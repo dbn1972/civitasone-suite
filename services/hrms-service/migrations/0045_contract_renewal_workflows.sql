@@ -45,7 +45,10 @@ DO $$ BEGIN
   ALTER TABLE contracts.hrms_contracts
     ADD CONSTRAINT uq_contracts_tenant_contract_no
     UNIQUE (tenant_id, contract_no);
-EXCEPTION WHEN duplicate_object THEN NULL;
+-- UNIQUE constraints create a backing index implicitly; Postgres raises
+-- duplicate_table (42P07) for THAT name collision, not duplicate_object
+-- (42710). Both must be caught for this guard to actually be idempotent.
+EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
 END $$;
 
 -- Only one active contract per employee per tenant (partial unique index)
@@ -143,14 +146,19 @@ ALTER TABLE contracts.hrms_contract_notifications FORCE ROW LEVEL SECURITY;
 ALTER TABLE contracts.hrms_contract_config        FORCE ROW LEVEL SECURITY;
 ALTER TABLE contracts.hrms_contract_seq           FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation_contracts ON contracts.hrms_contracts;
 CREATE POLICY tenant_isolation_contracts ON contracts.hrms_contracts
   USING (tenant_id = current_setting('app.tenant_id', false)::uuid);
+DROP POLICY IF EXISTS tenant_isolation_renewals ON contracts.hrms_contract_renewals;
 CREATE POLICY tenant_isolation_renewals ON contracts.hrms_contract_renewals
   USING (tenant_id = current_setting('app.tenant_id', false)::uuid);
+DROP POLICY IF EXISTS tenant_isolation_notifications ON contracts.hrms_contract_notifications;
 CREATE POLICY tenant_isolation_notifications ON contracts.hrms_contract_notifications
   USING (tenant_id = current_setting('app.tenant_id', false)::uuid);
+DROP POLICY IF EXISTS tenant_isolation_config ON contracts.hrms_contract_config;
 CREATE POLICY tenant_isolation_config ON contracts.hrms_contract_config
   USING (tenant_id = current_setting('app.tenant_id', false)::uuid);
+DROP POLICY IF EXISTS tenant_isolation_seq ON contracts.hrms_contract_seq;
 CREATE POLICY tenant_isolation_seq ON contracts.hrms_contract_seq
   USING (tenant_id = current_setting('app.tenant_id', false)::uuid);
 

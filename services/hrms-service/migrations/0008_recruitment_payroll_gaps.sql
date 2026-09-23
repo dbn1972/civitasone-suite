@@ -66,6 +66,17 @@ CREATE TABLE IF NOT EXISTS payroll.payroll_slip_templates (
 );
 
 -- Seed default salary slip template
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO payroll.payroll_slip_templates (tenant_id, name, template_html, is_default, footer_text, created_by) VALUES (
   '00000000-0000-0000-0000-000000000001',
   'Standard Government Salary Slip',
@@ -94,3 +105,4 @@ INSERT INTO payroll.payroll_slip_templates (tenant_id, name, template_html, is_d
   '00000000-0000-0000-0000-000000000099'
 ) ON CONFLICT DO NOTHING;
 
+RESET app.tenant_id;

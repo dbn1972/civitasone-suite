@@ -55,6 +55,17 @@ CREATE TABLE IF NOT EXISTS attendance.hrms_face_config (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO attendance.hrms_face_config (tenant_id, onnx_enabled, rekognition_enabled, onnx_threshold, rekognition_threshold) VALUES
   ('00000000-0000-0000-0000-000000000001', true, true, 0.7500, 0.7000)
 ON CONFLICT (tenant_id) DO NOTHING;
@@ -72,3 +83,4 @@ CREATE TABLE IF NOT EXISTS leave.hrms_auto_credit_config (
   UNIQUE(tenant_id, leave_type_id)
 );
 
+RESET app.tenant_id;

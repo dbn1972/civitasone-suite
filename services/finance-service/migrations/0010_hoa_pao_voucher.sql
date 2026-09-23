@@ -20,6 +20,17 @@ ALTER TABLE budget.finance_major_heads
   ALTER COLUMN account_type TYPE varchar(24);
 
 -- Seed real CGA major heads
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence, which is only
+-- true the FIRST time it is applied. On a re-run against an already-migrated
+-- cluster, RLS is already active and this session never otherwise sets
+-- app.tenant_id, so WITH CHECK would reject this row regardless of ON
+-- CONFLICT (Postgres evaluates WITH CHECK on the candidate row before
+-- conflict resolution). Session-scoped (not SET LOCAL): bootstrap-postgres.sh
+-- runs this file as its own psql -f connection with per-statement autocommit,
+-- not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO budget.finance_major_heads (code, description, sector, account_type) VALUES
   ('0029', 'Land Revenue', 'Tax', 'revenue_receipt'),
   ('0020', 'Corporation Tax', 'Tax', 'revenue_receipt'),
@@ -130,3 +141,5 @@ CREATE TABLE IF NOT EXISTS gl.finance_voucher_counter (
   updated_at  timestamptz NOT NULL DEFAULT now(),
   PRIMARY KEY (tenant_id, fy, series)
 );
+
+RESET app.tenant_id;

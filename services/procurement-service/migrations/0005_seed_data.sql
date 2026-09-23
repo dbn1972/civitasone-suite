@@ -7,6 +7,17 @@ BEGIN;
 
 -- ── Vendors ───────────────────────────────────────────────────────────────
 
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence, which is only
+-- true the FIRST time it is applied. On a re-run against an already-migrated
+-- cluster, RLS is already active and this session never otherwise sets
+-- app.tenant_id, so WITH CHECK would reject this row regardless of ON
+-- CONFLICT (Postgres evaluates WITH CHECK on the candidate row before
+-- conflict resolution). Session-scoped (not SET LOCAL): bootstrap-postgres.sh
+-- runs this file as its own psql -f connection with per-statement autocommit,
+-- not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO vendor.procurement_vendors
   (id, tenant_id, name, gstin, pan, email, phone, vendor_type, mse, msme,
    bank_account, ifsc, kyc_status, kyc_verified_at, created_by, updated_by)
@@ -365,3 +376,5 @@ VALUES
 ON CONFLICT (id) DO NOTHING;
 
 COMMIT;
+
+RESET app.tenant_id;

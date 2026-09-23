@@ -1,6 +1,17 @@
 -- System notification templates (fixed UUIDs for cross-service notification.send payloads)
 -- tenant_id uses zero UUID for platform-wide templates
 
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000000';
+
 INSERT INTO templates.templates (id, tenant_id, channel, name, subject, body, status, created_by, updated_by)
 VALUES
   ('00000000-0000-4000-8001-000000000000', '00000000-0000-0000-0000-000000000000', 'in_app', 'default', 'Notification', '{{message}}', 'active',
@@ -42,3 +53,5 @@ VALUES
    'RTI {{rtiId}} assigned. Deadline: {{deadline}}', 'active',
    '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT (id) DO NOTHING;
+
+RESET app.tenant_id;

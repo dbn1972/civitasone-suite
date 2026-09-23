@@ -37,6 +37,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_cause_list_syncs_cnr
 ALTER TABLE ecourts.cause_list_syncs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ecourts.cause_list_syncs FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation ON ecourts.cause_list_syncs;
 CREATE POLICY tenant_isolation ON ecourts.cause_list_syncs
   USING (tenant_id = current_setting('app.tenant_id')::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);

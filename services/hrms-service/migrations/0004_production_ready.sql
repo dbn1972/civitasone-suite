@@ -74,6 +74,17 @@ CREATE TABLE IF NOT EXISTS employee.hrms_import_batches (
 );
 
 -- ═══ Seed initial holidays (India 2026) ═══
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO leave.hrms_holidays (tenant_id, name, date, type, created_by) VALUES
   ('00000000-0000-0000-0000-000000000001', 'Republic Day', '2026-01-26', 'gazetted', '00000000-0000-0000-0000-000000000099'),
   ('00000000-0000-0000-0000-000000000001', 'Holi', '2026-03-17', 'gazetted', '00000000-0000-0000-0000-000000000099'),
@@ -84,3 +95,4 @@ INSERT INTO leave.hrms_holidays (tenant_id, name, date, type, created_by) VALUES
   ('00000000-0000-0000-0000-000000000001', 'Christmas', '2026-12-25', 'gazetted', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT DO NOTHING;
 
+RESET app.tenant_id;

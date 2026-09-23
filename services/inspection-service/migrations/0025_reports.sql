@@ -58,8 +58,10 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_observations_report
 ALTER TABLE reports.inspection_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports.observations        ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS rls_reports ON reports.inspection_reports;
 CREATE POLICY rls_reports ON reports.inspection_reports
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
+DROP POLICY IF EXISTS rls_observations ON reports.observations;
 CREATE POLICY rls_observations ON reports.observations
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 

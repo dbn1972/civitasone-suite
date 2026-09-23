@@ -1497,6 +1497,30 @@ jobs:
       - run: pnpm turbo build --filter='./packages/*'
       - name: Bootstrap Postgres
         run: bash scripts/ci/bootstrap-postgres.sh
+      # Migration idempotency regression guard: re-run the SAME bootstrap
+      # against the now-already-migrated service container. An independent
+      # review of a different PR's migration-idempotency claim found that a
+      # second full run failed on ~61 migrations across ~25 services (bare
+      # ADD CONSTRAINT / CREATE POLICY / CREATE INDEX with no guard, RLS
+      # blocking a re-applied seed INSERT, a stale ON CONFLICT target, etc.)
+      # -- meaning "just re-run bootstrap-postgres.sh on every deploy" would
+      # work once and then break on every subsequent deploy. All then-known
+      # cases were fixed; this step is what stops it from silently
+      # regressing. No new service container or script needed: the script's
+      # own ratchet (scripts/ci/migration-failure-allowlist.txt) already
+      # treats any non-allow-listed failure as fatal, so simply invoking it
+      # again here is a complete idempotency check on its own.
+      - name: Bootstrap Postgres again (idempotency regression guard)
+        # Ratchets against a SEPARATE allow-list (migration-second-run-
+        # allowlist.txt), not the default first-run one above -- 14 of the
+        # ~61 originally-found non-idempotent migrations are deliberately
+        # deferred tracked debt (see that file's header), and would
+        # otherwise permanently fail this step even with no real
+        # regression. Anything NOT in that file failing here IS a real
+        # regression.
+        env:
+          BOOTSTRAP_ALLOWLIST_PATH: ${{ github.workspace }}/scripts/ci/migration-second-run-allowlist.txt
+        run: bash scripts/ci/bootstrap-postgres.sh
       # REL-004: vitest.config.ts's junit reporter always writes to the same
       # `evidence/quality-program-junit.xml` regardless of which lane subset
       # was run, so a second `vitest run` in this job clobbers the first

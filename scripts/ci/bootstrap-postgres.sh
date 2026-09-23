@@ -593,7 +593,16 @@ psql -h "$PGHOST" -p "$PGPORT" -U "$ADMIN_USER" -d civitas_inspection \
 # reproduced before today because the allow-list had never been empty. `awk 'NF'`
 # does the same "drop blank lines" job but exits 0 regardless of how many lines
 # matched, so a genuinely clean result can actually be reported as one.
-ALLOWLIST="$ROOT/scripts/ci/migration-failure-allowlist.txt"
+# BOOTSTRAP_ALLOWLIST_PATH lets a caller point the ratchet at a DIFFERENT
+# allow-list than the default first-run one -- e.g. CI's migration-
+# idempotency regression guard re-invokes this same script a second time,
+# against the now-already-migrated service container, and needs to ratchet
+# against scripts/ci/migration-second-run-allowlist.txt (second-run-only
+# failures) instead of this file's normal fresh-cluster one -- otherwise
+# every currently-known, deliberately-deferred second-run failure would
+# permanently red the default allow-list's ratchet. Unset/default behavior
+# (this script's normal single-run use in every other CI job) is unchanged.
+ALLOWLIST="${BOOTSTRAP_ALLOWLIST_PATH:-$ROOT/scripts/ci/migration-failure-allowlist.txt}"
 
 printf '%s\n' "${MIGRATION_FAILURES[@]+"${MIGRATION_FAILURES[@]}"}" \
   | awk 'NF' | sort -u > "$SCRATCH_DIR/failures-observed.txt"

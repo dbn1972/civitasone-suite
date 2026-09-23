@@ -8,7 +8,10 @@ ALTER TABLE tenant.tenants
   ADD COLUMN IF NOT EXISTS db_dsn_ref     TEXT,
   ADD COLUMN IF NOT EXISTS kms_key_ref    TEXT;
 
-ALTER TABLE tenant.tenants
-  ADD CONSTRAINT chk_isolation_tier CHECK (isolation_tier IN ('pool', 'silo'));
+DO $$ BEGIN
+  ALTER TABLE tenant.tenants
+    ADD CONSTRAINT chk_isolation_tier CHECK (isolation_tier IN ('pool', 'silo'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_tenants_isolation ON tenant.tenants (isolation_tier);

@@ -39,9 +39,12 @@ ALTER TABLE crm.document_types
 
 -- Every element must still be one of the six known subject types; the array itself may
 -- be empty (the wildcard "applies to everything" convention above).
-ALTER TABLE crm.document_types
-  ADD CONSTRAINT chk_document_types_applies_to
-  CHECK (applies_to <@ ARRAY['lead','contact','account','opportunity','quotation','case']::varchar[]);
+DO $$ BEGIN
+  ALTER TABLE crm.document_types
+    ADD CONSTRAINT chk_document_types_applies_to
+    CHECK (applies_to <@ ARRAY['lead','contact','account','opportunity','quotation','case']::varchar[]);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- A btree index on a scalar column doesn't serve an array; GIN supports the
 -- containment lookup ("which mandatory types apply to subject X") this was for.

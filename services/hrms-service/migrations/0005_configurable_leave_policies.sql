@@ -33,6 +33,17 @@ CREATE INDEX IF NOT EXISTS idx_leave_policy_rules_tenant
   ON leave.hrms_leave_policy_rules(tenant_id, employee_type, is_active);
 
 -- ═══ Add new leave types: Medical Leave + Extraordinary Leave ═══
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence, which is only
+-- true the FIRST time it is applied. On a re-run against an already-migrated
+-- cluster, RLS is already active and this session never otherwise sets
+-- app.tenant_id, so WITH CHECK would reject this row regardless of ON
+-- CONFLICT (Postgres evaluates WITH CHECK on the candidate row before
+-- conflict resolution). Session-scoped (not SET LOCAL): bootstrap-postgres.sh
+-- runs this file as its own psql -f connection with per-statement autocommit,
+-- not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, is_encashable, carry_forward, created_by, updated_by) VALUES
   ('eeeeeeee-0001-0000-0000-000000000050', '00000000-0000-0000-0000-000000000001', 'MED', 'Medical Leave', 15, false, false, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099'),
   ('eeeeeeee-0001-0000-0000-000000000051', '00000000-0000-0000-0000-000000000001', 'EOL', 'Extraordinary Leave (without pay)', 365, false, false, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
@@ -108,3 +119,5 @@ BEGIN
     (t_id, med_id, 'deputation', 15, false, 15,  false, 'calendar',     15,  0,  false, false, actor, actor)
   ON CONFLICT (tenant_id, leave_type_id, employee_type) DO NOTHING;
 END $$;
+
+RESET app.tenant_id;

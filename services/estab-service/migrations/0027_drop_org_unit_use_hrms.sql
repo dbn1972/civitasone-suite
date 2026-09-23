@@ -6,8 +6,16 @@
 -- employees by UUID on estab_file_operator.employee_id.
 
 -- (a) Rename the org_unit_id column on records officer to department_id.
-ALTER TABLE files.estab_records_officer
-  RENAME COLUMN org_unit_id TO department_id;
+DO $$ BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'files' AND table_name = 'estab_records_officer'
+      AND column_name = 'org_unit_id'
+  ) THEN
+    ALTER TABLE files.estab_records_officer
+      RENAME COLUMN org_unit_id TO department_id;
+  END IF;
+END $$;
 COMMENT ON COLUMN files.estab_records_officer.department_id IS
   'Cross-service reference to hrms_departments.id (HRMS service owns the hierarchy)';
 

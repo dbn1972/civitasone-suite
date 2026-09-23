@@ -30,6 +30,17 @@ CREATE TABLE IF NOT EXISTS leave.hrms_leave_year_config (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence, which is only
+-- true the FIRST time it is applied. On a re-run against an already-migrated
+-- cluster, RLS is already active and this session never otherwise sets
+-- app.tenant_id, so WITH CHECK would reject this row regardless of ON
+-- CONFLICT (Postgres evaluates WITH CHECK on the candidate row before
+-- conflict resolution). Session-scoped (not SET LOCAL): bootstrap-postgres.sh
+-- runs this file as its own psql -f connection with per-statement autocommit,
+-- not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO leave.hrms_leave_year_config (tenant_id, year_start_month, weekend_days) VALUES
   ('00000000-0000-0000-0000-000000000001', 1, '0,6')
 ON CONFLICT (tenant_id) DO NOTHING;
@@ -150,3 +161,4 @@ INSERT INTO leave.hrms_holidays (tenant_id, name, date, type, is_optional, creat
   ('00000000-0000-0000-0000-000000000001', 'Chhath Puja', '2026-11-05', 'restricted', true, '00000000-0000-0000-0000-000000000099')
 ON CONFLICT DO NOTHING;
 
+RESET app.tenant_id;

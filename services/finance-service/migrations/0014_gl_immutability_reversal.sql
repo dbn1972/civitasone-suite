@@ -30,6 +30,17 @@ CREATE INDEX IF NOT EXISTS idx_fjournals_reverses ON gl.finance_journals (revers
 --    Seeded for the demo/default tenant; production tenants get it via the
 --    same code on first bill post if absent (consumer falls back to AP code).
 -- ============================================================
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO budget.finance_heads (id, tenant_id, code, name, level, classification, created_by, updated_by)
 VALUES (
   'dddddddd-0001-0000-0000-000000002050'::uuid,
@@ -135,3 +146,5 @@ REVOKE DELETE, TRUNCATE          ON gl.finance_journals FROM finance_svc;
 -- keep INSERT + SELECT + UPDATE(status-only, trigger-gated) for journals:
 GRANT  SELECT, INSERT, UPDATE    ON gl.finance_journals TO finance_svc;
 GRANT  SELECT, INSERT            ON gl.finance_ledger   TO finance_svc;
+
+RESET app.tenant_id;

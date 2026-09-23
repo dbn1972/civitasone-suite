@@ -96,6 +96,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_service_pack_key_version
 -- other seed-then-RLS sequence in this codebase avoids the same trap (e.g.
 -- workflow-service seeds workflow.definitions in 0003, RLS is only added in
 -- 0013 — a later file, not a bypass).
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO packs.domain_packs (
   id, tenant_id, domain_pack_key, sector, jurisdiction, version, name, description,
   manifest, pack_keys, status, created_by, updated_by
@@ -146,3 +157,5 @@ CREATE POLICY tenant_isolation ON packs.service_packs
 ALTER SCHEMA packs OWNER TO citizen_svc;
 ALTER TABLE packs.domain_packs OWNER TO citizen_svc;
 ALTER TABLE packs.service_packs OWNER TO citizen_svc;
+
+RESET app.tenant_id;

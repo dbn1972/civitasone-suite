@@ -51,8 +51,10 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_consumables_txns_tenant_item
 ALTER TABLE consumables.items  ENABLE ROW LEVEL SECURITY;
 ALTER TABLE consumables.transactions ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS rls_consumable_items ON consumables.items;
 CREATE POLICY rls_consumable_items ON consumables.items
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
+DROP POLICY IF EXISTS rls_consumable_txns ON consumables.transactions;
 CREATE POLICY rls_consumable_txns ON consumables.transactions
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid);
 

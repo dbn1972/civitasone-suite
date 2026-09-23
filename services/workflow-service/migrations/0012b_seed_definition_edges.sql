@@ -19,6 +19,17 @@
 -- point, so moving earlier needs no other change.
 
 -- file_noting: draft → section_review → us_approve → ds_approve (terminal)
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO workflow.definition_edges (id, definition_id, from_node, to_node, sort_order)
 VALUES
   ('00000000-0000-4004-8001-000000000001', '00000000-0000-4002-8001-000000000004', 'draft',          'section_review', 1),
@@ -40,3 +51,5 @@ VALUES
   ('00000000-0000-4004-8001-00000000000d', '00000000-0000-4002-8001-000000000005', 'scrutiny',       'sanction',        1),
   ('00000000-0000-4004-8001-00000000000e', '00000000-0000-4002-8001-000000000005', 'sanction',       'disbursed',       1)
 ON CONFLICT DO NOTHING;
+
+RESET app.tenant_id;

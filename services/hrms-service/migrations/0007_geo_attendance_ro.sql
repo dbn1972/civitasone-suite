@@ -54,6 +54,17 @@ CREATE TABLE IF NOT EXISTS attendance.hrms_geo_attendance (
 CREATE INDEX IF NOT EXISTS idx_geo_att_emp_date ON attendance.hrms_geo_attendance(tenant_id, employee_id, attendance_date);
 
 -- ═══ Seed office locations ═══
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO employee.hrms_office_locations (id, tenant_id, name, address, latitude, longitude, radius_meters, created_by) VALUES
   ('aaaaaaaa-0001-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Head Office Delhi', 'Shastri Bhawan, New Delhi', 28.6139, 77.2090, 200, '00000000-0000-0000-0000-000000000099'),
   ('aaaaaaaa-0001-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'Branch Office Mumbai', 'CGO Complex, Mumbai', 19.0760, 72.8777, 150, '00000000-0000-0000-0000-000000000099'),
@@ -71,3 +82,4 @@ UPDATE employee.hrms_employees SET
   office_location_id = 'aaaaaaaa-0001-0000-0000-000000000001'
 WHERE id = 'eeeeeeee-0001-0000-0000-000000000006' AND tenant_id = '00000000-0000-0000-0000-000000000001';
 
+RESET app.tenant_id;

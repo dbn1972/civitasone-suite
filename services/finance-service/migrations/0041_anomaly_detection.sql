@@ -42,6 +42,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_finance_anomalies_created_at
 -- RLS policy for tenant isolation
 ALTER TABLE finance_anomalies ENABLE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS finance_anomalies_tenant_isolation ON finance_anomalies;
 CREATE POLICY finance_anomalies_tenant_isolation ON finance_anomalies
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);

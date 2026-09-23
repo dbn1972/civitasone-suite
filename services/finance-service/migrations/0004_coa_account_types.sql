@@ -3,6 +3,17 @@
 -- Also correct any seed data where re_minor > be_minor (GFR Rule 11 violation).
 
 -- Seed demo accounts for the default tenant (00000000-0000-0000-0000-000000000001)
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO budget.finance_heads (id, tenant_id, code, name, level, classification, created_by, updated_by)
 VALUES
   (gen_random_uuid(), '00000000-0000-0000-0000-000000000001', '3001', 'Capital Account',         0, 'liability', '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099'),
@@ -17,3 +28,5 @@ ON CONFLICT (tenant_id, code) DO NOTHING;
 UPDATE budget.finance_budgets
 SET re_minor = LEAST(re_minor, be_minor)
 WHERE re_minor > be_minor;
+
+RESET app.tenant_id;

@@ -39,5 +39,8 @@ CREATE POLICY tenant_isolation_policy ON crm.pipelines
   WITH CHECK (tenant_id = crm.current_tenant_id());
 
 -- Stage count validation: 3-10 stages per pipeline enforced via CHECK constraint
-ALTER TABLE crm.pipelines ADD CONSTRAINT chk_pipelines_stages_count
-  CHECK (jsonb_array_length(stages) >= 3 AND jsonb_array_length(stages) <= 10);
+DO $$ BEGIN
+  ALTER TABLE crm.pipelines ADD CONSTRAINT chk_pipelines_stages_count
+    CHECK (jsonb_array_length(stages) >= 3 AND jsonb_array_length(stages) <= 10);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

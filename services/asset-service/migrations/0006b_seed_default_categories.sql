@@ -14,6 +14,17 @@
 -- 0013). All columns referenced below already exist as of 0001_init.sql, so
 -- moving this earlier needs no other change.
 
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Session-scoped (not
+-- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
+-- connection with per-statement autocommit, not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000000';
+
 INSERT INTO register.asset_categories
   (id, tenant_id, name, code, dep_method, dep_rate, useful_life_years,
    created_by, updated_by, created_at, updated_at)
@@ -31,3 +42,5 @@ VALUES
    '00000000-0000-0000-0000-000000000000',
    now(), now())
 ON CONFLICT (id) DO NOTHING;
+
+RESET app.tenant_id;

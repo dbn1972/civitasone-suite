@@ -55,8 +55,11 @@ CREATE TABLE IF NOT EXISTS orchestrator.step_executions (
 
 -- RLS
 ALTER TABLE orchestrator.wizard_definitions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_wizard_definitions ON orchestrator.wizard_definitions;
 CREATE POLICY rls_wizard_definitions ON orchestrator.wizard_definitions USING (tenant_id = current_setting('app.tenant_id')::uuid);
 ALTER TABLE orchestrator.step_definitions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_step_definitions ON orchestrator.step_definitions;
 CREATE POLICY rls_step_definitions ON orchestrator.step_definitions USING (tenant_id = current_setting('app.tenant_id')::uuid);
 ALTER TABLE orchestrator.step_executions ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS rls_step_executions ON orchestrator.step_executions;
 CREATE POLICY rls_step_executions ON orchestrator.step_executions USING (tenant_id = current_setting('app.tenant_id')::uuid);

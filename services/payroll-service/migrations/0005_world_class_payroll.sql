@@ -7,6 +7,17 @@ CREATE TABLE IF NOT EXISTS payroll.payroll_bonus (id UUID PRIMARY KEY DEFAULT ge
 -- Professional Tax (state-wise slabs)
 CREATE TABLE IF NOT EXISTS payroll.payroll_professional_tax (id UUID PRIMARY KEY DEFAULT gen_random_uuid(), tenant_id UUID NOT NULL, state_code VARCHAR(4) NOT NULL, slab_from_minor BIGINT NOT NULL, slab_to_minor BIGINT NOT NULL DEFAULT 999999999999, pt_amount_minor BIGINT NOT NULL, effective_from DATE NOT NULL DEFAULT '2024-04-01', is_active BOOLEAN NOT NULL DEFAULT TRUE, UNIQUE(tenant_id, state_code, slab_from_minor));
 -- Seed Karnataka PT slabs
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence, which is only
+-- true the FIRST time it is applied. On a re-run against an already-migrated
+-- cluster, RLS is already active and this session never otherwise sets
+-- app.tenant_id, so WITH CHECK would reject this row regardless of ON
+-- CONFLICT (Postgres evaluates WITH CHECK on the candidate row before
+-- conflict resolution). Session-scoped (not SET LOCAL): bootstrap-postgres.sh
+-- runs this file as its own psql -f connection with per-statement autocommit,
+-- not one transaction.
+SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+
 INSERT INTO payroll.payroll_professional_tax (tenant_id,state_code,slab_from_minor,slab_to_minor,pt_amount_minor) VALUES ('00000000-0000-0000-0000-000000000001','KA',0,1500000,0),('00000000-0000-0000-0000-000000000001','KA',1500001,999999999999,20000) ON CONFLICT DO NOTHING;
 
 -- Labour Welfare Fund
@@ -32,3 +43,5 @@ INSERT INTO payroll.payroll_ctc_config (tenant_id,component_code,component_name,
 ('00000000-0000-0000-0000-000000000001','ER_PF','Employer PF','pct_of_basic',12.0000,true),
 ('00000000-0000-0000-0000-000000000001','ER_ESI','Employer ESI','pct_of_basic',3.2500,true)
 ON CONFLICT DO NOTHING;
+
+RESET app.tenant_id;
