@@ -634,6 +634,30 @@ jobs:
         continue-on-error: true
         run: node scripts/ci/queue-publish-messageid-guard.mjs
 
+      # Follow-up to #1472 (sa-dashboard: "stop fabricating uptime/services
+      # metrics") -- a CI guard for the same class of defect: a stat-tile-
+      # shaped component (StatCard/StatCardGrid) passed a hardcoded
+      # numeric/percentage literal for its value prop instead of a real
+      # data-bound expression. A DIFFERENT pattern/granularity from the
+      # FABRICATED_DATA gate in .github/workflows/ci.yml's screen-contract
+      # step (scripts/contract/screen-map.mjs's scanForFabricatedArray,
+      # COMP-004): that one flags a page-level hardcoded array/object of
+      # multiple record-shaped entries on a page with NO loader at all; this
+      # one flags a single scalar literal on one JSX attribute, independent
+      # of whether the page has a loader. Pure source-text/AST analysis (no
+      # live DB needed), so it runs here like the guards above. Fixture
+      # tests first, then the guard against the real tree (ratchet: fails on
+      # NEW violations and on stale baseline entries, see
+      # scripts/ci/stat-tile-literal-baseline.json).
+      - name: Stat-tile literal guard unit tests
+        id: stat-tile-literal-guard-tests
+        continue-on-error: true
+        run: pnpm exec vitest run tests/architecture/stat-tile-literal-guard.test.ts
+      - name: Stat-tile literal guard (no hardcoded numeric/percentage literals in stat tiles)
+        id: stat-tile-literal-guard
+        continue-on-error: true
+        run: node scripts/ci/stat-tile-literal-guard.mjs
+
       # REL-039: this job's actual gate. Every guard above always reports
       # its own real outcome now instead of being skipped, but continue-on-
       # error also forces every one of those steps' `conclusion` to
@@ -677,6 +701,8 @@ jobs:
           R_AUTHZ_TENANT_SCANNER: ${{ steps.authz-tenant-scanner.outcome }}
           R_QUEUE_PUBLISH_MESSAGEID_TESTS: ${{ steps.queue-publish-messageid-guard-tests.outcome }}
           R_QUEUE_PUBLISH_MESSAGEID: ${{ steps.queue-publish-messageid-guard.outcome }}
+          R_STAT_TILE_LITERAL_TESTS: ${{ steps.stat-tile-literal-guard-tests.outcome }}
+          R_STAT_TILE_LITERAL: ${{ steps.stat-tile-literal-guard.outcome }}
         run: |
           fail=0
           check() {
@@ -720,6 +746,8 @@ jobs:
           check "Authz-tenant scanner" "$R_AUTHZ_TENANT_SCANNER"
           check "Queue publish messageId guard unit tests" "$R_QUEUE_PUBLISH_MESSAGEID_TESTS"
           check "Queue publish messageId guard" "$R_QUEUE_PUBLISH_MESSAGEID"
+          check "Stat-tile literal guard unit tests" "$R_STAT_TILE_LITERAL_TESTS"
+          check "Stat-tile literal guard" "$R_STAT_TILE_LITERAL"
           if [ "$fail" = "1" ]; then
             echo "One or more architecture guard steps failed -- see the individual step logs above (each now reports its own real result, never 'skipped')."
             exit 1
