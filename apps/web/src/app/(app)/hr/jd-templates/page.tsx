@@ -2,6 +2,7 @@ import Link from "next/link";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "JD Template Library — HR" };
@@ -27,12 +28,6 @@ const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> 
   deputation:    { label: "Deputation",    color: "#475569", bg: "#e2e8f0" },
 };
 
-// The catch-all try/catch here used to swallow every failure into a plain []
-// (identical to a tenant with zero templates yet created) -- this was the
-// UX-013 bug at the fetch layer itself, not just in how the page rendered
-// it. fetchJson surfaces a real source so the page can tell the two apart,
-// and centralizes auth-cookie reading (COOKIE.ACCESS) instead of this page
-// hardcoding the cookie name itself.
 async function fetchTemplates(type?: string): Promise<LoaderResult<JdTemplate[]>> {
   const path = type ? `/api/v1/hrms/jd-templates?vacancyType=${type}` : "/api/v1/hrms/jd-templates";
   return fetchJson<unknown, JdTemplate[]>(path, [], {
@@ -44,9 +39,17 @@ async function fetchTemplates(type?: string): Promise<LoaderResult<JdTemplate[]>
   });
 }
 
+/**
+ * Mirrors jd-template-routes.ts: ALL operations require
+ * HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
+ */
+const JD_TEMPLATE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 export default async function JdTemplatesPage({ searchParams }: { searchParams: { type?: string } }) {
   const activeType = searchParams.type ?? "";
   const { data: templates, source } = await fetchTemplates(activeType || undefined);
+  const roles = getSessionRoles();
+  const canManage = roles.some((r: string) => JD_TEMPLATE_ADMIN_ROLES.includes(r));
 
   const typeOptions = [
     { value: "", label: "All types" },
@@ -63,13 +66,15 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
         title="JD Template Library"
         subtitle="Reusable job description templates — select one to pre-fill a new job opening."
         actions={
-          <Link
-            href="/hr/jd-templates/new"
-            className="btn btn-primary"
-            style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "#154089", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}
-          >
-            + New template
-          </Link>
+          canManage ? (
+            <Link
+              href="/hr/jd-templates/new"
+              className="btn btn-primary"
+              style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "#154089", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}
+            >
+              + New template
+            </Link>
+          ) : undefined
         }
       />
 
@@ -98,9 +103,11 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
           <p style={{ fontSize: 40, margin: "0 0 12px" }}>📄</p>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>No templates yet</h2>
           <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 16px" }}>Create your first JD template to speed up future job openings.</p>
-          <Link href="/hr/jd-templates/new" style={{ display: "inline-block", padding: "10px 20px", background: "#154089", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-            Create template
-          </Link>
+          {canManage && (
+            <Link href="/hr/jd-templates/new" style={{ display: "inline-block", padding: "10px 20px", background: "#154089", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
+              Create template
+            </Link>
+          )}
         </div>
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
@@ -130,12 +137,14 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
                   >
                     Use template
                   </Link>
-                  <Link
-                    href={`/hr/jd-templates/${tmpl.id}`}
-                    style={{ padding: "8px 12px", background: "#f1f5f9", color: "#475569", borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: "none" }}
-                  >
-                    Edit
-                  </Link>
+                  {canManage && (
+                    <Link
+                      href={`/hr/jd-templates/${tmpl.id}`}
+                      style={{ padding: "8px 12px", background: "#f1f5f9", color: "#475569", borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: "none" }}
+                    >
+                      Edit
+                    </Link>
+                  )}
                 </div>
                 <p style={{ margin: 0, fontSize: 11, color: "var(--mut)" }}>
                   Used {tmpl.useCount} time{tmpl.useCount !== 1 ? "s" : ""}

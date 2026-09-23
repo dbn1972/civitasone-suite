@@ -1,13 +1,39 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
-import { getLeaveRequestDetails } from "../../../_data/loaders";
+import { getLeaveRequestDetails, getMyProfile } from "../../../_data/loaders";
 import type { LeaveRequestDetail } from "@civitasone/types";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+/**
+ * Mirrors leave/routes.ts HR_ROLES — the roles allowed to see ALL tenant
+ * leave data. Employees see only their own applications; managers see all
+ * (they need the pending queue for approval workflows).
+ */
+const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const ADMIN_OR_MANAGER_ROLES = [...HR_ROLES, "manager"];
 
 export default async function LeaveManagementPage() {
   const t = await getTranslations("leave");
-  const { data: leaveRequests, source } = await getLeaveRequestDetails();
+  const roles = getSessionRoles();
+  const isAdminOrManager = roles.some((r: string) => ADMIN_OR_MANAGER_ROLES.includes(r));
+  const isAdmin = roles.some((r: string) => HR_ROLES.includes(r));
+
+  const { data: allRequests, source } = await getLeaveRequestDetails();
+
+  // Scope data: employees see only their own applications.
+  let leaveRequests = allRequests;
+  if (!isAdminOrManager) {
+    const profileResult = await getMyProfile();
+    const myEmpId = profileResult.data?.id;
+    if (myEmpId) {
+      leaveRequests = allRequests.filter((r) => r.employeeId === myEmpId);
+    } else {
+      // No linked employee record — show nothing rather than everything.
+      leaveRequests = [];
+    }
+  }
 
   const total = leaveRequests.length;
   const pending = leaveRequests.filter((r) => r.status === "pending").length;
@@ -35,17 +61,17 @@ export default async function LeaveManagementPage() {
           <>
             <Link href="/hr/leave/balance" className="btn">{t("navBalance")}</Link>
             <Link href="/hr/leave/history" className="btn">{t("navHistory")}</Link>
-            <Link href="/hr/leave/allocate" className="btn">{t("navAllocate")}</Link>
-            <Link href="/hr/leave-policies" className="btn">{t("navPolicies")}</Link>
-            <Link href="/hr/leave/approvals" className="btn">{t("approvals")}</Link>
+            {isAdmin && <Link href="/hr/leave/allocate" className="btn">{t("navAllocate")}</Link>}
+            {isAdmin && <Link href="/hr/leave-policies" className="btn">{t("navPolicies")}</Link>}
+            {isAdminOrManager && <Link href="/hr/leave/approvals" className="btn">{t("approvals")}</Link>}
             <Link href="/hr/leave/apply" className="btn primary">{t("newLeave")}</Link>
           </>
         }
       />
       <DataSourceBadge source={source} />
 
-      {/* Pending approval nudge */}
-      {pending > 0 && (
+      {/* Pending approval nudge — only shown to roles that can approve */}
+      {isAdminOrManager && pending > 0 && (
         <div style={{ padding: "10px 14px", marginBottom: 12, borderRadius: 8, background: "var(--warnbg)", border: "1px solid var(--warn)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }}>
           <span aria-hidden="true">⏳</span>
           <span><strong>{pending}</strong> {t("pendingSuffix", { count: pending })}</span>
@@ -73,7 +99,7 @@ export default async function LeaveManagementPage() {
           emptyAction={
             <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
               <Link href="/hr/leave/apply" className="btn primary">{t("applyLeaveCta")}</Link>
-              <Link href="/hr/leave/approvals" className="btn ghost">{t("viewApprovalsCta")}</Link>
+              {isAdminOrManager && <Link href="/hr/leave/approvals" className="btn ghost">{t("viewApprovalsCta")}</Link>}
             </div>
           }
         />

@@ -2,10 +2,20 @@ import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds
 import { getAttendanceRegularisations } from "../../../../_data/loaders";
 import { RegularisationTable } from "./RegularisationTable";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+/**
+ * Mirrors attendance/routes.ts: approve/reject regularisation routes
+ * require HR_ROLES (hr_admin, hr_officer, super_admin). The manager role
+ * can view but not act.
+ */
+const REGULARISATION_APPROVE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 export default async function AttendanceRegularisationPage() {
   const t = await getTranslations("attendanceRegularisation");
   const { data: regs, source } = await getAttendanceRegularisations();
+  const roles = getSessionRoles();
+  const canApprove = roles.some((r: string) => REGULARISATION_APPROVE_ROLES.includes(r));
 
   const pending = regs.filter((r) => r.status === "pending").length;
   const approved = regs.filter((r) => r.status === "approved").length;
@@ -30,7 +40,7 @@ export default async function AttendanceRegularisationPage() {
         <StatCard icon="🔴" iconBg="var(--badbg)" label={t("statRejected")} value={rejected} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <RegularisationTable regs={regs} source={source} />
+        <RegularisationTable regs={regs} source={source} canApprove={canApprove} />
       </Card>
     </main>
   );

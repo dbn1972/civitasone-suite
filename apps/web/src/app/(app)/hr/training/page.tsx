@@ -6,9 +6,19 @@ import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { UpcomingPrograms } from "./_components/UpcomingPrograms";
 import { ProgramCard } from "./_components/ProgramCard";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+/**
+ * Mirrors training/routes.ts: POST /v1/hrms/trainings requires
+ * HR_ROLES = ["hr_admin", "hr_officer", "super_admin"].
+ * The program list (GET) is available to ALL_ROLES (incl. employee, manager).
+ */
+const TRAINING_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 export default async function TrainingPage() {
   const { data: programs, source } = await getTrainingPrograms();
+  const roles = getSessionRoles();
+  const canCreate = roles.some((r: string) => TRAINING_ADMIN_ROLES.includes(r));
 
   const total = programs.length;
   const upcoming = programs.filter((p) => p.status === "upcoming").length;
@@ -21,7 +31,9 @@ export default async function TrainingPage() {
         title="Training Programs"
         subtitle="Capacity building and skill development initiatives."
         actions={
-          <Link href="/hr/training/new" className="btn primary">+ New Program</Link>
+          canCreate ? (
+            <Link href="/hr/training/new" className="btn primary">+ New Program</Link>
+          ) : undefined
         }
       />
       <DataSourceBadge source={source} />
@@ -36,7 +48,7 @@ export default async function TrainingPage() {
             icon="🏆"
             title="No programs scheduled"
             message="Schedule your first training program to build capacity and upskill your workforce."
-            action={<Link href="/hr/training/new" className="btn primary">Schedule Program</Link>}
+            action={canCreate ? <Link href="/hr/training/new" className="btn primary">Schedule Program</Link> : undefined}
           />
         </div>
       ) : (
@@ -69,7 +81,7 @@ export default async function TrainingPage() {
                 icon="📚"
                 title="No training programmes"
                 message="Training programmes appear here once created."
-                action={<Link href="/hr/training/new" className="btn primary">+ New Program</Link>}
+                action={canCreate ? <Link href="/hr/training/new" className="btn primary">+ New Program</Link> : undefined}
               />
             )}
           </Card>
