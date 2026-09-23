@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-interface Props { daysLeft: number; monthName: string; headcount: number }
+interface Props { daysLeft: number; monthName: string; headcount: number | null }
 
 export function PayrollBanner({ daysLeft, monthName, headcount }: Props) {
   return (
@@ -10,7 +10,7 @@ export function PayrollBanner({ daysLeft, monthName, headcount }: Props) {
       </div>
       <div className="pb-text">
         <div className="pb-label">Payroll Processing</div>
-        <div className="pb-sub">{monthName} cycle · {headcount.toLocaleString("en-IN")} employees · Deadline in {daysLeft} day{daysLeft !== 1 ? "s" : ""}</div>
+        <div className="pb-sub">{monthName} cycle · {headcount != null ? headcount.toLocaleString("en-IN") : "—"} employees · Deadline in {daysLeft} day{daysLeft !== 1 ? "s" : ""}</div>
       </div>
       <Link href="/hr/payroll" className="pb-btn">Start Run →</Link>
       <style>{`
