@@ -42,8 +42,7 @@ export default async function AttendanceConfigPage() {
       <div
         role="note"
         className="rounded-lg border px-4 py-3 text-sm"
-        style={{ background: "var(--warnbg, #fffbeb)", borderColor: "var(--warnbd, #fde68a)", color: "var(--warn, #92400e)" }}
-        style={{ marginBottom: 16 }}
+        style={{ background: "var(--warnbg, #fffbeb)", borderColor: "var(--warnbd, #fde68a)", color: "var(--warn, #92400e)", marginBottom: 16 }}
       >
         {t("defaultsNotice")}
       </div>
