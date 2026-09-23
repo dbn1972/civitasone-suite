@@ -13,7 +13,7 @@ import { useFormError } from "@/lib/useFormError";
 type Decision = "approve" | "reject";
 type Row = AttendanceRegularisation & Record<string, unknown>;
 
-export function RegularisationTable({ regs, source = "api" }: { regs: AttendanceRegularisation[]; source?: "api" | "error" }) {
+export function RegularisationTable({ regs, source = "api", canApprove = true }: { regs: AttendanceRegularisation[]; source?: "api" | "error"; canApprove?: boolean }) {
   const t = useTranslations("attendanceRegularisation");
   const router = useRouter();
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<AttendanceRegularisation[]>(
@@ -78,6 +78,9 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
         label: t("colDecision"),
         sortable: false,
         render: (r: Row) =>
+          !canApprove ? (
+            <span style={{ color: "var(--mut)", fontSize: 12 }}>—</span>
+          ) :
           r.status === "pending" ? (
             <div style={{ display: "flex", gap: 8 }}>
               <Button variant="primary" size="sm" style={{ minHeight: 44 }} onClick={() => { setDialogError(undefined); setPending({ row: r, decision: "approve" }); }}>
@@ -92,7 +95,7 @@ export function RegularisationTable({ regs, source = "api" }: { regs: Attendance
           ),
       },
     ],
-    [t],
+    [t, canApprove],
   );
 
   return (
