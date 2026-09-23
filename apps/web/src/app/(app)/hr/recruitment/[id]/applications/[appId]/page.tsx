@@ -27,6 +27,9 @@ type Application = {
   appliedAt: string;
 };
 
+type Department = { id: string; name: string };
+type Designation = { id: string; name: string };
+
 export default function ApplicationDetailPage() {
   const t = useTranslations("recruitmentApplicationDetail");
   const { id: jobOpeningId, appId } = useParams<{ id: string; appId: string }>();
@@ -43,6 +46,8 @@ export default function ApplicationDetailPage() {
   const [basicMinor, setBasicMinor] = useState(0);
   const [departmentId, setDepartmentId] = useState("");
   const [designationId, setDesignationId] = useState("");
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [designations, setDesignations] = useState<Designation[]>([]);
   const [employeeType, setEmployeeType] = useState<"permanent" | "temporary" | "contract" | "deputation">("permanent");
   const [hireStatus, setHireStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [hireMessage, setHireMessage] = useState("");
@@ -85,6 +90,30 @@ export default function ApplicationDetailPage() {
     }
     if (appId && jobOpeningId) load();
   }, [appId, jobOpeningId]);
+
+  // UX: replaces the raw departmentId/designationId UUID text boxes in the
+  // hire dialog below with searchable name-based dropdowns, matching the
+  // pattern already used by PromoteWithApproval/TransferWithApproval.
+  // Fetched only once the dialog is actually opened.
+  useEffect(() => {
+    if (!showHireDialog) return;
+    void (async () => {
+      try {
+        const [deptRes, desigRes] = await Promise.all([
+          fetch("/api/proxy/v1/hrms/departments?limit=200"),
+          fetch("/api/proxy/v1/hrms/designations?limit=200"),
+        ]);
+        if (deptRes.ok) {
+          const body = (await deptRes.json()) as { data?: Department[] } | Department[];
+          setDepartments(Array.isArray(body) ? body : (body.data ?? []));
+        }
+        if (desigRes.ok) {
+          const body = (await desigRes.json()) as { data?: Designation[] } | Designation[];
+          setDesignations(Array.isArray(body) ? body : (body.data ?? []));
+        }
+      } catch { /* graceful fallback to raw-UUID inputs below */ }
+    })();
+  }, [showHireDialog]);
 
   async function handleHire(e: React.FormEvent) {
     e.preventDefault();
@@ -201,11 +230,29 @@ export default function ApplicationDetailPage() {
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
                   <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>{t("departmentId")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
-                  <input id={deptId} type="text" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} placeholder={t("uuidPlaceholder")} style={inputStyle} required />
+                  {departments.length > 0 ? (
+                    <select id={deptId} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} style={inputStyle} required>
+                      <option value="">Select department…</option>
+                      {departments.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input id={deptId} type="text" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} placeholder={t("uuidPlaceholder")} style={inputStyle} required />
+                  )}
                 </div>
                 <div>
                   <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>{t("designationId")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
-                  <input id={desigId} type="text" value={designationId} onChange={(e) => setDesignationId(e.target.value)} placeholder={t("uuidPlaceholder")} style={inputStyle} required />
+                  {designations.length > 0 ? (
+                    <select id={desigId} value={designationId} onChange={(e) => setDesignationId(e.target.value)} style={inputStyle} required>
+                      <option value="">Select designation…</option>
+                      {designations.map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input id={desigId} type="text" value={designationId} onChange={(e) => setDesignationId(e.target.value)} placeholder={t("uuidPlaceholder")} style={inputStyle} required />
+                  )}
                 </div>
               </div>
               <div>

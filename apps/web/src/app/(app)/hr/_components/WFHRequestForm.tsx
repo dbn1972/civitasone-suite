@@ -5,10 +5,12 @@
  */
 "use client";
 
-import { useState, useId } from "react";
+import { useEffect, useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "../../../_components/ds";
+
+type EmployeeOption = { id: string; name?: string; employeeNo?: string };
 
 interface WFHRequestFormProps {
   /** Pre-fill employee UUID (optional — admin filing on behalf) */
@@ -39,6 +41,7 @@ export function WFHRequestForm({
   const formError = useFormError("WFH request");
 
   const [employeeId, setEmployeeId] = useState(prefillId);
+  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
   const [reason, setReason] = useState("");
@@ -48,6 +51,27 @@ export function WFHRequestForm({
   const idTo = useId();
   const idReason = useId();
   const errId = useId();
+
+  // UX: replaces the raw "paste an employee UUID" text box below with a
+  // searchable name-based dropdown, matching the pattern already used by
+  // PromoteWithApproval/TransferWithApproval. Only needed when nobody
+  // already told us the employee (prefillId) -- so skip the fetch then.
+  useEffect(() => {
+    if (prefillId) return;
+    let cancelled = false;
+    try {
+      fetch("/api/proxy/v1/hrms/employees?limit=500")
+        .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+        .then((body: { data?: EmployeeOption[] } | EmployeeOption[]) => {
+          if (cancelled) return;
+          setEmployees(Array.isArray(body) ? body : (body.data ?? []));
+        })
+        .catch(() => { /* graceful fallback to raw-UUID input below */ });
+    } catch {
+      /* graceful fallback to raw-UUID input below */
+    }
+    return () => { cancelled = true; };
+  }, [prefillId]);
 
   // DoPT OM 2022 eligibility gates
   const isGazetted = payLevel !== undefined && payLevel > 10;
@@ -150,17 +174,35 @@ export function WFHRequestForm({
 
       {!prefillId && (
         <div>
-          <label htmlFor={idEmp} style={labelStyle}>Employee ID (UUID)</label>
-          <input
-            id={idEmp}
-            style={inputStyle}
-            value={employeeId}
-            onChange={(e) => setEmployeeId(e.target.value)}
-            placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-            pattern="[0-9a-fA-F-]{36}"
-            required
-            aria-required="true"
-          />
+          <label htmlFor={idEmp} style={labelStyle}>Employee ID</label>
+          {employees.length > 0 ? (
+            <select
+              id={idEmp}
+              style={inputStyle}
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              required
+              aria-required="true"
+            >
+              <option value="">Select employee…</option>
+              {employees.map((emp) => (
+                <option key={emp.id} value={emp.id}>
+                  {emp.name ?? emp.id}{emp.employeeNo ? ` (${emp.employeeNo})` : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id={idEmp}
+              style={inputStyle}
+              value={employeeId}
+              onChange={(e) => setEmployeeId(e.target.value)}
+              placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+              pattern="[0-9a-fA-F-]{36}"
+              required
+              aria-required="true"
+            />
+          )}
         </div>
       )}
 
