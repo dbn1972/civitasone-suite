@@ -16,6 +16,22 @@ import * as queries from "./queries.js";
 
 const HR_ROLES    = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
+// HRMS role-based review, Problem B: GET /v1/hrms/employees (the LIST route
+// just below) backs hr/directory's Employee Directory page. Its response
+// (queries.listEmployees: id/employeeNo/name/department/employeeType/status)
+// carries no PII, no salary, no bank/PAN -- ordinary, low-sensitivity
+// company-directory information every employee should be able to look up.
+// "employee" is added HERE, specifically for that one route.
+//
+// Deliberately NOT added to READER_ROLES itself: that constant also gates
+// GET /v1/hrms/employees/:id further down, which returns a much richer
+// per-employee detail record for an ARBITRARY id in the tenant (masked bank
+// account/IFSC/PAN, phone, reportingTo, managerId -- see
+// queries.getEmployeeDetail). Widening READER_ROLES directly would have let
+// any employee pull up any other employee's masked-PII detail record by id
+// enumeration -- a materially bigger change than "let employees see the
+// directory" and out of this fix's scope.
+const DIRECTORY_ROLES = [...READER_ROLES, "employee"];
 
 /**
  * SEC finding (HRMS role review): READER_ROLES lets a bare "manager" read
@@ -62,7 +78,7 @@ async function resolveManagerScope(ctx: RequestContext, req: FastifyRequest): Pr
 export async function employeeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/employees", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, DIRECTORY_ROLES);
     const q = employeeListQuery.parse(req.query);
     const managerScope = await resolveManagerScope(ctx, req);
     sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope));
