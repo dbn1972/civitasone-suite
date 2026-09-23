@@ -53,5 +53,12 @@ WITH ranked AS (
 DELETE FROM bbps.bbps_transactions
 WHERE id IN (SELECT id FROM ranked WHERE rn > 1);
 
-ALTER TABLE bbps.bbps_transactions
-  ADD CONSTRAINT uq_bbps_transactions_tenant_txn UNIQUE (tenant_id, bbps_txn_id);
+DO $$ BEGIN
+  ALTER TABLE bbps.bbps_transactions
+    ADD CONSTRAINT uq_bbps_transactions_tenant_txn UNIQUE (tenant_id, bbps_txn_id);
+-- UNIQUE constraints create a backing index implicitly; Postgres raises
+-- duplicate_table (42P07) for THAT name collision, not duplicate_object
+-- (42710) for a plain name clash. Both must be caught for this guard to
+-- actually be idempotent on a second run.
+EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
+END $$;

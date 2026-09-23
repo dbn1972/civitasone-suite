@@ -1,0 +1,56 @@
+# Migrations that STILL fail when scripts/ci/bootstrap-postgres.sh is run a
+# SECOND time in a row against the same already-migrated Postgres instance
+# (CI's migration-idempotency regression guard -- see the "Bootstrap Postgres
+# again" step in .github/workflows/ci.yml's quality-gates-schema job).
+# TRACKED DEBT, not approval -- a follow-up to the PR that closed the first,
+# larger tranche of this same class of bug (~47 of ~61 originally-found
+# non-idempotent migrations: bare ADD CONSTRAINT / CREATE POLICY / CREATE
+# INDEX missing a guard, RLS blocking a re-applied seed INSERT, a stale ON
+# CONFLICT target). These 14 remaining ones need real per-file root-cause
+# work, not a generic guard (unrecognized app.tenant_id GUC in triggers,
+# partition GRANT/trigger propagation, and cross-migration function-
+# ownership reassignment) -- deliberately left out of that PR to keep its
+# diff reviewable, and tracked here instead of silently masked.
+#
+# Distinct from scripts/ci/migration-failure-allowlist.txt (that one tracks
+# FIRST-run/fresh-cluster failures; this one tracks SECOND-run-only ones).
+# Same reconciliation semantics via BOOTSTRAP_ALLOWLIST_PATH: a failure NOT
+# listed here is new breakage (exit 1); a listed entry that now passes is
+# stale and must be removed (exit 1) so the fix cannot silently regress.
+#
+# A line may be prefixed with `CONDITIONAL: ` for the same reason as the
+# first-run allow-list: the 6 location-service/PostGIS entries below fail on
+# EVERY run (first or second) against plain postgres:16-alpine and pass on
+# postgis/postgis:16-3.4 -- extension availability, not idempotency debt.
+#
+# Regenerate with:
+#   BOOTSTRAP_ALLOWLIST_PATH="$PWD/scripts/ci/migration-second-run-allowlist.txt" \
+#   PGHOST=localhost PGPORT=<port> PGUSER=civitas PGPASSWORD=civitas_test \
+#   PGDATABASE=civitas_test POSTGRES_ADMIN_PASSWORD=civitas_test \
+#   BOOTSTRAP_WRITE_ALLOWLIST=1 bash scripts/ci/bootstrap-postgres.sh
+# ...against a throwaway container that has ALREADY had bootstrap-postgres.sh
+# run against it once (this measures the SECOND run, not the first) -- then
+# re-add `CONDITIONAL: ` to the postgis entries by hand (the write mode
+# doesn't know about that tag, same as the first-run allow-list).
+#
+# Generated: 2026-09-23  Count: 20 (6 CONDITIONAL: require the postgis extension)
+analytics-service/0002_hardening.sql                       # unique constraint on partitioned table must include all partitioning columns
+analytics-service/0004_money_bigint.sql                    # unrecognized configuration parameter "app.tenant_id"
+audit-service/0005_audit_immutability.sql                  # permission denied for table events_y2026m09
+audit-service/0006_audit_immutability.sql                  # permission denied for table events_y2026m09
+audit-service/0028_restore_cert_in_columns_partition_gap.sql # permission denied for table events
+audit-service/0029_events_immutability_trigger_missing_on_partitions.sql # trg_events_immutable is missing on 5 partition(s) of events.events after CREATE TRIGGER on the parent — see pr
+crm-service/0047_lead_escalation.sql                       # must be owner of function list_escalation_tenants
+crm-service/0055_task_escalation_rules.sql                 # must be owner of function list_task_escalation_tenants
+crm-service/0068_document_types.sql                        # must be owner of function list_document_alert_tenants
+crm-service/0082_cpgrams_alignment.sql                     # unrecognized configuration parameter "app.tenant_id"
+estab-service/0007_module_linkage_immutability.sql         # permission denied for table estab_notings
+estab-service/0011_noting_truncate_guard.sql               # permission denied for table estab_notings
+CONDITIONAL: location-service/0011_postgis_spatial.sql                  # extension "postgis" is not available
+CONDITIONAL: location-service/0014_land_cadastral_rls.sql               # extension "postgis" is not available
+CONDITIONAL: location-service/0015_locations_geom_trigger.sql           # extension "postgis" is not available
+CONDITIONAL: location-service/0016_spatial_features.sql                 # extension "postgis" is not available
+CONDITIONAL: location-service/0017_road_network.sql                     # extension "postgis" is not available
+CONDITIONAL: location-service/0019_geo_points.sql                       # extension "postgis" is not available
+notification-service/0023_i18n_schema_widen_columns.sql    # unrecognized configuration parameter "app.tenant_id"
+workflow-service/0029_rls_sweep_tenant_enumeration.sql     # must be owner of function sweep_task_tenants

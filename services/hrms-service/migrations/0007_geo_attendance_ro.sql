@@ -54,6 +54,25 @@ CREATE TABLE IF NOT EXISTS attendance.hrms_geo_attendance (
 CREATE INDEX IF NOT EXISTS idx_geo_att_emp_date ON attendance.hrms_geo_attendance(tenant_id, employee_id, attendance_date);
 
 -- ═══ Seed office locations ═══
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Wrapped in a DO block using set_config('app.tenant_id', ..., true) --
+-- SET LOCAL semantics (transaction-scoped to the DO block's own
+-- implicit transaction under psql's per-statement autocommit), not a
+-- raw session-scoped SET. This fleet routes through PgBouncer in
+-- transaction-pooling mode (PERF-001): a raw SET leaves the GUC on the
+-- shared backend connection for whichever unrelated client the pool
+-- hands it to next -- a cross-tenant leak for a tenant-scoping GUC. See
+-- scripts/ci/raw-session-guc-guard.mjs and the identical pattern in
+-- services/audit-service/migrations/0025_fix_legacy_status_values.sql.
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001', true);
+
 INSERT INTO employee.hrms_office_locations (id, tenant_id, name, address, latitude, longitude, radius_meters, created_by) VALUES
   ('aaaaaaaa-0001-0000-0000-000000000001', '00000000-0000-0000-0000-000000000001', 'Head Office Delhi', 'Shastri Bhawan, New Delhi', 28.6139, 77.2090, 200, '00000000-0000-0000-0000-000000000099'),
   ('aaaaaaaa-0001-0000-0000-000000000002', '00000000-0000-0000-0000-000000000001', 'Branch Office Mumbai', 'CGO Complex, Mumbai', 19.0760, 72.8777, 150, '00000000-0000-0000-0000-000000000099'),
@@ -71,3 +90,5 @@ UPDATE employee.hrms_employees SET
   office_location_id = 'aaaaaaaa-0001-0000-0000-000000000001'
 WHERE id = 'eeeeeeee-0001-0000-0000-000000000006' AND tenant_id = '00000000-0000-0000-0000-000000000001';
 
+END
+$body$;

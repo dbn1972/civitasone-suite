@@ -28,6 +28,7 @@ CREATE TABLE IF NOT EXISTS metadata.entity_definitions (
 
 ALTER TABLE metadata.entity_definitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE metadata.entity_definitions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON metadata.entity_definitions;
 CREATE POLICY tenant_isolation ON metadata.entity_definitions
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
@@ -59,6 +60,7 @@ CREATE TABLE IF NOT EXISTS metadata.field_definitions (
 
 ALTER TABLE metadata.field_definitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE metadata.field_definitions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON metadata.field_definitions;
 CREATE POLICY tenant_isolation ON metadata.field_definitions
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
@@ -80,6 +82,7 @@ CREATE TABLE IF NOT EXISTS metadata.layout_definitions (
 
 ALTER TABLE metadata.layout_definitions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE metadata.layout_definitions FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON metadata.layout_definitions;
 CREATE POLICY tenant_isolation ON metadata.layout_definitions
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
@@ -100,6 +103,7 @@ CREATE TABLE IF NOT EXISTS metadata.custom_records (
 
 ALTER TABLE metadata.custom_records ENABLE ROW LEVEL SECURITY;
 ALTER TABLE metadata.custom_records FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON metadata.custom_records;
 CREATE POLICY tenant_isolation ON metadata.custom_records
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);
@@ -131,6 +135,7 @@ CREATE TABLE IF NOT EXISTS metadata.validation_rules (
 
 ALTER TABLE metadata.validation_rules ENABLE ROW LEVEL SECURITY;
 ALTER TABLE metadata.validation_rules FORCE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS tenant_isolation ON metadata.validation_rules;
 CREATE POLICY tenant_isolation ON metadata.validation_rules
   USING (tenant_id = current_setting('app.tenant_id', true)::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id', true)::uuid);

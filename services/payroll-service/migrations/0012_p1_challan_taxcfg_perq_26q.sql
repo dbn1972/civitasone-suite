@@ -59,6 +59,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_tax_slab_config_fy_regime
 
 -- Seed FY 2024-25, 2025-26 (existing behaviour) and NEW FY 2026-27.
 -- new-regime surcharge top band capped at 25%; old-regime tops at 37%.
+--
+-- This INSERT supplies no tenant_id (the table had none at the time this
+-- migration was written), so once 0039_tax_slab_config_tenant_scope.sql adds
+-- tenant_id (DEFAULT the platform-default sentinel zero-UUID) plus FORCE RLS
+-- + tenant_isolation_policy, every row this INSERT proposes gets that same
+-- sentinel default and WITH CHECK requires tenant_id = current_tenant_id().
+-- On a fresh run 0039 has not executed yet so RLS has no effect; on a
+-- second full re-run it already has, and this session never otherwise sets
+-- app.tenant_id, so the DEFAULT sentinel row fails WITH CHECK. Scoped
+-- tightly around just this INSERT (not the whole file) since the other
+-- P1.1/P1.3/P1.4 sections in this file are unrelated tables.
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000000', true);
 INSERT INTO payroll.tax_slab_config
   (fy_start_year, regime, slabs, std_deduction, rebate_income_cap, rebate_max, surcharge_bands)
 VALUES
@@ -91,6 +105,8 @@ VALUES
    50000, 500000, 12500,
    '[{"above":5000000,"rate":0.10},{"above":10000000,"rate":0.15},{"above":20000000,"rate":0.25},{"above":50000000,"rate":0.37}]')
 ON CONFLICT (fy_start_year, regime) DO NOTHING;
+END
+$body$;
 
 -- ===========================================================================
 -- P1.3  FORM 12BA PERQUISITE COMPONENTS  (itemised per Sec 17(2))

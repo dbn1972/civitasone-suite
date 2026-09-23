@@ -1,6 +1,25 @@
 -- System notification templates (fixed UUIDs for cross-service notification.send payloads)
 -- tenant_id uses zero UUID for platform-wide templates
 
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Wrapped in a DO block using set_config('app.tenant_id', ..., true) --
+-- SET LOCAL semantics (transaction-scoped to the DO block's own
+-- implicit transaction under psql's per-statement autocommit), not a
+-- raw session-scoped SET. This fleet routes through PgBouncer in
+-- transaction-pooling mode (PERF-001): a raw SET leaves the GUC on the
+-- shared backend connection for whichever unrelated client the pool
+-- hands it to next -- a cross-tenant leak for a tenant-scoping GUC. See
+-- scripts/ci/raw-session-guc-guard.mjs and the identical pattern in
+-- services/audit-service/migrations/0025_fix_legacy_status_values.sql.
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000000', true);
+
 INSERT INTO templates.templates (id, tenant_id, channel, name, subject, body, status, created_by, updated_by)
 VALUES
   ('00000000-0000-4000-8001-000000000000', '00000000-0000-0000-0000-000000000000', 'in_app', 'default', 'Notification', '{{message}}', 'active',
@@ -42,3 +61,6 @@ VALUES
    'RTI {{rtiId}} assigned. Deadline: {{deadline}}', 'active',
    '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT (id) DO NOTHING;
+
+END
+$body$;

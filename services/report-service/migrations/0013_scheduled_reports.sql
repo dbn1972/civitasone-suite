@@ -36,6 +36,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_scheduled_reports_tenant
 ALTER TABLE reports.scheduled_reports ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports.scheduled_reports FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation_policy ON reports.scheduled_reports;
 CREATE POLICY tenant_isolation_policy ON reports.scheduled_reports
   USING (tenant_id = current_tenant_id())
   WITH CHECK (tenant_id = current_tenant_id());

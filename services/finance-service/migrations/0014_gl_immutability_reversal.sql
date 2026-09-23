@@ -30,7 +30,26 @@ CREATE INDEX IF NOT EXISTS idx_fjournals_reverses ON gl.finance_journals (revers
 --    Seeded for the demo/default tenant; production tenants get it via the
 --    same code on first bill post if absent (consumer falls back to AP code).
 -- ============================================================
-INSERT INTO budget.finance_heads (id, tenant_id, code, name, level, classification, created_by, updated_by)
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence (see the
+-- comment above), which is only true the FIRST time it is applied. On a
+-- re-run against an already-migrated cluster, RLS is already active and
+-- this session never otherwise sets app.tenant_id, so WITH CHECK would
+-- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
+-- on the candidate row before conflict resolution). Wrapped in a DO block using set_config('app.tenant_id', ..., true) --
+-- SET LOCAL semantics (transaction-scoped to the DO block's own
+-- implicit transaction under psql's per-statement autocommit), not a
+-- raw session-scoped SET. This fleet routes through PgBouncer in
+-- transaction-pooling mode (PERF-001): a raw SET leaves the GUC on the
+-- shared backend connection for whichever unrelated client the pool
+-- hands it to next -- a cross-tenant leak for a tenant-scoping GUC. See
+-- scripts/ci/raw-session-guc-guard.mjs and the identical pattern in
+-- services/audit-service/migrations/0025_fix_legacy_status_values.sql.
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001', true);
+
+  INSERT INTO budget.finance_heads (id, tenant_id, code, name, level, classification, created_by, updated_by)
 VALUES (
   'dddddddd-0001-0000-0000-000000002050'::uuid,
   '00000000-0000-0000-0000-000000000001'::uuid,
@@ -42,6 +61,8 @@ ON CONFLICT (tenant_id, code) DO NOTHING;
 
 -- ============================================================
 -- 3. Ledger: fully append-only (block UPDATE / DELETE / TRUNCATE)
+END
+$body$;
 -- ============================================================
 CREATE OR REPLACE FUNCTION gl.block_ledger_mutation() RETURNS trigger AS $$
 BEGIN

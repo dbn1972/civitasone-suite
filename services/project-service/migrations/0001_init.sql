@@ -86,9 +86,12 @@ CREATE TABLE IF NOT EXISTS project.project_tasks (
   version          integer      NOT NULL DEFAULT 1
 );
 
-ALTER TABLE project.project_tasks
-  ADD CONSTRAINT fk_task_parent FOREIGN KEY (parent_task_id)
-    REFERENCES project.project_tasks(id) DEFERRABLE INITIALLY DEFERRED;
+DO $$ BEGIN
+  ALTER TABLE project.project_tasks
+    ADD CONSTRAINT fk_task_parent FOREIGN KEY (parent_task_id)
+      REFERENCES project.project_tasks(id) DEFERRABLE INITIALLY DEFERRED;
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 CREATE INDEX IF NOT EXISTS idx_tasks_project ON project.project_tasks (project_id);
 

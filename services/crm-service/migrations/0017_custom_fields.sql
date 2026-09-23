@@ -20,14 +20,20 @@ CREATE TABLE IF NOT EXISTS crm.custom_fields (
 );
 
 -- Constraint: entity_type must be one of the allowed values
-ALTER TABLE crm.custom_fields
-  ADD CONSTRAINT chk_custom_fields_entity_type
-  CHECK (entity_type IN ('leads', 'contacts', 'deals'));
+DO $$ BEGIN
+  ALTER TABLE crm.custom_fields
+    ADD CONSTRAINT chk_custom_fields_entity_type
+    CHECK (entity_type IN ('leads', 'contacts', 'deals'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Constraint: field_type must be one of the allowed values
-ALTER TABLE crm.custom_fields
-  ADD CONSTRAINT chk_custom_fields_field_type
-  CHECK (field_type IN ('text', 'number', 'date', 'boolean', 'select', 'multi_select'));
+DO $$ BEGIN
+  ALTER TABLE crm.custom_fields
+    ADD CONSTRAINT chk_custom_fields_field_type
+    CHECK (field_type IN ('text', 'number', 'date', 'boolean', 'select', 'multi_select'));
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
 
 -- Index for listing by tenant + entity type (query pattern)
 CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_custom_fields_tenant_entity
@@ -37,6 +43,7 @@ CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_custom_fields_tenant_entity
 ALTER TABLE crm.custom_fields ENABLE ROW LEVEL SECURITY;
 ALTER TABLE crm.custom_fields FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation ON crm.custom_fields;
 CREATE POLICY tenant_isolation ON crm.custom_fields
   USING (tenant_id = current_setting('app.tenant_id')::uuid)
   WITH CHECK (tenant_id = current_setting('app.tenant_id')::uuid);

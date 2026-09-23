@@ -9,5 +9,8 @@ SET lock_timeout = '5s';
 DO $$ BEGIN
   ALTER TABLE cpf.hrms_cpf_accounts
     ADD CONSTRAINT hrms_cpf_accounts_cpf_number_uq UNIQUE (tenant_id, cpf_number);
-EXCEPTION WHEN duplicate_object THEN NULL;
+-- UNIQUE constraints create a backing index implicitly; Postgres raises
+-- duplicate_table (42P07) for THAT name collision, not duplicate_object
+-- (42710). Both must be caught for this guard to actually be idempotent.
+EXCEPTION WHEN duplicate_object OR duplicate_table THEN NULL;
 END $$;

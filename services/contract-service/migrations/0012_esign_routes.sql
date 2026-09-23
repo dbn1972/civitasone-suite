@@ -29,6 +29,7 @@ CREATE TABLE IF NOT EXISTS esign.esign_routes (
 ALTER TABLE esign.esign_routes ENABLE ROW LEVEL SECURITY;
 ALTER TABLE esign.esign_routes FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation ON esign.esign_routes;
 CREATE POLICY tenant_isolation ON esign.esign_routes
   USING (tenant_id::text = current_setting('app.tenant_id', true))
   WITH CHECK (tenant_id::text = current_setting('app.tenant_id', true));

@@ -115,6 +115,25 @@ CREATE TABLE IF NOT EXISTS employee.hrms_fnf_settlements (
 -- to '["a","b"]'. Only the quoting changed; no values were altered. Detected by
 -- running the bootstrap against a throwaway postgres:16-alpine container; hidden
 -- because scripts/ci/bootstrap-postgres.sh warned and continued.
+-- Idempotent under a second full bootstrap re-run: this seed relies on
+-- running before RLS is enabled later in this file/sequence, which is only
+-- true the FIRST time it is applied. On a re-run against an already-migrated
+-- cluster, RLS is already active and this session never otherwise sets
+-- app.tenant_id, so WITH CHECK would reject this row regardless of ON
+-- CONFLICT (Postgres evaluates WITH CHECK on the candidate row before
+-- conflict resolution). Wrapped in a DO block using set_config('app.tenant_id', ..., true) --
+-- SET LOCAL semantics (transaction-scoped to the DO block's own
+-- implicit transaction under psql's per-statement autocommit), not a
+-- raw session-scoped SET. This fleet routes through PgBouncer in
+-- transaction-pooling mode (PERF-001): a raw SET leaves the GUC on the
+-- shared backend connection for whichever unrelated client the pool
+-- hands it to next -- a cross-tenant leak for a tenant-scoping GUC. See
+-- scripts/ci/raw-session-guc-guard.mjs and the identical pattern in
+-- services/audit-service/migrations/0025_fix_legacy_status_values.sql.
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001', true);
+
 INSERT INTO employee.hrms_letter_templates (tenant_id, letter_type, name, template_html, variables, is_default, created_by) VALUES
 ('00000000-0000-0000-0000-000000000001', 'offer', 'Standard Offer Letter', '<html><body><h2>Offer of Employment</h2><p>Dear {{candidateName}},</p><p>We are pleased to offer you the position of <b>{{designation}}</b> in the <b>{{department}}</b> department at <b>{{orgName}}</b>.</p><p>Your CTC will be <b>₹{{ctc}}</b> per annum. Your joining date is <b>{{joiningDate}}</b>.</p><p>Please confirm your acceptance within 7 days.</p><p>Regards,<br/>HR Department</p></body></html>', '["candidateName","designation","department","orgName","ctc","joiningDate"]', true, '00000000-0000-0000-0000-000000000099'),
 ('00000000-0000-0000-0000-000000000001', 'appointment', 'Standard Appointment Letter', '<html><body><h2>Appointment Letter</h2><p>Dear {{employeeName}},</p><p>Ref: {{referenceNo}}</p><p>You are hereby appointed as <b>{{designation}}</b> in <b>{{department}}</b> w.e.f. <b>{{joiningDate}}</b>.</p><p>Your basic pay is <b>₹{{basicPay}}</b> per month. UAN: {{uan}}. PAN: {{pan}}.</p><p>Terms and conditions apply as per service rules.</p><p>HR Department<br/>{{orgName}}</p></body></html>', '["employeeName","referenceNo","designation","department","joiningDate","basicPay","uan","pan","orgName"]', true, '00000000-0000-0000-0000-000000000099'),
@@ -145,3 +164,5 @@ INSERT INTO attendance.hrms_shifts (tenant_id, name, start_time, end_time, grace
 ('00000000-0000-0000-0000-000000000001', 'Night Shift', '22:00', '06:00', 10, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT DO NOTHING;
 
+END
+$body$;

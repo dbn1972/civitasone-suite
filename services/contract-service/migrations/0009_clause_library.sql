@@ -47,6 +47,7 @@ CREATE OR REPLACE FUNCTION clauses.current_tenant_id() RETURNS uuid
   LANGUAGE sql STABLE SECURITY DEFINER
 AS $$ SELECT NULLIF(current_setting('app.tenant_id', true), '')::uuid $$;
 
+DROP POLICY IF EXISTS tenant_isolation ON clauses.clause_library;
 CREATE POLICY tenant_isolation ON clauses.clause_library
   USING (tenant_id = clauses.current_tenant_id())
   WITH CHECK (tenant_id = clauses.current_tenant_id());

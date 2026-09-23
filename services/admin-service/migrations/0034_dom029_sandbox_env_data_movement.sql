@@ -3,4 +3,4 @@
 -- was stubbed -- unlike the JOB row (refresh_jobs.data_movement), which is
 -- already honest about this. Mirrors that same stubbed|executed vocabulary.
 ALTER TABLE sandbox.sandbox_environments
-  ADD COLUMN last_refresh_data_movement varchar(16);
+  ADD COLUMN IF NOT EXISTS last_refresh_data_movement varchar(16);

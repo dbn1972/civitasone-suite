@@ -55,6 +55,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_document_versions_doc_ver
 ALTER TABLE documents.matter_documents ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents.matter_documents FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation ON documents.matter_documents;
 CREATE POLICY tenant_isolation ON documents.matter_documents
   USING (tenant_id = current_tenant_id())
   WITH CHECK (tenant_id = current_tenant_id());
@@ -62,6 +63,7 @@ CREATE POLICY tenant_isolation ON documents.matter_documents
 ALTER TABLE documents.document_versions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents.document_versions FORCE ROW LEVEL SECURITY;
 
+DROP POLICY IF EXISTS tenant_isolation ON documents.document_versions;
 CREATE POLICY tenant_isolation ON documents.document_versions
   USING (tenant_id = current_tenant_id())
   WITH CHECK (tenant_id = current_tenant_id());
