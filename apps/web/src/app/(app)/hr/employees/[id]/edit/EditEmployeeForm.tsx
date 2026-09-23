@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
 import { useFormError } from "@/lib/useFormError";
@@ -13,6 +13,9 @@ const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
 interface Props {
   employee: EmployeeDetail;
 }
+
+type EmployeeOption = { id: string; name?: string; employeeNo?: string };
+type PayStructureOption = { id: string; name?: string; code?: string };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -48,6 +51,29 @@ export function EditEmployeeForm({ employee }: Props) {
   const [uanNumber, setUanNumber] = useState((employee as Record<string,unknown>).uanNumber as string ?? "");
   const [esicIpNumber, setEsicIpNumber] = useState((employee as Record<string,unknown>).esicIpNumber as string ?? "");
   const [pran, setPran] = useState((employee as Record<string,unknown>).pran as string ?? "");
+
+  // Dropdown options for manager and pay structure (follows WFHRequestForm pattern)
+  const [managerOptions, setManagerOptions] = useState<EmployeeOption[]>([]);
+  const [payStructureOptions, setPayStructureOptions] = useState<PayStructureOption[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/proxy/v1/hrms/employees?limit=500")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((body: { data?: EmployeeOption[] } | EmployeeOption[]) => {
+        if (cancelled) return;
+        setManagerOptions(Array.isArray(body) ? body : (body.data ?? []));
+      })
+      .catch(() => { /* graceful fallback to text input */ });
+    fetch("/api/proxy/v1/hrms/pay-structures?limit=200")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((body: { data?: PayStructureOption[] } | PayStructureOption[]) => {
+        if (cancelled) return;
+        setPayStructureOptions(Array.isArray(body) ? body : (body.data ?? []));
+      })
+      .catch(() => { /* graceful fallback to text input */ });
+    return () => { cancelled = true; };
+  }, []);
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -109,9 +135,12 @@ export function EditEmployeeForm({ employee }: Props) {
     const initialBankIfsc = (employee as Record<string, unknown>).bankIfsc as string ?? "";
     if (bankAccountNo.trim() !== initialBankAccountNo) patch.bankAccountNo = bankAccountNo.trim();
     if (bankIfsc.trim().toUpperCase() !== initialBankIfsc.toUpperCase()) patch.bankIfsc = bankIfsc.trim().toUpperCase();
-    if (uanNumber.trim()) patch.uanNumber = uanNumber.trim();
-    if (esicIpNumber.trim()) patch.esicIpNumber = esicIpNumber.trim();
-    if (pran.trim()) patch.pran = pran.trim();
+    const initialUan = (employee as Record<string, unknown>).uanNumber as string ?? "";
+    const initialEsic = (employee as Record<string, unknown>).esicIpNumber as string ?? "";
+    const initialPran = (employee as Record<string, unknown>).pran as string ?? "";
+    if (uanNumber.trim() !== initialUan) patch.uanNumber = uanNumber.trim();
+    if (esicIpNumber.trim() !== initialEsic) patch.esicIpNumber = esicIpNumber.trim();
+    if (pran.trim() !== initialPran) patch.pran = pran.trim();
 
     if (Object.keys(patch).length === 0) {
       setTone("error");
@@ -276,49 +305,61 @@ export function EditEmployeeForm({ employee }: Props) {
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.managerId} style={labelStyle}>
               {t("managerIdLabel")}
-              <span
-                style={{
-                  marginInlineStart: 6,
-                  fontSize: 11,
-                  fontWeight: 400,
-                  color: "#64748b",
-                }}
-              >
-                {t("uuidHint")}
-              </span>
             </label>
-            <input
-              id={ids.managerId}
-              type="text"
-              value={managerId}
-              onChange={(e) => setManagerId(e.target.value)}
-              placeholder={t("managerIdPlaceholder")}
-              style={inputStyle}
-            />
+            {managerOptions.length > 0 ? (
+              <select
+                id={ids.managerId}
+                style={inputStyle}
+                value={managerId}
+                onChange={(e) => setManagerId(e.target.value)}
+              >
+                <option value="">{t("selectManagerPlaceholder")}</option>
+                {managerOptions.map((emp) => (
+                  <option key={emp.id} value={emp.id}>
+                    {emp.name ?? emp.id}{emp.employeeNo ? ` (${emp.employeeNo})` : ""}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id={ids.managerId}
+                type="text"
+                value={managerId}
+                onChange={(e) => setManagerId(e.target.value)}
+                placeholder={t("managerIdPlaceholder")}
+                style={inputStyle}
+              />
+            )}
           </div>
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={ids.payStructureId} style={labelStyle}>
               {t("payStructureIdLabel")}
-              <span
-                style={{
-                  marginInlineStart: 6,
-                  fontSize: 11,
-                  fontWeight: 400,
-                  color: "#64748b",
-                }}
-              >
-                {t("uuidHint")}
-              </span>
             </label>
-            <input
-              id={ids.payStructureId}
-              type="text"
-              value={payStructureId}
-              onChange={(e) => setPayStructureId(e.target.value)}
-              placeholder={t("payStructureIdPlaceholder")}
-              style={inputStyle}
-            />
+            {payStructureOptions.length > 0 ? (
+              <select
+                id={ids.payStructureId}
+                style={inputStyle}
+                value={payStructureId}
+                onChange={(e) => setPayStructureId(e.target.value)}
+              >
+                <option value="">{t("selectPayStructurePlaceholder")}</option>
+                {payStructureOptions.map((ps) => (
+                  <option key={ps.id} value={ps.id}>
+                    {ps.name ?? ps.code ?? ps.id}
+                  </option>
+                ))}
+              </select>
+            ) : (
+              <input
+                id={ids.payStructureId}
+                type="text"
+                value={payStructureId}
+                onChange={(e) => setPayStructureId(e.target.value)}
+                placeholder={t("payStructureIdPlaceholder")}
+                style={inputStyle}
+              />
+            )}
           </div>
         </div>
 

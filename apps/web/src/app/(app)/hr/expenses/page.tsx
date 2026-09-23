@@ -77,7 +77,6 @@ export default async function ExpensesPage() {
         <StatCard icon="❌" iconBg="#fff0f0" label={t("statRejectedLabel")} value={rejected} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <div className="card-h"><h3>{t("cardTitle")}</h3></div>
         <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🧾"

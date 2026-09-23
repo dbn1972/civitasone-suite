@@ -157,10 +157,14 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
       setMessage(t("toDateAfterFromError"));
       return;
     }
+    // NOTE: Client counts calendar days but the backend computes working days
+    // (excluding weekends/holidays). A strict client-side balance check would
+    // reject valid requests. Show a warning instead and let the backend decide.
     if (daysApplied > selectedAlloc.balanceDays) {
-      setStatus("error");
-      setMessage(t("insufficientBalanceError", { balance: selectedAlloc.balanceDays }));
-      return;
+      const proceed = confirm(
+        t("balanceWarning", { days: daysApplied, balance: selectedAlloc.balanceDays })
+      );
+      if (!proceed) return;
     }
 
     setStatus("submitting");
@@ -377,12 +381,17 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
         </div>
 
         {days > 0 ? (
-          <p className="text-sm text-slate-600">
-            {t("durationLabel")}{" "}
-            <span className="font-semibold text-slate-900">
-              {t("daysCount", { count: days })}
-            </span>
-          </p>
+          <div className="text-sm text-slate-600">
+            <p style={{ margin: 0 }}>
+              {t("durationLabel")}{" "}
+              <span className="font-semibold text-slate-900">
+                {t("daysCount", { count: days })}
+              </span>
+            </p>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "#94a3b8" }}>
+              {t("calendarDaysDisclaimer")}
+            </p>
+          </div>
         ) : null}
 
         {/* Reason — required, min 20 chars */}
