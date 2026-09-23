@@ -25,7 +25,14 @@ export function RouteError({
   reset: () => void;
   backHref?: string;
   backLabel?: string;
-  /** Plain noun for the area, e.g. "HR page". Used only in the friendly sentence. */
+  /**
+   * Plain label for the area, e.g. "HR page" or "Fleet Vehicles". Used only in
+   * the friendly sentence below — rendered with no leading article/determiner,
+   * because callers pass free text that is often plural or a list ("Insurance
+   * Claims", "Condemnation, Auction & Disposal"), which "this X" reads as
+   * broken ("this Insurance Claims"). Keep any new caller's value a bare noun
+   * phrase; don't rely on "this"/"these"/"a"/"an" agreeing with it.
+   */
   area?: string;
 }) {
   useEffect(() => {
@@ -47,7 +54,13 @@ export function RouteError({
           Something went wrong
         </h1>
         <p style={{ color: "var(--ink2)", maxWidth: 480, margin: "0 auto" }}>
-          We couldn&apos;t open this {area ?? "page"}. Please try again — your information is safe.
+          {/* No "this" before the area: it's caller-supplied free text and is
+              often plural or a list ("Insurance Claims", "Condemnation,
+              Auction & Disposal"), which "this X" reads as broken ("this
+              Insurance Claims"). Dropping the determiner reads correctly
+              regardless of the area's grammatical number. Same fix as
+              toHumanError() in lib/messages.ts. */}
+          We couldn&apos;t open {area?.trim() || "this page"}. Please try again — your information is safe.
         </p>
         {error.digest && (
           <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 8 }}>
