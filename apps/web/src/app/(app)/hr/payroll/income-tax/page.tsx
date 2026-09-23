@@ -3,8 +3,14 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_co
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { currentFinancialYear } from "@/lib/fiscalYear";
+import { formatRupees } from "@/lib/formatters";
 
-type Row = {
+// Wire shape from GET /v1/payroll/income-tax (tax/routes.ts): the money
+// fields are `String(rupeeNumber)` -- e.g. grossIncome computed from
+// slip.grossMinor/100, taxableIncome/taxPayable likewise rupee-scale -- not
+// paise, so formatMoney()/cellType:"amount" (which assume minor units) would
+// silently divide these by 100 again. Format with formatRupees() instead.
+type ApiIncomeTaxRow = {
   id: string;
   employee: string;
   department: string;
@@ -14,14 +20,27 @@ type Row = {
   taxableIncome: string;
   taxPayable: string;
   status: string;
-} & Record<string, unknown>;
+};
+
+type Row = ApiIncomeTaxRow & Record<string, unknown>;
+
+function mapIncomeTaxRows(rows: ApiIncomeTaxRow[]): Row[] {
+  return rows.map((r) => ({
+    ...r,
+    grossIncome: formatRupees(r.grossIncome),
+    deductions80C: formatRupees(r.deductions80C),
+    otherDeductions: formatRupees(r.otherDeductions),
+    taxableIncome: formatRupees(r.taxableIncome),
+    taxPayable: formatRupees(r.taxPayable),
+  }));
+}
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/payroll/income-tax", [], {
     telemetryKey: "payroll.income-tax",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiIncomeTaxRow[] })?.data;
+      return Array.isArray(arr) ? mapIncomeTaxRows(arr as ApiIncomeTaxRow[]) : null;
     },
   });
   return r;
