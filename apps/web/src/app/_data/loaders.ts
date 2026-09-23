@@ -522,7 +522,23 @@ function toEmployeeStatus(value: unknown): EmployeeStatus {
   return found ?? "probation";
 }
 
-function mapEmployees(payload: unknown): EmployeeSummary[] | null {
+// Exported (not a private closure) so it's directly unit testable without
+// mocking fetchJson -- see loaders.employees.test.ts.
+//
+// IMPORTANT: return the mapped array as-is, even when empty. A tenant with
+// zero employees is a normal, successful state (hrms-service replies 200
+// with {data: [], pagination: {...}}), not a parse failure -- fetchJson
+// treats a `null` mapResponse return as source:"error" (invalid_payload),
+// which renders the HR dashboard's page-level "Couldn't load" banner and
+// the employee table's "We couldn't load employees" state for a perfectly
+// healthy empty-tenant response. Same regression as mapContractsListRows
+// (fixup commit b6bd6740 / PR #813) and the generic mapModuleRows (see its
+// comment above moduleLoader()) -- this is the same `mapped.length > 0 ?
+// mapped : null` bug, independently present here. Only return null when the
+// payload itself couldn't be understood as a row list at all (getArrayPayload
+// returns null); that's a genuine invalid-payload failure, distinct from a
+// well-formed empty list.
+export function mapEmployees(payload: unknown): EmployeeSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
 
@@ -537,7 +553,7 @@ function mapEmployees(payload: unknown): EmployeeSummary[] | null {
     if (!id || !name) continue;
     mapped.push({ id, name, department, status, ...(empNo ? { employeeNo: empNo } : {}) });
   }
-  return mapped.length > 0 ? mapped : null;
+  return mapped;
 }
 
 function mapLeaveRequests(payload: unknown): LeaveRequestSummary[] | null {
