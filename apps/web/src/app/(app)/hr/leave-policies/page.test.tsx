@@ -1,4 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => ["hr_admin"],
+}));
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
