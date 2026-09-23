@@ -1,10 +1,20 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { PageHeader, Card, StatGrid, StatCard } from "../../../../../_components/ds";
 import { getSlipById } from "../../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"];
 
 export default async function PayslipDetailPage({ params }: { params: { id: string } }) {
+  const roles = getSessionRoles();
+  const canView = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
+  if (!canView) {
+    return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
+  }
+
   const { data: slip, source } = await getSlipById(params.id);
 
   if (!slip) {

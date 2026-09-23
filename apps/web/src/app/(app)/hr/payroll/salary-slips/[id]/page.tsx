@@ -1,10 +1,14 @@
 import { formatMoney } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { PageHeader } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { PrintButton } from "./PrintButton";
+
+const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"];
 
 type SlipComponent = { code: string; name: string; type: string; amountMinor: number };
 type Slip = {
@@ -36,11 +40,21 @@ function fmt(minor: number): string {
 }
 
 export default async function SalarySlipPage({ params }: { params: { id: string } }) {
+  const roles = getSessionRoles();
+  const canView = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
+  if (!canView) {
+    return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
+  }
+
   const { data: slip, source } = await getSlip(params.id);
   if (!slip) notFound();
 
   const earnings = slip.components.filter((c) => c.type === "earning");
   const deductions = slip.components.filter((c) => c.type === "deduction");
+
+  const maskedAccount = slip.bankAccount
+    ? "XXXX-XXXX-" + slip.bankAccount.slice(-4)
+    : "—";
 
   return (
     <main className="page-main wrap" style={{ maxWidth: 800 }}>
@@ -77,12 +91,10 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
               <td style={{ padding: "4px 0" }}><strong>Department:</strong> {slip.department ?? "—"}</td>
               <td style={{ padding: "4px 0" }}><strong>Designation:</strong> {slip.designation ?? "—"}</td>
             </tr>
-            {slip.bankAccount && (
-              <tr>
-                <td style={{ padding: "4px 0" }}><strong>Bank A/C:</strong> {slip.bankAccount}</td>
-                <td style={{ padding: "4px 0" }}><strong>Paid on:</strong> {slip.paidDate ?? "—"}</td>
-              </tr>
-            )}
+            <tr>
+              <td style={{ padding: "4px 0" }}><strong>Bank A/C:</strong> {maskedAccount}</td>
+              <td style={{ padding: "4px 0" }}><strong>Paid on:</strong> {slip.paidDate ?? "—"}</td>
+            </tr>
           </tbody>
         </table>
 
