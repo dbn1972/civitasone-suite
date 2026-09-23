@@ -6,6 +6,9 @@
  *   - maskValue: masks all but last 4 chars (e.g. "ABCDE1234F" → "******1234F")
  *   - stripPii: removes PII fields entirely from an employee record
  *   - maskPii: replaces PII fields with masked versions (for self-service/admin)
+ *   - isMaskedValue: detects maskValue()'s own output shape -- write-path
+ *     defense in depth, so a masked placeholder echoed back by a client is
+ *     never mistaken for a genuine value and persisted over the real one.
  */
 
 /** PII field keys that must be masked or stripped in API responses. */
@@ -20,6 +23,27 @@ export function maskValue(value: string | null | undefined, visibleChars = 4): s
   if (value.length <= visibleChars) return "*".repeat(value.length);
   const masked = "*".repeat(value.length - visibleChars) + value.slice(-visibleChars);
   return masked;
+}
+
+/**
+ * Detect whether `value` has exactly the shape maskValue() produces for the
+ * given `visibleChars` -- i.e. whether this looks like a masked placeholder
+ * rather than a genuine value.
+ *
+ * Write-path defense in depth: a client that echoes an already-masked field
+ * back unmodified (e.g. an edit form whose input state was seeded straight
+ * from a masked API response -- see employee/commands.ts updateEmployee and
+ * the EditEmployeeForm.tsx bug it guards against) must never have that
+ * placeholder persisted over the real stored value. False positives are not
+ * a practical concern for the PII fields this guards (bank account numbers,
+ * IFSC codes, PAN): none of them legitimately contain a literal "*".
+ */
+export function isMaskedValue(value: string | null | undefined, visibleChars = 4): boolean {
+  if (!value) return false;
+  if (value.length <= visibleChars) return /^\*+$/.test(value);
+  const maskedPrefix = value.slice(0, value.length - visibleChars);
+  const visibleSuffix = value.slice(value.length - visibleChars);
+  return /^\*+$/.test(maskedPrefix) && !visibleSuffix.includes("*");
 }
 
 /**

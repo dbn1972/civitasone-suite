@@ -3,6 +3,8 @@ import { putObject, StorageNotConfiguredError } from "@civitasone/storage";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { HttpError } from "../../shared/context.js";
+import { isMaskedValue } from "../../shared/pii-mask.js";
 import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody } from "./validators.js";
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
 import { db, scopedRead } from "../../shared/db.js";
@@ -143,6 +145,23 @@ export async function separateEmployee(ctx: RequestContext, id: string, body: Se
 }
 
 export async function updateEmployee(ctx: RequestContext, id: string, body: UpdateEmployeeBody): Promise<Accepted> {
+  // Data-corruption guard (defense in depth): bankAccountNo/bankIfsc are
+  // masked on read (pii-mask.ts maskValue, e.g. "*******1234"), and this
+  // command is the single choke point every caller of
+  // PATCH /v1/hrms/employees/:id goes through. A caller that echoes an
+  // unmodified masked value back here -- e.g. the EditEmployeeForm.tsx bug
+  // fixed alongside this guard, or any future/other caller with the same
+  // mistake -- must never have that placeholder persisted over the real
+  // stored value. Reject synchronously, before the update is even queued, so
+  // the caller gets an immediate error instead of a silent no-op overwrite.
+  if (isMaskedValue(body.bankAccountNo) || isMaskedValue(body.bankIfsc)) {
+    throw new HttpError(
+      400,
+      "MASKED_VALUE_REJECTED",
+      "bankAccountNo/bankIfsc looks like a masked placeholder, not a real value -- refusing to persist it.",
+    );
+  }
+
   const messageId = randomUUID();
   await queue.publish(COMMANDS.employeeUpdate, {
     messageId, type: COMMANDS.employeeUpdate,
