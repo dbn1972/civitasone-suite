@@ -10,6 +10,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { eq, and } from "drizzle-orm";
 import { hrmsLeaveApps } from "./schema.js";
+import { hrmsEmployees } from "../employee/schema.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 import * as commands from "./cancel-commands.js";
 
 const ALL_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
@@ -31,6 +33,29 @@ export async function leaveCancelRoutes(app: FastifyInstance): Promise<void> {
     }
     if (application.status !== "approved" && application.status !== "pending" && application.status !== "draft") {
       throw new HttpError(422, "CANNOT_CANCEL", `cannot cancel a leave application in status: ${application.status}`);
+    }
+
+    // IDOR guard: same isSelf||isManagerOfTarget pattern the leave-apply route uses.
+    // HR roles have full exemption; managers may cancel a direct report's leave;
+    // employees may cancel only their own.
+    const HR_ROLES_INNER = ["hr_admin", "hr_officer", "super_admin"];
+    const isHrActor = HR_ROLES_INNER.some((r) => ctx.roles.includes(r));
+    if (!isHrActor) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+      const isSelf = actorEmp?.id === application.employeeId;
+      // Look up target employee to check reporting line (managerId lives on
+      // hrmsEmployees, not on the leave application).
+      let isManagerOfTarget = false;
+      if (!isSelf && ctx.roles.includes("manager") && actorEmp != null) {
+        const [targetEmp] = await scopedRead((tx) =>
+          tx.select().from(hrmsEmployees)
+            .where(and(eq(hrmsEmployees.id, application.employeeId), eq(hrmsEmployees.tenantId, ctx.tenantId)))
+            .limit(1));
+        isManagerOfTarget = targetEmp?.managerId === actorEmp.id;
+      }
+      if (!isSelf && !isManagerOfTarget) {
+        throw new HttpError(403, "FORBIDDEN", "employees may only cancel their own leave applications (or, for managers, a direct report's)");
+      }
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.cancelLeave(ctx, id));
