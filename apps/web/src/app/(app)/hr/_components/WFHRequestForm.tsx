@@ -7,6 +7,7 @@
 
 import { useEffect, useState, useId } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "../../../_components/ds";
 
@@ -36,6 +37,7 @@ export function WFHRequestForm({
   weeklyWfhCount,
 }: WFHRequestFormProps) {
   const router = useRouter();
+  const t = useTranslations("wfhForm");
   const [state, setState] = useState<SubmitState>("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const formError = useFormError("WFH request");
@@ -84,12 +86,12 @@ export function WFHRequestForm({
     e.preventDefault();
     if (isGazetted || weeklyCapReached) return; // belt-and-suspenders
     if (!fromDate || !toDate) {
-      setErrorMsg("Both From date and To date are required.");
+      setErrorMsg(t("errorBothDatesRequired"));
       setState("error");
       return;
     }
     if (toDate < fromDate) {
-      setErrorMsg("To date cannot be before From date.");
+      setErrorMsg(t("errorToBeforeFrom"));
       setState("error");
       return;
     }
@@ -119,7 +121,7 @@ export function WFHRequestForm({
   return (
     <form
       onSubmit={handleSubmit}
-      aria-label="Work From Home request form"
+      aria-label={t("ariaLabel")}
       style={{ display: "flex", flexDirection: "column", gap: 18, padding: "20px 24px" }}
     >
       {/* DoPT OM 2022 eligibility banners */}
@@ -131,7 +133,7 @@ export function WFHRequestForm({
           data-testid="gazetted-error"
           style={errorBannerStyle}
         >
-          WFH is available for non-gazetted staff (Level 1–10) only per DoPT OM 2022.
+          {t("gazettedError")}
         </div>
       )}
 
@@ -142,7 +144,7 @@ export function WFHRequestForm({
           data-testid="weekly-cap-error"
           style={errorBannerStyle}
         >
-          2-day weekly WFH limit reached (DoPT OM 2022).
+          {t("weeklyCapError")}
         </div>
       )}
 
@@ -152,7 +154,7 @@ export function WFHRequestForm({
           data-testid="paylevel-warning"
           style={warningBannerStyle}
         >
-          Pay level could not be verified. You may submit, but the request is subject to eligibility review.
+          {t("payLevelWarning")}
         </div>
       )}
 
@@ -168,13 +170,15 @@ export function WFHRequestForm({
           color: "var(--info-text, #1d4ed8)",
         }}
       >
-        Per DoPT O.M., WFH is permitted for eligible cadres up to <strong>2 days per week</strong>.
-        Requests beyond this limit require DG/Secretary approval.
+        {t.rich("policyNote", {
+          limit: 2,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
       </div>
 
       {!prefillId && (
         <div>
-          <label htmlFor={idEmp} style={labelStyle}>Employee ID</label>
+          <label htmlFor={idEmp} style={labelStyle}>{t("labelEmployee")}</label>
           {employees.length > 0 ? (
             <select
               id={idEmp}
@@ -184,7 +188,7 @@ export function WFHRequestForm({
               required
               aria-required="true"
             >
-              <option value="">Select employee…</option>
+              <option value="">{t("placeholderEmployee")}</option>
               {employees.map((emp) => (
                 <option key={emp.id} value={emp.id}>
                   {emp.name ?? emp.id}{emp.employeeNo ? ` (${emp.employeeNo})` : ""}
@@ -208,7 +212,7 @@ export function WFHRequestForm({
 
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
-          <label htmlFor={idFrom} style={labelStyle}>From Date <span aria-hidden>*</span></label>
+          <label htmlFor={idFrom} style={labelStyle}>{t("labelFromDate")} <span aria-hidden>*</span></label>
           <input
             id={idFrom}
             type="date"
@@ -226,7 +230,7 @@ export function WFHRequestForm({
           )}
         </div>
         <div>
-          <label htmlFor={idTo} style={labelStyle}>To Date <span aria-hidden>*</span></label>
+          <label htmlFor={idTo} style={labelStyle}>{t("labelToDate")} <span aria-hidden>*</span></label>
           <input
             id={idTo}
             type="date"
@@ -246,13 +250,13 @@ export function WFHRequestForm({
       </div>
 
       <div>
-        <label htmlFor={idReason} style={labelStyle}>Reason / Purpose</label>
+        <label htmlFor={idReason} style={labelStyle}>{t("labelReason")}</label>
         <textarea
           id={idReason}
           style={{ ...inputStyle, resize: "vertical", minHeight: 80 }}
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          placeholder="Brief reason for the WFH request…"
+          placeholder={t("placeholderReason")}
           maxLength={500}
         />
       </div>
@@ -267,7 +271,7 @@ export function WFHRequestForm({
             margin: 0,
           }}
         >
-          {state === "done" ? "WFH request submitted. Redirecting…" : errorMsg}
+          {state === "done" ? t("successMessage") : errorMsg}
         </p>
       )}
 
@@ -278,7 +282,7 @@ export function WFHRequestForm({
           style={{ minHeight: 44 }}
           onClick={() => router.push("/hr/workforce/wfh")}
         >
-          Cancel
+          {t("cancel")}
         </Button>
         <Button
           type="submit"
@@ -287,7 +291,7 @@ export function WFHRequestForm({
           aria-busy={state === "submitting"}
           aria-disabled={submitDisabled}
         >
-          {state === "submitting" ? "Submitting…" : "Submit Request"}
+          {state === "submitting" ? t("submitting") : t("submitRequest")}
         </Button>
       </div>
     </form>

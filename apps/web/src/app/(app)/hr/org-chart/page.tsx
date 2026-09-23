@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, StatGrid, StatCard } from '../../../_components/ds'
 import { DataSourceBadge } from '../../../_components/DataSourceBadge'
 import { getOrgChart } from '../../../_data/loaders'
@@ -14,6 +15,7 @@ function countAll(nodes: OrgChartNode[]): number {
 export const metadata = { title: 'Organisation Chart — CivitasOne HRMS' }
 
 export default async function OrgChartPage() {
+  const t = await getTranslations("orgChart");
   const { data: nodes, source } = await getOrgChart()
 
   const managers = nodes.filter((n) => n.children && n.children.length > 0).length
@@ -24,16 +26,16 @@ export default async function OrgChartPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Organisation Chart"
-        subtitle="Ministry → Department → Division → Section — GoI reporting hierarchy."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label="Total Employees" value={totalCount} />
-        <StatCard icon="🏢" iconBg="#e6f7f0" label="Departments" value={uniqueDepts} />
-        <StatCard icon="💼" iconBg="#fff7e6" label="Managers" value={managers} />
-        <StatCard icon="🌟" iconBg="#f5f5f5" label="Root / Heads" value={roots} />
+        <StatCard icon="👥" iconBg="#e6f0ff" label={t("statTotalEmployees")} value={totalCount} />
+        <StatCard icon="🏢" iconBg="#e6f7f0" label={t("statDepartments")} value={uniqueDepts} />
+        <StatCard icon="💼" iconBg="#fff7e6" label={t("statManagers")} value={managers} />
+        <StatCard icon="🌟" iconBg="#f5f5f5" label={t("statRootHeads")} value={roots} />
       </StatGrid>
       <Card padding>
         <OrgChartClient data={nodes} />
