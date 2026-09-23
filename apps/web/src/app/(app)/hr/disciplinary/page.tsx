@@ -2,6 +2,14 @@ import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
+
+/**
+ * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's
+ * HR_ROLES guard on GET /v1/hrms/disciplinary-cases exactly.
+ */
+const DISCIPLINARY_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type RawRow = {
   id: string;
@@ -27,6 +35,13 @@ async function getData(): Promise<LoaderResult<RawRow[]>> {
 }
 
 export default async function DisciplinaryListPage() {
+  /* ── Role gate ─────────────────────────────────────────────── */
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => DISCIPLINARY_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="disciplinary cases" requiredRoles={DISCIPLINARY_ROLES} />;
+  }
+
   const { data: rawItems, source } = await getData();
   const items: Row[] = rawItems.map((r) => ({
     ...r,

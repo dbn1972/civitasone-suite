@@ -2,6 +2,14 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_compo
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
+
+/**
+ * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's
+ * HR_ROLES guard on GET /v1/hrms/vigilance exactly.
+ */
+const VIGILANCE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type RawRow = {
   id: string;
@@ -31,6 +39,13 @@ function shortId(id: string): string {
 }
 
 export default async function VigilancePage() {
+  /* ── Role gate ─────────────────────────────────────────────── */
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => VIGILANCE_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="vigilance cases" requiredRoles={VIGILANCE_ROLES} />;
+  }
+
   const t = await getTranslations("vigilance");
   const { data: rawItems, source } = await getData();
   const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
