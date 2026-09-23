@@ -102,12 +102,20 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_service_pack_key_version
 -- re-run against an already-migrated cluster, RLS is already active and
 -- this session never otherwise sets app.tenant_id, so WITH CHECK would
 -- reject this row regardless of ON CONFLICT (Postgres evaluates WITH CHECK
--- on the candidate row before conflict resolution). Session-scoped (not
--- SET LOCAL): bootstrap-postgres.sh runs this file as its own psql -f
--- connection with per-statement autocommit, not one transaction.
-SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+-- on the candidate row before conflict resolution). Wrapped in a DO block using set_config('app.tenant_id', ..., true) --
+-- SET LOCAL semantics (transaction-scoped to the DO block's own
+-- implicit transaction under psql's per-statement autocommit), not a
+-- raw session-scoped SET. This fleet routes through PgBouncer in
+-- transaction-pooling mode (PERF-001): a raw SET leaves the GUC on the
+-- shared backend connection for whichever unrelated client the pool
+-- hands it to next -- a cross-tenant leak for a tenant-scoping GUC. See
+-- scripts/ci/raw-session-guc-guard.mjs and the identical pattern in
+-- services/audit-service/migrations/0025_fix_legacy_status_values.sql.
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001', true);
 
-INSERT INTO packs.domain_packs (
+  INSERT INTO packs.domain_packs (
   id, tenant_id, domain_pack_key, sector, jurisdiction, version, name, description,
   manifest, pack_keys, status, created_by, updated_by
 ) VALUES (
@@ -137,6 +145,8 @@ INSERT INTO packs.service_packs (
   ('bbbbbbbb-0005-4000-8000-000000000005', '00000000-0000-0000-0000-000000000001', 'pack:property-tax', 'municipal-in-v1', 'Property Tax Self-Assessment', 'collection', 'engine', '4205', '{"businessService":"PT","engineKey":"revenue.assessment","pilot":true}'::jsonb, 'published', 1, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099'),
   ('bbbbbbbb-0006-4000-8000-000000000006', '00000000-0000-0000-0000-000000000001', 'pack:birth-death', 'municipal-in-v1', 'Birth & Death Registration', 'certificate', 'flat', '4206', '{"businessService":"BD","statutory":true,"pilot":true}'::jsonb, 'published', 1, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT (id) DO NOTHING;
+END
+$body$;
 
 -- ── RLS (tenant isolation) ─────────────────────────────────────────────────
 ALTER TABLE packs.domain_packs ENABLE ROW LEVEL SECURITY;
@@ -157,5 +167,3 @@ CREATE POLICY tenant_isolation ON packs.service_packs
 ALTER SCHEMA packs OWNER TO citizen_svc;
 ALTER TABLE packs.domain_packs OWNER TO citizen_svc;
 ALTER TABLE packs.service_packs OWNER TO citizen_svc;
-
-RESET app.tenant_id;

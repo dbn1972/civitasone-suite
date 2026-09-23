@@ -70,7 +70,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_tax_slab_config_fy_regime
 -- app.tenant_id, so the DEFAULT sentinel row fails WITH CHECK. Scoped
 -- tightly around just this INSERT (not the whole file) since the other
 -- P1.1/P1.3/P1.4 sections in this file are unrelated tables.
-SET app.tenant_id = '00000000-0000-0000-0000-000000000000';
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000000', true);
 INSERT INTO payroll.tax_slab_config
   (fy_start_year, regime, slabs, std_deduction, rebate_income_cap, rebate_max, surcharge_bands)
 VALUES
@@ -103,7 +105,8 @@ VALUES
    50000, 500000, 12500,
    '[{"above":5000000,"rate":0.10},{"above":10000000,"rate":0.15},{"above":20000000,"rate":0.25},{"above":50000000,"rate":0.37}]')
 ON CONFLICT (fy_start_year, regime) DO NOTHING;
-RESET app.tenant_id;
+END
+$body$;
 
 -- ===========================================================================
 -- P1.3  FORM 12BA PERQUISITE COMPONENTS  (itemised per Sec 17(2))

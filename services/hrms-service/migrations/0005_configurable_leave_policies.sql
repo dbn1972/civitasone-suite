@@ -39,15 +39,25 @@ CREATE INDEX IF NOT EXISTS idx_leave_policy_rules_tenant
 -- cluster, RLS is already active and this session never otherwise sets
 -- app.tenant_id, so WITH CHECK would reject this row regardless of ON
 -- CONFLICT (Postgres evaluates WITH CHECK on the candidate row before
--- conflict resolution). Session-scoped (not SET LOCAL): bootstrap-postgres.sh
--- runs this file as its own psql -f connection with per-statement autocommit,
--- not one transaction.
-SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+-- conflict resolution). Wrapped in a DO block using set_config('app.tenant_id', ..., true) --
+-- SET LOCAL semantics (transaction-scoped to the DO block's own
+-- implicit transaction under psql's per-statement autocommit), not a
+-- raw session-scoped SET. This fleet routes through PgBouncer in
+-- transaction-pooling mode (PERF-001): a raw SET leaves the GUC on the
+-- shared backend connection for whichever unrelated client the pool
+-- hands it to next -- a cross-tenant leak for a tenant-scoping GUC. See
+-- scripts/ci/raw-session-guc-guard.mjs and the identical pattern in
+-- services/audit-service/migrations/0025_fix_legacy_status_values.sql.
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001', true);
 
 INSERT INTO leave.hrms_leave_types (id, tenant_id, code, name, max_days, is_encashable, carry_forward, created_by, updated_by) VALUES
   ('eeeeeeee-0001-0000-0000-000000000050', '00000000-0000-0000-0000-000000000001', 'MED', 'Medical Leave', 15, false, false, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099'),
   ('eeeeeeee-0001-0000-0000-000000000051', '00000000-0000-0000-0000-000000000001', 'EOL', 'Extraordinary Leave (without pay)', 365, false, false, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT DO NOTHING;
+END
+$body$;
 
 -- ═══ Seed default policies for all employee types ═══
 -- Get existing leave type IDs
@@ -61,6 +71,8 @@ DECLARE
   med_id UUID := 'eeeeeeee-0001-0000-0000-000000000050';
   eol_id UUID := 'eeeeeeee-0001-0000-0000-000000000051';
 BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001', true);
+
   SELECT id INTO cl_id FROM leave.hrms_leave_types WHERE tenant_id = t_id AND code = 'CL' LIMIT 1;
   SELECT id INTO el_id FROM leave.hrms_leave_types WHERE tenant_id = t_id AND code = 'EL' LIMIT 1;
   SELECT id INTO hpl_id FROM leave.hrms_leave_types WHERE tenant_id = t_id AND code = 'HPL' LIMIT 1;
@@ -119,5 +131,3 @@ BEGIN
     (t_id, med_id, 'deputation', 15, false, 15,  false, 'calendar',     15,  0,  false, false, actor, actor)
   ON CONFLICT (tenant_id, leave_type_id, employee_type) DO NOTHING;
 END $$;
-
-RESET app.tenant_id;

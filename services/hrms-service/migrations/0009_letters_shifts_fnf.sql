@@ -121,10 +121,18 @@ CREATE TABLE IF NOT EXISTS employee.hrms_fnf_settlements (
 -- cluster, RLS is already active and this session never otherwise sets
 -- app.tenant_id, so WITH CHECK would reject this row regardless of ON
 -- CONFLICT (Postgres evaluates WITH CHECK on the candidate row before
--- conflict resolution). Session-scoped (not SET LOCAL): bootstrap-postgres.sh
--- runs this file as its own psql -f connection with per-statement autocommit,
--- not one transaction.
-SET app.tenant_id = '00000000-0000-0000-0000-000000000001';
+-- conflict resolution). Wrapped in a DO block using set_config('app.tenant_id', ..., true) --
+-- SET LOCAL semantics (transaction-scoped to the DO block's own
+-- implicit transaction under psql's per-statement autocommit), not a
+-- raw session-scoped SET. This fleet routes through PgBouncer in
+-- transaction-pooling mode (PERF-001): a raw SET leaves the GUC on the
+-- shared backend connection for whichever unrelated client the pool
+-- hands it to next -- a cross-tenant leak for a tenant-scoping GUC. See
+-- scripts/ci/raw-session-guc-guard.mjs and the identical pattern in
+-- services/audit-service/migrations/0025_fix_legacy_status_values.sql.
+DO $body$
+BEGIN
+  PERFORM set_config('app.tenant_id', '00000000-0000-0000-0000-000000000001', true);
 
 INSERT INTO employee.hrms_letter_templates (tenant_id, letter_type, name, template_html, variables, is_default, created_by) VALUES
 ('00000000-0000-0000-0000-000000000001', 'offer', 'Standard Offer Letter', '<html><body><h2>Offer of Employment</h2><p>Dear {{candidateName}},</p><p>We are pleased to offer you the position of <b>{{designation}}</b> in the <b>{{department}}</b> department at <b>{{orgName}}</b>.</p><p>Your CTC will be <b>₹{{ctc}}</b> per annum. Your joining date is <b>{{joiningDate}}</b>.</p><p>Please confirm your acceptance within 7 days.</p><p>Regards,<br/>HR Department</p></body></html>', '["candidateName","designation","department","orgName","ctc","joiningDate"]', true, '00000000-0000-0000-0000-000000000099'),
@@ -156,4 +164,5 @@ INSERT INTO attendance.hrms_shifts (tenant_id, name, start_time, end_time, grace
 ('00000000-0000-0000-0000-000000000001', 'Night Shift', '22:00', '06:00', 10, '00000000-0000-0000-0000-000000000099', '00000000-0000-0000-0000-000000000099')
 ON CONFLICT DO NOTHING;
 
-RESET app.tenant_id;
+END
+$body$;
