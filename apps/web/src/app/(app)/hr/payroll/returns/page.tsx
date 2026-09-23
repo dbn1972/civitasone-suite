@@ -92,7 +92,7 @@ function toForm24Q(raw: unknown): Form24Q | null {
         panFlag: String(d.panFlag ?? ""),
         name: String(d.name ?? ""),
         tdsDeductedMinor: Number(d.tdsDeductedMinor ?? 0),
-        tdsDepositedMinor: Number(d.tdsDeductedMinor ?? 0),
+        tdsDepositedMinor: Number(d.tdsDepositedMinor ?? 0),
         periods: Array.isArray(d.periods) ? (d.periods as string[]) : [],
       }))
     : [];
@@ -167,7 +167,8 @@ export default async function ReturnsPage({
     { key: "tdsDepositedMinor", label: "TDS Deposited", align: "right", cellType: "amount" },
   ];
   const totalTdsDeductedMinor24 = rows24.reduce((s, d) => s + d.tdsDeductedMinor, 0);
-  const totalTdsDepositedMinor24 = totalTdsDeductedMinor24;
+  const totalTdsDepositedMinor24 = rows24.reduce((s, d) => s + d.tdsDepositedMinor, 0);
+  const varianceMinor24 = totalTdsDeductedMinor24 - totalTdsDepositedMinor24;
 
   const rows26 = (f26?.deductees ?? []).map((d) => ({ ...d }));
   const totalAmountPaidMinor26 = rows26.reduce((s, d) => s + Number(d.amountPaidMinor ?? 0), 0);
@@ -248,6 +249,7 @@ export default async function ReturnsPage({
                   value={f24Lookup.data.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />
                 <StatCard icon="🏦" iconBg="var(--warnbg)" label="TDS Deposited" value={formatMoney(totalTdsDepositedMinor24)} />
+                <StatCard icon="⚠️" iconBg="var(--errorbg)" label="Variance" value={formatMoney(varianceMinor24)} />
               </StatGrid>
               {f24Lookup.data.reconciliation.warning && (
                 <p role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
