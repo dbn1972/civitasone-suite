@@ -56,10 +56,10 @@ export default async function CheckinLogPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="🔒" iconBg="#e6f7f0" label={t("statBiometricLabel")} value={errored ? "—" : biometric} />
-        <StatCard icon="⚠️" iconBg="#fff7e6" label={t("statMissingCheckoutLabel")} value={errored ? "—" : missingCheckout} />
-        <StatCard icon="📱" iconBg="#f5f5f5" label={t("statMobileManualLabel")} value={errored ? "—" : items.length - biometric} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="🔒" iconBg="var(--goodbg, #e6f7f0)" label={t("statBiometricLabel")} value={errored ? "—" : biometric} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statMissingCheckoutLabel")} value={errored ? "—" : missingCheckout} />
+        <StatCard icon="📱" iconBg="var(--bg, #f5f5f5)" label={t("statMobileManualLabel")} value={errored ? "—" : items.length - biometric} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {source === "error" ? (

@@ -122,7 +122,7 @@ export function HRKPIStrip({
         @media (max-width: 900px) { .kpi-strip { grid-template-columns: repeat(3, 1fr); } }
         @media (max-width: 560px) { .kpi-strip { grid-template-columns: repeat(2, 1fr); } }
         .kpi-card {
-          background: var(--surface, #fff);
+          background: var(--panel, #fff);
           border-radius: 8px;
           padding: 14px 16px 12px;
           box-shadow: 0 1px 3px rgba(15,34,64,.09);
@@ -140,13 +140,13 @@ export function HRKPIStrip({
         .kpi-val {
           font-size: 26px; font-weight: 700; letter-spacing: -.03em;
           font-variant-numeric: tabular-nums; line-height: 1;
-          color: var(--text, #0f172a);
+          color: var(--ink, #0f172a);
         }
         .kpi-val-sm  { font-size: 20px; }
         .kpi-val-muted { font-size: 20px; color: var(--muted, #64748b); }
         .kpi-trend { font-size: 11px; font-weight: 500; margin-top: 5px; }
-        .trend-up     { color: #15803d; }
-        .trend-down   { color: #dc2626; }
+        .trend-up     { color: var(--good, #15803d); }
+        .trend-down   { color: var(--bad, #dc2626); }
         .trend-flat   { color: var(--muted, #64748b); }
         .trend-urgent { color: #dc2626; font-weight: 700; }
         .kpi-badge {

@@ -120,8 +120,8 @@ export function GratuityCalculator() {
         <div
           style={{
             marginTop: 14,
-            background: "#fffbeb",
-            border: "1px solid #fde68a",
+            background: "var(--warnbg, #fffbeb)",
+            border: "1px solid var(--warnbd, #fde68a)",
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
@@ -139,26 +139,26 @@ export function GratuityCalculator() {
         <div
           style={{
             marginTop: 14,
-            background: "#f0fdf4",
-            border: "1px solid #bbf7d0",
+            background: "var(--goodbg, #f0fdf4)",
+            border: "1px solid var(--goodbd, #bbf7d0)",
             borderRadius: 8,
             padding: "14px 18px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 12, color: "#14532d" }}>{t("resultLabel")}</p>
+          <p style={{ margin: 0, fontSize: 12, color: "var(--good, #14532d)" }}>{t("resultLabel")}</p>
           <p
             style={{
               margin: "4px 0 0",
               fontSize: 28,
               fontWeight: 800,
-              color: "#16a34a",
+              color: "var(--good, #16a34a)",
               lineHeight: 1,
             }}
           >
             {formatRs(gratuity)}
           </p>
           {isCapped && (
-            <p style={{ margin: "6px 0 0", fontSize: 12, color: "#92400e" }}>
+            <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--warn, #92400e)" }}>
               {t("cappedNote", { amount: formatRs(maxRupees) })}
             </p>
           )}

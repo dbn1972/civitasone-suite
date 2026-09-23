@@ -137,19 +137,19 @@ export default async function GpfStatementsPage() {
 
         <div
           style={{
-            background: "#eff6ff",
-            border: "1px solid #bfdbfe",
+            background: "var(--infobg, #eff6ff)",
+            border: "1px solid var(--infobd, #bfdbfe)",
             borderRadius: 12,
             padding: "18px 20px",
           }}
         >
-          <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "#1e40af", textTransform: "uppercase" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--info, #1e40af)", textTransform: "uppercase" }}>
             {t("projectedValueLabel")}
           </p>
-          <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "#1d4ed8" }}>
+          <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "var(--info, #1d4ed8)" }}>
             {errored ? "—" : formatMoney(projectedCorpus)}
           </p>
-          <p style={{ margin: 0, fontSize: 11, color: "#1e40af" }}>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--info, #1e40af)" }}>
             {t("projectionNote", { years: AVG_YEARS_TO_RETIRE })}
           </p>
         </div>

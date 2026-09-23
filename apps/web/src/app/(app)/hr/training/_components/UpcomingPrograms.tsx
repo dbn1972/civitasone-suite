@@ -61,7 +61,8 @@ export function UpcomingPrograms({ programs }: UpcomingProgramsProps) {
   }
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-6">
+    <div className="rounded-xl border shadow-sm overflow-hidden mb-6"
+      style={{ background: "var(--panel, #fff)", borderColor: "var(--line, #e2e8f0)" }}>
       <div className="px-5 py-4 border-b border-slate-100">
         <h3 className="text-base font-semibold text-slate-800">Upcoming Programs</h3>
         <p className="text-xs text-slate-500 mt-0.5">Next {upcoming.length} scheduled training{upcoming.length !== 1 ? "s" : ""}</p>

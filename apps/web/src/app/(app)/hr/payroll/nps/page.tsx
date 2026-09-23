@@ -140,19 +140,19 @@ export default async function NpsStatementsPage() {
         {/* Projected corpus */}
         <div
           style={{
-            background: "#f0fdf4",
-            border: "1px solid #bbf7d0",
+            background: "var(--goodbg, #f0fdf4)",
+            border: "1px solid var(--goodbd, #bbf7d0)",
             borderRadius: 12,
             padding: "18px 20px",
           }}
         >
-          <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "#14532d", textTransform: "uppercase" }}>
+          <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--good, #14532d)", textTransform: "uppercase" }}>
             {t("projectedCorpusLabel")}
           </p>
-          <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "#16a34a" }}>
+          <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "var(--good, #16a34a)" }}>
             {errored ? "—" : formatMoney(projectedCorpus)}
           </p>
-          <p style={{ margin: 0, fontSize: 11, color: "#14532d" }}>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--good, #14532d)" }}>
             {t("projectionNote", { years: AVG_YEARS_TO_RETIRE })}
           </p>
         </div>

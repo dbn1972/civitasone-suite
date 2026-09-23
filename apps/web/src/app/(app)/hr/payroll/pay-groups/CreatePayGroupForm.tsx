@@ -110,7 +110,7 @@ export function CreatePayGroupForm() {
               id={freqId}
               value={frequency}
               onChange={(e) => setFrequency(e.target.value as typeof frequency)}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "var(--panel, #fff)" }}
             >
               {FREQUENCIES.map((f) => (
                 <option key={f.value} value={f.value}>{f.label}</option>
