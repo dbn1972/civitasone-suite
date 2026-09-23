@@ -254,16 +254,29 @@ export function isKnownEngagementType(code: string, canonicalCategories: Set<str
  * Reads are SEQUENTIAL (never Promise.all): two concurrent tenant transactions
  * on the pooled connection clash and return non-iterable results.
  */
-export async function assertKnownEngagementType(tenantId: string, code: string): Promise<void> {
+/**
+ * Resolve the two known-engagement-type sets (global canonical catalogue +
+ * this tenant's own hrms_employee_types master) in one pair of queries.
+ * Extracted from assertKnownEngagementType so a caller that needs to check
+ * many codes at once (bulk-import/routes.ts validating a whole batch) can
+ * fetch the sets once and check each row with the non-throwing
+ * isKnownEngagementType, instead of paying for the queries per row or
+ * having the first bad row's exception abort the rest of the batch.
+ */
+export async function resolveKnownEngagementTypeSets(tenantId: string): Promise<{ canonical: Set<string>; tenant: Set<string> }> {
   const canonRows = await scopedRead((tx) => tx.select({ c: engagementCatalogue.category }).from(engagementCatalogue));
   const ttRows = await scopedRead((tx) =>
     tx.select({ c: employeeTypeMaster.code }).from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, tenantId)),
   );
-  const known = isKnownEngagementType(
-    code,
-    new Set(canonRows.map((r) => String(r.c))),
-    new Set(ttRows.map((r) => String(r.c))),
-  );
+  return {
+    canonical: new Set(canonRows.map((r) => String(r.c))),
+    tenant: new Set(ttRows.map((r) => String(r.c))),
+  };
+}
+
+export async function assertKnownEngagementType(tenantId: string, code: string): Promise<void> {
+  const { canonical, tenant } = await resolveKnownEngagementTypeSets(tenantId);
+  const known = isKnownEngagementType(code, canonical, tenant);
   if (!known) {
     throw new HttpError(
       400,

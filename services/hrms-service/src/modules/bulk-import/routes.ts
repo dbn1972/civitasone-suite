@@ -6,6 +6,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { queue } from "../../shared/infra.js";
 import { randomUUID } from "node:crypto";
+import { isKnownEngagementType, resolveKnownEngagementTypeSets } from "../employee/engagement-policy.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
@@ -20,6 +21,14 @@ const bulkImportBody = z.object({
     mobile: z.string().max(20).optional(),
     gender: z.enum(["male", "female", "other"]).optional(),
     basicMinor: z.number().int().nonnegative().default(0),
+    // FINDING-2 (HRMS role-based review): missing entirely until this fix --
+    // ImportForm.tsx (and createEmployeeBody, the single-row equivalent)
+    // both send/require employeeType, and employee/consumer.ts's queue
+    // handler reads p.employeeType straight off this same
+    // hrms.employee.create payload (via `...emp` below) and inserts it
+    // uncoerced -- so every bulk-imported employee was silently getting
+    // employeeType: undefined. Default matches createEmployeeBody's.
+    employeeType: z.string().min(1).max(32).default("permanent"),
   })).min(1).max(500),
 });
 
@@ -30,16 +39,38 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
     const body = bulkImportBody.parse(req.body);
     const batchId = randomUUID();
 
-    // Validate all rows before queueing
-    const errors: Array<{ row: number; field: string; message: string }> = [];
+    // Validate all rows before queueing. Both checks report through
+    // `fieldErrors` (field: "employees.<idx>.<field>"), the same envelope
+    // shape the ZodError handler below already produces for a schema
+    // failure. FINDING-2 (HRMS role-based review): this used to be a
+    // bespoke `errors: [{row, field, message}]` shape that no frontend
+    // consumer could parse -- this route had no frontend consumer at all.
+    // apps/web's shared useFormError hook only recognises `fieldErrors`
+    // (keyed by field), the way locations/list/LocationActions.tsx already
+    // relies on -- one shared shape means ImportForm.tsx can read either
+    // failure mode (a hand-built validation error here, or a Zod parse
+    // failure) the same way.
+    const fieldErrors: Array<{ field: string; message: string }> = [];
     const seen = new Set<string>();
+    const { canonical, tenant } = await resolveKnownEngagementTypeSets(ctx.tenantId);
     body.employees.forEach((emp, idx) => {
-      if (seen.has(emp.employeeNo)) errors.push({ row: idx + 1, field: "employeeNo", message: `Duplicate: ${emp.employeeNo}` });
+      if (seen.has(emp.employeeNo)) {
+        fieldErrors.push({ field: `employees.${idx}.employeeNo`, message: `Duplicate: ${emp.employeeNo}` });
+      }
       seen.add(emp.employeeNo);
+      // The single-row path enforces this via assertKnownEngagementType
+      // (employee/routes.ts's POST /v1/hrms/employees) -- the bulk path
+      // queued straight past it with no check at all until this fix, so a
+      // typo'd employeeType would reach the DB unvalidated (the consumer
+      // just casts `p.employeeType as "permanent"`, which enforces nothing
+      // at runtime, it only satisfies the compiler).
+      if (!isKnownEngagementType(emp.employeeType, canonical, tenant)) {
+        fieldErrors.push({ field: `employees.${idx}.employeeType`, message: `unknown employee type '${emp.employeeType}'` });
+      }
     });
 
-    if (errors.length > 0) {
-      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "Bulk import has errors", errors, correlationId: ctx.correlationId });
+    if (fieldErrors.length > 0) {
+      return reply.code(400).send({ code: "VALIDATION_FAILED", message: "Bulk import has errors", fieldErrors, correlationId: ctx.correlationId });
     }
 
     // Queue each employee creation
@@ -58,7 +89,19 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/employees/bulk/status/:batchId", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    // In production this would check the import_batches table
+    // NOT WIRED TO REAL STATE (pre-existing -- left as-is by the HRMS
+    // role-based review's finding-2 fix, which is scoped to making
+    // ImportForm.tsx call the bulk endpoint correctly, not to building batch
+    // tracking). This always answers "completed" regardless of what the
+    // queued hrms.employee.create messages actually did -- there is no
+    // import_batches table or equivalent behind it, and batchId isn't even
+    // persisted anywhere by the POST handler above, so this route cannot
+    // presently distinguish a real batch id from a made-up one. Do not wire
+    // ImportForm.tsx (or any client) to poll this expecting per-row
+    // success/failure -- it would report "completed" even when every queued
+    // row failed downstream. Needs a real import_batches table (or
+    // equivalent) written by employee/consumer.ts per processed row before
+    // this can honestly answer per-row status.
     return reply.send({ batchId: (req.params as any).batchId, status: "completed", message: "Batch processed via CQRS" });
   });
 

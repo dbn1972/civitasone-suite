@@ -139,4 +139,21 @@ test.describe('HR', () => {
     // slips yet</h4> both also match /salary slip/i now.
     await expect(page.getByRole('heading', { name: /salary slip/i, level: 1 })).toBeVisible();
   });
+
+  // FINDING-1 (HRMS role-based review): hr/org-chart and hr/orgchart were two
+  // independent implementations of the same page -- org-chart is now
+  // canonical (it alone carries the UX-005 accessibility remediation and the
+  // GFR sanctioned-posts footnote; see next.config.mjs's redirects() for the
+  // full reasoning). This is also the first e2e coverage of this page.
+  test('org chart page loads at the canonical /hr/org-chart path', async ({ page }) => {
+    await page.goto('/hr/org-chart');
+    await expect(page.getByRole('heading', { name: 'Organisation Chart', level: 1 })).toBeVisible();
+    await expect(page.getByText('Total Employees')).toBeVisible();
+  });
+
+  test('/hr/orgchart (old no-hyphen path) redirects to /hr/org-chart', async ({ page }) => {
+    await page.goto('/hr/orgchart');
+    await expect(page).toHaveURL(/\/hr\/org-chart$/);
+    await expect(page.getByRole('heading', { name: 'Organisation Chart', level: 1 })).toBeVisible();
+  });
 });

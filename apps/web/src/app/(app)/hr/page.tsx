@@ -20,7 +20,7 @@ const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
 			{ title: "Dashboard", href: "/hr/dashboard", description: "People KPIs and quick navigation" },
 			{ title: "Employees", href: "/hr/employees", description: "Workforce directory and profiles" },
 			{ title: "Directory", href: "/hr/directory", description: "Search by name, dept, or designation" },
-			{ title: "Org Chart", href: "/hr/orgchart", description: "Reporting hierarchy" },
+			{ title: "Org Chart", href: "/hr/org-chart", description: "Reporting hierarchy" },
 			{ title: "ID Cards", href: "/hr/id-cards", description: "View issued employee and vendor ID cards" },
 		],
 	},
