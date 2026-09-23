@@ -31,13 +31,13 @@ export default async function IncomeTaxPage() {
   const t = await getTranslations("incomeTax");
   const { data: items, source: source } = await getData();
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "rupees"; align?: "left" | "right" }[] = [
     { key: "employee", label: t("colEmployee") },
-    { key: "grossIncome", label: t("colGrossIncome"), align: "right" },
-    { key: "deductions80C", label: t("col80c"), align: "right" },
-    { key: "otherDeductions", label: t("colOtherDed"), align: "right" },
-    { key: "taxableIncome", label: t("colTaxableIncome"), align: "right" },
-    { key: "taxPayable", label: t("colTaxPayable"), align: "right" },
+    { key: "grossIncome", label: t("colGrossIncome"), cellType: "rupees", align: "right" },
+    { key: "deductions80C", label: t("col80c"), cellType: "rupees", align: "right" },
+    { key: "otherDeductions", label: t("colOtherDed"), cellType: "rupees", align: "right" },
+    { key: "taxableIncome", label: t("colTaxableIncome"), cellType: "rupees", align: "right" },
+    { key: "taxPayable", label: t("colTaxPayable"), cellType: "rupees", align: "right" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 

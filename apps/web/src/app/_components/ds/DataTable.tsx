@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatRupees } from "@/lib/formatters";
 
 interface Column<T> {
   key: keyof T & string;
@@ -13,7 +13,7 @@ interface Column<T> {
   /** Use from client components only — cannot be passed from Server Components */
   render?: (row: T) => ReactNode;
   /** Server-safe: renders StatusPill from the row value at `key` */
-  cellType?: "status" | "amount";
+  cellType?: "status" | "amount" | "rupees";
   /** Opt-in: set false to exclude a column from sorting when the table is sortable. */
   sortable?: boolean;
 }
@@ -68,6 +68,9 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
     // missing data to 0 here (the old `?? 0`) made a fetch/mapping gap look
     // like a real zero-rupee amount across every cellType:"amount" column.
     return formatMoney(row[col.key] as bigint | number | string | null | undefined);
+  }
+  if (col.cellType === "rupees") {
+    return formatRupees(row[col.key] as number | string | null | undefined);
   }
   return String(row[col.key] ?? "");
 }
