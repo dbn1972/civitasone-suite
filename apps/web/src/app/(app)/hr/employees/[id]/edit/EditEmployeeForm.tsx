@@ -65,7 +65,7 @@ export function EditEmployeeForm({ employee }: Props) {
         setManagerOptions(Array.isArray(body) ? body : (body.data ?? []));
       })
       .catch(() => { /* graceful fallback to text input */ });
-    fetch("/api/proxy/v1/hrms/pay-structures?limit=200")
+    fetch("/api/proxy/v1/payroll/structures?limit=200")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((body: { data?: PayStructureOption[] } | PayStructureOption[]) => {
         if (cancelled) return;

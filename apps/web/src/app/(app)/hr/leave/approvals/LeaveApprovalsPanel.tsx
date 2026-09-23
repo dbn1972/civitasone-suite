@@ -35,7 +35,6 @@ type EnrichedTask = WorkflowTask & {
   dates: string;
   days: number | string;
   reason: string;
-  remarks: string;
 } & Record<string, unknown>;
 
 type Decision = "approve" | "reject";
@@ -109,7 +108,6 @@ export function LeaveApprovalsPanel() {
           dates: l ? `${formatIndianDate(l.fromDate)} – ${formatIndianDate(l.toDate)}` : "—",
           days: l?.days ?? "—",
           reason: l?.reason ?? "—",
-          remarks: "",
         };
       }),
     [tasks, leaveById],
@@ -187,7 +185,6 @@ export function LeaveApprovalsPanel() {
     { key: "dates", label: t("colDates") },
     { key: "days", label: t("colDays"), align: "right" },
     { key: "reason", label: t("colReason") },
-    { key: "remarks", label: t("colRemarks") },
     {
       key: "id",
       label: t("colDecision"),
