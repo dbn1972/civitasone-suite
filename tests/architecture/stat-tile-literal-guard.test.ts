@@ -143,6 +143,76 @@ describe("stat-tile-literal-guard: checkStatTileLiteralViolations()", () => {
     expect(violations).toHaveLength(1);
     expect(violations[0].reason).toMatch(/Services/);
   });
+
+  it('does NOT flag a legitimate marked static constant (label="Free Tier Storage" value="5 GB")', () => {
+    const source = `
+      {/* static reference: fixed plan constant, same for every tenant */}
+      <StatCard label="Free Tier Storage" value="5 GB" />
+    `;
+    expect(checkStatTileLiteralViolations(source)).toEqual([]);
+  });
+});
+
+// PR #1486 review follow-up: the guard's JSX-attribute-site check is, by
+// design, a single-hop analysis (see the file header's "deliberately does
+// not catch") -- but "single hop" was being measured inconsistently. These
+// four shapes are each exactly one hop away from a bare literal, no
+// cross-variable data-flow tracing required, and were invisible before this
+// fix even though the header already documented ternary/template/`??` as
+// "treated as data-bound" without actually checking what was inside them.
+// Each reproduces the reviewer's own fixture against
+// checkStatTileLiteralViolations() using the exact literal values ("99.9%",
+// "33") from the real #1472 bug this guard exists to catch.
+describe("stat-tile-literal-guard: one-hop-removed fabricated literals (PR #1486 review follow-up)", () => {
+  it('flags a template substitution that is itself a bare literal (value={`${"99.9"}%`}) -- reviewer gap #1', () => {
+    const source = '<StatCard label="Platform Uptime" value={`${"99.9"}%`} />';
+    const violations = checkStatTileLiteralViolations(source);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].reason).toMatch(/hardcoded literal \("99\.9%"\)/);
+  });
+
+  it('flags a ternary with one fabricated branch next to one real branch (value={isDemo ? "99.9%" : liveUptime}) -- reviewer gap #2', () => {
+    const source = `<StatCard label="Platform Uptime" value={isDemo ? "99.9%" : liveUptime} />`;
+    const violations = checkStatTileLiteralViolations(source);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].reason).toMatch(/hardcoded literal \("99\.9%"\)/);
+  });
+
+  it('flags a `??` fallback whose literal side is a fabricated metric, NOT the honest placeholder (value={data?.uptime ?? "99.9%"}) -- reviewer gap #3', () => {
+    const source = `<StatCard label="Platform Uptime" value={data?.uptime ?? "99.9%"} />`;
+    const violations = checkStatTileLiteralViolations(source);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].reason).toMatch(/hardcoded literal \("99\.9%"\)/);
+  });
+
+  it('flags a dead-left-side `??` fallback that always evaluates to the literal (value={undefined ?? "33"}) -- reviewer gap #4', () => {
+    const source = `<StatCard label="Services" value={undefined ?? "33"} />`;
+    const violations = checkStatTileLiteralViolations(source);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].reason).toMatch(/hardcoded literal \("33"\)/);
+  });
+
+  it('flags the same fallback mechanism via `||`, not just `??` (value={liveCount || "33"})', () => {
+    const source = `<StatCard label="Services" value={liveCount || "33"} />`;
+    const violations = checkStatTileLiteralViolations(source);
+    expect(violations).toHaveLength(1);
+    expect(violations[0].reason).toMatch(/hardcoded literal \("33"\)/);
+  });
+
+  it('does NOT flag a `||` fallback whose literal side is the honest placeholder (value={uptime || "—"})', () => {
+    const source = `<StatCard label="Platform Uptime" value={uptime || "—"} />`;
+    expect(checkStatTileLiteralViolations(source)).toEqual([]);
+  });
+
+  it("flags a fabricated literal one hop inside a StatCardGrid array entry, not just a bare StatCard value prop", () => {
+    const source = `
+      <StatCardGrid items={[
+        { label: "Platform Uptime", value: isDemo ? "99.9%" : liveUptime },
+      ]} />
+    `;
+    const violations = checkStatTileLiteralViolations(source);
+    expect(violations).toHaveLength(1);
+  });
 });
 
 describe("stat-tile-literal-guard: on-disk fixtures", () => {

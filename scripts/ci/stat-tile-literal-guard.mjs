@@ -31,14 +31,27 @@
 // apps/web/src/app/_components/ds/StatCard.tsx + StatCardGrid.tsx, the only
 // two such components live today) — whose `value` prop (StatCard) or whose
 // `items`/`stats` array entries' `value` field (StatCardGrid-shaped) is a
-// BARE literal that looks like a real metric (leads with a digit, after
+// literal that looks like a real metric (leads with a digit, after
 // stripping an optional leading currency symbol: "33", "99.9%", "8 hrs",
 // "₹42,000") rather than this app's own honest-placeholder vocabulary ("—",
 // "-", "--", "N/A", "Unknown", "TBD", ...; see StatCard.tsx's
-// displayValue()) or a real expression. An identifier, member/call
-// expression, template literal WITH a substitution, ternary, or `?? "—"`
-// fallback is treated as data-bound and left alone — only a bare literal
-// with nothing around it counts.
+// displayValue()) or a real expression — whether that literal sits bare in
+// the attribute (`value="33"`) or one syntax hop inside a shape that reads
+// as data-bound but isn't:
+//   - a template literal whose substitution is ITSELF a bare literal, with
+//     no genuinely dynamic part anywhere in the template
+//     (`` value={`${"99.9"}%`} ``);
+//   - a ternary with a fabricated literal on either branch
+//     (`value={isDemo ? "99.9%" : liveUptime}`);
+//   - a `??`/`||` fallback whose literal side is a fabricated metric rather
+//     than this app's honest placeholder
+//     (`value={data?.uptime ?? "99.9%"}`, `value={undefined ?? "33"}`).
+// An identifier, member/call expression, a template literal with at least
+// one genuinely dynamic substitution (`` `${online}/${total}` ``), a
+// ternary whose branches are each either a real expression or the honest
+// placeholder, or a `??`/`||` fallback whose literal side IS the honest
+// placeholder (`uptime ?? "—"`) is still treated as data-bound and left
+// alone.
 //
 // WHAT IT DELIBERATELY DOES NOT CATCH (scope, not oversight)
 // ------------------------------------------------------------
@@ -54,6 +67,18 @@
 //   manual review + a live-verify. Tracing values back through arbitrary
 //   variable assignments is left for a future, heavier tool if this gap
 //   proves costly in practice.
+// - The template/ternary/`??`/`||` recursion above composes through CHAINS
+//   of those same shapes (a ternary branch that's itself a template, a `??`
+//   whose fallback is itself a nested ternary, ...) — it is not artificially
+//   capped at one level, so e.g. `` `${config?.max ?? 1000}/min` `` (a
+//   template substitution that's a `??` fallback) is caught too. What stops
+//   the recursion is hitting a genuinely different node kind: an identifier,
+//   a call/member expression, or any binary operator other than `??`/`||`
+//   (string concatenation, `&&`, comparisons, ...). A literal buried inside
+//   a call argument, or reached through one of those other operators, is
+//   not descended into — recursing into arbitrary expression trees risks
+//   new false positives (e.g. a `+`-concatenated prefix) this guard can't
+//   cleanly bound, so that stays out of scope here.
 // - `delta`/trend props, icon colors, and every other non-`value` prop.
 // - An `items`/`stats` array assigned to a variable first
 //   (`const ROWS = [...]; <StatCardGrid items={ROWS} />`) rather than
@@ -184,12 +209,13 @@ function looksLikeFabricatedMetric(text) {
   return /^-?[0-9]/.test(stripped);
 }
 
-// Extracts the literal text from a bare-literal expression node, or null if
-// `expr` isn't one of the handful of "definitely not derived from
-// anything" shapes this guard cares about — a real identifier/member/call/
-// conditional/template-with-substitution/`??`-fallback expression all
-// return null here and are left alone (see the header's "deliberately does
-// not catch").
+// Extracts the literal text from an expression node — either a bare literal
+// itself, or one of the handful of one-hop-removed shapes below that
+// resolve to a fabricated literal even though they read as data-bound at a
+// glance. Returns null for a real identifier/member/call expression, or for
+// a template/ternary/`??`/`||` whose relevant side(s) are all genuinely
+// dynamic — those are left alone (see the header's "deliberately does not
+// catch").
 function literalTextOf(expr) {
   if (!expr) return null;
   if (ts.isStringLiteral(expr) || ts.isNoSubstitutionTemplateLiteral(expr)) return expr.text;
@@ -200,6 +226,60 @@ function literalTextOf(expr) {
     ts.isNumericLiteral(expr.operand)
   ) {
     return `-${expr.operand.text}`;
+  }
+  // A template literal WITH a substitution (`` `${x}%` ``) is only a bare
+  // literal in disguise when EVERY substitution itself resolves to literal
+  // text, recursively — e.g. `` `${"99.9"}%` ``. This is an AND across all
+  // spans: one genuinely dynamic substitution (`` `${online}/${total}` ``)
+  // makes the whole template return null here, same as before this fix.
+  if (ts.isTemplateExpression(expr)) {
+    let text = expr.head.text;
+    for (const span of expr.templateSpans) {
+      const spanText = literalTextOf(span.expression);
+      if (spanText === null) return null;
+      text += spanText + span.literal.text;
+    }
+    return text;
+  }
+  // A ternary, or a `??`/`||` fallback, is normally a data-bound shape —
+  // but that was only ever meant to hold when the literal side (if any) is
+  // this app's own honest "—" placeholder, or when neither side is a
+  // fabricated literal at all. It was never meant to blanket-exempt an
+  // arbitrary fabricated metric sitting in one branch
+  // (`isDemo ? "99.9%" : liveUptime`, `data?.uptime ?? "99.9%"`,
+  // `undefined ?? "33"`) — that is exactly the #1472 bug shape, one syntax
+  // hop removed. So: check each side; a side that is itself a bare literal
+  // AND looks fabricated (per looksLikeFabricatedMetric, which already
+  // excludes the honest-placeholder vocabulary) is surfaced. A side that
+  // resolves to the honest placeholder, or doesn't resolve to a literal at
+  // all (the genuinely data-bound case — an identifier, call, member
+  // access), contributes nothing, so the ternary/fallback stays exempt,
+  // unchanged from before. This is an OR across sides, unlike the AND used
+  // for template spans above: only one side needs to be fabricated for the
+  // whole expression to count as one.
+  if (ts.isConditionalExpression(expr)) {
+    return fabricatedSideOf(expr.whenTrue, expr.whenFalse);
+  }
+  if (
+    ts.isBinaryExpression(expr) &&
+    (expr.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken ||
+      expr.operatorToken.kind === ts.SyntaxKind.BarBarToken)
+  ) {
+    return fabricatedSideOf(expr.left, expr.right);
+  }
+  return null;
+}
+
+// Shared by the ConditionalExpression and `??`/`||` cases above. Returns
+// the first side's literal text if that side is both a bare literal and
+// fabricated-looking, else null. (reportIfFabricated re-checks
+// looksLikeFabricatedMetric on whatever literalTextOf returns, so doing the
+// check here too is a harmless redundant pass-through, not a second
+// independent gate.)
+function fabricatedSideOf(...sides) {
+  for (const side of sides) {
+    const text = literalTextOf(side);
+    if (text !== null && looksLikeFabricatedMetric(text)) return text;
   }
   return null;
 }
