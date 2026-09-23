@@ -1172,6 +1172,7 @@
     "loadingSubtitle": "एक अवकाश अनुरोध सबमिट करें।",
     "employeeLabel": "कर्मचारी",
     "noEmployeesLoaded": "कोई कर्मचारी लोड नहीं हुआ",
+    "noLinkedProfileMessage": "आपके खाते से कोई कर्मचारी रिकॉर्ड लिंक नहीं है, इसलिए आप अभी छुट्टी के लिए आवेदन नहीं कर सकते। अपने खाते को कर्मचारी रिकॉर्ड से लिंक कराने के लिए HR से संपर्क करें।",
     "leaveTypeLabel": "अवकाश प्रकार",
     "noLeaveAllocations": "कोई अवकाश आवंटन नहीं",
     "selectLeaveTypePlaceholder": "एक अवकाश प्रकार चुनें…",

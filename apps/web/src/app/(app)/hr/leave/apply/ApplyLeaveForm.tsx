@@ -34,6 +34,12 @@ type Props = {
    *  profile's "Apply Leave" quick action, ?empId=...). Falls back to the
    *  first employee in the list if not provided or not found in it. */
   initialEmployeeId?: string;
+  /** True when the logged-in user has no linked employee record at all — a
+   *  normal 404 from the self-service profile endpoint, not a fetch failure
+   *  — and (being a plain `employee`) no admin-picker access either. There
+   *  is nothing this form can do for them yet, so it shows a clear, honest
+   *  message instead of a confusing empty "no employees loaded" dropdown. */
+  noLinkedProfile?: boolean;
 };
 
 // Shared field input class
@@ -41,7 +47,7 @@ const fieldCls =
   "w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500";
 const errorCls = "mt-1 text-xs text-red-600";
 
-export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
+export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }: Props) {
   const t = useTranslations("leaveApply");
   const preselected = initialEmployeeId && employees.some((e) => e.id === initialEmployeeId)
     ? initialEmployeeId
@@ -206,6 +212,25 @@ export function ApplyLeaveForm({ employees, initialEmployeeId }: Props) {
   }
 
   const days = calcDays();
+
+  // No employee record is linked to this account at all (a normal 404, not
+  // a fetch failure — see page.tsx), and a plain `employee` role has no
+  // admin-picker fallback either. There is nothing to fill in here: show a
+  // clear, honest message instead of a form full of fields that can never be
+  // submitted (the picker would otherwise render an unexplained, permanently
+  // empty "No employees loaded" dropdown with a disabled submit button).
+  if (noLinkedProfile) {
+    return (
+      <section className="mx-auto max-w-2xl space-y-5">
+        <div
+          role="alert"
+          className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900"
+        >
+          {t("noLinkedProfileMessage")}
+        </div>
+      </section>
+    );
+  }
 
   // The page shell (landmark <main>, page <h1>, subtitle, and "back to Leave"
   // link) is already rendered once by page.tsx via the shared <PageHeader>
