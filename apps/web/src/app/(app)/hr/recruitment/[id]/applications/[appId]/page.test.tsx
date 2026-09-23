@@ -28,6 +28,12 @@ const LIST_RESPONSE = {
   ],
 };
 
+// UX: the hire dialog's departmentId/designationId now render as
+// name-based dropdowns (populated from these lists) instead of raw UUID
+// text boxes — see page.tsx's dropdown-vs-fallback-input branches.
+const DEPARTMENTS_RESPONSE = { data: [{ id: "dept-1", name: "IT Department" }] };
+const DESIGNATIONS_RESPONSE = { data: [{ id: "desig-1", name: "Software Engineer" }] };
+
 describe("ApplicationDetailPage", () => {
   afterEach(() => vi.unstubAllGlobals());
 
@@ -70,6 +76,12 @@ describe("ApplicationDetailPage", () => {
       if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") {
         return { ok: true, status: 200, json: async () => LIST_RESPONSE } as Response;
       }
+      if (url === "/api/proxy/v1/hrms/departments?limit=200") {
+        return { ok: true, status: 200, json: async () => DEPARTMENTS_RESPONSE } as Response;
+      }
+      if (url === "/api/proxy/v1/hrms/designations?limit=200") {
+        return { ok: true, status: 200, json: async () => DESIGNATIONS_RESPONSE } as Response;
+      }
       if (url === "/api/proxy/v1/hrms/applications/app-2/hire" && init?.method === "POST") {
         return { ok: true, status: 202, text: async () => "{}" } as Response;
       }
@@ -79,6 +91,8 @@ describe("ApplicationDetailPage", () => {
 
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
+
+    await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
 
     fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
     fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
@@ -115,6 +129,12 @@ describe("ApplicationDetailPage", () => {
         if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") {
           return new Response(JSON.stringify(LIST_RESPONSE), { status: 200 });
         }
+        if (url === "/api/proxy/v1/hrms/departments?limit=200") {
+          return new Response(JSON.stringify(DEPARTMENTS_RESPONSE), { status: 200 });
+        }
+        if (url === "/api/proxy/v1/hrms/designations?limit=200") {
+          return new Response(JSON.stringify(DESIGNATIONS_RESPONSE), { status: 200 });
+        }
         if (url === "/api/proxy/v1/hrms/applications/app-2/hire" && init?.method === "POST") {
           return new Response("hrms-service: hire command rejected", { status: 500 });
         }
@@ -124,6 +144,7 @@ describe("ApplicationDetailPage", () => {
 
       renderPage();
       fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
+      await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
       fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
       fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
       fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
