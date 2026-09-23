@@ -12,7 +12,7 @@ type Props = {
 export function NewAppraisalForm({ employees }: Props) {
   const router = useRouter();
 
-  const [employeeId, setEmployeeId] = useState(employees[0]?.id ?? "");
+  const [employeeId, setEmployeeId] = useState("");
   const [appraisalPeriod, setAppraisalPeriod] = useState("");
   const [reviewerId, setReviewerId] = useState("");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
@@ -82,11 +82,14 @@ export function NewAppraisalForm({ employees }: Props) {
           {employees.length === 0 ? (
             <option value="">No employees loaded</option>
           ) : (
-            employees.map((emp) => (
+            <>
+            <option value="" disabled>Select an employee...</option>
+            {employees.map((emp) => (
               <option key={emp.id} value={emp.id}>
                 {emp.name} ({emp.department})
               </option>
-            ))
+            ))}
+            </>
           )}
         </select>
       </div>

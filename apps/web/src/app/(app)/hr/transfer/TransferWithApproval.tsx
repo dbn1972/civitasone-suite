@@ -156,7 +156,7 @@ export function TransferWithApproval() {
 
   return (
     <>
-      <Button onClick={() => setOpen((v) => !v)}>
+      <Button onClick={() => { if (open) reset(); setOpen((v) => !v); }}>
         {open ? "Cancel" : "+ Transfer with approval"}
       </Button>
 

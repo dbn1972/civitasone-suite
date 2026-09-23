@@ -35,7 +35,7 @@ type DpcData = {
 };
 
 async function getData() {
-  return fetchJson<unknown, DpcData>("/api/v1/hrms/dpc/eligibility", {} as DpcData, {
+  return fetchJson<unknown, DpcData>("/api/v1/hrms/dpc/eligibility", { asOf: "—", minQualifyingYears: 0, eligibleCount: 0, ineligibleCount: 0, eligible: [], ineligible: [] }, {
     telemetryKey: "hr.dpc",
     mapResponse: (p) => {
       const d = p as DpcData;

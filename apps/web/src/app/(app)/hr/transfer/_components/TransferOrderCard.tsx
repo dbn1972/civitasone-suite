@@ -6,6 +6,7 @@
  * Action buttons per stage. Horizontal progress timeline.
  */
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { StatusPill, ConfirmDialog, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useToast } from "@/app/_components/ds/Toast";
@@ -79,6 +80,7 @@ type PendingStage = {
 
 export function TransferOrderCard({ transfer, onAction }: Props) {
   const { toast } = useToast();
+  const router = useRouter();
   const [acting, setActing] = useState(false);
   const [pending, setPending] = useState<PendingStage | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -103,6 +105,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
         throw new Error(resolved.message);
       }
       toast.success("Transfer updated. Change will reflect shortly.");
+      router.refresh();
       setPending(null);
       onAction?.();
     } catch (err) {

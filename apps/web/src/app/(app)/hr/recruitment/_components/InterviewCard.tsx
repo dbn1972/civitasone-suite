@@ -40,6 +40,7 @@ export function InterviewCard({
 }: InterviewCardProps) {
   const t = useTranslations("recruitmentInterviewCard");
   const slotLabel = formatIndianDateTime(slotISO);
+  const safeMeetLink = meetLink && /^https?:\/\//i.test(meetLink) ? meetLink : undefined;
 
   return (
     <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 flex flex-col gap-3">
@@ -68,9 +69,9 @@ export function InterviewCard({
 
       {/* Action row */}
       <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
-        {meetLink ? (
+        {safeMeetLink ? (
           <a
-            href={meetLink}
+            href={safeMeetLink}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-1.5 rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-500 transition-colors"

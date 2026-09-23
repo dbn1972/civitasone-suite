@@ -68,6 +68,7 @@ export function PromotionCard({ promotion }: Props) {
   const statusKey   = STATUS_LABEL_KEYS[promotion.status];
   const statusLabel = statusKey ? t(statusKey) : promotion.status;
   const chainIdx    = chainIndex(promotion.status);
+  const isCancelled  = promotion.status === "cancelled";
   const empLabel    = promotion.employee ?? promotion.employeeId ?? "Unknown";
   const fromLabel   = promotion.fromDesignation ?? promotion.fromGrade ?? promotion.fromDesigId ?? "—";
   const toLabel     = promotion.toDesignation   ?? promotion.toGrade   ?? promotion.toDesigId   ?? "—";
@@ -140,6 +141,11 @@ export function PromotionCard({ promotion }: Props) {
           <p style={{ margin: "0 0 8px", fontSize: "0.75rem", color: "var(--mut)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>
             {t("approvalChainLabel")}
           </p>
+          {isCancelled ? (
+            <p style={{ margin: "0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
+              This promotion was cancelled before completing the approval chain.
+            </p>
+          ) : (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {CHAIN.map(({ key, labelKey, icon }, i) => {
               const done   = i <= chainIdx;
@@ -159,6 +165,7 @@ export function PromotionCard({ promotion }: Props) {
               );
             })}
           </div>
+          )}
         </div>
       </div>
     </div>
