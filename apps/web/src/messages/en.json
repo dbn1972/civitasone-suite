@@ -678,6 +678,8 @@
     "statActive": "Active (Serving)",
     "statOnLeave": "On Leave",
     "statOthers": "Others",
+    "statActiveShown": "Active (Shown)",
+    "statOthersShown": "Others (Shown)",
     "tabAll": "All ({count})",
     "tabPermanent": "Permanent",
     "tabPermanentCount": "Permanent ({count})",
@@ -1199,7 +1201,9 @@
     "daysCount": "{count, plural, one {# day} other {# days}}",
     "loadContextError": "Failed to load leave balances",
     "allocationOption": "{name} ({balance} days balance)",
-    "charsCount": "{count} / 20+ chars"
+    "charsCount": "{count} / 20+ chars",
+    "balanceWarning": "You are applying for {days} days but only have {balance} days balance. The count shown is approximate (calendar days); the actual deduction may differ. Continue?",
+    "calendarDaysDisclaimer": "Approximate — excludes weekends "charsCount": "{count} / 20+ chars" holidays."
   },
   "leaveApprovals": {
     "title": "Leave Approvals",

@@ -678,6 +678,8 @@
     "statActive": "सक्रिय (सेवारत)",
     "statOnLeave": "अवकाश पर",
     "statOthers": "अन्य",
+    "statActiveShown": "सक्रिय (प्रदर्शित)",
+    "statOthersShown": "अन्य (प्रदर्शित)",
     "tabAll": "सभी ({count})",
     "tabPermanent": "स्थायी",
     "tabPermanentCount": "स्थायी ({count})",
@@ -1199,7 +1201,9 @@
     "daysCount": "{count, plural, one {# दिन} other {# दिन}}",
     "loadContextError": "अवकाश शेष लोड करने में विफल",
     "allocationOption": "{name} ({balance} दिन शेष)",
-    "charsCount": "{count} / 20+ अक्षर"
+    "charsCount": "{count} / 20+ अक्षर",
+    "balanceWarning": "आप {days} दिन की छुट्टी मांग रहे हैं लेकिन आपके पास केवल {balance} दिन शेष हैं। यह गणना अनुमानित है (कैलेंडर दिवस); वास्तविक कटौती भिन्न हो सकती है। जारी रखें?",
+    "calendarDaysDisclaimer": "अनुमानित — सप्ताहांत व छुट्टियाँ शामिल नहीं।"
   },
   "leaveApprovals": {
     "title": "अवकाश अनुमोदन",

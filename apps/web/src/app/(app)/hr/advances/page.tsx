@@ -46,7 +46,6 @@ export default async function AdvancesPage() {
       <RequestAdvanceForm />
 
       <Card title="Salary Advances">
-        <div className="card-h"><h3>Advance Requests</h3></div>
         <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or status…"
           pageSize={15}
           emptyIcon="💰"

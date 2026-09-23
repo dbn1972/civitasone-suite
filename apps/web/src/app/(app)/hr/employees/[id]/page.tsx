@@ -57,7 +57,7 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
         id: `t-${t.id}`,
         type: "transfer",
         date: t.joinedDate ?? t.effectiveDate ?? t.createdAt ?? new Date().toISOString(),
-        title: `Transfer → ${t.toOffice ?? t.toDeptId ?? "New Office"}`,
+        title: `Transfer → ${t.toOffice ?? "—"}`,
         detail: t.fromOffice ? `From ${t.fromOffice}` : undefined,
         status: t.status,
       });
@@ -70,7 +70,7 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
         id: `p-${p.id}`,
         type: "promotion",
         date: p.effectiveDate ?? p.createdAt ?? new Date().toISOString(),
-        title: `Promoted to ${p.toDesignation ?? p.toGrade ?? p.toDesigId ?? "New Grade"}`,
+        title: `Promoted to ${p.toDesignation ?? p.toGrade ?? "—"}`,
         status: p.status,
       });
     }
