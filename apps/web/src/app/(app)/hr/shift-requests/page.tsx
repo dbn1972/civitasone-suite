@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * ShiftRequestsPage — employee requests to swap/change shift.
@@ -48,6 +49,7 @@ export default async function ShiftRequestsPage() {
   const t = await getTranslations("shiftRequests");
   const { data: items, source } = await getData();
 
+  const errored = source === "error";
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
   const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
@@ -70,13 +72,16 @@ export default async function ShiftRequestsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🔄" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={approved} />
-        <StatCard icon="❌" iconBg="#fff0f0" label={t("statRejectedLabel")} value={rejected} />
+        <StatCard icon="🔄" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPendingLabel")} value={errored ? "—" : pending} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApprovedLabel")} value={errored ? "—" : approved} />
+        <StatCard icon="❌" iconBg="#fff0f0" label={t("statRejectedLabel")} value={errored ? "—" : rejected} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "shift requests" })} backHref="/hr" />
+        ) : (
+          <DataTable<Row>
           columns={COLUMNS}
           rows={items}
           sortable
@@ -87,6 +92,7 @@ export default async function ShiftRequestsPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

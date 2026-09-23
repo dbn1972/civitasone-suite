@@ -42,6 +42,7 @@ export default async function SocialFeedPage() {
   const t = await getTranslations("socialFeed");
   const { data: feed, source } = await getData();
 
+  const errored = source === "error";
   const kudosCount        = feed.filter((f) => f.type === "kudos").length;
   const birthdayCount     = feed.filter((f) => f.type === "birthday").length;
   const newJoineeCount    = feed.filter((f) => f.type === "new_joinee").length;
@@ -56,10 +57,10 @@ export default async function SocialFeedPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🌟" iconBg="#fffbe6" label={t("statKudosLabel")}         value={kudosCount} />
-        <StatCard icon="🎂" iconBg="#fff0f6" label={t("statBirthdaysLabel")}    value={birthdayCount} />
-        <StatCard icon="👋" iconBg="#e6f7f0" label={t("statNewJoineesLabel")}   value={newJoineeCount} />
-        <StatCard icon="📢" iconBg="#e6f0ff" label={t("statAnnouncementsLabel")} value={announcementCount} />
+        <StatCard icon="🌟" iconBg="#fffbe6" label={t("statKudosLabel")}         value={errored ? "—" : kudosCount} />
+        <StatCard icon="🎂" iconBg="#fff0f6" label={t("statBirthdaysLabel")}    value={errored ? "—" : birthdayCount} />
+        <StatCard icon="👋" iconBg="#e6f7f0" label={t("statNewJoineesLabel")}   value={errored ? "—" : newJoineeCount} />
+        <StatCard icon="📢" iconBg="#e6f0ff" label={t("statAnnouncementsLabel")} value={errored ? "—" : announcementCount} />
       </StatGrid>
 
       {source === "error" ? (
@@ -102,7 +103,7 @@ export default async function SocialFeedPage() {
               }
               if (item.type === "birthday") {
                 return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "#fff9f0", borderBottom: "1px solid var(--line)" }}>
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--warnbg, #fff9f0)", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 32 }}>🎂</span>
                     <div>
                       <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("birthdayGreeting", { name: item.name ?? "" })}</p>
@@ -113,7 +114,7 @@ export default async function SocialFeedPage() {
               }
               if (item.type === "new_joinee") {
                 return (
-                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "#f0fff8", borderBottom: "1px solid var(--line)" }}>
+                  <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--goodbg, #f0fff8)", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 32 }}>👋</span>
                     <div>
                       <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("newJoineeGreeting", { name: item.name ?? "" })}</p>
@@ -124,7 +125,7 @@ export default async function SocialFeedPage() {
               }
               if (item.type === "announcement") {
                 return (
-                  <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: item.pinned ? "#f5f8ff" : "transparent" }}>
+                  <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: item.pinned ? "var(--infobg, #f5f8ff)" : "transparent" }}>
                     <span style={{ fontSize: 24 }}>{item.pinned ? "📌" : "📢"}</span>
                     <div style={{ flex: 1 }}>
                       <p style={{ fontWeight: 600, fontSize: 14 }}>{item.title}</p>

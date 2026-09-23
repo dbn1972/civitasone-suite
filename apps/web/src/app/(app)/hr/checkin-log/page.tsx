@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -29,6 +30,7 @@ export default async function CheckinLogPage() {
   const t = await getTranslations("checkinLog");
   const { data: items, source } = await getData();
 
+  const errored = source === "error";
   const biometric = items.filter((i) => {
     const s = String(i.checkinSource ?? "").toLowerCase();
     return s === "biometric" || s === "bio" || s === "hardware";
@@ -54,13 +56,16 @@ export default async function CheckinLogPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
-        <StatCard icon="🔒" iconBg="#e6f7f0" label={t("statBiometricLabel")} value={biometric} />
-        <StatCard icon="⚠️" iconBg="#fff7e6" label={t("statMissingCheckoutLabel")} value={missingCheckout} />
-        <StatCard icon="📱" iconBg="#f5f5f5" label={t("statMobileManualLabel")} value={items.length - biometric} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="🔒" iconBg="#e6f7f0" label={t("statBiometricLabel")} value={errored ? "—" : biometric} />
+        <StatCard icon="⚠️" iconBg="#fff7e6" label={t("statMissingCheckoutLabel")} value={errored ? "—" : missingCheckout} />
+        <StatCard icon="📱" iconBg="#f5f5f5" label={t("statMobileManualLabel")} value={errored ? "—" : items.length - biometric} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "check-in log" })} backHref="/hr" />
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -71,6 +76,7 @@ export default async function CheckinLogPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );
