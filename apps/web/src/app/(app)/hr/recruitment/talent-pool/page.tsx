@@ -2,8 +2,14 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+
+// Mirrors HR_ROLES in services/hrms-service/src/modules/recruitment/routes.ts
+// (GET /v1/hrms/talent-pool) -- kept local rather than shared, matching how
+// the backend itself already re-declares this same list per route file.
+const TALENT_POOL_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type Candidate = {
   id: string;
@@ -38,7 +44,30 @@ export default async function TalentPoolPage({
   searchParams: { skill?: string; minExp?: string };
 }) {
   const t = await getTranslations("recruitmentTalentPool");
-  const { data: candidates, source } = await getCandidates(searchParams.skill, searchParams.minExp);
+  const { data: candidates, source, status } = await getCandidates(searchParams.skill, searchParams.minExp);
+
+  // A 403 here is a real, permanent role restriction (talent-pool search
+  // spans every candidate across every vacancy tenant-wide, deliberately
+  // HR-only -- see HR_ROLES in routes.ts), not a transient failure. Showing
+  // the normal "Couldn't load -- try again" error state for it is actively
+  // misleading: retrying will never succeed, and it reads as this page
+  // being broken rather than as a role the viewer correctly doesn't have.
+  // Skip the stats/filters/table entirely (none of it is meaningful with
+  // zero access) and say plainly what's actually true.
+  if (status === 403) {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader
+          title={t("title")}
+          subtitle={t("subtitle")}
+          back="/hr/recruitment"
+          backLabel={t("backLabel")}
+          help="hr"
+        />
+        <PermissionDenied module="the talent pool" requiredRoles={TALENT_POOL_ROLES} />
+      </main>
+    );
+  }
 
   const withSkills  = candidates.filter((c) => c.skills && c.skills.length > 0).length;
   const experienced = candidates.filter((c) => (c.experienceYears ?? 0) >= 5).length;

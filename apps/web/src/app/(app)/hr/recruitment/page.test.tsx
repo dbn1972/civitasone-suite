@@ -69,7 +69,7 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     expect(screen.getByText("No active job postings yet")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when the dashboard stats fetch fails, even though openings succeeded (HR-A finding: previously silent — stats section had no badge at all)", async () => {
+  it("shows a badge when the dashboard stats fetch fails, even though openings succeeded (HR-A finding: previously silent — stats section had no badge at all) — but NOT the 'showing nothing' text, since the openings table below is genuinely showing real data (manager-role finding: this exact shape is what a manager role sees, since /recruitment/dashboard is HR-only but /job-openings includes manager)", async () => {
     fetchJsonMock
       .mockResolvedValueOnce({ data: EMPTY_STATS, source: "error" })
       .mockResolvedValueOnce({ data: [OPENING], source: "api" });
@@ -77,7 +77,12 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     const ui = await RecruitmentPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    // A badge still appears (something -- the stats -- really did fail)...
+    expect(screen.getByText("Some figures on this page couldn't be loaded.")).toBeInTheDocument();
+    // ...but it must not claim "showing nothing": the openings table below
+    // rendered this row from real, successfully-fetched data.
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.getByText("Junior Engineer")).toBeInTheDocument();
   });
 
   it("shows the data-source badge when the openings fetch fails, even though dashboard stats succeeded", async () => {

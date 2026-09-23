@@ -1,9 +1,15 @@
 import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { JoineeCard, type JoineeCardData } from "./_components/JoineeCard";
+
+// Mirrors HR_ROLES in services/hrms-service/src/modules/lifecycle/onboarding-routes.ts
+// (GET /v1/hrms/onboarding) -- kept local rather than shared, matching how
+// the backend itself already re-declares this same list per route file.
+const ONBOARDING_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type Row = {
   id: string;
@@ -28,7 +34,28 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function OnboardingPage() {
-  const { data: items, source } = await getData();
+  const { data: items, source, status } = await getData();
+
+  // A 403 here is a real, permanent role restriction (this is a tenant-wide
+  // onboarding summary across every new joinee, deliberately HR-only -- see
+  // HR_ROLES in onboarding-routes.ts), not a transient failure. The normal
+  // "Couldn't load -- try again" error state is misleading for it: retrying
+  // never succeeds, and it reads as this page being broken rather than as a
+  // role the viewer correctly doesn't have. Skip the stat tiles/cards
+  // entirely (none of it is meaningful with zero access) and say plainly
+  // what's actually true.
+  if (status === 403) {
+    return (
+      <main className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader
+          title="Onboarding Tracker"
+          subtitle="Onboarding checklist progress for new joinees — document collection, IT setup, and departmental induction."
+          back="/hr"
+        />
+        <PermissionDenied module="the onboarding tracker" requiredRoles={ONBOARDING_ROLES} />
+      </main>
+    );
+  }
 
   const inProgress = items.filter((i) => i.status === "in_progress").length;
   const completed = items.filter((i) => i.status === "completed").length;
