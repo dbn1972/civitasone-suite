@@ -61,6 +61,14 @@ export default async function HRDashboardPage() {
   // Note: getDashboardLeaveInbox() doesn't surface a `source` (it discards the
   // loader's error token internally -- a separate, loader-level gap outside
   // UX-013's page.tsx scope), so it can't be included here.
+  //
+  // profileResult specifically: a 404 on /hrms/me/profile ("no employee
+  // record linked to your user") is a normal, expected state for an
+  // admin/test account with no linked employee record -- getMyProfile()
+  // itself now normalizes that one case to source:"api"/data:null (see
+  // loaders.ts), so it never reaches here as an "error" in the first place.
+  // Any OTHER profile failure (auth, network, 5xx) still counts, same as
+  // dashResult/empResult.
   const anyError =
     source === "error" ||
     empResult.source === "error" ||
@@ -73,6 +81,14 @@ export default async function HRDashboardPage() {
   // loaders.ts); passing null here on a real dashResult failure is what
   // tells HRKPIStrip that zero was fabricated, not counted.
   const hrDashboardFailed = source === "error";
+  // Same reasoning, for the employee table: it only renders empResult's own
+  // rows, so it must only show the "couldn't load" error state on
+  // empResult's own failure -- not because the unrelated dashboard summary
+  // or profile fetch errored (that was this page's actual bug: the table
+  // used the broad anyError and so kept showing "We couldn't load
+  // employees" even when empResult had genuinely succeeded, purely because
+  // profileResult's legitimate 404 kept anyError true).
+  const employeesFailed = empResult.source === "error";
   const onLeaveCount = data.onLeave;
   const deptCount = data.departmentBreakdown.length > 0
     ? data.departmentBreakdown.filter((d) => !d.name.startsWith("Others")).length +
@@ -152,7 +168,7 @@ export default async function HRDashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {anyError ? (
+                {employeesFailed ? (
                   <tr>
                     <td colSpan={6} style={{ padding: "24px" }}>
                       <RefreshErrorState error={toHumanError("load", { area: "employees" })} />

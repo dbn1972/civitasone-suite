@@ -1129,9 +1129,27 @@ export async function getEmployees(limit = 50, offset = 0, employeeType?: string
   });
 }
 
-/** Self-service profile for the logged-in employee (no admin role needed). */
+/**
+ * Self-service profile for the logged-in employee (no admin role needed).
+ *
+ * A 404 here has documented, known semantics -- "No employee record linked
+ * to your user" -- which is a normal, expected response for a non-employee
+ * account (an admin/test/tenant-admin user browsing HR screens), not a
+ * fetch/parse failure. Left alone, fetchJson's generic !response.ok
+ * handling reports that as source:"error" like any other failure (see
+ * apiClient.ts's `status` field doc comment, added for exactly this kind of
+ * distinction -- UX-009 follow-up), which then trips every caller that
+ * treats source:"error" as "something is broken" -- e.g. hr/dashboard's
+ * page-level banner and (before this fix) its employee table, even though
+ * `profile` there is only ever used as an optional greeting-name fallback
+ * with no error UI of its own. So this loader normalizes a 404 specifically
+ * into a successful "no profile" result instead of letting it read as a
+ * failure. Any other status (401, 5xx, network error) is left as a genuine
+ * source:"error" -- unlike a 404, those really mean "we don't know," not
+ * "we know you have none."
+ */
 export async function getMyProfile(): Promise<LoaderResult<{ id: string; name: string; department: string; employeeNo: string; status: string; designation: string } | null>> {
-  return fetchJson<Record<string, unknown>, { id: string; name: string; department: string; employeeNo: string; status: string; designation: string } | null>(
+  const result = await fetchJson<Record<string, unknown>, { id: string; name: string; department: string; employeeNo: string; status: string; designation: string } | null>(
     "/api/v1/hrms/me/profile",
     null,
     {
@@ -1151,6 +1169,10 @@ export async function getMyProfile(): Promise<LoaderResult<{ id: string; name: s
       },
     },
   );
+  if (result.source === "error" && result.status === 404) {
+    return { data: null, source: "api", status: 404 };
+  }
+  return result;
 }
 
 export async function getLeaveRequests(limit = 50, offset = 0): Promise<LoaderResult<LeaveRequestSummary[]>> {
