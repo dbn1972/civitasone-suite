@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
 type ApiEmployee = {
@@ -93,6 +94,7 @@ export default async function InternsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
+      <DataSourceBadge source={source} />
       <StatGrid>
         <StatCard icon="🎓" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
         <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={active} />
@@ -100,12 +102,16 @@ export default async function InternsPage() {
         <StatCard icon="🔧" iconBg="#f5f5f5" label={t("statApprenticesLabel")} value={apprentices} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="🎓"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "interns and apprentices" })} />
+        ) : (
+          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
+            pageSize={15}
+            emptyIcon="🎓"
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
+          />
+        )}
       </Card>
     </main>
   );
