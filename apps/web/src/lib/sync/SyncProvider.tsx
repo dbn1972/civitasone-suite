@@ -10,9 +10,47 @@ import { flushRequestQueue } from "@/lib/sync/requestQueue";
 
 const MAILBOXES = ["approvals", "notifications", "applications"] as const;
 
+/**
+ * SYNC-OFF (2026-09-23): temporarily disabled — see PR that added this comment
+ * for the full writeup.
+ *
+ * `POST /v1/sync/pull` (and /push) requires a *trusted device*
+ * (devices.registered_devices), which is only ever created by the
+ * identity-service *worker* process consuming the `identity.device.upsert`
+ * command that `POST /v1/devices/register` publishes (routes.ts publishes to a
+ * queue; it does not write the row itself — see modules/devices/consumer.ts).
+ *
+ * That worker (PM2 app `identity-worker`, services/identity-service/dist/
+ * worker.js) is not currently running in production: absent from `pm2 list`,
+ * its log has had no new lines in ~26 days while the paired API server's log
+ * is live, and `devices.registered_devices` has zero rows, full stop. So
+ * `assertTrustedDevice` (services/identity-service/src/modules/sync/routes.ts)
+ * 403s "DEVICE_NOT_TRUSTED" for every actor on every call, independent of role
+ * — including super_admin, which already bypasses the separate mailbox-ABAC
+ * check (authorizeMailbox) entirely. That fully explains a 403 on literally
+ * every page for every role: this component is mounted in the root
+ * (app)/layout.tsx, so it fires once per page load for the whole app.
+ *
+ * This is an operations gap, not a code or design bug: the protocol is fully
+ * implemented and tested on both the server (services/identity-service/tests/
+ * sync-routes.test.ts) and the mobile client (apps/mobile/lib/core/sync/), and
+ * `identity-worker` also hosts the RBAC/MFA/SCIM/session/tenant-onboarding/
+ * API-key consumers, none of which have run since it stopped either — a much
+ * bigger issue than sync alone, and restarting a live PM2 process is outside
+ * what this change does or should do.
+ *
+ * Re-enable by flipping this back to `true` once `identity-worker` is
+ * confirmed running again AND a device can be verified to actually reach
+ * "trusted" end-to-end (e.g. registered_devices gets a row after a real
+ * register call, and a subsequent pull for that device no longer 403s).
+ */
+const SYNC_ENABLED = false;
+
 /** Gmail-style background sync — BFF /api/proxy with device + trust headers. */
 export function SyncProvider() {
   useEffect(() => {
+    if (!SYNC_ENABLED) return;
+
     void registerServiceWorker();
 
     const deviceId = getOrCreateDeviceId();
