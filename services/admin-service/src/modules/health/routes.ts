@@ -5,6 +5,7 @@ import { resolveContext, requireSuperAdmin, requireRole, TENANT_ADMIN_ROLES, Htt
 import * as queries from "./queries.js";
 import { computeProductionReadiness } from "./readiness.js";
 import { getOperationsSnapshot } from "./operations.js";
+import { getSaDashboardSnapshot } from "./sa-dashboard.js";
 
 const serviceParam = z.object({ service: z.string().min(1) });
 
@@ -26,6 +27,18 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     return reply.send(await getOperationsSnapshot());
+  });
+
+  // Frontend (apps/web/.../admin/sa-dashboard/page.tsx via getSADashboard())
+  // has called this route since it was built; it never existed here, so every
+  // request 404'd. Real activeTenants count + metrics reused from the same
+  // OperationsSnapshot as /v1/admin/operations above; totalUsers is an
+  // honest `null` — see sa-dashboard.ts's file doc for why no cross-tenant
+  // user count exists anywhere in this codebase to source it from.
+  app.get("/v1/admin/sa-dashboard", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    return reply.send(await getSaDashboardSnapshot());
   });
 
   app.get("/v1/admin/health/:service", async (req, reply) => {

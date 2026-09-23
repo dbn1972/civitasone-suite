@@ -57,6 +57,14 @@ describe("SaDashboardPage", () => {
     expect(screen.getByText("Services").parentElement).toHaveTextContent("—");
     expect(screen.queryByText("99.9%")).not.toBeInTheDocument();
     expect(screen.queryByText("33")).not.toBeInTheDocument();
+    // Companion fix (GET /v1/admin/sa-dashboard, previously a 404 on every
+    // load): Total Users used to coerce a missing/failed totalUsers to a
+    // fabricated "0" via `Number(dashboard.totalUsers ?? 0)`. The backend
+    // now returns an honest `null` when no cross-tenant user count exists
+    // (see admin-service's sa-dashboard.ts), and this tile must show "—",
+    // never "0", for that same reason.
+    expect(screen.getByText("Total Users").parentElement).toHaveTextContent("—");
+    expect(screen.getByText("Total Users").parentElement).not.toHaveTextContent("0");
     // The KPI table's own honest failure copy is untouched by this fix.
     expect(screen.getByText("No metrics")).toBeInTheDocument();
   });

@@ -9,7 +9,13 @@ export default async function SaDashboardPage() {
     getSAOperationsSnapshot(),
   ]);
   const tenants = Number(dashboard.activeTenants ?? 0);
-  const users = Number(dashboard.totalUsers ?? 0);
+  // totalUsers is an honest `null` from the backend when no cross-tenant user
+  // count exists to report (see services/admin-service/.../health/sa-dashboard.ts's
+  // doc comment: identity-service's user store is tenant-scoped only, so
+  // there is no real platform-wide total to source) — show "—", never a
+  // fabricated 0, same convention as this file's own uptime/services handling
+  // below and apps/web/.../tenant-admin/mfa/page.tsx's unavailable-count case.
+  const users = dashboard.totalUsers == null ? "—" : Number(dashboard.totalUsers);
   // No backend has ever populated `dashboard.uptime` (GET /api/v1/admin/sa-dashboard
   // has no matching route at all today) and no real "% uptime over time" telemetry
   // exists anywhere in the platform yet — admin-service's own operations snapshot

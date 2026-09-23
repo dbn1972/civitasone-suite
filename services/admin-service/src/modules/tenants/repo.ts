@@ -43,6 +43,18 @@ export async function list(page: number, limit: number): Promise<{ items: Tenant
   return { items: rows.map(toView), total: countRows[0]?.count ?? 0 };
 }
 
+// Platform-wide count of ACTIVE tenants only (status = 'active'), distinct
+// from list()'s total (every tenant regardless of status). Backs the
+// super-admin dashboard's real "Active Tenants" stat (see health/sa-dashboard.ts).
+// Same cross-tenant scopedPlatformRead rationale as findById/list above.
+export async function countActive(): Promise<number> {
+  const [row] = await scopedPlatformRead((tx) => tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(adminTenants)
+    .where(eq(adminTenants.status, "active")));
+  return row?.count ?? 0;
+}
+
 export async function insert(tx: Writer, row: AdminTenantInsert): Promise<void> {
   await tx.insert(adminTenants).values(row);
 }
