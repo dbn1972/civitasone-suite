@@ -4,7 +4,6 @@ import { PageHeader, Card, StatusPill } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getGrantById } from "../../../_data/loaders";
 import { GrantInstallmentsTable, GrantUCsTable } from "./GrantDetailTables";
-import { ArrowLeft } from "lucide-react";
 
 export default async function GrantDetailPage({ params }: { params: { id: string } }) {
   const { data: grant, source } = await getGrantById(params.id);
@@ -15,10 +14,11 @@ export default async function GrantDetailPage({ params }: { params: { id: string
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a> <span aria-hidden="true">/</span>{" "}
-        <a href="/grants/list">All grants</a>
-      </nav>
+      {/* UX: PageHeader's `back`/`backLabel` props already render the single
+          breadcrumb (icon + "All grants" link) below — this page used to ALSO
+          render its own manual <nav aria-label="Breadcrumb"> here, which
+          doubled it into "← All grants ← All grants". Removed; do not re-add
+          a second breadcrumb alongside the `back` prop. */}
       <PageHeader
         back="/grants/list"
         backLabel="All grants"

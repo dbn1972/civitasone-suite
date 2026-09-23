@@ -4,7 +4,6 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { getApplicationById } from "../../_data";
 import { ApplicationActions } from "./ApplicationActions";
-import { ArrowLeft } from "lucide-react";
 
 const STATUS_ACTIONS: Record<string, string[]> = {
   submitted:    ["assign-reviewer", "score", "approve", "reject"],
@@ -30,14 +29,11 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="back">
-        <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a>{" "}
-        <span aria-hidden="true">/</span>{" "}
-        <a href="/grants/applications">Applications</a>{" "}
-        <span aria-hidden="true">/</span>{" "}
-        <span aria-current="page">{application.grantNo ?? params.id.slice(0, 8)}</span>
-      </nav>
-
+      {/* UX: PageHeader's `back`/`backLabel` props already render the single
+          breadcrumb (icon + "Applications" link) below — this page used to
+          ALSO render its own manual <nav aria-label="Breadcrumb"> here,
+          doubling the breadcrumb. Removed; do not re-add a second breadcrumb
+          alongside the `back` prop. */}
       <PageHeader
         back="/grants/applications"
         backLabel="Applications"

@@ -10,10 +10,10 @@ export default async function GrantDisbursementDetailPage({ params }: { params: 
   if (!disbursement) {
     return (
       <>
-        <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
-          <a href="/grants">Grants</a> <span aria-hidden="true">›</span>{" "}
-          <a href="/grants/releases">Releases</a> <span aria-hidden="true">›</span> Not found
-        </nav>
+        {/* UX: PageHeader's `back` prop already renders the single breadcrumb
+            below — this branch used to ALSO render its own manual
+            <nav aria-label="Breadcrumb"> here, doubling it. Removed; do not
+            re-add a second breadcrumb alongside the `back` prop. */}
         <PageHeader title="Disbursement Detail" back="/grants/releases" />
         <EmptyState icon="💰" title="Disbursement not found" message="This disbursement may have been removed or the ID is invalid." />
       </>
@@ -25,12 +25,10 @@ export default async function GrantDisbursementDetailPage({ params }: { params: 
 
   return (
     <>
-      <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
-        <a href="/grants">Grants</a> <span aria-hidden="true">›</span>{" "}
-        <a href="/grants/releases">Releases</a> <span aria-hidden="true">›</span>{" "}
-        <span aria-current="page">{disbursement.releaseNo}</span>
-      </nav>
-
+      {/* UX: PageHeader's `back` prop already renders the single breadcrumb
+          below — this page used to ALSO render its own manual
+          <nav aria-label="Breadcrumb"> here, doubling it. Removed; do not
+          re-add a second breadcrumb alongside the `back` prop. */}
       <PageHeader
         title={`Disbursement ${disbursement.releaseNo}`}
         subtitle={disbursement.granteeName !== "—" ? disbursement.granteeName : undefined}
