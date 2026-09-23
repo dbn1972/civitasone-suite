@@ -859,7 +859,7 @@ export const IndentSummarySchema = z.object({
   estimatedAmount: z.number(),
   requestDate: z.string(),
   requiredByDate: z.string().optional(),
-  status: z.enum(["draft", "pending_approval", "approved", "rejected", "converted_to_po"]),
+  status: z.enum(["draft", "pending_approval", "tender_required", "approved", "rejected", "converted_to_po", "closed"]),
 });
 export const IndentSummaryListSchema = z.array(IndentSummarySchema);
 

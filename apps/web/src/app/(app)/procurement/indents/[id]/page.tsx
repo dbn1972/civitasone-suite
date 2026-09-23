@@ -7,9 +7,11 @@ import { toHumanError } from "@/lib/messages";
 const STATUS_LABELS: Record<string, string> = {
   draft: "Draft",
   pending_approval: "Pending Approval",
+  tender_required: "Tender Required",
   approved: "Approved",
   rejected: "Rejected",
   converted_to_po: "Converted to PO",
+  closed: "Closed",
 };
 
 type LineItemRow = Record<string, unknown> & {
