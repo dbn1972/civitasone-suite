@@ -20,18 +20,18 @@ const READ_ROLES = ["analytics_user", "analytics_admin", "report_admin", "report
 const WRITE_ROLES = ["analytics_user", "analytics_admin", "report_admin", "super_admin", "tenant_admin"];
 
 // SEC-013: EMBED_SECRET used to fall back unconditionally to a hardcoded,
-// source-visible literal ("civitasone-dev-secret" -- the same value
-// ecosystem.config.js uses as JWT_SECRET's own dev/test convenience default,
-// see ecosystem.config.js / SEC-017) whenever JWT_SECRET was unset, in EVERY
-// environment including production. The embed *route* has no real consumer
-// today (nothing verifies an /embed/dashboards/:id token yet), but minting is
-// live and reachable by any authenticated analytics reader -- and since
-// ecosystem.config.js deliberately leaves JWT_SECRET undefined in real
-// production (RS256/Keycloak is the real auth path; JWT_SECRET only matters
-// for the HS256 dev/test convenience path, see packages/auth SEC-017), a real
-// production deployment hits the fallback literal on every call today. If a
-// verifying consumer is ever wired up, that's a token signed with a secret
-// visible in the public source.
+// source-visible literal (the same value ecosystem.config.js uses as
+// JWT_SECRET's own dev/test convenience default, see ecosystem.config.js /
+// SEC-017) whenever JWT_SECRET was unset, in EVERY environment including
+// production. The embed *route* has no real consumer today (nothing verifies
+// an /embed/dashboards/:id token yet), but minting is live and reachable by
+// any authenticated analytics reader -- and since ecosystem.config.js
+// deliberately leaves JWT_SECRET undefined in real production (RS256/
+// Keycloak is the real auth path; JWT_SECRET only matters for the HS256
+// dev/test convenience path, see packages/auth SEC-017), a real production
+// deployment hit the fallback literal on every call. If a verifying consumer
+// is ever wired up, that's a token signed with a secret visible in the
+// public source.
 //
 // Mirrors resolveCandSecret() (hrms-service candidate-public-auth-routes.ts,
 // SEC-003) and isProduction() (packages/auth/src/index.ts, SEC-017):
@@ -47,6 +47,16 @@ const WRITE_ROLES = ["analytics_user", "analytics_admin", "report_admin", "super
 // normal, correctly-configured production case. The check instead runs when
 // this specific route is actually invoked, so only a caller who exercises
 // this currently-unused embed feature is affected.
+//
+// Follow-up (CI Secret Scan): the dev/test convenience value itself used to
+// be a literal string sitting right here in committed source, which is
+// exactly what .github/workflows/ci.yml's "Scan for known dev secrets in
+// source" job greps for -- it flags a hardcoded secret's mere presence
+// regardless of the ALLOW-LIST gate around it, which is correct scanner
+// behavior (a real secret manager value should never be able to collide with
+// a value sitting in public source). The value now lives only in
+// ANALYTICS_EMBED_DEV_SECRET (documented in .env.example, which that job
+// deliberately excludes from its search), never in application code.
 const EMBED_SECRET_FALLBACK_ALLOWED_ENVS = new Set(["development", "test"]);
 
 /** Exported for the SEC-013 regression test (dashboards-embed-secret.test.ts). */
@@ -65,7 +75,17 @@ export function resolveEmbedSecret(): string {
         `Inject it from the secret manager (do not hardcode).`,
     );
   }
-  return "civitasone-dev-secret";
+  const devFallback = process.env.ANALYTICS_EMBED_DEV_SECRET;
+  if (devFallback && devFallback.length > 0) {
+    return devFallback;
+  }
+  throw new HttpError(
+    500,
+    "CONFIG_MISSING",
+    `SEC-013: neither JWT_SECRET nor ANALYTICS_EMBED_DEV_SECRET is set. Set ` +
+      `ANALYTICS_EMBED_DEV_SECRET in your local env (see .env.example) to exercise ` +
+      `the embed route in development/test.`,
+  );
 }
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
