@@ -1,6 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -47,12 +48,16 @@ export default async function TrainingNominationsPage() {
         <StatCard icon="📚" iconBg="#f5f5f5" label="Programs" value={new Set(items.map((i) => i.program)).size} />
       </StatGrid>
       <Card title="Training Nominations">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
-          pageSize={15}
-          emptyIcon="🎓"
-          emptyTitle="No training nominations"
-          emptyMessage="Employee nominations for training programmes appear here. Nominations are approved by the department head before enrolment."
-        />
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "training nominations" })} />
+        ) : (
+          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+            pageSize={15}
+            emptyIcon="🎓"
+            emptyTitle="No training nominations"
+            emptyMessage="Employee nominations for training programmes appear here. Nominations are approved by the department head before enrolment."
+          />
+        )}
       </Card>
     </main>
   );

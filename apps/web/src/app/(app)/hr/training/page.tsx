@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getTrainingPrograms } from "../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { UpcomingPrograms } from "./_components/UpcomingPrograms";
 import { ProgramCard } from "./_components/ProgramCard";
 
@@ -25,7 +26,11 @@ export default async function TrainingPage() {
       />
       <DataSourceBadge source={source} />
 
-      {total === 0 ? (
+      {source === "error" ? (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <RefreshErrorState error={toHumanError("load", { area: "training programmes" })} />
+        </div>
+      ) : total === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <EmptyState
             icon="🏆"
