@@ -164,7 +164,7 @@ export function PromoteWithApproval() {
 
   return (
     <>
-      <Button onClick={() => setOpen((v) => !v)}>
+      <Button onClick={() => { if (open) reset(); setOpen((v) => !v); }}>
         {open ? t("cancelToggleBtn") : t("openBtn")}
       </Button>
 

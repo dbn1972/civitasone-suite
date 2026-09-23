@@ -31,7 +31,8 @@ export type ConfirmationRow = {
 
 type LocalAction = "default" | "confirmed" | "extended";
 
-function daysDiff(iso: string): number {
+function daysDiff(iso: string): number | null {
+  if (!iso || isNaN(new Date(iso).getTime())) return null;
   return Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 }
 
@@ -52,7 +53,7 @@ const REC_CONFIG: Record<string, { label: string; badge: string; color: string; 
 function ProbationCard({ row }: { row: ConfirmationRow }) {
   const [action, setAction] = useState<LocalAction>("default");
   const days = daysDiff(row.dueDate);
-  const due  = dueMeta(days);
+  const due  = days !== null ? dueMeta(days) : { label: "Date not set", color: "var(--mut)" };
   const rec  = REC_CONFIG[row.managerRecommendation ?? "pending"] ?? REC_CONFIG.pending;
   const formError = useFormError("probation confirmation");
 
@@ -82,7 +83,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       className="card"
       style={{
         marginBottom: 0,
-        borderInlineStart: `4px solid ${days < 0 ? "#dc2626" : days <= 14 ? "#f59e0b" : "var(--line, #e2e8f0)"}`,
+        borderInlineStart: `4px solid ${days == null ? "var(--line, #e2e8f0)" : days < 0 ? "#dc2626" : days <= 14 ? "#f59e0b" : "var(--line, #e2e8f0)"}`,
       }}
       aria-label={`Probation confirmation for ${row.employee}`}
     >

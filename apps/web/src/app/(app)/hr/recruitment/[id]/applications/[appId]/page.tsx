@@ -138,8 +138,8 @@ export default function ApplicationDetailPage() {
       }
       setHireStatus("success");
       setHireMessage(t("hireSuccessMessage"));
+      setApplication((prev) => prev ? { ...prev, stage: "hired" } : prev);
       setShowHireDialog(false);
-      router.refresh();
     } catch {
       setHireStatus("error");
       setHireMessage(formError.fromException("save").message);
