@@ -80,12 +80,33 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
     expect(screen.getByText("No candidates found")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when the fetch fails", async () => {
+  it("shows the data-source badge when the fetch fails for a reason other than a permission denial", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" });
 
     const ui = await TalentPoolPage({ searchParams: {} });
     render(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+
+  // Manager-role finding: GET /v1/hrms/talent-pool is HR-only (HR_ROLES in
+  // routes.ts) — a manager role gets a real, permanent 403, not a transient
+  // failure. Before this fix the page couldn't tell the two apart (both are
+  // source:"error") and showed the generic "Couldn't load, try again" state
+  // for a request that will never succeed no matter how many times it's
+  // retried.
+  it("shows an honest access-restricted state, not the generic retry-suggesting error, when the fetch 403s", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error", status: 403 });
+
+    const ui = await TalentPoolPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.getByText("Access restricted")).toBeInTheDocument();
+    expect(screen.getByText(/don.t have permission to view the talent pool/i)).toBeInTheDocument();
+    // Must NOT suggest retrying — retrying a real 403 never succeeds.
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.queryByText(/try again/i)).not.toBeInTheDocument();
+    // None of the (meaningless-with-zero-access) stat tiles or search form render.
+    expect(screen.queryByText("No candidates found")).not.toBeInTheDocument();
   });
 });

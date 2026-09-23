@@ -53,6 +53,22 @@ export default async function RecruitmentPage() {
   // dashboard when only /recruitment/dashboard fails (openings table has its
   // own badge, but stats previously had none at all).
   const pageSource = statsSource === "error" || openingSource === "error" ? "error" : "api";
+  // The badge's default copy ("Couldn't load -- showing nothing") is only
+  // true when the openings list itself -- this page's actual content --
+  // failed to load. A manager role (or anyone else correctly denied the
+  // HR-only /recruitment/dashboard stats endpoint) still gets a full,
+  // real openings table below; telling them "showing nothing" while a
+  // real table of vacancies renders directly underneath is false and was
+  // read, in live testing, as the whole page being broken. Same principle
+  // the badge's own doc comment already applies to the cached-data case
+  // (UX-002: never say "showing nothing" when something IS showing) --
+  // just not yet applied to this partial-failure case.
+  const badgeMessage =
+    openingSource === "error"
+      ? undefined
+      : statsSource === "error"
+        ? "Some figures on this page couldn't be loaded."
+        : undefined;
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
@@ -68,7 +84,7 @@ export default async function RecruitmentPage() {
         }
       />
 
-      <DataSourceBadge source={pageSource} />
+      <DataSourceBadge source={pageSource} message={badgeMessage} />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalVacancies")} value={stats.totalOpenings} />
         <StatCard icon="🟢" iconBg="var(--goodbg)" label={t("statOpenNow")} value={stats.openVacancies} />
