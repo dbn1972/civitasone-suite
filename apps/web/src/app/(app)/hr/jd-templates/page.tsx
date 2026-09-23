@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "JD Template Library — HR" };
@@ -26,33 +27,26 @@ const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> 
   deputation:    { label: "Deputation",    color: "#475569", bg: "#e2e8f0" },
 };
 
-type TemplatesResult = { data: JdTemplate[]; source: "api" | "error" };
-
 // The catch-all try/catch here used to swallow every failure into a plain []
 // (identical to a tenant with zero templates yet created) -- this was the
 // UX-013 bug at the fetch layer itself, not just in how the page rendered
-// it. Now surfaces a real source so the page can tell the two apart.
-async function fetchTemplates(token: string, type?: string): Promise<TemplatesResult> {
-  const base = (process.env.CIVITASONE_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
-  const url = type ? `${base}/api/v1/hrms/jd-templates?vacancyType=${type}` : `${base}/api/v1/hrms/jd-templates`;
-  try {
-    const res = await fetch(url, {
-      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-      cache: "no-store",
-    });
-    if (!res.ok) return { data: [], source: "error" };
-    const json = await res.json() as { data: JdTemplate[] };
-    return { data: json.data ?? [], source: "api" };
-  } catch {
-    return { data: [], source: "error" };
-  }
+// it. fetchJson surfaces a real source so the page can tell the two apart,
+// and centralizes auth-cookie reading (COOKIE.ACCESS) instead of this page
+// hardcoding the cookie name itself.
+async function fetchTemplates(type?: string): Promise<LoaderResult<JdTemplate[]>> {
+  const path = type ? `/api/v1/hrms/jd-templates?vacancyType=${type}` : "/api/v1/hrms/jd-templates";
+  return fetchJson<unknown, JdTemplate[]>(path, [], {
+    telemetryKey: "hr.jd_templates",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: JdTemplate[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
+  });
 }
 
 export default async function JdTemplatesPage({ searchParams }: { searchParams: { type?: string } }) {
-  const { cookies } = await import("next/headers");
-  const token = cookies().get("civitasone_at")?.value ?? "";
   const activeType = searchParams.type ?? "";
-  const { data: templates, source } = await fetchTemplates(token, activeType || undefined);
+  const { data: templates, source } = await fetchTemplates(activeType || undefined);
 
   const typeOptions = [
     { value: "", label: "All types" },

@@ -16,18 +16,29 @@ type Row = {
   location: string
 } & Record<string, unknown>
 
-async function getData(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>('/api/v1/hrms/employees?limit=200', [], {
+// The API caps this list at 200 and reports whether more rows exist via
+// `pagination.hasMore` (see services/hrms-service employee/queries.ts —
+// there is no tenant-wide total/count on this endpoint, only a cursor-style
+// `hasMore`). We surface that flag so the page can stop presenting a
+// truncated page as if it were the whole directory (search below is also
+// scoped to only these loaded rows).
+type DirectoryData = { items: Row[]; hasMore: boolean }
+
+async function getData(): Promise<LoaderResult<DirectoryData>> {
+  return fetchJson<unknown, DirectoryData>('/api/v1/hrms/employees?limit=200', { items: [], hasMore: false }, {
     telemetryKey: 'hr.employees_limit_200',
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data
-      return Array.isArray(arr) ? arr : null
+      const body = p as { data?: Row[]; pagination?: { hasMore?: boolean } }
+      const arr = Array.isArray(p) ? p : body?.data
+      if (!Array.isArray(arr)) return null
+      return { items: arr, hasMore: Boolean(body?.pagination?.hasMore) }
     },
   })
 }
 
 export default async function DirectoryPage() {
-  const { data: items, source } = await getData()
+  const { data, source } = await getData()
+  const { items, hasMore } = data
 
   const depts = new Set(items.map((i) => i.department).filter(Boolean)).size
   const locations = new Set(items.map((i) => i.location).filter(Boolean)).size
@@ -41,8 +52,17 @@ export default async function DirectoryPage() {
         back="/hr"
       />
       <DataSourceBadge source={source} />
+      {hasMore && (
+        <span
+          role="status"
+          className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
+          style={{ marginBottom: 12 }}
+        >
+          Showing the first {items.length} employees — more exist. Search and filters below only cover this loaded set.
+        </span>
+      )}
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label="Total Employees" value={items.length} />
+        <StatCard icon="👥" iconBg="#e6f0ff" label={hasMore ? 'Employees Shown' : 'Total Employees'} value={items.length} />
         <StatCard icon="🏢" iconBg="#f5f5f5" label="Departments" value={depts} />
         <StatCard icon="📍" iconBg="#fffbe6" label="Locations" value={locations} />
         <StatCard icon="📛" iconBg="#e6f7f0" label="Designations" value={designations} />
