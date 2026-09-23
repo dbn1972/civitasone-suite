@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+// Same mocking convention as hr/departments/new/page.test.tsx: control the
+// session role directly at the roleGuard module boundary rather than
+// re-deriving it from a fake JWT cookie (that's roleGuard.test.ts's own
+// concern).
+let mockRoles: string[] = ["hr_admin"];
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => mockRoles,
+}));
+
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
@@ -11,6 +20,7 @@ import DisciplinaryPage from "./page";
 describe("DisciplinaryPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    mockRoles = ["hr_admin"];
   });
 
   it("links each case row to its detail page instead of leaving it unreachable", async () => {
@@ -40,5 +50,18 @@ describe("DisciplinaryPage", () => {
     // "VIG/"+id for a major case) to the row's detail page.
     const link = screen.getByRole("link", { name: "Open VIG/CASE-1" });
     expect(link).toHaveAttribute("href", "/hr/disciplinary/case-1");
+  });
+
+  it("shows an honest permission-denied state for a role the backend would reject, instead of a table the backend would refuse to serve", async () => {
+    // Regression: GET /v1/hrms/disciplinary-cases requires hr_admin /
+    // hr_officer / super_admin (gap-features/routes.ts's HR_ROLES) --
+    // "employee" is admitted into /hr by layout.tsx but was never checked
+    // here, so this page used to render the full case table shell (with a
+    // failed/empty fetch) instead of an honest access-restricted message.
+    mockRoles = ["employee"];
+    const ui = await DisciplinaryPage();
+    render(ui);
+    expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 });
