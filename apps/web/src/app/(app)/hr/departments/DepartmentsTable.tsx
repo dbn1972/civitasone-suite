@@ -54,6 +54,7 @@ type NodeProps = {
   saving: boolean;
   rowError: string | null;
   t: ReturnType<typeof useTranslations>;
+  canEdit: boolean;
   onStartEdit: (dept: Dept) => void;
   onCancelEdit: () => void;
   onSaveEdit: (id: string) => void;
@@ -71,6 +72,7 @@ function DeptNode({
   saving,
   rowError,
   t,
+  canEdit,
   onStartEdit,
   onCancelEdit,
   onSaveEdit,
@@ -187,12 +189,16 @@ function DeptNode({
                 {t("subDeptCount", { count: node.children.length })}
               </span>
             )}
-            <Button variant="ghost" size="sm" onClick={() => onStartEdit(node)} style={{ marginInlineStart: 8 }}>
-              {t("editBtn")}
-            </Button>
-            <Button variant="danger" size="sm" onClick={() => onDeleteTarget(node)}>
-              {t("deleteBtn")}
-            </Button>
+            {canEdit && (
+              <>
+                <Button variant="ghost" size="sm" onClick={() => onStartEdit(node)} style={{ marginInlineStart: 8 }}>
+                  {t("editBtn")}
+                </Button>
+                <Button variant="danger" size="sm" onClick={() => onDeleteTarget(node)}>
+                  {t("deleteBtn")}
+                </Button>
+              </>
+            )}
           </>
         )}
       </div>
@@ -211,6 +217,7 @@ function DeptNode({
               saving={saving}
               rowError={rowError}
               t={t}
+              canEdit={canEdit}
               onStartEdit={onStartEdit}
               onCancelEdit={onCancelEdit}
               onSaveEdit={onSaveEdit}
@@ -227,7 +234,7 @@ function DeptNode({
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function DepartmentsTable({ depts }: { depts: Dept[] }) {
+export function DepartmentsTable({ depts, canEdit }: { depts: Dept[]; canEdit: boolean }) {
   const t = useTranslations("departmentsTable");
   const router = useRouter();
   const [localDepts, setLocalDepts] = useState<Dept[]>(depts);
@@ -326,6 +333,7 @@ export function DepartmentsTable({ depts }: { depts: Dept[] }) {
               saving={saving}
               rowError={rowError}
               t={t}
+              canEdit={canEdit}
               onStartEdit={startEdit}
               onCancelEdit={cancelEdit}
               onSaveEdit={saveEdit}

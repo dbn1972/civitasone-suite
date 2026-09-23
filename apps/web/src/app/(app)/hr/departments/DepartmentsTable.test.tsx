@@ -6,10 +6,10 @@ import { DepartmentsTable } from "./DepartmentsTable";
 
 const DEPTS = [{ id: "d1", code: "IT", name: "Information Technology", parentId: null, employeeCount: 5 }];
 
-function renderTable() {
+function renderTable(canEdit = true) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <DepartmentsTable depts={DEPTS} />
+      <DepartmentsTable depts={DEPTS} canEdit={canEdit} />
     </NextIntlClientProvider>,
   );
 }
@@ -49,5 +49,26 @@ describe("DepartmentsTable — UX-016 clerk-safe errors", () => {
 
     await waitFor(() => expect(screen.getByRole("alertdialog")).toHaveTextContent(/couldn't save/i));
     expect(screen.getByRole("alertdialog").textContent).not.toMatch(/^Delete failed/);
+  });
+});
+
+/**
+ * HIGH finding: Edit/Delete used to render unconditionally regardless of
+ * role, so a non-admin (e.g. hr_officer, who masters-routes.ts's backend
+ * HR_ROLES deliberately excludes from PATCH/DELETE /v1/hrms/departments)
+ * saw fully interactive buttons that always failed with a 403. The parent
+ * page.tsx now computes canEdit from getSessionRoles() and passes it down.
+ */
+describe("DepartmentsTable — role-gated Edit/Delete", () => {
+  it("does not render Edit/Delete when canEdit is false", () => {
+    renderTable(false);
+    expect(screen.queryByRole("button", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+  });
+
+  it("renders Edit/Delete when canEdit is true", () => {
+    renderTable(true);
+    expect(screen.getByRole("button", { name: "Edit" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
   });
 });
