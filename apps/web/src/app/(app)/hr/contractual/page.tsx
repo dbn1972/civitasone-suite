@@ -93,7 +93,7 @@ export default async function ContractualPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
-      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
+      <DataSourceBadge source={source} />
       {isTruncated && (
         <span
           role="status"
