@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { TrainingProgramSummary } from "@civitasone/types";
 
 function formatIndianDate(iso: string): string {
@@ -46,10 +47,9 @@ function deriveCategory(program: TrainingProgramSummary): string {
 
 interface UpcomingProgramsProps {
   programs: TrainingProgramSummary[];
-  onEnroll?: (id: string) => void;
 }
 
-export function UpcomingPrograms({ programs, onEnroll }: UpcomingProgramsProps) {
+export function UpcomingPrograms({ programs }: UpcomingProgramsProps) {
   const now = new Date();
   const upcoming = programs
     .filter((p) => p.status === "upcoming" && new Date(p.startDate) > now)
@@ -112,19 +112,18 @@ export function UpcomingPrograms({ programs, onEnroll }: UpcomingProgramsProps) 
                   )}
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => onEnroll?.(p.id)}
-                disabled={seatsLeft !== null && seatsLeft <= 0}
+              <Link
+                href={`/hr/training/${p.id}`}
+                aria-disabled={seatsLeft !== null && seatsLeft <= 0 ? "true" : undefined}
                 className={[
-                  "shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors",
+                  "shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold transition-colors text-center",
                   seatsLeft !== null && seatsLeft <= 0
-                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
+                    ? "bg-slate-100 text-slate-400 pointer-events-none"
                     : "bg-indigo-600 text-white hover:bg-indigo-500",
                 ].join(" ")}
               >
                 {seatsLeft !== null && seatsLeft <= 0 ? "Full" : "Enroll"}
-              </button>
+              </Link>
             </div>
           );
         })}

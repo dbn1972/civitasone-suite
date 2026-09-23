@@ -15,22 +15,8 @@ const SLIPS = [
 // explicitly excludes. No prior test existed for this file, so this covers
 // the converted controls' behavior.
 describe("SalarySlipsClientTable", () => {
-  it("disables Run Payroll when there are unresolved exceptions", () => {
-    render(<SalarySlipsClientTable slips={SLIPS} payPeriod="2026-09" exceptionCount={2} />);
-    const runBtn = screen.getByRole("button", { name: /Run Payroll/ });
-    expect(runBtn).toBeDisabled();
-    expect(runBtn).toHaveAttribute("title", "2 exceptions must be resolved first");
-  });
-
-  it("enables Run Payroll when there are no exceptions", () => {
-    render(<SalarySlipsClientTable slips={SLIPS} payPeriod="2026-09" exceptionCount={0} />);
-    const runBtn = screen.getByRole("button", { name: "Run Payroll" });
-    expect(runBtn).toBeEnabled();
-    expect(runBtn).toHaveAttribute("title", "Run payroll for all employees");
-  });
-
   it("opens the salary slip preview modal and closes it via the (icon-only) close button", () => {
-    render(<SalarySlipsClientTable slips={SLIPS} payPeriod="2026-09" exceptionCount={0} />);
+    render(<SalarySlipsClientTable slips={SLIPS} payPeriod="2026-09" />);
     fireEvent.click(screen.getAllByRole("button", { name: "Preview Slip" })[0]);
     const dialog = screen.getByRole("dialog");
     // "Asha Rao" also appears in the table row behind the modal -- scope to
@@ -51,7 +37,7 @@ describe("SalarySlipsClientTable", () => {
       net: 45000,
       status: "generated",
     }));
-    render(<SalarySlipsClientTable slips={manySlips} payPeriod="2026-09" exceptionCount={0} />);
+    render(<SalarySlipsClientTable slips={manySlips} payPeriod="2026-09" />);
 
     const nextBtn = screen.getByRole("button", { name: /Next/ });
     const prevBtn = screen.getByRole("button", { name: /Previous/ });

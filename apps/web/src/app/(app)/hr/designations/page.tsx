@@ -4,7 +4,14 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { DesignationsTable } from "./DesignationsTable";
+
+/**
+ * Mirrors the HR_ROLES guard on PATCH/DELETE /v1/hrms/designations/:id.
+ * Same roles as departments -- only admins may edit or delete designations.
+ */
+const DESIGNATION_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
 type Designation = { id: string; code: string; name: string; level: number; payGrade: string | null } & Record<string, unknown>;
 
@@ -38,6 +45,8 @@ export default async function DesignationsPage() {
   const result = await getDesignations();
   const { data: items } = result;
   const resource = useResource(result);
+  const roles = getSessionRoles();
+  const canEdit = roles.some((r) => DESIGNATION_ADMIN_ROLES.includes(r));
   const errored = resource.status === "error";
 
   const withPayGrade    = errored ? null : items.filter((d) => !!d.payGrade).length;
@@ -77,7 +86,7 @@ export default async function DesignationsPage() {
             message={t("emptyMessage")}
           />
         ) : (
-          <DesignationsTable items={items} />
+          <DesignationsTable items={items} canEdit={canEdit} />
         )}
       </Card>
     </main>

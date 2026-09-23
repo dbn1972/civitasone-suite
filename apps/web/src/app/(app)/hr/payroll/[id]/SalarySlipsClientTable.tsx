@@ -234,14 +234,11 @@ function SalarySlipModal({
 type TableProps = {
   slips: SlipRow[];
   payPeriod: string;
-  exceptionCount: number;
-  onRunPayroll?: () => void;
 };
 
 export function SalarySlipsClientTable({
   slips,
   payPeriod,
-  exceptionCount,
 }: TableProps) {
   const [preview, setPreview] = useState<SlipRow | null>(null);
   const [filter, setFilter] = useState("");
@@ -297,38 +294,7 @@ export function SalarySlipsClientTable({
             maxWidth: 360,
           }}
         />
-        <Button
-          variant="primary"
-          size="sm"
-          disabled={exceptionCount > 0}
-          title={
-            exceptionCount > 0
-              ? `${exceptionCount} exception${exceptionCount !== 1 ? "s" : ""} must be resolved first`
-              : "Run payroll for all employees"
-          }
-        >
-          Run Payroll
-          {exceptionCount > 0 && (
-            <span
-              aria-label={`${exceptionCount} exceptions`}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                background: "#dc2626",
-                color: "#fff",
-                borderRadius: "50%",
-                width: 18,
-                height: 18,
-                fontSize: 10,
-                fontWeight: 700,
-                marginInlineStart: 2,
-              }}
-            >
-              {exceptionCount}
-            </span>
-          )}
-        </Button>
+
       </div>
 
       {/* Table */}

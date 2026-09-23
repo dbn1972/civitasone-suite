@@ -754,7 +754,7 @@ export const SalarySlipSummarySchema = z.object({
   gross: z.number(),
   deductions: z.number(),
   net: z.number(),
-  status: z.enum(["draft", "finalized", "paid"]),
+  status: z.enum(["draft", "finalized", "paid", "computed"]),
 });
 export const SalarySlipSummaryListSchema = z.array(SalarySlipSummarySchema);
 
