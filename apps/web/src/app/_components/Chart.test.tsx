@@ -64,6 +64,21 @@ describe("Chart", () => {
       const paths = container.querySelectorAll("path");
       expect(paths.length).toBeGreaterThanOrEqual(3);
     });
+
+    // Companion to the donut regression test below: PieChart shares the
+    // exact same `value / total` computation and was equally exposed.
+    it("renders without NaN when both slice values are zero", () => {
+      const zeroData: ChartDataPoint[] = [
+        { label: "A", value: 0 },
+        { label: "B", value: 0 },
+      ];
+      const { container } = render(<Chart type="pie" data={zeroData} />);
+      expect(container.innerHTML).not.toContain("NaN");
+      const paths = container.querySelectorAll("path");
+      for (const p of Array.from(paths)) {
+        expect(p.getAttribute("d") ?? "").not.toContain("NaN");
+      }
+    });
   });
 
   describe("donut chart", () => {
@@ -87,6 +102,33 @@ describe("Chart", () => {
       expect(screen.getByText("₹28.00")).toBeInTheDocument();
       expect(screen.getByText("₹15.00")).toBeInTheDocument();
       expect(screen.queryByText("85")).not.toBeInTheDocument();
+    });
+
+    // Regression: a donut with an all-zero split (e.g. BudgetChart.tsx's
+    // Utilized/Remaining when a tenant has no sanctioned budget AND nothing
+    // spent yet) has `total = 0`, so every slice's share was `0 / 0`. That
+    // is NaN, not an exception -- it doesn't throw, it silently poisons
+    // every arc's path coordinates and lands the literal string "NaN%" in
+    // each slice's hover tooltip. Assert an honest empty state instead.
+    it("renders an honest no-data state instead of NaN when both slice values are zero", () => {
+      const zeroData: ChartDataPoint[] = [
+        { label: "Utilized", value: 0 },
+        { label: "Remaining", value: 0 },
+      ];
+      const { container } = render(
+        <Chart type="donut" data={zeroData} valueFormatter={(v) => `₹${v}.00`} />
+      );
+      expect(container.innerHTML).not.toContain("NaN");
+      // Two elements legitimately say "No data" here: the SVG ring's own
+      // <title> hover tooltip and the visible centre <text> label -- same
+      // convention as the existing "agree on the same... magnitude" test in
+      // BudgetChart.test.tsx (getAllByText, not getByText, when more than
+      // one match is expected and correct).
+      expect(screen.getAllByText("No data").length).toBeGreaterThanOrEqual(2);
+      const paths = container.querySelectorAll("path");
+      for (const p of Array.from(paths)) {
+        expect(p.getAttribute("d") ?? "").not.toContain("NaN");
+      }
     });
   });
 

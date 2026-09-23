@@ -78,7 +78,30 @@ describe("BudgetChart — Issue #5 (100x scale) + Issue #15 (currency formatting
     expect(screen.queryByText(/Infinity/)).not.toBeInTheDocument();
   });
 
-  it("handles zero expenditure without throwing", () => {
-    expect(() => render(<BudgetChart utilisationPct={null} expenditure={0} />)).not.toThrow();
+  // Regression (separately-flagged, out-of-scope bug found by independent
+  // review of the Issue #15 PR above): utilisationPct=null + expenditure=0
+  // is a real, reachable state -- a tenant/FY with no sanctioned budget on
+  // record (UX-006, see the null-handling test above) AND nothing spent yet
+  // (a normal state at the start of a financial year, per BudgetChart.tsx's
+  // own comment on `expenditure`). That makes BOTH donut slices (`Utilized`,
+  // `Remaining`) zero, so DonutChart's internal `total` is zero too, and
+  // `value / total` is `0 / 0`.
+  //
+  // `not.toThrow()` alone -- the pre-existing version of this test -- does
+  // NOT catch that: NaN doesn't throw, it renders silently as the literal
+  // text "NaN" (in the arc's <title> tooltip) and as an invalid, blank arc
+  // path (`d="M NaN NaN ..."`) instead of crashing. Confirmed by sabotage
+  // check: reverting just Chart.tsx's `total === 0` guard while keeping
+  // this test's stronger assertions makes it fail with the literal "NaN"
+  // text found in the container; the old `not.toThrow()`-only version kept
+  // passing throughout.
+  it("handles zero expenditure without throwing, and without silently rendering NaN (both donut slices are zero: utilized=0, remaining=0)", () => {
+    const { container } = render(<BudgetChart utilisationPct={null} expenditure={0} />);
+    expect(container.innerHTML).not.toContain("NaN");
+    // An honest empty state, not a broken/blank arc. Two elements
+    // legitimately say "No data": the ring's <title> tooltip and the
+    // visible centre <text> label (getAllByText, same convention as this
+    // file's own "agree on the same... magnitude" test above).
+    expect(screen.getAllByText("No data").length).toBeGreaterThanOrEqual(2);
   });
 });
