@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -66,17 +67,8 @@ async function getShifts(): Promise<LoaderResult<Row[]>> {
   });
 }
 
-const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-  { key: "name", label: "Shift Name" },
-  { key: "startTime", label: "Start" },
-  { key: "endTime", label: "End" },
-  { key: "breakDuration", label: "Break" },
-  { key: "workingHours", label: "Working Hours" },
-  { key: "applicableTo", label: "Applicable To" },
-  { key: "status", label: "Status", cellType: "status" },
-];
-
 export default async function ShiftsPage() {
+  const t = await getTranslations("shifts");
   const { data: items, source } = await getShifts();
   // COMP-004 fix-up (round 3): this page used to silently substitute a
   // hardcoded 4-row GOVT_SHIFTS list whenever the real API call returned
@@ -96,28 +88,38 @@ export default async function ShiftsPage() {
         items.flatMap((i) => i.applicableTo.split(",").map((d) => d.trim())).filter((d) => d && d !== "—"),
       ).size;
 
+  const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+    { key: "name", label: t("colName") },
+    { key: "startTime", label: t("colStart") },
+    { key: "endTime", label: t("colEnd") },
+    { key: "breakDuration", label: t("colBreak") },
+    { key: "workingHours", label: t("colWorkingHours") },
+    { key: "applicableTo", label: t("colApplicableTo") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+  ];
+
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Shift Definitions"
-        subtitle="Manage shift schedules and department assignments. GoI standard hours: 09:00–17:30 Mon–Fri (DoPT O.M.)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
         actions={
-          <Link href="/hr/shift-requests" className="btn ghost" aria-label="View shift change requests">
-            Change Requests
+          <Link href="/hr/shift-requests" className="btn ghost" aria-label={t("changeRequests")}>
+            {t("changeRequests")}
           </Link>
         }
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🕐" iconBg="#e6f0ff" label="Total Shifts" value={errored ? "—" : items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={errored ? "—" : active} />
-        <StatCard icon="👥" iconBg="#fffbe6" label="Departments" value={errored ? "—" : departments} />
-        <StatCard icon="⏰" iconBg="#f5f5f5" label="Std Hours" value="8 hrs" />
+        <StatCard icon="🕐" iconBg="#e6f0ff" label={t("statTotalShifts")} value={errored ? "—" : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActive")} value={errored ? "—" : active} />
+        <StatCard icon="👥" iconBg="#fffbe6" label={t("statDepartments")} value={errored ? "—" : departments} />
+        <StatCard icon="⏰" iconBg="#f5f5f5" label={t("statStdHours")} value={t("stdHoursValue")} />
       </StatGrid>
 
       {!errored && items.length > 0 && (
-        <section aria-label="Shift cards" style={{ marginBottom: 16 }}>
+        <section aria-label={t("sectionAriaLabel")} style={{ marginBottom: 16 }}>
           <div
             style={{
               display: "grid",
@@ -132,7 +134,7 @@ export default async function ShiftsPage() {
         </section>
       )}
 
-      <Card title="All Shift Definitions">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "shift definitions" })} backHref="/hr" />
@@ -140,8 +142,8 @@ export default async function ShiftsPage() {
         ) : items.length === 0 ? (
           <EmptyState
             icon="🕐"
-            title="No shifts defined"
-            message="Shift schedules (Morning, Evening, Night, General) appear here once your organisation configures them. Nothing is shown because nothing has been configured yet — not because of an error."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         ) : (
           <DataTable<Row>
@@ -149,7 +151,7 @@ export default async function ShiftsPage() {
             rows={items}
             sortable
             filterable
-            filterPlaceholder="Filter by shift name or department…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
           />
         )}

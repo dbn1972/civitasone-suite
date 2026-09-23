@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card } from '../../../_components/ds'
 import { DataSourceBadge } from '../../../_components/DataSourceBadge'
 import { fetchJson, type LoaderResult } from '@/app/_data/apiClient'
@@ -37,6 +38,7 @@ async function getData(): Promise<LoaderResult<DirectoryData>> {
 }
 
 export default async function DirectoryPage() {
+  const t = await getTranslations("directory");
   const { data, source } = await getData()
   const { items, hasMore } = data
 
@@ -47,8 +49,8 @@ export default async function DirectoryPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Employee Directory"
-        subtitle="Search employees by name, department, designation, extension, or location."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
       />
       <DataSourceBadge source={source} />
@@ -58,16 +60,16 @@ export default async function DirectoryPage() {
           className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
           style={{ marginBottom: 12 }}
         >
-          Showing the first {items.length} employees — more exist. Search and filters below only cover this loaded set.
+          {t("hasMoreWarning", { count: items.length })}
         </span>
       )}
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label={hasMore ? 'Employees Shown' : 'Total Employees'} value={items.length} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label="Departments" value={depts} />
-        <StatCard icon="📍" iconBg="#fffbe6" label="Locations" value={locations} />
-        <StatCard icon="📛" iconBg="#e6f7f0" label="Designations" value={designations} />
+        <StatCard icon="👥" iconBg="#e6f0ff" label={hasMore ? t("statEmployeesShown") : t("statTotalEmployees")} value={items.length} />
+        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statDepartments")} value={depts} />
+        <StatCard icon="📍" iconBg="#fffbe6" label={t("statLocations")} value={locations} />
+        <StatCard icon="📛" iconBg="#e6f7f0" label={t("statDesignations")} value={designations} />
       </StatGrid>
-      <Card title="Directory">
+      <Card title={t("cardTitle")}>
         <DirectoryClient employees={items} />
       </Card>
     </main>

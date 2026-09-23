@@ -1,192 +1,195 @@
+import { getTranslations } from "next-intl/server";
 import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
 
-/**
- * Tiles grouped by category for progressive disclosure.
- *
- * Intentionally NOT exported: Next.js App Router validates page module
- * exports and rejects anything outside its allowed set (default export,
- * metadata/generateMetadata, route segment config, etc.). Exporting this
- * broke `next build` with:
- *   Type error: "hrCategories" is not a valid Page export field.
- * Nothing outside this file consumes it, so a module-local const is correct.
- */
-const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
-	{
-		title: "Core",
-		icon: "👥",
-		tiles: [
-			{ title: "Dashboard", href: "/hr/dashboard", description: "People KPIs and quick navigation" },
-			{ title: "Employees", href: "/hr/employees", description: "Workforce directory and profiles" },
-			{ title: "Directory", href: "/hr/directory", description: "Search by name, dept, or designation" },
-			{ title: "Org Chart", href: "/hr/org-chart", description: "Reporting hierarchy" },
-			{ title: "ID Cards", href: "/hr/id-cards", description: "View issued employee and vendor ID cards" },
-		],
-	},
-	{
-		title: "Attendance & Time",
-		icon: "📅",
-		tiles: [
-			{ title: "Attendance", href: "/hr/attendance", description: "Daily presence records" },
-			{ title: "Regularisation", href: "/hr/attendance/regularisation", description: "Correction requests" },
-			{ title: "Check-in Log", href: "/hr/checkin-log", description: "Biometric / geo log" },
-			{ title: "Shifts", href: "/hr/shifts", description: "Shift definitions and rosters" },
-			{ title: "Shift Requests", href: "/hr/shift-requests", description: "Swap and change requests" },
-			{ title: "WFH Requests", href: "/hr/wfh", description: "Work from home approvals" },
-			{ title: "Holidays", href: "/hr/holidays", description: "Gazetted and restricted holidays" },
-		],
-	},
-	{
-		title: "Leave",
-		icon: "🌴",
-		tiles: [
-			{ title: "Leave Management", href: "/hr/leave", description: "Review and process requests" },
-			{ title: "Apply Leave", href: "/hr/leave/apply", description: "Submit a new application" },
-			{ title: "Leave Policies", href: "/hr/leave-policies", description: "Rules and quotas" },
-			{ title: "Overtime", href: "/hr/overtime", description: "Overtime requests and approvals" },
-		],
-	},
-	{
-		title: "Payroll & Compensation",
-		icon: "💰",
-		tiles: [
-			{ title: "Payroll Runs", href: "/hr/payroll", description: "Monthly salary processing" },
-			{ title: "Salary Slips", href: "/hr/payroll/salary-slips", description: "Individual statements" },
-			{ title: "Pay Structures", href: "/hr/payroll/structures", description: "Earning/deduction components" },
-			{ title: "Pay Matrix", href: "/hr/pay-matrix", description: "7th CPC pay band matrix" },
-			{ title: "Salary Structures", href: "/hr/salary-structure", description: "Pay structure component definitions" },
-			{ title: "GPF", href: "/hr/payroll/gpf", description: "General Provident Fund" },
-			{ title: "NPS", href: "/hr/payroll/nps", description: "National Pension System" },
-			{ title: "Pensioners", href: "/hr/payroll/pensioners", description: "PPO management" },
-			{ title: "Form 16", href: "/hr/payroll/form16", description: "Form-16 generation" },
-			{ title: "Statutory", href: "/hr/payroll/statutory", description: "PF, ESI, PT deductions" },
-			{ title: "DDO Management", href: "/hr/payroll/ddos", description: "Drawing & Disbursing Officers" },
-			{ title: "Full & Final", href: "/hr/payroll/fnf", description: "F&F settlements" },
-			{ title: "Loans", href: "/hr/payroll/loans", description: "Loan disbursement and recovery" },
-			{ title: "Off-Cycle Payroll", href: "/hr/payroll/off-cycle", description: "Bonus, incentive, and ad-hoc payments" },
-			{ title: "Tax Declaration", href: "/hr/payroll/tax-declaration", description: "Employee IT investment proofs" },
-			{ title: "Income Tax (TDS)", href: "/hr/payroll/income-tax", description: "Monthly TDS computation and history" },
-			{ title: "TDS Returns", href: "/hr/payroll/returns", description: "Form 24Q / 26Q quarterly e-TDS" },
-			{ title: "Tax Config", href: "/hr/payroll/tax-config", description: "TDS slabs and deduction limits" },
-			{ title: "Salary Revisions", href: "/hr/payroll/salary-revisions", description: "Increment and revision records" },
-			{ title: "Salary Corrections", href: "/hr/payroll/corrections", description: "Component-level pay corrections" },
-			{ title: "Arrears", href: "/hr/payroll/arrears", description: "Retrospective salary arrears" },
-			{ title: "Bonus", href: "/hr/payroll/bonus", description: "Annual bonus computation" },
-			{ title: "Reimbursements", href: "/hr/payroll/reimbursements", description: "Expense reimbursements" },
-			{ title: "Pay Groups", href: "/hr/payroll/pay-groups", description: "Frequency and pay-day config" },
-			{ title: "CTC Calculator", href: "/hr/payroll/ctc", description: "Cost-to-company breakup tool" },
-			{ title: "Flex Benefits", href: "/hr/payroll/flex-benefits", description: "Employee flexi benefit elections" },
-			{ title: "Costing", href: "/hr/payroll/costing", description: "Cost-centre payroll allocation" },
-			{ title: "Payroll Register", href: "/hr/payroll/register", description: "Department-wise payroll summary" },
-			{ title: "Comparison", href: "/hr/payroll/comparison", description: "Month-on-month payroll variance" },
-			{ title: "Payroll Period", href: "/hr/payroll/period", description: "Period closing and control" },
-			{ title: "Disbursement", href: "/hr/payroll/disbursement", description: "Bank file and payment dispatch" },
-		],
-	},
-	{
-		title: "Benefits & Claims",
-		icon: "🎁",
-		tiles: [
-			{ title: "Benefits", href: "/hr/benefits", description: "HRA, LTC, medical enrollment" },
-			{ title: "Loans", href: "/hr/loans", description: "Loan applications and EMI" },
-			{ title: "Advances", href: "/hr/advances", description: "Salary advance requests" },
-			{ title: "Expenses", href: "/hr/expenses", description: "Expense claims" },
-			{ title: "Travel / TA-DA", href: "/hr/travel", description: "Travel allowance claims" },
-			{ title: "Medical Claims", href: "/hr/medical", description: "CGHS / CS(MA) reimbursement" },
-		],
-	},
-	{
-		title: "Recruitment & Onboarding",
-		icon: "📢",
-		tiles: [
-			{ title: "Recruitment", href: "/hr/recruitment", description: "Job openings and applications" },
-			{ title: "Onboarding", href: "/hr/onboarding", description: "New joinee setup" },
-		],
-	},
-	{
-		title: "Performance & Development",
-		icon: "⭐",
-		tiles: [
-			{ title: "Appraisals (APAR)", href: "/hr/apar", description: "SPARROW multi-authority appraisal workflow" },
-			{ title: "Goals / KRA", href: "/hr/goals", description: "Targets and tracking against each employee's Key Result Areas (KRA)" },
-			{ title: "Training", href: "/hr/training", description: "Programs and capacity building" },
-			{ title: "Skills", href: "/hr/skills", description: "Skill matrix" },
-			{ title: "Certifications", href: "/hr/certifications", description: "Certification tracker" },
-			{ title: "Competency Framework", href: "/hr/competency", description: "Competencies and frameworks" },
-			{ title: "Work Summaries", href: "/hr/work-summary", description: "Employee task and performance records" },
-		],
-	},
-	{
-		title: "Employee Lifecycle",
-		icon: "🔄",
-		tiles: [
-			{ title: "Service Book", href: "/hr/service-book", description: "Postings, promotions history" },
-			{ title: "Transfer", href: "/hr/transfer", description: "Transfer orders" },
-			{ title: "Promotion", href: "/hr/promotion", description: "Promotion orders" },
-			{ title: "Deputation", href: "/hr/deputation", description: "Deputation to other orgs" },
-			{ title: "Confirmation", href: "/hr/confirmation", description: "Probation confirmations" },
-			{ title: "Retirement", href: "/hr/retirement", description: "Superannuation and separation" },
-			{ title: "DPC Eligibility", href: "/hr/dpc", description: "Promotion seniority list" },
-		],
-	},
-	{
-		title: "Employee Relations",
-		icon: "🤝",
-		tiles: [
-			{ title: "Grievance", href: "/hr/grievance", description: "Grievance redressal" },
-			{ title: "Vigilance", href: "/hr/vigilance", description: "Disciplinary cases" },
-			{ title: "Disciplinary Cases", href: "/hr/disciplinary", description: "All proceedings — major & minor" },
-			{ title: "ICC Complaints (POSH)", href: "/hr/icc", description: "Internal complaints under POSH Act" },
-		],
-	},
-	{
-		title: "Workforce Planning",
-		icon: "📋",
-		tiles: [
-			{ title: "Staffing Plan", href: "/hr/staffing-plan", description: "Sanctioned posts and vacancies" },
-			{ title: "Contractual", href: "/hr/contractual", description: "Contractual employees" },
-			{ title: "Outsourced", href: "/hr/outsourced", description: "Vendor-supplied workforce" },
-			{ title: "Interns", href: "/hr/interns", description: "Interns and apprentices" },
-			{ title: "Workforce Analytics", href: "/hr/workforce", description: "Headcount and retirement forecast" },
-			{ title: "Succession Planning", href: "/hr/succession", description: "Critical role coverage" },
-		],
-	},
-	{
-		title: "Compliance & Transparency",
-		icon: "⚖️",
-		tiles: [
-			{ title: "RTI Requests", href: "/hr/rti", description: "Right to Information tracking" },
-		],
-	},
-	{
-		title: "Communication & Engagement",
-		icon: "💬",
-		tiles: [
-			{ title: "Social Feed", href: "/hr/social-feed", description: "Team updates, kudos, and office announcements" },
-		],
-	},
-	{
-		title: "Setup & Configuration",
-		icon: "⚙️",
-		tiles: [
-			{ title: "Departments", href: "/hr/departments", description: "Add and manage departments" },
-			{ title: "Designations", href: "/hr/designations", description: "Job titles and pay levels" },
-			{ title: "Locations", href: "/hr/locations", description: "Office and facility locations" },
-      { title: "Leave Policies", href: "/hr/leave-policies", description: "Leave rules and entitlements" },
-			{ title: "Holidays", href: "/hr/holidays", description: "Gazetted and restricted holidays" },
-			{ title: "Employee Types", href: "/hr/employee-types", description: "Define regular, contractual, and deputation employee types" },
-			{ title: "Audit Log", href: "/hr/audit-log", description: "All HR actions — approvals, edits, payroll runs (e-Governance compliance)" },
-		],
-	},
-];
+export default async function Page() {
+	const t = await getTranslations("hr");
 
-export default function Page() {
+	/**
+	 * Tiles grouped by category for progressive disclosure.
+	 *
+	 * Intentionally NOT exported: Next.js App Router validates page module
+	 * exports and rejects anything outside its allowed set (default export,
+	 * metadata/generateMetadata, route segment config, etc.). Exporting this
+	 * broke `next build` with:
+	 *   Type error: "hrCategories" is not a valid Page export field.
+	 * Nothing outside this file consumes it, so a module-local const is correct.
+	 */
+	const hrCategories: { title: string; icon: string; tiles: NavTile[] }[] = [
+		{
+			title: t("catCore"),
+			icon: "👥",
+			tiles: [
+				{ title: t("dashboard"), href: "/hr/dashboard", description: t("dashboardDesc") },
+				{ title: t("employees"), href: "/hr/employees", description: t("employeesDesc") },
+				{ title: t("directory"), href: "/hr/directory", description: t("directoryDesc") },
+				{ title: t("orgChart"), href: "/hr/org-chart", description: t("orgChartDesc") },
+				{ title: t("idCards"), href: "/hr/id-cards", description: t("idCardsDesc") },
+			],
+		},
+		{
+			title: t("catAttendanceTime"),
+			icon: "📅",
+			tiles: [
+				{ title: t("attendance"), href: "/hr/attendance", description: t("attendanceDesc") },
+				{ title: t("regularisation"), href: "/hr/attendance/regularisation", description: t("regularisationDesc") },
+				{ title: t("checkinLog"), href: "/hr/checkin-log", description: t("checkinLogDesc") },
+				{ title: t("shifts"), href: "/hr/shifts", description: t("shiftsDesc") },
+				{ title: t("shiftRequests"), href: "/hr/shift-requests", description: t("shiftRequestsDesc") },
+				{ title: t("wfhRequests"), href: "/hr/wfh", description: t("wfhRequestsDesc") },
+				{ title: t("holidays"), href: "/hr/holidays", description: t("holidaysDesc") },
+			],
+		},
+		{
+			title: t("catLeave"),
+			icon: "🌴",
+			tiles: [
+				{ title: t("leaveManagement"), href: "/hr/leave", description: t("leaveManagementDesc") },
+				{ title: t("applyLeave"), href: "/hr/leave/apply", description: t("applyLeaveDesc") },
+				{ title: t("leavePolicies"), href: "/hr/leave-policies", description: t("leavePoliciesDesc") },
+				{ title: t("overtime"), href: "/hr/overtime", description: t("overtimeDesc") },
+			],
+		},
+		{
+			title: t("catPayroll"),
+			icon: "💰",
+			tiles: [
+				{ title: t("payrollRuns"), href: "/hr/payroll", description: t("payrollRunsDesc") },
+				{ title: t("salarySlips"), href: "/hr/payroll/salary-slips", description: t("salarySlipsDesc") },
+				{ title: t("payStructures"), href: "/hr/payroll/structures", description: t("payStructuresDesc") },
+				{ title: t("payMatrix"), href: "/hr/pay-matrix", description: t("payMatrixDesc") },
+				{ title: t("salaryStructures"), href: "/hr/salary-structure", description: t("salaryStructuresDesc") },
+				{ title: t("gpf"), href: "/hr/payroll/gpf", description: t("gpfDesc") },
+				{ title: t("nps"), href: "/hr/payroll/nps", description: t("npsDesc") },
+				{ title: t("pensioners"), href: "/hr/payroll/pensioners", description: t("pensionersDesc") },
+				{ title: t("form16"), href: "/hr/payroll/form16", description: t("form16Desc") },
+				{ title: t("statutory"), href: "/hr/payroll/statutory", description: t("statutoryDesc") },
+				{ title: t("ddoManagement"), href: "/hr/payroll/ddos", description: t("ddoManagementDesc") },
+				{ title: t("fullFinal"), href: "/hr/payroll/fnf", description: t("fullFinalDesc") },
+				{ title: t("loans"), href: "/hr/payroll/loans", description: t("loansDesc") },
+				{ title: t("offCyclePayroll"), href: "/hr/payroll/off-cycle", description: t("offCyclePayrollDesc") },
+				{ title: t("taxDeclaration"), href: "/hr/payroll/tax-declaration", description: t("taxDeclarationDesc") },
+				{ title: t("incomeTax"), href: "/hr/payroll/income-tax", description: t("incomeTaxDesc") },
+				{ title: t("tdsReturns"), href: "/hr/payroll/returns", description: t("tdsReturnsDesc") },
+				{ title: t("taxConfig"), href: "/hr/payroll/tax-config", description: t("taxConfigDesc") },
+				{ title: t("salaryRevisions"), href: "/hr/payroll/salary-revisions", description: t("salaryRevisionsDesc") },
+				{ title: t("salaryCorrections"), href: "/hr/payroll/corrections", description: t("salaryCorrectionsDesc") },
+				{ title: t("arrears"), href: "/hr/payroll/arrears", description: t("arrearsDesc") },
+				{ title: t("bonus"), href: "/hr/payroll/bonus", description: t("bonusDesc") },
+				{ title: t("reimbursements"), href: "/hr/payroll/reimbursements", description: t("reimbursementsDesc") },
+				{ title: t("payGroups"), href: "/hr/payroll/pay-groups", description: t("payGroupsDesc") },
+				{ title: t("ctcCalculator"), href: "/hr/payroll/ctc", description: t("ctcCalculatorDesc") },
+				{ title: t("flexBenefits"), href: "/hr/payroll/flex-benefits", description: t("flexBenefitsDesc") },
+				{ title: t("costing"), href: "/hr/payroll/costing", description: t("costingDesc") },
+				{ title: t("payrollRegister"), href: "/hr/payroll/register", description: t("payrollRegisterDesc") },
+				{ title: t("comparison"), href: "/hr/payroll/comparison", description: t("comparisonDesc") },
+				{ title: t("payrollPeriod"), href: "/hr/payroll/period", description: t("payrollPeriodDesc") },
+				{ title: t("disbursement"), href: "/hr/payroll/disbursement", description: t("disbursementDesc") },
+			],
+		},
+		{
+			title: t("catBenefits"),
+			icon: "🎁",
+			tiles: [
+				{ title: t("benefits"), href: "/hr/benefits", description: t("benefitsDesc") },
+				{ title: t("loansB"), href: "/hr/loans", description: t("loansBDesc") },
+				{ title: t("advances"), href: "/hr/advances", description: t("advancesDesc") },
+				{ title: t("expenses"), href: "/hr/expenses", description: t("expensesDesc") },
+				{ title: t("travel"), href: "/hr/travel", description: t("travelDesc") },
+				{ title: t("medicalClaims"), href: "/hr/medical", description: t("medicalClaimsDesc") },
+			],
+		},
+		{
+			title: t("catRecruitment"),
+			icon: "📢",
+			tiles: [
+				{ title: t("recruitment"), href: "/hr/recruitment", description: t("recruitmentDesc") },
+				{ title: t("onboarding"), href: "/hr/onboarding", description: t("onboardingDesc") },
+			],
+		},
+		{
+			title: t("catPerformance"),
+			icon: "⭐",
+			tiles: [
+				{ title: t("appraisals"), href: "/hr/apar", description: t("appraisalsDesc") },
+				{ title: t("goals"), href: "/hr/goals", description: t("goalsDesc") },
+				{ title: t("training"), href: "/hr/training", description: t("trainingDesc") },
+				{ title: t("skills"), href: "/hr/skills", description: t("skillsDesc") },
+				{ title: t("certifications"), href: "/hr/certifications", description: t("certificationsDesc") },
+				{ title: t("competency"), href: "/hr/competency", description: t("competencyDesc") },
+				{ title: t("workSummaries"), href: "/hr/work-summary", description: t("workSummariesDesc") },
+			],
+		},
+		{
+			title: t("catLifecycle"),
+			icon: "🔄",
+			tiles: [
+				{ title: t("serviceBook"), href: "/hr/service-book", description: t("serviceBookDesc") },
+				{ title: t("transfer"), href: "/hr/transfer", description: t("transferDesc") },
+				{ title: t("promotion"), href: "/hr/promotion", description: t("promotionDesc") },
+				{ title: t("deputation"), href: "/hr/deputation", description: t("deputationDesc") },
+				{ title: t("confirmation"), href: "/hr/confirmation", description: t("confirmationDesc") },
+				{ title: t("retirement"), href: "/hr/retirement", description: t("retirementDesc") },
+				{ title: t("dpc"), href: "/hr/dpc", description: t("dpcDesc") },
+			],
+		},
+		{
+			title: t("catRelations"),
+			icon: "🤝",
+			tiles: [
+				{ title: t("grievance"), href: "/hr/grievance", description: t("grievanceDesc") },
+				{ title: t("vigilance"), href: "/hr/vigilance", description: t("vigilanceDesc") },
+				{ title: t("disciplinary"), href: "/hr/disciplinary", description: t("disciplinaryDesc") },
+				{ title: t("icc"), href: "/hr/icc", description: t("iccDesc") },
+			],
+		},
+		{
+			title: t("catWorkforce"),
+			icon: "📋",
+			tiles: [
+				{ title: t("staffingPlan"), href: "/hr/staffing-plan", description: t("staffingPlanDesc") },
+				{ title: t("contractual"), href: "/hr/contractual", description: t("contractualDesc") },
+				{ title: t("outsourced"), href: "/hr/outsourced", description: t("outsourcedDesc") },
+				{ title: t("interns"), href: "/hr/interns", description: t("internsDesc") },
+				{ title: t("workforceAnalytics"), href: "/hr/workforce", description: t("workforceAnalyticsDesc") },
+				{ title: t("successionPlanning"), href: "/hr/succession", description: t("successionPlanningDesc") },
+			],
+		},
+		{
+			title: t("catCompliance"),
+			icon: "⚖️",
+			tiles: [
+				{ title: t("rti"), href: "/hr/rti", description: t("rtiDesc") },
+			],
+		},
+		{
+			title: t("catCommunication"),
+			icon: "💬",
+			tiles: [
+				{ title: t("socialFeed"), href: "/hr/social-feed", description: t("socialFeedDesc") },
+			],
+		},
+		{
+			title: t("catSetup"),
+			icon: "⚙️",
+			tiles: [
+				{ title: t("departments"), href: "/hr/departments", description: t("departmentsDesc") },
+				{ title: t("designations"), href: "/hr/designations", description: t("designationsDesc") },
+				{ title: t("locations"), href: "/hr/locations", description: t("locationsDesc") },
+				{ title: t("setupLeavePolicies"), href: "/hr/leave-policies", description: t("setupLeavePoliciesDesc") },
+				{ title: t("setupHolidays"), href: "/hr/holidays", description: t("setupHolidaysDesc") },
+				{ title: t("employeeTypes"), href: "/hr/employee-types", description: t("employeeTypesDesc") },
+				{ title: t("auditLog"), href: "/hr/audit-log", description: t("auditLogDesc") },
+			],
+		},
+	];
+
 	return (
 		<main className="page-main wrap" aria-labelledby="page-heading">
 			<PageHeader
-				title="Human Resources"
-				subtitle="People operations — employees, leave, attendance, payroll, and more."
+				title={t("title")}
+				subtitle={t("subtitle")}
 				help="hr"
 			/>
 			{hrCategories.map((cat) => (

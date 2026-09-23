@@ -1,3 +1,4 @@
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -76,6 +77,7 @@ const HOLIDAY_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 const CURRENT_YEAR = new Date().getFullYear();
 
 export default async function HolidaysPage() {
+  const t = await getTranslations("holidays");
   const { data: items, source } = await getHolidays();
   const roles = getSessionRoles();
   const canManage = roles.some((r: string) => HOLIDAY_ADMIN_ROLES.includes(r));
@@ -84,44 +86,44 @@ export default async function HolidaysPage() {
   const restricted = items.filter((i) => i.type === "restricted" || i.type === "Restricted").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "date", label: "Date" },
-    { key: "day", label: "Day" },
-    { key: "name", label: "Holiday" },
-    { key: "type", label: "Type" },
-    { key: "applicableTo", label: "Applicable To" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "date", label: t("colDate") },
+    { key: "day", label: t("colDay") },
+    { key: "name", label: t("colHoliday") },
+    { key: "type", label: t("colType") },
+    { key: "applicableTo", label: t("colApplicableTo") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Holiday Calendar"
-        subtitle="Gazetted, restricted, and optional holidays for the year."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr"
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📅" iconBg="#e6f0ff" label="Total Holidays" value={items.length} />
-        <StatCard icon="🏛️" iconBg="#e6f7f0" label="Gazetted" value={gazetted} />
-        <StatCard icon="📋" iconBg="#fffbe6" label="Restricted" value={restricted} />
-        <StatCard icon="🗓️" iconBg="#f5f5f5" label="Year" value={CURRENT_YEAR} />
+        <StatCard icon="📅" iconBg="#e6f0ff" label={t("statTotal")} value={items.length} />
+        <StatCard icon="🏛️" iconBg="#e6f7f0" label={t("statGazetted")} value={gazetted} />
+        <StatCard icon="📋" iconBg="#fffbe6" label={t("statRestricted")} value={restricted} />
+        <StatCard icon="🗓️" iconBg="#f5f5f5" label={t("statYear")} value={CURRENT_YEAR} />
       </StatGrid>
 
       {/* Add-holiday form: visible only to admin roles (mirrors backend POST gate) */}
       {canManage && <AddHolidayForm />}
 
-      <Card title="Holiday Calendar">
-        <div className="card-h"><h3>Holiday List {CURRENT_YEAR}</h3></div>
+      <Card title={t("cardTitle")}>
+        <div className="card-h"><h3>{t("listTitle", { year: CURRENT_YEAR })}</h3></div>
         <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by holiday name or type…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📅"
-          emptyTitle="No holidays configured"
-          emptyMessage="National, state, and restricted holidays appear here. Holiday calendars are used for leave computation and payroll."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
       </Card>
     </main>
