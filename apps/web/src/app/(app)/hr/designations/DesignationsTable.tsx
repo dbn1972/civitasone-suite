@@ -78,7 +78,7 @@ const thStyle: React.CSSProperties = {
 
 // ── Main component ─────────────────────────────────────────────────────────
 
-export function DesignationsTable({ items }: { items: Designation[] }) {
+export function DesignationsTable({ items, canEdit = false }: { items: Designation[]; canEdit?: boolean }) {
   const t = useTranslations("designationsTable");
   const router = useRouter();
   const [localItems, setLocalItems] = useState<Designation[]>(items);
@@ -278,16 +278,20 @@ export function DesignationsTable({ items }: { items: Designation[] }) {
                       {item.payGrade ?? "—"}
                     </td>
                     <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                      <Button variant="ghost" size="sm" style={{ marginInlineEnd: 6 }} onClick={() => startEdit(item)}>
-                        {t("editBtn")}
-                      </Button>
-                      <Button
-                        variant="danger"
-                        size="sm"
-                        onClick={() => { setDeleteError(undefined); setDeleteTarget(item); }}
-                      >
-                        {t("deleteBtn")}
-                      </Button>
+                      {canEdit && (
+                        <>
+                          <Button variant="ghost" size="sm" style={{ marginInlineEnd: 6 }} onClick={() => startEdit(item)}>
+                            {t("editBtn")}
+                          </Button>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => { setDeleteError(undefined); setDeleteTarget(item); }}
+                          >
+                            {t("deleteBtn")}
+                          </Button>
+                        </>
+                      )}
                     </td>
                   </>
                 )}

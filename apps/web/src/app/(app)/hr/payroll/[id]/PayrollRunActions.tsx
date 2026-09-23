@@ -84,7 +84,7 @@ export function PayrollRunActions({
 
   const canApprove  = canAdminister && (status === "processing" || status === "draft");
   const canDisburse = canAdminister && status === "approved";
-  const canRevert   = status === "failed";
+  const canRevert   = canAdminister && status === "failed";
 
   if (!canApprove && !canDisburse && !canRevert) return null;
 
