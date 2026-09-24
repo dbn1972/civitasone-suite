@@ -3,10 +3,11 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { PageHeader } from "../../../../../_components/ds";
+import { PageHeader, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { PrintButton } from "./PrintButton";
+import { toHumanError } from "@/lib/messages";
 
 const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"];
 
@@ -47,6 +48,17 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
   }
 
   const { data: slip, source } = await getSlip(params.id);
+  const errored = source === "error";
+  if (errored) {
+    return (
+      <main className="page-main wrap" style={{ maxWidth: 800 }}>
+        <PageHeader title="Salary Slip" back="/hr/payroll/salary-slips" />
+        <div className="pad">
+          <RefreshErrorState error={toHumanError("load", { area: "salary slip" })} backHref="/hr/payroll/salary-slips" />
+        </div>
+      </main>
+    );
+  }
   if (!slip) notFound();
 
   const earnings = slip.components.filter((c) => c.type === "earning");

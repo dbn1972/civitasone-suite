@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 // Wire shape from GET /v1/payroll/arrears (payroll-service, world-class-routes.ts ->
 // repo.listArrears -> `SELECT * FROM payroll.payroll_arrears`). These are the literal
@@ -79,6 +80,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function ArrearsPage() {
   const t = await getTranslations("arrears");
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const columns: {
     key: keyof Row & string;
@@ -102,13 +104,19 @@ export default async function ArrearsPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={items.filter((i) => i.status === "pending").length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApprovedPaid")} value={items.filter((i) => i.status === "approved" || i.status === "paid").length} />
-        <StatCard icon="💰" iconBg="var(--panel)" label={t("statTotalArrearsAmount")} value={formatMoney(totalArrearsMinor)} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : items.filter((i) => i.status === "pending").length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApprovedPaid")} value={errored ? null : items.filter((i) => i.status === "approved" || i.status === "paid").length} />
+        <StatCard icon="💰" iconBg="var(--panel)" label={t("statTotalArrearsAmount")} value={errored ? null : formatMoney(totalArrearsMinor)} />
       </StatGrid>
       <Card title={t("registerCardTitle")}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📋" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "arrears" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📋" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
+        )}
       </Card>
     </main>
   );

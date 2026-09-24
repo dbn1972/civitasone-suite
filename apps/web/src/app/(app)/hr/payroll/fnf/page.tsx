@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { ComputeFnfForm } from "./ComputeFnfForm";
 import { FnFSettlementCards, type FnFCardRow } from "./FnFSettlementCard";
+import { toHumanError } from "@/lib/messages";
 
 type SettlementRow = {
   id: string;
@@ -31,6 +32,7 @@ async function getSettlements(): Promise<LoaderResult<SettlementRow[]>> {
 
 export default async function FnfPage() {
   const { data: settlements, source } = await getSettlements();
+  const errored = source === "error";
 
   const pending = settlements.filter((s) => s.status === "pending" || s.status === "computed" || s.status === "draft").length;
   const settled = settlements.filter((s) => s.status === "settled" || s.status === "paid" || s.status === "disbursed").length;
@@ -61,18 +63,24 @@ export default async function FnfPage() {
       <DataSourceBadge source={source} message="Couldn't load F&F settlements — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="🧮" iconBg="var(--infobg)" label="Total Settlements" value={settlements.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending / Draft" value={pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled / Disbursed" value={settled} />
-        <StatCard icon="📊" iconBg="var(--panel)" label="Separation Types" value={separationTypes} />
+        <StatCard icon="🧮" iconBg="var(--infobg)" label="Total Settlements" value={errored ? null : settlements.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending / Draft" value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled / Disbursed" value={errored ? null : settled} />
+        <StatCard icon="📊" iconBg="var(--panel)" label="Separation Types" value={errored ? null : separationTypes} />
       </StatGrid>
 
       <ComputeFnfForm />
 
       <Card title="F&F Settlements">
-        <div style={{ padding: "0 4px" }}>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "fnf" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <div style={{ padding: "0 4px" }}>
           <FnFSettlementCards rows={cardRows} />
         </div>
+        )}
       </Card>
     </main>
   );

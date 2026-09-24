@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type NpsRow = {
   id: string;
@@ -28,6 +29,7 @@ async function getData(): Promise<LoaderResult<NpsRow[]>> {
 export default async function NpsStatutoryPage() {
   const t = await getTranslations("nps");
   const { data: rows, source } = await getData();
+  const errored = source === "error";
 
   const totalEmpContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
   const totalErContribMinor = rows.reduce((s, r) => s + Number(r.erContribMinor ?? 0), 0);
@@ -52,13 +54,18 @@ export default async function NpsStatutoryPage() {
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="var(--infobg)" label={t("statNpsRecords")} value={rows.length} />
-        <StatCard icon="👤" iconBg="var(--goodbg)" label={t("statTotalEmployeeContribution")} value={formatMoney(totalEmpContribMinor)} />
-        <StatCard icon="🏛️" iconBg="var(--warnbg)" label={t("statTotalEmployerContribution")} value={formatMoney(totalErContribMinor)} />
-        <StatCard icon="💵" iconBg="var(--panel)" label={t("statTotalNpsOutflow")} value={formatMoney(totalNpsMinor)} />
+        <StatCard icon="📊" iconBg="var(--infobg)" label={t("statNpsRecords")} value={errored ? null : rows.length} />
+        <StatCard icon="👤" iconBg="var(--goodbg)" label={t("statTotalEmployeeContribution")} value={errored ? null : formatMoney(totalEmpContribMinor)} />
+        <StatCard icon="🏛️" iconBg="var(--warnbg)" label={t("statTotalEmployerContribution")} value={errored ? null : formatMoney(totalErContribMinor)} />
+        <StatCard icon="💵" iconBg="var(--panel)" label={t("statTotalNpsOutflow")} value={errored ? null : formatMoney(totalNpsMinor)} />
       </StatGrid>
       <Card title={t("historyCardTitle")}>
-        <DataTable<NpsRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "nps" })} backHref="/hr/payroll/statutory" />
+          </div>
+        ) : (
+          <DataTable<NpsRow>
           columns={columns}
           rows={rows}
           sortable
@@ -69,6 +76,7 @@ export default async function NpsStatutoryPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

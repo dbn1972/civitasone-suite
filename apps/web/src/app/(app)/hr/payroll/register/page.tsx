@@ -1,7 +1,8 @@
-import { Button, PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -39,6 +40,7 @@ export default async function PayrollRegisterPage({
   const period = searchParams?.period?.trim() || undefined;
   const runId = searchParams?.runId?.trim() || undefined;
   const { data: items, source } = await getData(period, runId);
+  const errored = source === "error";
 
   const columns: {
     key: keyof Row & string;
@@ -100,14 +102,19 @@ export default async function PayrollRegisterPage({
       </Card>
 
       <StatGrid>
-        <StatCard icon="🏢" iconBg="var(--infobg)" label="Departments" value={items.length} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees" value={totalEmployees} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Gross" value={formatMoney(totalGrossMinor)} />
-        <StatCard icon="🧾" iconBg="var(--warnbg)" label="Total Net Pay" value={formatMoney(totalNetMinor)} />
+        <StatCard icon="🏢" iconBg="var(--infobg)" label="Departments" value={errored ? null : items.length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees" value={errored ? null : totalEmployees} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Gross" value={errored ? null : formatMoney(totalGrossMinor)} />
+        <StatCard icon="🧾" iconBg="var(--warnbg)" label="Total Net Pay" value={errored ? null : formatMoney(totalNetMinor)} />
       </StatGrid>
 
       <Card title="Register Lines">
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "register" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -118,6 +125,7 @@ export default async function PayrollRegisterPage({
           emptyTitle="No register lines"
           emptyMessage="No payroll register found for the given period or run. Try a different filter, or run payroll for this period first."
         />
+        )}
       </Card>
     </main>
   );

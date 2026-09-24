@@ -1,9 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RequestAdvanceForm } from "./RequestAdvanceForm";
 import { mapAdvances, type ApiAdvance, type Row } from "./mapAdvances";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
@@ -18,6 +19,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 
 export default async function AdvancesPage() {
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
@@ -38,21 +40,27 @@ export default async function AdvancesPage() {
       <PageHeader title="Salary Advances" subtitle="Request and track salary advance disbursements." back="/hr" />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="💰" iconBg="#e6f0ff" label="Total Advances" value={items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
-        <StatCard icon="❌" iconBg="#fdecea" label="Rejected" value={rejected} />
+        <StatCard icon="💰" iconBg="#e6f0ff" label="Total Advances" value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={errored ? null : approved} />
+        <StatCard icon="❌" iconBg="#fdecea" label="Rejected" value={errored ? null : rejected} />
       </StatGrid>
 
       <RequestAdvanceForm />
 
       <Card title="Salary Advances">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or status…"
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "advances" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by employee or status…"
           pageSize={15}
           emptyIcon="💰"
           emptyTitle="No salary advances"
           emptyMessage="Salary advance requests appear here once employees raise them. Advances are approved by HR and adjusted against subsequent salary."
         />
+        )}
       </Card>
     </main>
   );

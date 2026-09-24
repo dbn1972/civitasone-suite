@@ -1,9 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
+import { toHumanError } from "@/lib/messages";
 
 const RTI_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
@@ -39,6 +40,7 @@ export default async function RtiPage() {
 
   const t = await getTranslations("rtiRequests");
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const pending = items.filter((i) => i.status === "filed" || i.status === "assigned").length;
   const overdue = items.filter((i) => i.overdue).length;
@@ -63,13 +65,18 @@ export default async function RtiPage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📂" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
-        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statOverdueLabel")} value={overdue} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={disposed} />
+        <StatCard icon="📂" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? null : items.length} />
+        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statPendingLabel")} value={errored ? null : pending} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statOverdueLabel")} value={errored ? null : overdue} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={errored ? null : disposed} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "rti" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -80,6 +87,7 @@ export default async function RtiPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

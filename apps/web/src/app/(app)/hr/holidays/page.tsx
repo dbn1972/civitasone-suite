@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { AddHolidayForm } from "./AddHolidayForm";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { toHumanError } from "@/lib/messages";
 
 type ApiHoliday = {
   id: string;
@@ -79,6 +80,7 @@ const CURRENT_YEAR = new Date().getFullYear();
 export default async function HolidaysPage() {
   const t = await getTranslations("holidays");
   const { data: items, source } = await getHolidays();
+  const errored = source === "error";
   const roles = getSessionRoles();
   const canManage = roles.some((r: string) => HOLIDAY_ADMIN_ROLES.includes(r));
 
@@ -103,17 +105,23 @@ export default async function HolidaysPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📅" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={items.length} />
-        <StatCard icon="🏛️" iconBg="var(--goodbg, #e6f7f0)" label={t("statGazetted")} value={gazetted} />
-        <StatCard icon="📋" iconBg="var(--warnbg, #fffbe6)" label={t("statRestricted")} value={restricted} />
-        <StatCard icon="🗓️" iconBg="var(--bg, #f5f5f5)" label={t("statYear")} value={CURRENT_YEAR} />
+        <StatCard icon="📅" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="🏛️" iconBg="var(--goodbg, #e6f7f0)" label={t("statGazetted")} value={errored ? null : gazetted} />
+        <StatCard icon="📋" iconBg="var(--warnbg, #fffbe6)" label={t("statRestricted")} value={errored ? null : restricted} />
+        <StatCard icon="🗓️" iconBg="var(--bg, #f5f5f5)" label={t("statYear")} value={errored ? null : CURRENT_YEAR} />
       </StatGrid>
 
       {/* Add-holiday form: visible only to admin roles (mirrors backend POST gate) */}
       {canManage && <AddHolidayForm />}
 
       <Card title={t("cardTitle")}>
-        <div className="card-h"><h3>{t("listTitle", { year: CURRENT_YEAR })}</h3></div>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "holidays" })} backHref="/hr" />
+          </div>
+        ) : (
+          <>
+          <div className="card-h"><h3>{t("listTitle", { year: CURRENT_YEAR })}</h3></div>
         <DataTable<Row>
           columns={columns}
           rows={items}
@@ -125,6 +133,8 @@ export default async function HolidaysPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+          </>
+        )}
       </Card>
     </main>
   );

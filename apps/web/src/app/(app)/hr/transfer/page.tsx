@@ -1,9 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { TransferWithApproval } from "./TransferWithApproval";
 import { TransferOrderCard, type TransferRow } from "./_components/TransferOrderCard";
 import { TransferListFilters } from "./_components/TransferListFilters";
+import { toHumanError } from "@/lib/messages";
 
 async function getData(): Promise<LoaderResult<TransferRow[]>> {
   // NOTE: this used to fall back to GET /api/v1/hrms/transfers whenever the
@@ -24,6 +25,7 @@ async function getData(): Promise<LoaderResult<TransferRow[]>> {
 
 export default async function TransferPage() {
   const { data: raw, source } = await getData();
+  const errored = source === "error";
   // The raw backend row only carries employeeId/fromDeptId/toDeptId (no
   // joined names yet) -- degrade to the id rather than rendering a blank
   // DataTable cell, matching the fallback TransferOrderCard already uses.
@@ -60,12 +62,12 @@ export default async function TransferPage() {
       <DataSourceBadge source={source} message="Couldn't load transfer orders — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="🔄" iconBg="#e6f0ff" label="Total Transfers"    value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Completed / Joined" value={completed} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending"            value={pending} />
-        <StatCard icon="👍" iconBg="#f0f5ff" label="Order Issued"       value={approved} />
+        <StatCard icon="🔄" iconBg="#e6f0ff" label="Total Transfers"    value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Completed / Joined" value={errored ? null : completed} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending"            value={errored ? null : pending} />
+        <StatCard icon="👍" iconBg="#f0f5ff" label="Order Issued"       value={errored ? null : approved} />
         {relieved > 0 && (
-          <StatCard icon="📍" iconBg="#fef9c3" label="Relieved" value={relieved} />
+          <StatCard icon="📍" iconBg="#fef9c3" label="Relieved" value={errored ? null : relieved} />
         )}
       </StatGrid>
 
@@ -74,7 +76,12 @@ export default async function TransferPage() {
 
       {/* Table fallback for density view */}
       <Card title="Transfer Orders — Table View">
-        <DataTable<TransferRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "transfer" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<TransferRow>
           columns={tableColumns}
           rows={items}
           sortable
@@ -85,6 +92,7 @@ export default async function TransferPage() {
           emptyTitle="No transfer orders"
           emptyMessage="Transfer orders appear here once issued. Use '+ Transfer with approval' to move an employee to another office."
         />
+        )}
       </Card>
     </main>
   );

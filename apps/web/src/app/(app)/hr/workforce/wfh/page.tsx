@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { WFHRequestForm } from "../../_components/WFHRequestForm";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * WFHPage — Work From Home requests and approvals.
@@ -41,6 +42,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function WFHPage() {
   const t = await getTranslations("workforceWfh");
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
@@ -66,10 +68,10 @@ export default async function WFHPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏠" iconBg="#e6f0ff" label={t("statTotalRequests")} value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApproved")} value={approved} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPending")} value={pending} />
-        <StatCard icon="↩️" iconBg="#fff0f0" label={t("statRejectedRecalled")} value={rejected + recalled} />
+        <StatCard icon="🏠" iconBg="#e6f0ff" label={t("statTotalRequests")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statApproved")} value={errored ? null : approved} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="↩️" iconBg="#fff0f0" label={t("statRejectedRecalled")} value={errored ? null : rejected + recalled} />
       </StatGrid>
 
       <Card title={t("cardNewRequest")}>
@@ -78,7 +80,12 @@ export default async function WFHPage() {
 
       <div style={{ marginTop: 16 }}>
         <Card title={t("cardRequests")}>
-          <DataTable<Row>
+          {errored ? (
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "wfh" })} backHref="/hr/workforce" />
+            </div>
+          ) : (
+            <DataTable<Row>
             columns={COLUMNS}
             rows={items}
             sortable
@@ -89,6 +96,7 @@ export default async function WFHPage() {
             emptyTitle={t("emptyTitle")}
             emptyMessage={t("emptyMessage")}
           />
+          )}
         </Card>
       </div>
     </main>

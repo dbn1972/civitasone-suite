@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { EcrGeneratorForm } from "./EcrGeneratorForm";
+import { toHumanError } from "@/lib/messages";
 
 type PfRow = {
   id: string;
@@ -27,6 +28,7 @@ async function getData(): Promise<LoaderResult<PfRow[]>> {
 export default async function PfStatutoryPage() {
   const t = await getTranslations("pf");
   const { data: rows, source } = await getData();
+  const errored = source === "error";
 
   const totalEmpContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
   const totalErContribMinor = rows.reduce((s, r) => s + Number(r.erContribMinor ?? 0), 0);
@@ -49,16 +51,21 @@ export default async function PfStatutoryPage() {
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🏦" iconBg="var(--infobg)" label={t("statPfRecords")} value={rows.length} />
-        <StatCard icon="👤" iconBg="var(--goodbg)" label={t("statTotalEmployeeContribution")} value={formatMoney(totalEmpContribMinor)} />
-        <StatCard icon="🏢" iconBg="var(--warnbg)" label={t("statTotalEmployerContribution")} value={formatMoney(totalErContribMinor)} />
-        <StatCard icon="💵" iconBg="var(--panel)" label={t("statTotalPfOutflow")} value={formatMoney(totalPfMinor)} />
+        <StatCard icon="🏦" iconBg="var(--infobg)" label={t("statPfRecords")} value={errored ? null : rows.length} />
+        <StatCard icon="👤" iconBg="var(--goodbg)" label={t("statTotalEmployeeContribution")} value={errored ? null : formatMoney(totalEmpContribMinor)} />
+        <StatCard icon="🏢" iconBg="var(--warnbg)" label={t("statTotalEmployerContribution")} value={errored ? null : formatMoney(totalErContribMinor)} />
+        <StatCard icon="💵" iconBg="var(--panel)" label={t("statTotalPfOutflow")} value={errored ? null : formatMoney(totalPfMinor)} />
       </StatGrid>
 
       <EcrGeneratorForm />
 
       <Card title={t("historyCardTitle")}>
-        <DataTable<PfRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "pf" })} backHref="/hr/payroll/statutory" />
+          </div>
+        ) : (
+          <DataTable<PfRow>
           columns={columns}
           rows={rows}
           sortable
@@ -69,6 +76,7 @@ export default async function PfStatutoryPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

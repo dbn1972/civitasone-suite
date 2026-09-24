@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { CtcCalculatorForm } from "./CtcCalculatorForm";
+import { toHumanError } from "@/lib/messages";
 
 type ConfigRow = {
   id: string;
@@ -33,6 +34,7 @@ const CALC_TYPE_LABEL: Record<string, string> = {
 
 export default async function CtcConfigPage() {
   const { data: config, source } = await getData();
+  const errored = source === "error";
 
   const rows = config.map((c) => {
     const isPct = c.calc_type === "pct_of_basic" || c.calc_type === "pct_of_ctc";
@@ -75,14 +77,19 @@ export default async function CtcConfigPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="⚙️" iconBg="var(--infobg)" label="Configured Components" value={config.length} />
-        <StatCard icon="🏛️" iconBg="var(--warnbg)" label="Employer-Cost" value={employerComponents} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active Components" value={activeComponents} />
-        <StatCard icon="📊" iconBg="var(--goodbg)" label="Percentage-Based" value={pctComponents} />
+        <StatCard icon="⚙️" iconBg="var(--infobg)" label="Configured Components" value={errored ? null : config.length} />
+        <StatCard icon="🏛️" iconBg="var(--warnbg)" label="Employer-Cost" value={errored ? null : employerComponents} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active Components" value={errored ? null : activeComponents} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label="Percentage-Based" value={errored ? null : pctComponents} />
       </StatGrid>
 
       <Card title="CTC Component Configuration">
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "ctc" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={rows}
           sortable
@@ -93,6 +100,7 @@ export default async function CtcConfigPage() {
           emptyTitle="No CTC configuration found"
           emptyMessage="No active payroll_ctc_config rows are configured for this tenant."
         />
+        )}
       </Card>
 
       <CtcCalculatorForm />

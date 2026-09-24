@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreateDdoForm } from "./CreateDdoForm";
+import { toHumanError } from "@/lib/messages";
 
 type DdoRow = {
   ddoCode: string;
@@ -18,6 +19,7 @@ async function getDdos(): Promise<LoaderResult<DdoRow[]>> {
 
 export default async function DdosPage() {
   const { data: ddos, source } = await getDdos();
+  const errored = source === "error";
 
   const rows = ddos.map((d) => ({ ...d, departmentCount: d.departmentIds?.length ?? 0 }));
   const multiDeptDdos = ddos.filter((d) => (d.departmentIds?.length ?? 0) > 1).length;
@@ -40,16 +42,21 @@ export default async function DdosPage() {
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg)" label="Total DDOs" value={ddos.length} />
-        <StatCard icon="🏢" iconBg="var(--goodbg)" label="Multi-Dept DDOs" value={multiDeptDdos} />
-        <StatCard icon="🔗" iconBg="var(--warnbg)" label="Total Dept Mappings" value={totalDeptMappings} />
-        <StatCard icon="📊" iconBg="var(--goodbg)" label="Avg Depts / DDO" value={avgDepts} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label="Total DDOs" value={errored ? null : ddos.length} />
+        <StatCard icon="🏢" iconBg="var(--goodbg)" label="Multi-Dept DDOs" value={errored ? null : multiDeptDdos} />
+        <StatCard icon="🔗" iconBg="var(--warnbg)" label="Total Dept Mappings" value={errored ? null : totalDeptMappings} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label="Avg Depts / DDO" value={errored ? null : avgDepts} />
       </StatGrid>
 
       <CreateDdoForm />
 
       <Card title="DDOs">
-        <DataTable<DdoRow & { departmentCount: number }>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "ddos" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<DdoRow & { departmentCount: number }>
           columns={columns}
           rows={rows}
           sortable
@@ -60,6 +67,7 @@ export default async function DdosPage() {
           emptyTitle="No DDOs configured yet"
           emptyMessage="Create your first DDO using the form above."
         />
+        )}
       </Card>
     </main>
   );

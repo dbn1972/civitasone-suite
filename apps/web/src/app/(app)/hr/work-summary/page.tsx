@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
+import { toHumanError } from "@/lib/messages";
 
 const WORK_SUMMARY_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin"];
 
@@ -64,6 +65,7 @@ export default async function WorkSummaryPage() {
   }
 
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const reviewed = items.filter((i) => ["approved", "accepted", "finalised"].includes(i.status)).length;
   const pending = items.filter((i) => ["pending", "submitted"].includes(i.status)).length;
@@ -89,13 +91,18 @@ export default async function WorkSummaryPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📝" iconBg="#e6f0ff" label="Total Records" value={items.length} />
-        <StatCard icon="👤" iconBg="#f5f5f5" label="Employees" value={employees} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Reviewed" value={reviewed} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Review" value={pending} />
+        <StatCard icon="📝" iconBg="#e6f0ff" label="Total Records" value={errored ? null : items.length} />
+        <StatCard icon="👤" iconBg="#f5f5f5" label="Employees" value={errored ? null : employees} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label="Reviewed" value={errored ? null : reviewed} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Review" value={errored ? null : pending} />
       </StatGrid>
       <Card title="Work Summary Records">
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "work summary" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -106,6 +113,7 @@ export default async function WorkSummaryPage() {
           emptyTitle="No work summaries yet"
           emptyMessage="Work summaries are derived from APAR appraisal records. Each annual appraisal cycle generates a summary of tasks completed and supervisor ratings."
         />
+        )}
       </Card>
     </main>
   );

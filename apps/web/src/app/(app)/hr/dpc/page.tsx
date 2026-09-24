@@ -1,11 +1,12 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, Tabs } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, Tabs, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PromotionBatchView } from "./_components/PromotionBatchView";
 import { SeniorityListActions } from "./_components/SeniorityListActions";
 import type { PromotionRow } from "../promotion/_components/PromotionCard";
+import { toHumanError } from "@/lib/messages";
 
 // DOM-023: mirrors the backend's HR_ROLES guard exactly
 // (services/hrms-service/src/modules/seniority/routes.ts) for the
@@ -61,6 +62,7 @@ export default async function DpcPage() {
   const canAdministerSeniority = roles.some((r) => SENIORITY_ADMIN_ROLES.includes(r));
 
   const [{ data, source }, batchPromotions] = await Promise.all([getData(), getBatchPromotions()]);
+  const errored = source === "error";
   const { asOf, eligibleCount, ineligibleCount, eligible, ineligible } = data ?? {
     asOf: "—", eligibleCount: 0, ineligibleCount: 0, eligible: [], ineligible: [],
   };
@@ -89,15 +91,20 @@ export default async function DpcPage() {
       <SeniorityListActions canAdminister={canAdministerSeniority} />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statEligible")}       value={eligibleCount} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statNotYetEligible")} value={ineligibleCount} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label={t("statAsOnDate")}       value={asOf} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label={t("statTotalOfficers")}  value={totalOfficers} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statEligible")}       value={errored ? null : eligibleCount} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t("statNotYetEligible")} value={errored ? null : ineligibleCount} />
+        <StatCard icon="📅" iconBg="#f5f5f5" label={t("statAsOnDate")}       value={errored ? null : asOf} />
+        <StatCard icon="👥" iconBg="#e6f7f0" label={t("statTotalOfficers")}  value={errored ? null : totalOfficers} />
       </StatGrid>
 
       {/* Eligible Officers seniority list */}
       <Card title={t("eligibleListTitle")}>
-        <DataTable<EligibleRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "dpc" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<EligibleRow>
           columns={eligibleCols}
           rows={eligible}
           sortable filterable
@@ -107,6 +114,7 @@ export default async function DpcPage() {
           emptyTitle={t("noEligibleTitle")}
           emptyMessage={t("noEligibleMessage")}
         />
+        )}
       </Card>
 
       {/* DPC Batch Promotion View */}

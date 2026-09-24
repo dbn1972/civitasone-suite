@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * InternsPage — intern cohort list with institution, stipend, project, and end date.
@@ -85,6 +86,7 @@ async function getInterns(): Promise<LoaderResult<Row[]>> {
 export default async function InternsPage() {
   const t = await getTranslations("workforceInterns");
   const { data: items, source } = await getInterns();
+  const errored = source === "error";
 
   const active = items.filter((i) => i.status === "active").length;
   const interns = items.filter((i) => ["intern", "internship"].includes(i.type.toLowerCase())).length;
@@ -112,13 +114,18 @@ export default async function InternsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🎓" iconBg="#e6f0ff" label={t("statTotal")} value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActive")} value={active} />
-        <StatCard icon="📚" iconBg="#fffbe6" label={t("statInterns")} value={interns} />
-        <StatCard icon="🔧" iconBg="#f5f5f5" label={t("statApprentices")} value={apprentices} />
+        <StatCard icon="🎓" iconBg="#e6f0ff" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActive")} value={errored ? null : active} />
+        <StatCard icon="📚" iconBg="#fffbe6" label={t("statInterns")} value={errored ? null : interns} />
+        <StatCard icon="🔧" iconBg="#f5f5f5" label={t("statApprentices")} value={errored ? null : apprentices} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "interns" })} backHref="/hr/workforce" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={COLUMNS}
           rows={items}
           sortable
@@ -129,6 +136,7 @@ export default async function InternsPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

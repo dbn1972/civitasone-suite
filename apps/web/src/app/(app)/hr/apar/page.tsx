@@ -6,10 +6,11 @@
  */
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { APARFlowList, type AparRecord } from "./_components/APARFlowCard";
+import { toHumanError } from "@/lib/messages";
 
 async function getApars() {
   return fetchJson<unknown, AparRecord[]>("/api/v1/hrms/apar", [], {
@@ -24,6 +25,7 @@ async function getApars() {
 export default async function AparListPage() {
   const t = await getTranslations("apar");
   const result = await getApars();
+  const errored = result.source === "error";
   const apars  = result.data;
 
   const pending   = apars.filter(
@@ -55,17 +57,23 @@ export default async function AparListPage() {
       <DataSourceBadge source={result.source} />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotal")}        value={apars.length} />
-        <StatCard icon="✍️" iconBg="#fffbe6" label={t("statSelfAppraisal")} value={pending} />
-        <StatCard icon="🔍" iconBg="#e6f0ff" label={t("statUnderReview")}   value={inReview} />
-        <StatCard icon="⚠️" iconBg="#fff1f0" label={t("statDisputed")}      value={disputed} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statClosed")}        value={completed} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotal")}        value={errored ? null : apars.length} />
+        <StatCard icon="✍️" iconBg="#fffbe6" label={t("statSelfAppraisal")} value={errored ? null : pending} />
+        <StatCard icon="🔍" iconBg="#e6f0ff" label={t("statUnderReview")}   value={errored ? null : inReview} />
+        <StatCard icon="⚠️" iconBg="#fff1f0" label={t("statDisputed")}      value={errored ? null : disputed} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statClosed")}        value={errored ? null : completed} />
       </StatGrid>
 
       <Card title={t("flowCardTitle")}>
-        <div style={{ padding: 16 }}>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "apar" })} backHref="/hr" />
+          </div>
+        ) : (
+          <div style={{ padding: 16 }}>
           <APARFlowList records={apars} />
         </div>
+        )}
       </Card>
     </main>
   );

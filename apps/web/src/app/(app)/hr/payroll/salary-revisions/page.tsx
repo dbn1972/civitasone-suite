@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 // Read-only: payroll-service exposes GET /v1/payroll/salary-revisions but no create route
 // (verified against world-class-routes.ts / gap-routes.ts / repo.ts). Revisions are sourced
@@ -43,6 +44,7 @@ const REVISION_TYPE_KEYS: Record<string, string> = {
 export default async function SalaryRevisionsPage() {
   const t = await getTranslations("salaryRevisions");
   const { data: rawItems, source } = await getData();
+  const errored = source === "error";
 
   const items = rawItems.map((r) => {
     const key = REVISION_TYPE_KEYS[r.revision_type];
@@ -72,10 +74,10 @@ export default async function SalaryRevisionsPage() {
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📈" iconBg="var(--infobg)" label={t("statTotalRevisions")} value={items.length} />
-        <StatCard icon="🏅" iconBg="var(--goodbg)" label={t("statIncrements")} value={items.filter((i) => i.revision_type === "annual_increment").length} />
-        <StatCard icon="🎯" iconBg="var(--warnbg)" label={t("statPromotions")} value={items.filter((i) => i.revision_type === "promotion").length} />
-        <StatCard icon="🏛" iconBg="var(--panel)" label={t("statPayCommission")} value={items.filter((i) => i.revision_type === "pay_commission").length} />
+        <StatCard icon="📈" iconBg="var(--infobg)" label={t("statTotalRevisions")} value={errored ? null : items.length} />
+        <StatCard icon="🏅" iconBg="var(--goodbg)" label={t("statIncrements")} value={errored ? null : items.filter((i) => i.revision_type === "annual_increment").length} />
+        <StatCard icon="🎯" iconBg="var(--warnbg)" label={t("statPromotions")} value={errored ? null : items.filter((i) => i.revision_type === "promotion").length} />
+        <StatCard icon="🏛" iconBg="var(--panel)" label={t("statPayCommission")} value={errored ? null : items.filter((i) => i.revision_type === "pay_commission").length} />
       </StatGrid>
 
       <Card>
@@ -85,7 +87,12 @@ export default async function SalaryRevisionsPage() {
       </Card>
 
       <Card title={t("historyCardTitle")}>
-        <DataTable<Row2>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "salary revisions" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<Row2>
           columns={columns}
           rows={items}
           sortable
@@ -96,6 +103,7 @@ export default async function SalaryRevisionsPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );
