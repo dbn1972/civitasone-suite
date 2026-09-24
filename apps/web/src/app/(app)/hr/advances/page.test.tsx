@@ -1,6 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+// Page now has a role gate (SEC fix: this page previously rendered for any
+// authenticated user with no check at all) -- default to an authorized role
+// so the existing content tests below keep exercising the real page body;
+// the dedicated gate test overrides this per-call.
+const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn(() => ["hr_admin"]) }));
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: getSessionRolesMock,
+}));
+
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
@@ -11,6 +20,16 @@ import AdvancesPage from "./page";
 describe("AdvancesPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+  });
+
+  it("shows Access restricted instead of the form/table for a role outside ADVANCE_ROLES (regression: this page had no gate at all)", async () => {
+    getSessionRolesMock.mockReturnValue(["employee"]);
+    const ui = await AdvancesPage();
+    render(ui);
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+    expect(screen.queryByText("Request Advance")).not.toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
   // fetchJson itself is mocked (as everywhere else in this suite), which

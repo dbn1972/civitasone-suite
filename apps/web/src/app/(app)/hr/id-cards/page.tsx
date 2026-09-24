@@ -2,6 +2,15 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_compo
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
+
+// Matches the backend role gate on GET /v1/hrms/id-cards (services/hrms-service/
+// src/modules/id-cards/routes.ts) -- this page had no client-side gate at all,
+// so any authenticated user could reach a UI showing org-wide holder photo,
+// card number, department, and access_zones even though the backend now
+// (separately) rejects the underlying fetch for anyone outside this list.
+const ID_CARDS_ROLES = ["hr_admin", "security_admin", "super_admin"];
 
 type Row = {
   id: string;
@@ -30,6 +39,13 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function IdCardsPage() {
+  /* ── Role gate ─────────────────────────────────────────────── */
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => ID_CARDS_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="ID cards" requiredRoles={ID_CARDS_ROLES} />;
+  }
+
   const t = await getTranslations("idCards");
   const { data: items, source } = await getData();
 

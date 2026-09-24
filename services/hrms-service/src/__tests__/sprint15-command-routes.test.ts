@@ -107,15 +107,19 @@ describe("loans commands — POST /v1/hrms/salary-advances", () => {
 });
 
 describe("loans commands — PATCH /v1/hrms/salary-advances/:id/approve", () => {
-  it("PATCH /v1/hrms/salary-advances/:id/approve — 202 Accepted (exercises approveAdvance)", async () => {
+  it("PATCH /v1/hrms/salary-advances/:id/approve — 404 for unknown id (exercises handler up to DB lookup)", async () => {
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/salary-advances/${FAKE_ID}/approve`,
       headers: { authorization: `Bearer ${T}`, "content-type": "application/json" },
       body: JSON.stringify({}),
     });
-    // This route has no DB lookup — calls approveAdvance(ctx, id) directly.
-    // With memory queue it should return 202.
-    expect(OK_CMD).toContain(r.statusCode);
+    // fix/disc-idcards-advances (maker-checker fix): this route now looks up
+    // the advance by id/tenant before calling approveAdvance, so it can
+    // reject a self-approval and 404 a nonexistent id instead of blindly
+    // dispatching the command. FAKE_ID exercises that lookup/404 path here;
+    // the real approve-success and self-approval-blocked paths are covered
+    // against a seeded record by loans-advances-manager-scope-real-db.test.ts.
+    expect(OK_ALL).toContain(r.statusCode);
   });
 
   it("PATCH /v1/hrms/salary-advances/:id/approve — 401 without token", async () => {
