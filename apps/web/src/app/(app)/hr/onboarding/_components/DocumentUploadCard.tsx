@@ -62,6 +62,7 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
   const [localFile, setLocalFile] = useState<string | null>(doc.uploadedFileName ?? null);
   const [localStatus, setLocalStatus] = useState<DocStatus>(doc.status);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   async function handleFile(file: File) {
     if (file.size > 10 * 1024 * 1024) {
@@ -77,20 +78,17 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
       });
       if (res.ok) {
         const { uploadUrl, key, headers } = await res.json() as { uploadUrl: string; key: string; headers: Record<string, string> };
-        await fetch(uploadUrl, { method: "PUT", headers, body: file });
+        const put = await fetch(uploadUrl, { method: "PUT", headers, body: file });
+        if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+        setUploadError(null);
         setLocalFile(file.name);
         setLocalStatus("uploaded");
         onUploaded?.(doc.id, key);
       } else {
-        // In dev/test — still mark as uploaded for UX demo
-        setLocalFile(file.name);
-        setLocalStatus("uploaded");
-        onUploaded?.(doc.id, file.name);
+        setUploadError(`Could not prepare upload (${res.status})`);
       }
-    } catch {
-      setLocalFile(file.name);
-      setLocalStatus("uploaded");
-      onUploaded?.(doc.id, file.name);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed — please try again.");
     } finally {
       setUploading(false);
     }
@@ -209,6 +207,13 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
             </>
           )}
         </div>
+      )}
+
+      {/* Upload error */}
+      {uploadError && (
+        <p role="alert" style={{ margin: 0, fontSize: 12, color: "#dc2626", fontWeight: 500 }}>
+          {uploadError}
+        </p>
       )}
     </div>
   );

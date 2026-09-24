@@ -40,7 +40,7 @@ export default async function RtiPage() {
   const t = await getTranslations("rtiRequests");
   const { data: items, source } = await getData();
 
-  const filed = items.filter((i) => i.status === "filed").length;
+  const pending = items.filter((i) => i.status === "filed" || i.status === "assigned").length;
   const overdue = items.filter((i) => i.overdue).length;
   const disposed = items.filter((i) => i.status === "responded" || i.status === "closed").length;
 
@@ -64,7 +64,7 @@ export default async function RtiPage() {
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
         <StatCard icon="📂" iconBg="#e6f0ff" label={t("statTotalLabel")} value={items.length} />
-        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statPendingLabel")} value={filed} />
+        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statPendingLabel")} value={pending} />
         <StatCard icon="🔴" iconBg="#fff1f0" label={t("statOverdueLabel")} value={overdue} />
         <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={disposed} />
       </StatGrid>

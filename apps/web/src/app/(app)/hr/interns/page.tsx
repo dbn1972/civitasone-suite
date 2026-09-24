@@ -62,7 +62,7 @@ function mapInterns(apiItems: ApiEmployee[]): Row[] {
 }
 
 async function getInterns(): Promise<LoaderResult<Row[]>> {
-  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/employees?limit=50", [], {
+  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/employees?limit=1000", [], {
     telemetryKey: "hr.interns",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: ApiEmployee[] })?.data;
@@ -80,12 +80,12 @@ export default async function InternsPage() {
   const internsCount = items.filter((i) => i.type.toLowerCase() === "intern" || i.type.toLowerCase() === "internship").length;
   const apprentices = items.filter((i) => i.type.toLowerCase() === "apprentice" || i.type.toLowerCase() === "apprenticeship").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status"; sortable?: boolean }[] = [
     { key: "name", label: t("colName") },
     { key: "institution", label: t("colInstitution") },
     { key: "department", label: t("colDepartment") },
-    { key: "periodFrom", label: t("colFrom") },
-    { key: "periodTo", label: t("colTo") },
+    { key: "periodFrom", label: t("colFrom"), sortable: false },
+    { key: "periodTo", label: t("colTo"), sortable: false },
     { key: "mentor", label: t("colMentor") },
     { key: "type", label: t("colType") },
     { key: "status", label: t("colStatus"), cellType: "status" },
