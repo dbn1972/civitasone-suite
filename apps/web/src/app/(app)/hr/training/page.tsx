@@ -29,6 +29,7 @@ export default async function TrainingPage() {
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Training Programs"
+        back="/hr" backLabel="Back to HR"
         subtitle="Capacity building and skill development initiatives."
         actions={
           canCreate ? (

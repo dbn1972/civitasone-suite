@@ -197,7 +197,7 @@ export default function ApplicationDetailPage() {
   if (error || !application) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title={t("notFoundTitle")} subtitle={t("notFoundSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} />
+        <PageHeader title={t("notFoundTitle")} subtitle={t("notFoundSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} backLabel="Back to Applications" />
         <DataSourceBadge source={source} />
         <Card padding>
           <p style={{ color: "var(--mut)", textAlign: "center" }}>{error ?? t("notFoundMessage")}</p>
@@ -213,7 +213,7 @@ export default function ApplicationDetailPage() {
       <PageHeader
         title={application.applicantName}
         subtitle={t("subtitle")}
-        back={`/hr/recruitment/${jobOpeningId}`}
+        back={`/hr/recruitment/${jobOpeningId}`} backLabel="Back to Applications"
         actions={
           canHire && hireStatus !== "success" ? (
             <Button onClick={() => setShowHireDialog(true)}>

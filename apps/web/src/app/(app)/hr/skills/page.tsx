@@ -77,7 +77,7 @@ export default async function SkillsPage() {
           ) : matrixRecords.length === 0 ? (
             <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
               <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
-<p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>{t("emptyTitle")}</p>
+<p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>{t("emptyTitle")}</p>
               <p style={{ fontSize: 13, margin: "4px 0 0" }}>
                 {t("emptyMessage")}
               </p>

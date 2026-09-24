@@ -157,6 +157,7 @@ export default function LeavePoliciesClient() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
+        back="/hr" backLabel="Back to HR"
       />
       <DataSourceBadge source={state === "error" ? "error" : "api"} />
       {state === "ready" && policies.length > 0 && (

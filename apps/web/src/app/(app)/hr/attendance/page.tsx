@@ -17,6 +17,7 @@ export default async function AttendancePage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
+        back="/hr" backLabel="Back to HR"
       />
       {/* UX-012: the data-source badge now lives inside AttendanceTable,
           driven by the same useSeededResource call that produces its rows —

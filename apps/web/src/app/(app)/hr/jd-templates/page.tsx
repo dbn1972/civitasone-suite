@@ -64,6 +64,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
     <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="JD Template Library"
+        back="/hr" backLabel="Back to HR"
         subtitle="Reusable job description templates — select one to pre-fill a new job opening."
         actions={
           canManage ? (
