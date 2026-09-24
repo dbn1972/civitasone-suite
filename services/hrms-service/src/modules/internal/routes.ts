@@ -40,6 +40,15 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     // gates statutory). Resolver = tenant type master over canonical catalogue.
     const resolveType = await loadTypeResolver(ctx.tenantId);
     const approvedLeaves = await leaveRepo.findApprovedLeaveInMonth(ctx.tenantId, q.month);
+    // MEDIUM fix: approved overtime hours by employee, so payroll-service can
+    // see them at all -- see attendanceRepo.findApprovedOvertimeInMonth's
+    // doc comment. NOTE: surfacing only. payroll-service's shared/hrms-client.ts
+    // types this field on HrmsPayrollInput but nothing in payroll's own
+    // slip/run computation consumes it yet to actually pay for it -- that
+    // (rate lookup, which pay component it lands in, statutory treatment of
+    // OT pay) is a larger, separate change, deliberately deferred rather
+    // than done partially here.
+    const overtimeHoursByEmployee = await attendanceRepo.findApprovedOvertimeInMonth(ctx.tenantId, q.month);
     // Pay-suspension flag from the Disciplinary module: active suspensions with
     // pay_suspended=true. Payroll applies subsistence allowance / withholds pay.
     const paySuspended = await activePaySuspendedEmployeeIds(ctx.tenantId);
@@ -138,6 +147,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
         };
       }),
       lopDays: Object.fromEntries(lopByEmployee.entries()),
+      overtimeHours: Object.fromEntries(overtimeHoursByEmployee.entries()),
     });
   });
 

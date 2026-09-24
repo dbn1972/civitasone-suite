@@ -48,6 +48,12 @@ vi.mock("../src/modules/attendance/repo.js", async (io) => ({
     const rows = await findAttendanceMock();
     return new Map(employeeIds.map((id) => [id, rows]));
   },
+  // MEDIUM fix: internal/routes.ts's payroll-input feed now also calls
+  // findApprovedOvertimeInMonth. Without this override the spread-real-module
+  // default above would run the actual (DB-backed) implementation, which this
+  // mock-only test suite has no live Postgres for -- not exercised by this
+  // test's assertions, so a plain empty Map.
+  findApprovedOvertimeInMonth: async () => new Map<string, number>(),
 }));
 vi.mock("../src/modules/disciplinary/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),

@@ -95,7 +95,26 @@ export function registerFnfConsumers(queue: Queue): void {
 
       const settlementId = randomUUID();
 
-      await tx.insert(fnfSettlements).values({
+      // HIGH fix (defense in depth): payroll.fnf_settlements now carries a
+      // unique (tenant_id, employee_id, separation_date) index (migrations/
+      // 0044_fnf_settlements_unique.sql, widened by
+      // 0045_fnf_settlements_unique_with_date.sql) guarding against two
+      // settlement rows for the same exit -- reachable both via a
+      // retried/duplicated hrms.employee.separated event (the main path,
+      // closed at the source by hrms-service's separateEmployee messageId
+      // fix) and via POST /v1/payroll/fnf/compute (fnf/routes.ts) being
+      // called twice directly, which that source-side fix cannot reach.
+      // separation_date is part of the key (not just tenant_id+employee_id)
+      // because an employee CAN legitimately be separated more than once
+      // (separate -> reinstate -> separate again, each with its own
+      // separationDate) -- see separateEmployee()'s messageId, keyed on
+      // `employeeId:effectiveDate` for exactly that reason. A 2-column key
+      // silently dropped the second, legitimate settlement outright.
+      // onConflictDoNothing + the empty-`inserted` check below makes THIS
+      // command idempotent under that constraint too, instead of letting
+      // the insert throw an unhandled 23505 that would roll back
+      // markProcessed and retry forever (a poison message).
+      const [inserted] = await tx.insert(fnfSettlements).values({
         id: settlementId,
         tenantId: msg.tenantId,
         employeeId: p.employeeId,
@@ -126,7 +145,24 @@ export function registerFnfConsumers(queue: Queue): void {
         currency: "INR",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
-      });
+      })
+        .onConflictDoNothing({
+          target: [fnfSettlements.tenantId, fnfSettlements.employeeId, fnfSettlements.separationDate],
+        })
+        .returning({ id: fnfSettlements.id });
+
+      if (!inserted) {
+        // A settlement for this employee AND separation_date already exists
+        // -- a true duplicate compute request (retry / redelivery /
+        // double-click / a second caller for the SAME exit). A settlement
+        // for the same employee with a DIFFERENT separation_date (a later,
+        // genuinely separate exit -- e.g. reinstated then separated again)
+        // is not a conflict at all and inserts normally above. The original
+        // computation stands; skip emitting a second fnfComputed event and a
+        // second audit row for what is, from the ledger's point of view, the
+        // same settlement.
+        return;
+      }
 
       // Emit fnfComputed event
       await enqueue(tx, {

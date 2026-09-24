@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -10,6 +12,18 @@ vi.mock("next/navigation", () => ({
 }));
 
 import SalaryRevisionsPage from "./page";
+
+// UX-017 (PR #1552 review): SalaryRevisionsPage is a server component
+// (translated via getTranslations(), which vitest.setup.ts mocks centrally --
+// no provider needed just for that call), but it also renders
+// CreateSalaryRevisionForm, a CLIENT component that now calls
+// useTranslations(). That child needs a genuine NextIntlClientProvider in the
+// tree once rendered for real by testing-library -- same pattern as
+// ../off-cycle/page.test.tsx.
+async function renderPage() {
+  const ui = await SalaryRevisionsPage();
+  render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 describe("SalaryRevisionsPage", () => {
   beforeEach(() => {
@@ -29,8 +43,7 @@ describe("SalaryRevisionsPage", () => {
       source: "api",
     });
 
-    const ui = await SalaryRevisionsPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("e1")).toBeInTheDocument();
     expect(screen.getAllByText("Annual Increment").length).toBeGreaterThan(0);
@@ -39,8 +52,7 @@ describe("SalaryRevisionsPage", () => {
   it("renders an empty state when there are no revisions", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
-    const ui = await SalaryRevisionsPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("No salary revisions yet")).toBeInTheDocument();
   });
@@ -48,8 +60,7 @@ describe("SalaryRevisionsPage", () => {
   it("shows the saved-information badge when the source is error", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
-    const ui = await SalaryRevisionsPage();
-    render(ui);
+    await renderPage();
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });

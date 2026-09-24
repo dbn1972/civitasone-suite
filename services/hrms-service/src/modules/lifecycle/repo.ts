@@ -196,12 +196,21 @@ export async function applyPromotionEffect(
  */
 export async function applyTransferEffect(
   tx: Writer,
-  transfer: Pick<TransferRow, "tenantId" | "employeeId" | "toDeptId" | "toDesigId">,
+  transfer: Pick<TransferRow, "tenantId" | "employeeId" | "toDeptId" | "toDesigId" | "payStructureId">,
   actorId: string,
 ): Promise<void> {
   const emp = await employeeRepo.findVersionForUpdate(tx, transfer.employeeId, transfer.tenantId);
   if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${transfer.employeeId} not found`);
   const patch: Record<string, unknown> = { departmentId: transfer.toDeptId };
   if (transfer.toDesigId) patch.designationId = transfer.toDesigId;
+  // HIGH fix (integration-audit follow-up): a transfer to a new department can
+  // imply a different pay scale/structure. Applied here, in the one function
+  // shared by both transfer paths (direct employee/consumer.ts and the
+  // eOffice-approved lifecycle/eoffice-consumer.ts) and by the deferred-
+  // effective scheduler (effective-scheduler.ts), so a payStructureId recorded
+  // on the transfer is honoured whichever of those three actually applies it —
+  // including a transfer that was pending_effective at submission time and
+  // only gets applied later by the scheduler tick.
+  if (transfer.payStructureId) patch.payStructureId = transfer.payStructureId;
   await employeeRepo.updateEmployeeVersioned(tx, transfer.employeeId, transfer.tenantId, emp.version, patch, actorId);
 }

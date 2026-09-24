@@ -3,7 +3,7 @@ import { parseDecisionCallback } from "@civitasone/eoffice-sdk";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { CONSUMED_EVENTS } from "../../topics.js";
+import { CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -70,7 +70,25 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
             from: ["pending_effective"], to: "completed",
           }, tx);
           if (transfer) {
+            // HIGH fix: apply the pay-structure change recorded at submission
+            // time (employee/commands.ts's submitTransferForApproval) —
+            // applyTransferEffect now carries payStructureId the same way it
+            // already carries departmentId/designationId, see its doc comment
+            // in lifecycle/repo.ts.
             await repo.applyTransferEffect(tx, transfer, cb.decidedBy);
+            // HIGH fix: this eOffice-approved posting is the other transfer
+            // path that previously published no event at all. Mirrors the
+            // direct path's EVENTS.employeeTransferred, under the same
+            // "only once actually applied" gate.
+            await enqueue(tx, {
+              topic: EVENTS.employeeTransferred, eventType: EVENTS.employeeTransferred,
+              tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,
+              payload: {
+                employeeId: transfer.employeeId, fromDeptId: transfer.fromDeptId, toDeptId: transfer.toDeptId,
+                fromDesigId: transfer.fromDesigId ?? null, toDesigId: transfer.toDesigId ?? null,
+                payStructureId: transfer.payStructureId ?? null, effectiveDate: transfer.effectiveDate,
+              },
+            });
           }
         }
         await audit(tx, msg, "eoffice_approved", cb.refId, {

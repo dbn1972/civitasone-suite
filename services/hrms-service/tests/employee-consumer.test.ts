@@ -283,6 +283,8 @@ describe("employeeTransfer command", () => {
     expect(insertTransferMock).toHaveBeenCalledOnce();
     const [, transferRow] = insertTransferMock.mock.calls[0]! as [unknown, Record<string, unknown>];
     expect(transferRow.status).toBe("completed");
+    // No payStructureId in the payload -> recorded as null on the transfer row.
+    expect(transferRow.payStructureId).toBeNull();
 
     // Bug 2 fix (version-guard parity with promotions): the actual employee
     // write now happens inside lifecycle/repo.ts's applyTransferEffect,
@@ -301,7 +303,46 @@ describe("employeeTransfer command", () => {
       [unknown, Record<string, unknown>, string];
     expect(transferArg.employeeId).toBe(empId);
     expect(transferArg.toDeptId).toBe(toDeptId);
+    // No payStructureId in the payload -> must not be passed through either.
+    expect(transferArg.payStructureId).toBeNull();
     expect(actorArg).toBe(ACTOR);
+    await q.stop();
+  });
+
+  // HIGH regression: a transfer used to never update payStructureId and
+  // never published any event at all (unlike create/update/separate).
+  it("passes payStructureId through to applyTransferEffect and the transfer record when the payload provides one", async () => {
+    const q = await buildQueue();
+    const empId = randomUUID();
+    const toDeptId = randomUUID();
+    const payStructureId = randomUUID();
+    await q.publish(COMMANDS.employeeTransfer, makeMsg(COMMANDS.employeeTransfer, {
+      employeeId: empId, tenantId: TENANT,
+      fromDeptId: randomUUID(), toDeptId,
+      effectiveDate: "2026-06-01", payStructureId,
+    }));
+    await settle();
+    const [, transferArg] = applyTransferEffectMock.mock.calls[0]! as [unknown, Record<string, unknown>];
+    expect(transferArg.payStructureId).toBe(payStructureId);
+    const insertRow = insertTransferMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(insertRow.payStructureId).toBe(payStructureId);
+    await q.stop();
+  });
+
+  it("publishes an employeeTransferred event after a successful transfer", async () => {
+    const q = await buildQueue();
+    const empId = randomUUID();
+    const toDeptId = randomUUID();
+    await q.publish(COMMANDS.employeeTransfer, makeMsg(COMMANDS.employeeTransfer, {
+      employeeId: empId, tenantId: TENANT,
+      fromDeptId: randomUUID(), toDeptId,
+      effectiveDate: "2026-06-01",
+    }));
+    await settle();
+    const evt = enqueuedMessages.find((m) => m.topic === EVENTS.employeeTransferred);
+    expect(evt).toBeDefined();
+    expect((evt!.payload as any).employeeId).toBe(empId);
+    expect((evt!.payload as any).toDeptId).toBe(toDeptId);
     await q.stop();
   });
 });
@@ -318,6 +359,24 @@ describe("employeeTransferSubmitApproval command", () => {
     expect(insertTransferMock).toHaveBeenCalledOnce();
     const row = insertTransferMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(row.status).toBe("pending_approval");
+    await q.stop();
+  });
+
+  // HIGH regression: payStructureId must survive on the pending request so
+  // the eOffice decision consumer can apply it once approved -- submission
+  // and decision are separated in time, so it can't be re-supplied later.
+  it("carries payStructureId onto the pending transfer row when provided", async () => {
+    const q = await buildQueue();
+    const transferId = randomUUID();
+    const payStructureId = randomUUID();
+    await q.publish(COMMANDS.employeeTransferSubmitApproval, makeMsg(COMMANDS.employeeTransferSubmitApproval, {
+      id: transferId, employeeId: randomUUID(), tenantId: TENANT,
+      fromDeptId: randomUUID(), toDeptId: randomUUID(), effectiveDate: "2026-06-01",
+      payStructureId,
+    }));
+    await settle();
+    const row = insertTransferMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(row.payStructureId).toBe(payStructureId);
     await q.stop();
   });
 });

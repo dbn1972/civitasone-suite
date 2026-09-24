@@ -113,6 +113,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       employeeId: string; tenantId: string; fromDeptId: string; toDeptId: string;
       fromDesigId?: string; toDesigId?: string; effectiveDate: string; orderRef?: string;
+      payStructureId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -127,6 +128,14 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         id: msg.messageId, tenantId: p.tenantId, employeeId: p.employeeId,
         fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
         fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+        // HIGH fix: a transfer that changes department can imply a different
+        // pay scale/structure. payStructureId is caller-supplied (mirrors how
+        // it's supplied at hire time -- there is no automatic
+        // department->pay-structure derivation anywhere in this codebase).
+        // Recorded on the transfer row itself (not just applied immediately
+        // below) so a deferred transfer's intended pay-structure survives
+        // until the scheduler later applies it -- see applyTransferEffect.
+        payStructureId: p.payStructureId ?? null,
         effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
         status: due ? "completed" : "pending_effective",
         createdBy: msg.actorId, updatedBy: msg.actorId,
@@ -142,13 +151,29 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         // markProcessed insert above — silently rolled back on every direct
         // transfer; nothing here ever actually persisted. applyTransferEffect
         // (shared with the eOffice-approved transfer path, which never had
-        // this bug) applies only departmentId/designationId, and only once
-        // the effective date is actually due — a future-dated transfer stays
-        // "pending_effective" and is picked up later by the scheduler
-        // (lifecycle/effective-scheduler.ts), per the effective-dating fix.
+        // this bug) applies departmentId/designationId/payStructureId, and
+        // only once the effective date is actually due — a future-dated
+        // transfer stays "pending_effective" and is picked up later by the
+        // scheduler (lifecycle/effective-scheduler.ts), per the effective-
+        // dating fix.
         await lifecycleRepo.applyTransferEffect(tx, {
-          tenantId: p.tenantId, employeeId: p.employeeId, toDeptId: p.toDeptId, toDesigId: p.toDesigId ?? null,
+          tenantId: p.tenantId, employeeId: p.employeeId, toDeptId: p.toDeptId,
+          toDesigId: p.toDesigId ?? null, payStructureId: p.payStructureId ?? null,
         }, msg.actorId);
+        // HIGH fix: previously no event was published after a transfer at all
+        // (unlike create/update/separate). Published once the transfer has
+        // actually taken effect -- i.e. under the same `due` gate as the
+        // employee-master update just above, since nothing has happened to
+        // the employee yet for a transfer that's still only pending_effective.
+        await enqueue(tx, {
+          topic: EVENTS.employeeTransferred, eventType: EVENTS.employeeTransferred,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            employeeId: p.employeeId, fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
+            fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+            payStructureId: p.payStructureId ?? null, effectiveDate: p.effectiveDate,
+          },
+        });
       }
       await audit(tx, msg, "transfer", "employee", p.employeeId);
     });
@@ -165,6 +190,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; employeeId: string; tenantId: string; fromDeptId: string; toDeptId: string;
       fromDesigId?: string; toDesigId?: string; effectiveDate: string; orderRef?: string;
+      payStructureId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -172,6 +198,11 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
         fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
         fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+        // HIGH fix: carried on the pending request so the eOffice decision
+        // consumer (lifecycle/eoffice-consumer.ts) can apply it once approved
+        // -- submission and decision are separated in time, so this can't be
+        // re-supplied at approval; it has to survive on the row itself.
+        payStructureId: p.payStructureId ?? null,
         effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
         status: "pending_approval",
         createdBy: msg.actorId, updatedBy: msg.actorId,
