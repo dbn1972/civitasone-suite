@@ -76,9 +76,16 @@ export default async function Form16Page({
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
-      {/* Wizard: 3-step — select FY / review deductions / generate & download */}
+      {/* Wizard: 3-step — select FY / review deductions / generate & download.
+          key={fy} forces a full remount whenever the URL-driven `fy` changes
+          (e.g. via FyLookupForm below) -- Form16Wizard seeds several pieces
+          of state (fy, step, deductionVals, jobId...) from `defaultFy` only
+          once via useState(), so without a changing key a client-side
+          navigation to a different ?fy= would silently leave the whole
+          wizard (FY field, current step, any in-progress job) pinned to
+          whatever FY was active on first mount. */}
       <Card title={t("wizardCardTitle")}>
-        <Form16Wizard defaultFy={fy} />
+        <Form16Wizard key={fy} defaultFy={fy} />
       </Card>
 
       <Card title={t("bulkStatusCardTitle", { fy })}>

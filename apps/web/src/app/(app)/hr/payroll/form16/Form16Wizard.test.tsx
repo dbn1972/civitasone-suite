@@ -96,4 +96,56 @@ describe("Form16Wizard", () => {
       expect(live).toHaveTextContent("Step 2 of 3: Review Deductions");
     });
   });
+
+  // fy (and step, deductionVals, jobId...) are all seeded from `defaultFy`
+  // via plain useState(), which React only honors on the very first mount.
+  // The real page (page.tsx) accounts for this by keying Form16Wizard on
+  // `fy` (key={fy}), so a URL-driven FY change (e.g. via FyLookupForm)
+  // forces a full remount instead of leaving a stale session pinned to
+  // whatever FY was active when the wizard first mounted. This test
+  // exercises that same key-remount pattern directly.
+  describe("resets when the URL-driven FY changes (key-remount, matching page.tsx)", () => {
+    it("reseeds the FY field and returns to step 0 on a fy-keyed remount", () => {
+      const { rerender } = render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <Form16Wizard key="2024-25" defaultFy="2024-25" />
+        </NextIntlClientProvider>,
+      );
+
+      // Advance past step 0 so there's real state (current step) that a
+      // partial fix -- one that only resynced the fy value -- would leave
+      // stranded.
+      fireEvent.click(screen.getByRole("button", { name: /Next: Review Deductions/ }));
+      expect(screen.getByText(/Deduction Figures/)).toBeInTheDocument();
+
+      // Simulate the page re-rendering after ?fy= changes: a new key means
+      // React tears down the old instance and mounts a fresh one from the
+      // new defaultFy, rather than patching the existing instance in place.
+      rerender(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <Form16Wizard key="2023-24" defaultFy="2023-24" />
+        </NextIntlClientProvider>,
+      );
+
+      // Back on step 0 (a same-instance update would still be on step 1).
+      expect(screen.getByText("Financial Year")).toBeInTheDocument();
+      expect(screen.getByLabelText("Financial Year")).toHaveValue("2023-24");
+    });
+
+    it("without a changing key, defaultFy alone does NOT update an already-mounted wizard (documents why the key is required)", () => {
+      const { rerender } = render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <Form16Wizard defaultFy="2024-25" />
+        </NextIntlClientProvider>,
+      );
+      rerender(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <Form16Wizard defaultFy="2023-24" />
+        </NextIntlClientProvider>,
+      );
+      // Same component instance: useState(defaultFy) only ran once, on the
+      // first mount, so the field is still showing the original FY.
+      expect(screen.getByLabelText("Financial Year")).toHaveValue("2024-25");
+    });
+  });
 });

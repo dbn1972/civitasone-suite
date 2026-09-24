@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { toHumanError } from "@/lib/messages";
 import { Button } from "@/app/_components/ds";
 
@@ -45,6 +45,16 @@ export function CreateGRNForm() {
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
 
+  // Stable per-row React key, independent of array position -- see
+  // LineItemsEditor.tsx (apps/web/src/app/(app)/procurement/_components) for
+  // the full rationale. GRNLine carries no id and stays that way (it maps
+  // straight into the submit payload); a parallel id list, advanced only by
+  // the three places `lines`'s length actually changes below, keeps each
+  // row's key stable across edits.
+  const nextLineRowId = useRef(0);
+  const [lineRowIds, setLineRowIds] = useState<number[]>(() => [nextLineRowId.current++]);
+  const lineKeyFor = (idx: number) => lineRowIds[idx] ?? idx;
+
   useEffect(() => {
     void (async () => {
       try {
@@ -68,7 +78,8 @@ export function CreateGRNForm() {
         if (clean[0]) selectPo(clean[0]);
       } catch { /* optional */ }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // (No react-hooks/exhaustive-deps suppression needed here: now that the
+    // rule actually runs, it reports nothing missing at this effect.)
   }, []);
 
   async function selectPo(po: POOption) {
@@ -92,6 +103,7 @@ export function CreateGRNForm() {
       setPoItems(items);
       if (items.length > 0) {
         setLines([{ poItemRef: items[0].ref, itemCode: items[0].itemCode, orderedQty: items[0].quantity, receivedQty: items[0].quantity, acceptedQty: items[0].quantity }]);
+        setLineRowIds([nextLineRowId.current++]);
       }
     } catch {
       setPoItems([]);
@@ -100,6 +112,14 @@ export function CreateGRNForm() {
 
   function updateLine(idx: number, patch: Partial<GRNLine>) {
     setLines((prev) => prev.map((l, i) => (i === idx ? { ...l, ...patch } : l)));
+  }
+  function addLine() {
+    setLines((p) => [...p, emptyLine()]);
+    setLineRowIds((ids) => [...ids, nextLineRowId.current++]);
+  }
+  function removeLine(idx: number) {
+    setLines((p) => (p.length > 1 ? p.filter((_, i) => i !== idx) : p));
+    setLineRowIds((ids) => (ids.length > 1 ? ids.filter((_, i) => i !== idx) : ids));
   }
   function pickItem(idx: number, ref: string) {
     const it = poItems.find((p) => p.ref === ref);
@@ -199,7 +219,7 @@ export function CreateGRNForm() {
             </thead>
             <tbody>
               {lines.map((l, idx) => (
-                <tr key={idx}>
+                <tr key={lineKeyFor(idx)}>
                   <td>
                     <label className="sr-only" htmlFor={`g-item-${idx}`}>PO item, row {idx + 1}</label>
                     {poItems.length > 0 ? (
@@ -219,14 +239,14 @@ export function CreateGRNForm() {
                   <td className="num"><input type="number" min={0} aria-label={`Received qty row ${idx + 1}`} value={l.receivedQty} onChange={(e) => updateLine(idx, { receivedQty: Number(e.target.value) })} style={{ minHeight: 40, width: 80, textAlign: "right" }} /></td>
                   <td className="num"><input type="number" min={0} aria-label={`Accepted qty row ${idx + 1}`} value={l.acceptedQty} onChange={(e) => updateLine(idx, { acceptedQty: Number(e.target.value) })} style={{ minHeight: 40, width: 80, textAlign: "right" }} /></td>
                   <td>
-                    <Button type="button" variant="ghost" size="sm" onClick={() => setLines((p) => p.length > 1 ? p.filter((_, i) => i !== idx) : p)} disabled={lines.length <= 1} aria-label={`Remove line item ${idx + 1}`} style={{ minHeight: 40 }}>Remove</Button>
+                    <Button type="button" variant="ghost" size="sm" onClick={() => removeLine(idx)} disabled={lines.length <= 1} aria-label={`Remove line item ${idx + 1}`} style={{ minHeight: 40 }}>Remove</Button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-        <Button type="button" variant="ghost" size="sm" onClick={() => setLines((p) => [...p, emptyLine()])} style={{ marginTop: 10, minHeight: 40 }}>+ Add line item</Button>
+        <Button type="button" variant="ghost" size="sm" onClick={addLine} style={{ marginTop: 10, minHeight: 40 }}>+ Add line item</Button>
       </fieldset>
 
       <div role="status" aria-live="polite">

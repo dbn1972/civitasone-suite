@@ -49,6 +49,14 @@ const SELECTED_APP = {
   screeningDecision: "eligible",
 };
 
+const APPLIED_APP2 = {
+  id: "app-3",
+  applicantName: "Priya Nair",
+  email: "priya@example.com",
+  stage: "applied",
+  screeningDecision: "pending",
+};
+
 function mockFetchSequence(applications = [APPLIED_APP]) {
   const fn = vi.fn(async (url: string, init?: RequestInit) => {
     if (url.includes("job-openings?limit=")) {
@@ -206,5 +214,47 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
       expect(dialog.textContent).not.toMatch(/hrms-service/);
       expect(dialog.textContent).not.toMatch(/\b500\b/);
     });
+  });
+
+  // The bulk "Shortlist All Pending" quick action had no busy-state guard:
+  // nothing stopped a second click from firing a second overlapping
+  // Promise.all(...) batch of the same per-application POSTs while the
+  // first batch was still in flight.
+  it("guards the 'Shortlist All Pending' bulk action against firing a second overlapping batch while the first is still in flight", async () => {
+    const gate: { release?: () => void } = {};
+    const screeningGate = new Promise<void>((resolve) => { gate.release = resolve; });
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
+      if (url.match(/job-openings\/[^/]+\/applications$/)) {
+        return new Response(JSON.stringify({ data: [APPLIED_APP, APPLIED_APP2] }), { status: 200 });
+      }
+      if (url.includes("/screening-decision")) {
+        await screeningGate; // held open until the test releases it below
+        return new Response(JSON.stringify({}), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fn);
+
+    renderPage();
+    await screen.findByText("Asha Verma");
+    await screen.findByText("Priya Nair");
+
+    const bulkBtn = screen.getByRole("button", { name: /Shortlist All Pending/i });
+    fireEvent.click(bulkBtn);
+
+    // Still in flight (gated): the trigger must now be disabled, and two
+    // more clicks while it's held there must not queue further batches.
+    expect(bulkBtn).toBeDisabled();
+    fireEvent.click(bulkBtn);
+    fireEvent.click(bulkBtn);
+
+    gate.release?.();
+    await waitFor(() => expect(bulkBtn).not.toBeDisabled());
+
+    const screeningCalls = fn.mock.calls.filter(([u]) => String(u).includes("/screening-decision"));
+    // Exactly one call per pending application (2) -- not doubled/tripled
+    // by the extra clicks fired while the first batch was in flight.
+    expect(screeningCalls.length).toBe(2);
   });
 });

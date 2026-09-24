@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { formatMoney } from "@/lib/formatters";
 import { Button } from "@/app/_components/ds";
 
@@ -30,14 +31,38 @@ export function LineItemsEditor({
   onChange: (next: LineItem[]) => void;
   unitLabel?: string;
 }) {
+  // Stable per-row React key, independent of array position. `LineItem`
+  // itself carries no id and stays that way (it's the exact shape this
+  // component hands back via onChange, and callers submit it to the
+  // backend as-is) -- a parallel id list, generated once per row and kept
+  // in lockstep with `items` through this component's own add()/remove()
+  // (the only two places its length changes today), gives each row a real
+  // identity to key on instead. Without it (the previous key={idx}),
+  // removing row 2 of 4 shifted rows 3-4 up to keys 2-3: React read that as
+  // "row 2's DOM node, patched with row 3's data" rather than "row 2's node
+  // removed, rows 3-4 untouched" -- a keyboard user focused in row 4 could
+  // end up with focus silently landed on what's now row 3's input instead
+  // of following row 4's own data, or simply losing focus with no visual
+  // cue why.
+  const nextRowId = useRef(0);
+  const [rowIds, setRowIds] = useState<number[]>(() => items.map(() => nextRowId.current++));
+  // Fallback to the array index for any row this component didn't itself
+  // add (e.g. a future caller that resets `items` wholesale) -- keeps
+  // rendering correct rather than crashing; only add()/remove() below are
+  // relied on to keep rowIds in step with `items` for the callers today.
+  const keyFor = (idx: number) => rowIds[idx] ?? idx;
+
   function update(idx: number, patch: Partial<LineItem>) {
     onChange(items.map((it, i) => (i === idx ? { ...it, ...patch } : it)));
   }
   function add() {
     onChange([...items, emptyLineItem()]);
+    setRowIds((ids) => [...ids, nextRowId.current++]);
   }
   function remove(idx: number) {
-    onChange(items.length > 1 ? items.filter((_, i) => i !== idx) : items);
+    if (items.length <= 1) return;
+    onChange(items.filter((_, i) => i !== idx));
+    setRowIds((ids) => ids.filter((_, i) => i !== idx));
   }
 
   const totalMinor = lineItemsTotalMinor(items);
@@ -61,7 +86,7 @@ export function LineItemsEditor({
             {items.map((it, idx) => {
               const lineMinor = Math.max(0, Math.round(it.unitPrice * 100)) * Math.max(0, it.quantity);
               return (
-                <tr key={idx}>
+                <tr key={keyFor(idx)}>
                   <td>
                     <label className="sr-only" htmlFor={`li-code-${idx}`}>Item code, row {idx + 1}</label>
                     <input id={`li-code-${idx}`} value={it.itemCode} onChange={(e) => update(idx, { itemCode: e.target.value })}

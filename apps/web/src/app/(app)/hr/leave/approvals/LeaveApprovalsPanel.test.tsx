@@ -38,6 +38,37 @@ function mockFetch() {
   return fn;
 }
 
+// Mount-time fetch cancellation: the initial load used to have no
+// AbortController at all, so a fetch that resolved after this panel had
+// already unmounted (the user navigated away while it was still loading)
+// would still run its .then()/.catch() and call setState on a gone
+// component.
+describe("LeaveApprovalsPanel — cancels its initial load on unmount", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("aborts the in-flight initial-load requests when the panel unmounts", async () => {
+    let capturedSignal: AbortSignal | undefined;
+    const fn = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url.includes("/workflow/tasks?")) {
+        capturedSignal = init?.signal ?? undefined;
+        // Never resolves -- simulates a request still in flight when the
+        // user navigates away, so unmount is what has to end it.
+        return new Promise<Response>(() => {});
+      }
+      return new Promise<Response>(() => {});
+    });
+    vi.stubGlobal("fetch", fn);
+
+    const { unmount } = renderPanel();
+    await waitFor(() => expect(capturedSignal).toBeDefined());
+    expect(capturedSignal?.aborted).toBe(false);
+
+    unmount();
+
+    expect(capturedSignal?.aborted).toBe(true);
+  });
+});
+
 describe("LeaveApprovalsPanel — reason persistence", () => {
   afterEach(() => vi.unstubAllGlobals());
 

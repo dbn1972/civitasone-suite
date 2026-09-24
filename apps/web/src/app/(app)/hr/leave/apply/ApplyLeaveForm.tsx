@@ -87,7 +87,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
   // Keep fromDateRef current so the toDate validator sees the latest value.
   fromDateRef.current = values.fromDate;
 
-  const loadContext = useCallback(async (empId: string) => {
+  const loadContext = useCallback(async (empId: string, signal?: AbortSignal) => {
     if (!empId) {
       setLeaveContext(null);
       return;
@@ -96,6 +96,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
     try {
       const res = await fetch(
         `/api/proxy/v1/hrms/leave-context?employeeId=${encodeURIComponent(empId)}`,
+        { signal },
       );
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "load");
@@ -105,6 +106,13 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
       setLeaveContext(ctx);
       setStatus("idle");
     } catch (err) {
+      // An abort means either this component unmounted, or (just as real a
+      // risk here, since this effect re-fires on every employeeId change) a
+      // newer load for a *different* employeeId has already superseded this
+      // one -- either way, painting this stale attempt's error state would
+      // be wrong, possibly showing "failed to load" over a context that
+      // actually loaded fine a moment later, or vice versa.
+      if (err instanceof Error && err.name === "AbortError") return;
       setLeaveContext(null);
       setStatus("error");
       setMessage(
@@ -116,7 +124,9 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, noLinkedProfile }
   }, []);
 
   useEffect(() => {
-    void loadContext(employeeId);
+    const controller = new AbortController();
+    void loadContext(employeeId, controller.signal);
+    return () => controller.abort();
   }, [employeeId, loadContext]);
 
   // When employee changes, reset validation state too.
