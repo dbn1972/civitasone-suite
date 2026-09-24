@@ -5,8 +5,16 @@ import { RequestAdvanceForm } from "./RequestAdvanceForm";
 import { mapAdvances, type ApiAdvance, type Row } from "./mapAdvances";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
 
 import { getTranslations } from "next-intl/server";
+
+// Matches ALL_ROLES on the backend (services/hrms-service/src/modules/employee/
+// loans-routes.ts) -- this page had no client-side gate at all, so any
+// authenticated user could reach a form whose employee picker posts directly
+// to POST /v1/hrms/salary-advances (now separately IDOR-guarded server-side).
+const ADVANCE_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer"];
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
@@ -20,6 +28,13 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function AdvancesPage() {
+  /* ── Role gate ─────────────────────────────────────────────── */
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => ADVANCE_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="salary advances" requiredRoles={ADVANCE_ROLES} />;
+  }
+
   const t = await getTranslations("advances");
   const { data: items, source } = await getData();
   const errored = source === "error";

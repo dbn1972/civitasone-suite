@@ -173,6 +173,49 @@ describe("GET /v1/hrms/id-cards", () => {
     expect(r.json().data).toHaveLength(1);
     await app.close();
   });
+
+  it("returns 403 for a plain employee role (regression: this endpoint had NO requireRole at all -- any authenticated user of any role got the full org-wide card list, including holder photo URL, card number, and access_zones)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/id-cards", headers: auth(USER, ["employee"]) });
+    expect(r.statusCode).toBe(403);
+    expect(H.poolQuery).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 401 without a token", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/id-cards" });
+    expect(r.statusCode).toBe(401);
+    await app.close();
+  });
+});
+
+describe("POST /v1/hrms/id-cards/verify", () => {
+  const payload = { qrPayload: "CVO1:cccccccc-0001-4000-8000-000000000001:deadbeefdeadbeef" };
+
+  it("returns 403 for a plain employee role (regression: this endpoint had NO requireRole at all)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/id-cards/verify", headers: auth(USER, ["employee"]), payload });
+    expect(r.statusCode).toBe(403);
+    expect(H.poolQuery).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("returns 401 without a token", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/id-cards/verify", payload });
+    expect(r.statusCode).toBe(401);
+    await app.close();
+  });
+
+  it("still works for security_admin (200 -- the role gate does not block a legitimate checkpoint scan)", async () => {
+    H.poolQuery.mockResolvedValueOnce(Object.assign([], { count: 0 })); // card lookup via withTenantGuc/tx.unsafe: not found
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/id-cards/verify", headers: auth(USER, ["security_admin"]), payload });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().result).toBe("unknown"); // proves we reached real handler logic, past the role gate
+    await app.close();
+  });
 });
 
 describe("PATCH /v1/hrms/id-cards/:id/suspend", () => {

@@ -12,13 +12,15 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  * property beyond means, outside employment, gifts received, and sign
  * confidentiality undertakings. These are tracked with full audit trail.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
 import { eq, and, desc } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsCoiDeclarations } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const VIGILANCE_ROLES = [...HR_ROLES, "vigilance_officer"];
@@ -27,6 +29,47 @@ const ALL_ROLES = [...HR_ROLES, "employee", "manager"];
 const DECL_TYPES = ["coi", "confidentiality", "property", "gift", "outside_employment"] as const;
 const idParam = z.object({ id: z.string().uuid() });
 const declIdParam = z.object({ declId: z.string().uuid() });
+
+/**
+ * IDOR fix (audit: COI declarations — read, forge, and false-acknowledge).
+ * ALL_ROLES lets a bare employee/manager hit any :id/declId with zero
+ * ownership check: file a fabricated declaration attributed to a colleague
+ * (only the target employee's existence-in-tenant was checked, never that it
+ * was the caller), read a colleague's declaration, or falsely mark any
+ * colleague's declaration "acknowledged".
+ *
+ * Resolves the caller's OWN hrms_employees row via resolveEmployeeForActor
+ * (userRef = actorId, email fallback) — the same primitive medical/routes.ts's
+ * resolveSelfScopedEmployeeId and employee/routes.ts's resolveManagerScope
+ * already use — deliberately NOT a raw `ctx.actorId === employeeId`
+ * comparison: actorId is the JWT subject, a different id space from
+ * hrms_employees.id (see actor-link.ts).
+ *
+ * VIGILANCE_ROLES (HR + vigilance_officer) keep unrestricted, tenant-wide
+ * access — matches this file's own pre-existing revoke route, which already
+ * reserves revoke for that exact set. A bare "manager" is deliberately NOT
+ * treated as privileged here: there is no "manager sees a report's COI"
+ * business case documented anywhere in this module (unlike leave/attendance),
+ * and revoke's existing role list already excludes manager, so employee and
+ * manager are scoped identically — both may only ever act on their own
+ * declaration.
+ *
+ * Throws 403 (not a disguised 404) when the caller is neither privileged nor
+ * the declaration's own subject — matches employee/routes.ts's identical
+ * "not self, not a direct report" 403 precedent; the employee id-space is an
+ * unguessable UUID, so this doesn't meaningfully aid enumeration.
+ */
+async function assertOwnEmployeeOrPrivileged(
+  ctx: RequestContext,
+  req: FastifyRequest,
+  targetEmployeeId: string,
+): Promise<void> {
+  if (VIGILANCE_ROLES.some((r) => ctx.roles.includes(r))) return;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  if (!actorEmp || actorEmp.id !== targetEmployeeId) {
+    throw new HttpError(403, "FORBIDDEN", "you may only access your own declarations");
+  }
+}
 
 export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> {
   // File a new declaration
@@ -39,6 +82,11 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
       declarationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
       details: z.string().min(1).max(8000),
     }).parse(req.body);
+
+    // IDOR guard: must run before the existence check below so a
+    // non-privileged caller targeting an arbitrary :id doesn't learn whether
+    // that id exists in the tenant.
+    await assertOwnEmployeeOrPrivileged(ctx, req, id);
 
     // Verify employee exists in tenant
     const emp = await scopedRead((tx) =>
@@ -65,6 +113,9 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
       declarationType: z.enum(DECL_TYPES).optional(),
       status: z.enum(["active", "revoked", "expired", "superseded"]).optional(),
     }).parse(req.query);
+
+    // IDOR guard: closes the "read a colleague's declaration" leak.
+    await assertOwnEmployeeOrPrivileged(ctx, req, id);
 
     const rows = await scopedRead(async (tx) => {
       let q = tx.select().from(hrmsCoiDeclarations)
@@ -119,6 +170,25 @@ export async function coiDeclarationRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { declId } = declIdParam.parse(req.params);
+
+    // IDOR fix (audit: any employee/manager could acknowledge ANY colleague's
+    // declaration — no subject check existed here or in the consumer).
+    // Fetching the row synchronously also closes the same false-positive-200
+    // gap the revoke route above was already fixed for: previously this
+    // always replied 200 "acknowledged" even for an unknown/non-active
+    // declId, with the consumer's 404/409 only surfacing after the fact.
+    const declRows = await scopedRead((tx) =>
+      tx.select({ id: hrmsCoiDeclarations.id, status: hrmsCoiDeclarations.status, employeeId: hrmsCoiDeclarations.employeeId })
+        .from(hrmsCoiDeclarations)
+        .where(and(eq(hrmsCoiDeclarations.id, declId), eq(hrmsCoiDeclarations.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    const decl = declRows[0];
+    if (!decl) throw new HttpError(404, "NOT_FOUND", "declaration not found");
+    await assertOwnEmployeeOrPrivileged(ctx, req, decl.employeeId);
+    if (decl.status !== "active") {
+      throw new HttpError(409, "WRONG_STATE", `declaration is '${decl.status}', cannot acknowledge`);
+    }
 
     await publishF3Write(ctx, "disciplinary_coi_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
