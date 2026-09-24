@@ -121,4 +121,65 @@ describe("GstnConsole", () => {
     fireEvent.click(lastButtonNamed("Verify GSTIN"));
     expect(screen.getByText("Enter a valid 15-character GSTIN (e.g. 22AAAAA0000A1Z5).")).toBeInTheDocument();
   });
+
+  // GstnConsole is a real consumer of the shared ds/Tabs component's
+  // roving-tabindex arrow-key model. Every other test in this file only
+  // fires click events on the tab strip, so none of them exercise the
+  // keyboard path at all -- these do, against the actual rendered console
+  // (not just Tabs.tsx in isolation).
+  describe("keyboard tab navigation (roving tabindex)", () => {
+    it("moves focus and activation across tabs with ArrowRight/ArrowLeft, wrapping at the ends", () => {
+      render(<GstnConsole />);
+      const submitTab = screen.getByRole("tab", { name: "Submit Return" });
+      const statusTab = screen.getByRole("tab", { name: "Return Status" });
+      const verifyTab = screen.getByRole("tab", { name: "Verify GSTIN" });
+
+      expect(submitTab).toHaveAttribute("aria-selected", "true");
+      expect(submitTab).toHaveAttribute("tabindex", "0");
+      expect(statusTab).toHaveAttribute("tabindex", "-1");
+      expect(verifyTab).toHaveAttribute("tabindex", "-1");
+
+      fireEvent.keyDown(submitTab, { key: "ArrowRight" });
+      expect(statusTab).toHaveAttribute("aria-selected", "true");
+      expect(statusTab).toHaveAttribute("tabindex", "0");
+      expect(submitTab).toHaveAttribute("tabindex", "-1");
+
+      fireEvent.keyDown(statusTab, { key: "ArrowRight" });
+      expect(verifyTab).toHaveAttribute("aria-selected", "true");
+
+      // Wraps from the last tab back to the first.
+      fireEvent.keyDown(verifyTab, { key: "ArrowRight" });
+      expect(submitTab).toHaveAttribute("aria-selected", "true");
+
+      // Wraps from the first tab back to the last.
+      fireEvent.keyDown(submitTab, { key: "ArrowLeft" });
+      expect(verifyTab).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("Home and End jump to the first and last tab", () => {
+      render(<GstnConsole />);
+      const submitTab = screen.getByRole("tab", { name: "Submit Return" });
+      const verifyTab = screen.getByRole("tab", { name: "Verify GSTIN" });
+
+      fireEvent.keyDown(submitTab, { key: "End" });
+      expect(verifyTab).toHaveAttribute("aria-selected", "true");
+
+      fireEvent.keyDown(verifyTab, { key: "Home" });
+      expect(submitTab).toHaveAttribute("aria-selected", "true");
+    });
+
+    it("ArrowRight actually swaps the rendered panel end-to-end, not just the tab strip's own state", () => {
+      const { container } = render(<GstnConsole />);
+      const returnStatusForm = '[aria-label="Check GST return status"]';
+
+      // Submit Return's panel is showing.
+      expect(screen.getByLabelText(/^GSTIN/)).toBeInTheDocument();
+      expect(container.querySelector(returnStatusForm)).not.toBeInTheDocument();
+
+      fireEvent.keyDown(screen.getByRole("tab", { name: "Submit Return" }), { key: "ArrowRight" });
+
+      // Now on Return Status -- its own form replaces Submit Return's.
+      expect(container.querySelector(returnStatusForm)).toBeInTheDocument();
+    });
+  });
 });
