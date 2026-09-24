@@ -59,15 +59,25 @@ export async function upsertPeriodClose(tx: Writer, row: typeof financePeriodClo
   // monorepo (e.g. workflow-service/src/modules/external-tasks/repo.ts's
   // `lockExpiresIso`).
   const closedAtIso = row.closedAt ? new Date(row.closedAt).toISOString() : null;
+  // BUG FIX (accounting-critical #1): the live table (created by
+  // 0005_world_class.sql — see schema.ts's createdBy doc comment) requires
+  // created_by NOT NULL with no default. Every caller already has an actor id
+  // available (msg.actorId) to pass through `row.createdBy`; on the ON
+  // CONFLICT DO UPDATE path this value is constructed but never applied (the
+  // SET list below doesn't touch created_by, so an existing row keeps its
+  // original creator) — it still must be a valid non-null UUID for the
+  // INSERT's proposed row to satisfy the NOT NULL constraint, which Postgres
+  // enforces before conflict resolution is even reached.
   await (tx as any).execute(sql`
-    INSERT INTO gl.finance_period_close (tenant_id, period, fiscal_year, status, closed_by, closed_at)
+    INSERT INTO gl.finance_period_close (tenant_id, period, fiscal_year, status, closed_by, closed_at, created_by)
     VALUES (
       ${row.tenantId}::uuid,
       ${row.period},
       ${row.fiscalYear},
       ${row.status ?? "open"},
       ${row.closedBy ?? null}::uuid,
-      ${closedAtIso}::timestamptz
+      ${closedAtIso}::timestamptz,
+      ${row.createdBy}::uuid
     )
     ON CONFLICT (tenant_id, fiscal_year, period) DO UPDATE
       SET status    = EXCLUDED.status,

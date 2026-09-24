@@ -718,7 +718,15 @@ export type GLEntrySummary = {
   credit: string;
   narration?: string;
   referenceNo?: string;
-  type?: "payment" | "receipt" | "journal" | "budget";
+  // BUG FIX (accounting-critical #3): kept in sync with the widened
+  // GLEntrySummarySchema.type in packages/schemas/src/web.ts — this was a
+  // closed union missing "contra" (and several automated-posting types:
+  // depreciation, asset_disposal, payroll_settlement, payroll_accrual,
+  // asset_acquisition, ...) that finance_journals.type (an unconstrained
+  // varchar(32)) can legitimately hold. See that schema's doc comment for
+  // the full incident. GLTable.tsx only ever does a plain equality filter on
+  // this field (no exhaustive switch), so widening it is display-safe.
+  type?: string;
 };
 
 export type FinancialStatementSummary = {

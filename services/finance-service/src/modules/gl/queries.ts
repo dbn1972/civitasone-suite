@@ -83,15 +83,54 @@ export async function listJournalEntries(tenantId: string, limit: number, offset
   return entries;
 }
 
+type StatementType = "asset" | "liability" | "income" | "expenditure";
+
+/**
+ * BUG FIX (accounting-critical #2): derive the Financial Statement type from
+ * the account's REAL chart-of-accounts classification (budget.finance_heads),
+ * not from array-index parity. Mirrors the code-prefix-first, classification-
+ * as-tie-breaker approach already established in
+ * financial-statements/routes.ts's natureOf() for the same reason: this
+ * fleet's seeded COA mixes 'capital' (really assets, e.g. 1200/1250) and
+ * 'revenue' (used for income), so classification alone mis-states the
+ * statement. Collapsed to this schema's 4-way enum (no separate "equity"
+ * bucket — folded into "liability"; "expense" renamed "expenditure" to match
+ * FinancialStatementSummarySchema in packages/schemas/src/web.ts).
+ */
+function deriveStatementType(code: string | null, classification: string | null): StatementType {
+  const d = code?.charAt(0) ?? "";
+  if (d === "1") return "asset";
+  if (d === "4" && (classification === "income" || classification === "revenue")) return "income";
+  if (d === "5" || d === "6") return "expenditure";
+  // REVIEW FOLLOW-UP: natureOf() (financial-statements/routes.ts) special-cases
+  // 4200 (gain/loss on disposal, GAIN_LOSS in gl/consumer.ts) as expense before
+  // its generic "4" -> income fallback; this dropped that special case, so
+  // 4200 would misclassify as income. Reconciled to match.
+  if (code === "4200") return "expenditure";
+  if (d === "4") return "income";
+  if (d === "2" || d === "3") return "liability";
+  // No usable code prefix (e.g. an orphaned ledger row) — fall back to the
+  // stored classification directly.
+  const c = (classification ?? "").toLowerCase();
+  if (c === "asset") return "asset";
+  if (c === "income" || c === "revenue") return "income";
+  if (c === "expense" || c === "expenditure") return "expenditure";
+  return "liability";
+}
+
 export async function listFinancialStatements(tenantId: string) {
-  const rows = (await getTrialBalance(tenantId)) ?? [];
-  return rows.map((row, idx) => ({
+  const rows = await cache.getOrLoad(
+    cache.makeKey(tenantId, "gl_financial_statements", tenantId),
+    () => repo.getTrialBalanceWithClassification(tenantId),
+    30,
+  ) ?? [];
+  return rows.map((row) => ({
     id: row.headId,
     head: row.headId,
     openingBalance: 0,
     receipts: Number(row.totalCredit) / 100,
     payments: Number(row.totalDebit) / 100,
     closingBalance: Number(row.totalCredit - row.totalDebit) / 100,
-    type: (idx % 2 === 0 ? "asset" : "expenditure") as "asset" | "liability" | "income" | "expenditure",
+    type: deriveStatementType(row.code, row.classification),
   }));
 }

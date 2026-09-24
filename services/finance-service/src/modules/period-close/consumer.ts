@@ -27,6 +27,9 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
         status: p.closeType,
         closedBy: msg.actorId,
         closedAt: new Date(),
+        // Preserve the original creator across soft->hard transitions; only
+        // used if this INSERT is the first row for this (tenant, fy, period).
+        createdBy: existing?.createdBy ?? msg.actorId,
       });
       await enqueue(tx, {
         topic: "finance.period.closed", eventType: "finance.period.closed",
@@ -55,6 +58,7 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
         status: "open",
         closedBy: null,
         closedAt: null,
+        createdBy: existing.createdBy,
       });
       await periodRepo.logReopen(tx, {
         id: crypto.randomUUID(),

@@ -17,12 +17,15 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
+import { createQueue } from "@civitasone/queue";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { scoped } from "./_tenant.js";
 import { financeJournals, financeLedger } from "../src/modules/gl/schema.js";
 import { financeHeads } from "../src/modules/budget/schema.js";
 import { financePeriodClose } from "../src/modules/period-close/schema.js";
+import { registerGlConsumers } from "../src/modules/gl/consumer.js";
+import { COMMANDS } from "../src/topics.js";
 
 // ── Test-isolated tenant (all hex, never conflicts with seed data) ──────────
 const TEST_TENANT = "aa000001-ec00-4000-8000-000000000001";
@@ -362,7 +365,13 @@ describe("I8 – Subledger = control account reconciliation (HTTP route)", () =>
     const closeRes = await app1.inject({
       method: "POST",
       url: "/v1/finance/periods/2025-06/hard-close",
-      headers: { authorization: `Bearer ${token()}` },
+      // BUG FIX (accounting-critical, role-tiering): hard-close now requires
+      // the same elevated tier as reopen (finance_admin/super_admin) — see
+      // period-close/routes.ts's PERIOD_ADMIN_ROLES doc comment for why a
+      // baseline finance_officer being able to close what only an elevated
+      // role could ever reopen was a one-way-door gap. A plain
+      // finance_officer token here now correctly gets 403.
+      headers: { authorization: `Bearer ${token(["finance_admin"])}` },
     });
     await app1.close();
     // FIX: hard-close is a queue-first F3 route (sendAccepted -> 202), not the
@@ -422,5 +431,84 @@ describe("I5b – Reversal status persisted in DB (DB integration)", () => {
     `)) as unknown as { cnt: number }[];
     // Lines still exist even if the journal was marked reversed
     expect(Number(rows[0]!.cnt)).toBe(2); // the two lines we inserted in beforeAll
+  });
+});
+
+// ── I9: period-close posting guard (DB + real consumer, not a literal stub) ──
+//
+// REVIEW FOLLOW-UP: period-close-domain.test.ts's "hard_close blocks all
+// journal posting" only ever asserted `"hard_close" === "hard_close"` against
+// local literals it set two lines above -- it never touched real code. This
+// test hard-closes a real period (direct-seeded row, same `scoped()` pattern
+// this file already uses for setup -- the CLOSING mechanism itself is already
+// covered by this file's HTTP-level hard-close test above and by live manual
+// verification; what's under test here is the POSTING guard) and then
+// actually attempts to post a real journal into it through the real consumer
+// (registerGlConsumers, gl/consumer.ts's postJournal ~line 109-111), using a
+// real MemoryQueue (via createQueue(), so tenant-GUC wrapping matches
+// production) rather than a mock -- confirming the PERIOD_CLOSED throw
+// genuinely fires and genuinely prevents the write, not merely that a string
+// equals itself.
+describe("I9 – Period-close posting guard (DB + real consumer integration)", () => {
+  const CLOSED_PERIOD = "2099-01";
+
+  beforeAll(async () => {
+    await scoped(TEST_TENANT, (tx: any) =>
+      tx.insert(financePeriodClose).values({
+        id: randomUUID(),
+        tenantId: TEST_TENANT,
+        fiscalYear: "2098-99",
+        period: CLOSED_PERIOD,
+        status: "hard_close",
+        createdBy: TEST_ACTOR,
+      }).onConflictDoNothing()
+    );
+  });
+
+  it("a real journal posted into a real hard-closed period is genuinely rejected, not merely a literal comparison", async () => {
+    // createQueue() (not `new MemoryQueue()` directly) so subscribe is wrapped
+    // with the same tenant-GUC context (withTenantConsumer) production gets --
+    // required for the consumer's RLS-scoped reads/writes to see this tenant's
+    // rows at all.
+    const q = createQueue();
+    registerGlConsumers(q);
+    await q.start();
+
+    const journalId = randomUUID();
+    await q.publish(COMMANDS.journalPost, {
+      messageId: randomUUID(),
+      type: COMMANDS.journalPost,
+      tenantId: TEST_TENANT,
+      actorId: TEST_ACTOR,
+      correlationId: randomUUID(),
+      schemaVersion: "1.0",
+      payload: {
+        id: journalId,
+        tenantId: TEST_TENANT,
+        voucherNo: "AUTO",
+        type: "journal",
+        postingDate: `${CLOSED_PERIOD}-15`,
+        lines: [
+          { accountCode: H_EXP, debitMinor: "100", creditMinor: "0" },
+          { accountCode: H_LIAB, debitMinor: "0", creditMinor: "100" },
+        ],
+      },
+    } as any);
+    await (q as any).drain();
+    await q.stop();
+
+    // The guard fired: the message dead-lettered with PERIOD_CLOSED (the
+    // default maxAttempts=5 retries all exhaust identically, since this is a
+    // permanent rejection, before landing here) --
+    const dlq = (q as any).dlq as Array<{ error: string }>;
+    expect(dlq.length).toBe(1);
+    expect(dlq[0]!.error).toContain("PERIOD_CLOSED");
+
+    // -- and, the part a literal-comparison stub can never prove: no journal
+    // row was actually written.
+    const rows = await scoped(TEST_TENANT, (tx: any) =>
+      tx.select().from(financeJournals).where(eq(financeJournals.id, journalId))
+    );
+    expect(rows.length).toBe(0);
   });
 });
