@@ -3,10 +3,13 @@ import { PageHeader, EmptyState, RefreshErrorState } from "../../../../_componen
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
 import { OnboardingChecklist, type ChecklistStep } from "../_components/OnboardingChecklist";
 import { DocumentUploadCard, type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
+
+const ONBOARDING_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 // ---------------------------------------------------------------------------
 // Types
@@ -101,7 +104,7 @@ interface Props {
 export default async function OnboardingDetailPage({ params }: Props) {
   const { id } = await params;
 
-  const { data: rows, source: summarySource } = await fetchJson<unknown, ApiRow[]>(
+  const { data: rows, source: summarySource, status: summaryStatus } = await fetchJson<unknown, ApiRow[]>(
     "/api/v1/hrms/onboarding",
     [],
     {
@@ -112,6 +115,15 @@ export default async function OnboardingDetailPage({ params }: Props) {
       },
     },
   );
+
+  if (summaryStatus === 403) {
+    return (
+      <main className="page-main wrap">
+        <PageHeader title="Onboarding Details" back="/hr/onboarding" />
+        <PermissionDenied module="onboarding details" requiredRoles={ONBOARDING_ROLES} />
+      </main>
+    );
+  }
 
   const row = rows.find((r) => r.id === id);
   if (!row) notFound();

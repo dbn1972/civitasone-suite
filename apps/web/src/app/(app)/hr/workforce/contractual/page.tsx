@@ -2,7 +2,6 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { ContractorRow } from "../../_components/ContractorRow";
 
 /**
  * ContractualPage — contract employees table with renewal tracking.
@@ -60,7 +59,7 @@ function mapContractual(apiItems: ApiEmployee[]): Row[] {
       designation: e.designation ?? "—",
       contractFrom: formatDate(e.contractFrom),
       contractTo: formatDate(e.contractTo),
-      status: e.status,
+      status: e.status ?? "—",
     }));
 }
 
@@ -107,44 +106,25 @@ export default async function ContractualPage() {
       </StatGrid>
 
       <Card title={t("cardTitle")}>
-        {items.length > 0 ? (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }} aria-label={t("ariaStaffList")}>
-              <thead>
-                <tr style={{ background: "var(--surface-2, #f9fafb)", textAlign: "start" }}>
-                  {[t("colName"), t("colAgency"), t("colDepartment"), t("colDesignation"), t("colFrom"), t("colTo"), t("colStatus")].map((h) => (
-                    <th key={h} scope="col" style={{ padding: "10px 12px", fontSize: 12, fontWeight: 600, color: "var(--muted, #6b7280)", whiteSpace: "nowrap" }}>{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row) => (
-                  <ContractorRow key={row.id} {...row} />
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <DataTable<Row>
-            columns={[
-              { key: "name", label: t("colName") },
-              { key: "agency", label: t("colAgency") },
-              { key: "department", label: t("colDepartment") },
-              { key: "designation", label: t("colDesignation") },
-              { key: "contractFrom", label: t("colFrom") },
-              { key: "contractTo", label: t("colTo") },
-              { key: "status", label: t("colStatus"), cellType: "status" },
-            ]}
-            rows={items}
-            sortable
-            filterable
-            filterPlaceholder={t("filterPlaceholder")}
-            pageSize={15}
-            emptyIcon="📑"
-            emptyTitle={t("emptyTitle")}
-            emptyMessage={t("emptyMessage")}
-          />
-        )}
+        <DataTable<Row>
+          columns={[
+            { key: "name", label: t("colName") },
+            { key: "agency", label: t("colAgency") },
+            { key: "department", label: t("colDepartment") },
+            { key: "designation", label: t("colDesignation") },
+            { key: "contractFrom", label: t("colFrom"), sortable: false },
+            { key: "contractTo", label: t("colTo"), sortable: false },
+            { key: "status", label: t("colStatus"), cellType: "status" },
+          ]}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder={t("filterPlaceholder")}
+          pageSize={15}
+          emptyIcon="📑"
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
+        />
       </Card>
     </main>
   );

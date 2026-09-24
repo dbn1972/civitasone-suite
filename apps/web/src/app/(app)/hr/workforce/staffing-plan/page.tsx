@@ -120,156 +120,17 @@ export default async function StaffingPlanPage() {
       )}
 
       <Card title={t('cardTitle')}>
-        {items.length > 0 ? (
-          <div role="region" aria-label={t('ariaTableRegion')}>
-            <table
-              style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}
-              aria-label={t('ariaTable')}
-            >
-              <thead>
-                <tr>
-                  {columns.map((c) => (
-                    <th
-                      key={c.key}
-                      scope="col"
-                      style={{
-                        padding: '10px 12px',
-                        textAlign: c.align === 'right' ? 'right' : 'left',
-                        borderBottom: '2px solid var(--border, #e2e8f0)',
-                        fontWeight: 700,
-                        fontSize: 11,
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.5,
-                        color: 'var(--muted, #64748b)',
-                        background: 'var(--table-head-bg, #f8fafc)',
-                      }}
-                    >
-                      {c.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row) => {
-                  const isHighVacancy = row.vacancyAlert
-                  return (
-                    <tr
-                      key={row.id}
-                      style={{
-                        background: isHighVacancy ? '#fff2f0' : undefined,
-                        borderBottom: '1px solid var(--border, #e2e8f0)',
-                      }}
-                      aria-label={
-                        isHighVacancy
-                          ? t('highVacancyRowAriaLabel', { department: row.department, vacant: row.vacant })
-                          : undefined
-                      }
-                    >
-                      <td style={tdBase}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          {isHighVacancy && (
-                            <span
-                              aria-label={t('highVacancyIconAriaLabel')}
-                              title={t('highVacancyIconTitle')}
-                              style={{ color: '#cf1322', fontWeight: 700, fontSize: 14 }}
-                            >
-                              ⚠
-                            </span>
-                          )}
-                          <span>
-                            {row.department}
-                            {row.cadre !== '—' && (
-                              <small style={{ display: 'block', color: 'var(--muted, #64748b)', fontSize: 11 }}>
-                                {row.cadre}
-                              </small>
-                            )}
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ ...tdBase, textAlign: 'end', fontVariantNumeric: 'tabular-nums' }}>
-                        {row.sanctionedPosts}
-                      </td>
-                      <td style={{ ...tdBase, textAlign: 'end', fontVariantNumeric: 'tabular-nums', color: '#1a6d3c', fontWeight: 600 }}>
-                        {row.filled}
-                      </td>
-                      <td
-                        style={{
-                          ...tdBase,
-                          textAlign: 'end',
-                          fontVariantNumeric: 'tabular-nums',
-                          color: isHighVacancy ? '#cf1322' : undefined,
-                          fontWeight: isHighVacancy ? 700 : undefined,
-                        }}
-                      >
-                        {row.vacant}
-                      </td>
-                      <td style={{ ...tdBase, textAlign: 'end' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 6 }}>
-                          <div
-                            role="progressbar"
-                            aria-valuenow={row.fillPercentage}
-                            aria-valuemin={0}
-                            aria-valuemax={100}
-                            aria-label={t('fillRateAriaLabel', { pct: row.fillPercentage })}
-                            style={{
-                              width: 50,
-                              height: 6,
-                              borderRadius: 3,
-                              background: 'var(--border, #e2e8f0)',
-                              overflow: 'hidden',
-                            }}
-                          >
-                            <div
-                              style={{
-                                width: `${Math.min(row.fillPercentage, 100)}%`,
-                                height: '100%',
-                                background: isHighVacancy ? '#cf1322' : '#1a6d3c',
-                                borderRadius: 3,
-                              }}
-                            />
-                          </div>
-                          <span style={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
-                            {row.fillPercentage}%
-                          </span>
-                        </div>
-                      </td>
-                      <td style={{ ...tdBase, color: 'var(--muted, #64748b)' }}>{row.lastReview}</td>
-                      <td style={tdBase}>
-                        <span
-                          style={{
-                            display: 'inline-block',
-                            padding: '2px 8px',
-                            borderRadius: 12,
-                            fontSize: 11,
-                            fontWeight: 600,
-                            background:
-                              row.status === 'active' ? '#e6f7f0' : '#f5f5f5',
-                            color:
-                              row.status === 'active' ? '#1a6d3c' : '#64748b',
-                          }}
-                        >
-                          {row.status}
-                        </span>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <DataTable<Row>
-            columns={columns}
-            rows={items}
-            sortable
-            filterable
-            filterPlaceholder={t('filterPlaceholder')}
-            pageSize={20}
-            emptyIcon="📊"
-            emptyTitle={t('emptyTitle')}
-            emptyMessage={t('emptyMessage')}
-          />
-        )}
+        <DataTable<Row>
+          columns={columns}
+          rows={items}
+          sortable
+          filterable
+          filterPlaceholder={t('filterPlaceholder')}
+          pageSize={20}
+          emptyIcon="📊"
+          emptyTitle={t('emptyTitle')}
+          emptyMessage={t('emptyMessage')}
+        />
       </Card>
 
       <p style={{ fontSize: 11, color: 'var(--muted, #64748b)', marginTop: 8 }}>
@@ -279,7 +140,3 @@ export default async function StaffingPlanPage() {
   )
 }
 
-const tdBase: React.CSSProperties = {
-  padding: '10px 12px',
-  verticalAlign: 'middle',
-}
