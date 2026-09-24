@@ -2,15 +2,60 @@
  * World-class gap features — compensation planning, LMS, skills matrix,
  * succession planning, engagement surveys, onboarding, 360° feedback, benefits.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlPool, sqlClient } from "../../shared/db.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import * as employeeRepo from "../employee/repo.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "hr_officer"];
 const READER_ROLES = [...HR_ROLES, "manager", "employee"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
+
+/**
+ * IDOR fix (audit): GET /v1/hrms/skills/gap-analysis took a client-supplied
+ * employeeId with no check against the caller's identity. A bare "employee"
+ * caller is forced onto their own linked hrms_employees record (resolved
+ * via resolveEmployeeForActor -- NOT ctx.actorId, a different id space; see
+ * employee/actor-link.ts). HR and manager roles pass the requested id
+ * through unchanged -- this module has no existing "manager scoped to
+ * direct reports" precedent of its own, the same judgment call
+ * medical/routes.ts's resolveSelfScopedEmployeeId documents. Returns null
+ * when a bare-employee caller has no resolvable employee link -- callers
+ * MUST treat that as "nothing to show" (fails CLOSED).
+ */
+async function resolveOwnEmployeeIdIfBareEmployee(
+  ctx: RequestContext, req: FastifyRequest, requested: string,
+): Promise<string | null> {
+  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+  if (isPrivileged) return requested;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  return actorEmp ? actorEmp.id : null;
+}
+
+/**
+ * IDOR fix (audit): GET /v1/hrms/skills and GET /v1/hrms/work-summaries were
+ * org-wide list dumps with no employee filter at all, exposing every
+ * employee's competency/appraisal data to any employee or manager. Unlike
+ * resolveOwnEmployeeIdIfBareEmployee above, this scopes BOTH bare
+ * "employee" and "manager" callers to their own record (only HR_ROLES is
+ * privileged/tenant-wide here) -- these are list-dump endpoints with no
+ * existing "manager sees direct reports" precedent, so manager is treated
+ * the same as employee rather than the same as HR.
+ * Returns: undefined (HR — unrestricted, no filter), a uuid (non-HR,
+ * resolved to caller's own hrms_employees.id), or null (non-HR caller with
+ * no resolvable employee link — callers MUST return an empty list).
+ */
+async function resolveOwnEmployeeIdIfNonHr(
+  ctx: RequestContext, req: FastifyRequest,
+): Promise<string | null | undefined> {
+  if (HR_ROLES.some((r) => ctx.roles.includes(r))) return undefined;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  return actorEmp ? actorEmp.id : null;
+}
 
 export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // ─── Gap 1: Compensation Planning ──────────────────────────────────────────
@@ -132,8 +177,10 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/skills/gap-analysis", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const q = z.object({ employeeId: z.string().uuid() }).parse(req.query);
+    const employeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, q.employeeId);
+    if (employeeId === null) return reply.send({ data: [] });
     const { rows } = await sqlPool.query(
-      `SELECT c.name AS competency, rcm.required_level, COALESCE(sa.assessed_level, 'not_assessed') AS actual_level FROM employee.role_competency_map rcm JOIN employee.competencies c ON c.id = rcm.competency_id LEFT JOIN employee.skill_assessments sa ON sa.competency_id = rcm.competency_id AND sa.employee_id = $2 AND sa.tenant_id = $1 WHERE rcm.tenant_id = $1 ORDER BY c.name`, [ctx.tenantId, q.employeeId]);
+      `SELECT c.name AS competency, rcm.required_level, COALESCE(sa.assessed_level, 'not_assessed') AS actual_level FROM employee.role_competency_map rcm JOIN employee.competencies c ON c.id = rcm.competency_id LEFT JOIN employee.skill_assessments sa ON sa.competency_id = rcm.competency_id AND sa.employee_id = $2 AND sa.tenant_id = $1 WHERE rcm.tenant_id = $1 ORDER BY c.name`, [ctx.tenantId, employeeId]);
     return reply.send({ data: rows });
   });
 
@@ -251,10 +298,29 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ data: { id, name: body.name, status: "active" } });
   });
 
+  /**
+   * IDOR/gaming fix (audit): any employee could nominate who rates a
+   * colleague -- there was no check the caller is authorized to nominate
+   * raters for this cycle/employee. Restricted to HR or the target
+   * employee's actual people-manager (hrms_employees.managerId -- the same
+   * reporting-line FK employee/routes.ts's "isManagerOfTarget" check and
+   * apar/routes.ts's stage-ownership resolution already use for this
+   * relationship).
+   */
   app.post("/v1/hrms/feedback/cycles/:id/nominate-raters", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({ employeeId: z.string().uuid(), raters: z.array(z.object({ raterId: z.string().uuid(), raterGroup: z.string().max(32) })).min(1).max(20) }).parse(req.body);
+
+    if (!HR_ROLES.some((r) => ctx.roles.includes(r))) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+      const target = await employeeRepo.findById(body.employeeId, ctx.tenantId);
+      const isManagerOfTarget = actorEmp != null && target != null && target.managerId === actorEmp.id;
+      if (!isManagerOfTarget) {
+        throw new HttpError(403, "FORBIDDEN", "only HR or the employee's manager may nominate raters for this feedback cycle");
+      }
+    }
+
     for (const r of body.raters) {
       const nid = randomUUID();
       await sqlPool.query(`INSERT INTO employee.feedback_nominations (id, tenant_id, cycle_id, employee_id, rater_id, rater_group) VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT (tenant_id, cycle_id, employee_id, rater_id) DO NOTHING`, [nid, ctx.tenantId, id, body.employeeId, r.raterId, r.raterGroup]);
@@ -262,11 +328,35 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ data: { cycleId: id, employeeId: body.employeeId, ratersAdded: body.raters.length } });
   });
 
+  /**
+   * Gaming fix (audit): the caller could self-attribute raterGroup (e.g.
+   * "manager") and submit fabricated 360 scores about anyone -- there was
+   * no check the caller is an actually-nominated rater for the cycle/
+   * employee in question. Now requires a matching row in
+   * employee.feedback_nominations (rater_id = the caller's OWN resolved
+   * hrms_employees.id, via resolveEmployeeForActor) and derives raterGroup
+   * from THAT nomination row server-side -- the client-supplied
+   * body.raterGroup is no longer trusted at all.
+   */
   app.post("/v1/hrms/feedback/responses", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const body = z.object({ cycleId: z.string().uuid(), employeeId: z.string().uuid(), raterGroup: z.string().max(32), scores: z.record(z.number()), comments: z.string().max(2000).optional() }).parse(req.body);
+
+    const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+    if (!actorEmp) {
+      throw new HttpError(403, "FORBIDDEN", "no linked employee record for this actor");
+    }
+    const nomination = await sqlPool.query(
+      `SELECT rater_group FROM employee.feedback_nominations WHERE tenant_id = $1 AND cycle_id = $2 AND employee_id = $3 AND rater_id = $4`,
+      [ctx.tenantId, body.cycleId, body.employeeId, actorEmp.id],
+    );
+    if (nomination.rows.length === 0) {
+      throw new HttpError(403, "NOT_NOMINATED", "caller is not a nominated rater for this employee/cycle");
+    }
+    const raterGroup = nomination.rows[0]!.rater_group as string; // server-derived — body.raterGroup is never trusted
+
     const id = randomUUID();
-    await sqlPool.query(`INSERT INTO employee.feedback_responses (id, tenant_id, cycle_id, employee_id, rater_group, scores, comments) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [id, ctx.tenantId, body.cycleId, body.employeeId, body.raterGroup, JSON.stringify(body.scores), body.comments ?? null]);
+    await sqlPool.query(`INSERT INTO employee.feedback_responses (id, tenant_id, cycle_id, employee_id, rater_group, scores, comments) VALUES ($1,$2,$3,$4,$5,$6,$7)`, [id, ctx.tenantId, body.cycleId, body.employeeId, raterGroup, JSON.stringify(body.scores), body.comments ?? null]);
     return reply.code(201).send({ data: { id, submitted: true } });
   });
 
@@ -356,8 +446,13 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Gap: Skills (employee competency assessments) ──────────────────────────
+  // IDOR fix (audit): org-wide list dump with no employee filter, exposing
+  // every employee's competency data to any employee/manager. Self-scoped
+  // for non-HR callers (see resolveOwnEmployeeIdIfNonHr above).
   app.get("/v1/hrms/skills", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
+    const scopeId = await resolveOwnEmployeeIdIfNonHr(ctx, req);
+    if (scopeId === null) return reply.send({ data: [] });
     const { rows } = await sqlPool.query(`
       SELECT sa.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
              c.name AS skill, c.category, sa.assessed_level AS proficiency,
@@ -367,9 +462,9 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       JOIN employee.hrms_employees e ON e.id = sa.employee_id AND e.tenant_id = $1
       LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
       LEFT JOIN employee.hrms_employees ae ON ae.id = sa.assessed_by AND ae.tenant_id = $1
-      WHERE sa.tenant_id = $1
+      WHERE sa.tenant_id = $1 ${scopeId !== undefined ? "AND sa.employee_id = $2" : ""}
       ORDER BY sa.assessed_at DESC LIMIT 500
-    `, [ctx.tenantId]);
+    `, scopeId !== undefined ? [ctx.tenantId, scopeId] : [ctx.tenantId]);
     return reply.send({ data: rows });
   });
 
@@ -419,8 +514,13 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Gap: Work Summaries (derived from appraisals) ─────────────────────────
+  // IDOR fix (audit): org-wide list dump with no employee filter, exposing
+  // every employee's appraisal-derived data to any employee/manager.
+  // Self-scoped for non-HR callers (see resolveOwnEmployeeIdIfNonHr above).
   app.get("/v1/hrms/work-summaries", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
+    const scopeId = await resolveOwnEmployeeIdIfNonHr(ctx, req);
+    if (scopeId === null) return reply.send({ data: [] });
     const { rows } = await sqlPool.query(`
       SELECT a.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
              a.appraisal_period AS period, 'annual' AS "periodType",
@@ -430,9 +530,9 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       FROM appraisal.hrms_appraisals a
       JOIN employee.hrms_employees e ON e.id = a.employee_id AND e.tenant_id = $1
       LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
-      WHERE a.tenant_id = $1
+      WHERE a.tenant_id = $1 ${scopeId !== undefined ? "AND a.employee_id = $2" : ""}
       ORDER BY a.appraisal_period DESC, e.full_name LIMIT 500
-    `, [ctx.tenantId]);
+    `, scopeId !== undefined ? [ctx.tenantId, scopeId] : [ctx.tenantId]);
     return reply.send({ data: rows });
   });
 

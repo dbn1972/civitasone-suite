@@ -724,6 +724,14 @@ describe("POST /v1/hrms/feedback/cycles/:id/nominate-raters", () => {
 
 describe("POST /v1/hrms/feedback/responses", () => {
   it("submits feedback response (201)", async () => {
+    // Gaming fix: the route now (1) resolves the caller's own hrms_employees
+    // record via resolveEmployeeForActor (a Drizzle read -> H.selectFrom)
+    // and (2) looks up a matching employee.feedback_nominations row to
+    // verify the caller is a genuinely nominated rater, deriving raterGroup
+    // from it server-side (H.poolQuery) -- both previously absent, so this
+    // test's mocks need to supply them for the (still legitimate) 201 path.
+    H.selectFrom.mockResolvedValueOnce([{ id: "dddddddd-0001-4000-8000-000000000001" }]);
+    H.poolQuery.mockResolvedValueOnce({ rows: [{ rater_group: "self" }], rowCount: 1 });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/feedback/responses", headers: auth(), payload: { cycleId: ID1, employeeId: USER, raterGroup: "self", scores: { q1: 4, q2: 5 } } });
     expect(r.statusCode).toBe(201);

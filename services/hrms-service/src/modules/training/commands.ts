@@ -2,6 +2,9 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
+import * as employeeRepo from "../employee/repo.js";
 import type { CreateTrainingBody, CreateNominationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -16,7 +19,22 @@ export async function createTraining(ctx: RequestContext, body: CreateTrainingBo
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * FK existence check (audit: orphaned-record risk) -- neither this
+ * command's queue payload nor the consumer that ultimately calls
+ * repo.insertNomination (training/consumer.ts) validated that trainingId
+ * / employeeId actually exist before writing hrms_nominations, so a typo'd
+ * or stale id would silently create an orphaned nomination with no FK
+ * enforcement to catch it (hrms_nominations has no DB-level FK constraint
+ * either). Fail fast here, synchronously, before the command is even
+ * queued, rather than let it land broken downstream.
+ */
 export async function createNomination(ctx: RequestContext, body: CreateNominationBody): Promise<Accepted> {
+  const training = await repo.getTraining(ctx.tenantId, body.trainingId);
+  if (!training) throw new HttpError(404, "NOT_FOUND", "training not found");
+  const employee = await employeeRepo.findById(body.employeeId, ctx.tenantId);
+  if (!employee) throw new HttpError(404, "NOT_FOUND", "employee not found");
+
   const id = randomUUID();
   await queue.publish(COMMANDS.nominationCreate, {
     messageId: id, type: COMMANDS.nominationCreate,
