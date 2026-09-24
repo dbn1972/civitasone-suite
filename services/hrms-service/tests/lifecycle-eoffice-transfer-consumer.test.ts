@@ -14,7 +14,7 @@ import { MemoryQueue } from "@civitasone/queue";
 
 const {
   mockTx, dbTransactionFn, enqueuedMessages,
-  transitionTransferMock, updateEmployeeMock,
+  transitionTransferMock, applyTransferEffectMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -28,7 +28,14 @@ const {
     dbTransactionFn: _dbTransactionFn as any,
     enqueuedMessages: _enqueuedMessages,
     transitionTransferMock: vi.fn(),
-    updateEmployeeMock: vi.fn(async () => undefined as any),
+    // Effective-dating fix (migration 0144, PR #1546): the eOffice-approved
+    // path now defers through applyTransferEffect the same way the direct-
+    // transfer path does, instead of writing departmentId/payStructureId via
+    // employee/repo.ts's updateEmployee directly -- see
+    // employee-consumer.test.ts's identical applyTransferEffectMock comment
+    // for why this is a spy rather than exercising its real, version-guarded
+    // body here.
+    applyTransferEffectMock: vi.fn(async () => undefined as any),
   };
 });
 
@@ -49,9 +56,10 @@ vi.mock("../src/shared/infra.js", () => ({
 }));
 vi.mock("../src/modules/lifecycle/repo.js", () => ({
   transitionTransfer: (...a: any[]) => transitionTransferMock(...a),
-}));
-vi.mock("../src/modules/employee/repo.js", () => ({
-  updateEmployee: (...a: any[]) => updateEmployeeMock(...a),
+  // Pure, side-effect-free -- real semantics reproduced inline rather than
+  // mocked away, same as employee-consumer.test.ts's identical mock.
+  isEffectiveDateDue: (effectiveDate: string, asOf: string) => effectiveDate <= asOf,
+  applyTransferEffect: (...a: any[]) => applyTransferEffectMock(...a),
 }));
 
 import { registerEOfficeDecisionConsumers } from "../src/modules/lifecycle/eoffice-consumer.js";
@@ -104,11 +112,13 @@ describe("hrms.transfer.file_decided (approved)", () => {
     await q.publish(CONSUMED_EVENTS.transferFileDecided, makeMsg(decisionPayload()));
     await settle();
 
-    expect(updateEmployeeMock).toHaveBeenCalledOnce();
-    const [, id, patch] = updateEmployeeMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
-    expect(id).toBe(employeeId);
-    expect(patch.departmentId).toBe(toDeptId);
-    expect(patch).not.toHaveProperty("payStructureId");
+    expect(applyTransferEffectMock).toHaveBeenCalledOnce();
+    const [, transferArg, actorArg] = applyTransferEffectMock.mock.calls[0]! as
+      [unknown, Record<string, unknown>, string];
+    expect(transferArg.employeeId).toBe(employeeId);
+    expect(transferArg.toDeptId).toBe(toDeptId);
+    expect(transferArg.payStructureId).toBeNull();
+    expect(actorArg).toBe(DECIDER);
     await q.stop();
   });
 
@@ -126,8 +136,8 @@ describe("hrms.transfer.file_decided (approved)", () => {
     await q.publish(CONSUMED_EVENTS.transferFileDecided, makeMsg(decisionPayload()));
     await settle();
 
-    const [, , patch] = updateEmployeeMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
-    expect(patch.payStructureId).toBe(payStructureId);
+    const [, transferArg] = applyTransferEffectMock.mock.calls[0]! as [unknown, Record<string, unknown>];
+    expect(transferArg.payStructureId).toBe(payStructureId);
     await q.stop();
   });
 
@@ -156,7 +166,7 @@ describe("hrms.transfer.file_decided (approved)", () => {
     await q.publish(CONSUMED_EVENTS.transferFileDecided, makeMsg(decisionPayload()));
     await settle();
 
-    expect(updateEmployeeMock).not.toHaveBeenCalled();
+    expect(applyTransferEffectMock).not.toHaveBeenCalled();
     expect(enqueuedMessages.find((m) => m.topic === EVENTS.employeeTransferred)).toBeUndefined();
     await q.stop();
   });
@@ -172,7 +182,7 @@ describe("hrms.transfer.file_decided (approved)", () => {
     await q.publish(CONSUMED_EVENTS.transferFileDecided, makeMsg(decisionPayload({ decision: "rejected" })));
     await settle();
 
-    expect(updateEmployeeMock).not.toHaveBeenCalled();
+    expect(applyTransferEffectMock).not.toHaveBeenCalled();
     expect(enqueuedMessages.find((m) => m.topic === EVENTS.employeeTransferred)).toBeUndefined();
     await q.stop();
   });
