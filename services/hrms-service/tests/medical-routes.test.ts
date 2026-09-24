@@ -351,10 +351,58 @@ describe("GET /v1/hrms/medical/claims — list claims", () => {
   });
 
   it("employees can list their own claims (200)", async () => {
+    // resolveEmployeeForActor's userRef lookup — links USER (the JWT sub /
+    // ctx.actorId) to EMP (the real hrms_employees.id), matching the guard
+    // medical/routes.ts's GET /claims now applies.
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
     H.sqlClientQuery.mockReturnValue([claimRow()]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/claims?employeeId=${EMP}`, headers: auth(USER, ["employee"]) });
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("employees CANNOT list another employee's claims — the query is scoped to their own linked id, not the requested one (IDOR closed)", async () => {
+    const OTHER_EMP = "bbbbbbbb-9999-4000-8000-000000000099";
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
+    H.sqlClientQuery.mockReturnValue([claimRow()]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/claims?employeeId=${OTHER_EMP}`, headers: auth(USER, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    const usedOtherEmp = H.sqlClientQuery.mock.calls.some((args: unknown[]) => args.includes(OTHER_EMP));
+    const usedOwnEmp = H.sqlClientQuery.mock.calls.some((args: unknown[]) => args.includes(EMP));
+    expect(usedOtherEmp).toBe(false);
+    expect(usedOwnEmp).toBe(true);
+    await app.close();
+  });
+
+  it("employees omitting employeeId do not get a tenant-wide list — still scoped to their own linked id", async () => {
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
+    H.sqlClientQuery.mockReturnValue([claimRow()]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/claims", headers: auth(USER, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    const usedOwnEmp = H.sqlClientQuery.mock.calls.some((args: unknown[]) => args.includes(EMP));
+    expect(usedOwnEmp).toBe(true);
+    await app.close();
+  });
+
+  it("employees with no linked employee record get an empty list, never a tenant-wide fallback (fails closed)", async () => {
+    H.selectFrom.mockResolvedValueOnce([]); // resolveEmployeeForActor finds nothing
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/claims", headers: auth(USER, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data).toEqual([]);
+    await app.close();
+  });
+
+  it("HR's tenant-wide access (no employeeId filter) is preserved — never resolves an actor-employee link", async () => {
+    H.sqlClientQuery.mockReturnValue([claimRow(), claimRow({ id: "cccccccc-0003-4000-8000-000000000003" })]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/claims", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data).toHaveLength(2);
+    expect(H.selectFrom).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -643,10 +691,43 @@ describe("GET /v1/hrms/medical/insurance — insurance details", () => {
   });
 
   it("employees can view their own insurance (200)", async () => {
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
     H.sqlClientQuery.mockReturnValue([insuranceRow()]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/insurance?employeeId=${EMP}`, headers: auth(USER, ["employee"]) });
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("employees CANNOT view another employee's insurance — the query is scoped to their own linked id, not the requested one (IDOR closed)", async () => {
+    const OTHER_EMP = "bbbbbbbb-9999-4000-8000-000000000098";
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
+    H.sqlClientQuery.mockReturnValue([insuranceRow()]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/insurance?employeeId=${OTHER_EMP}`, headers: auth(USER, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    const usedOtherEmp = H.sqlClientQuery.mock.calls.some((args: unknown[]) => args.includes(OTHER_EMP));
+    const usedOwnEmp = H.sqlClientQuery.mock.calls.some((args: unknown[]) => args.includes(EMP));
+    expect(usedOtherEmp).toBe(false);
+    expect(usedOwnEmp).toBe(true);
+    await app.close();
+  });
+
+  it("employees with no linked employee record get 404, never someone else's insurance (fails closed)", async () => {
+    H.selectFrom.mockResolvedValueOnce([]); // resolveEmployeeForActor finds nothing
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/insurance?employeeId=${EMP}`, headers: auth(USER, ["employee"]) });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("NOT_FOUND");
+    await app.close();
+  });
+
+  it("managers' access by employeeId is preserved (unaffected — never resolves an actor-employee link)", async () => {
+    H.sqlClientQuery.mockReturnValue([insuranceRow()]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/insurance?employeeId=${EMP}`, headers: auth(USER, ["manager"]) });
+    expect(r.statusCode).toBe(200);
+    expect(H.selectFrom).not.toHaveBeenCalled();
     await app.close();
   });
 });
@@ -721,10 +802,43 @@ describe("GET /v1/hrms/medical/history — medical history timeline", () => {
   });
 
   it("employees can view their own history (200)", async () => {
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
     H.sqlClientQuery.mockReturnValue([claimRow()]);
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/history?employeeId=${EMP}`, headers: auth(USER, ["employee"]) });
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("employees CANNOT view another employee's history — the query is scoped to their own linked id, not the requested one (IDOR closed)", async () => {
+    const OTHER_EMP = "bbbbbbbb-9999-4000-8000-000000000097";
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
+    H.sqlClientQuery.mockReturnValue([claimRow()]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/history?employeeId=${OTHER_EMP}`, headers: auth(USER, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    const usedOtherEmp = H.sqlClientQuery.mock.calls.some((args: unknown[]) => args.includes(OTHER_EMP));
+    const usedOwnEmp = H.sqlClientQuery.mock.calls.some((args: unknown[]) => args.includes(EMP));
+    expect(usedOtherEmp).toBe(false);
+    expect(usedOwnEmp).toBe(true);
+    await app.close();
+  });
+
+  it("employees with no linked employee record get an empty history, never someone else's (fails closed)", async () => {
+    H.selectFrom.mockResolvedValueOnce([]); // resolveEmployeeForActor finds nothing
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/history?employeeId=${EMP}`, headers: auth(USER, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data).toEqual([]);
+    await app.close();
+  });
+
+  it("managers' access by employeeId is preserved (unaffected — never resolves an actor-employee link)", async () => {
+    H.sqlClientQuery.mockReturnValue([claimRow()]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/medical/history?employeeId=${EMP}`, headers: auth(USER, ["manager"]) });
+    expect(r.statusCode).toBe(200);
+    expect(H.selectFrom).not.toHaveBeenCalled();
     await app.close();
   });
 });

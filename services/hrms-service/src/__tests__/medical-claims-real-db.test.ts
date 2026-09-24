@@ -35,6 +35,13 @@ import { sqlClient } from "../shared/db.js";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "cccccccc-0040-4000-8000-000000000040";
 const EMPLOYEE_ID = "cccccccc-0040-4000-8000-0000000000e1";
+// IDOR-fix fixtures: a second, real employee NOT linked to selfToken, plus
+// the department/designation hrms_employees requires, and a filler actor
+// for created_by/updated_by on those seed rows.
+const OTHER_EMPLOYEE_ID = "cccccccc-0040-4000-8000-0000000000e2";
+const DEPT_ID = "cccccccc-0040-4000-8000-0000000000d1";
+const DESIG_ID = "cccccccc-0040-4000-8000-0000000000d2";
+const SEED_ACTOR = "cccccccc-0040-4000-8000-0000000000f9";
 
 function tok(roles: string[], sub: string) {
   return signToken({ sub, tid: TENANT, roles, sid: "sess-medical-claims-test" }, SECRET);
@@ -43,7 +50,8 @@ function tok(roles: string[], sub: string) {
 // `sub` becomes `ctx.actorId` (packages/auth/src/index.ts), which routes.ts
 // writes straight into the uuid `created_by`/`updated_by`/`approved_by`
 // columns — it must be a real UUID, not a human-readable test label.
-const selfToken = tok(["employee"], "cccccccc-0040-4000-8000-0000000000f1");
+const SELF_SUB = "cccccccc-0040-4000-8000-0000000000f1";
+const selfToken = tok(["employee"], SELF_SUB);
 const hrToken = tok(["hr_admin"], "cccccccc-0040-4000-8000-0000000000f2");
 
 let app: Awaited<ReturnType<typeof buildApp>>;
@@ -58,6 +66,9 @@ function asTenant<T>(fn: (tx: typeof sqlClient) => Promise<T>): Promise<T> {
 
 async function cleanup(): Promise<void> {
   await asTenant((tx) => tx`DELETE FROM medical.hrms_medical_claims WHERE tenant_id = ${TENANT}`);
+  await asTenant((tx) => tx`DELETE FROM employee.hrms_employees WHERE tenant_id = ${TENANT}`);
+  await asTenant((tx) => tx`DELETE FROM employee.hrms_designations WHERE tenant_id = ${TENANT}`);
+  await asTenant((tx) => tx`DELETE FROM employee.hrms_departments WHERE tenant_id = ${TENANT}`);
 }
 
 beforeAll(async () => {
@@ -79,6 +90,33 @@ beforeAll(async () => {
   }
 
   await cleanup(); // idempotency: wipe any leftovers from a previously crashed run
+
+  // IDOR-fix fixture: link SELF_SUB (selfToken's JWT `sub`, i.e. ctx.actorId)
+  // to a real hrms_employees row via user_ref — the same actor->employee
+  // resolution medical/routes.ts's resolveSelfScopedEmployeeId now performs
+  // via actor-link.ts's resolveEmployeeForActor. Plus a second, UNLINKED
+  // employee (OTHER_EMPLOYEE_ID) to prove selfToken cannot pivot onto it.
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_departments (id, tenant_id, code, name, created_by, updated_by)
+    VALUES (${DEPT_ID}, ${TENANT}, 'MEDTEST', 'Medical Test Dept', ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_designations (id, tenant_id, code, name, created_by, updated_by)
+    VALUES (${DESIG_ID}, ${TENANT}, 'MEDTEST', 'Medical Test Designation', ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, created_by, updated_by)
+    VALUES
+      (${EMPLOYEE_ID}, ${TENANT}, 'MEDTEST-001', 'Medical Test Self Employee', ${DEPT_ID}, ${DESIG_ID}, '2020-01-01', ${SELF_SUB}, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, created_by, updated_by)
+    VALUES
+      (${OTHER_EMPLOYEE_ID}, ${TENANT}, 'MEDTEST-002', 'Medical Test Other Employee', ${DEPT_ID}, ${DESIG_ID}, '2020-01-01', ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+
   app = await buildApp();
 });
 
@@ -90,6 +128,7 @@ afterAll(async () => {
 
 describe("medical claims — real round-trip against medical.hrms_medical_claims", () => {
   let claimId: string;
+  let otherClaimId: string;
 
   it("POST /v1/hrms/medical/claims — 201, and the row actually exists in medical.hrms_medical_claims", async () => {
     const r = await app.inject({
@@ -167,6 +206,68 @@ describe("medical claims — real round-trip against medical.hrms_medical_claims
     expect(found?.hospital_name).toBe("AIIMS Test Wing");
   });
 
+  // ── IDOR regression suite ────────────────────────────────────────────
+  // medical claims/insurance/history leaked tenant-wide to any bare
+  // "employee" caller: employeeId was either optional-and-unchecked (claims
+  // list) or required-but-never-compared-to-the-actor (history/insurance).
+  // These prove the fix: the leak is closed AND the caller's own data still
+  // returns correctly, for both the self-service and privileged (HR) roles.
+
+  it("HR files a claim for a SECOND employee — fixture for the IDOR tests below", async () => {
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${hrToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        employeeId: OTHER_EMPLOYEE_ID,
+        claimType: "indoor",
+        amountMinor: 300000,
+        hospitalName: "Safdarjung Test Wing",
+        diagnosis: "Unrelated employee's claim — must never appear in selfToken's results",
+        documents: [],
+      }),
+    });
+    expect(r.statusCode).toBe(201);
+    otherClaimId = JSON.parse(r.body).data.id;
+    expect(otherClaimId).toBeTruthy();
+  });
+
+  it("GET /v1/hrms/medical/claims — employee caller is scoped to their own claim even when requesting another employee's id (IDOR closed)", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/medical/claims?employeeId=${OTHER_EMPLOYEE_ID}`,
+      headers: { authorization: `Bearer ${selfToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(claimId);          // their own claim: still returned correctly
+    expect(ids).not.toContain(otherClaimId); // NOT silently redirected onto someone else's
+  });
+
+  it("GET /v1/hrms/medical/claims — employee caller omitting employeeId does not leak tenant-wide (the audit's actual trigger)", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${selfToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(claimId);
+    expect(ids).not.toContain(otherClaimId);
+  });
+
+  it("GET /v1/hrms/medical/claims — HR's broader (tenant-wide) access is preserved", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(claimId);
+    expect(ids).toContain(otherClaimId);
+  });
+
   it("PATCH /v1/hrms/medical/claims/:id/approve — 200, and writes approved_by/approved_at (not decided_by/decided_at)", async () => {
     const r = await app.inject({
       method: "PATCH",
@@ -205,6 +306,29 @@ describe("medical claims — real round-trip against medical.hrms_medical_claims
     expect(found).toBeTruthy();
     expect(found?.status).toBe("approved");
     expect(found?.approved_at).toBeTruthy();
+  });
+
+  it("GET /v1/hrms/medical/history — employee caller cannot see another employee's history, still sees their own (IDOR closed)", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/medical/history?employeeId=${OTHER_EMPLOYEE_ID}`,
+      headers: { authorization: `Bearer ${selfToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(claimId);
+    expect(ids).not.toContain(otherClaimId);
+  });
+
+  it("GET /v1/hrms/medical/history — HR's broader access is preserved", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/medical/history?employeeId=${OTHER_EMPLOYEE_ID}`,
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(otherClaimId);
   });
 
   it("PATCH .../approve — 404 for a claim id that does not exist (still queries the real table, not a stub)", async () => {

@@ -13,14 +13,61 @@
  *         hospital_name, hospital_id, diagnosis, documents[], status, dependant_name, dependant_relation
  */
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer"];
 const SELF_ROLES = [...HR_ROLES, "manager", "employee"];
+
+/**
+ * IDOR fix (audit: medical claims/insurance/history leaked tenant-wide to a
+ * bare "employee" caller — employeeId was either optional-and-unchecked or
+ * required-but-never-compared-to-the-actor).
+ *
+ * Self-service ownership guard shared by the three read routes below.
+ * Resolves the caller's OWN hrms_employees row the same way
+ * self-service/routes.ts and leave/routes.ts's enforceCcsLeaveRules already
+ * do elsewhere in this service (hrms_employees.user_ref = actorId, email
+ * fallback via resolveEmployeeForActor) — deliberately NOT a raw
+ * `ctx.actorId === employeeId` comparison: actorId is the JWT subject, a
+ * different id space from hrms_employees.id (see actor-link.ts). That
+ * shallower comparison does appear elsewhere in this codebase (e.g.
+ * attendance/routes.ts's overtime routes), but resolveEmployeeForActor is
+ * the pattern this module's own service already established and tested for
+ * "is this caller looking at their own record", so claims/insurance/history
+ * follow it too instead of introducing a second, inconsistent convention.
+ *
+ * HR/finance/manager roles pass `requested` through unchanged. This module
+ * has no existing "manager scoped to direct reports" precedent of its own
+ * the way leave/routes.ts does, so manager stays aligned with HR here
+ * (today's tenant-wide access) — the audit's confirmed critical issue is
+ * only the bare "employee" role's default-tenant-wide leak.
+ *
+ * A bare `employee` caller is always forced onto their own linked record,
+ * regardless of what (if anything) they requested. Returns:
+ *   - `requested` unchanged (string | undefined) — privileged caller.
+ *   - a uuid                                     — self-service caller, resolved.
+ *   - null                                        — self-service caller with NO
+ *     linked employee record. Callers MUST treat this as "nothing to show"
+ *     (fails CLOSED — mirrors employee/routes.ts's resolveManagerScope and
+ *     the manager-employee-read-scope-real-db.test.ts precedent for list
+ *     routes), never fall through to an unscoped query.
+ */
+async function resolveSelfScopedEmployeeId(
+  ctx: RequestContext,
+  req: FastifyRequest,
+  requested: string | undefined,
+): Promise<string | undefined | null> {
+  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+  if (isPrivileged) return requested;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  return actorEmp ? actorEmp.id : null;
+}
 
 /**
  * medical.hrms_medical_claims has RLS ENABLEd and FORCEd (migration
@@ -113,6 +160,13 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
+    // IDOR guard: a bare "employee" caller is forced onto their own linked
+    // employeeId regardless of what (if anything) they requested — closes
+    // the default-tenant-wide leak (omitting employeeId used to return
+    // every claim in the tenant to any SELF_ROLES-holding caller).
+    const effectiveEmployeeId = await resolveSelfScopedEmployeeId(ctx, req, query.employeeId);
+    if (effectiveEmployeeId === null) return reply.send({ data: [] });
+
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT id, employee_id, claim_type, amount_minor::text, hospital_name,
              hospital_id, diagnosis, documents, status, dependant_name,
@@ -120,7 +174,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
              created_at, updated_at
       FROM medical.hrms_medical_claims
       WHERE tenant_id = ${ctx.tenantId}
-        ${query.employeeId ? tx`AND employee_id = ${query.employeeId}` : tx``}
+        ${effectiveEmployeeId ? tx`AND employee_id = ${effectiveEmployeeId}` : tx``}
         ${query.status ? tx`AND status = ${query.status}` : tx``}
       ORDER BY created_at DESC
       LIMIT ${query.limit} OFFSET ${query.offset}
@@ -198,11 +252,19 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
 
     const query = z.object({ employeeId: z.string().uuid() }).parse(req.query);
 
+    // IDOR guard: same self-scoping as the claims list above. employeeId is
+    // mandatory here, but a bare "employee" caller's value is still ignored
+    // and replaced by their own linked id — an unresolvable link folds into
+    // the same 404 a genuinely-missing record gets (never leaks whether the
+    // record exists for someone else).
+    const effectiveEmployeeId = await resolveSelfScopedEmployeeId(ctx, req, query.employeeId);
+    if (!effectiveEmployeeId) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
+
     const [row] = await sqlClient`
       SELECT employee_id, scheme_type, scheme_id, card_number, validity_from,
              validity_to, tier, dependants, annual_limit_minor::text
       FROM employee.medical_insurance
-      WHERE tenant_id = ${ctx.tenantId} AND employee_id = ${query.employeeId}
+      WHERE tenant_id = ${ctx.tenantId} AND employee_id = ${effectiveEmployeeId}
     `;
 
     if (!row) throw new HttpError(404, "NOT_FOUND", "no insurance record found for employee");
@@ -220,12 +282,16 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
+    // IDOR guard: same self-scoping as claims/insurance above.
+    const effectiveEmployeeId = await resolveSelfScopedEmployeeId(ctx, req, query.employeeId);
+    if (!effectiveEmployeeId) return reply.send({ data: [] });
+
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT id, claim_type, amount_minor::text, approved_amount_minor::text,
              hospital_name, diagnosis, status, dependant_name,
              created_at, approved_at
       FROM medical.hrms_medical_claims
-      WHERE tenant_id = ${ctx.tenantId} AND employee_id = ${query.employeeId}
+      WHERE tenant_id = ${ctx.tenantId} AND employee_id = ${effectiveEmployeeId}
       ORDER BY created_at DESC
       LIMIT ${query.limit} OFFSET ${query.offset}
     `);

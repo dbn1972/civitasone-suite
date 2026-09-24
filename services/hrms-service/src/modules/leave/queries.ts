@@ -1,5 +1,5 @@
 import { cache } from "../../shared/infra.js";
-import { eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 import { hrmsLeaveAllocs, type LeaveAppRow } from "./schema.js";
@@ -113,8 +113,20 @@ export async function listLeaveRequestDetails(tenantId: string, limit: number, o
 }
 
 
-export async function listLeaveAllocations(tenantId: string, limit: number) {
+/**
+ * IDOR fix: this used to run with `WHERE tenant_id=$1 LIMIT 50` and no
+ * employee scoping whatsoever. `employeeIds`, when passed, restricts the
+ * result to those employees (self-service/manager callers — see
+ * leave/routes.ts's resolveLeaveReadScope); `undefined` means "unscoped"
+ * (HR, today's behaviour); an explicitly EMPTY array short-circuits to no
+ * rows without a DB round-trip (an unresolvable self-service actor, or a
+ * manager with no direct reports — never falls through to unscoped).
+ */
+export async function listLeaveAllocations(tenantId: string, limit: number, employeeIds?: string[]) {
+  if (employeeIds && employeeIds.length === 0) return [];
   const { scopedRead } = await import("../../shared/db.js");
-  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs).where(eq(hrmsLeaveAllocs.tenantId, tenantId)).limit(limit));
+  const conditions = [eq(hrmsLeaveAllocs.tenantId, tenantId)];
+  if (employeeIds) conditions.push(inArray(hrmsLeaveAllocs.employeeId, employeeIds));
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveAllocs).where(and(...conditions)).limit(limit));
   return rows.map(r => ({ id: r.id, employeeId: r.employeeId, leaveTypeId: r.leaveTypeId, fy: r.fy, totalDays: r.totalDays, balanceDays: r.balanceDays }));
 }
