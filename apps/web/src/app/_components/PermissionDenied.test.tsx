@@ -33,4 +33,36 @@ describe("PermissionDenied", () => {
     const { container } = render(<PermissionDenied />);
     expect(container.querySelector("[aria-hidden]")?.textContent).toBe("🔒");
   });
+
+  // `reason` carries the backend's own HttpError message for the specific
+  // request that just failed (see apiClient.ts's `errorMessage` and
+  // ds/LoadErrorState.tsx) -- e.g. a per-record ownership check like "not
+  // one of your direct reports" that no static per-page role list could
+  // ever express correctly.
+  it("shows the backend's own reason, capitalized and punctuated, when provided", () => {
+    render(<PermissionDenied reason="managers may only view their own direct reports' records" />);
+    expect(
+      screen.getByText("Managers may only view their own direct reports' records."),
+    ).toBeInTheDocument();
+  });
+
+  it("leaves an already-punctuated reason alone instead of double-punctuating it", () => {
+    render(<PermissionDenied reason="Requires one of: hr_admin, hr_officer, super_admin." />);
+    expect(
+      screen.getByText("Requires one of: hr_admin, hr_officer, super_admin."),
+    ).toBeInTheDocument();
+  });
+
+  it("prefers reason over module/requiredRoles when both are given -- the live, specific answer wins over a static guess", () => {
+    render(
+      <PermissionDenied
+        module="employee"
+        requiredRoles={["hr_admin"]}
+        reason="not one of your direct reports"
+      />,
+    );
+    expect(screen.getByText("Not one of your direct reports.")).toBeInTheDocument();
+    expect(screen.queryByText(/Required:/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/permission to view employee/)).not.toBeInTheDocument();
+  });
 });

@@ -3,7 +3,7 @@
  * Transforms the pipeline + risk API responses into CriticalPost cards
  * with readiness level, skill gap indicators, and dev-plan link.
  */
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
@@ -108,6 +108,12 @@ export default async function SuccessionPage() {
     pipeResult.source === "error" || riskResult.source === "error"
       ? "error"
       : pipeResult.source;
+  const errored = source === "error";
+  // Whichever of the two calls actually failed carries the real reason
+  // (e.g. a 403's backend message) -- prefer it over the other,
+  // still-empty result so a genuine 403 doesn't get reported as a plain
+  // network/5xx failure.
+  const errorResult = pipeResult.source === "error" ? pipeResult : riskResult;
 
   const posts        = buildPosts(pipeline, tCard);
   const readyNow     = pipeline.reduce((s, r) => s + Number(r.ready_now ?? 0), 0);
@@ -137,9 +143,15 @@ export default async function SuccessionPage() {
 
       {/* Rich succession plan cards */}
       <Card title={t("cardTitlePipeline")}>
-        <div style={{ padding: 16 }}>
-          <SuccessionPlanList posts={posts} t={tCard} />
-        </div>
+        {errored ? (
+          <div className="pad">
+            <LoadErrorState result={errorResult} area="succession plans" backHref="/hr" />
+          </div>
+        ) : (
+          <div style={{ padding: 16 }}>
+            <SuccessionPlanList posts={posts} t={tCard} />
+          </div>
+        )}
       </Card>
 
       {/* At-risk table */}

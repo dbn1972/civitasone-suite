@@ -12,8 +12,32 @@ export type LoaderSource = "api" | "error";
  * detail-by-id page CAN tell a real 404 ("this record doesn't exist") apart
  * from every other failure ("we couldn't load it") when that distinction
  * matters — `source: "error"` alone conflates them (see UX-009 follow-up).
+ *
+ * `errorCode`/`errorMessage` are the same kind of additive, optional escape
+ * hatch for the response BODY: every route handler in this codebase throws
+ * a typed `HttpError(status, code, message)` (every service's own src/shared/context.ts)
+ * whose module-level Fastify error handler serializes it as
+ * `{ code, message, correlationId, ... }` — see e.g.
+ * services/hrms-service/src/modules/employee/routes.ts's `errorHandler`.
+ * `message` is always already a clerk-safe, specific, plain-language reason
+ * ("managers may only view their own direct reports' records", "requires
+ * one of: hr_admin, hr_officer, super_admin") — never a raw stack trace or
+ * internal detail — so it is safe to surface directly to a caller instead of
+ * a generic fallback. This is what lets `status === 403` be rendered as an
+ * honest, specific "Access restricted" message (see
+ * `ds/LoadErrorState.tsx`) instead of the generic "couldn't load, try
+ * again" copy, which is actively misleading for a permanent authorization
+ * boundary — retrying a 403 can never succeed.
  */
-export type LoaderResult<T> = { data: T; source: LoaderSource; status?: number };
+export type LoaderResult<T> = {
+  data: T;
+  source: LoaderSource;
+  status?: number;
+  /** The backend's own machine-readable error code (e.g. "FORBIDDEN"), when a response body could be parsed. */
+  errorCode?: string;
+  /** The backend's own plain-language reason (HttpError's `message`), when a response body could be parsed. */
+  errorMessage?: string;
+};
 
 export interface FetchJsonOptions<TApi, TOutput> {
   revalidateSeconds?: number;
@@ -58,6 +82,30 @@ function serverAuthHeaders(): Record<string, string> {
 }
 
 /**
+ * Best-effort parse of a failed response's JSON body for the `{ code,
+ * message }` shape every service's HttpError-backed error handler sends.
+ * Never throws: a non-JSON or unexpectedly-shaped error body (a raw 502
+ * from a proxy that never reached the service, say) just yields
+ * `{ code: undefined, message: undefined }`, and the caller falls back to
+ * the generic error copy exactly as it did before this existed.
+ */
+async function readErrorBody(response: Response): Promise<{ code?: string; message?: string }> {
+  try {
+    const body = (await response.clone().json()) as unknown;
+    if (body && typeof body === "object") {
+      const { code, message } = body as { code?: unknown; message?: unknown };
+      return {
+        code: typeof code === "string" ? code : undefined,
+        message: typeof message === "string" ? message : undefined,
+      };
+    }
+  } catch {
+    // not JSON, or already consumed — fall through to the empty result.
+  }
+  return {};
+}
+
+/**
  * API-only loader — no mock fallback. On failure returns empty data + source:"error".
  */
 export async function fetchJson<TApi, TOutput>(
@@ -92,7 +140,8 @@ export async function fetchJson<TApi, TOutput>(
 
     if (!response.ok) {
       emitError(options.telemetryKey, "http_error", path, response.status);
-      return { data: empty, source: "error", status: response.status };
+      const { code, message } = await readErrorBody(response);
+      return { data: empty, source: "error", status: response.status, errorCode: code, errorMessage: message };
     }
 
     const raw = await response.json();

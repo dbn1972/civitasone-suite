@@ -3,12 +3,11 @@
  * Paginated, filterable chronological service record using ServiceBookView.
  */
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { ServiceBookView, type ServiceEntry } from "./_components/ServiceBookView";
-import { toHumanError } from "@/lib/messages";
 
 async function getData(employeeId?: string): Promise<LoaderResult<ServiceEntry[]>> {
   const path = employeeId
@@ -33,7 +32,7 @@ export default async function ServiceBookPage({
   // ?empId= — previously ignored entirely, so it always showed every
   // employee's entries mixed together instead of the one the officer opened.
   const empId = searchParams?.empId;
-  const { data: items, source } = await getData(empId);
+  const { data: items, source, status, errorMessage } = await getData(empId);
   const errored = source === "error";
 
   const employees  = new Set(items.map((i) => i.employee ?? i.employeeId).filter(Boolean)).size;
@@ -64,7 +63,7 @@ export default async function ServiceBookPage({
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "service book" })} backHref="/hr" />
+            <LoadErrorState result={{ status, errorMessage }} area="service book" backHref="/hr" />
           </div>
         ) : (
           <div style={{ padding: 16 }}>
