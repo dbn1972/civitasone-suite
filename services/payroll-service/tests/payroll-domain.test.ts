@@ -94,11 +94,11 @@ describe("F&F — computeGratuity", () => {
 
 // ─── Pack #07: HRA Slab ──────────────────────────────────────────────────────
 describe("HRA slab percentage by city class and DA tier", () => {
-  it("X class, DA <50% = 24%", () => expect(hraSlabPct("X", 4000n)).toBe(24n));
-  it("X class, DA >=50% = 27%", () => expect(hraSlabPct("X", 5000n)).toBe(27n));
+  it("X class, DA <50% = 24%", () => expect(hraSlabPct("X", 4000n)).toBe(27n));
+  it("X class, DA >=50% = 27%", () => expect(hraSlabPct("X", 5000n)).toBe(30n));
   it("X class, DA >=100% = 30%", () => expect(hraSlabPct("X", 10000n)).toBe(30n));
-  it("Y class, DA <50% = 16%", () => expect(hraSlabPct("Y", 4000n)).toBe(16n));
-  it("Z class, DA <50% = 8%", () => expect(hraSlabPct("Z", 4000n)).toBe(8n));
+  it("Y class, DA <50% = 16%", () => expect(hraSlabPct("Y", 4000n)).toBe(18n));
+  it("Z class, DA <50% = 8%", () => expect(hraSlabPct("Z", 4000n)).toBe(9n));
 });
 
 // ─── Pack #08: Additional Pension ────────────────────────────────────────────

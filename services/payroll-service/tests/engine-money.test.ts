@@ -49,16 +49,16 @@ describe("roundRupee — round-half-up to whole rupee, symmetric on sign", () =>
 // ─────────────────────── DA + HRA slab escalation ───────────────────────
 
 describe("HRA city-class slab escalates with DA threshold (7th CPC)", () => {
-  it("X metro: 24% (DA<50%), 27% (DA>=50%), 30% (DA>=100%)", () => {
+  it("X metro: 24% (DA<25%), 27% (DA>=25%), 30% (DA>=50%)", () => {
     expect(hraSlabPct("X", 0n)).toBe(24n);
-    expect(hraSlabPct("X", 4999n)).toBe(24n);
-    expect(hraSlabPct("X", 5000n)).toBe(27n);
-    expect(hraSlabPct("X", 9999n)).toBe(27n);
+    expect(hraSlabPct("X", 4999n)).toBe(27n);
+    expect(hraSlabPct("X", 5000n)).toBe(30n);
+    expect(hraSlabPct("X", 9999n)).toBe(30n);
     expect(hraSlabPct("X", 10000n)).toBe(30n);
   });
   it("Y town: 16/18/20, Z town: 8/9/10", () => {
     expect(hraSlabPct("Y", 0n)).toBe(16n);
-    expect(hraSlabPct("Y", 5000n)).toBe(18n);
+    expect(hraSlabPct("Y", 5000n)).toBe(20n);
     expect(hraSlabPct("Y", 10000n)).toBe(20n);
     expect(hraSlabPct("Z", 0n)).toBe(8n);
     expect(hraSlabPct("Z", 10000n)).toBe(10n);
@@ -72,11 +72,11 @@ describe("computeSlip — DA, HRA, EPS split (exact paise)", () => {
   it("DA = 50% of basic = 15,000.00", () => {
     expect(r.daMinor).toBe(1_500_000n);
   });
-  it("HRA = 27% of basic (DA>=50% escalation) = 8,100.00", () => {
-    expect(r.hraMinor).toBe(810_000n);
+  it("HRA = 30% of basic (DA>=50% escalation) = 9,000.00", () => {
+    expect(r.hraMinor).toBe(900_000n);
   });
-  it("gross = basic + DA + HRA = 53,100.00", () => {
-    expect(r.grossMinor).toBe(5_310_000n);
+  it("gross = basic + DA + HRA = 54,000.00", () => {
+    expect(r.grossMinor).toBe(5_400_000n);
   });
   it("PF (EE) = 12% of capped wage 15,000 = 1,800.00", () => {
     // pension base = basic + DA = 45,000 > 15,000 ceiling → capped.
@@ -94,8 +94,8 @@ describe("computeSlip — DA, HRA, EPS split (exact paise)", () => {
     expect(r.esiMinor).toBe(0n);
     expect(r.esiEmployerMinor).toBe(0n);
   });
-  it("net = gross − PF (no TDS at this income, new regime) = 51,300.00", () => {
-    expect(r.netPayMinor).toBe(5_130_000n);
+  it("net = gross − PF (no TDS at this income, new regime) = 52,200.00", () => {
+    expect(r.netPayMinor).toBe(5_220_000n);
   });
 });
 

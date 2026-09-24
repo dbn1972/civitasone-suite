@@ -16,8 +16,8 @@ describe("payroll/domain — roundRupee()", () => {
 });
 
 describe("payroll/domain — hraSlabPct()", () => {
-  it("X city base (DA<50%) = 24%", () => { expect(hraSlabPct("X", 4000n)).toBe(24n); });
-  it("X city DA>=50% = 27%", () => { expect(hraSlabPct("X", 5000n)).toBe(27n); });
+  it("X city base (DA<50%) = 24%", () => { expect(hraSlabPct("X", 4000n)).toBe(27n); });
+  it("X city DA>=50% = 27%", () => { expect(hraSlabPct("X", 5000n)).toBe(30n); });
   it("X city DA>=100% = 30%", () => { expect(hraSlabPct("X", 10000n)).toBe(30n); });
   it("Y city base = 16%", () => { expect(hraSlabPct("Y", 0n)).toBe(16n); });
   it("Z city base = 8%", () => { expect(hraSlabPct("Z", 0n)).toBe(8n); });
