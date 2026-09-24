@@ -24,6 +24,9 @@ const H = vi.hoisted(() => ({
   findById: vi.fn(),
   listByTenant: vi.fn(),
   listByTenantEmp: vi.fn(),
+  // actor->employee identity resolution (SoD fix) -- see
+  // employee/actor-link.js's resolveEmployeeForActor.
+  resolveEmployeeForActor: vi.fn(),
 }));
 
 // A real in-memory queue so the async F3 write consumer actually runs in tests.
@@ -100,6 +103,15 @@ vi.mock("../src/modules/employee/repo.js", () => ({
   updateEmployee: async () => undefined,
 }));
 
+// Mocked wholesale (like repo.js above) so PATCH .../stage's ownership tests
+// control the caller<->employee link deterministically instead of needing a
+// real DB row -- same convention apar-routes.test.ts uses for the identical
+// dependency.
+vi.mock("../src/modules/employee/actor-link.js", () => ({
+  resolveEmployeeForActor: (...a: unknown[]) => H.resolveEmployeeForActor(...a),
+  extractActorEmail: () => undefined,
+}));
+
 import { buildApp } from "../src/app.js";
 import { queue } from "../src/shared/infra.js";
 import { registerF3_appraisals_Consumers } from "../src/modules/appraisals/f3-consumer.js";
@@ -142,6 +154,9 @@ beforeEach(() => {
   H.findById.mockResolvedValue(appraisalRow());
   H.listByTenant.mockResolvedValue([appraisalRow()]);
   H.listByTenantEmp.mockResolvedValue([{ id: EMP, fullName: "Test User", departmentId: "dept-1" }]);
+  // Fail-closed default: no linked employee row unless a test opts in.
+  // PATCH .../stage's ownership tests below set this explicitly per-case.
+  H.resolveEmployeeForActor.mockResolvedValue(undefined);
 });
 
 afterAll(async () => {
@@ -175,6 +190,49 @@ describe("GET /v1/hrms/appraisals", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(USER, ["manager"]) });
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  // --- read-scope regression (Bug 2/IDOR fix): the route resolves a scope
+  // and forwards it to queries.listAppraisals as its 3rd argument. This
+  // file mocks queries.js wholesale (so it can't prove the real filtering --
+  // see the new real-DB appraisals-identity-resolution.test.ts for that),
+  // but it DOES prove routes.ts computes the right scope for each caller
+  // and actually passes it through, mirroring
+  // apar-routes.test.ts's own "read-scope regression" block.
+
+  it("hr_admin: unrestricted scope (null) is passed to queries.listAppraisals", async () => {
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(USER, ["hr_admin"]) });
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, expect.any(Number), null);
+    await app.close();
+  });
+
+  it("manager with no resolvable employee link is scoped to an empty array (fails closed)", async () => {
+    H.resolveEmployeeForActor.mockResolvedValue(undefined);
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(USER, ["manager"]) });
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, expect.any(Number), []);
+    await app.close();
+  });
+
+  it("manager with resolvable direct reports is scoped to their employeeIds only", async () => {
+    const MANAGER_EMP = "eeeeeeee-0008-4000-8000-000000000001";
+    const REPORT_1 = "eeeeeeee-0009-4000-8000-000000000001";
+    const REPORT_2 = "eeeeeeee-0010-4000-8000-000000000001";
+    H.resolveEmployeeForActor.mockResolvedValue({ id: MANAGER_EMP });
+    H.listByTenantEmp.mockResolvedValue([
+      { id: REPORT_1, fullName: "Report One", departmentId: "dept-1" },
+      { id: REPORT_2, fullName: "Report Two", departmentId: "dept-1" },
+    ]);
+    const app = await buildApp();
+    await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(USER, ["manager"]) });
+    const call = H.listAppraisals.mock.calls[0] as [string, number, string[] | null];
+    expect(call[2]).not.toBeNull();
+    expect(new Set(call[2])).toEqual(new Set([REPORT_1, REPORT_2]));
+    // listByTenant(managerId) is the real employee/repo.ts direct-reports
+    // lookup -- confirm it was queried BY the resolved manager employee id.
+    expect(H.listByTenantEmp).toHaveBeenCalledWith(TENANT, 500, 0, undefined, MANAGER_EMP);
     await app.close();
   });
 
@@ -266,11 +324,24 @@ describe("POST /v1/hrms/appraisals", () => {
 describe("PATCH /v1/hrms/appraisals/:id/stage", () => {
   const payload = { stage: "reporting_officer" };
 
-  it("202 — advances stage", async () => {
+  // --- SoD / stage-ownership regression (C2/IDOR fix) ------------------------
+  // Bug 1 fix: PATCH .../stage now requires the caller to resolve (via
+  // resolveEmployeeForActor) to the hrms_employees.id actually named as the
+  // owner of the appraisal's CURRENT stage -- reportingOfficerId /
+  // reviewingOfficerId / acceptingAuthorityId / employeeId, matching
+  // whichever column apraisalStageOwner() maps the current status to.
+  // Holding "hr_admin"/"manager" (the route's coarse role gate) is
+  // necessary but no longer sufficient, mirroring apar/routes.ts's
+  // assertStageOwner exactly: only super_admin may override.
+
+  it("202 — advances stage when the caller resolves to the current stage's owner", async () => {
+    const OFFICER = "eeeeeeee-0001-4000-8000-000000000001";
+    H.findById.mockResolvedValue(appraisalRow({ status: "reporting_officer", reportingOfficerId: OFFICER }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: OFFICER });
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
-      headers: auth(), payload,
+      headers: auth(), payload: { stage: "reviewing_officer" },
     });
     expect(r.statusCode).toBe(202);
     const body = r.json();
@@ -279,17 +350,101 @@ describe("PATCH /v1/hrms/appraisals/:id/stage", () => {
     await app.close();
   });
 
-  it("202 — manager can advance stage", async () => {
+  it("202 — manager can advance stage when they resolve to the actual reporting officer", async () => {
+    const OFFICER = "eeeeeeee-0002-4000-8000-000000000001";
+    H.findById.mockResolvedValue(appraisalRow({ status: "reporting_officer", reportingOfficerId: OFFICER }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: OFFICER });
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
-      headers: auth(USER, ["manager"]), payload,
+      headers: auth(USER, ["manager"]), payload: { stage: "reviewing_officer" },
     });
     expect(r.statusCode).toBe(202);
     await app.close();
   });
 
-  it("202 — with optional rating", async () => {
+  it("403 — manager holding the role but NOT the resolved stage owner cannot advance (closes Bug 1)", async () => {
+    H.findById.mockResolvedValue(appraisalRow({ status: "reporting_officer", reportingOfficerId: "eeeeeeee-0003-4000-8000-000000000001" }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: "ffffffff-0001-4000-8000-000000000001" }); // not the officer
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
+      headers: auth(USER, ["manager"]), payload: { stage: "reviewing_officer" },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("NOT_STAGE_OWNER");
+    await app.close();
+  });
+
+  it("403 — hr_admin is NOT an automatic bypass for stage ownership (only super_admin overrides)", async () => {
+    H.findById.mockResolvedValue(appraisalRow({ status: "reporting_officer", reportingOfficerId: "eeeeeeee-0004-4000-8000-000000000001" }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
+      headers: auth(USER, ["hr_admin"]), payload: { stage: "reviewing_officer" },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("NOT_STAGE_OWNER");
+    await app.close();
+  });
+
+  it("202 — super_admin may explicitly override as a privileged, audited action", async () => {
+    H.findById.mockResolvedValue(appraisalRow({ status: "reporting_officer", reportingOfficerId: "eeeeeeee-0005-4000-8000-000000000001" }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
+      headers: auth(USER, ["super_admin"]), payload: { stage: "reviewing_officer" },
+    });
+    expect(r.statusCode).toBe(202);
+    await app.close();
+  });
+
+  it("403 — the appraisee can never act as their own officer, even as a would-be super_admin override", async () => {
+    // Self-review-forbidden is checked BEFORE the super_admin-override
+    // branch in assertAppraisalStageOwner, mirroring
+    // apar/routes.ts's assertStageOwner: no role can override self-dealing.
+    H.findById.mockResolvedValue(appraisalRow({ status: "reporting_officer", employeeId: EMP, reportingOfficerId: "eeeeeeee-0007-4000-8000-000000000001" }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP }); // caller IS the appraisee
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
+      headers: auth(USER, ["super_admin"]), payload: { stage: "reviewing_officer" },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("SELF_REVIEW_FORBIDDEN");
+    await app.close();
+  });
+
+  // --- monotonic stage-order regression (closes "any enum value accepted") ---
+
+  it("409 — cannot jump straight to 'completed' from 'self_pending' (was previously accepted)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
+      headers: auth(), payload: { stage: "completed", rating: "4.5" },
+    });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("WRONG_STAGE");
+    await app.close();
+  });
+
+  it("409 — cannot replay an earlier stage", async () => {
+    H.findById.mockResolvedValue(appraisalRow({ status: "reviewing_officer", reportingOfficerId: EMP }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
+      headers: auth(), payload: { stage: "reporting_officer" },
+    });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("WRONG_STAGE");
+    await app.close();
+  });
+
+  it("202 — with optional rating, on a legitimate immediate transition owned by the accepting authority", async () => {
+    const OFFICER = "eeeeeeee-0006-4000-8000-000000000001";
+    H.findById.mockResolvedValue(appraisalRow({ status: "accepting_authority", acceptingAuthorityId: OFFICER }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: OFFICER });
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/appraisals/${APPRAISAL_ID}/stage`,
