@@ -43,7 +43,8 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     if (vacancy && !isApplicationOpen(vacancy as never, Date.now(), false)) {
       throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
     }
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createApplication(ctx, body));
+    const dedupKey = deriveDedupKey(vacancy, body.email);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createApplication(ctx, body, dedupKey));
   });
 
   // Talent pool: search all applications across openings (filter by skill, experience, source).
@@ -129,6 +130,15 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     // Validate application belongs to this tenant before queuing (same as hire route)
     const existingApp = await repo.findApplicationById(id, ctx.tenantId);
     if (!existingApp) throw new HttpError(404, "NOT_FOUND", "Application not found");
+    // Bug 1 hardening: reject an offer on an application that's already
+    // offered/hired or in a terminal status (withdrawn/rejected/joined) --
+    // fast synchronous feedback for the HTTP caller. repo.claimApplicationForOffer
+    // (run from the consumer once this command is processed) re-checks the
+    // SAME condition atomically, since this read-then-later-publish has its
+    // own race window this synchronous check alone can't close.
+    if (repo.NOT_OFFERABLE_STAGES.includes(existingApp.stage) || repo.NOT_OFFERABLE_STATUSES.includes(existingApp.status)) {
+      throw new HttpError(409, "INVALID_STATE", `Cannot offer application in stage "${existingApp.stage}" (status "${existingApp.status}")`);
+    }
     const body = offerApplicationBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.offerApplication(ctx, id, body));
   });
@@ -199,11 +209,30 @@ export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<voi
     if (!isApplicationOpen(vacancy as never, Date.now())) {
       throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
     }
-    const result = await commands.createPublicApplication(vacancy.tenantId, body);
+    const dedupKey = deriveDedupKey(vacancy, body.email);
+    const result = await commands.createPublicApplication(vacancy.tenantId, body, dedupKey);
     return reply.code(202).send(result);
   });
 
   app.setErrorHandler(errorHandler);
+}
+
+/**
+ * Bug 2 hardening: the same dedup_key derivation eligibility-routes.ts
+ * already uses for its own (separate) apply path -- lower(email) unless the
+ * vacancy's advertised eligibility criteria explicitly sets allowMultiple,
+ * else null. The DB's existing partial unique index
+ * (hrms_applications_dedup_uq on tenant_id, job_opening_id, dedup_key WHERE
+ * dedup_key IS NOT NULL AND status <> 'withdrawn') does the actual
+ * enforcement once this is set on insert (see consumer.ts). No email, or no
+ * vacancy/criteria to read (e.g. HR recording against an id that turns out
+ * not to exist) -> null (can't dedupe on nothing; matches eligibility-routes.ts's
+ * own "unless explicitly allowed" default otherwise).
+ */
+function deriveDedupKey(vacancy: { eligibility?: unknown } | null | undefined, email: string | undefined): string | null {
+  const allowMultiple = (vacancy?.eligibility as { allowMultiple?: boolean } | undefined)?.allowMultiple === true;
+  if (allowMultiple || !email) return null;
+  return email.toLowerCase();
 }
 
 function errorHandler(err: unknown, req: any, reply: any): void {

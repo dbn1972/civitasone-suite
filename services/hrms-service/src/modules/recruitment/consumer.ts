@@ -35,58 +35,90 @@ export function registerRecruitmentConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.applicationCreate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; jobOpeningId: string; applicantName: string; email?: string; mobile?: string; resumeRef?: string; qualification?: string; experienceYears?: number; skills?: string[]; source?: string; institutionName?: string; graduationYear?: number; semester?: string; tradeCategory?: string; itiCertNo?: string; availabilityHoursPerWeek?: number; stipendExpectedMinor?: number };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      // Generate a short, human-readable application number.
-      const year = new Date().getFullYear();
-      const shortId = p.id.slice(-6).toUpperCase();
-      const applicationNo = `APP-${year}-${shortId}`;
-      await repo.insertApplication(tx, {
-        id: p.id, tenantId: p.tenantId, jobOpeningId: p.jobOpeningId,
-        applicantName: p.applicantName, email: p.email ?? null,
-        mobile: p.mobile ?? null, resumeRef: p.resumeRef ?? null,
-        qualification: p.qualification ?? null,
-        experienceYears: p.experienceYears ?? null,
-        skills: p.skills ?? null,
-        source: p.source ?? "internal",
-        applicationNo,
-        stage: "applied", status: "active",
-        institutionName: p.institutionName ?? null,
-        graduationYear: p.graduationYear ?? null,
-        semester: p.semester ?? null,
-        tradeCategory: p.tradeCategory ?? null,
-        itiCertNo: p.itiCertNo ?? null,
-        availabilityHoursPerWeek: p.availabilityHoursPerWeek ?? null,
-        stipendExpectedMinor: p.stipendExpectedMinor != null ? BigInt(p.stipendExpectedMinor) : null,
-        createdBy: msg.actorId, updatedBy: msg.actorId,
-      });
-      // Enqueue confirmation notification (email seam — picked up by notification service).
-      if (p.email && p.source === "public_portal") {
-        await enqueue(tx, {
-          topic: "hrms.candidate.application_confirmed",
-          eventType: "hrms.candidate.application_confirmed",
-          tenantId: p.tenantId,
-          actorId: msg.actorId,
-          correlationId: msg.correlationId,
-          payload: {
-            applicationId: p.id,
-            applicationNo,
-            applicantName: p.applicantName,
-            email: p.email,
-            jobOpeningId: p.jobOpeningId,
-          },
+    const p = msg.payload as { id: string; tenantId: string; jobOpeningId: string; applicantName: string; email?: string; mobile?: string; resumeRef?: string; qualification?: string; experienceYears?: number; skills?: string[]; source?: string; institutionName?: string; graduationYear?: number; semester?: string; tradeCategory?: string; itiCertNo?: string; availabilityHoursPerWeek?: number; stipendExpectedMinor?: number; dedupKey?: string | null };
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        // Generate a short, human-readable application number.
+        const year = new Date().getFullYear();
+        const shortId = p.id.slice(-6).toUpperCase();
+        const applicationNo = `APP-${year}-${shortId}`;
+        await repo.insertApplication(tx, {
+          id: p.id, tenantId: p.tenantId, jobOpeningId: p.jobOpeningId,
+          applicantName: p.applicantName, email: p.email ?? null,
+          mobile: p.mobile ?? null, resumeRef: p.resumeRef ?? null,
+          qualification: p.qualification ?? null,
+          experienceYears: p.experienceYears ?? null,
+          skills: p.skills ?? null,
+          source: p.source ?? "internal",
+          applicationNo,
+          stage: "applied", status: "active",
+          // Bug 2 hardening: dedupKey is derived by the route (routes.ts's
+          // deriveDedupKey, threaded through commands.ts) -- null when the
+          // vacancy allows multiple applications or there's no email to key
+          // on. The DB's existing partial unique index
+          // (hrms_applications_dedup_uq) is what actually enforces it; see
+          // the catch block below for the resulting 23505.
+          dedupKey: p.dedupKey ?? null,
+          institutionName: p.institutionName ?? null,
+          graduationYear: p.graduationYear ?? null,
+          semester: p.semester ?? null,
+          tradeCategory: p.tradeCategory ?? null,
+          itiCertNo: p.itiCertNo ?? null,
+          availabilityHoursPerWeek: p.availabilityHoursPerWeek ?? null,
+          stipendExpectedMinor: p.stipendExpectedMinor != null ? BigInt(p.stipendExpectedMinor) : null,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
         });
+        // Enqueue confirmation notification (email seam — picked up by notification service).
+        if (p.email && p.source === "public_portal") {
+          await enqueue(tx, {
+            topic: "hrms.candidate.application_confirmed",
+            eventType: "hrms.candidate.application_confirmed",
+            tenantId: p.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: {
+              applicationId: p.id,
+              applicationNo,
+              applicantName: p.applicantName,
+              email: p.email,
+              jobOpeningId: p.jobOpeningId,
+            },
+          });
+        }
+        await audit(tx, msg, "create", "application", p.id);
+      });
+    } catch (err: unknown) {
+      // Bug 2 hardening: with dedupKey now set, a genuine duplicate trips
+      // hrms_applications_dedup_uq as a hard 23505 here instead of silently
+      // inserting a second row. A duplicate can never succeed on retry, so
+      // log and stop rather than let it become a poison message.
+      if (err && typeof err === "object" && "code" in err && (err as { code?: unknown }).code === "23505") {
+        log.warn({ applicationId: p.id, tenantId: p.tenantId, jobOpeningId: p.jobOpeningId }, "duplicate application suppressed by dedup_key unique index");
+        return;
       }
-      await audit(tx, msg, "create", "application", p.id);
-    });
+      throw err;
+    }
   });
 
   queue.subscribe(COMMANDS.applicationOffer, async (msg) => {
     const p = msg.payload as { offerId: string; applicationId: string; tenantId: string; ctcMinor: number; currency: string; joiningDate?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateApplication(tx, p.applicationId, { stage: "offered" });
+
+      // Bug 1 hardening: atomically claim the application for the offer step
+      // (replaces the old blind updateApplication call, which had no stage/
+      // status precondition at all -- it would happily move a withdrawn,
+      // rejected, or already-hired application to "offered"). Only succeeds
+      // when the application is genuinely offer-eligible right now; see
+      // repo.claimApplicationForOffer for the exact guard and why routes.ts's
+      // synchronous pre-check alone isn't sufficient.
+      const claimed = await repo.claimApplicationForOffer(tx, p.applicationId, p.tenantId);
+      if (!claimed) {
+        log.warn({ applicationId: p.applicationId, tenantId: p.tenantId }, "offer rejected: application is not in an offerable state");
+        return;
+      }
+
       await repo.insertOffer(tx, {
         id: p.offerId, tenantId: p.tenantId, applicationId: p.applicationId,
         ctcMinor: BigInt(p.ctcMinor), currency: p.currency as "INR",
@@ -103,98 +135,134 @@ export function registerRecruitmentConsumers(queue: Queue): void {
       employeeNo: string; dateOfJoining: string; basicMinor: number;
       departmentId: string; designationId: string; employeeType: string;
     };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
 
-      // BUG-3 fix: atomically claim the application for hiring BEFORE
-      // creating the employee record (replaces the old blind
-      // updateApplication call below). 0 rows affected means this
-      // application is already in the "hired" stage -- a duplicate or
-      // redelivered hire command that reached this consumer under a
-      // different messageId than the original attempt (so markProcessed
-      // above didn't catch it -- see commands.ts's hireApplication for the
-      // deterministic-messageId half of this fix) -- so skip employee
-      // creation entirely rather than creating a second one for the same
-      // application.
-      const claimed = await repo.claimApplicationForHire(tx, p.applicationId, p.tenantId);
-      if (!claimed) {
-        log.warn({ applicationId: p.applicationId, tenantId: p.tenantId, employeeId: p.employeeId }, "duplicate hire suppressed: application already hired");
+        // BUG-3 fix: atomically claim the application for hiring BEFORE
+        // creating the employee record (replaces the old blind
+        // updateApplication call below). 0 rows affected means this
+        // application is already in the "hired" stage -- a duplicate or
+        // redelivered hire command that reached this consumer under a
+        // different messageId than the original attempt (so markProcessed
+        // above didn't catch it -- see commands.ts's hireApplication for the
+        // deterministic-messageId half of this fix) -- so skip employee
+        // creation entirely rather than creating a second one for the same
+        // application.
+        const claimed = await repo.claimApplicationForHire(tx, p.applicationId, p.tenantId);
+        if (!claimed) {
+          log.warn({ applicationId: p.applicationId, tenantId: p.tenantId, employeeId: p.employeeId }, "duplicate hire suppressed: application already hired");
+          return;
+        }
+
+        // Fetch application for applicant details (already claimed above).
+        const application = await repo.findApplicationByIdTx(tx, p.applicationId, p.tenantId);
+        const fullName = application?.applicantName ?? "Unknown";
+        const email = application?.email ?? null;
+        const mobile = application?.mobile ?? null;
+
+        // Recruitment hardening (Bug 3): atomically claim one vacancy on this
+        // application's job opening BEFORE creating the employee. Throws
+        // (not a bare return) so the WHOLE transaction rolls back --
+        // including the claimApplicationForHire claim above -- leaving the
+        // application back in its pre-hire ("offered") state for HR to
+        // reassign, rather than stuck falsely "hired" with no employee
+        // created and no vacancy consumed. See repo.claimVacancy for the
+        // atomic UPDATE...WHERE guard against two concurrent hires racing
+        // for the same last vacancy.
+        if (application?.jobOpeningId) {
+          const vacancyClaimed = await repo.claimVacancy(tx, application.jobOpeningId, p.tenantId);
+          if (!vacancyClaimed) throw new Error("NO_VACANCY_AVAILABLE");
+        }
+
+        // Recruitment hardening (minor item): fail fast with a clear error
+        // instead of a raw FK-violation crash if the caller passed a
+        // department/designation that doesn't exist for this tenant.
+        const [deptOk, desigOk] = await Promise.all([
+          employeeRepo.departmentExistsTx(tx, p.departmentId, p.tenantId),
+          employeeRepo.designationExistsTx(tx, p.designationId, p.tenantId),
+        ]);
+        if (!deptOk) throw new Error(`DEPARTMENT_NOT_FOUND: ${p.departmentId}`);
+        if (!desigOk) throw new Error(`DESIGNATION_NOT_FOUND: ${p.designationId}`);
+
+        // Create the employee record
+        await employeeRepo.insertEmployee(tx, {
+          id: p.employeeId,
+          tenantId: p.tenantId,
+          employeeNo: p.employeeNo,
+          fullName,
+          departmentId: p.departmentId,
+          designationId: p.designationId,
+          dateOfJoining: p.dateOfJoining,
+          employeeType: p.employeeType as "permanent",
+          basicMinor: BigInt(p.basicMinor),
+          currency: "INR",
+          status: "probation",
+          email,
+          mobile,
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+
+        // Emit employeeCreated event (so payroll picks up the new employee)
+        await enqueue(tx, {
+          topic: EVENTS.employeeCreated, eventType: EVENTS.employeeCreated,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { employeeId: p.employeeId, employeeNo: p.employeeNo, tenantId: p.tenantId },
+        });
+
+        // SVC-003: close the manpower plan -> requisition -> hire loop. The
+        // manpower-planning consumer maps jobOpeningId -> requisition -> plan and
+        // bumps filled_strength. No-op for openings not born from a plan.
+        if (application?.jobOpeningId) {
+          await enqueue(tx, {
+            topic: EVENTS.positionFilled, eventType: EVENTS.positionFilled,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { jobOpeningId: application.jobOpeningId, employeeId: p.employeeId, tenantId: p.tenantId },
+          });
+        }
+
+        await audit(tx, msg, "hire", "application", p.applicationId);
+
+        // Notify the newly hired employee and trigger onboarding workflow
+        await enqueue(tx, {
+          topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: buildNotificationPayload({
+            eventType: "hrms.recruitment.hire_confirmed",
+            recipient: p.employeeId,
+            recipientId: p.employeeId,
+            variables: { employeeNo: p.employeeNo, employeeId: p.employeeId },
+          }),
+        });
+        await enqueue(tx, {
+          topic: "workflow.instance.create", eventType: "workflow.instance.create",
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            id: randomUUID(),
+            tenantId: msg.tenantId,
+            name: `Employee Onboarding — ${p.employeeId.slice(0, 8)}`,
+            status: "active",
+            definitionCode: "employee_onboarding",
+            initialTaskName: "Document Submission",
+            version: 1,
+            refType: "employee",
+            refId: p.employeeId,
+            triggeredBy: msg.actorId ?? "system",
+          },
+        });
+      });
+    } catch (err: unknown) {
+      // Bug 3 / FK hardening: none of these can ever succeed on a retry (the
+      // vacancy stays exhausted, the bad FK stays bad), so log and stop
+      // rather than let it become a poison message that retries forever.
+      const reason = err instanceof Error ? err.message : "";
+      if (reason === "NO_VACANCY_AVAILABLE" || reason.startsWith("DEPARTMENT_NOT_FOUND") || reason.startsWith("DESIGNATION_NOT_FOUND")) {
+        log.warn({ applicationId: p.applicationId, tenantId: p.tenantId, employeeId: p.employeeId, reason }, "hire rejected");
         return;
       }
-
-      // Fetch application for applicant details (already claimed above).
-      const application = await repo.findApplicationByIdTx(tx, p.applicationId, p.tenantId);
-      const fullName = application?.applicantName ?? "Unknown";
-      const email = application?.email ?? null;
-      const mobile = application?.mobile ?? null;
-
-      // Create the employee record
-      await employeeRepo.insertEmployee(tx, {
-        id: p.employeeId,
-        tenantId: p.tenantId,
-        employeeNo: p.employeeNo,
-        fullName,
-        departmentId: p.departmentId,
-        designationId: p.designationId,
-        dateOfJoining: p.dateOfJoining,
-        employeeType: p.employeeType as "permanent",
-        basicMinor: BigInt(p.basicMinor),
-        currency: "INR",
-        status: "probation",
-        email,
-        mobile,
-        createdBy: msg.actorId,
-        updatedBy: msg.actorId,
-      });
-
-      // Emit employeeCreated event (so payroll picks up the new employee)
-      await enqueue(tx, {
-        topic: EVENTS.employeeCreated, eventType: EVENTS.employeeCreated,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { employeeId: p.employeeId, employeeNo: p.employeeNo, tenantId: p.tenantId },
-      });
-
-      // SVC-003: close the manpower plan -> requisition -> hire loop. The
-      // manpower-planning consumer maps jobOpeningId -> requisition -> plan and
-      // bumps filled_strength. No-op for openings not born from a plan.
-      if (application?.jobOpeningId) {
-        await enqueue(tx, {
-          topic: EVENTS.positionFilled, eventType: EVENTS.positionFilled,
-          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { jobOpeningId: application.jobOpeningId, employeeId: p.employeeId, tenantId: p.tenantId },
-        });
-      }
-
-      await audit(tx, msg, "hire", "application", p.applicationId);
-
-      // Notify the newly hired employee and trigger onboarding workflow
-      await enqueue(tx, {
-        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: buildNotificationPayload({
-          eventType: "hrms.recruitment.hire_confirmed",
-          recipient: p.employeeId,
-          recipientId: p.employeeId,
-          variables: { employeeNo: p.employeeNo, employeeId: p.employeeId },
-        }),
-      });
-      await enqueue(tx, {
-        topic: "workflow.instance.create", eventType: "workflow.instance.create",
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          id: randomUUID(),
-          tenantId: msg.tenantId,
-          name: `Employee Onboarding — ${p.employeeId.slice(0, 8)}`,
-          status: "active",
-          definitionCode: "employee_onboarding",
-          initialTaskName: "Document Submission",
-          version: 1,
-          refType: "employee",
-          refId: p.employeeId,
-          triggeredBy: msg.actorId ?? "system",
-        },
-      });
-    });
+      throw err;
+    }
 
     // Invalidate caches
     await cache.invalidate(cache.makeKey(msg.tenantId, "application", p.applicationId));

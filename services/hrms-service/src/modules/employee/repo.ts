@@ -2,7 +2,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
-import { hrmsEmployees, type EmployeeRow, type EmployeeInsert } from "./schema.js";
+import { hrmsEmployees, hrmsDepartments, hrmsDesignations, type EmployeeRow, type EmployeeInsert } from "./schema.js";
 
 const log = pino({ name: "employee-repo" });
 
@@ -60,6 +60,27 @@ export async function listByTenant(tenantId: string, limit = 100, offset = 0, em
 
 export async function insertEmployee(tx: Writer, row: EmployeeInsert): Promise<void> {
   await tx.insert(hrmsEmployees).values(row);
+}
+
+/**
+ * Recruitment hardening: existence checks the hire consumer runs before
+ * insertEmployee so an unknown departmentId/designationId fails fast with a
+ * clear error instead of a raw FK-violation crash. Tx-scoped (called from
+ * inside the hire consumer's already-open transaction) -- see findByIdTx's
+ * doc comment above for why a scopedRead-based variant can't be used there.
+ */
+export async function departmentExistsTx(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: hrmsDepartments.id }).from(hrmsDepartments)
+    .where(and(eq(hrmsDepartments.id, id), eq(hrmsDepartments.tenantId, tenantId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function designationExistsTx(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: hrmsDesignations.id }).from(hrmsDesignations)
+    .where(and(eq(hrmsDesignations.id, id), eq(hrmsDesignations.tenantId, tenantId)))
+    .limit(1);
+  return rows.length > 0;
 }
 
 export async function updateEmployee(tx: Writer, id: string, patch: Partial<EmployeeInsert>): Promise<void> {
