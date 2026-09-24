@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const statusAwareGetMock = vi.fn();
 vi.mock("../_lib/statusAwareFetch", () => ({
@@ -60,7 +62,7 @@ describe("ReturnsPage", () => {
     });
 
     const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Asha Verma")).toBeInTheDocument();
     // 500000 paise == ₹5,000.00, formatted via formatMoney (not raw paise "500000")
@@ -76,7 +78,7 @@ describe("ReturnsPage", () => {
     });
 
     const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Form-24Q blocked for FY 2025-26 Q1")).toBeInTheDocument();
     expect(screen.getByText(/does not match deposited challans/)).toBeInTheDocument();
@@ -87,7 +89,7 @@ describe("ReturnsPage", () => {
     statusAwareGetMock.mockResolvedValue({ kind: "http_error", status: 403, body: { code: "FORBIDDEN" } });
 
     const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
     expect(screen.getByText("Could not load Form-24Q for FY 2025-26 Q1")).toBeInTheDocument();
@@ -110,7 +112,7 @@ describe("ReturnsPage", () => {
     fetchJsonMock.mockResolvedValue({ data: null, source: "error" });
 
     const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Could not load Form-26Q for FY 2025-26 Q1")).toBeInTheDocument();
     expect(screen.queryByText("Non-salary TDS not yet populated")).not.toBeInTheDocument();

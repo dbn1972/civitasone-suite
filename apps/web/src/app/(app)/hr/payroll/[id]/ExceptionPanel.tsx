@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 
 export type PayrollException = {
   employeeId: string;
@@ -13,12 +14,13 @@ type Props = {
 };
 
 export function ExceptionPanel({ exceptions }: Props) {
+  const t = useTranslations("exceptionPanel");
   if (exceptions.length === 0) return null;
 
   return (
     <div
       role="alert"
-      aria-label={`${exceptions.length} payroll exception${exceptions.length !== 1 ? "s" : ""} require attention`}
+      aria-label={t("panelAriaLabel", { count: exceptions.length })}
       style={{
         border: "1.5px solid var(--warn, #d97706)",
         borderRadius: 10,
@@ -37,8 +39,7 @@ export function ExceptionPanel({ exceptions }: Props) {
       >
         <span aria-hidden="true" style={{ fontSize: 15 }}>⚠️</span>
         <strong style={{ fontSize: 13, color: "var(--warn, #92400e)" }}>
-          {exceptions.length} employee{exceptions.length !== 1 ? "s" : ""} need attention
-          before running payroll
+          {t("headingText", { count: exceptions.length })}
         </strong>
       </div>
 
@@ -70,7 +71,7 @@ export function ExceptionPanel({ exceptions }: Props) {
                 whiteSpace: "nowrap",
               }}
             >
-              Fix
+              {t("fixLink")}
             </Link>
           </div>
         ))}
@@ -79,9 +80,15 @@ export function ExceptionPanel({ exceptions }: Props) {
   );
 }
 
-/** Derive exceptions from salary-slip data (missing info signals). */
+/**
+ * Derive exceptions from salary-slip data (missing info signals).
+ * `t` is the caller's own translator (payrollDetail, a Server Component
+ * translator obtained via getTranslations) -- this is a plain data-shaping
+ * function, not a component, so it cannot call useTranslations() itself.
+ */
 export function deriveExceptions(
   slips: Array<{ employeeId: string; employeeName: string; status: string }>,
+  t: (key: string) => string,
 ): PayrollException[] {
   const out: PayrollException[] = [];
   for (const s of slips) {
@@ -89,7 +96,7 @@ export function deriveExceptions(
       out.push({
         employeeId: s.employeeId,
         employeeName: s.employeeName,
-        issue: "Salary calculation failed — check bank account, PAN, or salary structure",
+        issue: t("exceptionSalaryCalcFailed"),
       });
     }
   }

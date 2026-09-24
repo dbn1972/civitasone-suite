@@ -127,6 +127,20 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, SELF_ROLES);
     const body = submitClaimBody.parse(req.body);
 
+    // Forgery fix: same self-scoping helper the read routes below already
+    // use. Privileged roles (HR/finance/manager) keep today's behavior —
+    // `body.employeeId` passes through unchanged, so HR can still file a
+    // claim on behalf of a given employee (e.g. data-entry of a paper
+    // submission; see "HR files a claim for a SECOND employee" in
+    // medical-claims-real-db.test.ts). A bare "employee" caller is always
+    // forced onto their OWN resolved employee record instead — closing the
+    // forgery hole where any employee could set an arbitrary employeeId in
+    // the body and have the claim recorded as a colleague's.
+    const ownerEmployeeId = await resolveSelfScopedEmployeeId(ctx, req, body.employeeId);
+    if (!ownerEmployeeId) {
+      throw new HttpError(403, "NO_EMPLOYEE_LINK", "no linked employee record for this actor");
+    }
+
     const id = randomUUID();
     await withTenantGuc(ctx.tenantId, (tx) => tx`
       INSERT INTO medical.hrms_medical_claims (
@@ -134,7 +148,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
         hospital_id, diagnosis, documents, status, dependant_name, dependant_relation,
         remarks, created_by, updated_by
       ) VALUES (
-        ${id}, ${ctx.tenantId}, ${body.employeeId}, ${body.claimType},
+        ${id}, ${ctx.tenantId}, ${ownerEmployeeId}, ${body.claimType},
         ${body.amountMinor}, ${body.hospitalName}, ${body.hospitalId ?? null},
         ${body.diagnosis}, ${JSON.stringify(body.documents)}, 'pending',
         ${body.dependantName ?? null}, ${body.dependantRelation ?? null},
@@ -143,7 +157,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     `);
 
     return reply.code(201).send({
-      data: { id, employeeId: body.employeeId, status: "pending", amountMinor: body.amountMinor },
+      data: { id, employeeId: ownerEmployeeId, status: "pending", amountMinor: body.amountMinor },
     });
   });
 
@@ -205,7 +219,17 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
         ? (body.approvedAmountMinor ?? Number(existing.amount_minor))
         : 0;
 
-      await tx`
+      // Race fix: the SELECT above only proves the claim was 'pending' at
+      // read time — two concurrent approve requests can both pass that
+      // check before either commits. Re-assert status = 'pending' as part
+      // of the UPDATE's own WHERE clause (atomic with the write, not a
+      // separate round-trip) and use RETURNING to detect whether a
+      // concurrent request already won the race. Same idiom as
+      // updateEmployeeIfStatus (employee/repo.ts) and approveLeaveApp
+      // (leave/repo.ts), adapted to this file's raw sqlClient tagged-SQL
+      // style (see social/routes.ts's travel-request/expense-claim approve
+      // handlers for the same raw-SQL shape).
+      const updated = await tx`
         UPDATE medical.hrms_medical_claims
         SET status = ${body.status},
             approved_amount_minor = ${amount},
@@ -214,8 +238,12 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
             approved_at = NOW(),
             updated_by = ${ctx.actorId},
             updated_at = NOW()
-        WHERE id = ${id} AND tenant_id = ${ctx.tenantId}
+        WHERE id = ${id} AND tenant_id = ${ctx.tenantId} AND status = 'pending'
+        RETURNING id
       `;
+      if (updated.length === 0) {
+        throw new HttpError(409, "WRONG_STATE", "claim was concurrently processed by another request");
+      }
 
       return amount;
     });

@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -11,6 +12,7 @@ type BonusResponse = {
 };
 
 export function ComputeBonusForm() {
+  const t = useTranslations("computeBonusForm");
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState("");
   const [fy, setFy] = useState("");
@@ -31,9 +33,10 @@ export function ComputeBonusForm() {
   const fyRef = useRef<HTMLInputElement>(null);
   const basicRef = useRef<HTMLInputElement>(null);
 
-  const empInvalid = tone === "bad" && message === "Employee ID is required.";
-  const fyInvalid = tone === "bad" && !!message && message.startsWith("Financial year");
-  const basicInvalid = tone === "bad" && !!message && message.startsWith("Basic salary");
+  const [invalidField, setInvalidField] = useState<"employeeId" | "fy" | "basic" | null>(null);
+  const empInvalid = tone === "bad" && invalidField === "employeeId";
+  const fyInvalid = tone === "bad" && invalidField === "fy";
+  const basicInvalid = tone === "bad" && invalidField === "basic";
 
   const previewAmountMinor = (() => {
     const b = Math.round(parseFloat(basic) * 100);
@@ -45,22 +48,26 @@ export function ComputeBonusForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
     if (!employeeId.trim()) {
       setTone("bad");
-      setMessage("Employee ID is required.");
+      setInvalidField("employeeId");
+      setMessage(t("employeeIdRequiredError"));
       empRef.current?.focus();
       return;
     }
     if (!/^\d{4}-\d{2}$/.test(fy.trim())) {
       setTone("bad");
-      setMessage("Financial year must be in YYYY-YY format, e.g. 2025-26.");
+      setInvalidField("fy");
+      setMessage(t("fyFormatError"));
       fyRef.current?.focus();
       return;
     }
     const rupees = parseFloat(basic);
     if (Number.isNaN(rupees) || rupees <= 0) {
       setTone("bad");
-      setMessage("Basic salary must be a positive amount in rupees.");
+      setInvalidField("basic");
+      setMessage(t("basicRequiredError"));
       basicRef.current?.focus();
       return;
     }
@@ -84,12 +91,13 @@ export function ComputeBonusForm() {
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(`Bonus of ${formatMoney(res.data.bonus_amount_minor)} computed.`);
+      setInvalidField(null);
+      setMessage(t("computedMessage", { amount: formatMoney(res.data.bonus_amount_minor) }));
       setEmployeeId("");
       setBasic("");
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -97,12 +105,12 @@ export function ComputeBonusForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Compute Bonus" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Employee ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={empId}
@@ -117,7 +125,7 @@ export function ComputeBonusForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Financial Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={fyId}
@@ -133,7 +141,7 @@ export function ComputeBonusForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={basicId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Basic Salary (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("basicSalaryLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={basicId}
@@ -150,7 +158,7 @@ export function ComputeBonusForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={pctId} style={{ fontSize: 13, fontWeight: 600 }}>Bonus % (statutory 8.33–20)</label>
+              <label htmlFor={pctId} style={{ fontSize: 13, fontWeight: 600 }}>{t("bonusPctLabel")}</label>
               <input
                 id={pctId}
                 type="number"
@@ -166,13 +174,13 @@ export function ComputeBonusForm() {
 
           {previewAmountMinor !== null && (
             <p style={{ fontSize: 13, color: "var(--ink2)" }}>
-              Preview bonus amount: <strong>{formatMoney(previewAmountMinor)}</strong>
+              {t.rich("previewAmountText", { amount: formatMoney(previewAmountMinor), strong: (chunks) => <strong>{chunks}</strong> })}
             </p>
           )}
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              Compute Bonus
+              {t("computeBonusBtn")}
             </Button>
           </div>
 
@@ -192,16 +200,17 @@ export function ComputeBonusForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Compute this bonus?"
-        confirmLabel="Compute bonus"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Compute a {bonusPct}% bonus on {formatMoney(Math.round((parseFloat(basic) || 0) * 100))} basic for
-            employee <strong>{employeeId}</strong>, FY {fy}. This creates a bonus record.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          pct: bonusPct,
+          amount: formatMoney(Math.round((parseFloat(basic) || 0) * 100)),
+          employeeId,
+          fy,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void computeBonus()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

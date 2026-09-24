@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { formatRupees } from "@/lib/formatters";
@@ -29,6 +30,7 @@ export function PayrollRunActions({
   payPeriod,
   canAdminister = false,
 }: Props) {
+  const t = useTranslations("payrollRunActions");
   const router = useRouter();
   const [pending, setPending] = useState<PendingAction>(null);
   const [busy, setBusy] = useState(false);
@@ -61,17 +63,17 @@ export function PayrollRunActions({
       setMessageTone("good");
       setMessage(
         action === "approve"
-          ? `Payroll run for ${payPeriod} approved.`
+          ? t("approvedMessage", { period: payPeriod })
           : action === "disburse"
-            ? `Disbursement of ${formatRupees(netAmount)} to ${employeeCount} employees initiated.`
-            : `Payroll run for ${payPeriod} reverted to draft.`,
+            ? t("disbursementInitiatedMessage", { amount: formatRupees(netAmount), count: employeeCount })
+            : t("revertedMessage", { period: payPeriod }),
       );
       toast.success(
         action === "approve"
-          ? `✓ Payroll run for ${payPeriod} approved`
+          ? t("approvedToast", { period: payPeriod })
           : action === "disburse"
-            ? `✓ Disbursement of ${formatRupees(netAmount)} initiated`
-            : `✓ Run reverted to draft`,
+            ? t("disbursementInitiatedToast", { amount: formatRupees(netAmount) })
+            : t("revertedToast"),
       );
       setPending(null);
       router.refresh();
@@ -91,7 +93,7 @@ export function PayrollRunActions({
   return (
     <section className="card" style={{ marginBottom: 16 }}>
       <div className="card-h">
-        <h3>Payroll Actions</h3>
+        <h3>{t("sectionTitle")}</h3>
       </div>
       <div className="pad">
         <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
@@ -100,7 +102,7 @@ export function PayrollRunActions({
               style={{ minHeight: 44 }}
               onClick={() => { setError(undefined); setPending("approve"); }}
             >
-              Approve Run
+              {t("approveRunBtn")}
             </Button>
           )}
           {canDisburse && (
@@ -108,7 +110,7 @@ export function PayrollRunActions({
               style={{ minHeight: 44 }}
               onClick={() => { setError(undefined); setPending("disburse"); }}
             >
-              Disburse Run
+              {t("disburseRunBtn")}
             </Button>
           )}
           {canRevert && (
@@ -117,7 +119,7 @@ export function PayrollRunActions({
               style={{ minHeight: 44 }}
               onClick={() => { setError(undefined); setPending("revert"); }}
             >
-              Revert to Draft
+              {t("revertToDraftBtn")}
             </Button>
           )}
         </div>
@@ -131,60 +133,55 @@ export function PayrollRunActions({
 
       <ConfirmDialog
         open={pending === "approve"}
-        title="Approve this payroll run?"
+        title={t("approveConfirmTitle")}
         danger
         requireReason
-        reasonLabel="Approval remarks (maker-checker)"
-        confirmLabel="Approve run"
+        reasonLabel={t("approveReasonLabel")}
+        confirmLabel={t("approveConfirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            You are about to approve the payroll run for <strong>{payPeriod}</strong> covering{" "}
-            <strong>{employeeCount}</strong> employees with a gross of{" "}
-            <strong>{formatRupees(grossAmount)}</strong>. Once approved the run can be disbursed and
-            cannot be edited.
-          </>
-        }
+        description={t.rich("approveDescription", {
+          period: payPeriod,
+          count: employeeCount,
+          amount: formatRupees(grossAmount),
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={(reason) => void runAction("approve", reason)}
         onCancel={() => !busy && setPending(null)}
       />
 
       <ConfirmDialog
         open={pending === "disburse"}
-        title="Disburse this payroll run?"
+        title={t("disburseConfirmTitle")}
         danger
         requireReason
-        reasonLabel="Disbursement authorisation (maker-checker)"
-        confirmLabel="Disburse now"
+        reasonLabel={t("disburseReasonLabel")}
+        confirmLabel={t("disburseConfirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            This will disburse <strong>{formatRupees(netAmount)}</strong> to{" "}
-            <strong>{employeeCount}</strong> employees for <strong>{payPeriod}</strong>. Funds are
-            released to PFMS and this action is <strong>irreversible</strong>.
-          </>
-        }
+        description={t.rich("disburseDescription", {
+          amount: formatRupees(netAmount),
+          count: employeeCount,
+          period: payPeriod,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={(reason) => void runAction("disburse", reason)}
         onCancel={() => !busy && setPending(null)}
       />
 
       <ConfirmDialog
         open={pending === "revert"}
-        title="Revert this run to draft?"
+        title={t("revertConfirmTitle")}
         danger
         requireReason
-        reasonLabel="Reason for revert"
-        confirmLabel="Revert to draft"
+        reasonLabel={t("revertReasonLabel")}
+        confirmLabel={t("revertConfirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            The payroll run for <strong>{payPeriod}</strong> will be reverted to draft status so
-            it can be corrected and reprocessed. No funds have been disbursed.
-          </>
-        }
+        description={t.rich("revertDescription", {
+          period: payPeriod,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={(reason) => void runAction("revert", reason)}
         onCancel={() => !busy && setPending(null)}
       />

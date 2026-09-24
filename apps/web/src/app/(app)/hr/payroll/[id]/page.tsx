@@ -55,7 +55,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel="Payroll Runs" />
-        <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+        <DataSourceBadge source={source} message={t("loadErrorMessage")} />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0" }}>
             {t("notFound")}
@@ -83,7 +83,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   }
 
   const slipRows = run.salarySlips as SalarySlipRow[];
-  const exceptions = deriveExceptions(slipRows);
+  const exceptions = deriveExceptions(slipRows, t);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -93,7 +93,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         back="/hr/payroll"
         backLabel="Payroll Runs"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       {/* 5-step horizontal progress stepper */}
       <Card>

@@ -2,12 +2,19 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+// next-intl / ICU MessageFormat: `select` compares the interpolated value
+// after string coercion, so passing the raw `isDefault` boolean works with
+// case labels "true"/"other" -- this composes the whole sentence as one
+// translatable unit instead of concatenating a fixed-position suffix, so a
+// Hindi (or any other locale) translation can reorder the clause naturally.
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
 
 export function CreateStructureForm() {
+  const t = useTranslations("createStructureForm");
   const router = useRouter();
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -30,7 +37,7 @@ export function CreateStructureForm() {
     setMessage(null);
     if (!name.trim()) {
       setTone("bad");
-      setMessage("Structure name is required.");
+      setMessage(t("nameRequiredError"));
       nameRef.current?.focus();
       return;
     }
@@ -54,15 +61,15 @@ export function CreateStructureForm() {
       setTone("good");
       setMessage(
         res.id
-          ? `Structure submitted (id ${res.id}). It is processed asynchronously and will appear in the list shortly.`
-          : "Structure submitted.",
+          ? t("submittedWithIdMessage", { id: res.id })
+          : t("submittedMessage"),
       );
       setName("");
       setDescription("");
       setIsDefault(false);
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -70,12 +77,12 @@ export function CreateStructureForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Create Pay Structure" padding>
+      <Card title={t("formTitle")} padding>
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Name <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("nameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={nameId}
@@ -90,7 +97,7 @@ export function CreateStructureForm() {
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>Description</label>
+            <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>{t("descriptionLabel")}</label>
             <input
               id={descId}
               value={description}
@@ -107,13 +114,13 @@ export function CreateStructureForm() {
               onChange={(e) => setIsDefault(e.target.checked)}
               style={{ width: 18, height: 18 }}
             />
-            <label htmlFor={defaultId} style={{ fontSize: 13, fontWeight: 600 }}>Set as default structure</label>
+            <label htmlFor={defaultId} style={{ fontSize: 13, fontWeight: 600 }}>{t("setAsDefaultLabel")}</label>
           </div>
         </div>
 
         <div>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-            Create Structure
+            {t("createStructureBtn")}
           </Button>
         </div>
 
@@ -133,16 +140,18 @@ export function CreateStructureForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this pay structure?"
-        confirmLabel="Create structure"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Create pay structure <strong>{name}</strong>
-            {isDefault ? " and set it as the default structure" : ""}.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          name,
+          // ICU `select` compares this after string coercion; t.rich()'s own
+          // type only accepts string/number/Date values, not boolean, so
+          // stringify explicitly rather than relying on an implicit cast.
+          isDefault: isDefault ? "true" : "false",
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void createStructure()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

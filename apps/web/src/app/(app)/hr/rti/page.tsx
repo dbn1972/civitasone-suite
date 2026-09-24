@@ -20,6 +20,8 @@ type Row = {
   daysToDue: number;
 } & Record<string, unknown>;
 
+type RowWithSla = Row & { slaLabel: string };
+
 async function getData(): Promise<LoaderResult<Row[]>> {
   return fetchJson<unknown, Row[]>("/api/v1/hrms/rti/requests", [], {
     telemetryKey: "hr.rti",
@@ -46,12 +48,31 @@ export default async function RtiPage() {
   const overdue = items.filter((i) => i.overdue).length;
   const disposed = items.filter((i) => i.status === "responded" || i.status === "closed").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  // Per-request SLA visibility: overdue/daysToDue already come back from the
+  // API (routes.ts's withSla()) but were previously only ever aggregated
+  // into the page-level "Overdue" stat card -- a PIO looking at the actual
+  // register had no way to tell, request by request, which ones need
+  // action. slaLabel turns those two fields into one plain, sortable/
+  // filterable column string (DataTable's `render` column prop is client-
+  // only and this page is a Server Component, so this is computed here
+  // rather than as a custom cell renderer).
+  const rows: RowWithSla[] = items.map((item) => ({
+    ...item,
+    slaLabel:
+      item.status === "closed"
+        ? t("slaClosed")
+        : item.overdue
+          ? t("slaOverdueByDays", { days: Math.abs(item.daysToDue) })
+          : t("slaDueInDays", { days: item.daysToDue }),
+  }));
+
+  const columns: { key: keyof RowWithSla & string; label: string; cellType?: "status" }[] = [
     { key: "referenceNo", label: t("colReferenceNo") },
     { key: "applicantName", label: t("colApplicant") },
     { key: "subject", label: t("colSubject") },
     { key: "receivedDate", label: t("colReceived") },
     { key: "dueDate", label: t("colDueDate") },
+    { key: "slaLabel", label: t("colSla") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
@@ -76,9 +97,9 @@ export default async function RtiPage() {
             <RefreshErrorState error={toHumanError("load", { area: "rti" })} backHref="/hr" />
           </div>
         ) : (
-          <DataTable<Row>
+          <DataTable<RowWithSla>
           columns={columns}
-          rows={items}
+          rows={rows}
           sortable
           filterable
           filterPlaceholder={t("filterPlaceholder")}

@@ -1,11 +1,13 @@
 import { PageHeader } from "../../../../_components/ds";
+import { getTranslations } from "next-intl/server";
 
-export default function PayrollRunsLoading() {
+export default async function PayrollRunsLoading() {
+  const t = await getTranslations("payrollRuns");
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Payroll Runs"
-        subtitle="Monthly salary processing and statutory run status."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
         backLabel="Payroll"
       />

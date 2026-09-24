@@ -45,9 +45,15 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
       <div className="greeting-inner">
         <div className="greeting-text" data-testid="dashboard-greeting">
           <p className="greeting-eyebrow">HR & Payroll · People Operations</p>
-          <h1 className="greeting-title">
+          {/* h2, not h1: the page's real (sr-only) h1 is
+              #hr-dash-heading in page.tsx -- this personalized greeting is a
+              banner within the page, not the page's title, and having both
+              be <h1> gave the page two competing top-level headings.
+              className drives all visual styling, so demoting the tag is a
+              no-op for layout/appearance. */}
+          <h2 className="greeting-title">
             {dayName.startsWith("S") ? "Good day" : "Good morning"}, {userName}
-          </h1>
+          </h2>
           <p className="greeting-sub">
             {dayName}, {today} · {briefing}
           </p>

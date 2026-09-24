@@ -39,7 +39,8 @@
  *      "submitted", not "confirmed done" (see SeniorityListActions.tsx).
  */
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
@@ -48,6 +49,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 import { buildSeniority } from "./engine.js";
 import { hrmsSeniorityLists } from "./schema.js";
 
@@ -56,6 +58,52 @@ const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
 // snapshot — gated to HR admin/officer (+ super_admin), not the broader
 // read-only "manager" role that can see the live GET views above.
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
+/**
+ * SEC finding (HRMS role review, seniority/DPC reads): READER_ROLES lets a
+ * bare "manager" read the live seniority ranking / DPC-eligibility list for
+ * ANY department, tenant-wide — filter.departmentId below is entirely
+ * caller-supplied and optional, so a manager who simply omits it (or passes
+ * a department that isn't their own) gets every department's ranking, not
+ * just their own.
+ *
+ * This is a DIFFERENT scoping dimension from employee/routes.ts's
+ * resolveManagerScope (which restricts a manager to their direct reports,
+ * via hrmsEmployees.managerId, for the employee directory/detail routes):
+ * DPC seniority is inherently a departmental comparison — officers are
+ * ranked and judged eligible against their own department's peers in the
+ * same cadre, not against "people who report to this specific manager".
+ * Keyed on departmentId here for that reason, not managerId; the two
+ * helpers are intentionally not unified.
+ *
+ * Does NOT touch computeSeniority/buildSeniority (engine.ts) at all —
+ * engine.ts already accepts and correctly applies filter.departmentId; this
+ * only decides, at the route layer, WHAT departmentId value a manager-only
+ * caller is allowed to supply. engine.ts's ranking/eligibility computation
+ * itself (including the separate, deliberately-unaddressed sealed-cover-for-
+ * suspended-employees gap around its own status filter) is unrelated and
+ * unchanged.
+ *
+ * Returns:
+ *  - `requested` unchanged (string | undefined) — HR_ROLES caller: any
+ *    department, or none = every department (unrestricted, unchanged).
+ *  - a departmentId string — manager-only caller, forced onto their OWN
+ *    hrms_employees.departmentId regardless of what (if anything) they
+ *    requested.
+ *  - null — manager-only caller with NO resolvable employee link. Callers
+ *    MUST treat this as "nothing to show" (fails CLOSED), never fall
+ *    through to an unscoped query.
+ */
+async function resolveManagerDepartmentScope(
+  ctx: RequestContext,
+  req: FastifyRequest,
+  requested: string | undefined,
+): Promise<string | undefined | null> {
+  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+  if (isHrActor) return requested;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  return actorEmp ? actorEmp.departmentId : null;
+}
 
 export async function seniorityRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/seniority", async (req, reply) => {
@@ -67,8 +115,12 @@ export async function seniorityRoutes(app: FastifyInstance): Promise<void> {
       asOf: z.string().optional(),
     }).parse(req.query);
     const asOf = q.asOf ?? new Date().toISOString().slice(0, 10);
+    // Dept-scoping: a manager-only caller is always forced onto their own
+    // department, regardless of what (if anything) they requested.
+    const departmentScope = await resolveManagerDepartmentScope(ctx, req, q.departmentId);
+    if (departmentScope === null) return reply.send({ asOf, count: 0, data: [] });
     const filter: { departmentId?: string; designationId?: string } = {};
-    if (q.departmentId) filter.departmentId = q.departmentId;
+    if (departmentScope) filter.departmentId = departmentScope;
     if (q.designationId) filter.designationId = q.designationId;
     const list = await buildSeniority(ctx.tenantId, filter, asOf);
     return reply.send({ asOf, count: list.length, data: list });
@@ -84,8 +136,15 @@ export async function seniorityRoutes(app: FastifyInstance): Promise<void> {
       asOf: z.string().optional(),
     }).parse(req.query);
     const asOf = q.asOf ?? new Date().toISOString().slice(0, 10);
+    const departmentScope = await resolveManagerDepartmentScope(ctx, req, q.departmentId);
+    if (departmentScope === null) {
+      return reply.send({
+        asOf, minQualifyingYears: q.minQualifyingYears,
+        eligibleCount: 0, ineligibleCount: 0, eligible: [], ineligible: [],
+      });
+    }
     const filter: { departmentId?: string; designationId?: string } = {};
-    if (q.departmentId) filter.departmentId = q.departmentId;
+    if (departmentScope) filter.departmentId = departmentScope;
     if (q.designationId) filter.designationId = q.designationId;
     const list = await buildSeniority(ctx.tenantId, filter, asOf);
     const eligible = list.filter((r) => r.qualifyingYears >= q.minQualifyingYears)

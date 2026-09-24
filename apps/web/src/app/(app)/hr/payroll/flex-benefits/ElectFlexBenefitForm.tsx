@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -13,6 +14,7 @@ type ElectionResponse = { data: { id: string; planId: string; fy: string; totalE
 const emptyLine = (): ElectionLine => ({ component: "", amount: "" });
 
 export function ElectFlexBenefitForm() {
+  const t = useTranslations("electFlexBenefitForm");
   const router = useRouter();
   const [planId, setPlanId] = useState("");
   // Default to the current FY — matches CreateFlexPlanForm and avoids
@@ -60,9 +62,10 @@ export function ElectFlexBenefitForm() {
     setLineRowIds([nextLineRowId.current++]);
   }
 
-  const planInvalid = tone === "bad" && message === "Plan ID is required.";
-  const fyInvalid = tone === "bad" && !!message && message.startsWith("Financial year");
-  const lineGroupInvalid = tone === "bad" && !!message && message.startsWith("Each election line");
+  const [invalidField, setInvalidField] = useState<"planId" | "fy" | "lines" | null>(null);
+  const planInvalid = tone === "bad" && invalidField === "planId";
+  const fyInvalid = tone === "bad" && invalidField === "fy";
+  const lineGroupInvalid = tone === "bad" && invalidField === "lines";
 
   function isLineInvalid(l: ElectionLine): boolean {
     if (!lineGroupInvalid) return false;
@@ -81,15 +84,18 @@ export function ElectFlexBenefitForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
     if (!planId.trim()) {
       setTone("bad");
-      setMessage("Plan ID is required.");
+      setInvalidField("planId");
+      setMessage(t("planIdRequiredError"));
       planRef.current?.focus();
       return;
     }
     if (!/^\d{4}-\d{2}$/.test(fy.trim())) {
       setTone("bad");
-      setMessage("Financial year must be in YYYY-YY format, e.g. 2025-26.");
+      setInvalidField("fy");
+      setMessage(t("fyFormatError"));
       fyRef.current?.focus();
       return;
     }
@@ -99,7 +105,8 @@ export function ElectFlexBenefitForm() {
     );
     if (validLines.length === 0 || validLines.some((l) => Number.isNaN(parseFloat(l.amount)) || parseFloat(l.amount) < 0)) {
       setTone("bad");
-      setMessage("Each election line needs a component and a non-negative amount.");
+      setInvalidField("lines");
+      setMessage(t("linesRequiredError"));
       if (firstInvalidIdx >= 0) lineComponentRefs.current[firstInvalidIdx]?.focus();
       return;
     }
@@ -123,12 +130,13 @@ export function ElectFlexBenefitForm() {
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(`Election submitted: ${formatMoney(res.data.totalElectedMinor)} elected.`);
+      setInvalidField(null);
+      setMessage(t("submittedMessage", { amount: formatMoney(res.data.totalElectedMinor) }));
       setPlanId("");
       resetLines();
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -136,12 +144,12 @@ export function ElectFlexBenefitForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Elect Flex Benefit Components" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={planIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Plan ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("planIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={planIdField}
@@ -156,7 +164,7 @@ export function ElectFlexBenefitForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Financial Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={fyId}
@@ -174,7 +182,7 @@ export function ElectFlexBenefitForm() {
 
           <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
             <legend style={{ fontSize: 13, fontWeight: 600, padding: "0 4px" }}>
-              Elections <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("electionsLegend")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </legend>
             <div style={{ display: "grid", gap: 10 }}>
               {lines.map((l, idx) => {
@@ -184,7 +192,7 @@ export function ElectFlexBenefitForm() {
                 return (
                   <div key={lineKeyFor(idx)} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto", alignItems: "end" }}>
                     <div style={{ display: "grid", gap: 4 }}>
-                      <label htmlFor={compId} style={{ fontSize: 12 }}>Component</label>
+                      <label htmlFor={compId} style={{ fontSize: 12 }}>{t("componentLabel")}</label>
                       <input
                         id={compId}
                         ref={(el) => { lineComponentRefs.current[idx] = el; }}
@@ -196,7 +204,7 @@ export function ElectFlexBenefitForm() {
                       />
                     </div>
                     <div style={{ display: "grid", gap: 4 }}>
-                      <label htmlFor={amtId} style={{ fontSize: 12 }}>Elected Amount (₹)</label>
+                      <label htmlFor={amtId} style={{ fontSize: 12 }}>{t("electedAmountLabel")}</label>
                       <input
                         id={amtId}
                         type="number"
@@ -212,11 +220,11 @@ export function ElectFlexBenefitForm() {
                     <Button
                       variant="ghost"
                       style={{ minHeight: 40 }}
-                      aria-label={`Remove election line ${idx + 1}${l.component ? `: ${l.component}` : ""}`}
+                      aria-label={l.component ? t("removeLineNamedAriaLabel", { index: idx + 1, name: l.component }) : t("removeLineAriaLabel", { index: idx + 1 })}
                       onClick={() => removeLine(idx)}
                       disabled={lines.length === 1}
                     >
-                      Remove
+                      {t("removeBtn")}
                     </Button>
                   </div>
                 );
@@ -227,19 +235,19 @@ export function ElectFlexBenefitForm() {
                   style={{ minHeight: 40 }}
                   onClick={addLine}
                 >
-                  + Add line
+                  {t("addLineBtn")}
                 </Button>
               </div>
             </div>
           </fieldset>
 
           <p style={{ fontSize: 13, color: "var(--ink2)" }}>
-            Total elected: <strong>{formatMoney(totalMinor)}</strong>
+            {t.rich("totalElectedText", { amount: formatMoney(totalMinor), strong: (chunks) => <strong>{chunks}</strong> })}
           </p>
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
-              Submit Election
+              {t("submitElectionBtn")}
             </Button>
           </div>
 
@@ -259,15 +267,16 @@ export function ElectFlexBenefitForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Submit this flex benefit election?"
-        confirmLabel="Submit election"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Submit election totalling {formatMoney(totalMinor)} for plan <strong>{planId}</strong>, FY {fy}.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          amount: formatMoney(totalMinor),
+          planId,
+          fy,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void submitElection()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

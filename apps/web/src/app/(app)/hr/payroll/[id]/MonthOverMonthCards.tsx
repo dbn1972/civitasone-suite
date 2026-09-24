@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { formatRupees } from "@/lib/formatters";
 
 type Props = {
@@ -23,6 +24,7 @@ export function MonthOverMonthCards({
   currentPeriod,
   previousPeriod,
 }: Props) {
+  const t = useTranslations("monthOverMonthCards");
   const diff  = previousGross !== null ? currentGross - previousGross : null;
   const pct   = diff !== null && previousGross !== null && previousGross > 0 ? (diff / previousGross) * 100 : null;
   const isUp  = diff !== null && diff >= 0;
@@ -59,13 +61,13 @@ export function MonthOverMonthCards({
     <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 16 }}>
       {/* Current month gross */}
       <div style={cardStyle}>
-        <div style={labelStyle}>{currentPeriod} — Gross</div>
+        <div style={labelStyle}>{t("periodGrossLabel", { period: currentPeriod })}</div>
         <div style={valueStyle}>{formatRupees(currentGross)}</div>
       </div>
 
       {/* Previous month gross + MoM delta */}
       <div style={cardStyle}>
-        <div style={labelStyle}>{previousPeriod} — Gross</div>
+        <div style={labelStyle}>{t("periodGrossLabel", { period: previousPeriod })}</div>
         <div style={valueStyle}>{formatRupees(previousGross)}</div>
         {pct !== null && (
           <div
@@ -76,17 +78,17 @@ export function MonthOverMonthCards({
               color: isUp ? "var(--success,#16a34a)" : "var(--danger,#dc2626)",
             }}
           >
-            {isUp ? "↑" : "↓"} {Math.abs(pct).toFixed(1)}% vs {previousPeriod}
+            {t("vsPreviousPeriod", { arrow: isUp ? "↑" : "↓", pct: Math.abs(pct).toFixed(1), period: previousPeriod })}
           </div>
         )}
       </div>
 
       {/* Net-to-Gross ratio */}
       <div style={cardStyle}>
-        <div style={labelStyle}>Net-to-Gross Ratio</div>
+        <div style={labelStyle}>{t("netToGrossRatioLabel")}</div>
         <div style={valueStyle}>{ratio}{ratio !== "—" ? "%" : ""}</div>
         <div style={{ marginTop: 4, fontSize: 11, color: "var(--mut,#64748b)" }}>
-          Net {formatRupees(currentNet)} of Gross {formatRupees(currentGross)}
+          {t("netOfGrossSummary", { net: formatRupees(currentNet), gross: formatRupees(currentGross) })}
         </div>
       </div>
     </div>

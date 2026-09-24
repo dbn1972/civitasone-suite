@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -25,17 +27,26 @@ describe("FnfPage", () => {
     });
 
     const ui = await FnfPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
-    // "retirement" appears both as a table cell and as a select option in the compute form.
-    expect(screen.getAllByText("retirement").length).toBeGreaterThan(0);
+    // The card's own separationType text is embedded in a compound sibling
+    // text node ("e1 · retirement · 2026-07-01"), so RTL's default exact
+    // getByText can't isolate "retirement" there -- assert on it with a
+    // flexible text-content matcher instead of an exact string.
+    expect(
+      screen.getByText((_, node) => node?.textContent === "e1 · retirement · 2026-07-01"),
+    ).toBeInTheDocument();
+    // ComputeFnfForm's separation-type <select> now shows the translated,
+    // properly-cased label ("Retirement") instead of the raw internal code
+    // ("retirement") it used to render verbatim.
+    expect(screen.getByText("Retirement")).toBeInTheDocument();
   });
 
   it("renders an empty state when there are no settlements", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
     const ui = await FnfPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("No F&F settlements yet")).toBeInTheDocument();
   });
@@ -44,7 +55,7 @@ describe("FnfPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
     const ui = await FnfPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Couldn't load F&F settlements — showing nothing")).toBeInTheDocument();
   });

@@ -322,6 +322,12 @@ export function DataTable<T extends Record<string, unknown>>({
                 <tr
                   key={resolveRowKey(row, i, rowKey)}
                   className={href ? "clickable row-link" : undefined}
+                  // A <tr> keeps its native, non-interactive "row" role even
+                  // with a click handler bolted on -- assistive tech never
+                  // learns it's actionable, and it's skipped by AT quick-nav
+                  // (e.g. NVDA/JAWS "next button"). role="button" exposes the
+                  // affordance; Enter/Space activation already existed below.
+                  role={href ? "button" : undefined}
                   onClick={href ? () => router.push(href) : undefined}
                   onKeyDown={href ? (e) => onRowKeyDown(e, href) : undefined}
                   tabIndex={href ? 0 : undefined}

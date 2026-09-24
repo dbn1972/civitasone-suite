@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -25,7 +27,7 @@ describe("FlexBenefitsPage", () => {
     });
 
     const ui = await FlexBenefitsPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("FY26 Flex Plan")).toBeInTheDocument();
   });
@@ -34,7 +36,7 @@ describe("FlexBenefitsPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
     const ui = await FlexBenefitsPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("No flex benefit elections yet")).toBeInTheDocument();
   });
@@ -43,7 +45,7 @@ describe("FlexBenefitsPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
     const ui = await FlexBenefitsPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -25,7 +27,7 @@ describe("PayGroupsPage", () => {
     });
 
     const ui = await PayGroupsPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Monthly Staff")).toBeInTheDocument();
   });
@@ -34,7 +36,7 @@ describe("PayGroupsPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
     const ui = await PayGroupsPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("No pay groups yet")).toBeInTheDocument();
   });

@@ -1,5 +1,5 @@
-import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { ExplainabilityTooltip, type ExplainabilityFactor } from "./ExplainabilityTooltip";
 
 const sampleFactors: ExplainabilityFactor[] = [
@@ -104,13 +104,53 @@ describe("ExplainabilityTooltip", () => {
       expect(screen.getByRole("tooltip")).toBeInTheDocument();
     });
 
-    it("hides tooltip on mouse leave", () => {
+    it("does not hide the tooltip immediately on mouse leave", () => {
       renderTooltip();
       const trigger = screen.getByText("Trigger");
       fireEvent.mouseEnter(trigger);
       expect(screen.getByRole("tooltip")).toBeInTheDocument();
       fireEvent.mouseLeave(trigger);
+      // Still open right after mouseLeave -- see "mouseLeave grace period" below.
+      expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    });
+  });
+
+  // A bare, immediate close on mouseLeave closed the tooltip before the
+  // pointer could travel down across the gap into the popover itself -- see
+  // ExplainabilityTooltip.tsx.
+  describe("mouseLeave grace period", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("hides the tooltip once the grace period elapses without the pointer returning", () => {
+      renderTooltip();
+      const trigger = screen.getByText("Trigger");
+      fireEvent.mouseEnter(trigger);
+      fireEvent.mouseLeave(trigger);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
       expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    });
+
+    it("cancels the scheduled close if the pointer re-enters the trigger within the grace period", () => {
+      renderTooltip();
+      const trigger = screen.getByText("Trigger");
+      fireEvent.mouseEnter(trigger);
+      fireEvent.mouseLeave(trigger);
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      fireEvent.mouseEnter(trigger);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(screen.getByRole("tooltip")).toBeInTheDocument();
     });
   });
 

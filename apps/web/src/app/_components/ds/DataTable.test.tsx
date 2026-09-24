@@ -270,4 +270,21 @@ describe("DataTable", () => {
       expect(screen.getByText("Second")).toBeInTheDocument();
     });
   });
+
+  // A clickable <tr> (onClick + Enter/Space + tabIndex) still carried its
+  // native, non-interactive "row" role, so assistive tech never learned it
+  // was actionable and AT quick-nav (e.g. NVDA/JAWS "next button") skipped
+  // it entirely. Keyboard activation already worked; role="button" is the
+  // missing piece.
+  describe("clickable row semantics", () => {
+    it("gives every link-row role=button", () => {
+      render(<DataTable columns={columns} rows={rows} rowLinkKey="id" rowLinkPrefix="/orders/" />);
+      expect(screen.getAllByRole("button")).toHaveLength(rows.length);
+    });
+
+    it("does not add role=button to rows when the table has no row link", () => {
+      render(<DataTable columns={columns} rows={rows} />);
+      expect(screen.queryAllByRole("button")).toHaveLength(0);
+    });
+  });
 });

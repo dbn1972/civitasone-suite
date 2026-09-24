@@ -113,7 +113,7 @@ function toForm24Q(raw: unknown): Form24Q | null {
  * is a separate, explicit action (see ForceFileButton.tsx), not a query param
  * on this GET, so this loader has nothing to pass through for it any more.
  */
-async function getForm24Q(fy: string, quarter: Quarter): Promise<Form24QLookup> {
+async function getForm24Q(fy: string, quarter: Quarter, t: (key: string) => string): Promise<Form24QLookup> {
   const r = await statusAwareGet(
     "/v1/payroll/statutory/form24q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter,
   );
@@ -124,7 +124,7 @@ async function getForm24Q(fy: string, quarter: Quarter): Promise<Form24QLookup> 
   if (r.kind === "http_error" && r.status === 409) {
     return {
       state: "reconciliation_blocked",
-      message: "TDS deducted does not match deposited challans (TRACES reconciliation gate).",
+      message: t("reconciliationBlockedMessage"),
     };
   }
   return { state: "error" };
@@ -147,6 +147,11 @@ export default async function ReturnsPage({
   searchParams: { fy?: string; quarter?: string };
 }) {
   const t = await getTranslations("payrollReturns");
+  // TaxReturnsSummary/QuarterLookupForm are plain (non-async) components --
+  // see their own file comments -- so this page resolves their translators
+  // once, here, and passes them down as props.
+  const tSummary = await getTranslations("taxReturnsSummary");
+  const tQuarterForm = await getTranslations("quarterLookupForm");
   const { fy: defFy, quarter: defQuarter } = currentFyQuarter();
   const fy = searchParams.fy && FY_RE.test(searchParams.fy) ? searchParams.fy : defFy;
   const quarter = (QUARTERS as string[]).includes(searchParams.quarter ?? "")
@@ -154,7 +159,7 @@ export default async function ReturnsPage({
     : defQuarter;
 
   const [f24Lookup, { data: f26, source: src26 }] = await Promise.all([
-    getForm24Q(fy, quarter),
+    getForm24Q(fy, quarter, t),
     getForm26Q(fy, quarter),
   ]);
 
@@ -212,16 +217,16 @@ export default async function ReturnsPage({
         back="/hr/payroll" backLabel="Back to Payroll"
       />
 
-      <DataSourceBadge source={overallSource} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={overallSource} message={t("loadErrorMessage")} />
 
       {/* Q1-Q4 annual overview with filing dates, challan refs, TDS totals */}
       <Card title={t("annualOverviewTitle", { fy })}>
         <div className="pad">
-          <TaxReturnsSummary fy={fy} quarters={quarterSummaries} />
+          <TaxReturnsSummary fy={fy} quarters={quarterSummaries} t={tSummary} />
         </div>
       </Card>
 
-      <QuarterLookupForm defaultFy={fy} defaultQuarter={quarter} quarters={QUARTERS} />
+      <QuarterLookupForm defaultFy={fy} defaultQuarter={quarter} quarters={QUARTERS} t={tQuarterForm} />
 
       <Card title={t("form24qTitle", { fy, quarter })}>
         <div className="pad">
@@ -232,7 +237,7 @@ export default async function ReturnsPage({
             </>
           ) : f24Lookup.state === "error" ? (
             <>
-              <DataSourceBadge source="error" message="Couldn't load — showing nothing" />
+              <DataSourceBadge source="error" message={t("loadErrorMessage")} />
               <EmptyState
                 icon="⚠️"
                 title={t("form24qErrorTitle", { fy, quarter })}
@@ -289,7 +294,7 @@ iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(
         <div className="pad">
           {f26 === null ? (
             <>
-              <DataSourceBadge source="error" message="Couldn't load — showing nothing" />
+              <DataSourceBadge source="error" message={t("loadErrorMessage")} />
               <EmptyState
                 icon="⚠️"
                 title={t("form26qErrorTitle", { fy, quarter })}
@@ -300,7 +305,7 @@ iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(
             <EmptyState icon="🧾" title={t("form26qNotPopulated")} message={f26.note} />
           ) : (
             <>
-              <DataSourceBadge source={src26 === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
+              <DataSourceBadge source={src26 === "error" ? "error" : "api"} message={t("loadErrorMessage")} />
               <StatGrid>
                 <StatCard icon="👥" iconBg="var(--infobg)" label={t("statDeductees")} value={f26.deducteeCount} />
                 <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeducted")} value={formatMoney(f26.totalTdsDeductedMinor)} />

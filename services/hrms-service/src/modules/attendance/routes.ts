@@ -180,14 +180,23 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/hrms/shift-requests", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...HR_ROLES, "manager"]);
+    requireRole(ctx, [...HR_ROLES, "manager", "employee"]);
+    const q = z.object({ empId: z.string().uuid().optional() }).parse(req.query);
+    // Self-service (WAVE-4): employees may only list their own shift-change
+    // requests; HR/manager keep the full tenant queue or an empId filter.
+    // Mirrors GET /v1/hrms/overtime-requests' IDOR guard below.
+    const isHrOrManager = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+    const effectiveEmpId = isHrOrManager ? q.empId : ctx.actorId;
     // SEC-010: attendance.hrms_shift_change_requests is now FORCE RLS'd. A
     // bare db.select() runs with no app.tenant_id GUC set, which would fail
     // closed to zero rows for every tenant (see shared/db.ts's scopedRead
     // doc comment) — read inside the tenant transaction instead.
     const rows = await scopedRead((tx) =>
       tx.select().from(hrmsShiftChangeRequests)
-        .where(eq(hrmsShiftChangeRequests.tenantId, ctx.tenantId))
+        .where(and(
+          eq(hrmsShiftChangeRequests.tenantId, ctx.tenantId),
+          effectiveEmpId ? eq(hrmsShiftChangeRequests.employeeId, effectiveEmpId) : undefined,
+        ))
         .orderBy(desc(hrmsShiftChangeRequests.createdAt))
         .limit(200),
     );
@@ -208,12 +217,21 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/hrms/wfh-requests", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, [...HR_ROLES, "manager"]);
+    requireRole(ctx, [...HR_ROLES, "manager", "employee"]);
+    const q = z.object({ empId: z.string().uuid().optional() }).parse(req.query);
+    // Self-service (WAVE-4): employees may only list their own WFH requests;
+    // HR/manager keep the full tenant queue or an empId filter. Mirrors
+    // GET /v1/hrms/overtime-requests' IDOR guard below.
+    const isHrOrManager = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+    const effectiveEmpId = isHrOrManager ? q.empId : ctx.actorId;
     // SEC-010: attendance.hrms_wfh_requests is now FORCE RLS'd — same reasoning
     // as GET /v1/hrms/shift-requests above.
     const rows = await scopedRead((tx) =>
       tx.select().from(hrmsWfhRequests)
-        .where(eq(hrmsWfhRequests.tenantId, ctx.tenantId))
+        .where(and(
+          eq(hrmsWfhRequests.tenantId, ctx.tenantId),
+          effectiveEmpId ? eq(hrmsWfhRequests.employeeId, effectiveEmpId) : undefined,
+        ))
         .orderBy(desc(hrmsWfhRequests.createdAt))
         .limit(200),
     );
@@ -273,15 +291,23 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    // Synchronous pre-check (existence): the old code's conditional UPDATE
-    // WHERE id+tenantId 404'd when no row matched. Mirror that here so an
-    // invalid id gets a real 404 instead of a silently dropped async write.
+    // Synchronous pre-check (existence + status): the old code only checked
+    // existence, so a conditional UPDATE WHERE id+tenantId 404'd on an
+    // invalid id but happily re-approved/re-rejected an already-decided
+    // request -- illegal state reversal (approve an already-rejected
+    // request or vice versa) with no error at all. Mirror the
+    // regularisation approve/reject guard just above: also require
+    // status='pending' here, and let the async consumer's
+    // repo.updateOvertimeStatus apply the same guard atomically as part of
+    // the write itself (see f3-consumer.ts's attendance_routes__3).
     const existing = await scopedRead((tx) =>
-      tx.select({ id: hrmsOvertimeRequests.id }).from(hrmsOvertimeRequests)
+      tx.select({ id: hrmsOvertimeRequests.id, status: hrmsOvertimeRequests.status }).from(hrmsOvertimeRequests)
         .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
         .limit(1),
     );
-    if (!existing[0]) return reply.code(404).send({ error: "Overtime request not found" });
+    if (!existing[0] || existing[0].status !== "pending") {
+      return reply.code(404).send({ error: "Overtime request not found or already decided" });
+    }
 
     await publishF3Write(ctx, "attendance_routes__3", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "approved" }) as any;
@@ -293,15 +319,196 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     z.object({ reason: z.string().max(500).optional() }).parse(req.body);
 
-    // Synchronous pre-check (existence) — same reasoning as the approve route.
+    // Synchronous pre-check (existence + status) — same reasoning as the
+    // approve route above: a decided request (approved or rejected) must
+    // not be re-decided in the other direction.
     const existing = await scopedRead((tx) =>
-      tx.select({ id: hrmsOvertimeRequests.id }).from(hrmsOvertimeRequests)
+      tx.select({ id: hrmsOvertimeRequests.id, status: hrmsOvertimeRequests.status }).from(hrmsOvertimeRequests)
         .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
         .limit(1),
     );
-    if (!existing[0]) return reply.code(404).send({ error: "Overtime request not found" });
+    if (!existing[0] || existing[0].status !== "pending") {
+      return reply.code(404).send({ error: "Overtime request not found or already decided" });
+    }
 
     await publishF3Write(ctx, "attendance_routes__4", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "rejected" }) as any;
+  });
+
+  // ── WFH (Work From Home) requests ───────────────────────────────────────
+  // WAVE-4 gap closure: the workforce/wfh frontend page (WFHRequestForm)
+  // already POSTs to /v1/hrms/wfh-requests -- { employeeId, fromDate, toDate,
+  // reason } -- and GET /v1/hrms/wfh-requests already existed (above), but no
+  // create/approve/reject route existed at all, so every submission 404'd.
+  // Mirrors the overtime-requests create/approve/reject routes just above
+  // (same F3 async-write + 202 Accepted shape, same self-only IDOR guard on
+  // create), with two deliberate corrections rather than copying those
+  // routes' gaps forward:
+  //  1. approve/reject re-check status==='pending' (mirroring the
+  //     regularisation routes' guard further up this file), not just
+  //     existence -- overtime's approve/reject only check existence, so an
+  //     already-decided OT request can currently be silently re-decided.
+  //  2. approve/reject also reject the actor deciding their own request --
+  //     no existing precedent in this module checks that at all.
+  app.post("/v1/hrms/wfh-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "employee"]);
+    const body = z.object({
+      employeeId: z.string().uuid(),
+      fromDate:   z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      toDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      reason:     z.string().max(500).optional(),
+    }).refine((d) => d.toDate >= d.fromDate, {
+      message: "toDate must be on or after fromDate", path: ["toDate"],
+    }).parse(req.body);
+    // IDOR guard: employees may only submit WFH requests for themselves.
+    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+    if (!isHrActor && body.employeeId !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "employees may only create WFH requests for themselves");
+    }
+    const id = randomUUID();
+    await publishF3Write(ctx, "attendance_routes__5", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "pending" }) as any;
+  });
+
+  app.patch("/v1/hrms/wfh-requests/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    // Managers decide their reports' WFH requests, same as the existing GET
+    // above already lets them view the full queue -- unlike overtime, which
+    // is HR-only.
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+
+    const existing = await scopedRead((tx) =>
+      tx.select({ id: hrmsWfhRequests.id, employeeId: hrmsWfhRequests.employeeId, status: hrmsWfhRequests.status })
+        .from(hrmsWfhRequests)
+        .where(and(eq(hrmsWfhRequests.id, id), eq(hrmsWfhRequests.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existing[0]) {
+      throw new HttpError(404, "NOT_FOUND", "WFH request not found");
+    }
+    if (existing[0].employeeId === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own WFH request");
+    }
+    if (existing[0].status !== "pending") {
+      throw new HttpError(404, "NOT_FOUND", "WFH request not found or already decided");
+    }
+
+    await publishF3Write(ctx, "attendance_routes__6", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "approved" }) as any;
+  });
+
+  app.patch("/v1/hrms/wfh-requests/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    z.object({ reason: z.string().max(500).optional() }).parse(req.body ?? {});
+
+    const existing = await scopedRead((tx) =>
+      tx.select({ id: hrmsWfhRequests.id, employeeId: hrmsWfhRequests.employeeId, status: hrmsWfhRequests.status })
+        .from(hrmsWfhRequests)
+        .where(and(eq(hrmsWfhRequests.id, id), eq(hrmsWfhRequests.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existing[0]) {
+      throw new HttpError(404, "NOT_FOUND", "WFH request not found");
+    }
+    if (existing[0].employeeId === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own WFH request");
+    }
+    if (existing[0].status !== "pending") {
+      throw new HttpError(404, "NOT_FOUND", "WFH request not found or already decided");
+    }
+
+    await publishF3Write(ctx, "attendance_routes__7", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "rejected" }) as any;
+  });
+
+  // ── Shift-change requests ────────────────────────────────────────────────
+  // WAVE-4 gap closure: GET /v1/hrms/shift-requests already existed (above)
+  // and the shift-requests frontend page already describes a "submit ->
+  // supervisor approves" maker-checker workflow, but as of this fix that page
+  // is READ-ONLY (a list + stat cards, no submit form and no approve/reject
+  // controls anywhere in apps/web) -- there is no frontend fetch call to
+  // confirm a create contract against. The body shape below is inferred from
+  // the fields the existing GET route already returns (currentShift,
+  // requestedShift, effectiveDate, reason -- see above), since those are the
+  // only concretely-established field names for this entity. See this PR's
+  // description: the frontend still needs its own create form + an
+  // approve/reject action added to actually reach these routes.
+  app.post("/v1/hrms/shift-requests", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "employee"]);
+    const body = z.object({
+      employeeId:     z.string().uuid(),
+      currentShift:   z.string().min(1).max(120),
+      requestedShift: z.string().min(1).max(120),
+      effectiveDate:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+      reason:         z.string().max(500).optional(),
+    }).parse(req.body);
+    // IDOR guard: employees may only submit shift-change requests for
+    // themselves.
+    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+    if (!isHrActor && body.employeeId !== ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "employees may only create shift-change requests for themselves");
+    }
+    const id = randomUUID();
+    await publishF3Write(ctx, "attendance_routes__8", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "pending" }) as any;
+  });
+
+  app.patch("/v1/hrms/shift-requests/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    // Managers decide their reports' shift-change requests, same as the
+    // existing GET above already lets them view the full queue -- unlike
+    // overtime, which is HR-only.
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+
+    const existing = await scopedRead((tx) =>
+      tx.select({ id: hrmsShiftChangeRequests.id, employeeId: hrmsShiftChangeRequests.employeeId, status: hrmsShiftChangeRequests.status })
+        .from(hrmsShiftChangeRequests)
+        .where(and(eq(hrmsShiftChangeRequests.id, id), eq(hrmsShiftChangeRequests.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existing[0]) {
+      throw new HttpError(404, "NOT_FOUND", "shift-change request not found");
+    }
+    if (existing[0].employeeId === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own shift-change request");
+    }
+    if (existing[0].status !== "pending") {
+      throw new HttpError(404, "NOT_FOUND", "shift-change request not found or already decided");
+    }
+
+    await publishF3Write(ctx, "attendance_routes__9", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return reply.code(202).send({ id, status: "approved" }) as any;
+  });
+
+  app.patch("/v1/hrms/shift-requests/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    z.object({ reason: z.string().max(500).optional() }).parse(req.body ?? {});
+
+    const existing = await scopedRead((tx) =>
+      tx.select({ id: hrmsShiftChangeRequests.id, employeeId: hrmsShiftChangeRequests.employeeId, status: hrmsShiftChangeRequests.status })
+        .from(hrmsShiftChangeRequests)
+        .where(and(eq(hrmsShiftChangeRequests.id, id), eq(hrmsShiftChangeRequests.tenantId, ctx.tenantId)))
+        .limit(1),
+    );
+    if (!existing[0]) {
+      throw new HttpError(404, "NOT_FOUND", "shift-change request not found");
+    }
+    if (existing[0].employeeId === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own shift-change request");
+    }
+    if (existing[0].status !== "pending") {
+      throw new HttpError(404, "NOT_FOUND", "shift-change request not found or already decided");
+    }
+
+    await publishF3Write(ctx, "attendance_routes__10", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "rejected" }) as any;
   });
 

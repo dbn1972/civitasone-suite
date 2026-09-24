@@ -49,10 +49,45 @@ describe("Tabs", () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
-  it("each tab has role=tab and tabIndex=0 for accessibility", () => {
+  it("each tab has role=tab", () => {
     render(<Tabs tabs={tabs} active="All" onChange={vi.fn()} />);
-    const el = screen.getByText("Pending");
-    expect(el).toHaveAttribute("role", "tab");
-    expect(el).toHaveAttribute("tabindex", "0");
+    expect(screen.getByText("Pending")).toHaveAttribute("role", "tab");
+  });
+
+  // Roving tabindex: only the active tab sits in the page Tab order, per the
+  // WAI-ARIA tabs pattern -- arrow keys (below) move focus among the rest.
+  it("only the active tab has tabIndex=0; the others have tabIndex=-1", () => {
+    render(<Tabs tabs={tabs} active="All" onChange={vi.fn()} />);
+    expect(screen.getByText("All")).toHaveAttribute("tabindex", "0");
+    expect(screen.getByText("Pending")).toHaveAttribute("tabindex", "-1");
+    expect(screen.getByText("Approved")).toHaveAttribute("tabindex", "-1");
+  });
+
+  it("ArrowRight moves to and activates the next tab, wrapping past the last", () => {
+    const onChange = vi.fn();
+    render(<Tabs tabs={tabs} active="Approved" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByText("Approved"), { key: "ArrowRight" });
+    expect(onChange).toHaveBeenCalledWith("All");
+  });
+
+  it("ArrowLeft moves to and activates the previous tab, wrapping before the first", () => {
+    const onChange = vi.fn();
+    render(<Tabs tabs={tabs} active="All" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByText("All"), { key: "ArrowLeft" });
+    expect(onChange).toHaveBeenCalledWith("Approved");
+  });
+
+  it("Home moves focus and activation to the first tab", () => {
+    const onChange = vi.fn();
+    render(<Tabs tabs={tabs} active="Approved" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByText("Approved"), { key: "Home" });
+    expect(onChange).toHaveBeenCalledWith("All");
+  });
+
+  it("End moves focus and activation to the last tab", () => {
+    const onChange = vi.fn();
+    render(<Tabs tabs={tabs} active="All" onChange={onChange} />);
+    fireEvent.keyDown(screen.getByText("All"), { key: "End" });
+    expect(onChange).toHaveBeenCalledWith("Approved");
   });
 });

@@ -3,6 +3,8 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import * as employeeRepo from "../employee/repo.js";
 import * as repo from "./repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -13,6 +15,25 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    // Dept-scoping (DIFFERENT finding from the sealed-cover/suspended-
+    // eligibility gap in seniority/engine.ts -- this only restricts WHICH
+    // employee id a manager-only caller may look up, not any ranking or
+    // eligibility computation). HR roles are unrestricted, unchanged; a
+    // manager-only caller may only read service-book entries for an
+    // employee in their OWN department -- otherwise this let a manager
+    // pull up any employee's full service-book by id enumeration, tenant-
+    // wide, same shape of gap as employee/routes.ts's resolveManagerScope
+    // and medical/routes.ts's resolveSelfScopedEmployeeId already closed
+    // elsewhere.
+    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+    if (!isHrActor) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+      if (!actorEmp) throw new HttpError(403, "NO_EMPLOYEE_LINK", "no linked employee record for this actor");
+      const target = await employeeRepo.findById(id, ctx.tenantId);
+      if (!target || target.departmentId !== actorEmp.departmentId) {
+        throw new HttpError(403, "FORBIDDEN", "manager access is scoped to their own department");
+      }
+    }
     const rows = await repo.listServiceBookEntries(ctx.tenantId, id);
     return reply.send({ data: rows });
   });

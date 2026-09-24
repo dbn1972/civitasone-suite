@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -8,6 +10,17 @@ vi.mock("next/navigation", () => ({
 
 import { CreateCostingRuleForm } from "./CreateCostingRuleForm";
 
+// UX-017: CreateCostingRuleForm now reads its copy through next-intl
+// (useTranslations("createCostingRuleForm")), so every render needs a real
+// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <CreateCostingRuleForm />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("CreateCostingRuleForm", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -15,7 +28,7 @@ describe("CreateCostingRuleForm", () => {
   });
 
   it("requires employee group and cost center before opening the confirm dialog", () => {
-    render(<CreateCostingRuleForm />);
+    renderForm();
     fireEvent.click(screen.getByText("Save Rule"));
     expect(screen.getByText("Employee group and cost center are required.")).toBeInTheDocument();
   });
@@ -25,7 +38,7 @@ describe("CreateCostingRuleForm", () => {
       new Response(JSON.stringify({ data: { id: "cr-1", employeeGroup: "Group A", costCenterId: "cc-1", splitPct: 100 } }), { status: 201 }),
     );
 
-    render(<CreateCostingRuleForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/Employee Group/), { target: { value: "Group A" } });
     fireEvent.change(screen.getByLabelText(/Cost Center ID/), { target: { value: "11111111-1111-1111-1111-111111111111" } });
     fireEvent.click(screen.getByText("Save Rule"));
@@ -42,7 +55,7 @@ describe("CreateCostingRuleForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<CreateCostingRuleForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/Employee Group/), { target: { value: "Group A" } });
     fireEvent.change(screen.getByLabelText(/Cost Center ID/), { target: { value: "11111111-1111-1111-1111-111111111111" } });
     fireEvent.click(screen.getByText("Save Rule"));

@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -8,6 +10,17 @@ vi.mock("next/navigation", () => ({
 
 import { CreateDdoForm } from "./CreateDdoForm";
 
+// UX-017: CreateDdoForm now reads its copy through next-intl
+// (useTranslations("createDdoForm")), so every render needs a real
+// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <CreateDdoForm />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("CreateDdoForm", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -15,7 +28,7 @@ describe("CreateDdoForm", () => {
   });
 
   it("requires DDO code and name before opening the confirm dialog", () => {
-    render(<CreateDdoForm />);
+    renderForm();
     fireEvent.click(screen.getByText("Save DDO"));
     expect(screen.getByText("DDO code and name are required.")).toBeInTheDocument();
   });
@@ -25,7 +38,7 @@ describe("CreateDdoForm", () => {
       new Response(JSON.stringify({ ddoCode: "DDO02", name: "New DDO", departmentIds: [] }), { status: 201 }),
     );
 
-    render(<CreateDdoForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/DDO Code/), { target: { value: "DDO02" } });
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "New DDO" } });
     fireEvent.click(screen.getByText("Save DDO"));
@@ -42,7 +55,7 @@ describe("CreateDdoForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<CreateDdoForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/DDO Code/), { target: { value: "DDO03" } });
     fireEvent.change(screen.getByLabelText(/^Name/), { target: { value: "Another DDO" } });
     fireEvent.click(screen.getByText("Save DDO"));
