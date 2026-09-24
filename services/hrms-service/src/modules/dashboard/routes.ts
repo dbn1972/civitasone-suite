@@ -20,7 +20,15 @@ const PendingLeaveInboxItemSchema = z.object({
   daysApplied: z.number(),
   status: z.string(),
 });
-const PendingLeaveInboxSchema = z.object({ data: z.array(PendingLeaveInboxItemSchema) });
+// `routingFailed` is additive/optional on purpose: it's a NEW sibling array
+// (leave applications whose workflow instance came back rejected — see
+// leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber), not something
+// existing callers of this endpoint know to send, so a `.default([])`
+// keeps this schema backward compatible.
+const PendingLeaveInboxSchema = z.object({
+  data: z.array(PendingLeaveInboxItemSchema),
+  routingFailed: z.array(PendingLeaveInboxItemSchema).default([]),
+});
 
 export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/dashboard", async (req, reply) => {
@@ -32,8 +40,11 @@ export async function dashboardRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/dashboard/pending-leaves", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const items = await queries.getPendingLeaveInbox(ctx.tenantId);
-    sendValidated(reply, PendingLeaveInboxSchema, { data: items });
+    const [items, routingFailed] = await Promise.all([
+      queries.getPendingLeaveInbox(ctx.tenantId),
+      queries.getRoutingFailedLeaveInbox(ctx.tenantId),
+    ]);
+    sendValidated(reply, PendingLeaveInboxSchema, { data: items, routingFailed });
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -26,6 +26,11 @@ const STATUS_STYLE: Record<string, { bg: string; color: string }> = {
   approved:  { bg: "var(--goodbg)", color: "var(--good)" },
   rejected:  { bg: "var(--badbg)", color: "var(--bad)" },
   cancelled: { bg: "var(--bg, #f8fafc)", color: "var(--mut, #64748b)" },
+  // Deliberately distinct from `rejected` -- this is a system/routing
+  // failure (no workflow.tasks row was ever created for it), not a human
+  // decision. Reusing the "rejected" look would read as "someone said no",
+  // which is misleading and less actionable than "this needs attention".
+  routing_failed: { bg: "var(--badbg)", color: "var(--bad)" },
 };
 
 function fmt(d: string) {
@@ -65,6 +70,7 @@ export default function LeaveHistoryClient({ roles, myEmployeeId }: Props) {
     approved: t("chipApproved"),
     rejected: t("chipRejected"),
     cancelled: t("chipCancelled"),
+    routing_failed: t("chipRoutingFailed"),
   };
 
   useEffect(() => {
@@ -142,6 +148,7 @@ export default function LeaveHistoryClient({ roles, myEmployeeId }: Props) {
   const approved  = apps.filter((a) => a.status === "approved").length;
   const pending   = apps.filter((a) => a.status === "pending").length;
   const rejected  = apps.filter((a) => a.status === "rejected").length;
+  const routingFailed = apps.filter((a) => a.status === "routing_failed").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -157,6 +164,9 @@ export default function LeaveHistoryClient({ roles, myEmployeeId }: Props) {
         <StatCard icon="✅"       iconBg="var(--goodbg)" label={t("statApproved")}           value={approved} />
         <StatCard icon="⏳"       iconBg="var(--warnbg)" label={t("statPending")}            value={pending} />
         <StatCard icon="❌"       iconBg="var(--badbg)" label={t("statRejected")}           value={rejected} />
+        {routingFailed > 0 && (
+          <StatCard icon="⚠️" iconBg="var(--badbg)" label={t("statRoutingFailed")} value={routingFailed} />
+        )}
       </StatGrid>
 
       {/* Employee picker: visible only to admin/manager roles */}
@@ -261,6 +271,11 @@ export default function LeaveHistoryClient({ roles, myEmployeeId }: Props) {
                           <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 11, fontWeight: 600, background: style.bg, color: style.color }}>
                             {label}
                           </span>
+                          {app.status === "routing_failed" && (
+                            <div role="alert" style={{ marginTop: 4, fontSize: 11, color: "var(--bad)", maxWidth: 220 }}>
+                              {t("routingFailedExplanation")}
+                            </div>
+                          )}
                         </td>
                         <td style={{ padding: "10px 14px" }}>
                           {isCancellable(app.status) && (

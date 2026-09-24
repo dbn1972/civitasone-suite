@@ -13,12 +13,13 @@ export async function getDashboard(tenantId: string): Promise<{
   payrollDue: number;
   departmentBreakdown: { name: string; count: number }[];
   employeeTypeBreakdown: { name: string; count: number }[];
+  routingFailedCount: number;
 }> {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
-  const { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows, employeeTypeRows } =
+  const { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows, employeeTypeRows, routingFailedRow } =
     await db.transaction(async (tx) => {
       const [headcountRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -90,7 +91,22 @@ export async function getDashboard(tenantId: string): Promise<{
         ))
         .groupBy(hrmsEmployees.employeeType);
 
-      return { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows, employeeTypeRows };
+      // Leave applications whose workflow instance was rejected (see
+      // leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber) --
+      // requests that were never actually routed to anyone and so will
+      // never surface via the pendingLeaves count above. Counted
+      // separately (not folded into pendingLeaves) so HR sees it as its
+      // own distinct, actionable signal rather than an inflated "pending"
+      // number with no obvious next step.
+      const [routingFailedRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hrmsLeaveApps)
+        .where(and(
+          eq(hrmsLeaveApps.tenantId, tenantId),
+          eq(hrmsLeaveApps.status, "routing_failed"),
+        ));
+
+      return { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows, employeeTypeRows, routingFailedRow };
     });
 
   const headcount = headcountRow?.count ?? 0;
@@ -116,10 +132,11 @@ export async function getDashboard(tenantId: string): Promise<{
     payrollDue: 0,
     departmentBreakdown,
     employeeTypeBreakdown: employeeTypeRows.map((r) => ({ name: r.name, count: r.count })),
+    routingFailedCount: routingFailedRow?.count ?? 0,
   };
 }
 
-export async function getPendingLeaveInbox(tenantId: string): Promise<{
+type LeaveInboxRow = {
   id: string;
   employeeName: string;
   employeeNo: string;
@@ -130,7 +147,28 @@ export async function getPendingLeaveInbox(tenantId: string): Promise<{
   toDate: string;
   daysApplied: number;
   status: string;
-}[]> {
+};
+
+function mapLeaveInboxRow(r: {
+  id: string; employeeName: string; employeeNo: string; departmentName: string;
+  leaveTypeName: string | null; leaveTypeCode: string | null;
+  fromDate: unknown; toDate: unknown; daysApplied: number; status: string;
+}): LeaveInboxRow {
+  return {
+    id: r.id,
+    employeeName: r.employeeName,
+    employeeNo: r.employeeNo,
+    departmentName: r.departmentName,
+    leaveTypeName: r.leaveTypeName ?? "Leave",
+    leaveTypeCode: r.leaveTypeCode ?? "LV",
+    fromDate: typeof r.fromDate === "string" ? r.fromDate : String(r.fromDate),
+    toDate: typeof r.toDate === "string" ? r.toDate : String(r.toDate),
+    daysApplied: r.daysApplied,
+    status: r.status,
+  };
+}
+
+export async function getPendingLeaveInbox(tenantId: string): Promise<LeaveInboxRow[]> {
   const rows = await db.transaction(async (tx) =>
     tx
       .select({
@@ -157,16 +195,46 @@ export async function getPendingLeaveInbox(tenantId: string): Promise<{
       .limit(10)
   );
 
-  return rows.map((r) => ({
-    id: r.id,
-    employeeName: r.employeeName,
-    employeeNo: r.employeeNo,
-    departmentName: r.departmentName,
-    leaveTypeName: r.leaveTypeName ?? "Leave",
-    leaveTypeCode: r.leaveTypeCode ?? "LV",
-    fromDate: typeof r.fromDate === "string" ? r.fromDate : String(r.fromDate),
-    toDate: typeof r.toDate === "string" ? r.toDate : String(r.toDate),
-    daysApplied: r.daysApplied,
-    status: r.status,
-  }));
+  return rows.map(mapLeaveInboxRow);
+}
+
+/**
+ * Leave applications stuck in "routing_failed" (see leave/consumer.ts's
+ * WORKFLOW_INSTANCE_REJECTED subscriber) -- an HR-facing signal, surfaced
+ * alongside the pending-leave inbox on the dashboard, for requests that
+ * will never appear via the normal approvals queue because no
+ * workflow.tasks row was ever created for them. Same shape/joins as
+ * getPendingLeaveInbox above, just a different status filter -- kept as a
+ * separate query rather than a shared query-builder helper, since Drizzle's
+ * chained builder type does not abstract cleanly across a function
+ * boundary without fighting its generics.
+ */
+export async function getRoutingFailedLeaveInbox(tenantId: string): Promise<LeaveInboxRow[]> {
+  const rows = await db.transaction(async (tx) =>
+    tx
+      .select({
+        id: hrmsLeaveApps.id,
+        employeeName: hrmsEmployees.fullName,
+        employeeNo: hrmsEmployees.employeeNo,
+        departmentName: hrmsDepartments.name,
+        leaveTypeName: hrmsLeaveTypes.name,
+        leaveTypeCode: hrmsLeaveTypes.code,
+        fromDate: hrmsLeaveApps.fromDate,
+        toDate: hrmsLeaveApps.toDate,
+        daysApplied: hrmsLeaveApps.daysApplied,
+        status: hrmsLeaveApps.status,
+      })
+      .from(hrmsLeaveApps)
+      .innerJoin(hrmsEmployees, eq(hrmsLeaveApps.employeeId, hrmsEmployees.id))
+      .innerJoin(hrmsDepartments, eq(hrmsEmployees.departmentId, hrmsDepartments.id))
+      .innerJoin(hrmsLeaveTypes, eq(hrmsLeaveApps.leaveTypeId, hrmsLeaveTypes.id))
+      .where(and(
+        eq(hrmsLeaveApps.tenantId, tenantId),
+        eq(hrmsLeaveApps.status, "routing_failed"),
+      ))
+      .orderBy(hrmsLeaveApps.createdAt)
+      .limit(10)
+  );
+
+  return rows.map(mapLeaveInboxRow);
 }

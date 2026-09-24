@@ -679,6 +679,14 @@ export const HRDashboardSchema = z.object({
   payrollDue: z.number().default(0),
   departmentBreakdown: z.array(z.object({ name: z.string(), count: z.number() })).default([]),
   employeeTypeBreakdown: z.array(z.object({ name: z.string(), count: z.number() })).default([]),
+  // Count of this tenant's leave applications stuck in "routing_failed" —
+  // their workflow.instance.create request came back rejected (e.g. a
+  // missing workflow.definitions row for "leave_approval") and so were
+  // never routed to anyone for approval. Zero for tenants unaffected;
+  // `.default(0)` keeps every pre-existing caller/fixture that doesn't know
+  // about this field (e.g. HR_DASHBOARD_EMPTY / DASH_OK in page.test.tsx)
+  // parsing exactly as before.
+  routingFailedCount: z.number().default(0),
 });
 
 export const AttendanceSummaryItemSchema = z.object({
@@ -716,7 +724,14 @@ export const LeaveRequestDetailSchema = z.object({
   days: z.number(),
   reason: z.string().optional(),
   approver: z.string().optional(),
-  status: z.enum(["pending", "approved", "rejected", "cancelled"]),
+  // routing_failed: see hrms-service leave/domain.ts's transition map and
+  // leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber — a request
+  // whose workflow instance was rejected (e.g. the tenant has no active
+  // "leave_approval" workflow.definitions row) so it was never actually
+  // routed to anyone for approval. Added here, not just in application
+  // code, because sendValidated() throws on an unrecognized enum member —
+  // without this, a single such row 400s this endpoint's ENTIRE response.
+  status: z.enum(["pending", "approved", "rejected", "cancelled", "routing_failed"]),
   appliedAt: z.string(),
 });
 export const LeaveRequestDetailListSchema = z.array(LeaveRequestDetailSchema);
