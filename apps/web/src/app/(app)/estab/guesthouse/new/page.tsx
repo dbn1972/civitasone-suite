@@ -95,7 +95,7 @@ export default function NewGuesthouseBookingPage() {
   };
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="New Guest House Booking"
         subtitle="Reserve a room for a guest. The booking enters the register pending approval."
@@ -283,6 +283,6 @@ export default function NewGuesthouseBookingPage() {
           </div>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

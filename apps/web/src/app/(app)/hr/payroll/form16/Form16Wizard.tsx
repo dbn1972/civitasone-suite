@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
 
@@ -19,11 +19,10 @@ const DEDUCTION_LABEL_KEYS: Record<DeductionSection, string> = {
   "10HRA": "deductionHra",
 };
 
-function StepBar({ step, t }: { step: number; t: ReturnType<typeof useTranslations> }) {
-  const STEPS = [t("stepSelectFy"), t("stepReviewDeductions"), t("stepGenerateDownload")];
+function StepBar({ step, steps, ariaLabel }: { step: number; steps: string[]; ariaLabel: string }) {
   return (
-    <nav aria-label={t("stepAriaLabel")} style={{ display: "flex", marginBottom: 28 }}>
-      {STEPS.map((label, i) => {
+    <nav aria-label={ariaLabel} style={{ display: "flex", marginBottom: 28 }}>
+      {steps.map((label, i) => {
         const done = i < step;
         const active = i === step;
         return (
@@ -45,7 +44,7 @@ function StepBar({ step, t }: { step: number; t: ReturnType<typeof useTranslatio
                 {label}
               </span>
             </div>
-            {i < STEPS.length - 1 && (
+            {i < steps.length - 1 && (
               <div style={{ flex: 1, height: 2, background: done ? "var(--good, #27ae60)" : "var(--line2)", margin: "0 6px", marginBottom: 20 }} />
             )}
           </div>
@@ -107,6 +106,31 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
   const fyId = useId();
   const empId = useId();
 
+  const STEP_NAMES = useMemo(
+    () => [t("stepSelectFy"), t("stepReviewDeductions"), t("stepGenerateDownload")],
+    [t],
+  );
+
+  // Focus management + step-change announcement (WCAG 2.4.3 / 4.1.3): moving
+  // between steps today re-renders in place with nothing to tell a keyboard
+  // or screen-reader user the step actually changed. On every step change
+  // (not the initial mount — that would steal focus from normal page load)
+  // move focus to the new step's panel and announce it via a polite live
+  // region, a standard low-risk wizard pattern.
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const isFirstRender = useRef(true);
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    panelRef.current?.focus();
+    setAnnouncement(
+      t("stepProgress", { current: step + 1, total: STEP_NAMES.length, name: STEP_NAMES[step] ?? "" }),
+    );
+  }, [step, t, STEP_NAMES]);
+
   async function generateForm16() {
     setBusy(true);
     setError(undefined);
@@ -135,11 +159,16 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
 
   return (
     <div style={{ padding: "20px 24px" }}>
-      <StepBar step={step} t={t} />
+      <StepBar step={step} steps={STEP_NAMES} ariaLabel={t("stepAriaLabel")} />
+      {/* Announces "Step 2 of 3: Review Deductions" etc. whenever `step`
+          changes — sighted keyboard users get the same cue visually via
+          StepBar's aria-current="step" circle, but that's silent to a
+          screen reader unless something explicitly speaks the change. */}
+      <div aria-live="polite" className="sr-only">{announcement}</div>
 
       {/* Step 0 — Select FY */}
       {step === 0 && (
-        <div style={{ display: "grid", gap: 16 }}>
+        <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[0] ?? ""} style={{ display: "grid", gap: 16 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, maxWidth: 500 }}>
             <div>
               <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>{t("financialYearLabel")}</label>
@@ -161,7 +190,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
 
       {/* Step 1 — Review deductions + TDS reconciliation */}
       {step === 1 && (
-        <div style={{ display: "grid", gap: 22 }}>
+        <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[1] ?? ""} style={{ display: "grid", gap: 22 }}>
           <div>
             <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{t("deductionFiguresHeading", { fy })}</h3>
             <div style={{ display: "grid", gap: 8, maxWidth: 540 }}>
@@ -201,7 +230,7 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
 
       {/* Step 2 — Download */}
       {step === 2 && (
-        <div style={{ display: "grid", gap: 16 }}>
+        <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[2] ?? ""} style={{ display: "grid", gap: 16 }}>
           <div style={{ background: "var(--goodbg, #e6f7f0)", borderRadius: 12, padding: "28px", textAlign: "center" }}>
             <p style={{ fontSize: 36, margin: "0 0 10px" }}>✅</p>
             <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{t("generationStartedTitle")}</p>

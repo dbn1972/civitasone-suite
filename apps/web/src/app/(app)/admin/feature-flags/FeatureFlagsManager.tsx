@@ -117,7 +117,7 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Feature Flags" subtitle="Platform feature toggles with gradual rollout controls and kill switch." back="/admin" />
       <DataSourceBadge source={source} />
       {error && (
@@ -237,6 +237,6 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

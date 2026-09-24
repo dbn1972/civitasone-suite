@@ -17,7 +17,7 @@ export default async function ExecutionPage() {
   const openIssues = issues.filter((i) => i.status === "open").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside ExecutionTable,
           driven by the same useSeededResource calls that produce its rows —
           not a second, independent read of `source` here that could
@@ -48,6 +48,6 @@ export default async function ExecutionPage() {
       <Card title="Execution Progress">
         <ExecutionTable progress={progress} issues={issues} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

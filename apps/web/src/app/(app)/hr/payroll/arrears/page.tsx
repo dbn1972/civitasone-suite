@@ -100,7 +100,7 @@ export default async function ArrearsPage() {
   const totalArrearsMinor = items.reduce((sum, i) => sum + Number(i.difference_minor ?? 0), 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
@@ -118,6 +118,6 @@ export default async function ArrearsPage() {
           <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📋" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

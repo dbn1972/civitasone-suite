@@ -457,10 +457,11 @@ export default function BrandingPage() {
     // A bespoke split-screen editor (live preview on the right), not a list/detail
     // page, so it deliberately doesn't use the shared PageHeader chrome (back link
     // + "How this works") which is built for the page-main/wrap layout and would
-    // eat into the fixed-height editor panel. It still gets the same real,
-    // properly-landmarked heading every other page has: a <main> with
-    // aria-labelledby pointing at an id'd <h1> (UX-007).
-    <main className="flex h-screen" aria-labelledby="page-heading">
+    // eat into the fixed-height editor panel. It still gets the same id'd <h1> +
+    // aria-labelledby every other page has (UX-007) — on a <div> here rather than
+    // a <main>, since AppShell already supplies the page's one true <main> landmark
+    // and a second one would violate the one-main-per-document rule (a11y HIGH-1).
+    <div className="flex h-screen" aria-labelledby="page-heading">
       {/* Left: Editor Panel */}
       <div className="w-[420px] border-e overflow-y-auto p-6 space-y-6 bg-white">
         <div>
@@ -672,6 +673,6 @@ export default function BrandingPage() {
           <LivePreview config={config} />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -117,7 +117,7 @@ export default async function AaDetailPage({
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={aa.aaNumber ?? `AA ${params.id.slice(0, 8)}…`}
         subtitle="Administrative Approval"
@@ -180,6 +180,6 @@ export default async function AaDetailPage({
         </Link>
         <ApprovalFinalizeButton id={aa.id} type="aa" status={aa.status} />
       </div>
-    </main>
+    </div>
   );
 }

@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 export default function PolicyEvaluatePage() {
   return (
-    <main className="page-main wrap" aria-label="Policy evaluate">
+    <div className="page-main wrap" aria-label="Policy evaluate">
       <PageHeader
         title="Evaluate Permission"
         subtitle="Run a decision against /api/v1/policy/evaluate (RBAC + ABAC)."
@@ -14,6 +14,6 @@ export default function PolicyEvaluatePage() {
       <Card title="Decision request" padding>
         <EvaluateForm />
       </Card>
-    </main>
+    </div>
   );
 }

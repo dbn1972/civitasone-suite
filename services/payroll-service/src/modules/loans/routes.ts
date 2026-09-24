@@ -81,7 +81,16 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     let balance = principal;
     for (let i = 1; i <= tenure; i++) {
       const interest = monthlyRate > 0 ? Math.round(balance * monthlyRate) : 0;
-      const principalPart = Math.min(emiMinor - interest, balance);
+      // LOW (payroll-calc audit): clamp to >= 0, matching the real deduction
+      // engine's own guard (consumer.ts processPayrollRun's loan loop: `if
+      // (principal < 0n) principal = 0n;`). Without this, an EMI smaller than
+      // the interest due (emiMinor - interest < 0) made principalPart
+      // negative, which then made `balance - principalPart` ADD to the
+      // balance instead of reducing it — a nonsensical growing outstanding
+      // for what is only a preview endpoint (the real deduction engine
+      // already collects the full interest and simply recovers zero
+      // principal that period, leaving the balance flat, not growing).
+      const principalPart = Math.max(0, Math.min(emiMinor - interest, balance));
       const closing = Math.max(0, balance - principalPart);
       schedule.push({
         installmentNo: i,

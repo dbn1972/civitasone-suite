@@ -10,9 +10,9 @@ export default function PayrollLoading() {
         back="/hr"
         backLabel="HR"
       />
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <SkeletonTable rows={6} />
-      </main>
+      </div>
     </>
   );
 }

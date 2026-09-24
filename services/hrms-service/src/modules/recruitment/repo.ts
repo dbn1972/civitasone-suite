@@ -1,8 +1,20 @@
-import { eq, and, inArray, sql, desc, ne } from "drizzle-orm";
+import { eq, and, inArray, notInArray, sql, desc, ne, gt } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, type ApplicationRow, type JobOpeningRow, type InterviewRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
+
+/**
+ * Recruitment hardening: stages/statuses beyond which an application can no
+ * longer be (re-)offered -- already offered, already hired, or in a terminal
+ * status (withdrawn/rejected/joined). Exported so routes.ts's PATCH
+ * .../offer handler can run the identical synchronous pre-check (fast 409)
+ * that claimApplicationForOffer below enforces atomically.
+ */
+// Plain (not readonly) string[]: drizzle's notInArray()/inArray() overloads
+// want a mutable (string | Placeholder)[] and reject a readonly array.
+export const NOT_OFFERABLE_STAGES: string[] = ["offered", "hired"];
+export const NOT_OFFERABLE_STATUSES: string[] = ["withdrawn", "rejected", "joined"];
 
 export async function findApplicationById(id: string, tenantId: string): Promise<ApplicationRow | null> {
   const rows = await scopedRead((tx) => tx.select().from(hrmsApplications)
@@ -45,13 +57,75 @@ export async function updateApplication(tx: Writer, id: string, patch: Partial<t
  */
 export async function claimApplicationForHire(tx: Writer, id: string, tenantId: string): Promise<boolean> {
   const result = await tx.update(hrmsApplications)
-    .set({ stage: "hired", status: "closed", updatedAt: new Date() })
+    // Recruitment hardening: this used to write status: "closed", which is
+    // NOT a member of hrms_applications_status_check (active, shortlisted,
+    // rejected, offered, joined, withdrawn -- see migration
+    // 0035_check_constraints_status_columns.sql, VALIDATEd so it's enforced
+    // on every write) -- confirmed live against the dev DB. Every real hire
+    // through this path would have thrown a check-constraint violation.
+    // "joined" is the enum's actual terminal "hired" value; nothing else in
+    // the codebase reads hrms_applications.status === "closed" (verified).
+    .set({ stage: "hired", status: "joined", updatedAt: new Date() })
     .where(and(
       eq(hrmsApplications.id, id),
       eq(hrmsApplications.tenantId, tenantId),
       ne(hrmsApplications.stage, "hired"),
     ))
     .returning({ id: hrmsApplications.id });
+  return result.length > 0;
+}
+
+/**
+ * Recruitment hardening (Bug 1): atomically claim an application for the
+ * offer step. Mirrors claimApplicationForHire's WHERE-guard pattern (itself
+ * mirroring leave/repo.ts's approveLeaveApp H2 guard): only succeeds when the
+ * application is genuinely offer-eligible right now -- not already offered
+ * or hired, and not withdrawn/rejected/joined (NOT_OFFERABLE_STAGES /
+ * NOT_OFFERABLE_STATUSES above). routes.ts's PATCH .../offer handler runs
+ * the same check synchronously first for fast HTTP feedback, but only this
+ * atomic UPDATE closes the race between that read and this consumer actually
+ * processing the command (e.g. two concurrent offer attempts, or a withdraw
+ * landing in between).
+ */
+export async function claimApplicationForOffer(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const result = await tx.update(hrmsApplications)
+    .set({ stage: "offered", updatedAt: new Date() })
+    .where(and(
+      eq(hrmsApplications.id, id),
+      eq(hrmsApplications.tenantId, tenantId),
+      notInArray(hrmsApplications.stage, NOT_OFFERABLE_STAGES),
+      notInArray(hrmsApplications.status, NOT_OFFERABLE_STATUSES),
+    ))
+    .returning({ id: hrmsApplications.id });
+  return result.length > 0;
+}
+
+/**
+ * Recruitment hardening (Bug 3): atomically claim one vacancy on a job
+ * opening as part of a hire. Mirrors leave/repo.ts's debitLeaveBalance -- a
+ * single guarded UPDATE ... WHERE vacancies > 0, so two concurrent hire
+ * attempts for the same job opening's LAST vacancy can never both succeed:
+ * Postgres row-locks the first UPDATE until it commits or rolls back, and
+ * the second then sees the already-decremented value, so its own
+ * `vacancies > 0` guard fails (0 rows affected) rather than racing past it.
+ * When this decrements vacancies to 0, the job opening's status flips to
+ * "filled" in the SAME statement (see migration
+ * 0035_check_constraints_status_columns.sql for the valid status enum:
+ * open/closed/cancelled/filled).
+ */
+export async function claimVacancy(tx: Writer, jobOpeningId: string, tenantId: string): Promise<boolean> {
+  const result = await tx.update(hrmsJobOpenings)
+    .set({
+      vacancies: sql`${hrmsJobOpenings.vacancies} - 1`,
+      status: sql`CASE WHEN ${hrmsJobOpenings.vacancies} - 1 <= 0 THEN 'filled' ELSE ${hrmsJobOpenings.status} END`,
+      updatedAt: new Date(),
+    })
+    .where(and(
+      eq(hrmsJobOpenings.id, jobOpeningId),
+      eq(hrmsJobOpenings.tenantId, tenantId),
+      gt(hrmsJobOpenings.vacancies, 0),
+    ))
+    .returning({ id: hrmsJobOpenings.id });
   return result.length > 0;
 }
 

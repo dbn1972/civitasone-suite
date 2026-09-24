@@ -110,7 +110,7 @@ export default function TelephonyCallsPage() {
       <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", minHeight: 16 }}>
         {cacheNote ?? (loading ? "Loading calls…" : "")}
       </p>
-      <main aria-label="Call log">
+      <div aria-label="Call log">
         <StatGrid>
           <StatCard icon="📞" iconBg="#eef2ff" label="Total Calls" value={calls.length.toLocaleString("en-IN")} />
           <StatCard icon="🟢" iconBg="#ecfdf5" label="Live (queued/ringing)" value={live.toLocaleString("en-IN")} />
@@ -129,7 +129,7 @@ export default function TelephonyCallsPage() {
             pageSize={15}
           />
         </div>
-      </main>
+      </div>
     </>
   );
 }

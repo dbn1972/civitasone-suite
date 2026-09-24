@@ -37,7 +37,7 @@ export default async function EditEmployeePage({
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
@@ -45,6 +45,6 @@ export default async function EditEmployeePage({
         backLabel={employee.name}
       />
       <EditEmployeeForm employee={employee} />
-    </main>
+    </div>
   );
 }

@@ -1,15 +1,17 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getAppraisals } from "../../../_data/loaders";
 import type { AppraisalSummary } from "@civitasone/types";
 import { AppraisalCycleProgress } from "./_components/AppraisalCycleProgress";
 import { APARRatingDistribution } from "./_components/APARRatingDistribution";
 import { getTranslations } from "next-intl/server";
+import { toHumanError } from "@/lib/messages";
 
 export default async function AppraisalsPage() {
   const t = await getTranslations("appraisals");
   const { data: appraisals, source } = await getAppraisals();
+  const errored = source === "error";
 
   const total = appraisals.length;
   const pending = appraisals.filter((a) => a.status === "pending").length;
@@ -26,7 +28,7 @@ export default async function AppraisalsPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -34,9 +36,15 @@ export default async function AppraisalsPage() {
           <Link href="/hr/appraisals/new" className="btn primary">{t("newAppraisal")}</Link>
         }
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
 
-      {total === 0 ? (
+      {errored ? (
+        <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "appraisals" })} backHref="/hr" />
+          </div>
+        </div>
+      ) : total === 0 ? (
         <div className="rounded-xl border border-slate-200 bg-white shadow-sm">
           <EmptyState
             icon="📊"
@@ -79,6 +87,6 @@ export default async function AppraisalsPage() {
           </Card>
         </>
       )}
-    </main>
+    </div>
   );
 }

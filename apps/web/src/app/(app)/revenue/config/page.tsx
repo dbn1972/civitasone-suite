@@ -81,7 +81,7 @@ export default async function RateConfigPage({
   const activeHeads = rateHeads.filter((rh) => rh.isActive).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Rate Configuration"
         subtitle="Configure rate heads, rate slabs, penalty (interest) rules, and rebate rules for the municipal rate engine."
@@ -108,6 +108,6 @@ export default async function RateConfigPage({
           rebateRulesSource={rebateResult.source}
         />
       </Card>
-    </main>
+    </div>
   );
 }

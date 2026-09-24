@@ -11,7 +11,7 @@ export default async function MetadataRecordsPage() {
   const resource = useResource(result);
   const errored = resource.status === "error";
   return (
-    <main className="page-main wrap" aria-label="Metadata records">
+    <div className="page-main wrap" aria-label="Metadata records">
       <PageHeader
         title="Records"
         subtitle="Wired to /api/v1/metadata/entities (select entity to drill into records)."
@@ -28,6 +28,6 @@ export default async function MetadataRecordsPage() {
           <pre className="text-xs overflow-auto p-3">{JSON.stringify(data.slice(0, 50), null, 2)}</pre>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

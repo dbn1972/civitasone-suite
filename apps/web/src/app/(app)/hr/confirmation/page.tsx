@@ -39,7 +39,7 @@ export default async function ConfirmationPage() {
   const timely   = Math.max(0, items.length - overdue - dueSoon);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -66,6 +66,6 @@ export default async function ConfirmationPage() {
           </div>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

@@ -11,7 +11,7 @@ export default async function PlansPage() {
   const currentPlan = plansData.plans.find((p) => p.id === plansData.currentPlanId);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside PlansClient, driven by
           the same useSeededResource call that produces its data — not a
           second, independent read of `source` here that could disagree
@@ -26,6 +26,6 @@ export default async function PlansPage() {
       </StatGrid>
 
       <PlansClient plansData={plansData} source={source} />
-    </main>
+    </div>
   );
 }

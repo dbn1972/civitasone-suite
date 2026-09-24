@@ -98,7 +98,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
   const totalUsed     = totalEntitlement - totalBalance;
 
   return (
-    <main className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
+    <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -217,6 +217,6 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
           </Card>
         )
       )}
-    </main>
+    </div>
   );
 }

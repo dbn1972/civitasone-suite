@@ -13,7 +13,7 @@ export default async function AdminUsersPage() {
   const mfaEnabled = users.filter((u) => u.mfaEnabled).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* fix/tenant-admin-and-establishment-nav (Bug A): this page used to
           render THREE stacked "go up" affordances — the global AutoBreadcrumb
           (from AppShell, every page gets this automatically), a second,
@@ -42,6 +42,6 @@ export default async function AdminUsersPage() {
           second, independent read of `source` here that could disagree
           with the table's own cache state (UX-002's pattern). */}
       <UsersTable users={users} source={source} />
-    </main>
+    </div>
   );
 }

@@ -16,7 +16,7 @@ export default async function TaxConfigPage() {
     const t = await getTranslations("payrollTaxConfig");
     const fy = getCurrentFY();
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
 
         <div className="grid g-2">
@@ -78,13 +78,13 @@ export default async function TaxConfigPage() {
         <p style={{ marginTop: 16, color: "var(--mut)", fontSize: 13 }}>
           {t("footerNote", { fy })}
         </p>
-      </main>
+      </div>
     );
   } catch {
     return (
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <RefreshErrorState error={toHumanError("load", { area: "tax configuration" })} backHref="/hr/payroll" />
-      </main>
+      </div>
     );
   }
 }

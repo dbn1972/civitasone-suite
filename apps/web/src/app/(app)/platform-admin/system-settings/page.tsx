@@ -4,7 +4,7 @@ import { SystemSettingsPage } from "./SystemSettingsPage";
 
 export default function SystemSettingsRoute() {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "System Settings" }]} />
       <PageHeader
         back="/platform-admin"
@@ -18,6 +18,6 @@ export default function SystemSettingsRoute() {
         <StatCard icon="🔗" iconBg="#fffaeb" label="Integrations" value="3 connected" />
       </div>
       <SystemSettingsPage />
-    </main>
+    </div>
   );
 }

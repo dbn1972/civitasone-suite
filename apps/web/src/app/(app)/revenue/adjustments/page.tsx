@@ -99,7 +99,7 @@ export default async function AdjustmentsPage({
   const overallSource = assesseesSource === "error" || demandsResult.source === "error" ? "error" : "api";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Adjustments"
         subtitle="Move an outstanding balance from one demand to another for the same assessee."
@@ -162,6 +162,6 @@ export default async function AdjustmentsPage({
           Adjustments apply immediately and have no maker-checker decide step.
         </p>
       </Card>
-    </main>
+    </div>
   );
 }

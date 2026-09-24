@@ -1,10 +1,11 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { PeriodSelector } from "./PeriodSelector";
 import { IngestChallanForm } from "./IngestChallanForm";
+import { toHumanError } from "@/lib/messages";
 
 type ChallanRow = {
   cin: string;
@@ -85,7 +86,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -110,7 +111,12 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
       <IngestChallanForm period={period} />
 
       <Card title={t("historyCardTitle", { period })}>
-        <DataTable<ChallanRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "TDS challans" })} backHref="/hr/payroll/statutory" />
+          </div>
+        ) : (
+          <DataTable<ChallanRow>
           columns={columns}
           rows={challans}
           sortable
@@ -121,7 +127,8 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
-    </main>
+    </div>
   );
 }

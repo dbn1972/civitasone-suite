@@ -202,6 +202,11 @@ describe("hireApplicationBody — hire validation", () => {
     expect(hireApplicationBody.safeParse({ ...valid, basicMinor: -1 }).success).toBe(false);
   });
 
+  // Recruitment hardening: basicMinor was nonnegative() (₹0 allowed through).
+  it("rejects a zero basicMinor (a real hire needs a genuinely positive basic pay)", () => {
+    expect(hireApplicationBody.safeParse({ ...valid, basicMinor: 0 }).success).toBe(false);
+  });
+
   it("rejects non-UUID departmentId/designationId", () => {
     expect(hireApplicationBody.safeParse({ ...valid, departmentId: "bad" }).success).toBe(false);
     expect(hireApplicationBody.safeParse({ ...valid, designationId: "bad" }).success).toBe(false);

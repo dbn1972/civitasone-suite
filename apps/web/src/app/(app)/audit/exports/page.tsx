@@ -12,7 +12,7 @@ export default async function AuditExportsPage() {
   const rows = items as ExportRow[];
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
@@ -39,6 +39,6 @@ export default async function AuditExportsPage() {
           <div style={{ fontSize: "12.5px", color: "#475467" }}>Exports are cryptographically signed (HMAC) with a 7-year retention lock (WORM). Use "Verify integrity" to re-validate an artifact against its stored signature.</div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

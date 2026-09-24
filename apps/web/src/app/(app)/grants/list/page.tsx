@@ -20,7 +20,7 @@ export default async function GrantsListPage() {
           by the same useSeededResource call that produces its rows — not a
           second, independent read of `source` here that could disagree with
           the table's own cache state (UX-002's pattern). */}
-      <main aria-label="Grants list">
+      <div aria-label="Grants list">
         <StatGrid>
           <StatCard icon="🎁" iconBg="#dcfce7" label="Total" value={grants.length} />
           <StatCard icon="✅" iconBg="#f0fdf4" label="Active" value={active} />
@@ -30,7 +30,7 @@ export default async function GrantsListPage() {
         <Card title="Grants List">
           <GrantsTable grants={grants} source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

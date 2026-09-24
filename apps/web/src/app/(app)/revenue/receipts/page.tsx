@@ -173,7 +173,7 @@ export default async function ReceiptsPage({
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Collection Receipts"
         subtitle="Record tax collection receipts against demands and review an assessee's receipt history."
@@ -250,6 +250,6 @@ export default async function ReceiptsPage({
           </Card>
         </>
       )}
-    </main>
+    </div>
   );
 }

@@ -25,9 +25,9 @@ const procurementTiles: NavTile[] = [
 export default async function Page() {
 	const t = await getTranslations("procurement");
 	return (
-		<main className="page-main" aria-labelledby="page-heading">
+		<div className="page-main" aria-labelledby="page-heading">
 			<PageHeader title={t("title")} subtitle="Requisitions, vendors, purchase orders, and tenders with approval controls." help="procurement" />
 			<LinkTiles tiles={procurementTiles} columns="four" />
-		</main>
+		</div>
 	);
 }

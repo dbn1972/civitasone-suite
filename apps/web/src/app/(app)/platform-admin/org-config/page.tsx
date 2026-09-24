@@ -17,7 +17,7 @@ import { OrgConfigPage } from "./OrgConfigPage";
 export default async function OrgConfigRoute() {
   const { data: levels, source } = await getOrgHierarchyLevels();
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Org Configuration" }]} />
       <PageHeader
         back="/platform-admin"
@@ -31,6 +31,6 @@ export default async function OrgConfigRoute() {
         <StatCard icon="✏️" iconBg="#fffaeb" label="Editable" value="Name + Order" />
       </div>
       <OrgConfigPage initialLevels={levels} source={source} />
-    </main>
+    </div>
   );
 }

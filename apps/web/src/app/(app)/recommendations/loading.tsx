@@ -1,6 +1,6 @@
 export default function RecommendationsLoading() {
   return (
-    <main
+    <div
       className="min-h-screen bg-slate-50 p-6 md:p-8"
       style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }}
     >
@@ -20,6 +20,6 @@ export default function RecommendationsLoading() {
         </div>
         <div className="h-96 w-full rounded-xl bg-gray-200" style={{ animation: "pulse 2s infinite" }} />
       </div>
-    </main>
+    </div>
   );
 }

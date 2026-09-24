@@ -2,8 +2,9 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { TrainingProgramSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated } from "@civitasone/schemas/validate";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { ZodError, z } from "zod";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { createTrainingBody, createNominationBody, completeNominationBody, myNominationsQuery } from "./validators.js";
 import * as commands from "./commands.js";
@@ -13,9 +14,53 @@ import { and, eq, inArray } from "drizzle-orm";
 import { hrmsTrainings } from "./schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
+
+/**
+ * IDOR fix (audit): GET /v1/hrms/nominations took a client-supplied
+ * employeeId with no check against the caller's identity, despite the
+ * comment below claiming "an employee's own nominations" -- and
+ * hrms_nominations.employeeId is an hrms_employees.id (schema.ts), NOT
+ * ctx.actorId (a different id space -- see employee/actor-link.ts). A bare
+ * "employee" caller is forced onto their OWN linked hrms_employees record
+ * (resolveEmployeeForActor: userRef + email-fallback) regardless of what
+ * they requested. HR and manager roles pass the requested id through
+ * unchanged -- this module has no existing "manager scoped to direct
+ * reports" precedent of its own, the same judgment call
+ * medical/routes.ts's resolveSelfScopedEmployeeId documents. Returns null
+ * when a bare-employee caller has no resolvable employee link -- callers
+ * MUST treat that as "nothing to show" (fails CLOSED).
+ */
+async function resolveOwnEmployeeIdIfBareEmployee(
+  ctx: RequestContext, req: FastifyRequest, requested: string,
+): Promise<string | null> {
+  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+  if (isPrivileged) return requested;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  return actorEmp ? actorEmp.id : null;
+}
+
+/**
+ * Write-side self-scoping for POST /v1/hrms/nominations (audit): any non-HR
+ * caller (employee OR manager) can only create a nomination record for
+ * THEMSELVES, regardless of the employeeId they submit -- unlike the read
+ * above, a manager submitting an arbitrary colleague's id here would
+ * fabricate a training-nomination record under someone else's identity, so
+ * this is scoped to non-HR rather than bare-employee-only. HR remains
+ * unrestricted (nominating on behalf of anyone is the intended HR
+ * workflow). Returns null when a non-HR caller has no resolvable employee
+ * link -- callers MUST reject the write rather than falling through.
+ */
+async function resolveOwnEmployeeIdIfNonHr(
+  ctx: RequestContext, req: FastifyRequest, requested: string,
+): Promise<string | null> {
+  if (HR_ROLES.some((r) => ctx.roles.includes(r))) return requested;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  return actorEmp ? actorEmp.id : null;
+}
 
 export async function trainingRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/training-programs", async (req, reply) => {
@@ -38,14 +83,20 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = myNominationsQuery.parse(req.query);
-    return reply.send(await queries.listMyNominations(ctx.tenantId, q.employeeId, q.limit));
+    const employeeId = await resolveOwnEmployeeIdIfBareEmployee(ctx, req, q.employeeId);
+    if (employeeId === null) return reply.send([]);
+    return reply.send(await queries.listMyNominations(ctx.tenantId, employeeId, q.limit));
   });
 
   app.post("/v1/hrms/nominations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = createNominationBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createNomination(ctx, body));
+    const employeeId = await resolveOwnEmployeeIdIfNonHr(ctx, req, body.employeeId);
+    if (employeeId === null) {
+      throw new HttpError(403, "NO_EMPLOYEE_LINK", "no linked employee record for this actor");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createNomination(ctx, { ...body, employeeId }));
   });
 
   // LMS completion: record completion + feed the service book / competency record.

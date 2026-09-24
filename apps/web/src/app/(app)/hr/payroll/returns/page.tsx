@@ -205,7 +205,7 @@ export default async function ReturnsPage({
   });
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -337,6 +337,6 @@ iconBg={f26.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #f
           )}
         </div>
       </Card>
-    </main>
+    </div>
   );
 }

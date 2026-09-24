@@ -21,7 +21,7 @@ export default async function InventoryGoodsReturnsPage() {
         subtitle="Returned or rejected stock from issues, gated by QC inspection before restock or scrap."
       />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory goods returns">
+      <div aria-label="Inventory goods returns">
         <StatGrid>
           <StatCard icon="↩️" iconBg="#fee2e2" label="Returns" value={returns.length} />
           <StatCard icon="🔎" iconBg="#fef3c7" label="Pending QC" value={pendingQc} />
@@ -30,7 +30,7 @@ export default async function InventoryGoodsReturnsPage() {
         <Card title="Goods Returns">
           <GoodsReturnsTable returns={returns} source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

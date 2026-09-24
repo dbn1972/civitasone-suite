@@ -67,7 +67,7 @@ export default async function PayrollRegisterPage({
   const totalNetMinor = items.reduce((sum, r) => sum + Number(r.total_net_minor ?? 0), 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -130,6 +130,6 @@ export default async function PayrollRegisterPage({
         />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

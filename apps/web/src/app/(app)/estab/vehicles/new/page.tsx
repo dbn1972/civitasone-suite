@@ -88,7 +88,7 @@ export default function NewVehiclePage() {
   };
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Add Vehicle"
         subtitle="Register a vehicle for fleet operations (allocation, logbook, fuel)."
@@ -235,6 +235,6 @@ export default function NewVehiclePage() {
           </div>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

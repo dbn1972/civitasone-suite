@@ -19,7 +19,7 @@ export default async function TenantAdminPage() {
   const errored = source === "error";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin" }]} />
       <PageHeader
         title="Tenant Administration"
@@ -102,6 +102,6 @@ export default async function TenantAdminPage() {
           </a>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

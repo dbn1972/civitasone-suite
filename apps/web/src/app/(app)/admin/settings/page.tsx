@@ -411,7 +411,7 @@ export default function AdminSystemSettingsPage() {
   const [activeTab, setActiveTab] = useState<Tab>("General");
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="System Settings"
         subtitle="Platform-wide configuration — General, Email, Security, and Integrations."
@@ -439,6 +439,6 @@ export default function AdminSystemSettingsPage() {
         {activeTab === "Integrations" && <IntegrationsSection />}
         {activeTab === "Tenant Config" && <TenantConfigSection />}
       </div>
-    </main>
+    </div>
   );
 }

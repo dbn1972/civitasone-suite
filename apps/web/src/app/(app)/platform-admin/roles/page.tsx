@@ -22,7 +22,7 @@ export default async function PlatformAdminRolesPage() {
   const source = rolesSource === "error" || permsSource === "error" ? "error" : "api";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Roles & Permissions" }]} />
       <PageHeader
         back="/platform-admin"
@@ -34,6 +34,6 @@ export default async function PlatformAdminRolesPage() {
         <StatCard icon="🛡️" iconBg="#fffaeb" label="SoD constraints" value="Active" />
       </div>
       <RolePermissionsMatrix roles={roles} permissions={permissions} source={source} />
-    </main>
+    </div>
   );
 }

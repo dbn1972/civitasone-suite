@@ -35,9 +35,9 @@ export default async function PlatformConfigPage() {
 
   if (!config) {
     return (
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <PageHeader title="Platform Configuration" subtitle="Could not load configuration. Try refreshing." />
-      </main>
+      </div>
     );
   }
 
@@ -45,7 +45,7 @@ export default async function PlatformConfigPage() {
   const debugActive = ctrl.debugModeUntil && new Date(ctrl.debugModeUntil) > new Date();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Platform Configuration"
         subtitle="Tunable parameters and read-only infrastructure view for platform operators."
@@ -198,6 +198,6 @@ export default async function PlatformConfigPage() {
           </table>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

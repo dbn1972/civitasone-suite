@@ -45,7 +45,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function SessionDetailPage({ params }: { params: { id: string } }) {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Sessions", href: "/tenant-admin/sessions" }, { label: `Session ${params.id}` }]} />
       <PageHeader
         back="/tenant-admin/sessions"
@@ -84,6 +84,6 @@ export default function SessionDetailPage({ params }: { params: { id: string } }
       <Card title="User Agent" padding>
         <p className="mono" style={{ fontSize: 12, margin: 0, wordBreak: "break-all" }}>{session.userAgent}</p>
       </Card>
-    </main>
+    </div>
   );
 }

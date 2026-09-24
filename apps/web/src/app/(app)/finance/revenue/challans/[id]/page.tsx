@@ -17,19 +17,19 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
 
   if (!challan) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Challan Detail" back="/finance/revenue/challans" />
         <EmptyState
           icon="🧾"
           title="Challan detail not available"
           message="This challan may not exist, or challan detail lookup isn't available yet. Check the challan register for the current list."
         />
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Challan ${challan.challanNo}`}
         subtitle={challan.depositor}
@@ -56,6 +56,6 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
           <div className="field"><span className="label">Status</span><StatusPill status={challan.status} /></div>
         </div>
       </Card>
-    </main>
+    </div>
   );
 }

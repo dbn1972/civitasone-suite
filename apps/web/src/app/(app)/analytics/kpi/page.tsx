@@ -18,7 +18,7 @@ export default async function KpiPage() {
   const improving = errored ? null : rows.filter((r) => r.trend.includes("↑") || r.trend.includes("+")).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="KPI Library" subtitle="Organisation-wide Key Performance Indicators with targets and trends." back="/analytics" />
       <StatGrid>
         <StatCard icon="🎯" iconBg="#eef2ff" label="Total KPIs" value={total ?? "—"} />
@@ -37,6 +37,6 @@ export default async function KpiPage() {
           <KpiTable rows={rows} source={source === "error" ? "error" : "api"} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

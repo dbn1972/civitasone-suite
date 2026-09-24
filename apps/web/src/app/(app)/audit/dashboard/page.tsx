@@ -16,7 +16,7 @@ export default async function AuditDashboardPage() {
   const { data, source } = await getAuditDashboard();
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <span aria-current="page">Audit Dashboard</span>
       </nav>
@@ -43,6 +43,6 @@ export default async function AuditDashboardPage() {
           </nav>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

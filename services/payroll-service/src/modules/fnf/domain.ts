@@ -18,7 +18,7 @@ import {
   type RetrenchmentExemptionResult,
   type VrsExemptionResult,
 } from "../tax/exemptions.js";
-import { computeTax, stdDeduction, type Regime } from "../tax/engine.js";
+import { computeTax, stdDeduction, roundTenRupeesMinor, type Regime } from "../tax/engine.js";
 import { DEFAULT_STATUTORY_CONFIG, type StatutoryConfig } from "../payroll/domain.js";
 
 export interface FnfInput {
@@ -196,7 +196,13 @@ export function computeFnfSettlement(input: FnfInput): FnfResult {
   if (annualTaxableMinor < 0n) annualTaxableMinor = 0n;
 
   // Step 6: Compute annual tax (convert paise to rupees for the engine, then back)
-  const taxableRupees = Math.round(Math.max(0, Number(annualTaxableMinor) / 100) / 10) * 10; // Sec 288A rounding
+  // LOW (payroll-calc audit): Sec 288A rounding is now bigint-paise-first via
+  // tax/engine.ts's own roundTenRupeesMinor, matching DOM-014's rule for the
+  // rest of the codebase ("no slab/surcharge/cess amount is ever produced by
+  // float multiplication" — tax/engine.ts's file-level comment), instead of
+  // float division/Math.round on a Number-converted paise value. annualTaxableMinor
+  // is already clamped to >= 0n above, so no separate Math.max(0, ...) is needed.
+  const taxableRupees = Number(roundTenRupeesMinor(annualTaxableMinor) / 100n); // Sec 288A rounding
   const taxResult = computeTax(taxableRupees, input.taxRegime, input.fyStartYear, input.tenantId);
   const annualTaxMinor = BigInt(taxResult.totalTax) * 100n;
 

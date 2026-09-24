@@ -302,6 +302,13 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/id-cards — list all cards (HR admin view) */
   app.get("/v1/hrms/id-cards", async (req, reply) => {
     const ctx = resolveContext(req);
+    // SEC finding: unlike every other handler in this file (issue, suspend,
+    // revoke, reactivate), this route called resolveContext and went
+    // straight to the query with no requireRole at all -- any authenticated
+    // user of any role got the full org-wide card list, including holder
+    // photo URL, card number, department, and access_zones (physical areas
+    // the badge unlocks). Same role list as every sibling handler below.
+    requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const { type, status, search } = req.query as { type?: string; status?: string; search?: string };
 
     let where = "WHERE tenant_id = $1";
@@ -375,6 +382,14 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/id-cards/verify — verify a card by scanning QR code */
   app.post("/v1/hrms/id-cards/verify", async (req, reply) => {
     const ctx = resolveContext(req);
+    // SEC finding: no requireRole at all -- any authenticated user of any
+    // role could call this. This writes an audit-attributed verification-log
+    // row and bumps the card's verification stats (see below), and this
+    // codebase has no dedicated "security guard" / checkpoint role separate
+    // from security_admin (checked: no such role appears anywhere else in
+    // this repo) -- so this gets the same role list as every other handler
+    // in this file rather than inventing a role with no other precedent.
+    requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
     const body = verifySchema.parse(req.body);
 
     const { cardId, hmac: scannedHmac, formatValid } = parseQrPayload(body.qrPayload);

@@ -25,7 +25,7 @@ export default async function LibraryIssuesPage({
   const issuableBooks = books.filter((b) => b.copiesAvailable > 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Library Issues &amp; Loans"
         subtitle="Issue books to staff and record returns."
@@ -60,6 +60,6 @@ export default async function LibraryIssuesPage({
           <IssuesTable rows={issues} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

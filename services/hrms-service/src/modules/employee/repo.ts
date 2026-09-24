@@ -2,7 +2,7 @@ import { eq, and, sql } from "drizzle-orm";
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
-import { hrmsEmployees, type EmployeeRow, type EmployeeInsert } from "./schema.js";
+import { hrmsEmployees, hrmsDepartments, hrmsDesignations, type EmployeeRow, type EmployeeInsert } from "./schema.js";
 
 const log = pino({ name: "employee-repo" });
 
@@ -84,8 +84,67 @@ export async function insertEmployee(tx: Writer, row: EmployeeInsert): Promise<v
   await tx.insert(hrmsEmployees).values(row);
 }
 
+/**
+ * Recruitment hardening: existence checks the hire consumer runs before
+ * insertEmployee so an unknown departmentId/designationId fails fast with a
+ * clear error instead of a raw FK-violation crash. Tx-scoped (called from
+ * inside the hire consumer's already-open transaction) -- see findByIdTx's
+ * doc comment above for why a scopedRead-based variant can't be used there.
+ */
+export async function departmentExistsTx(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: hrmsDepartments.id }).from(hrmsDepartments)
+    .where(and(eq(hrmsDepartments.id, id), eq(hrmsDepartments.tenantId, tenantId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
+export async function designationExistsTx(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: hrmsDesignations.id }).from(hrmsDesignations)
+    .where(and(eq(hrmsDesignations.id, id), eq(hrmsDesignations.tenantId, tenantId)))
+    .limit(1);
+  return rows.length > 0;
+}
+
 export async function updateEmployee(tx: Writer, id: string, patch: Partial<EmployeeInsert>): Promise<void> {
   await tx.update(hrmsEmployees).set({ ...patch, updatedAt: new Date() }).where(eq(hrmsEmployees.id, id));
+}
+
+/**
+ * Status-guarded employee write (SEC: hrms status-integrity fix — e.g.
+ * employeeConfirm). Mirrors updateEmployeeVersioned's WHERE-precondition
+ * pattern below, but keyed on `status` instead of `version`: the UPDATE's
+ * WHERE clause re-checks status = expectedStatus atomically WITH the write,
+ * so a concurrent status-changing writer (e.g. a separate/terminate command
+ * landing in the window between the caller's own precondition read and this
+ * write) can never be silently clobbered. hrms_employees has no automatic
+ * version bump on every write — only basicMinor writes opt into that via
+ * updateEmployeeVersioned below — so for a status transition, a plain
+ * read-then-blind-write is not actually race-safe on its own; this closes
+ * that gap by enforcing the precondition as part of the single UPDATE
+ * statement rather than as a separate round-trip.
+ *
+ * Returns false (does not throw) when the WHERE clause matched zero rows —
+ * either the row doesn't exist, or (assuming the caller already confirmed
+ * existence via a fresh read earlier in the same transaction) status no
+ * longer equals expectedStatus. Callers should treat false as a conflict.
+ */
+export async function updateEmployeeIfStatus(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  expectedStatus: string,
+  patch: Partial<EmployeeInsert>,
+): Promise<boolean> {
+  const res = await tx.update(hrmsEmployees)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(and(
+      eq(hrmsEmployees.id, id),
+      eq(hrmsEmployees.tenantId, tenantId),
+      eq(hrmsEmployees.status, expectedStatus),
+    ));
+  const rowCount = (res as { rowCount?: number; count?: number }).rowCount
+    ?? (res as { count?: number }).count ?? 0;
+  return rowCount > 0;
 }
 
 /**

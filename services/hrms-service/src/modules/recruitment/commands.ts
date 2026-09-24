@@ -17,12 +17,21 @@ export async function createJobOpening(ctx: RequestContext, body: CreateJobOpeni
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function createApplication(ctx: RequestContext, body: CreateApplicationBody): Promise<Accepted> {
+/**
+ * dedupKey: Bug 2 hardening. Derived by the caller (routes.ts, which has the
+ * job opening's advertised eligibility criteria in hand) and threaded
+ * through the command payload so the applicationCreate consumer can set it
+ * on insert -- see recruitment/repo.ts's NOT_OFFERABLE_* comment block
+ * neighbours and eligibility-routes.ts for the original (correct) pattern
+ * this mirrors. null means "don't dedupe" (vacancy allows multiple
+ * applications, or no email to key on).
+ */
+export async function createApplication(ctx: RequestContext, body: CreateApplicationBody, dedupKey: string | null): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.applicationCreate, {
     messageId: id, type: COMMANDS.applicationCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { id, tenantId: ctx.tenantId, ...body, dedupKey },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -73,7 +82,7 @@ import type { PublicApplicationBody } from "./validators.js";
  * Public application — submitted by an external candidate without authentication.
  * The tenant is resolved from the vacancy, not from the session. Source = "public_portal".
  */
-export async function createPublicApplication(tenantId: string, body: PublicApplicationBody): Promise<{ id: string; status: string }> {
+export async function createPublicApplication(tenantId: string, body: PublicApplicationBody, dedupKey: string | null): Promise<{ id: string; status: string }> {
   const id = randomUUID();
   // Public applications use a system actor UUID (the actorId column is uuid type).
   const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
@@ -96,6 +105,8 @@ export async function createPublicApplication(tenantId: string, body: PublicAppl
       itiCertNo: body.itiCertNo ?? null,
       availabilityHoursPerWeek: body.availabilityHoursPerWeek ?? null,
       stipendExpectedMinor: body.stipendExpectedMinor ?? null,
+      // Bug 2 hardening — see createApplication's dedupKey doc comment above.
+      dedupKey,
     },
   });
   return { id, status: "received" };

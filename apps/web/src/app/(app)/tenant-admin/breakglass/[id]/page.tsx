@@ -47,7 +47,7 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function BreakglassDetailPage({ params }: { params: { id: string } }) {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Break-Glass", href: "/tenant-admin/breakglass" }, { label: `Event ${params.id}` }]} />
       <PageHeader
         back="/tenant-admin/breakglass"
@@ -99,6 +99,6 @@ export default function BreakglassDetailPage({ params }: { params: { id: string 
           ))}
         </ol>
       </Card>
-    </main>
+    </div>
   );
 }

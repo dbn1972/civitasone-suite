@@ -20,7 +20,7 @@ export default async function AiInsightsPage() {
       : 0;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="AI Insights" subtitle="Machine learning generated insights and recommended actions across modules." back="/analytics" />
       <StatGrid>
         <StatCard icon="🤖" iconBg="#eef2ff" label="Total Insights" value={total ?? "—"} />
@@ -39,6 +39,6 @@ export default async function AiInsightsPage() {
           <AiInsightsTable rows={rows} source={source === "error" ? "error" : "api"} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

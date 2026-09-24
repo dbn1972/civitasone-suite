@@ -28,6 +28,21 @@
  *  - Family pension = 30% of last Basic (normal); enhanced rate = 50% of last
  *    Basic for the first 7 years from death or up to age 67, whichever earlier.
  *  - NPS / EPF: no defined-benefit pension from this engine.
+ *
+ * NOTE (payroll-calc audit, LOW): unlike payroll-service's tax/engine.ts and
+ * payroll/domain.ts (bigint-paise-first: rates as integer basis points,
+ * roundRupeeMinor/roundTenRupeesMinor, no `Math.round(x * floatRate)`), this
+ * whole engine computes in `Number` (paise-as-float) via toPaise() below and
+ * only converts to bigint paise at the very end of each calculation. There is
+ * no realistic precision-loss risk at pension/DCRG magnitudes (well under
+ * Number.MAX_SAFE_INTEGER), so this is a style/consistency gap, not a
+ * correctness bug — left as-is rather than as a "small, contained" fix:
+ * several of this file's multipliers are inherently fractional
+ * (COMMUTATION_FACTORS like 9.075/8.287, DCRG_EMOLUMENT_CAP_MULTIPLE=16.5,
+ * DCRG_HALF_YEAR_FACTOR=0.25), so converting the whole engine to integer
+ * basis points would touch every computed field here and is a real refactor,
+ * not a one-line fix. Worth aligning to the bigint-first pattern in a
+ * dedicated pass if this module is touched again.
  */
 
 export const MAX_QUALIFYING_HALF_YEARS = 66; // 33 years (DCRG cap only)

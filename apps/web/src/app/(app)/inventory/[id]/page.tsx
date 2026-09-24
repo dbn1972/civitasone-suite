@@ -36,10 +36,10 @@ export default async function StockItemDetailPage({
 
   if (!item) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Item not found" back="/inventory/list" />
         <p className="sub">The requested stock item could not be found.</p>
-      </main>
+      </div>
     );
   }
 
@@ -52,7 +52,7 @@ export default async function StockItemDetailPage({
   }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={
           <>
@@ -149,6 +149,6 @@ export default async function StockItemDetailPage({
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

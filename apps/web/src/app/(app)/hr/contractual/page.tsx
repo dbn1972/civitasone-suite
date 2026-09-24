@@ -91,7 +91,7 @@ export default async function ContractualPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} />
       {isTruncated && (
@@ -121,6 +121,6 @@ export default async function ContractualPage() {
         />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

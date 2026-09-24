@@ -31,11 +31,11 @@ function DefaultIllustration() {
 
 export function EmptyState({ icon, title, message, action }: EmptyStateProps) {
   return (
-    <div className="empty-state">
+    <div className="empty-state" role="status" aria-live="polite">
       <div className="ic" aria-hidden="true">
         {icon ? icon : <DefaultIllustration />}
       </div>
-      <h4>{title}</h4>
+      <h3>{title}</h3>
       {message && <p>{message}</p>}
       {action}
     </div>

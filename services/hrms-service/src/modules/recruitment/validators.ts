@@ -80,7 +80,9 @@ export type OfferApplicationBody = z.infer<typeof offerApplicationBody>;
 export const hireApplicationBody = z.object({
   employeeNo:    z.string().min(1).max(32),
   dateOfJoining: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  basicMinor:    z.number().int().nonnegative(),
+  // Recruitment hardening: a genuinely positive basic pay is required for a
+  // real hire -- nonnegative() let a ₹0 basic through.
+  basicMinor:    z.number().int().positive(),
   departmentId:  z.string().uuid(),
   designationId: z.string().uuid(),
   // Any code; membership enforced at the hire route via assertKnownEngagementType

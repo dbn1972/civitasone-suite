@@ -32,6 +32,8 @@ import { registerDisciplinaryEOfficeConsumers } from "../src/modules/disciplinar
 import { submitDisciplinaryForApproval } from "../src/modules/disciplinary/commands.js";
 import { createNomination } from "../src/modules/training/commands.js";
 import { createRegularisation } from "../src/modules/attendance/commands.js";
+import { hrmsTrainings } from "../src/modules/training/schema.js";
+import { hrmsEmployees } from "../src/modules/employee/schema.js";
 
 const TENANT = "bbbbbbbb-1111-4000-8000-000000000077";
 const ACTOR = "bbbbbbbb-2222-4000-8000-000000000077";
@@ -818,6 +820,27 @@ describe("Command functions — coverage", () => {
     roles: ["hr_admin"] as string[],
   };
 
+  // IDOR fix follow-up: createNomination now validates trainingId/employeeId
+  // actually exist (orphaned-record guard, training/commands.ts) before
+  // publishing the command, so the "createNomination publishes command"
+  // test below needs real rows behind the ids it already references
+  // (previously unvalidated). onConflictDoNothing() keeps this idempotent
+  // across repeated runs against the same fixture TENANT/ids.
+  beforeAll(async () => {
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(hrmsTrainings).values({
+        id: "cc00aa01-0000-4000-8000-000000000077", tenantId: TENANT,
+        title: "Coverage Fixture Training", fromDate: "2025-01-01", toDate: "2025-01-02",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      }).onConflictDoNothing();
+      await tx.insert(hrmsEmployees).values({
+        id: ACTOR, tenantId: TENANT, employeeNo: "COV-EXT2-ACTOR", fullName: "Coverage Fixture Actor",
+        departmentId: "bbbbbbbb-3333-4000-8000-000000000077", designationId: "bbbbbbbb-4444-4000-8000-000000000077",
+        dateOfJoining: "2020-01-01", createdBy: ACTOR, updatedBy: ACTOR,
+      }).onConflictDoNothing();
+    }));
+  });
+
   it("submitDisciplinaryForApproval publishes command", async () => {
     const result = await submitDisciplinaryForApproval(ctx, "case-001", {
       penaltyType: "censure",
@@ -830,10 +853,17 @@ describe("Command functions — coverage", () => {
   });
 
   it("createNomination publishes command", async () => {
-    const result = await createNomination(ctx, {
+    // The new FK-existence reads inside createNomination (repo.getTraining /
+    // employeeRepo.findById) go through scopedRead, which sources
+    // app.tenant_id from AsyncLocalStorage (wrapWithTenantGuc) -- normally
+    // populated by the app's onRequest hooks during a real HTTP request.
+    // This test calls the command function directly, bypassing that, so
+    // (like the seeding above) it needs its own runWithTenant wrapper or
+    // FORCE RLS hides the just-seeded rows and the read returns nothing.
+    const result = await runWithTenant(TENANT, () => createNomination(ctx, {
       trainingId: "cc00aa01-0000-4000-8000-000000000077",
       employeeId: ACTOR,
-    });
+    }));
     expect(result.status).toBe("accepted");
     expect(result.id).toBeTruthy();
   });

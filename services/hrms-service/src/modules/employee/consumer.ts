@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { isExitedStatus } from "./status.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -73,7 +74,34 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string; confirmationDate: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateEmployee(tx, p.id, { status: "confirmed", confirmationDate: p.confirmationDate, updatedBy: msg.actorId });
+      // SEC CRITICAL (status-integrity fix): confirmEmployee used to write
+      // status: "confirmed" unconditionally, with no check on the employee's
+      // prior state — a terminated/separated/retired employee (or one already
+      // confirmed) could be silently "re-confirmed". The route now performs a
+      // synchronous pre-check (employee/routes.ts) for the common case, but
+      // this consumer runs async off a queue, so it re-verifies the
+      // precondition here too, immediately before writing, and enforces it
+      // atomically via updateEmployeeIfStatus's WHERE-guarded UPDATE — closing
+      // the race window between the route's read and this write (e.g. a
+      // concurrent separate/terminate landing in between; hrms_employees has
+      // no version bump on plain writes for the guard to lean on instead).
+      // "probation" is the only state confirmation is ever valid from — every
+      // other status (including "confirmed" itself) is rejected.
+      const emp = await repo.findByIdTx(tx, p.id, p.tenantId);
+      if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${p.id} not found`);
+      if (emp.status !== "probation") {
+        throw new HttpError(
+          409,
+          "INVALID_STATUS_TRANSITION",
+          `employee ${p.id} cannot be confirmed from status '${emp.status}' — only an employee in 'probation' status can be confirmed`,
+        );
+      }
+      const applied = await repo.updateEmployeeIfStatus(tx, p.id, p.tenantId, "probation", {
+        status: "confirmed", confirmationDate: p.confirmationDate, updatedBy: msg.actorId,
+      });
+      if (!applied) {
+        throw new HttpError(409, "EMPLOYEE_STATUS_CONFLICT", `employee ${p.id} status changed since it was read; refusing to confirm`);
+      }
       await audit(tx, msg, "confirm", "employee", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
@@ -260,6 +288,25 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // SEC CRITICAL (status-integrity fix): this generic profile-update path
+      // had NO status check at all — a terminated/separated/retired
+      // employee's mobile/email/bank-account/IFSC etc. could still be edited
+      // by any HR-role actor. Safer default: block the update entirely once
+      // an employee has permanently exited (isExitedStatus — terminated,
+      // separated, retired), rather than trying to allow-list which fields
+      // are "safe" post-exit. There is no separate audited exception path for
+      // post-exit corrections in this module today (fnf-route.ts's
+      // /fnf-calculate is a pure read-only calculator, not a write path), so
+      // this is a hard block, not a partial one.
+      const emp = await repo.findByIdTx(tx, p.id, p.tenantId);
+      if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${p.id} not found`);
+      if (isExitedStatus(emp.status)) {
+        throw new HttpError(
+          409,
+          "EMPLOYEE_EXITED",
+          `employee ${p.id} has status '${emp.status}' and can no longer be updated via this endpoint`,
+        );
+      }
       const patch: Parameters<typeof repo.updateEmployee>[2] = { updatedBy: msg.actorId };
       const changedFields: string[] = [];
       if (p.mobile      !== undefined) { patch.mobile      = p.mobile; changedFields.push("mobile"); }

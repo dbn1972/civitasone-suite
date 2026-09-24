@@ -18,7 +18,7 @@ export default async function BreakglassPage() {
   }).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Break-Glass Access" }]} />
       {activeNow > 0 && (
         <div className="banner" role="status" style={{ background: "#fef3f2", border: "1px solid #fca5a5", color: "#991b1b", borderRadius: 12, padding: "13px 16px", marginBottom: 18, fontSize: 13 }}>
@@ -53,6 +53,6 @@ export default async function BreakglassPage() {
           status: e.status,
         }))}
       />
-    </main>
+    </div>
   );
 }

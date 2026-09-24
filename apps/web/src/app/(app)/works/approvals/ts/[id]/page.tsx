@@ -115,7 +115,7 @@ export default async function TsDetailPage({
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={ts.tsNumber ?? `TS ${params.id.slice(0, 8)}…`}
         subtitle="Technical Sanction"
@@ -178,6 +178,6 @@ export default async function TsDetailPage({
         </Link>
         <ApprovalFinalizeButton id={ts.id} type="ts" status={ts.status} />
       </div>
-    </main>
+    </div>
   );
 }

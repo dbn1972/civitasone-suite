@@ -10,7 +10,8 @@ const {
   mockTx, dbTransactionFn, enqueuedMessages,
   insertJobOpeningMock, insertApplicationMock, updateApplicationMock,
   insertOfferMock, findApplicationByIdMock, insertEmployeeMock,
-  claimApplicationForHireMock,
+  claimApplicationForHireMock, claimApplicationForOfferMock, claimVacancyMock,
+  departmentExistsTxMock, designationExistsTxMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -34,6 +35,20 @@ const {
     // (claim succeeds / not already hired) so the existing happy-path test
     // below keeps its original behavior.
     claimApplicationForHireMock: vi.fn(async () => true),
+    // Recruitment hardening (Bug 1): atomic offer-eligibility claim, replaces
+    // the old blind updateApplication in the offer handler. Defaults to
+    // `true` (offer-eligible) so the happy-path test keeps its original
+    // behavior.
+    claimApplicationForOfferMock: vi.fn(async () => true),
+    // Recruitment hardening (Bug 3): atomic vacancy claim in the hire
+    // handler. Defaults to `true` (a vacancy was available) for the same
+    // reason.
+    claimVacancyMock: vi.fn(async () => true),
+    // Recruitment hardening (minor item): department/designation existence
+    // checks the hire handler now runs before insertEmployee. Default to
+    // `true` (exists) so the happy-path test keeps its original behavior.
+    departmentExistsTxMock: vi.fn(async () => true),
+    designationExistsTxMock: vi.fn(async () => true),
   };
 });
 
@@ -60,9 +75,16 @@ vi.mock("../src/modules/recruitment/repo.js", () => ({
   findApplicationByIdTx: (...a: any[]) => findApplicationByIdMock(...a),
   // BUG-3 fix: atomic hire claim -- see claimApplicationForHireMock above.
   claimApplicationForHire: (...a: any[]) => claimApplicationForHireMock(...a),
+  // Recruitment hardening (Bug 1): atomic offer-eligibility claim.
+  claimApplicationForOffer: (...a: any[]) => claimApplicationForOfferMock(...a),
+  // Recruitment hardening (Bug 3): atomic vacancy claim.
+  claimVacancy: (...a: any[]) => claimVacancyMock(...a),
 }));
 vi.mock("../src/modules/employee/repo.js", () => ({
   insertEmployee: (...a: any[]) => insertEmployeeMock(...a),
+  // Recruitment hardening (minor item): FK existence checks.
+  departmentExistsTx: (...a: any[]) => departmentExistsTxMock(...a),
+  designationExistsTx: (...a: any[]) => designationExistsTxMock(...a),
 }));
 
 import { registerRecruitmentConsumers } from "../src/modules/recruitment/consumer.js";
@@ -70,6 +92,7 @@ import { COMMANDS, EVENTS } from "../src/topics.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 const ACTOR = "20000000-bbbb-4000-8000-000000000001";
+const JOB = "30000000-cccc-4000-8000-000000000001";
 
 function makeMsg(type: string, payload: Record<string, unknown>) {
   return { messageId: randomUUID(), type, tenantId: TENANT, actorId: ACTOR, correlationId: randomUUID(), schemaVersion: "1.0", payload };
@@ -87,8 +110,14 @@ beforeEach(() => {
   vi.clearAllMocks();
   enqueuedMessages.length = 0;
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
-  findApplicationByIdMock.mockResolvedValue({ applicantName: "Ravi Kumar", email: "ravi@gov.in", mobile: "9876543210" });
+  // jobOpeningId included so the Bug-3 vacancy-claim branch (application?.jobOpeningId)
+  // is actually exercised by the tests below, not silently skipped.
+  findApplicationByIdMock.mockResolvedValue({ applicantName: "Ravi Kumar", email: "ravi@gov.in", mobile: "9876543210", jobOpeningId: JOB });
   claimApplicationForHireMock.mockResolvedValue(true);
+  claimApplicationForOfferMock.mockResolvedValue(true);
+  claimVacancyMock.mockResolvedValue(true);
+  departmentExistsTxMock.mockResolvedValue(true);
+  designationExistsTxMock.mockResolvedValue(true);
 });
 
 describe("jobCreate command", () => {
@@ -127,17 +156,41 @@ describe("applicationCreate command", () => {
 });
 
 describe("applicationOffer command", () => {
-  it("updates application stage to 'offered' and inserts offer", async () => {
+  it("claims the application for offer (atomic guard) and inserts the offer", async () => {
+    const q = await buildQueue();
+    const appId = randomUUID();
+    await q.publish(COMMANDS.applicationOffer, makeMsg(COMMANDS.applicationOffer, {
+      offerId: randomUUID(), applicationId: appId, tenantId: TENANT,
+      ctcMinor: 6000000, currency: "INR",
+    }));
+    await settle();
+    // Bug 1 fix: the offer handler now claims the application atomically
+    // (claimApplicationForOffer, a guarded UPDATE ... WHERE stage/status is
+    // offer-eligible) instead of the old blind updateApplication -- see
+    // recruitment/repo.ts.
+    expect(claimApplicationForOfferMock).toHaveBeenCalledOnce();
+    expect(claimApplicationForOfferMock).toHaveBeenCalledWith(mockTx, appId, TENANT);
+    expect(updateApplicationMock).not.toHaveBeenCalled();
+
+    expect(insertOfferMock).toHaveBeenCalledOnce();
+    const offer = insertOfferMock.mock.calls[0]![1] as Record<string, unknown>;
+    expect(offer.status).toBe("sent");
+    await q.stop();
+  });
+
+  // Bug 1 regression: an application that's withdrawn/rejected/already
+  // offered/hired must never get a new offer inserted. This is what a real
+  // guarded UPDATE ... WHERE stage NOT IN (...) AND status NOT IN (...)
+  // returns 0 rows for -- claimApplicationForOfferMock simulates that.
+  it("does not insert an offer when the application is not offer-eligible (withdrawn/rejected/already offered/hired)", async () => {
+    claimApplicationForOfferMock.mockResolvedValue(false);
     const q = await buildQueue();
     await q.publish(COMMANDS.applicationOffer, makeMsg(COMMANDS.applicationOffer, {
       offerId: randomUUID(), applicationId: randomUUID(), tenantId: TENANT,
       ctcMinor: 6000000, currency: "INR",
     }));
     await settle();
-    expect(updateApplicationMock).toHaveBeenCalledOnce();
-    expect(insertOfferMock).toHaveBeenCalledOnce();
-    const offer = insertOfferMock.mock.calls[0]![1] as Record<string, unknown>;
-    expect(offer.status).toBe("sent");
+    expect(insertOfferMock).not.toHaveBeenCalled();
     await q.stop();
   });
 });
@@ -161,6 +214,14 @@ describe("applicationHire command", () => {
     expect(claimApplicationForHireMock).toHaveBeenCalledWith(mockTx, appId, TENANT);
     expect(updateApplicationMock).not.toHaveBeenCalled();
 
+    // Bug 3 fix: a vacancy is claimed atomically on the application's job
+    // opening BEFORE the employee is created.
+    expect(claimVacancyMock).toHaveBeenCalledOnce();
+    expect(claimVacancyMock).toHaveBeenCalledWith(mockTx, JOB, TENANT);
+    // Minor-item fix: department/designation existence checked before insert.
+    expect(departmentExistsTxMock).toHaveBeenCalledOnce();
+    expect(designationExistsTxMock).toHaveBeenCalledOnce();
+
     expect(insertEmployeeMock).toHaveBeenCalledOnce();
     const emp = insertEmployeeMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(emp.id).toBe(empId);
@@ -169,6 +230,89 @@ describe("applicationHire command", () => {
 
     const evt = enqueuedMessages.find((m) => m.topic === EVENTS.employeeCreated);
     expect(evt).toBeDefined();
+    await q.stop();
+  });
+
+  // Bug 3 regression: over-hiring beyond the job opening's vacancies must be
+  // rejected, not silently create yet another employee against an exhausted
+  // opening. claimVacancyMock simulates the real guarded
+  // UPDATE ... WHERE vacancies > 0 returning 0 rows.
+  it("does not create an employee when the job opening has no vacancy left", async () => {
+    claimVacancyMock.mockResolvedValue(false);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.applicationHire, makeMsg(COMMANDS.applicationHire, {
+      employeeId: randomUUID(), applicationId: randomUUID(), tenantId: TENANT,
+      employeeNo: "EMP-OVER-001", dateOfJoining: "2026-08-01",
+      basicMinor: 5000000, departmentId: randomUUID(),
+      designationId: randomUUID(), employeeType: "permanent",
+    }));
+    await settle();
+    expect(claimVacancyMock).toHaveBeenCalledOnce();
+    expect(insertEmployeeMock).not.toHaveBeenCalled();
+    expect(enqueuedMessages.find((m) => m.topic === EVENTS.employeeCreated)).toBeUndefined();
+    await q.stop();
+  });
+
+  // Bug 3 regression, concurrency-shaped: two hire attempts for DIFFERENT
+  // applications against the SAME job opening's last vacancy. Mirrors the
+  // existing "does not create a second employee..." test's stateful-mock
+  // style to simulate what the real guarded UPDATE ... WHERE vacancies > 0
+  // does under a genuine race -- succeeds exactly once, then reports no
+  // vacancy for every other concurrent attempt. See
+  // tests/recruitment-hardening-e2e.test.ts for a real-Postgres concurrent
+  // version of this same scenario (true row-lock serialization, not a
+  // simulated mock).
+  it("claims the last vacancy for only ONE of two concurrent hire attempts on the same job opening", async () => {
+    let vacancyClaimed = false;
+    claimVacancyMock.mockImplementation(async () => {
+      if (vacancyClaimed) return false;
+      vacancyClaimed = true;
+      return true;
+    });
+    const q = await buildQueue();
+    const basePayload = {
+      tenantId: TENANT, dateOfJoining: "2026-08-01", basicMinor: 5000000,
+      departmentId: randomUUID(), designationId: randomUUID(), employeeType: "permanent",
+    };
+    await q.publish(COMMANDS.applicationHire, makeMsg(COMMANDS.applicationHire, { employeeId: randomUUID(), applicationId: randomUUID(), employeeNo: "EMP-RACE-A", ...basePayload }));
+    await q.publish(COMMANDS.applicationHire, makeMsg(COMMANDS.applicationHire, { employeeId: randomUUID(), applicationId: randomUUID(), employeeNo: "EMP-RACE-B", ...basePayload }));
+    await settle();
+
+    expect(claimVacancyMock).toHaveBeenCalledTimes(2);
+    // The critical assertion: only ONE of the two concurrent hires actually
+    // created an employee against the shared last vacancy.
+    expect(insertEmployeeMock).toHaveBeenCalledOnce();
+    expect(enqueuedMessages.filter((m) => m.topic === EVENTS.employeeCreated)).toHaveLength(1);
+    await q.stop();
+  });
+
+  // Minor-item regression: an unknown departmentId must fail fast, not crash
+  // past a raw FK-violation, and must not create the employee.
+  it("does not create an employee when the department does not exist", async () => {
+    departmentExistsTxMock.mockResolvedValue(false);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.applicationHire, makeMsg(COMMANDS.applicationHire, {
+      employeeId: randomUUID(), applicationId: randomUUID(), tenantId: TENANT,
+      employeeNo: "EMP-BADDEPT-001", dateOfJoining: "2026-08-01",
+      basicMinor: 5000000, departmentId: randomUUID(),
+      designationId: randomUUID(), employeeType: "permanent",
+    }));
+    await settle();
+    expect(insertEmployeeMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("does not create an employee when the designation does not exist", async () => {
+    designationExistsTxMock.mockResolvedValue(false);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.applicationHire, makeMsg(COMMANDS.applicationHire, {
+      employeeId: randomUUID(), applicationId: randomUUID(), tenantId: TENANT,
+      employeeNo: "EMP-BADDESIG-001", dateOfJoining: "2026-08-01",
+      basicMinor: 5000000, departmentId: randomUUID(),
+      designationId: randomUUID(), employeeType: "permanent",
+    }));
+    await settle();
+    expect(insertEmployeeMock).not.toHaveBeenCalled();
     await q.stop();
   });
 

@@ -16,7 +16,7 @@ export default async function DprTrackingPage() {
   const returned = errored ? null : rows.filter((r) => r.status === "rejected").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="DPR Tracking" subtitle="Detailed Project Report submission, review and approval status." back="/projects" />
       <StatGrid>
         <StatCard icon="📄" iconBg="#eff6ff" label="Total DPRs" value={total ?? "—"} />
@@ -35,6 +35,6 @@ export default async function DprTrackingPage() {
           <DprTrackingTable rows={rows} source={source === "error" ? "error" : "api"} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

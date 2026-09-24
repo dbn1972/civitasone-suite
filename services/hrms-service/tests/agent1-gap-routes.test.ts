@@ -271,6 +271,60 @@ describe("0180 — POST /v1/hrms/employees/:id/activate", () => {
     await app.close();
   });
 
+  // SEC CRITICAL regression suite (status-integrity fix): the guard above
+  // only ever excluded "confirmed" — comparing against the long-retired
+  // "active" value made it permanently unreachable in practice for anything
+  // BUT the one case it happened to also block by accident. A terminated/
+  // separated/retired (etc.) employee could be "activated" (silently
+  // reactivated to "confirmed") the same way. "probation" is now the only
+  // valid starting status.
+  it.each(["terminated", "separated", "retired", "on_leave", "suspended", "deputation", "no_show"])(
+    "returns 409 (not 200) when activating an employee with status '%s'",
+    async (status) => {
+      H.selectFrom.mockResolvedValue([{
+        id: EMP_ID, tenantId: TENANT, fullName: "Test", status,
+        fitnessStatus: "fit", departmentId: "dept-1", designationId: "desig-1",
+        dateOfJoining: "2026-01-15", bankAccountNo: "1234", pan: "PAN",
+        employeeType: "permanent", version: 1,
+      }]);
+      const app = await buildApp();
+      const r = await app.inject({
+        method: "POST",
+        url: `/v1/hrms/employees/${EMP_ID}/activate`,
+        headers: auth(),
+      });
+      expect(r.statusCode).toBe(409);
+      // Distinct code from the "already confirmed" case — a terminated
+      // employee is not "already active", and the message should say so.
+      expect(r.json().code).toBe("INVALID_STATUS");
+      // The write must never be attempted.
+      await drainF3();
+      expect(H.update).not.toHaveBeenCalled();
+      await app.close();
+    },
+  );
+
+  it("activation from 'probation' still succeeds (200) — the one valid transition", async () => {
+    H.selectFrom.mockResolvedValue([{
+      id: EMP_ID, tenantId: TENANT, fullName: "Test", status: "probation",
+      fitnessStatus: "fit", departmentId: "dept-1", designationId: "desig-1",
+      dateOfJoining: "2026-01-15", bankAccountNo: "1234", pan: "PAN",
+      employeeType: "permanent", version: 1,
+    }]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: `/v1/hrms/employees/${EMP_ID}/activate`,
+      headers: auth(),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.status).toBe("confirmed");
+    await drainF3();
+    expect(H.update).toHaveBeenCalledTimes(1);
+    expect(H.update.mock.calls[0]?.[0]).toMatchObject({ status: "confirmed" });
+    await app.close();
+  });
+
   it("returns 404 for unknown employee", async () => {
     H.selectFrom.mockResolvedValue([]);
     const app = await buildApp();

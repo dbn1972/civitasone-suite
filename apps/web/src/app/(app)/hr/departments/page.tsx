@@ -66,7 +66,7 @@ export default async function DepartmentsPage() {
   const withCode  = errored ? null : depts.filter((d) => !!d.code).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -134,6 +134,6 @@ export default async function DepartmentsPage() {
           <DepartmentsTable depts={depts} canEdit={canEdit} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

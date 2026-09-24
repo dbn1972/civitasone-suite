@@ -130,7 +130,7 @@ export default async function MastersPage({
   const typeLabel = humanizeMaster(type);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Masters Registry"
         subtitle="Configure lookup values used across the works lifecycle."
@@ -192,6 +192,6 @@ export default async function MastersPage({
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

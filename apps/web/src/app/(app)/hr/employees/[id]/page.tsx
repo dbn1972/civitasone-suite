@@ -99,24 +99,24 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
 
   if (errored) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("notFoundTitle")} back="/hr/employees" />
         <div className="pad">
           <RefreshErrorState error={toHumanError("load", { area: "employee" })} backHref="/hr/employees" />
         </div>
-      </main>
+      </div>
     );
   }
 
   if (!employee) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("notFoundTitle")} back="/hr/employees" backLabel="Back to Employees" />
         <DataSourceBadge source={source} />
         <Card padding>
           <p className="text-center text-slate-600">{t("notFoundMessage")}</p>
         </Card>
-      </main>
+      </div>
     );
   }
 
@@ -150,7 +150,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   const allEvents = [...baseEvents, ...lifecycleEvents];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={employee.name}
         back="/hr/employees" backLabel="Back to Employees"
@@ -248,6 +248,6 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       <Card title={t("lifecycleTitle")}>
         <LifecycleTimeline events={allEvents} />
       </Card>
-    </main>
+    </div>
   );
 }

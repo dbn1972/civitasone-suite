@@ -51,7 +51,7 @@ export default function AdminConfigPage() {
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Platform Configuration"
         subtitle="Core platform settings — name, branding, security policies and session controls."
@@ -237,6 +237,6 @@ export default function AdminConfigPage() {
           </Button>
         </div>
       </form>
-    </main>
+    </div>
   );
 }

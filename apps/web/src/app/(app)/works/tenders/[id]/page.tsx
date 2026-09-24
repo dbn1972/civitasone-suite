@@ -117,7 +117,7 @@ export default async function TenderDetailPage({
   // ── Render ─────────────────────────────────────────────────────────────────
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={
           tender?.workNumber
@@ -235,6 +235,6 @@ export default async function TenderDetailPage({
           + Add pre-tender
         </Link>
       </div>
-    </main>
+    </div>
   );
 }

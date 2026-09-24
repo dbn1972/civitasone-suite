@@ -28,7 +28,7 @@ export default async function ReconciliationRunDetailPage({ params }: { params: 
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={run ? `Recon Run — ${run.provider}` : "Reconciliation Run"}
         subtitle={run ? `${run.sourceSystem} ↔ ${run.targetSystem} · started ${formatIndianDate(run.startedAt)}` : undefined}
@@ -55,6 +55,6 @@ export default async function ReconciliationRunDetailPage({ params }: { params: 
           <DataSourceBadge source="error" />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

@@ -32,7 +32,7 @@ export default async function FleetDashboardPage() {
   const { data: stats, source } = await getFleetDashboard();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fleet Management"
         subtitle="Government vehicles, trips, fuel, maintenance, and telematics."
@@ -77,7 +77,7 @@ export default async function FleetDashboardPage() {
           description="Trip log-book, fuel fill entries, driver roster."
         />
       </div>
-    </main>
+    </div>
   );
 }
 

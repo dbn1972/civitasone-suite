@@ -13,7 +13,7 @@ export default async function PolicyBindingsPage() {
   const revoked = errored ? 0 : bindings.filter((b) => b.status === "revoked").length;
 
   return (
-    <main className="page-main wrap" aria-label="Policy bindings">
+    <div className="page-main wrap" aria-label="Policy bindings">
       <PageHeader
         title="Role Bindings"
         subtitle="Assign roles to users. Reads and creates go through /api/v1/policy/bindings."
@@ -64,6 +64,6 @@ export default async function PolicyBindingsPage() {
           </div>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

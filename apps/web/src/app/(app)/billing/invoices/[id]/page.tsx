@@ -88,21 +88,21 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
 
   if (!invoice) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Invoice not found" back="/billing/invoices" />
         {invoiceSource === "error" ? (
           <DataSourceBadge source="error" />
         ) : (
           <EmptyState icon="🧾" title="Invoice not found" message="This invoice may have been removed or the ID is invalid." />
         )}
-      </main>
+      </div>
     );
   }
 
   void einvoiceSource; // intentionally unused for badging — see getEInvoiceStatus comment above.
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <a href="/billing">Billing</a> <span aria-hidden="true">›</span>{" "}
         <a href="/billing/invoices">Invoices</a> <span aria-hidden="true">›</span>{" "}
@@ -181,6 +181,6 @@ export default async function InvoiceDetailPage({ params }: { params: { id: stri
       <Card title="GST e-invoice (IRN)" padding>
         <InvoiceActions invoiceId={invoice.id} einvoice={einvoice} />
       </Card>
-    </main>
+    </div>
   );
 }

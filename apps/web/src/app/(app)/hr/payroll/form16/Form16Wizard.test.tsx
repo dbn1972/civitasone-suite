@@ -61,4 +61,39 @@ describe("Form16Wizard", () => {
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent("FY not closed yet."));
     expect(screen.getByText(/Deduction Figures/)).toBeInTheDocument();
   });
+
+  // HIGH-7 (a11y remediation): no focus management or step-change
+  // announcement existed across Next/Back — StepBar visually marked
+  // aria-current="step" but nothing moved focus or told a screen reader
+  // the step changed. These cover the fix, not just that the step content
+  // itself swaps (already covered above).
+  describe("step-change focus management and announcement", () => {
+    it("does not steal focus on initial mount", () => {
+      renderWizard();
+      expect(document.activeElement).not.toHaveAttribute("role", "group");
+    });
+
+    it("moves focus to the new step's panel when Next is clicked", () => {
+      renderWizard();
+      fireEvent.click(screen.getByRole("button", { name: /Next: Review Deductions/ }));
+      const panel = screen.getByRole("group", { name: "Review Deductions" });
+      expect(document.activeElement).toBe(panel);
+      expect(panel).toHaveAttribute("tabindex", "-1");
+    });
+
+    it("moves focus back to step 0's panel when Back is clicked", () => {
+      renderWizard();
+      fireEvent.click(screen.getByRole("button", { name: /Next: Review Deductions/ }));
+      fireEvent.click(screen.getByRole("button", { name: "← Back" }));
+      expect(document.activeElement).toBe(screen.getByRole("group", { name: "Select FY" }));
+    });
+
+    it("announces the new step via a polite live region", () => {
+      renderWizard();
+      fireEvent.click(screen.getByRole("button", { name: /Next: Review Deductions/ }));
+      const live = document.querySelector('[aria-live="polite"]');
+      expect(live).not.toBeNull();
+      expect(live).toHaveTextContent("Step 2 of 3: Review Deductions");
+    });
+  });
 });
