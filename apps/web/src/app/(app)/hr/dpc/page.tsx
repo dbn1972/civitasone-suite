@@ -45,7 +45,7 @@ async function getData() {
   });
 }
 
-async function getBatchPromotions(): Promise<PromotionRow[]> {
+async function getBatchPromotions(): Promise<LoaderResult<PromotionRow[]>> {
   const r = await fetchJson<unknown, PromotionRow[]>("/api/v1/hrms/lifecycle/promotions", [], {
     telemetryKey: "hr.dpc.promotions",
     mapResponse: (p) => {
@@ -53,7 +53,7 @@ async function getBatchPromotions(): Promise<PromotionRow[]> {
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
+  return r;
 }
 
 export default async function DpcPage() {
@@ -61,8 +61,8 @@ export default async function DpcPage() {
   const roles = getSessionRoles();
   const canAdministerSeniority = roles.some((r) => SENIORITY_ADMIN_ROLES.includes(r));
 
-  const [{ data, source }, batchPromotions] = await Promise.all([getData(), getBatchPromotions()]);
-  const errored = source === "error";
+  const [{ data, source }, { data: batchPromotions, source: promoSource }] = await Promise.all([getData(), getBatchPromotions()]);
+  const errored = source === "error" || promoSource === "error";
   const { asOf, eligibleCount, ineligibleCount, eligible, ineligible } = data ?? {
     asOf: "—", eligibleCount: 0, ineligibleCount: 0, eligible: [], ineligible: [],
   };

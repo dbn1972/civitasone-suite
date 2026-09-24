@@ -86,7 +86,7 @@ export default async function DisciplinaryListPage() {
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "disciplinary" })} backHref="/hr" />
           </div>
-        ) : (
+        ) : (<>
 
         {/* Regression fix: this table had no row-link props at all, so the
             fully-built disciplinary/[id] detail page (breadcrumbs, case
@@ -105,7 +105,7 @@ export default async function DisciplinaryListPage() {
           emptyTitle="No disciplinary cases on record"
           emptyMessage="All departmental proceedings under CCS (CCA) Rules appear here — both major vigilance cases (charge memo / inquiry) and minor proceedings."
         />
-        )}
+        </>)}
       </Card>
     </main>
   );

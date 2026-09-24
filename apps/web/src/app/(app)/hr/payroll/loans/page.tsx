@@ -58,7 +58,7 @@ export default async function LoansPage({
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "loans" })} backHref="/hr/payroll" />
           </div>
-        ) : (
+        ) : (<>
 
         {!empId ? (
           <EmptyState
@@ -69,7 +69,7 @@ export default async function LoansPage({
         ) : (
           <LoansTable rows={loans} />
         )}
-        )}
+        </>)}
         </Card>
 
       <Card title={t("recoveryCardTitle")}>

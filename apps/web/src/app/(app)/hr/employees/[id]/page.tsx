@@ -161,11 +161,6 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       {/* Quick Actions */}
       {isActive && (
         <Card title={t("quickActionsTitle")} padding>
-          {errored ? (
-            <div className="pad">
-              <RefreshErrorState error={toHumanError("load", { area: "employees" })} backHref="/hr/employees" />
-            </div>
-          ) : (
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Link href={`/hr/leave/apply?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
               {t("actionApplyLeave")}
