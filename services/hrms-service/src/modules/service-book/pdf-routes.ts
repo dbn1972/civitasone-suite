@@ -2,6 +2,10 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole } from "../../shared/context.js";
 import * as repo from "./repo.js";
+// SEC-CRIT-001: reuse the existing HTML-escape helper (same service, already
+// tested) instead of duplicating one -- see application-pdf.ts's own header
+// comment for why every interpolated value must be escaped here too.
+import { escapeHtml } from "../recruitment/application-pdf.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
@@ -35,7 +39,7 @@ export async function serviceBookPdfRoutes(app: FastifyInstance): Promise<void> 
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const rows = await repo.listServiceBookEntries(ctx.tenantId, id);
     const entryRows = rows.length
-      ? rows.map((e) => `<tr><td>${e.effectiveDate}</td><td>${e.entryType}</td><td>${e.description}</td><td>${e.documentRef ?? "—"}</td></tr>`).join("")
+      ? rows.map((e) => `<tr><td>${escapeHtml(e.effectiveDate)}</td><td>${escapeHtml(e.entryType)}</td><td>${escapeHtml(e.description)}</td><td>${escapeHtml(e.documentRef ?? "—")}</td></tr>`).join("")
       : "<tr><td colspan=\"4\">No entries recorded</td></tr>";
     const html = renderTemplate(SERVICE_BOOK_TEMPLATE, { employeeId: id, entryRows });
     return reply.header("content-type", "text/html; charset=utf-8").send(html);
