@@ -111,7 +111,7 @@ export default async function StatutoryHubPage() {
             style={{
               fontSize: 15,
               fontWeight: 700,
-              color: "var(--fg)",
+              color: "var(--ink)",
               marginBottom: 12,
             }}
           >
