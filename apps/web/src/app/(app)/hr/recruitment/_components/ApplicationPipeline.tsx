@@ -30,10 +30,10 @@ export function ApplicationPipeline({
 
   return (
     <div className="mb-5" aria-label={t("ariaLabel")}>
-      <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+      <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-2">
         {t("heading")}
       </p>
-      <div className="flex rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <div className="flex rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden">
         {ORDERED_STAGES.map(({ key, label }, idx) => {
           const isActive = activeStage === key;
           const count = counts[key] ?? 0;
@@ -49,14 +49,14 @@ export function ApplicationPipeline({
                 "transition-colors duration-150 relative",
                 isActive
                   ? "bg-indigo-600 text-white"
-                  : "hover:bg-slate-50 text-slate-700",
-                idx > 0 ? "border-s border-slate-200" : "",
+                  : "hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300",
+                idx > 0 ? "border-s border-slate-200 dark:border-slate-700" : "",
               ].filter(Boolean).join(" ")}
             >
               <span
                 className={[
                   "text-xl font-bold leading-none",
-                  isActive ? "text-white" : "text-slate-800",
+                  isActive ? "text-white" : "text-slate-800 dark:text-slate-200",
                 ].join(" ")}
               >
                 {count}
@@ -64,7 +64,7 @@ export function ApplicationPipeline({
               <span
                 className={[
                   "text-[11px] font-medium whitespace-nowrap",
-                  isActive ? "text-indigo-100" : "text-slate-500",
+                  isActive ? "text-indigo-100" : "text-slate-500 dark:text-slate-400",
                 ].join(" ")}
               >
                 {label}
@@ -78,7 +78,7 @@ export function ApplicationPipeline({
                     "w-4 h-4 rounded-full border text-[9px] font-bold",
                     isActive
                       ? "border-indigo-600 bg-indigo-600 text-white"
-                      : "border-slate-200 bg-white text-slate-300",
+                      : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-300 dark:text-slate-500",
                   ].join(" ")}
                 >
                   ›

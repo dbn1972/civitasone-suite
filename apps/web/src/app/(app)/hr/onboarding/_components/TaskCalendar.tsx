@@ -36,10 +36,10 @@ function addDays(iso: string, days: number): string {
 }
 
 const STATUS_DOT: Partial<Record<CalendarTask["status"], { color: string; label: string }>> = {
-  completed: { color: "var(--good, #067647)", label: "Done" },
-  pending: { color: "#94a3b8", label: "Pending" },
-  overdue: { color: "#d97706", label: "Overdue" },
-  in_progress: { color: "#4f46e5", label: "In progress" },
+  completed:   { color: "var(--good, #067647)",    label: "Done" },
+  pending:     { color: "var(--mut, #94a3b8)",        label: "Pending" },
+  overdue:     { color: "var(--warn, #d97706)",       label: "Overdue" },
+  in_progress: { color: "var(--indigo, #4f46e5)",    label: "In progress" },
 };
 
 export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
@@ -67,10 +67,10 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
               key={day}
               role="listitem"
               style={{
-                border: `1px solid ${hasOverdue ? "#fde68a" : "var(--border, #e2e8f0)"}`,
+                border: `1px solid ${hasOverdue ? "var(--warnbd, #fde68a)" : "var(--border, #e2e8f0)"}`,
                 borderRadius: 10,
                 padding: 12,
-                background: hasOverdue ? "#fffbeb" : "var(--card-bg, #fff)",
+                background: hasOverdue ? "var(--warnbg, #fffbeb)" : "var(--card-bg, #fff)",
               }}
             >
               {/* Column header */}
@@ -79,7 +79,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                   style={{
                     fontSize: 13,
                     fontWeight: 700,
-                    color: hasOverdue ? "#92400e" : "var(--heading, #1e293b)",
+                    color: hasOverdue ? "var(--warn, #92400e)" : "var(--heading, #1e293b)",
                   }}
                 >
                   {label}
@@ -116,8 +116,8 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                           gap: 6,
                           padding: "6px 8px",
                           borderRadius: 6,
-                          background: task.status === "overdue" ? "#fef3c7" : "#f8fafc",
-                          border: `1px solid ${task.status === "overdue" ? "#fde68a" : "var(--border, #e2e8f0)"}`,
+                          background: task.status === "overdue" ? "var(--warnbg, #fef3c7)" : "var(--bg, #f8fafc)",
+                          border: `1px solid ${task.status === "overdue" ? "var(--warnbd, #fde68a)" : "var(--border, #e2e8f0)"}`,
                         }}
                       >
                         <div

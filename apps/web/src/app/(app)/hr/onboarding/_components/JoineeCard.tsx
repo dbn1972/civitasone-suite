@@ -48,10 +48,10 @@ export function JoineeCard({
     <div
       data-testid={`joinee-card-${id}`}
       style={{
-        border: `1px solid ${isOverdue ? "#fde68a" : "var(--border, #e2e8f0)"}`,
+        border: `1px solid ${isOverdue ? "var(--warnbd, #fde68a)" : "var(--border, #e2e8f0)"}`,
         borderRadius: 10,
         padding: 16,
-        background: isOverdue ? "#fffcf0" : "var(--card-bg, #fff)",
+        background: isOverdue ? "var(--warnbg, #fffcf0)" : "var(--card-bg, #fff)",
         display: "flex",
         flexDirection: "column",
         gap: 12,
@@ -105,10 +105,10 @@ export function JoineeCard({
             style={{
               padding: "1px 7px",
               borderRadius: 99,
-              background: "#fef3c7",
-              color: "#92400e",
+              background: "var(--warnbg, #fef3c7)",
+              color: "var(--warn, #92400e)",
               fontWeight: 700,
-              border: "1px solid #fde68a",
+              border: "1px solid var(--warnbd, #fde68a)",
             }}
           >
             ⚠ {overdue} overdue

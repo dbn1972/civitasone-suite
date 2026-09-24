@@ -24,10 +24,10 @@ const STATUS_CONFIG: Record<
   ChecklistStep["status"],
   { icon: string; color: string; bg: string; label: string }
 > = {
-  completed: { icon: "✓", color: "var(--good, #067647)", bg: "#dcfce7", label: "Completed" },
-  in_progress: { icon: "⟳", color: "#4f46e5", bg: "#ede9fe", label: "In progress" },
-  overdue: { icon: "!", color: "#b45309", bg: "#fef3c7", label: "Overdue" },
-  pending: { icon: "○", color: "var(--mut)", bg: "#f1f5f9", label: "Pending" },
+  completed:   { icon: "✓", color: "var(--good, #067647)",  bg: "var(--goodbg, #dcfce7)",  label: "Completed" },
+  in_progress: { icon: "⟳", color: "var(--indigo, #4f46e5)", bg: "var(--infobg, #ede9fe)",  label: "In progress" },
+  overdue:     { icon: "!", color: "var(--warn, #b45309)",    bg: "var(--warnbg, #fef3c7)",  label: "Overdue" },
+  pending:     { icon: "○", color: "var(--mut)",              bg: "var(--line2, #f1f5f9)",     label: "Pending" },
 };
 
 export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistProps) {
