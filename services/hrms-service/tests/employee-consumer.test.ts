@@ -263,7 +263,14 @@ describe("employeeTransfer command", () => {
     const [, id, patch] = updateEmployeeMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
     expect(id).toBe(empId);
     expect(patch.departmentId).toBe(toDeptId);
-    expect(patch.status).toBe("transferred");
+    // HIGH fix: "transferred" was never a valid value in the enforced
+    // hrms_employees_status_check CHECK constraint (see employee/consumer.ts's
+    // "HIGH fix" comment on this same command) -- every real transfer request
+    // hit the CHECK violation and rolled back. The fix stops writing `status`
+    // here at all (a transfer changes department/designation, not employment
+    // status), so this stale assertion on the old, always-broken value is
+    // replaced with the correct expectation: status is left untouched.
+    expect(patch.status).toBeUndefined();
     await q.stop();
   });
 });

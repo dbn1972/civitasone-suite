@@ -615,6 +615,10 @@ describe("POST /v1/hrms/attendance/regularisations", () => {
   };
 
   it("202 — creates regularisation request", async () => {
+    H.selectFrom.mockResolvedValueOnce([]); // findLockedPeriods: no locked periods
+    H.selectFrom.mockResolvedValueOnce([
+      { id: "att-1", employeeId: EMP_ID, tenantId: TENANT, attendanceDate: "2026-07-01", status: "absent" },
+    ]); // findAttendanceByEmpAndDate: a record exists for the target date
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -624,6 +628,21 @@ describe("POST /v1/hrms/attendance/regularisations", () => {
     });
     expect(r.statusCode).toBe(202);
     expect(r.json().status).toBe("accepted");
+    await app.close();
+  });
+
+  it("404 — no attendance record exists for the target employee/date", async () => {
+    H.selectFrom.mockResolvedValueOnce([]); // findLockedPeriods: no locked periods
+    H.selectFrom.mockResolvedValueOnce([]); // findAttendanceByEmpAndDate: nothing marked for this employee/date
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/attendance/regularisations",
+      headers: auth(),
+      payload: validBody,
+    });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("ATTENDANCE_RECORD_NOT_FOUND");
     await app.close();
   });
 

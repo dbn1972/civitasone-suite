@@ -118,8 +118,23 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null, status: "completed",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
+      // HIGH fix: this used to also write status: "transferred", which has
+      // NOT been a valid value in the enforced hrms_employees_status_check
+      // CHECK constraint since migrations/0025_employee_status_contract.sql
+      // superseded 0001_init.sql's original (since-replaced) list that did
+      // include it — confirmed-current valid values are probation/confirmed/
+      // on_leave/suspended/deputation/retired/separated/terminated/no_show
+      // (0130_employee_status_add_no_show.sql added no_show; a later attempt
+      // in 0035_check_constraints_status_columns.sql to add a different list
+      // under the same constraint name was a documented no-op against 0025's
+      // already-existing constraint). So every real call to this endpoint hit
+      // the CHECK violation and rolled back. A transfer changes the
+      // employee's department/designation (assignment), not their employment
+      // status, so the fix is to simply stop writing `status` here — not
+      // substitute a different value — while keeping the legitimate
+      // department/designation updates below.
       const patch: Parameters<typeof repo.updateEmployee>[2] = {
-        departmentId: p.toDeptId, status: "transferred", updatedBy: msg.actorId,
+        departmentId: p.toDeptId, updatedBy: msg.actorId,
       };
       if (p.toDesigId) patch.designationId = p.toDesigId;
       await repo.updateEmployee(tx, p.employeeId, patch);
