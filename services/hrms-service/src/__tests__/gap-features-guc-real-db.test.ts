@@ -113,6 +113,24 @@ async function seedAppraisal(tenant: string, opts: { employeeId: string; period:
   });
 }
 
+// disciplinary.hrms_disciplinary_cases also has no POST route in
+// gap-features/routes.ts (its mutating routes live in disciplinary/routes.ts,
+// fixed separately in PR #1555 — this file only ever reads it), so seeding
+// goes through raw SQL + set_config, same as training/appraisal above.
+async function seedDisciplinaryCase(tenant: string, opts: { employeeId: string; proceedingType: "minor" | "major"; allegation: string; createdBy: string }): Promise<string> {
+  const id = randomUUID();
+  await sqlClient.begin(async (sql) => {
+    await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [tenant]);
+    await sql.unsafe(
+      `INSERT INTO disciplinary.hrms_disciplinary_cases
+         (id, tenant_id, employee_id, case_no, proceeding_type, status, allegation, created_by, updated_by)
+       VALUES ($1,$2,$3,$4,$5,'opened',$6,$7,$7)`,
+      [id, tenant, opts.employeeId, `CASE-${id.slice(0, 8)}`, opts.proceedingType, opts.allegation, opts.createdBy],
+    );
+  });
+  return id;
+}
+
 const HR_A = randomUUID();
 const HR_B = randomUUID();
 
@@ -327,6 +345,40 @@ describe("Certifications — different schema entirely (training.hrms_nomination
     const r = await app.inject({ method: "GET", url: "/v1/hrms/certifications", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().data.some((c: { certification: string; employee: string }) => c.certification === "POSH Compliance" && c.employee === "Alice A")).toBe(true);
+  });
+});
+
+describe("Disciplinary cases & Vigilance — GUC fix (read-only lists; mutating routes already fixed in PR #1555)", () => {
+  it("a minor case is visible on the disciplinary-cases list but not on the vigilance (major-only) list", async () => {
+    await seedDisciplinaryCase(TENANT_A, { employeeId: aliceEmpId, proceedingType: "minor", allegation: "Late attendance pattern", createdBy: HR_A });
+
+    const disc = await app.inject({ method: "GET", url: "/v1/hrms/disciplinary-cases", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
+    expect(disc.statusCode).toBe(200);
+    expect(disc.json().data.some((c: { charges: string; employee: string }) => c.charges === "Late attendance pattern" && c.employee === "Alice A")).toBe(true);
+
+    const vig = await app.inject({ method: "GET", url: "/v1/hrms/vigilance", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
+    expect(vig.statusCode).toBe(200);
+    expect(vig.json().data.some((c: { charges: string }) => c.charges === "Late attendance pattern")).toBe(false);
+  });
+
+  it("a major case is visible on both lists (vigilance is disciplinary-cases filtered to proceeding_type='major', not a separate table)", async () => {
+    await seedDisciplinaryCase(TENANT_A, { employeeId: bobEmpId, proceedingType: "major", allegation: "Alleged bribery", createdBy: HR_A });
+
+    const disc = await app.inject({ method: "GET", url: "/v1/hrms/disciplinary-cases", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
+    expect(disc.json().data.some((c: { charges: string }) => c.charges === "Alleged bribery")).toBe(true);
+
+    const vig = await app.inject({ method: "GET", url: "/v1/hrms/vigilance", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
+    expect(vig.json().data.some((c: { charges: string; employee: string }) => c.charges === "Alleged bribery" && c.employee === "Bob A")).toBe(true);
+  });
+
+  it("tenant B's disciplinary case is invisible on tenant A's lists (cross-tenant isolation)", async () => {
+    await seedDisciplinaryCase(TENANT_B, { employeeId: zaraEmpId, proceedingType: "major", allegation: "Tenant-B-only case", createdBy: HR_B });
+
+    const disc = await app.inject({ method: "GET", url: "/v1/hrms/disciplinary-cases", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
+    expect(disc.json().data.some((c: { charges: string }) => c.charges === "Tenant-B-only case")).toBe(false);
+
+    const vig = await app.inject({ method: "GET", url: "/v1/hrms/vigilance", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
+    expect(vig.json().data.some((c: { charges: string }) => c.charges === "Tenant-B-only case")).toBe(false);
   });
 });
 

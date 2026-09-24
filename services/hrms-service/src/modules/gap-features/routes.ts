@@ -7,7 +7,7 @@ import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool, sqlClient } from "../../shared/db.js";
+import { sqlClient } from "../../shared/db.js";
 import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 import * as employeeRepo from "../employee/repo.js";
 
@@ -558,20 +558,31 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
 
 
   // ── Gap: All Disciplinary Cases (list) ────────────────────────────────────
+  // GUC fix: disciplinary.hrms_disciplinary_cases has FORCE ROW LEVEL
+  // SECURITY (migration 0034); sqlPool.query() never set app.tenant_id here,
+  // so this list silently returned zero rows for every caller regardless of
+  // role or data — the same bug class as certifications/staffing-plan/
+  // work-summaries above, just on the disciplinary-cases list rather than
+  // its mutating routes (those already got ownership checks in PR #1555;
+  // this is the read-side GUC gap that PR's own reviewer found and
+  // recommended folding into this file-wide fix).
   app.get("/v1/hrms/disciplinary-cases", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const { rows } = await sqlPool.query(`
-      SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
-             c.proceeding_type, c.allegation AS charges,
-             c.charge_memo_date AS filed_date,
-             COALESCE(c.inquiry_officer_name,'Unassigned') AS inquiry_officer,
-             c.status
-      FROM disciplinary.hrms_disciplinary_cases c
-      JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
-      LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
-      WHERE c.tenant_id = $1
-      ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
-    `, [ctx.tenantId]);
+    const rows = await sqlClient.begin(async (sql) => {
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      return sql.unsafe(`
+        SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+               c.proceeding_type, c.allegation AS charges,
+               c.charge_memo_date AS filed_date,
+               COALESCE(c.inquiry_officer_name,'Unassigned') AS inquiry_officer,
+               c.status
+        FROM disciplinary.hrms_disciplinary_cases c
+        JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
+        LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
+        WHERE c.tenant_id = $1
+        ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
+      `, [ctx.tenantId]);
+    });
     return reply.send({ data: rows });
   });
 
@@ -663,19 +674,25 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Gap: Vigilance (major disciplinary cases) ──────────────────────────────
+  // GUC fix: same as disciplinary-cases above — this list queries the same
+  // FORCE-RLS table (filtered to proceeding_type='major') and had the same
+  // missing app.tenant_id gap, silently returning zero rows for every caller.
   app.get("/v1/hrms/vigilance", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const { rows } = await sqlPool.query(`
-      SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
-             c.allegation AS charges, c.charge_memo_date AS "filedDate",
-             COALESCE(c.inquiry_officer_name,'Not Appointed') AS "inquiryOfficer",
-             c.inquiry_appointed_date AS "nextHearing", c.status
-      FROM disciplinary.hrms_disciplinary_cases c
-      JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
-      LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
-      WHERE c.tenant_id = $1 AND c.proceeding_type = 'major'
-      ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
-    `, [ctx.tenantId]);
+    const rows = await sqlClient.begin(async (sql) => {
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      return sql.unsafe(`
+        SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+               c.allegation AS charges, c.charge_memo_date AS "filedDate",
+               COALESCE(c.inquiry_officer_name,'Not Appointed') AS "inquiryOfficer",
+               c.inquiry_appointed_date AS "nextHearing", c.status
+        FROM disciplinary.hrms_disciplinary_cases c
+        JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
+        LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
+        WHERE c.tenant_id = $1 AND c.proceeding_type = 'major'
+        ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
+      `, [ctx.tenantId]);
+    });
     return reply.send({ data: rows });
   });
 
