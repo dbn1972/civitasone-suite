@@ -1,4 +1,4 @@
-import { hraExemptionMinor, annualTaxFromTaxableMinor, trueUpTdsMinor, stdDeduction, PLATFORM_DEFAULT_TENANT_ID, type Regime } from "../tax/engine.js";
+import { hraExemptionMinor, annualTaxFromTaxableMinor, trueUpTdsMinor, stdDeduction, divRoundBig, PLATFORM_DEFAULT_TENANT_ID, type Regime } from "../tax/engine.js";
 
 /** Employee tax declaration inputs for old-regime exemptions (annual paise). */
 export interface TaxDeclarationInput {
@@ -367,9 +367,18 @@ export function computeSlip(input: SlipInput): SlipResult {
   }
   if (annualTaxableMinor < 0n) annualTaxableMinor = 0n;
   const annualTaxMinor = annualTaxFromTaxableMinor(annualTaxableMinor, taxRegime, fyStartYear, taxTenantId);
+  // LOW (payroll-calc audit): the flat /12 fallback (no monthsRemaining
+  // supplied) used plain truncating division, the same under-withholding
+  // pattern as the pension-run TDS bug (consumer.ts processPensionRun).
+  // Currently unreachable in production -- computeAndInsertSlip's one real
+  // caller (processPayrollRun) always supplies monthsRemaining -- but this
+  // branch IS exercised directly by callers of computeSlip() that omit it
+  // (e.g. a preview/estimate with no run context), so it is fixed for
+  // consistency: round-half-up via tax/engine.ts's own divRoundBig, not a
+  // flat truncate.
   const tdsMinor = monthsRemaining != null
     ? trueUpTdsMinor(annualTaxMinor, tdsYtdMinor ?? 0n, monthsRemaining)         // Sec 192 true-up
-    : (annualTaxMinor / 100n / 12n) * 100n;                                       // flat /12 fallback
+    : roundRupee(divRoundBig(annualTaxMinor, 12n));                              // flat /12 fallback
 
   // Statutory pension/insurance/tax deductions are never floored.
   const statutoryDeductions = pfEmployeeMinor + esiMinor + tdsMinor + gpfMinor + npsEmployeeMinor;

@@ -12,7 +12,7 @@ import * as lopRepo from "../integration/lop-repo.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
 import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type StatutoryConfig, type StatutoryConfigRow } from "./domain.js";
-import { annualTaxFromTaxableMinor, stdDeduction, type Regime } from "../tax/engine.js";
+import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
@@ -61,9 +61,21 @@ export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string,
   return resolveStatutoryConfig(mapped, tenantId, month);
 }
 
-/** Resolve the DA rate (basis points) effective for the run month (Iter1). */
-async function resolveDaRateBps(tenantId: string, month: string): Promise<bigint> {
-  const rows = (await db.execute(sql`
+/**
+ * Resolve the DA rate (basis points) effective on/before the given month.
+ * `tx` first, matching resolvePtSlabs/resolveLatestRevision's convention
+ * below: pass the module-level `db` for a pre-transaction call, or the
+ * caller's own open `tx` when called from inside a `db.transaction()` (see
+ * the "tenantTransaction re-audit" comment on resolvePtSlabs — a bare
+ * db.execute() from inside an already-open outer transaction checks out a
+ * SEPARATE pool connection and risks the same deadlock class).
+ *
+ * HIGH (payroll-calc audit): this is now also called PER HISTORICAL PERIOD
+ * from inside generateRetroArrears's loop, not just once for the run month —
+ * see that function's own comment for why.
+ */
+async function resolveDaRateBps(tx: typeof db, tenantId: string, month: string): Promise<bigint> {
+  const rows = (await tx.execute(sql`
     SELECT rate_bps FROM payroll.dearness_allowance_rates
     WHERE tenant_id = ${tenantId}::uuid AND effective_from <= ${month + "-01"}::date
     ORDER BY effective_from DESC LIMIT 1
@@ -303,13 +315,24 @@ export async function resolveLatestRevisionsTx(tx: typeof db, tenantId: string, 
  * run month. Idempotent: the unique partial index
  * ux_payroll_arrears_revision_period(tenant,employee,component,from_period)
  * WHERE source='revision' makes re-inserts a no-op.
+ *
+ * HIGH (payroll-calc audit): DA/DR changes roughly twice a year and has only
+ * ever risen historically. The DA rate — and with it the HRA slab tier, which
+ * escalates at the SAME 25%/50% DA thresholds (hraSlabPct) — used to be
+ * resolved ONCE for the run month and reused unchanged for every historical
+ * period below, so a revision effective before a DA rate change had its
+ * pre-change months priced at the (higher) run-month rate: a systematic
+ * overpayment. Each period in the loop below now resolves its OWN historical
+ * DA rate via resolveDaRateBps(tx, ...) instead of taking one in from the
+ * caller. `daRateCache` just avoids re-querying the same period twice when
+ * two revisions' spans overlap (a later revision's own effMonth..runMonth-1
+ * range can revisit periods an earlier revision already covered).
  */
-async function generateRetroArrears(
+export async function generateRetroArrears(
   tx: typeof db,
   tenantId: string,
   employeeId: string,
   runMonth: string,
-  daRateBps: bigint,
   cityClass: CityClass,
   actorId: string,
 ): Promise<void> {
@@ -320,34 +343,45 @@ async function generateRetroArrears(
       AND to_char(effective_date,'YYYY-MM') < ${runMonth}
     ORDER BY effective_date ASC
   `)) as unknown as Array<{ old_basic_minor: string | number; new_basic_minor: string | number; effective_date: string }>;
-  const hraPct = hraSlabPct(cityClass, daRateBps);
+  const daRateCache = new Map<string, bigint>();
+  const daRateForPeriod = async (period: string): Promise<bigint> => {
+    let rate = daRateCache.get(period);
+    if (rate === undefined) {
+      rate = await resolveDaRateBps(tx, tenantId, period);
+      daRateCache.set(period, rate);
+    }
+    return rate;
+  };
   for (const r of revs) {
     const oldBasic = BigInt(r.old_basic_minor);
     const newBasic = BigInt(r.new_basic_minor);
     const effMonth = r.effective_date.slice(0, 7); // YYYY-MM
-    // Per-month delta = delta basic + delta DA + delta HRA on the basic delta.
     const basicDelta = newBasic - oldBasic;
     if (basicDelta === 0n) continue;
-    const daDelta  = roundRupee((basicDelta * daRateBps) / 10000n);
-    const hraDelta = roundRupee((basicDelta * hraPct) / 100n);
-    const perMonth = basicDelta + daDelta + hraDelta;
-    // H1: a back-dated pay DECREASE (negative delta) is an overpayment that must
-    // be RECOVERED, not paid as a negative earning. A negative EARNING bypasses
-    // the protected-net floor (ARREAR is not a RECOVERY_CODE) and can silently
-    // clamp net to 0. Route the absolute overpayment as an ARREAR_RECOVERY
-    // *deduction* row (component_code='ARREAR_RECOVERY'), which IS floor-protected
-    // and carry-forward-eligible in computeSlip. Positive deltas stay 'ARREAR'.
-    const isRecovery = perMonth < 0n;
-    const componentCode = isRecovery ? "ARREAR_RECOVERY" : "ARREAR";
-    const storedDiff = isRecovery ? -perMonth : perMonth; // store positive magnitude
-    const reason = isRecovery
-      ? "salary revision overpayment recovery"
-      : "salary revision retro arrears";
-    // Iterate effMonth .. runMonth-1 inclusive.
+    // Iterate effMonth .. runMonth-1 inclusive, pricing DA/HRA fresh per period.
     let [y, m] = effMonth.split("-").map(Number) as [number, number];
     const [ry, rm] = runMonth.split("-").map(Number) as [number, number];
     while (y < ry || (y === ry && m < rm)) {
       const period = `${y}-${String(m).padStart(2, "0")}`;
+      const periodDaRateBps = await daRateForPeriod(period);
+      const hraPct = hraSlabPct(cityClass, periodDaRateBps);
+      // Per-month delta = delta basic + delta DA + delta HRA on the basic
+      // delta, all at THIS period's own historical rate (not the run month's).
+      const daDelta  = roundRupee((basicDelta * periodDaRateBps) / 10000n);
+      const hraDelta = roundRupee((basicDelta * hraPct) / 100n);
+      const perMonth = basicDelta + daDelta + hraDelta;
+      // H1: a back-dated pay DECREASE (negative delta) is an overpayment that must
+      // be RECOVERED, not paid as a negative earning. A negative EARNING bypasses
+      // the protected-net floor (ARREAR is not a RECOVERY_CODE) and can silently
+      // clamp net to 0. Route the absolute overpayment as an ARREAR_RECOVERY
+      // *deduction* row (component_code='ARREAR_RECOVERY'), which IS floor-protected
+      // and carry-forward-eligible in computeSlip. Positive deltas stay 'ARREAR'.
+      const isRecovery = perMonth < 0n;
+      const componentCode = isRecovery ? "ARREAR_RECOVERY" : "ARREAR";
+      const storedDiff = isRecovery ? -perMonth : perMonth; // store positive magnitude
+      const reason = isRecovery
+        ? "salary revision overpayment recovery"
+        : "salary revision retro arrears";
       await tx.execute(sql`
         INSERT INTO payroll.payroll_arrears
           (tenant_id, employee_id, component_code, from_period, to_period,
@@ -1121,7 +1155,7 @@ async function processPayrollRun(
   const structComps = await repo.listComponentsByStructure(p.structureId, p.tenantId);
   // Multi-DDO: the departments this DDO pays (null => whole tenant, legacy).
   const ddoDepartments = await resolveDdoDepartments(p.tenantId, p.ddoCode ?? null);
-  const daRateBps = await resolveDaRateBps(p.tenantId, p.month);
+  const daRateBps = await resolveDaRateBps(db, p.tenantId, p.month);
   // H14 FIX: PT slabs are now resolved per-employee (by state_code) inside the loop.
   // A tenant-level fallback is kept for employees without a state_code.
   const ptSlabsFallback = await resolvePtSlabs(db, p.tenantId);
@@ -1213,7 +1247,7 @@ async function processPayrollRun(
       // collecting earnings, so this run pays them. Only the regular run
       // generates them (idempotent index makes re-runs a no-op anyway).
       if ((p.runType ?? "regular") === "regular") {
-        await generateRetroArrears(tx as unknown as typeof db, p.tenantId, emp.id, p.month, daRateBps, cityClass, msg.actorId);
+        await generateRetroArrears(tx as unknown as typeof db, p.tenantId, emp.id, p.month, cityClass, msg.actorId);
       }
 
       // P2: source current Basic from the latest revision effective on/before the
@@ -1255,9 +1289,11 @@ async function processPayrollRun(
         ? Math.max(0, Number(doj!.slice(8, 10)) - 1)
         : 0;
       const lopDays = Math.min(Number(daysInMonth), attendanceLopDays + joiningUnpaidDays);
-      // LOP daily rate on (Basic + DA) over actual days in month.
-      const dailyRate = (basicMinor + daMinor) / daysInMonth;
-      const lopDeduction = dailyRate * BigInt(lopDays);
+      // LOP daily rate on (Basic + DA) over actual days in month. Multiply
+      // before dividing (LOW, payroll-calc audit): dividing first truncated
+      // the per-day rate before scaling by lopDays, under-withholding LOP by
+      // up to a few sub-rupee paise per employee per run.
+      const lopDeduction = ((basicMinor + daMinor) * BigInt(lopDays)) / daysInMonth;
 
       // Iter2: real loan recovery — split interest/principal, cap at outstanding.
       // P3: the actual EMI withheld may be capped by the protected-net floor, so
@@ -1449,8 +1485,14 @@ async function processPensionRun(
   msg: { tenantId: string; actorId: string; correlationId: string },
   p: { id: string; tenantId: string; month: string; ddoCode: string | null },
 ): Promise<void> {
-  const drRateBps = await resolveDaRateBps(p.tenantId, p.month); // DR shares the DA series
+  const drRateBps = await resolveDaRateBps(db, p.tenantId, p.month); // DR shares the DA series
   const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
+  // MEDIUM (payroll-calc audit): Sec 192 true-up, same monthIdxInFy/
+  // monthsRemaining formula processPayrollRun uses -- pension is taxable as
+  // salary (see computePension's own doc comment), so it earns the same
+  // treatment.
+  const monthIdxInFy = (Number(p.month.slice(5, 7)) - 4 + 12) % 12; // Apr=0..Mar=11
+  const monthsRemaining = 12 - monthIdxInFy;
 
   const pensioners = (await db.execute(sql`
     SELECT id, ppo_no, full_name, date_of_birth::text AS date_of_birth,
@@ -1471,6 +1513,15 @@ async function processPensionRun(
   const alreadyComputed = new Set(existingSlips.map((s) => s.employeeId));
 
   await db.transaction(async (tx) => {
+    // MEDIUM: batched YTD-TDS pre-fetch, reusing resolveTdsYtdMinorsTx as-is —
+    // pensioner TDS rows live in the SAME statutory.payroll_tds table as the
+    // salary path, keyed by employee_id = pensioner id and joined to
+    // payroll.payroll_runs (pensioner runs included, same table, run_type=
+    // 'pensioner'), so no new query shape is needed, only reuse. Mirrors the
+    // PERF-021 batched-pre-fetch pattern processPayrollRun already uses.
+    const pensionerIds = pensioners.filter((pen) => !alreadyComputed.has(pen.id)).map((pen) => pen.id);
+    const tdsYtdByPensioner = await resolveTdsYtdMinorsTx(tx as unknown as typeof db, p.tenantId, pensionerIds, fyStart, p.month);
+
     for (const pen of pensioners) {
       if (alreadyComputed.has(pen.id)) continue;
       const regime: Regime = pen.tax_regime === "old" ? "old" : "new";
@@ -1496,7 +1547,17 @@ async function processPensionRun(
       let annualTaxable = annualGross - stdDed;
       if (annualTaxable < 0n) annualTaxable = 0n;
       const annualTax = annualTaxFromTaxableMinor(annualTaxable, regime, fyStart, p.tenantId);
-      const tdsMinor = (annualTax / 100n / 12n) * 100n; // even monthly spread, rupee-rounded
+      // MEDIUM fix: Sec 192 true-up (round-half-up spread + full-residual
+      // final month), reusing tax/engine.ts's trueUpTdsMinor -- was plain
+      // truncating bigint division (comment claimed "rupee-rounded" but
+      // wasn't) recomputed from scratch every month with no memory of TDS
+      // already withheld. When DR rose mid-year, months before the rise were
+      // under-withheld with nothing correcting it later; now each month's
+      // withholding is trued up against what this pensioner has actually had
+      // withheld so far this FY (tdsYtdByPensioner, from approved/disbursed
+      // runs only — same M3 guard as the salary path).
+      const tdsYtdMinor = tdsYtdByPensioner.get(pen.id) ?? 0n;
+      const tdsMinor = trueUpTdsMinor(annualTax, tdsYtdMinor, monthsRemaining);
 
       const result = computePension({
         basicPensionMinor: BigInt(pen.basic_pension_minor),
