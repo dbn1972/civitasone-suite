@@ -20,6 +20,7 @@ import { Button } from "@/app/_components/ds";
 type Employee = { id: string; name?: string; designation?: string; departmentId?: string; department?: string };
 type Department = { id: string; name: string };
 type Officer = { id: string; name: string; designation?: string };
+type PayStructureOption = { id: string; name?: string; code?: string };
 
 export function TransferWithApproval() {
   const [open, setOpen] = useState(false);
@@ -27,6 +28,7 @@ export function TransferWithApproval() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [officers, setOfficers] = useState<Officer[]>([]);
+  const [payStructures, setPayStructures] = useState<PayStructureOption[]>([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const { toast } = useToast();
@@ -35,6 +37,12 @@ export function TransferWithApproval() {
   const [fromDeptId, setFromDeptId] = useState("");
   const [fromDeptName, setFromDeptName] = useState("");
   const [toDeptId, setToDeptId] = useState("");
+  // HIGH fix (PR #1552 review): optional -- omitting it means "no pay-
+  // structure change", not an error. Backend already accepts it on both
+  // transfer paths (lifecycle/validators.ts's transferBody, applied by
+  // employee/consumer.ts and lifecycle/eoffice-consumer.ts); this wires the
+  // one remaining gap, the actual UI never sending it.
+  const [payStructureId, setPayStructureId] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
   const [initiatedBy, setInitiatedBy] = useState("");
   const [currentWith, setCurrentWith] = useState("");
@@ -51,10 +59,12 @@ export function TransferWithApproval() {
     if (!open) return;
     void (async () => {
       try {
-        const [empRes, deptRes, offRes] = await Promise.all([
+        const [empRes, deptRes, offRes, psRes] = await Promise.all([
           fetch("/api/proxy/v1/hrms/employees?limit=200"),
           fetch("/api/proxy/v1/hrms/departments?limit=200"),
           fetch("/api/proxy/v1/identity/users?limit=200"),
+          // Same endpoint/pattern as EditEmployeeForm.tsx's pay-structure picker.
+          fetch("/api/proxy/v1/payroll/structures?limit=200"),
         ]);
         if (empRes.ok) {
           const body = (await empRes.json()) as { data?: Employee[] } | Employee[];
@@ -68,12 +78,17 @@ export function TransferWithApproval() {
           const body = (await offRes.json()) as { data?: Officer[] } | Officer[];
           setOfficers(Array.isArray(body) ? body : (body.data ?? []));
         }
+        if (psRes.ok) {
+          const body = (await psRes.json()) as { data?: PayStructureOption[] } | PayStructureOption[];
+          setPayStructures(Array.isArray(body) ? body : (body.data ?? []));
+        }
       } catch { /* graceful fallback to text inputs */ }
     })();
   }, [open]);
 
   const reset = () => {
     setEmployeeId(""); setFromDeptId(""); setFromDeptName(""); setToDeptId("");
+    setPayStructureId("");
     setEffectiveDate(""); setInitiatedBy(""); setCurrentWith(""); setNote("");
     setSubmittedTransferId(null);
     setStep(1);
@@ -111,7 +126,14 @@ export function TransferWithApproval() {
         const subRes = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/transfer/submit-approval`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ fromDeptId, toDeptId, effectiveDate }),
+          // payStructureId is optional server-side (lifecycle/validators.ts's
+          // transferBody) -- omit it entirely rather than sending "" so a
+          // transfer with no pay-structure change is unambiguously "no
+          // change", not an empty-string value.
+          body: JSON.stringify({
+            fromDeptId, toDeptId, effectiveDate,
+            payStructureId: payStructureId || undefined,
+          }),
         });
         if (!subRes.ok) throw new Error((await subRes.text()) || "Could not create transfer request");
         const sub = (await subRes.json()) as { id?: string };
@@ -152,7 +174,7 @@ export function TransferWithApproval() {
     } finally {
       setSaving(false);
     }
-  }, [employeeId, fromDeptId, toDeptId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, submittedTransferId, toast]);
+  }, [employeeId, fromDeptId, toDeptId, payStructureId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, submittedTransferId, toast]);
 
   return (
     <>
@@ -243,6 +265,29 @@ export function TransferWithApproval() {
                     onChange={(e) => setEffectiveDate(e.target.value)}
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   />
+                </label>
+
+                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
+                  <span style={{ fontWeight: 600 }}>New pay structure (optional)</span>
+                  {payStructures.length > 0 ? (
+                    <select
+                      value={payStructureId}
+                      onChange={(e) => setPayStructureId(e.target.value)}
+                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                    >
+                      <option value="">No change</option>
+                      {payStructures.map((ps) => (
+                        <option key={ps.id} value={ps.id}>{ps.name ?? ps.code ?? ps.id}</option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      value={payStructureId}
+                      placeholder="Pay structure ID (optional)"
+                      onChange={(e) => setPayStructureId(e.target.value)}
+                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                    />
+                  )}
                 </label>
               </div>
 

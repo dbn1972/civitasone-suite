@@ -16,7 +16,7 @@
 //
 //  1. The UX-004 scanner's combined hardcoded-string count for the four
 //     directories does not regress above the count left after this tranche
-//     (26 findings, all confirmed -- by manual review of every single one
+//     (36 findings, all confirmed -- by manual review of every single one
 //     -- to be scanner false positives: TypeScript generic brackets/
 //     useState/useRef declarations split across lines, comparison
 //     operators (e.g. `r.status === "approved"`) sitting next to a
@@ -26,6 +26,17 @@
 //     immediately before them. None are real UI text. If this test starts
 //     failing because the count went *up*, that's the signal to check for
 //     a real regression with `--list`.
+//
+//     Ceiling raised 26 -> 36 (PR #1552 review, UX-017 follow-up):
+//     CreateSalaryRevisionForm.tsx converted to next-intl
+//     (useTranslations("createSalaryRevisionForm") + an `invalidField`
+//     identity replacing message-string comparisons -- see its own header
+//     comment) added several new useState/useRef declarations and a
+//     `Record<RevisionType, string>` generic. Verified with `--list`: all 10
+//     new findings in that file (plus one pre-existing, unrelated
+//     page.tsx:24 false positive merely shifted past the old ceiling index)
+//     are the exact same useState/useRef/generic-declaration code-fragment
+//     class documented above -- zero real hardcoded UI text among them.
 //
 //  2. Every message key referenced by this slice's namespaces exists in
 //     *both* en.json and hi.json (no locale silently falls back to a
@@ -56,7 +67,7 @@ function walk(dir, out = []) {
   return out;
 }
 
-const HR_PAYROLL_ADJUSTMENTS_HARDCODED_STRING_CEILING = 26;
+const HR_PAYROLL_ADJUSTMENTS_HARDCODED_STRING_CEILING = 36;
 
 describe("hr/payroll/{arrears,corrections,off-cycle,salary-revisions} i18n coverage (UX-017 tranche 11)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {
@@ -88,6 +99,7 @@ describe("hr/payroll/{arrears,corrections,off-cycle,salary-revisions} i18n cover
       "offCycleCard",
       "offCycleList",
       "salaryRevisions",
+      "createSalaryRevisionForm",
     ];
 
     function leafKeys(obj, prefix = "") {

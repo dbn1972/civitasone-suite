@@ -1,4 +1,4 @@
--- 0144_transfer_pay_structure.sql
+-- 0147_transfer_pay_structure.sql
 -- HIGH fix (cross-module integration audit follow-up): a transfer to a new
 -- department can imply a different pay scale/structure, but neither transfer
 -- path (direct employee/consumer.ts, or the eOffice-approved

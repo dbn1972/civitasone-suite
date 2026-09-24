@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -8,6 +10,18 @@ vi.mock("next/navigation", () => ({
 
 import { CreateSalaryRevisionForm } from "./CreateSalaryRevisionForm";
 
+// UX-017: CreateSalaryRevisionForm now reads its copy through next-intl
+// (useTranslations("createSalaryRevisionForm")), so every render needs a
+// real provider in the tree -- same pattern as
+// ../off-cycle/CreateOffCycleForm.test.tsx.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <CreateSalaryRevisionForm />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("CreateSalaryRevisionForm", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -15,20 +29,20 @@ describe("CreateSalaryRevisionForm", () => {
   });
 
   it("requires an employee id before opening the confirm dialog", () => {
-    render(<CreateSalaryRevisionForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
     expect(screen.getByText("Employee ID is required.")).toBeInTheDocument();
   });
 
   it("requires a valid effective date", () => {
-    render(<CreateSalaryRevisionForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
     expect(screen.getByText("Effective date must be in YYYY-MM-DD format.")).toBeInTheDocument();
   });
 
   it("requires a positive new basic amount", () => {
-    render(<CreateSalaryRevisionForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
     fireEvent.change(screen.getByLabelText(/^Effective Date/), { target: { value: "2026-08-01" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
@@ -40,7 +54,7 @@ describe("CreateSalaryRevisionForm", () => {
       new Response(JSON.stringify({ id: "sr1", status: "accepted", correlationId: "c1" }), { status: 202 }),
     );
 
-    render(<CreateSalaryRevisionForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
     fireEvent.change(screen.getByLabelText(/^Effective Date/), { target: { value: "2026-08-01" } });
     fireEvent.change(screen.getByLabelText(/^New Basic/), { target: { value: "44000" } });
@@ -71,7 +85,7 @@ describe("CreateSalaryRevisionForm", () => {
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/status", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
 
-    render(<CreateSalaryRevisionForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
     fireEvent.change(screen.getByLabelText(/^Effective Date/), { target: { value: "2026-08-01" } });
     fireEvent.change(screen.getByLabelText(/^New Basic/), { target: { value: "44000" } });

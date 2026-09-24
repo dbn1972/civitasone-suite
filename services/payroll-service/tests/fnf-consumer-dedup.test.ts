@@ -1,14 +1,37 @@
 /**
  * HIGH regression (defense in depth): payroll.fnf_settlements now carries a
- * unique (tenant_id, employee_id) index (migrations/
- * 0044_fnf_settlements_unique.sql) so at most one settlement can ever exist
- * per employee -- reachable both via a duplicated hrms.employee.separated
- * event (closed at the source by hrms-service's separateEmployee messageId
- * fix) and via POST /v1/payroll/fnf/compute being called twice directly,
- * which that source-side fix cannot reach. This covers the consumer's own
- * handling of that constraint: onConflictDoNothing must make a duplicate
- * payroll.fnf.compute command a safe no-op (skip the event/audit) instead of
- * letting an unhandled 23505 roll back markProcessed and retry forever.
+ * unique (tenant_id, employee_id, separation_date) index (migrations/
+ * 0044_fnf_settlements_unique.sql, widened by
+ * 0045_fnf_settlements_unique_with_date.sql) so at most one settlement can
+ * ever exist per employee PER SEPARATION DATE -- reachable both via a
+ * duplicated hrms.employee.separated event (closed at the source by
+ * hrms-service's separateEmployee messageId fix) and via POST
+ * /v1/payroll/fnf/compute being called twice directly, which that
+ * source-side fix cannot reach.
+ *
+ * IMPORTANT: this is NOT "at most one settlement per employee, full stop" --
+ * an employee CAN be legitimately separated more than once (separate ->
+ * reinstate -> separate again), each with its own separation_date, and each
+ * must get its own settlement row. That is exactly why separation_date is
+ * part of the unique key rather than just (tenant_id, employee_id): an
+ * earlier version of this fix keyed the index on (tenant_id, employee_id)
+ * alone, which silently dropped the second, legitimate settlement outright
+ * (live-reproduced against real Postgres -- see
+ * fnf-settlements-unique-real-db.test.ts for the real-DB proof of both the
+ * "two legitimate settlements" and "true duplicate" cases; this file only
+ * covers the consumer's own mechanical handling of onConflictDoNothing,
+ * below).
+ *
+ * This file covers the consumer's own handling of that constraint:
+ * onConflictDoNothing must make a duplicate payroll.fnf.compute command (same
+ * employee, same separation_date) a safe no-op (skip the event/audit)
+ * instead of letting an unhandled 23505 roll back markProcessed and retry
+ * forever. It does NOT exercise the real unique index (the mock's
+ * `insertReturningMock` just simulates "conflict occurred" vs "no conflict"
+ * regardless of which columns are in the target) -- that real-DB proof lives
+ * in fnf-settlements-unique-real-db.test.ts, mirroring
+ * integration-separation-gratuity.test.ts's mock-based harness here for the
+ * consumer-logic layer.
  *
  * Mock-based (no real DB), mirroring integration-separation-gratuity.test.ts's
  * harness. computeFnfSettlement (domain.ts) runs for real -- it's a pure
@@ -113,7 +136,7 @@ describe("payroll.fnf.compute -- unique-constraint dedup", () => {
     await q.stop();
   });
 
-  it("skips fnfComputed + audit when the unique (tenant_id, employee_id) index rejects a duplicate insert", async () => {
+  it("skips fnfComputed + audit when the unique (tenant_id, employee_id, separation_date) index rejects a duplicate insert", async () => {
     // onConflictDoNothing().returning() resolves empty when the insert hit
     // the conflict target instead of writing a row.
     insertReturningMock.mockResolvedValue([]);

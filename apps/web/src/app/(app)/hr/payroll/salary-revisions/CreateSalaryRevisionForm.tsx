@@ -9,25 +9,37 @@
  * repo.ts at the time), which was stale by the time this form was written.
  * Modeled directly on ../reimbursements/CreateReimbursementForm.tsx, the
  * closest existing analog (another CQRS-lifted list+create payroll screen).
+ *
+ * UX-017 (PR #1552 review): copy now reads through next-intl
+ * (useTranslations("createSalaryRevisionForm")) instead of hardcoded English
+ * -- same convention as ../off-cycle/CreateOffCycleForm.tsx and
+ * ../corrections/CreateCorrectionForm.tsx. Field-invalidity is tracked as its
+ * own `invalidField` identity rather than re-testing the live `message`
+ * state against an English literal (`message === "Employee ID is
+ * required."` etc.) -- the same "translated text used as a logic identity"
+ * bug class CreateOffCycleForm.tsx's own invalidField fix already closed:
+ * once `message` holds translated text, a hardcoded-English comparison
+ * silently stops matching under any non-English locale, breaking
+ * aria-invalid/aria-describedby for every non-English user.
  */
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
 
-const REVISION_TYPES = [
-  { value: "annual_increment", label: "Annual Increment" },
-  { value: "promotion", label: "Promotion" },
-  { value: "correction", label: "Correction" },
-  { value: "fitment", label: "Fitment" },
-] as const;
+const REVISION_TYPE_VALUES = ["annual_increment", "promotion", "correction", "fitment"] as const;
+type RevisionType = (typeof REVISION_TYPE_VALUES)[number];
+
+type InvalidField = "employeeId" | "effectiveDate" | "newBasic" | "newGross" | null;
 
 export function CreateSalaryRevisionForm() {
+  const t = useTranslations("createSalaryRevisionForm");
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
-  const [revisionType, setRevisionType] = useState<(typeof REVISION_TYPES)[number]["value"]>("annual_increment");
+  const [revisionType, setRevisionType] = useState<RevisionType>("annual_increment");
   const [oldBasic, setOldBasic] = useState("");
   const [newBasic, setNewBasic] = useState("");
   const [oldGross, setOldGross] = useState("");
@@ -38,6 +50,7 @@ export function CreateSalaryRevisionForm() {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const empId = useId();
   const dateId = useId();
@@ -53,37 +66,49 @@ export function CreateSalaryRevisionForm() {
   const newBasicRef = useRef<HTMLInputElement>(null);
   const newGrossRef = useRef<HTMLInputElement>(null);
 
-  const empInvalid = tone === "bad" && message === "Employee ID is required.";
-  const dateInvalid = tone === "bad" && !!message && message.startsWith("Effective date");
-  const newBasicInvalid = tone === "bad" && !!message && message.startsWith("New basic");
-  const newGrossInvalid = tone === "bad" && !!message && message.startsWith("New gross");
+  const REVISION_TYPE_LABELS: Record<RevisionType, string> = {
+    annual_increment: t("revisionTypeAnnualIncrementOption"),
+    promotion: t("revisionTypePromotionOption"),
+    correction: t("revisionTypeCorrectionOption"),
+    fitment: t("revisionTypeFitmentOption"),
+  };
+
+  const empInvalid = tone === "bad" && invalidField === "employeeId";
+  const dateInvalid = tone === "bad" && invalidField === "effectiveDate";
+  const newBasicInvalid = tone === "bad" && invalidField === "newBasic";
+  const newGrossInvalid = tone === "bad" && invalidField === "newGross";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
     if (!employeeId.trim()) {
       setTone("bad");
-      setMessage("Employee ID is required.");
+      setInvalidField("employeeId");
+      setMessage(t("employeeIdRequiredError"));
       empRef.current?.focus();
       return;
     }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveDate.trim())) {
       setTone("bad");
-      setMessage("Effective date must be in YYYY-MM-DD format.");
+      setInvalidField("effectiveDate");
+      setMessage(t("effectiveDateFormatError"));
       dateRef.current?.focus();
       return;
     }
     const newBasicRupees = parseFloat(newBasic);
     if (Number.isNaN(newBasicRupees) || newBasicRupees <= 0) {
       setTone("bad");
-      setMessage("New basic must be a positive value in rupees.");
+      setInvalidField("newBasic");
+      setMessage(t("newBasicRequiredError"));
       newBasicRef.current?.focus();
       return;
     }
     const newGrossRupees = parseFloat(newGross);
     if (Number.isNaN(newGrossRupees) || newGrossRupees <= 0) {
       setTone("bad");
-      setMessage("New gross must be a positive value in rupees.");
+      setInvalidField("newGross");
+      setMessage(t("newGrossRequiredError"));
       newGrossRef.current?.focus();
       return;
     }
@@ -111,10 +136,16 @@ export function CreateSalaryRevisionForm() {
       });
       setConfirmOpen(false);
       setTone("good");
+      setInvalidField(null);
       // Built from local form state, not the response body -- the accepted-
       // envelope's `data` field is optional and this route doesn't populate
       // it (see world-class-routes.ts / payroll/commands.ts createSalaryRevision).
-      setMessage(`Salary revision to ${formatMoney(toMinor(newBasic))} recorded for employee ${employeeId.trim()}.`);
+      setMessage(
+        t("recordedMessage", {
+          amount: formatMoney(toMinor(newBasic)),
+          employeeId: employeeId.trim(),
+        }),
+      );
       setEmployeeId("");
       setEffectiveDate("");
       setOldBasic("");
@@ -124,7 +155,7 @@ export function CreateSalaryRevisionForm() {
       setOrderNo("");
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -132,12 +163,12 @@ export function CreateSalaryRevisionForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Record Salary Revision" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Employee ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={empId}
@@ -152,7 +183,7 @@ export function CreateSalaryRevisionForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Effective Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("effectiveDateLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={dateId}
@@ -167,20 +198,20 @@ export function CreateSalaryRevisionForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>Revision Type</label>
+              <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>{t("revisionTypeLabel")}</label>
               <select
                 id={typeId}
                 value={revisionType}
-                onChange={(e) => setRevisionType(e.target.value as typeof revisionType)}
+                onChange={(e) => setRevisionType(e.target.value as RevisionType)}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
               >
-                {REVISION_TYPES.map((r) => (
-                  <option key={r.value} value={r.value}>{r.label}</option>
+                {REVISION_TYPE_VALUES.map((v) => (
+                  <option key={v} value={v}>{REVISION_TYPE_LABELS[v]}</option>
                 ))}
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={oldBasicId} style={{ fontSize: 13, fontWeight: 600 }}>Old Basic (₹)</label>
+              <label htmlFor={oldBasicId} style={{ fontSize: 13, fontWeight: 600 }}>{t("oldBasicLabel")}</label>
               <input
                 id={oldBasicId}
                 type="number"
@@ -193,7 +224,7 @@ export function CreateSalaryRevisionForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={newBasicId} style={{ fontSize: 13, fontWeight: 600 }}>
-                New Basic (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("newBasicLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={newBasicId}
@@ -210,7 +241,7 @@ export function CreateSalaryRevisionForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={oldGrossId} style={{ fontSize: 13, fontWeight: 600 }}>Old Gross (₹)</label>
+              <label htmlFor={oldGrossId} style={{ fontSize: 13, fontWeight: 600 }}>{t("oldGrossLabel")}</label>
               <input
                 id={oldGrossId}
                 type="number"
@@ -223,7 +254,7 @@ export function CreateSalaryRevisionForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={newGrossId} style={{ fontSize: 13, fontWeight: 600 }}>
-                New Gross (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("newGrossLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={newGrossId}
@@ -240,7 +271,7 @@ export function CreateSalaryRevisionForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={orderId} style={{ fontSize: 13, fontWeight: 600 }}>Order No.</label>
+              <label htmlFor={orderId} style={{ fontSize: 13, fontWeight: 600 }}>{t("orderNoLabel")}</label>
               <input
                 id={orderId}
                 value={orderNo}
@@ -253,7 +284,7 @@ export function CreateSalaryRevisionForm() {
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              Record Revision
+              {t("submitBtn")}
             </Button>
           </div>
 
@@ -273,17 +304,17 @@ export function CreateSalaryRevisionForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Record this salary revision?"
-        confirmLabel="Record revision"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Record a {REVISION_TYPES.find((r) => r.value === revisionType)?.label.toLowerCase()} revision to{" "}
-            {formatMoney(Math.round((parseFloat(newBasic) || 0) * 100))} basic for employee{" "}
-            <strong>{employeeId}</strong>, effective {effectiveDate}.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          revisionType: REVISION_TYPE_LABELS[revisionType].toLowerCase(),
+          amount: formatMoney(Math.round((parseFloat(newBasic) || 0) * 100)),
+          employeeId,
+          effectiveDate,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void createSalaryRevision()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

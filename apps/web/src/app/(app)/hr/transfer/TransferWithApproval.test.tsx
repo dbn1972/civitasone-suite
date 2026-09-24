@@ -19,27 +19,33 @@ const OFFICERS = [
   { id: "off-1", name: "S. Rao", designation: "Section Officer" },
   { id: "off-2", name: "P. Iyer", designation: "Under Secretary" },
 ];
+const PAY_STRUCTURES = [
+  { id: "ps-1", name: "Pay Level 6 (GP 4200)" },
+  { id: "ps-2", name: "Pay Level 7 (GP 4600)" },
+];
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
 
 /**
- * Routes the three lookup GETs (employees/departments/identity users) to
- * fixed fixtures, and lets the test control what the two mutating calls
- * (submit-approval, from-module) return — while recording how many times
- * each was actually invoked, which is the thing the fix under test changes.
+ * Routes the four lookup GETs (employees/departments/identity users/payroll
+ * structures) to fixed fixtures, and lets the test control what the two
+ * mutating calls (submit-approval, from-module) return — while recording
+ * both the URL and body of every call, which is the thing the fixes under
+ * test change.
  */
 function mockFetchRouting(opts: { submitApproval: () => Response; fromModule: () => Response }) {
-  const submitApprovalCalls: string[] = [];
+  const submitApprovalCalls: Array<{ url: string; body: unknown }> = [];
   const fromModuleCalls: Array<{ url: string; body: unknown }> = [];
   vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     if (url.includes("/hrms/employees?")) return Promise.resolve(jsonResponse({ data: EMPLOYEES }));
     if (url.includes("/hrms/departments?")) return Promise.resolve(jsonResponse({ data: DEPARTMENTS }));
     if (url.includes("/identity/users?")) return Promise.resolve(jsonResponse({ data: OFFICERS }));
+    if (url.includes("/payroll/structures?")) return Promise.resolve(jsonResponse({ data: PAY_STRUCTURES }));
     if (url.includes("/transfer/submit-approval")) {
-      submitApprovalCalls.push(url);
+      submitApprovalCalls.push({ url, body: init?.body ? JSON.parse(String(init.body)) : null });
       return Promise.resolve(opts.submitApproval());
     }
     if (url.includes("/estab/files/from-module")) {
@@ -125,5 +131,49 @@ describe("TransferWithApproval", () => {
     expect(fromModuleCalls).toHaveLength(1);
     // Wizard closes and resets on success.
     expect(screen.getByRole("button", { name: "+ Transfer with approval" })).toBeInTheDocument();
+  });
+
+  // HIGH fix (PR #1552 review): the backend has accepted an optional
+  // payStructureId on both transfer paths for a while, but the actual form
+  // never sent one, so nothing changed for real users. These two tests prove
+  // the field is both present and functional in the UI, and genuinely optional.
+  it("sends the selected pay structure in the submit-approval request body", async () => {
+    const { submitApprovalCalls } = mockFetchRouting({
+      submitApproval: () => jsonResponse({ id: "transfer-ps1", status: "accepted" }),
+      fromModule: () => jsonResponse({ fileNo: "HR/2026/002" }),
+    });
+
+    render(<TransferWithApproval />);
+    await openAndFillWizard(); // does not touch pay structure -- filled in below
+
+    // openAndFillWizard already advanced to step 2 (the selector only exists
+    // in step 1); go back, select a pay structure, then forward again.
+    fireEvent.click(screen.getByRole("button", { name: "← Back" }));
+    await waitFor(() => expect(screen.getByRole("option", { name: /Pay Level 6/ })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("New pay structure (optional)"), { target: { value: "ps-2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Next: Approval routing →" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit transfer to eOffice" }));
+    await waitFor(() => expect(submitApprovalCalls).toHaveLength(1));
+
+    expect(submitApprovalCalls[0]!.body).toMatchObject({
+      fromDeptId: "dept-1", toDeptId: "dept-2", effectiveDate: "2026-09-01", payStructureId: "ps-2",
+    });
+  });
+
+  it("omits payStructureId entirely when left as 'No change' — optional, not required", async () => {
+    const { submitApprovalCalls } = mockFetchRouting({
+      submitApproval: () => jsonResponse({ id: "transfer-nops", status: "accepted" }),
+      fromModule: () => jsonResponse({ fileNo: "HR/2026/003" }),
+    });
+
+    render(<TransferWithApproval />);
+    await openAndFillWizard();
+    fireEvent.click(screen.getByRole("button", { name: "Submit transfer to eOffice" }));
+    await waitFor(() => expect(submitApprovalCalls).toHaveLength(1));
+
+    const body = submitApprovalCalls[0]!.body as Record<string, unknown>;
+    expect(body).toMatchObject({ fromDeptId: "dept-1", toDeptId: "dept-2", effectiveDate: "2026-09-01" });
+    expect(Object.prototype.hasOwnProperty.call(body, "payStructureId")).toBe(false);
   });
 });
