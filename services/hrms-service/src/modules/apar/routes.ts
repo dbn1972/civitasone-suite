@@ -16,7 +16,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  * officer assigned to the *current* stage. Out-of-turn actors are rejected
  * with 403. An immutable stage-history row is appended on every transition.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -24,6 +24,7 @@ import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import { computeOverallGrade, type ScoreInput } from "./engine.js";
 import type { AppraisalRow } from "../appraisals/schema.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ACTOR_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -96,12 +97,68 @@ function trueActorRole(ctx: RequestContext, functionalRole: string, override: bo
   return ctx.roles[0] ?? functionalRole;
 }
 
+/**
+ * Read-scope for GET /v1/hrms/apar (list) and GET /v1/hrms/apar/:id (detail)
+ * ONLY. The stage-transition (POST) routes below do NOT use this — they rely
+ * entirely on assertStageOwner's per-stage ownership chain, which is already
+ * separately audited and must not be narrowed by this read-only visibility
+ * scope (e.g. a reporting officer must still be able to act on a stage even
+ * when they are not the employee's people-manager).
+ *
+ * Returns:
+ *  - null      caller holds an HR_ROLES role (hr_admin/hr_officer/
+ *              super_admin) — unrestricted, tenant-wide, matching the
+ *              "HR sees all" comment on the list route below.
+ *  - string[]  caller is "employee" and/or "manager" — the set of
+ *              `employeeId` values (APAR's employeeId IS the acting actor's
+ *              id — see stageOwner/assertStageOwner above, which already
+ *              compares a.employeeId directly to ctx.actorId) this caller
+ *              may read: their own record ("employee" role) unioned with
+ *              their direct reports' records ("manager" role, via
+ *              hrms_employees.managerId — the same reporting-line
+ *              relationship employee/routes.ts's resolveManagerScope uses).
+ *              An empty array means the caller can read nothing — e.g. a
+ *              manager-only caller with no resolvable hrms_employees link,
+ *              which fails CLOSED rather than falling back to "see
+ *              everyone", mirroring resolveManagerScope's `null` case.
+ */
+async function resolveAparReadScope(ctx: RequestContext, req: FastifyRequest): Promise<string[] | null> {
+  if (HR_ROLES.some((r) => ctx.roles.includes(r))) return null;
+
+  const allowed = new Set<string>();
+  if (ctx.roles.includes("employee")) {
+    allowed.add(ctx.actorId);
+  }
+  if (ctx.roles.includes("manager")) {
+    const managerEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+    if (managerEmp) {
+      const reports = await repo.listDirectReportActorIds(ctx.tenantId, managerEmp.id);
+      for (const actorId of reports) allowed.add(actorId);
+    }
+    // No resolvable employee link for this manager -> contributes nothing;
+    // fails CLOSED rather than granting tenant-wide (or any) visibility.
+  }
+  return [...allowed];
+}
+
+/**
+ * Single-record guard for GET /:id. Rejects with 404 (not 403) so an
+ * out-of-scope caller cannot distinguish "exists but isn't yours" from
+ * "does not exist" — this is a lookup by id (unlike the list route, which
+ * filters), so Bug 2 calls for reject/404 rather than filtering.
+ */
+function assertReadable(scope: string[] | null, a: AppraisalRow): void {
+  if (scope === null || scope.includes(a.employeeId)) return;
+  throw new HttpError(404, "NOT_FOUND", "appraisal not found");
+}
+
 export async function aparRoutes(app: FastifyInstance): Promise<void> {
   // --- list APARs for tenant (HR sees all; employee sees own) -----------------
   app.get("/v1/hrms/apar", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ACTOR_ROLES);
-    const rows = await repo.listAppraisals(ctx.tenantId);
+    const scope = await resolveAparReadScope(ctx, req);
+    const rows = await repo.listAppraisals(ctx.tenantId, scope);
     return reply.send({ data: rows });
   });
 
@@ -236,6 +293,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ACTOR_ROLES);
     const { id } = idParam.parse(req.params);
     const a = await mustFind(id, ctx.tenantId);
+    const scope = await resolveAparReadScope(ctx, req);
+    assertReadable(scope, a);
     const [scores, history] = await Promise.all([
       repo.listScores(ctx.tenantId, id),
       repo.listHistory(ctx.tenantId, id),

@@ -1,7 +1,8 @@
-import { eq, and, asc, desc, sql } from "drizzle-orm";
+import { eq, and, asc, desc, sql, inArray } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { hrmsAppraisals, type AppraisalRow, type AppraisalInsert } from "../appraisals/schema.js";
+import { hrmsEmployees } from "../employee/schema.js";
 import {
   hrmsAparScores, hrmsAparStageHistory,
   type AparScoreRow, type AparScoreInsert, type AparStageHistoryInsert,
@@ -9,9 +10,36 @@ import {
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
-export async function listAppraisals(tenantId: string, limit = 100): Promise<AppraisalRow[]> {
+/**
+ * List appraisals for a tenant, optionally restricted to a set of employeeId
+ * values. APAR's employeeId IS the acting user's actor id (see
+ * apar/routes.ts's stageOwner/assertStageOwner, which already compares
+ * a.employeeId directly against ctx.actorId for the self-appraisal /
+ * representation stages) -- so the caller-scoping set below is expressed in
+ * that same actor-id space.
+ *
+ *  - allowedEmployeeIds === null   unrestricted (HR/super_admin) -- "HR sees all".
+ *  - allowedEmployeeIds === []     caller can read nothing (fail-closed scope
+ *                                  from apar/routes.ts's resolveAparReadScope,
+ *                                  e.g. a manager with no resolvable
+ *                                  hrms_employees link). Short-circuits
+ *                                  before querying.
+ *  - allowedEmployeeIds === [...]  restricted to appraisals whose employeeId
+ *                                  is in this set (own record plus, for a
+ *                                  manager, direct reports' records).
+ */
+export async function listAppraisals(
+  tenantId: string,
+  allowedEmployeeIds: string[] | null,
+  limit = 100,
+): Promise<AppraisalRow[]> {
+  if (allowedEmployeeIds !== null && allowedEmployeeIds.length === 0) return [];
+  const conditions = [eq(hrmsAppraisals.tenantId, tenantId)];
+  if (allowedEmployeeIds !== null) {
+    conditions.push(inArray(hrmsAppraisals.employeeId, allowedEmployeeIds));
+  }
   return scopedRead((tx) => tx.select().from(hrmsAppraisals)
-    .where(eq(hrmsAppraisals.tenantId, tenantId))
+    .where(and(...conditions))
     .orderBy(desc(hrmsAppraisals.updatedAt))
     .limit(limit));
 }
@@ -77,4 +105,22 @@ export async function listHistory(tenantId: string, appraisalId: string, limit =
     .where(and(eq(hrmsAparStageHistory.tenantId, tenantId), eq(hrmsAparStageHistory.appraisalId, appraisalId)))
     .orderBy(asc(hrmsAparStageHistory.createdAt))
     .limit(limit));
+}
+
+/**
+ * Direct reports of `managerEmployeeId` (an hrms_employees.id), returned as
+ * their actor ids (hrms_employees.userRef) -- i.e. the same identity space
+ * as hrms_appraisals.employeeId -- so callers can filter/compare appraisals
+ * directly without a per-row lookup. Used by apar/routes.ts's
+ * resolveAparReadScope for the "manager sees own reports" read scope,
+ * mirroring the hrms_employees.managerId relationship employee/routes.ts's
+ * resolveManagerScope uses for the same purpose. Rows with no linked
+ * userRef (not yet onboarded to a user account) are dropped -- they cannot
+ * match any appraisal's actor-id-based employeeId anyway.
+ */
+export async function listDirectReportActorIds(tenantId: string, managerEmployeeId: string): Promise<string[]> {
+  const rows = await scopedRead((tx) => tx.select({ userRef: hrmsEmployees.userRef })
+    .from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.managerId, managerEmployeeId))));
+  return rows.map((r) => r.userRef).filter((v): v is string => v != null);
 }
