@@ -11,11 +11,29 @@ import { useId, useState, useRef, useEffect, type ReactNode } from "react";
  * - The popover is linked via aria-describedby and announced to screen readers.
  * - Opens on hover, focus, click; closes on blur, Escape, outside click.
  * - Works without JS hover (focus/click), and degrades to the native title attr.
+ * - A short grace period on mouseleave (not blur/Escape/outside-click) gives
+ *   the pointer time to travel from the trigger into the popover itself
+ *   before it closes -- without it, a diagonal mouse move across the small
+ *   gap between the "?" button and the popover below it closed the tooltip
+ *   before the pointer ever reached the popover's content.
  */
 export function HelpTip({ term, children }: { term?: string; children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const wrapRef = useRef<HTMLSpanElement | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelScheduledClose() {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
+
+  function scheduleClose() {
+    cancelScheduledClose();
+    closeTimer.current = setTimeout(() => setOpen(false), 200);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -33,6 +51,9 @@ export function HelpTip({ term, children }: { term?: string; children: ReactNode
     };
   }, [open]);
 
+  // Cancel any pending close if the component unmounts mid-grace-period.
+  useEffect(() => cancelScheduledClose, []);
+
   const plain = typeof children === "string" ? children : undefined;
 
   return (
@@ -44,8 +65,11 @@ export function HelpTip({ term, children }: { term?: string; children: ReactNode
         aria-describedby={open ? id : undefined}
         title={plain}
         onClick={() => setOpen((v) => !v)}
-        onMouseEnter={() => setOpen(true)}
-        onMouseLeave={() => setOpen(false)}
+        onMouseEnter={() => {
+          cancelScheduledClose();
+          setOpen(true);
+        }}
+        onMouseLeave={scheduleClose}
         onFocus={() => setOpen(true)}
         onBlur={() => setOpen(false)}
         style={{
@@ -65,6 +89,8 @@ export function HelpTip({ term, children }: { term?: string; children: ReactNode
         <span
           id={id}
           role="tooltip"
+          onMouseEnter={cancelScheduledClose}
+          onMouseLeave={scheduleClose}
           style={{
             position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 60,
             width: "max-content", maxWidth: 280, padding: "8px 10px",

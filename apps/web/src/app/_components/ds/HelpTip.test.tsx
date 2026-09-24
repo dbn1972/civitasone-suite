@@ -1,5 +1,5 @@
-import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { HelpTip } from "./HelpTip";
 
 describe("HelpTip", () => {
@@ -42,12 +42,51 @@ describe("HelpTip", () => {
     expect(screen.getByRole("tooltip")).toBeInTheDocument();
   });
 
-  it("hides tooltip on mouseLeave", () => {
-    render(<HelpTip term="GRN">Goods Received Note</HelpTip>);
-    fireEvent.mouseEnter(screen.getByRole("button"));
-    expect(screen.getByRole("tooltip")).toBeInTheDocument();
-    fireEvent.mouseLeave(screen.getByRole("button"));
-    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  // A bare, immediate close on mouseLeave closed the tooltip before the
+  // pointer could ever travel down into the popover itself -- see
+  // HelpTip.tsx. These three replace the old "hides tooltip on mouseLeave"
+  // test, which asserted exactly that (now-fixed) immediate-close behavior.
+  describe("mouseLeave grace period", () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("does not hide the tooltip immediately on mouseLeave", () => {
+      render(<HelpTip term="GRN">Goods Received Note</HelpTip>);
+      fireEvent.mouseEnter(screen.getByRole("button"));
+      expect(screen.getByRole("tooltip")).toBeInTheDocument();
+      fireEvent.mouseLeave(screen.getByRole("button"));
+      expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    });
+
+    it("hides the tooltip once the grace period elapses without the pointer returning", () => {
+      render(<HelpTip term="GRN">Goods Received Note</HelpTip>);
+      fireEvent.mouseEnter(screen.getByRole("button"));
+      fireEvent.mouseLeave(screen.getByRole("button"));
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+    });
+
+    it("cancels the scheduled close if the pointer re-enters the trigger within the grace period", () => {
+      render(<HelpTip term="GRN">Goods Received Note</HelpTip>);
+      const btn = screen.getByRole("button");
+      fireEvent.mouseEnter(btn);
+      fireEvent.mouseLeave(btn);
+      act(() => {
+        vi.advanceTimersByTime(50);
+      });
+      fireEvent.mouseEnter(btn);
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+      expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    });
   });
 
   it("shows tooltip on focus", () => {
