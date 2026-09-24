@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * ContractualPage — contract employees table with renewal tracking.
@@ -76,6 +77,7 @@ async function getContractual(): Promise<LoaderResult<Row[]>> {
 export default async function ContractualPage() {
   const t = await getTranslations("workforceContractual");
   const { data: items, source } = await getContractual();
+  const errored = source === "error";
 
   const active = items.filter((i) => i.status === "active").length;
   const expiring = items.filter((i) => {
@@ -99,14 +101,19 @@ export default async function ContractualPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalContractual")} value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActive")} value={active} />
-        <StatCard icon="⚠️" iconBg="#fffbe6" label={t("statExpiring30d")} value={expiring} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statAgencies")} value={agencies} />
+        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalContractual")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActive")} value={errored ? null : active} />
+        <StatCard icon="⚠️" iconBg="#fffbe6" label={t("statExpiring30d")} value={errored ? null : expiring} />
+        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statAgencies")} value={errored ? null : agencies} />
       </StatGrid>
 
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "contractual" })} backHref="/hr/workforce" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={[
             { key: "name", label: t("colName") },
             { key: "agency", label: t("colAgency") },
@@ -125,6 +132,7 @@ export default async function ContractualPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

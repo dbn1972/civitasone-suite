@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { LwfConfigForm } from "./LwfConfigForm";
+import { toHumanError } from "@/lib/messages";
 
 type LwfRow = {
   state_code: string;
@@ -24,6 +25,7 @@ async function getData(): Promise<LoaderResult<LwfRow[]>> {
 export default async function LwfPage() {
   const t = await getTranslations("lwf");
   const { data: rows, source } = await getData();
+  const errored = source === "error";
 
   const totalEmpContribMinor = rows.reduce((s, r) => s + Number(r.employee_contrib_minor || 0), 0);
   const totalErContribMinor = rows.reduce((s, r) => s + Number(r.employer_contrib_minor || 0), 0);
@@ -45,16 +47,21 @@ export default async function LwfPage() {
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🤝" iconBg="var(--infobg)" label={t("statStatesConfigured")} value={rows.length} />
-        <StatCard icon="👤" iconBg="var(--goodbg)" label={t("statTotalEmpContribution")} value={formatMoney(totalEmpContribMinor)} />
-        <StatCard icon="🏛️" iconBg="var(--warnbg)" label={t("statTotalEmployerContribution")} value={formatMoney(totalErContribMinor)} />
-        <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statUniqueFrequencies")} value={uniqueFrequencies} />
+        <StatCard icon="🤝" iconBg="var(--infobg)" label={t("statStatesConfigured")} value={errored ? null : rows.length} />
+        <StatCard icon="👤" iconBg="var(--goodbg)" label={t("statTotalEmpContribution")} value={errored ? null : formatMoney(totalEmpContribMinor)} />
+        <StatCard icon="🏛️" iconBg="var(--warnbg)" label={t("statTotalEmployerContribution")} value={errored ? null : formatMoney(totalErContribMinor)} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statUniqueFrequencies")} value={errored ? null : uniqueFrequencies} />
       </StatGrid>
 
       <LwfConfigForm />
 
       <Card title={t("historyCardTitle")}>
-        <DataTable<LwfRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "lwf" })} backHref="/hr/payroll/statutory" />
+          </div>
+        ) : (
+          <DataTable<LwfRow>
           columns={columns}
           rows={rows}
           sortable
@@ -65,6 +72,7 @@ export default async function LwfPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

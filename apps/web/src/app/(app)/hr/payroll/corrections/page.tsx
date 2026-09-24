@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { CreateCorrectionForm } from "./CreateCorrectionForm";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -34,6 +35,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function CorrectionsPage() {
   const t = await getTranslations("corrections");
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const columns: {
     key: keyof DisplayRow & string;
@@ -69,16 +71,21 @@ export default async function CorrectionsPage() {
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <StatGrid>
-        <StatCard icon="✏️" iconBg="var(--infobg)" label={t("statTotalCorrections")} value={items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={pendingCount} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalArrears")} value={formatMoney(totalArrearsMinor)} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={approvedCount} />
+        <StatCard icon="✏️" iconBg="var(--infobg)" label={t("statTotalCorrections")} value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pendingCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalArrears")} value={errored ? null : formatMoney(totalArrearsMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={errored ? null : approvedCount} />
       </StatGrid>
 
       <CreateCorrectionForm />
 
       <Card title={t("historyCardTitle")}>
-        <DataTable<DisplayRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "corrections" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<DisplayRow>
           columns={columns}
           rows={rows}
           sortable
@@ -89,6 +96,7 @@ export default async function CorrectionsPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
 
       <Card title={t("lopCardTitle")} padding>

@@ -1,9 +1,10 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's
@@ -43,6 +44,7 @@ export default async function DisciplinaryListPage() {
   }
 
   const { data: rawItems, source } = await getData();
+  const errored = source === "error";
   const items: Row[] = rawItems.map((r) => ({
     ...r,
     caseRef: (r.proceeding_type === "major" ? "VIG/" : "GRV/") + r.id.slice(0, 8).toUpperCase(),
@@ -74,12 +76,18 @@ export default async function DisciplinaryListPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="#e6f0ff" label="Total Cases" value={items.length} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label="Major (Vigilance)" value={major} />
-        <StatCard icon="🟡" iconBg="#fffbe6" label="Minor (Grievance)" value={minor} />
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Active / Open" value={open} />
+        <StatCard icon="⚖️" iconBg="#e6f0ff" label="Total Cases" value={errored ? null : items.length} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label="Major (Vigilance)" value={errored ? null : major} />
+        <StatCard icon="🟡" iconBg="#fffbe6" label="Minor (Grievance)" value={errored ? null : minor} />
+        <StatCard icon="📋" iconBg="#f5f5f5" label="Active / Open" value={errored ? null : open} />
       </StatGrid>
       <Card title="All Disciplinary Cases">
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "disciplinary" })} backHref="/hr" />
+          </div>
+        ) : (<>
+
         {/* Regression fix: this table had no row-link props at all, so the
             fully-built disciplinary/[id] detail page (breadcrumbs, case
             fields, e-Office raise action) was completely unreachable except
@@ -97,6 +105,7 @@ export default async function DisciplinaryListPage() {
           emptyTitle="No disciplinary cases on record"
           emptyMessage="All departmental proceedings under CCS (CCA) Rules appear here — both major vigilance cases (charge memo / inquiry) and minor proceedings."
         />
+        </>)}
       </Card>
     </main>
   );

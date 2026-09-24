@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { CreateReimbursementForm } from "./CreateReimbursementForm";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -27,6 +28,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 
 export default async function ReimbursementsPage() {
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
     { key: "employee_id", label: "Employee" },
@@ -50,16 +52,21 @@ export default async function ReimbursementsPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Claims" value={items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={pendingCount} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Claimed" value={formatMoney(totalMinor)} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={approvedReimb} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Claims" value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={errored ? null : pendingCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Claimed" value={errored ? null : formatMoney(totalMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={errored ? null : approvedReimb} />
       </StatGrid>
 
       <CreateReimbursementForm />
 
       <Card title="Reimbursement Claims">
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "reimbursements" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -70,6 +77,7 @@ export default async function ReimbursementsPage() {
           emptyTitle="No reimbursement claims yet"
           emptyMessage="Create your first claim using the form above."
         />
+        )}
       </Card>
     </main>
   );

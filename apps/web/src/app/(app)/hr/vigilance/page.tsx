@@ -1,9 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's
@@ -48,6 +49,7 @@ export default async function VigilancePage() {
 
   const t = await getTranslations("vigilance");
   const { data: rawItems, source } = await getData();
+  const errored = source === "error";
   const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
 
   const opened = items.filter((i) => i.status === "opened").length;
@@ -79,13 +81,18 @@ export default async function VigilancePage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="#e6f0ff" label={t("statTotalCasesLabel")} value={items.length} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statChargeMemoStageLabel")} value={opened} />
-        <StatCard icon="🔍" iconBg="#fffbe6" label={t("statUnderInquiryLabel")} value={inquiry} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedClosedLabel")} value={closed} />
+        <StatCard icon="⚖️" iconBg="#e6f0ff" label={t("statTotalCasesLabel")} value={errored ? null : items.length} />
+        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statChargeMemoStageLabel")} value={errored ? null : opened} />
+        <StatCard icon="🔍" iconBg="#fffbe6" label={t("statUnderInquiryLabel")} value={errored ? null : inquiry} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedClosedLabel")} value={errored ? null : closed} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "vigilance" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -96,6 +103,7 @@ export default async function VigilancePage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

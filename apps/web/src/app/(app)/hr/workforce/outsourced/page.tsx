@@ -1,7 +1,8 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * OutsourcedPage — outsourced staff per agency, service category, deployment location.
@@ -69,6 +70,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function OutsourcedPage() {
   const t = await getTranslations("workforceOutsourced");
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const vendors = new Set(items.map((i) => i.vendor).filter((v) => v !== "—")).size;
   const active = items.filter((i) => i.status?.toLowerCase() === "active").length;
@@ -93,13 +95,18 @@ export default async function OutsourcedPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏭" iconBg="#e6f0ff" label={t("statVendors")} value={vendors} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveContracts")} value={active} />
-        <StatCard icon="👷" iconBg="#fffbe6" label={t("statTotalHeadcount")} value={totalHeadcount} />
-        <StatCard icon="📋" iconBg="#f5f5f5" label={t("statTotalRecords")} value={items.length} />
+        <StatCard icon="🏭" iconBg="#e6f0ff" label={t("statVendors")} value={errored ? null : vendors} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveContracts")} value={errored ? null : active} />
+        <StatCard icon="👷" iconBg="#fffbe6" label={t("statTotalHeadcount")} value={errored ? null : totalHeadcount} />
+        <StatCard icon="📋" iconBg="#f5f5f5" label={t("statTotalRecords")} value={errored ? null : items.length} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "outsourced" })} backHref="/hr/workforce" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={COLUMNS}
           rows={items}
           sortable
@@ -110,6 +117,7 @@ export default async function OutsourcedPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

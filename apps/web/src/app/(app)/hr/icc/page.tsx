@@ -1,9 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
+import { toHumanError } from "@/lib/messages";
 
 /**
  * POSH Act 2013, §16 — "contents of the complaint made under section 9,
@@ -65,6 +66,7 @@ export default async function IccPage() {
 
   const t = await getTranslations("icc");
   const { data: rawItems, source } = await getData();
+  const errored = source === "error";
 
   /*
    * POSH Act 2013 masking:
@@ -121,13 +123,18 @@ export default async function IccPage() {
       )}
 
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="#e6f0ff" label={t("statTotalComplaintsLabel")} value={items.length} />
-        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statFiledLabel")} value={filed} />
-        <StatCard icon="🔍" iconBg="#fff1f0" label={t("statUnderInquiryLabel")} value={inquiry} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={closed} />
+        <StatCard icon="⚖️" iconBg="#e6f0ff" label={t("statTotalComplaintsLabel")} value={errored ? null : items.length} />
+        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statFiledLabel")} value={errored ? null : filed} />
+        <StatCard icon="🔍" iconBg="#fff1f0" label={t("statUnderInquiryLabel")} value={errored ? null : inquiry} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={errored ? null : closed} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "icc" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -138,6 +145,7 @@ export default async function IccPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

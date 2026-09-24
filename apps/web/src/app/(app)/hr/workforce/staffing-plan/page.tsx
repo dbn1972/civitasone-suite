@@ -1,7 +1,8 @@
 import { getTranslations } from 'next-intl/server'
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from '../../../../_components/ds'
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from '../../../../_components/ds'
 import { DataSourceBadge } from '../../../../_components/DataSourceBadge'
 import { fetchJson, type LoaderResult } from '@/app/_data/apiClient'
+import { toHumanError } from "@/lib/messages";
 
 export const metadata = { title: 'Staffing Plan — CivitasOne HRMS' }
 
@@ -63,6 +64,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function StaffingPlanPage() {
   const t = await getTranslations('workforceStaffingPlan')
   const { data: items, source } = await getData()
+  const errored = source === "error";
 
   const totalSanctioned = items.reduce((s, i) => s + i.sanctionedPosts, 0)
   const totalFilled = items.reduce((s, i) => s + i.filled, 0)
@@ -95,10 +97,10 @@ export default async function StaffingPlanPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label={t('statSanctionedPosts')} value={totalSanctioned} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label={t('statFilledPositions')} value={totalFilled} />
-        <StatCard icon="⬜" iconBg="#fff1f0" label={t('statVacantPosts')} value={totalVacant} />
-        <StatCard icon="📈" iconBg="#fffbe6" label={t('statFillRate')} value={overallFill} />
+        <StatCard icon="📊" iconBg="#e6f0ff" label={t('statSanctionedPosts')} value={errored ? null : totalSanctioned} />
+        <StatCard icon="👥" iconBg="#e6f7f0" label={t('statFilledPositions')} value={errored ? null : totalFilled} />
+        <StatCard icon="⬜" iconBg="#fff1f0" label={t('statVacantPosts')} value={errored ? null : totalVacant} />
+        <StatCard icon="📈" iconBg="#fffbe6" label={t('statFillRate')} value={errored ? null : overallFill} />
       </StatGrid>
 
       {highVacancyCount > 0 && (
@@ -120,7 +122,12 @@ export default async function StaffingPlanPage() {
       )}
 
       <Card title={t('cardTitle')}>
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "staffing plan" })} backHref="/hr/workforce" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -131,6 +138,7 @@ export default async function StaffingPlanPage() {
           emptyTitle={t('emptyTitle')}
           emptyMessage={t('emptyMessage')}
         />
+        )}
       </Card>
 
       <p style={{ fontSize: 11, color: 'var(--muted, #64748b)', marginTop: 8 }}>

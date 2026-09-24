@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 
 type GpfRow = {
   id: string;
@@ -26,6 +27,7 @@ async function getData(): Promise<LoaderResult<GpfRow[]>> {
 export default async function GpfStatutoryPage() {
   const t = await getTranslations("gpf");
   const { data: rows, source } = await getData();
+  const errored = source === "error";
 
   const totalContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
   const uniqueEmployees = new Set(rows.map((r) => r.employeeId)).size;
@@ -48,13 +50,18 @@ export default async function GpfStatutoryPage() {
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statGpfRecords")} value={rows.length} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalGpfSubscription")} value={formatMoney(totalContribMinor)} />
-        <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statUniqueEmployees")} value={uniqueEmployees} />
-        <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statPeriodsCovered")} value={uniquePeriods} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statGpfRecords")} value={errored ? null : rows.length} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalGpfSubscription")} value={errored ? null : formatMoney(totalContribMinor)} />
+        <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statUniqueEmployees")} value={errored ? null : uniqueEmployees} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statPeriodsCovered")} value={errored ? null : uniquePeriods} />
       </StatGrid>
       <Card title={t("historyCardTitle")}>
-        <DataTable<GpfRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "gpf" })} backHref="/hr/payroll/statutory" />
+          </div>
+        ) : (
+          <DataTable<GpfRow>
           columns={columns}
           rows={rows}
           sortable
@@ -65,6 +72,7 @@ export default async function GpfStatutoryPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

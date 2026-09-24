@@ -1,9 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { CreateFlexPlanForm } from "./CreateFlexPlanForm";
 import { ElectFlexBenefitForm } from "./ElectFlexBenefitForm";
+import { toHumanError } from "@/lib/messages";
 
 // Note: the payroll-service only exposes POST /v1/payroll/flex-benefits/plans (create) —
 // there is no GET list-all-plans endpoint. The only list endpoint available is the
@@ -29,6 +30,7 @@ async function getData(): Promise<LoaderResult<ElectionRow[]>> {
 
 export default async function FlexBenefitsPage() {
   const { data: elections, source } = await getData();
+  const errored = source === "error";
 
   const columns: { key: keyof ElectionRow & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
     { key: "plan_name", label: "Plan" },
@@ -50,17 +52,22 @@ export default async function FlexBenefitsPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="🧩" iconBg="var(--infobg)" label="My Elections" value={elections.length} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Elected" value={formatMoney(totalElectedMinor)} />
-        <StatCard icon="✅" iconBg="var(--warnbg)" label="Approved" value={approvedElections} />
-        <StatCard icon="📅" iconBg="var(--goodbg)" label="Financial Years" value={uniqueFYs} />
+        <StatCard icon="🧩" iconBg="var(--infobg)" label="My Elections" value={errored ? null : elections.length} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Elected" value={errored ? null : formatMoney(totalElectedMinor)} />
+        <StatCard icon="✅" iconBg="var(--warnbg)" label="Approved" value={errored ? null : approvedElections} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label="Financial Years" value={errored ? null : uniqueFYs} />
       </StatGrid>
 
       <CreateFlexPlanForm />
       <ElectFlexBenefitForm />
 
       <Card title="My Flex Benefit Elections">
-        <DataTable<ElectionRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "flex benefits" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<ElectionRow>
           columns={columns}
           rows={elections}
           sortable
@@ -71,6 +78,7 @@ export default async function FlexBenefitsPage() {
           emptyTitle="No flex benefit elections yet"
           emptyMessage="Create a plan and submit an election using the forms above."
         />
+        )}
       </Card>
     </main>
   );

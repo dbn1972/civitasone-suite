@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card } from '../../../_components/ds'
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from '../../../_components/ds'
 import { DataSourceBadge } from '../../../_components/DataSourceBadge'
 import { fetchJson, type LoaderResult } from '@/app/_data/apiClient'
 import { DirectoryClient } from './DirectoryClient'
+import { toHumanError } from "@/lib/messages";
 
 export const metadata = { title: 'Employee Directory — CivitasOne HRMS' }
 
@@ -40,6 +41,7 @@ async function getData(): Promise<LoaderResult<DirectoryData>> {
 export default async function DirectoryPage() {
   const t = await getTranslations("directory");
   const { data, source } = await getData()
+  const errored = source === "error";
   const { items, hasMore } = data
 
   const depts = new Set(items.map((i) => i.department).filter(Boolean)).size
@@ -64,13 +66,19 @@ export default async function DirectoryPage() {
         </span>
       )}
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label={hasMore ? t("statEmployeesShown") : t("statTotalEmployees")} value={items.length} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statDepartments")} value={depts} />
-        <StatCard icon="📍" iconBg="#fffbe6" label={t("statLocations")} value={locations} />
-        <StatCard icon="📛" iconBg="#e6f7f0" label={t("statDesignations")} value={designations} />
+        <StatCard icon="👥" iconBg="#e6f0ff" label={hasMore ? t("statEmployeesShown") : t("statTotalEmployees")} value={errored ? null : items.length} />
+        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statDepartments")} value={errored ? null : depts} />
+        <StatCard icon="📍" iconBg="#fffbe6" label={t("statLocations")} value={errored ? null : locations} />
+        <StatCard icon="📛" iconBg="#e6f7f0" label={t("statDesignations")} value={errored ? null : designations} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DirectoryClient employees={items} />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "directory" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DirectoryClient employees={items} />
+        )}
       </Card>
     </main>
   )

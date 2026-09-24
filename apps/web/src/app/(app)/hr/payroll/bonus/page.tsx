@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { ComputeBonusForm } from "./ComputeBonusForm";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -26,6 +27,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 
 export default async function BonusPage() {
   const { data: items, source } = await getData();
+  const errored = source === "error";
 
   const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
     { key: "employee_id", label: "Employee" },
@@ -48,16 +50,21 @@ export default async function BonusPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="🎁" iconBg="var(--infobg)" label="Bonus Records" value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved/Paid" value={items.filter((r) => r.status === "approved" || r.status === "paid").length} />
-        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Computed" value={formatMoney(totalBonusMinor)} />
-        <StatCard icon="⏳" iconBg="var(--badbg)" label="Pending" value={pendingBonus} />
+        <StatCard icon="🎁" iconBg="var(--infobg)" label="Bonus Records" value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved/Paid" value={errored ? null : items.filter((r) => r.status === "approved" || r.status === "paid").length} />
+        <StatCard icon="💰" iconBg="var(--warnbg)" label="Total Computed" value={errored ? null : formatMoney(totalBonusMinor)} />
+        <StatCard icon="⏳" iconBg="var(--badbg)" label="Pending" value={errored ? null : pendingBonus} />
       </StatGrid>
 
       <ComputeBonusForm />
 
       <Card title="Bonus Records">
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "bonus" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -68,6 +75,7 @@ export default async function BonusPage() {
           emptyTitle="No bonus records yet"
           emptyMessage="Compute a bonus using the form above."
         />
+        )}
       </Card>
     </main>
   );

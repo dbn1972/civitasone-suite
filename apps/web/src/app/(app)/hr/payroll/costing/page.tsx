@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CostingPeriodForm } from "./CostingPeriodForm";
 import { CreateCostingRuleForm } from "./CreateCostingRuleForm";
+import { toHumanError } from "@/lib/messages";
 
 type ReportRow = {
   employee_group: string;
@@ -45,6 +46,7 @@ export default async function CostingPage({
   // Only fetch once there is a period to report on -- avoid a request (and
   // its own loading/error state) for a report nobody has asked for yet.
   const result: LoaderResult<DisplayRow[]> = period ? await getReport(period) : { data: [], source: "api" };
+  const errored = result.source === "error";
   const rows = result.data;
 
   const uniqueCostCenters = new Set(rows.map((r) => r.costCenterId)).size;
@@ -67,9 +69,9 @@ export default async function CostingPage({
       {period && <DataSourceBadge source={result.source} message="Couldn't load — showing nothing" />}
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="var(--infobg)" label="Allocations (this period)" value={rows.length} />
-        <StatCard icon="🏢" iconBg="var(--warnbg)" label="Cost Centers (this period)" value={uniqueCostCenters} />
-        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employee Groups (this period)" value={uniqueEmpGroups} />
+        <StatCard icon="📊" iconBg="var(--infobg)" label="Allocations (this period)" value={errored ? null : rows.length} />
+        <StatCard icon="🏢" iconBg="var(--warnbg)" label="Cost Centers (this period)" value={errored ? null : uniqueCostCenters} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employee Groups (this period)" value={errored ? null : uniqueEmpGroups} />
       </StatGrid>
 
       <CreateCostingRuleForm />
@@ -97,7 +99,13 @@ export default async function CostingPage({
       </Card>
 
       <Card title="Costing Report">
-        <CostingPeriodForm initialPeriod={period} />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "costing" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <>
+          <CostingPeriodForm initialPeriod={period} />
         {!period ? (
           <EmptyState icon="🗓️" title="Choose a period" message="Enter a period (YYYY-MM) above to view the cost allocation report." />
         ) : (
@@ -112,6 +120,8 @@ export default async function CostingPage({
             emptyTitle="No allocations for this period"
             emptyMessage="No active costing rules produced allocations for this period."
           />
+        )}
+          </>
         )}
       </Card>
     </main>

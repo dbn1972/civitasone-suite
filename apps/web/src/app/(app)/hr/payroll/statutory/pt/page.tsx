@@ -1,9 +1,10 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { PtSlabForm } from "./PtSlabForm";
+import { toHumanError } from "@/lib/messages";
 
 type PtSlabRow = {
   state_code: string;
@@ -24,6 +25,7 @@ async function getData(): Promise<LoaderResult<PtSlabRow[]>> {
 export default async function ProfessionalTaxPage() {
   const t = await getTranslations("pt");
   const { data: rows, source } = await getData();
+  const errored = source === "error";
 
   const statesCovered = new Set(rows.map((r) => r.state_code).filter(Boolean)).size;
   const maxPtMinor = rows.length > 0 ? Math.max(...rows.map((r) => Number(r.pt_amount_minor || 0))) : 0;
@@ -45,16 +47,21 @@ export default async function ProfessionalTaxPage() {
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statPtSlabsConfigured")} value={rows.length} />
-        <StatCard icon="🗺️" iconBg="var(--goodbg)" label={t("statStatesCovered")} value={statesCovered} />
-        <StatCard icon="📈" iconBg="var(--warnbg)" label={t("statHighestPtAmount")} value={formatMoney(maxPtMinor)} />
-        <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statAvgPtPerSlab")} value={formatMoney(Math.round(avgPtMinor))} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statPtSlabsConfigured")} value={errored ? null : rows.length} />
+        <StatCard icon="🗺️" iconBg="var(--goodbg)" label={t("statStatesCovered")} value={errored ? null : statesCovered} />
+        <StatCard icon="📈" iconBg="var(--warnbg)" label={t("statHighestPtAmount")} value={errored ? null : formatMoney(maxPtMinor)} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statAvgPtPerSlab")} value={errored ? null : formatMoney(Math.round(avgPtMinor))} />
       </StatGrid>
 
       <PtSlabForm />
 
       <Card title={t("historyCardTitle")}>
-        <DataTable<PtSlabRow>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "pt" })} backHref="/hr/payroll/statutory" />
+          </div>
+        ) : (
+          <DataTable<PtSlabRow>
           columns={columns}
           rows={rows}
           sortable
@@ -65,6 +72,7 @@ export default async function ProfessionalTaxPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

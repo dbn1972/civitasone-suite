@@ -1,8 +1,9 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { currentFinancialYear } from "@/lib/fiscalYear";
+import { toHumanError } from "@/lib/messages";
 
 type Row = {
   id: string;
@@ -30,6 +31,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function IncomeTaxPage() {
   const t = await getTranslations("incomeTax");
   const { data: items, source: source } = await getData();
+  const errored = source === "error";
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" | "rupees"; align?: "left" | "right" }[] = [
     { key: "employee", label: t("colEmployee") },
@@ -48,18 +50,24 @@ export default async function IncomeTaxPage() {
       <PageHeader title={t("title")} subtitle={t("subtitle", { fy })} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statFinalized")} value={items.filter((i) => i.status === "finalized" || i.status === "completed").length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={items.filter((i) => i.status === "pending" || i.status === "draft").length} />
-        <StatCard icon="🏢" iconBg="var(--panel)" label={t("statDepartments")} value={new Set(items.map((i) => i.department)).size} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statFinalized")} value={errored ? null : items.filter((i) => i.status === "finalized" || i.status === "completed").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : items.filter((i) => i.status === "pending" || i.status === "draft").length} />
+        <StatCard icon="🏢" iconBg="var(--panel)" label={t("statDepartments")} value={errored ? null : new Set(items.map((i) => i.department)).size} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "income tax" })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📊"
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        )}
       </Card>
     </main>
   );

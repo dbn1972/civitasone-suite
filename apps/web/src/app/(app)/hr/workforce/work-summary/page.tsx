@@ -1,7 +1,8 @@
 import { getTranslations } from 'next-intl/server'
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from '../../../../_components/ds'
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from '../../../../_components/ds'
 import { DataSourceBadge } from '../../../../_components/DataSourceBadge'
 import { fetchJson, type LoaderResult } from '@/app/_data/apiClient'
+import { toHumanError } from "@/lib/messages";
 
 export const metadata = { title: 'Work Summary — CivitasOne HRMS' }
 
@@ -58,6 +59,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 export default async function WorkSummaryPage() {
   const t = await getTranslations('workforceWorkSummary')
   const { data: items, source } = await getData()
+  const errored = source === "error";
 
   const reviewed = items.filter((i) =>
     ['approved', 'accepted', 'finalised'].includes(i.status),
@@ -92,14 +94,19 @@ export default async function WorkSummaryPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📝" iconBg="#e6f0ff" label={t('statTotalRecords')} value={items.length} />
-        <StatCard icon="👤" iconBg="#f5f5f5" label={t('statEmployees')} value={employees} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t('statReviewed')} value={reviewed} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label={t('statPendingReview')} value={pending} />
+        <StatCard icon="📝" iconBg="#e6f0ff" label={t('statTotalRecords')} value={errored ? null : items.length} />
+        <StatCard icon="👤" iconBg="#f5f5f5" label={t('statEmployees')} value={errored ? null : employees} />
+        <StatCard icon="✅" iconBg="#e6f7f0" label={t('statReviewed')} value={errored ? null : reviewed} />
+        <StatCard icon="⏳" iconBg="#fffbe6" label={t('statPendingReview')} value={errored ? null : pending} />
       </StatGrid>
 
       <Card title={t('cardTitle')}>
-        <DataTable<Row>
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "work summary" })} backHref="/hr/workforce" />
+          </div>
+        ) : (
+          <DataTable<Row>
           columns={columns}
           rows={items}
           sortable
@@ -110,6 +117,7 @@ export default async function WorkSummaryPage() {
           emptyTitle={t('emptyTitle')}
           emptyMessage={t('emptyMessage')}
         />
+        )}
       </Card>
 
       <p style={{ fontSize: 11, color: 'var(--muted, #64748b)', marginTop: 8 }}>
