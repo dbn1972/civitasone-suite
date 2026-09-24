@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -32,6 +33,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 const TRAINING_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 export default async function TrainingFeedbackPage() {
+  const t = await getTranslations("trainingFeedback");
   const roles = getSessionRoles();
   const canAccess = roles.some((r: string) => TRAINING_ADMIN_ROLES.includes(r));
 
@@ -42,31 +44,31 @@ export default async function TrainingFeedbackPage() {
   const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; render?: (r: Row) => string }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "program", label: "Program" },
-    { key: "rating", label: "Overall Rating", render: (r) => r.rating.toFixed(1) },
-    { key: "submittedOn", label: "Submitted" },
+    { key: "employee", label: t("colEmployee") },
+    { key: "program", label: t("colProgram") },
+    { key: "rating", label: t("colOverallRating"), render: (r) => r.rating.toFixed(1) },
+    { key: "submittedOn", label: t("colSubmitted") },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Training Feedback" subtitle="Post-training feedback and program ratings." back="/hr" backLabel="Back to HR" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label="Total" value={items.length} />
-        <StatCard icon="📚" iconBg="var(--goodbg, #e6f7f0)" label="Programs" value={new Set(items.map((i) => i.program)).size} />
-        <StatCard icon="👥" iconBg="var(--warnbg, #fffbe6)" label="Employees" value={new Set(items.map((i) => i.employee)).size} />
-        <StatCard icon="⭐" iconBg="var(--bg, #f5f5f5)" label="Avg Rating" value={items.length > 0 ? (items.reduce((s, i) => s + i.rating, 0) / items.length).toFixed(1) : "—"} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="📚" iconBg="var(--goodbg, #e6f7f0)" label={t("statPrograms")} value={new Set(items.map((i) => i.program)).size} />
+        <StatCard icon="👥" iconBg="var(--warnbg, #fffbe6)" label={t("statEmployees")} value={new Set(items.map((i) => i.employee)).size} />
+        <StatCard icon="⭐" iconBg="var(--bg, #f5f5f5)" label={t("statAvgRating")} value={items.length > 0 ? (items.reduce((s, i) => s + i.rating, 0) / items.length).toFixed(1) : "—"} />
       </StatGrid>
-      <Card title="Training Feedback">
+      <Card title={t("cardTitle")}>
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "training feedback" })} />
         ) : (
-          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="📝"
-            emptyTitle="No training feedback"
-            emptyMessage="Employee feedback on completed training programmes appears here. Feedback is collected at programme closure."
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
           />
         )}
       </Card>

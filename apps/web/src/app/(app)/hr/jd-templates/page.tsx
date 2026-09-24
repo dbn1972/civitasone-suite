@@ -3,6 +3,7 @@ import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getTranslations } from "next-intl/server";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "JD Template Library — HR" };
@@ -46,25 +47,27 @@ async function fetchTemplates(type?: string): Promise<LoaderResult<JdTemplate[]>
 const JD_TEMPLATE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 export default async function JdTemplatesPage({ searchParams }: { searchParams: { type?: string } }) {
+  const t = await getTranslations("jdTemplates");
   const activeType = searchParams.type ?? "";
   const { data: templates, source } = await fetchTemplates(activeType || undefined);
   const roles = getSessionRoles();
   const canManage = roles.some((r: string) => JD_TEMPLATE_ADMIN_ROLES.includes(r));
 
   const typeOptions = [
-    { value: "", label: "All types" },
-    { value: "regular", label: "Regular" },
-    { value: "internship", label: "Internship" },
-    { value: "apprenticeship", label: "Apprenticeship" },
-    { value: "volunteership", label: "Volunteer" },
-    { value: "contractual", label: "Contractual" },
+    { value: "", label: t("filterAllTypes") },
+    { value: "regular", label: t("filterRegular") },
+    { value: "internship", label: t("filterInternship") },
+    { value: "apprenticeship", label: t("filterApprenticeship") },
+    { value: "volunteership", label: t("filterVolunteer") },
+    { value: "contractual", label: t("filterContractual") },
   ];
 
   return (
     <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
-        title="JD Template Library"
-        subtitle="Reusable job description templates — select one to pre-fill a new job opening."
+        title={t("title")}
+        back="/hr" backLabel="Back to HR"
+        subtitle={t("subtitle")}
         actions={
           canManage ? (
             <Link
@@ -72,7 +75,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
               className="btn btn-primary"
               style={{ display: "inline-flex", alignItems: "center", gap: 6, padding: "8px 18px", background: "var(--primary, #154089)", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}
             >
-              + New template
+              {t("newTemplate")}
             </Link>
           ) : undefined
         }
@@ -101,11 +104,11 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
       ) : templates.length === 0 ? (
         <div style={{ textAlign: "center", padding: "48px 24px", background: "var(--panel, #fff)", borderRadius: 12, border: "1px solid var(--line, #e2e8f0)" }}>
           <p style={{ fontSize: 40, margin: "0 0 12px" }}>📄</p>
-          <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>No templates yet</h2>
-          <p style={{ color: "var(--mut, #64748b)", fontSize: 14, margin: "0 0 16px" }}>Create your first JD template to speed up future job openings.</p>
+          <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>{t("emptyTitle")}</h2>
+          <p style={{ color: "var(--mut, #64748b)", fontSize: 14, margin: "0 0 16px" }}>{t("emptyMessage")}</p>
           {canManage && (
             <Link href="/hr/jd-templates/new" style={{ display: "inline-block", padding: "10px 20px", background: "var(--primary, #154089)", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
-              Create template
+              {t("createTemplate")}
             </Link>
           )}
         </div>
@@ -135,19 +138,19 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
                     href={`/hr/recruitment/new?templateId=${tmpl.id}`}
                     style={{ flex: 1, textAlign: "center", padding: "8px", background: "var(--primary, #154089)", color: "#fff", borderRadius: 7, fontWeight: 700, fontSize: 13, textDecoration: "none" }}
                   >
-                    Use template
+                    {t("useTemplate")}
                   </Link>
                   {canManage && (
                     <Link
                       href={`/hr/jd-templates/${tmpl.id}`}
                       style={{ padding: "8px 12px", background: "var(--bg, #f1f5f9)", color: "var(--ink2, #475569)", borderRadius: 7, fontWeight: 600, fontSize: 13, textDecoration: "none" }}
                     >
-                      Edit
+                      {t("edit")}
                     </Link>
                   )}
                 </div>
                 <p style={{ margin: 0, fontSize: 11, color: "var(--mut)" }}>
-                  Used {tmpl.useCount} time{tmpl.useCount !== 1 ? "s" : ""}
+                  {t("usedCount", { count: tmpl.useCount })}
                 </p>
               </article>
             );

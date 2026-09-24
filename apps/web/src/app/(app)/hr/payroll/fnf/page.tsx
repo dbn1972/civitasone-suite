@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { ComputeFnfForm } from "./ComputeFnfForm";
 import { FnFSettlementCards, type FnFCardRow } from "./FnFSettlementCard";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type SettlementRow = {
   id: string;
@@ -31,6 +32,7 @@ async function getSettlements(): Promise<LoaderResult<SettlementRow[]>> {
 }
 
 export default async function FnfPage() {
+  const t = await getTranslations("payrollFnf");
   const { data: settlements, source } = await getSettlements();
   const errored = source === "error";
 
@@ -56,22 +58,22 @@ export default async function FnfPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Full & Final Settlement"
-        subtitle="Compute and track F&F separation settlements — last salary, gratuity, leave encashment, arrears."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load F&F settlements — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="🧮" iconBg="var(--infobg)" label="Total Settlements" value={errored ? null : settlements.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending / Draft" value={errored ? null : pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Settled / Disbursed" value={errored ? null : settled} />
-        <StatCard icon="📊" iconBg="var(--panel)" label="Separation Types" value={errored ? null : separationTypes} />
+        <StatCard icon="🧮" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : settlements.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statSettled")} value={errored ? null : settled} />
+        <StatCard icon="📊" iconBg="var(--panel)" label={t("statSeparationTypes")} value={errored ? null : separationTypes} />
       </StatGrid>
 
       <ComputeFnfForm />
 
-      <Card title="F&F Settlements">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "fnf" })} backHref="/hr/payroll" />

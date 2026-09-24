@@ -75,6 +75,7 @@ export default async function RecruitmentPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
+        back="/hr" backLabel="Back to HR"
         help="hr"
         actions={
           <>

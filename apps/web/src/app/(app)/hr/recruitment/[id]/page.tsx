@@ -162,7 +162,7 @@ function ContextMenu({
 
   if (actions.length === 0) { // ux-001-ok: static STAGE_ACTIONS lookup keyed by app.stage (see the COMP-004 note above) -- not a loader result
     return (
-      <span className="text-xs text-slate-400 italic">{t("noActions")}</span>
+      <span className="text-xs text-slate-400 dark:text-slate-500 italic">{t("noActions")}</span>
     );
   }
 
@@ -175,16 +175,16 @@ function ContextMenu({
         aria-label={t("applicationActionsAriaLabel")}
         aria-haspopup="true"
         aria-expanded={open}
-        className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+        className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 px-2.5 py-1 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50"
       >
         {actionState === "submitting" ? "…" : t("actionsButton")}
-        <span aria-hidden="true" className="text-slate-400">▾</span>
+        <span aria-hidden="true" className="text-slate-400 dark:text-slate-500">▾</span>
       </button>
 
       {open && (
         <div
           role="menu"
-          className="absolute end-0 top-full mt-1 z-20 min-w-[180px] rounded-xl border border-slate-200 bg-white shadow-lg py-1"
+          className="absolute end-0 top-full mt-1 z-20 min-w-[180px] rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 shadow-lg py-1"
         >
           {actions.map((act) => (
             <div key={act.key} className="relative group">
@@ -212,10 +212,10 @@ function ContextMenu({
                 className={[
                   "w-full text-start px-4 py-2 text-xs font-medium transition-colors",
                   act.disabled
-                    ? "text-slate-300 cursor-not-allowed"
+                    ? "text-slate-300 dark:text-slate-600 cursor-not-allowed"
                     : act.variant === "danger"
-                    ? "text-red-600 hover:bg-red-50"
-                    : "text-slate-700 hover:bg-slate-50",
+                    ? "text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
+                    : "text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800",
                 ].join(" ")}
               >
                 {act.label}
@@ -231,7 +231,7 @@ function ContextMenu({
             </div>
           ))}
           {actionState === "error" && (
-            <p className="px-4 py-1 text-[10px] text-red-500">{t("actionFailed")}</p>
+            <p className="px-4 py-1 text-[10px] text-red-500 dark:text-red-400">{t("actionFailed")}</p>
           )}
         </div>
       )}
@@ -383,7 +383,7 @@ export default function JobOpeningDetailPage() {
   if (loadingOpening) {
     return (
       <main className="page-main">
-        <p className="text-center text-slate-500 py-12">{t("loadingVacancy")}</p>
+        <p className="text-center text-slate-500 dark:text-slate-400 py-12">{t("loadingVacancy")}</p>
       </main>
     );
   }
@@ -391,11 +391,11 @@ export default function JobOpeningDetailPage() {
   if (error ?? !opening) {
     return (
       <main className="page-main">
-        <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline mb-4 block">
+        <button onClick={() => router.back()} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-4 block">
           {t("backToRecruitment")}
         </button>
-        <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <p className="text-center text-slate-400">{error ?? t("vacancyNotFound")}</p>
+        <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 p-6 shadow-sm">
+          <p className="text-center text-slate-400 dark:text-slate-500">{error ?? t("vacancyNotFound")}</p>
         </div>
       </main>
     );
@@ -408,13 +408,13 @@ export default function JobOpeningDetailPage() {
       {/* ── Header ── */}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <button onClick={() => router.back()} className="text-sm text-indigo-600 hover:underline mb-1 block">
+          <button onClick={() => router.back()} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-1 block">
             {t("recruitmentBack")}
           </button>
-          <h1 id="page-heading" className="text-2xl font-bold text-slate-800">
+          <h1 id="page-heading" className="text-2xl font-bold text-slate-800 dark:text-slate-100">
             {opening.jobTitle}
           </h1>
-          <p className="text-sm text-slate-500 mt-0.5">{opening.refNo} · {opening.department ?? "—"}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{opening.refNo} · {opening.department ?? "—"}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
@@ -434,9 +434,9 @@ export default function JobOpeningDetailPage() {
           { label: t("metaApplications"), value: loadingApps ? "—" : applications.length },
           { label: t("metaDeadline"),     value: opening.applicationDeadline ? new Date(opening.applicationDeadline).toLocaleDateString("en-IN") : t("deadlineOpen") },
         ].map(({ label, value }) => (
-          <div key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm text-center">
-            <p className="text-2xl font-bold text-slate-800">{String(value)}</p>
-            <p className="text-xs text-slate-500 mt-1">{label}</p>
+          <div key={label} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 p-4 shadow-sm text-center">
+            <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{String(value)}</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{label}</p>
           </div>
         ))}
       </div>
@@ -454,12 +454,12 @@ export default function JobOpeningDetailPage() {
       )}
 
       {/* ── Applications Inbox ── */}
-      <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-        <div className="px-5 py-4 border-b border-slate-100 flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-slate-800">
+      <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
             {t("applicationsInbox")}
             {!loadingApps && (
-              <span className="ms-2 inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">
+              <span className="ms-2 inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-300">
                 {filtered.length} / {applications.length}
               </span>
             )}
@@ -472,13 +472,13 @@ export default function JobOpeningDetailPage() {
               placeholder={t("searchApplicantsPlaceholder")}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="rounded-lg border border-slate-300 px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-900 px-3 py-1.5 text-sm w-52 text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
             />
             {stageFilter !== "all" && (
               <button
                 type="button"
                 onClick={() => setStageFilter("all")}
-                className="text-xs text-indigo-600 hover:underline"
+                className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
               >
                 {t("clearFilter")}
               </button>
@@ -487,7 +487,7 @@ export default function JobOpeningDetailPage() {
         </div>
 
         {loadingApps ? (
-          <div className="px-5 py-10 text-center text-slate-500 text-sm">{t("loadingApplications")}</div>
+          <div className="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">{t("loadingApplications")}</div>
         ) : appsLoadError ? (
           <div className="px-5 py-8">
             <ErrorState error={toHumanError("load", { area: "applications" })} onRetry={() => loadApplications()} />
@@ -495,7 +495,7 @@ export default function JobOpeningDetailPage() {
         ) : filtered.length === 0 ? (
           <div className="px-5 py-12 text-center">
             <p className="text-3xl mb-2">📭</p>
-            <p className="text-slate-500 text-sm">
+            <p className="text-slate-500 dark:text-slate-400 text-sm">
               {applications.length === 0
                 ? t("noApplicationsYet")
                 : t("noApplicationsMatchFilter")}
@@ -504,41 +504,41 @@ export default function JobOpeningDetailPage() {
               <button
                 type="button"
                 onClick={() => setStageFilter("all")}
-                className="mt-2 text-xs text-indigo-600 hover:underline"
+                className="mt-2 text-xs text-indigo-600 dark:text-indigo-400 hover:underline"
               >
                 {t("showAllStages")}
               </button>
             )}
           </div>
         ) : (
-          <div className="divide-y divide-slate-100">
+          <div className="divide-y divide-slate-100 dark:divide-slate-800">
             {filtered.map((app) => {
               const ds = decisionStates[app.id] ?? "idle";
               return (
-                <div key={app.id} className="px-5 py-4 hover:bg-slate-50 transition-colors">
+                <div key={app.id} className="px-5 py-4 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div className="min-w-0">
                       <Link
                         href={`/hr/recruitment/${id}/applications/${app.id}`}
-                        className="font-semibold text-slate-800 text-sm truncate hover:underline hover:text-indigo-700 block"
+                        className="font-semibold text-slate-800 dark:text-slate-100 text-sm truncate hover:underline hover:text-indigo-700 dark:hover:text-indigo-400 block"
                       >
                         {app.applicantName}
                       </Link>
-                      <p className="text-xs text-slate-500 mt-0.5 truncate">
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
                         {app.email}{app.mobile ? ` · ${app.mobile}` : ""}
                       </p>
                       {app.qualification && (
-                        <p className="text-xs text-slate-600 mt-1">
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
                           {app.qualification}{app.experienceYears != null ? ` · ${t("yearsExpSuffix", { count: app.experienceYears })}` : ""}
                         </p>
                       )}
                       {(app.skills ?? []).length > 0 && (
                         <div className="flex flex-wrap gap-1 mt-1.5">
                           {(app.skills ?? []).slice(0, 5).map((sk) => (
-                            <span key={sk} className="rounded bg-indigo-50 px-1.5 py-0.5 text-xs text-indigo-700">{sk}</span>
+                            <span key={sk} className="rounded bg-indigo-50 dark:bg-indigo-900/30 px-1.5 py-0.5 text-xs text-indigo-700 dark:text-indigo-300">{sk}</span>
                           ))}
                           {(app.skills ?? []).length > 5 && (
-                            <span className="text-xs text-slate-400">{t("moreSkills", { count: (app.skills ?? []).length - 5 })}</span>
+                            <span className="text-xs text-slate-400 dark:text-slate-500">{t("moreSkills", { count: (app.skills ?? []).length - 5 })}</span>
                           )}
                         </div>
                       )}
@@ -554,7 +554,7 @@ export default function JobOpeningDetailPage() {
                         </span>
                       </div>
                       {app.appliedAt && (
-                        <p className="text-xs text-slate-400">{new Date(app.appliedAt).toLocaleDateString("en-IN")}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500">{new Date(app.appliedAt).toLocaleDateString("en-IN")}</p>
                       )}
                       {/* Context-aware action menu */}
                       <ContextMenu
@@ -584,14 +584,14 @@ export default function JobOpeningDetailPage() {
               // rejection when some (but not all) calls in the batch fail.
               void Promise.all(pending.map((a) => handleAction(a.id, "shortlist"))).catch(() => {});
             }}
-            className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+            className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50"
           >
             {t("shortlistAllPending", { count: applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied").length })}
           </button>
           <button
             type="button"
             onClick={() => loadApplications()}
-            className="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
+            className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
           >
             {t("refresh")}
           </button>

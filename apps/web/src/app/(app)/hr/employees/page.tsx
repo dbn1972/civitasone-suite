@@ -59,6 +59,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
+        back="/hr" backLabel="Back to HR"
         help="hr"
         actions={
           <Link href="/hr/employees/new" className="btn primary">{t("add")}</Link>
@@ -83,7 +84,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
             style={{
               fontSize: 13, padding: "5px 12px", borderRadius: 20,
               background: typeFilter === tab.key ? "var(--primary)" : "var(--bg2)",
-              color: typeFilter === tab.key ? "#fff" : "var(--ink)",
+              color: typeFilter === tab.key ? "var(--panel, #fff)" : "var(--ink)",
               textDecoration: "none", fontWeight: typeFilter === tab.key ? 600 : 400,
               border: "1px solid var(--line)",
             }}

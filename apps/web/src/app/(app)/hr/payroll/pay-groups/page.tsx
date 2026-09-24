@@ -4,6 +4,7 @@ import { CreatePayGroupForm } from "./CreatePayGroupForm";
 import { PayGroupCard } from "./PayGroupCard";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -28,6 +29,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function PayGroupsPage() {
+  const t = await getTranslations("payrollPayGroups");
   const result = await getData();
   const { data: groups } = result;
   const resource = useResource(result);
@@ -40,36 +42,36 @@ export default async function PayGroupsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Pay Groups"
-        subtitle="Groups of employees paid on a common schedule (monthly, bi-weekly, or weekly)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--infobg)" label="Total Pay Groups" value={errored ? "—" : groups.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={activeCount ?? "—"} />
-        <StatCard icon="📅" iconBg="var(--warnbg)" label="Monthly Groups" value={monthlyCount ?? "—"} />
-        <StatCard icon="⏸️" iconBg="var(--panel)" label="Inactive" value={inactiveCount ?? "—"} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? "—" : groups.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={activeCount ?? "—"} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label={t("statMonthly")} value={monthlyCount ?? "—"} />
+        <StatCard icon="⏸️" iconBg="var(--panel)" label={t("statInactive")} value={inactiveCount ?? "—"} />
       </StatGrid>
 
       <CreatePayGroupForm />
 
       {errored ? (
-        <Card title="Pay Groups">
+        <Card title={t("cardTitle")}>
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "pay groups" })} backHref="/hr/payroll" />
           </div>
         </Card>
       ) : groups.length === 0 ? (
-        <Card title="Pay Groups">
+        <Card title={t("cardTitle")}>
           <EmptyState
             icon="👥"
-            title="No pay groups yet"
-            message="Create your first pay group using the form above to organize employees onto a common pay schedule."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         </Card>
       ) : (
-        <Card title="Pay Group Cards">
+        <Card title={t("cardsTitle")}>
           <div
             style={{
               display: "grid",

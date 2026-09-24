@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreateDdoForm } from "./CreateDdoForm";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type DdoRow = {
   ddoCode: string;
@@ -18,6 +19,7 @@ async function getDdos(): Promise<LoaderResult<DdoRow[]>> {
 }
 
 export default async function DdosPage() {
+  const t = await getTranslations("payrollDdos");
   const { data: ddos, source } = await getDdos();
   const errored = source === "error";
 
@@ -27,30 +29,30 @@ export default async function DdosPage() {
   const avgDepts = ddos.length > 0 ? (totalDeptMappings / ddos.length).toFixed(1) : "0";
 
   const columns: { key: (keyof DdoRow & string) | "departmentCount"; label: string; align?: "left" | "right" }[] = [
-    { key: "ddoCode", label: "DDO Code" },
-    { key: "name", label: "Name" },
-    { key: "departmentCount", label: "Departments", align: "right" },
+    { key: "ddoCode", label: t("colDdoCode") },
+    { key: "name", label: t("colName") },
+    { key: "departmentCount", label: t("colDepartments"), align: "right" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="DDO Management"
-        subtitle="Drawing & Disbursing Officer (DDO) master data and department mapping for multi-DDO payroll."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg)" label="Total DDOs" value={errored ? null : ddos.length} />
-        <StatCard icon="🏢" iconBg="var(--goodbg)" label="Multi-Dept DDOs" value={errored ? null : multiDeptDdos} />
-        <StatCard icon="🔗" iconBg="var(--warnbg)" label="Total Dept Mappings" value={errored ? null : totalDeptMappings} />
-        <StatCard icon="📊" iconBg="var(--goodbg)" label="Avg Depts / DDO" value={errored ? null : avgDepts} />
+        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : ddos.length} />
+        <StatCard icon="🏢" iconBg="var(--goodbg)" label={t("statMultiDept")} value={errored ? null : multiDeptDdos} />
+        <StatCard icon="🔗" iconBg="var(--warnbg)" label={t("statDeptMappings")} value={errored ? null : totalDeptMappings} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statAvgDepts")} value={errored ? null : avgDepts} />
       </StatGrid>
 
       <CreateDdoForm />
 
-      <Card title="DDOs">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "ddos" })} backHref="/hr/payroll" />
@@ -61,11 +63,11 @@ export default async function DdosPage() {
           rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by DDO code or name…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🏛️"
-          emptyTitle="No DDOs configured yet"
-          emptyMessage="Create your first DDO using the form above."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
         )}
       </Card>

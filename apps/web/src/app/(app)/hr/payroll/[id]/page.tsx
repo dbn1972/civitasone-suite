@@ -8,6 +8,7 @@ import { MonthOverMonthCards } from "./MonthOverMonthCards";
 import { ExceptionPanel, deriveExceptions } from "./ExceptionPanel";
 import { SalarySlipsClientTable } from "./SalarySlipsClientTable";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getTranslations } from "next-intl/server";
 
 type SalarySlipRow = {
   id: string;
@@ -45,6 +46,7 @@ function prevPeriodIso(pp: string): string | null {
 }
 
 export default async function PayrollRunDetailPage({ params }: { params: { id: string } }) {
+  const t = await getTranslations("payrollDetail");
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => ["payroll_admin", "payroll_officer", "super_admin"].includes(r));
   const { data: run, source } = await getPayrollRunById(params.id);
@@ -52,11 +54,11 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   if (!run) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Payroll Run" back="/hr/payroll" backLabel="Payroll Runs" />
+        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel="Payroll Runs" />
         <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--mut)", padding: "24px 0" }}>
-            Payroll run not found. It may have been removed or you may not have access.
+            {t("notFound")}
           </p>
         </Card>
       </main>
@@ -82,8 +84,8 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={`Payroll Run — ${run.payPeriod}`}
-        subtitle={`Run dated ${formatIndianDate(run.runDate)}`}
+        title={t("title", { period: run.payPeriod })}
+        subtitle={t("subtitle", { date: formatIndianDate(run.runDate) })}
         back="/hr/payroll"
         backLabel="Payroll Runs"
       />
@@ -98,10 +100,10 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
 
       {/* KPI summary cards */}
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees"  value={run.employeeCount.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Gross"      value={formatRupees(run.grossAmount)} />
-        <StatCard icon="📉" iconBg="var(--warnbg)" label="Deductions" value={formatRupees(run.deductions)} />
-        <StatCard icon="✅" iconBg="var(--panel)"  label="Net Pay"    value={formatRupees(run.netAmount)} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployees")}  value={run.employeeCount.toLocaleString("en-IN")} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")}      value={formatRupees(run.grossAmount)} />
+        <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statDeductions")} value={formatRupees(run.deductions)} />
+        <StatCard icon="✅" iconBg="var(--panel)"  label={t("statNetPay")}    value={formatRupees(run.netAmount)} />
       </StatGrid>
 
       {/* Month-over-Month KPI cards */}
@@ -127,22 +129,22 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         canAdminister={canAdminister}
       />
 
-      <Card title="Run Details">
+      <Card title={t("runDetailsTitle")}>
         <div className="fields">
           <div className="fld">
-            <div className="l">Pay Period</div>
+            <div className="l">{t("fieldPayPeriod")}</div>
             <div className="v">{run.payPeriod}</div>
           </div>
           <div className="fld">
-            <div className="l">Run Date</div>
+            <div className="l">{t("fieldRunDate")}</div>
             <div className="v">{formatIndianDate(run.runDate)}</div>
           </div>
           <div className="fld">
-            <div className="l">Employee Count</div>
+            <div className="l">{t("fieldEmployeeCount")}</div>
             <div className="v">{run.employeeCount.toLocaleString("en-IN")}</div>
           </div>
           <div className="fld">
-            <div className="l">Status</div>
+            <div className="l">{t("fieldStatus")}</div>
             <div className="v">
               <span className={`pill ${run.status === "paid" ? "good" : run.status === "draft" ? "mut" : run.status === "failed" ? "bad" : "warn"}`}>
                 {run.status}
@@ -150,22 +152,22 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
             </div>
           </div>
           <div className="fld">
-            <div className="l">Gross Amount</div>
+            <div className="l">{t("fieldGrossAmount")}</div>
             <div className="v">{formatRupees(run.grossAmount)}</div>
           </div>
           <div className="fld">
-            <div className="l">Deductions</div>
+            <div className="l">{t("fieldDeductions")}</div>
             <div className="v">{formatRupees(run.deductions)}</div>
           </div>
           <div className="fld">
-            <div className="l">Net Amount</div>
+            <div className="l">{t("fieldNetAmount")}</div>
             <div className="v">{formatRupees(run.netAmount)}</div>
           </div>
         </div>
       </Card>
 
       {/* Salary slips with Preview Slip button per row */}
-      <Card title={`Salary Slips (${slipRows.length})`}>
+      <Card title={t("salarySlipsTitle", { count: slipRows.length })}>
         <div style={{ padding: "0 0 4px" }}>
           <SalarySlipsClientTable
             slips={slipRows}

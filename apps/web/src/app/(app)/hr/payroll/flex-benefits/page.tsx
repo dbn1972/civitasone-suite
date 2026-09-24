@@ -5,6 +5,7 @@ import { formatMoney } from "@/lib/formatters";
 import { CreateFlexPlanForm } from "./CreateFlexPlanForm";
 import { ElectFlexBenefitForm } from "./ElectFlexBenefitForm";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 // Note: the payroll-service only exposes POST /v1/payroll/flex-benefits/plans (create) —
 // there is no GET list-all-plans endpoint. The only list endpoint available is the
@@ -29,14 +30,15 @@ async function getData(): Promise<LoaderResult<ElectionRow[]>> {
 }
 
 export default async function FlexBenefitsPage() {
+  const t = await getTranslations("payrollFlexBenefits");
   const { data: elections, source } = await getData();
   const errored = source === "error";
 
   const columns: { key: keyof ElectionRow & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
-    { key: "plan_name", label: "Plan" },
-    { key: "fy", label: "Financial Year" },
-    { key: "total_elected_minor", label: "Total Elected", align: "right", cellType: "amount" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "plan_name", label: t("colPlan") },
+    { key: "fy", label: t("colFinancialYear") },
+    { key: "total_elected_minor", label: t("colTotalElected"), align: "right", cellType: "amount" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   const totalElectedMinor = elections.reduce((sum, r) => sum + Number(r.total_elected_minor ?? 0), 0);
@@ -46,22 +48,22 @@ export default async function FlexBenefitsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Flex Benefits"
-        subtitle="Flexible-benefit plans and employee component elections."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="🧩" iconBg="var(--infobg)" label="My Elections" value={errored ? null : elections.length} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Elected" value={errored ? null : formatMoney(totalElectedMinor)} />
-        <StatCard icon="✅" iconBg="var(--warnbg)" label="Approved" value={errored ? null : approvedElections} />
-        <StatCard icon="📅" iconBg="var(--goodbg)" label="Financial Years" value={errored ? null : uniqueFYs} />
+        <StatCard icon="🧩" iconBg="var(--infobg)" label={t("statMyElections")} value={errored ? null : elections.length} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalElected")} value={errored ? null : formatMoney(totalElectedMinor)} />
+        <StatCard icon="✅" iconBg="var(--warnbg)" label={t("statApproved")} value={errored ? null : approvedElections} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statFinancialYears")} value={errored ? null : uniqueFYs} />
       </StatGrid>
 
       <CreateFlexPlanForm />
       <ElectFlexBenefitForm />
 
-      <Card title="My Flex Benefit Elections">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "flex benefits" })} backHref="/hr/payroll" />
@@ -72,11 +74,11 @@ export default async function FlexBenefitsPage() {
           rows={elections}
           sortable
           filterable
-          filterPlaceholder="Filter by plan or FY…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🧩"
-          emptyTitle="No flex benefit elections yet"
-          emptyMessage="Create a plan and submit an election using the forms above."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
         )}
       </Card>
