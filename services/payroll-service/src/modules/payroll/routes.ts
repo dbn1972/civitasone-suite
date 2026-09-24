@@ -1,17 +1,36 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, requirePermissionKey, isSelfServiceEmployee, HttpError } from "../../shared/context.js";
 import { createStructureBody, createRunBody, idParam, createDdoBody, createPensionerBody, listRunsQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
+import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
+// payroll-critical fix: an employee viewing their OWN payslip, layered on
+// top of READER_ROLES below (never in place of it).
+const SLIP_ROLES = [...READER_ROLES, "employee"];
+
+/**
+ * Mirrors hrms-service's employee/actor-link.ts extractActorEmail exactly
+ * (same authPlugin-decorated jwtPayload, falling back to the same
+ * gateway-forwarded header) -- payroll-service has no local copy of that
+ * helper to import (different service), and the email is only needed here
+ * as a bootstrap fallback for resolveActorEmployeeId's cross-service call
+ * below, for an employee not yet linked by actorId.
+ */
+function extractActorEmail(req: FastifyRequest): string | undefined {
+  const raw = (req as unknown as { jwtPayload?: { email?: string } }).jwtPayload;
+  if (raw?.email) return raw.email;
+  const hdr = req.headers["x-user-email"];
+  return typeof hdr === "string" ? hdr : undefined;
+}
 
 export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/runs", async (req, reply) => {
@@ -88,12 +107,41 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id));
   });
 
+  /**
+   * payroll-critical fix: this used to be READER_ROLES-only, so an employee
+   * got "Access restricted" on their OWN payslip -- there was no
+   * self-service payslip route anywhere in the app (confirmed against the
+   * full nav-route manifest). Same established pattern as hrms-service's
+   * medical/skills/work-summaries self-scoping (resolveEmployeeForActor /
+   * resolveSelfScopedEmployeeId), applied across the service boundary via
+   * resolveActorEmployeeId (hrms-client.ts), since payroll-service has no
+   * employee-identity table of its own to resolve "is this MY record"
+   * in-process the way those hrms-service modules do.
+   */
   app.get("/v1/payroll/slips/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    requireRole(ctx, SLIP_ROLES);
     const { id } = idParam.parse(req.params);
     const slip = await queries.getSlip(id, ctx.tenantId);
     if (!slip) throw new HttpError(404, "NOT_FOUND", "slip not found");
+    if (isSelfServiceEmployee(ctx)) {
+      let ownEmployeeId: string | null;
+      try {
+        ownEmployeeId = await resolveActorEmployeeId(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+      } catch (err) {
+        // Mirrors commands.ts's assertEmployeeExists: remap HrmsUnavailableError
+        // to the same 502 HRMS_UNAVAILABLE this service's other HRMS-dependent
+        // call sites use, instead of letting it fall through to this file's
+        // errorHandler's generic 500 catch-all.
+        if (err instanceof HrmsUnavailableError) {
+          throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot verify payslip ownership: HRMS identity source unreachable");
+        }
+        throw err;
+      }
+      if (!ownEmployeeId || ownEmployeeId !== slip.employeeId) {
+        throw new HttpError(403, "FORBIDDEN", "employees may only access their own payslip");
+      }
+    }
     return reply.send(slip);
   });
 

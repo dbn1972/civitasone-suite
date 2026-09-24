@@ -578,8 +578,17 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         await processPayrollRun(msg, { ...p, structureId: p.structureId ?? NIL_STRUCTURE_ID, runType, ddoCode });
       }
     } catch (err) {
+      // payroll-critical fix: record WHY, not just that, this run failed
+      // (migration 0046 last_error) -- previously the reason only ever
+      // reached the queue's own error log/DLQ, and the run row itself gave
+      // no distinguishable signal (see routes.ts/queries.ts's mapRunStatus
+      // fix and the runs-list UI fix in this same change, which depend on a
+      // real 'failed' status reaching the frontend at all). Truncated: this
+      // is a display aid, not a full diagnostic log -- the queue/DLQ still
+      // gets the untruncated error via the rethrow below.
+      const reason = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
       await db.transaction(async (tx) => {
-        await repo.updateRun(tx, p.id, { status: "failed", updatedBy: msg.actorId });
+        await repo.updateRun(tx, p.id, { status: "failed", lastError: reason, updatedBy: msg.actorId });
       });
       throw err;
     }

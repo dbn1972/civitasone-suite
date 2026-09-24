@@ -58,23 +58,63 @@ export type HrmsPayrollInput = {
   overtimeHours: Record<string, number>;
 };
 
+/**
+ * payroll-critical fix: bounded retry for the two TRANSIENT failure shapes on
+ * this internal call — network/DNS/timeout (the fetch() throwing) and a 5xx
+ * from hrms-service (its own dependency briefly unavailable, e.g. mid
+ * restart/redeploy). Deliberately does NOT retry a non-2xx/non-5xx response
+ * (401/403/404/etc): those are the service telling us plainly that the
+ * request is wrong (bad/missing service secret, bad tenant, route gone), not
+ * that it's temporarily busy — retrying that just delays an inevitable
+ * failure and can look like disguised auth-bypass hammering. The 401 this
+ * was written for turned out to be a permanent internal-secret
+ * misconfiguration (see ecosystem.config.js's INTERNAL_SERVICE_SECRET fix),
+ * which retrying alone would never have fixed — this is a second, genuinely
+ * independent hardening for the transient case (payroll-worker racing
+ * hrms-service's own startup, or hrms-service briefly restarting) that a
+ * fixed secret does not cover.
+ */
+async function fetchInternalWithRetry(
+  url: string,
+  headers: Record<string, string>,
+  timeoutMs: number,
+  unreachableMessage: (detail: string) => string,
+  attempts = 3,
+): Promise<Response> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= attempts; attempt++) {
+    let res: Response;
+    try {
+      res = await fetch(url, { headers, signal: AbortSignal.timeout(timeoutMs) });
+    } catch (err) {
+      lastErr = err;
+      if (attempt === attempts) {
+        throw new HrmsUnavailableError(unreachableMessage((err as Error).message));
+      }
+      await new Promise((r) => setTimeout(r, 150 * attempt));
+      continue;
+    }
+    if (res.status >= 500 && attempt < attempts) {
+      lastErr = new Error(`HTTP ${res.status}`);
+      await new Promise((r) => setTimeout(r, 150 * attempt));
+      continue;
+    }
+    return res;
+  }
+  // Unreachable in practice (loop always returns or throws above); satisfies
+  // the compiler and keeps the retryable-error context if it ever isn't.
+  throw new HrmsUnavailableError(unreachableMessage(lastErr instanceof Error ? lastErr.message : String(lastErr)));
+}
+
 export async function fetchPayrollInput(tenantId: string, month: string): Promise<HrmsPayrollInput> {
   const url = `${HRMS_URL}/v1/hrms/internal/payroll-input?month=${encodeURIComponent(month)}`;
   const serviceSecret = process.env.INTERNAL_SERVICE_SECRET ?? "";
-  let res: Response;
-  try {
-    res = await fetch(url, {
-      headers: {
-        "x-internal": "1",
-        "x-service-secret": serviceSecret,
-        "x-tenant-id": tenantId,
-      },
-      signal: AbortSignal.timeout(10000),
-    });
-  } catch (err) {
-    // Network failure / timeout / DNS — HRMS is unreachable, not "no data".
-    throw new HrmsUnavailableError(`hrms payroll-input unreachable: ${(err as Error).message}`);
-  }
+  const res = await fetchInternalWithRetry(
+    url,
+    { "x-internal": "1", "x-service-secret": serviceSecret, "x-tenant-id": tenantId },
+    10000,
+    (detail) => `hrms payroll-input unreachable: ${detail}`,
+  );
   if (!res.ok) throw new HrmsUnavailableError(`hrms payroll-input failed: ${res.status}`);
   return res.json() as Promise<HrmsPayrollInput>;
 }
@@ -238,4 +278,44 @@ export async function fetchDefaultSlipTemplate(tenantId: string): Promise<Payrol
   if (res.status === 404) return null;
   if (!res.ok) throw new HrmsUnavailableError(`hrms slip-template fetch failed: ${res.status}`);
   return res.json() as Promise<PayrollSlipTemplate>;
+}
+
+/**
+ * payroll-critical fix (payslip self-service): resolves the CALLER's own
+ * hrms_employees.id, for the "is this MY payslip" ownership check on
+ * GET /v1/payroll/slips/:id (payroll/routes.ts). Deliberately not a raw
+ * `slip.employeeId === ctx.actorId` comparison — actorId is the JWT subject,
+ * a different id space from hrms_employees.id (see hrms-service's
+ * employee/actor-link.ts resolveEmployeeForActor, which this calls into over
+ * the internal boundary via the new .../employees/actor/:actorId/resolve
+ * route, since payroll-service has no employee-identity table of its own to
+ * query directly — same cross-database split as fetchPayrollInput/
+ * verifyEmployeeExists above). Same established pattern this codebase already
+ * uses in-service for medical/skills/work-summaries-style self-scoping,
+ * applied across the service boundary.
+ *
+ * Returns `null` for "this actor has no linked employee record" (a real,
+ * legitimate outcome — the caller must fail closed on it, never fall back to
+ * treating the actor as some other employee). Fails CLOSED (throws
+ * HrmsUnavailableError) on an unreachable/erroring HRMS, mirroring
+ * verifyEmployeeExists above — this gates access control, so "can't tell"
+ * must never be silently treated as "allow" or as "this isn't their slip".
+ */
+export async function resolveActorEmployeeId(
+  tenantId: string,
+  actorId: string,
+  email: string | undefined,
+): Promise<string | null> {
+  const url = `${HRMS_URL}/v1/hrms/internal/employees/actor/${encodeURIComponent(actorId)}/resolve${
+    email ? `?email=${encodeURIComponent(email)}` : ""
+  }`;
+  const res = await fetchInternalWithRetry(
+    url,
+    { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+    5000,
+    (detail) => `hrms actor-employee resolve unreachable: ${detail}`,
+  );
+  if (!res.ok) throw new HrmsUnavailableError(`hrms actor-employee resolve failed: ${res.status}`);
+  const body = (await res.json()) as { employeeId: string | null };
+  return body.employeeId;
 }

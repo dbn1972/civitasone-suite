@@ -52,6 +52,10 @@ export const payrollRuns = payrollSchema.table("payroll_runs", {
   totalNetMinor:   bigint("total_net_minor", { mode: "bigint" }).notNull().default(0n),
   currency:        char("currency", { length: 3 }).notNull().default("INR"),
   status:          varchar("status", { length: 24 }).notNull().default("draft"),
+  // payroll-critical fix: why a run ended up status='failed' (migration
+  // 0046). NULL for every other status and for any run that failed before
+  // this column existed -- "no recorded reason", not "definitely healthy".
+  lastError:       text("last_error"),
   approvedBy:      uuid("approved_by"),
   approvedAt:      timestamp("approved_at", { withTimezone: true }),
   disbursedAt:     timestamp("disbursed_at", { withTimezone: true }),

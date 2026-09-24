@@ -769,7 +769,14 @@ export const PayrollRunDetailSchema = z.object({
   grossAmount: z.number(),
   netAmount: z.number(),
   deductions: z.number(),
-  status: z.enum(["draft", "processing", "completed", "paid"]),
+  // payroll-critical fix: 'failed' added as a real, distinct status -- it
+  // used to be silently remapped to 'draft' server-side (payroll-service's
+  // queries.ts mapRunStatus), making a run whose async processing genuinely
+  // threw indistinguishable from a healthy new one. failureReason carries
+  // the recorded cause when available (migration 0046 payroll_runs.last_error);
+  // null for every other status or when no reason was recorded.
+  status: z.enum(["draft", "processing", "completed", "paid", "failed"]),
+  failureReason: z.string().nullable().optional(),
 });
 export const PayrollRunDetailListSchema = z.array(PayrollRunDetailSchema);
 

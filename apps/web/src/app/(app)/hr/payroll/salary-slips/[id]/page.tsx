@@ -40,12 +40,19 @@ async function getSlip(id: string): Promise<LoaderResult<Slip | null>> {
 export default async function SalarySlipPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("salarySlipDetail");
   const roles = getSessionRoles();
-  const canView = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
-  if (!canView) {
+  // payroll-critical fix: this used to be SALARY_ADMIN_ROLES-only, so an
+  // employee got "Access restricted" on their OWN payslip -- see the
+  // matching fix (and its longer comment) in hr/payroll/slips/[id]/page.tsx,
+  // this page's sibling view of the same backend slip.
+  const canAttempt = roles.some((r) => SALARY_ADMIN_ROLES.includes(r)) || roles.includes("employee");
+  if (!canAttempt) {
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
   }
 
-  const { data: slip, source } = await getSlip(params.id);
+  const { data: slip, source, status } = await getSlip(params.id);
+  if (status === 403) {
+    return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
+  }
   const errored = source === "error";
   if (errored) {
     return (

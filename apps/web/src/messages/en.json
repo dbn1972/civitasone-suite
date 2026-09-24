@@ -5030,7 +5030,7 @@
   },
   "salarySlipDashboard": {
     "title": "Salary Slip",
-    "notFoundMessage": "Salary slip not found or could not be loaded.",
+    "notFoundMessage": "Salary slip not found. It may have been removed or you may not have access.",
     "titleWithPeriod": "Salary Slip — {period}",
     "printableSlipLink": "🖨 Printable Slip",
     "downloadPdfLink": "⬇ Download PDF",

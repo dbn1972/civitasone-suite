@@ -12,12 +12,23 @@ const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "
 export default async function PayslipDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("salarySlipDashboard");
   const roles = getSessionRoles();
-  const canView = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
-  if (!canView) {
+  // payroll-critical fix: this used to be SALARY_ADMIN_ROLES-only, so an
+  // employee got "Access restricted" on their OWN payslip -- there was no
+  // self-service payslip route anywhere in the app. The backend
+  // (GET /v1/payroll/slips/:id) now enforces the real ownership check
+  // (employee sees only their own slip, 403 otherwise); this page just needs
+  // to stop blocking a plain employee before that check ever runs, and
+  // handle the 403 it can now legitimately get back for someone else's slip.
+  const canAttempt = roles.some((r) => SALARY_ADMIN_ROLES.includes(r)) || roles.includes("employee");
+  if (!canAttempt) {
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
   }
 
-  const { data: slip, source } = await getSlipById(params.id);
+  const { data: slip, source, status } = await getSlipById(params.id);
+
+  if (status === 403) {
+    return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
+  }
 
   if (!slip) {
     return (

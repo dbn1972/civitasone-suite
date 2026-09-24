@@ -1,16 +1,32 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
 import { getPensioners } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import type { PensionerSummary } from "@civitasone/types";
 
 type Row = PensionerSummary;
 type DisplayRow = Row & { basicPensionDisplay: string };
 
+// payroll-critical fix: matches the backend's own READER_ROLES for
+// GET /v1/payroll/pensioners (payroll/routes.ts) -- this page rendered the
+// full pensioner list (PII: PPO no., pension amounts) for the unauthorized
+// `employee` role with no gate at all. Not an active privilege-escalation
+// bug (the POST create is correctly server-gated to PAYROLL_ROLES below),
+// but defense-in-depth/UX clarity: an employee should see the same
+// "Access restricted" this codebase already shows on the payslip pages,
+// not a real (if merely read-only) HR/payroll dataset.
+const PENSIONER_VIEW_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+
 export default async function PensionersPage() {
   const t = await getTranslations("pensioners");
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PENSIONER_VIEW_ROLES.includes(r))) {
+    return <PermissionDenied module="pensioners" requiredRoles={PENSIONER_VIEW_ROLES} />;
+  }
   const { data: pensioners, source } = await getPensioners();
 
   const total = pensioners.length;

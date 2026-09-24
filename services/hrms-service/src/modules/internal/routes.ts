@@ -7,6 +7,7 @@ import * as attendanceRepo from "../attendance/repo.js";
 import { getHolidaysInRange, countWorkingDaysExcludingHolidays } from "../leave/rules-engine.js";
 import { activePaySuspendedEmployeeIds } from "../disciplinary/repo.js";
 import { loadTypeResolver, attendanceLopApplies } from "../employee/engagement-policy.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
 
@@ -149,6 +150,34 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       lopDays: Object.fromEntries(lopByEmployee.entries()),
       overtimeHours: Object.fromEntries(overtimeHoursByEmployee.entries()),
     });
+  });
+
+  /**
+   * payroll-critical fix (payslip self-service): payroll-service's own
+   * database has no employee-identity table (separate DB, see this module's
+   * other routes' comments), so it cannot run resolveEmployeeForActor
+   * (employee/actor-link.ts) itself the way this service's own self-service
+   * routes do (medical/routes.ts's resolveSelfScopedEmployeeId and friends).
+   * This is the cross-service equivalent: same resolver, reached over the
+   * internal boundary like payroll-input/employee-summaries above.
+   *
+   * :actorId and ?email are EXPLICIT parameters, not read from this
+   * request's own ctx.actorId -- an x-internal call authenticates as the
+   * fixed internal service account (resolveServiceContextInner in
+   * packages/auth/src/context.ts), not as the original end user, so the
+   * caller (payroll-service) must forward the real actor's id/email itself.
+   * Returns `employeeId: null` (200), not 404, when the actor has no linked
+   * employee record -- a real "you have no self-service identity" outcome
+   * the caller must treat as "cannot own anything" (fails closed), mirroring
+   * resolveEmployeeForActor's own `undefined` contract.
+   */
+  app.get("/v1/hrms/internal/employees/actor/:actorId/resolve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const { actorId } = z.object({ actorId: z.string().uuid() }).parse(req.params);
+    const q = z.object({ email: z.string().email().optional() }).parse(req.query);
+    const emp = await resolveEmployeeForActor(ctx.tenantId, actorId, q.email);
+    return reply.send({ employeeId: emp ? emp.id : null });
   });
 
   app.setErrorHandler((err, req, reply) => {

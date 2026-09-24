@@ -4,12 +4,22 @@ import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
 import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
 
-function mapRunStatus(status: string): "draft" | "processing" | "completed" | "paid" {
+/**
+ * payroll-critical fix: this used to map the DB's 'failed' status to
+ * 'draft' -- collapsing "processing threw and the run is stuck broken" into
+ * the exact same frontend value as "freshly created, nothing wrong yet".
+ * StatusPill.tsx (apps/web) already has a distinct `failed: "bad"` style
+ * ready to go; it just never received the string because this function
+ * intercepted it first. 'failed' is now a real member of the return union
+ * so a genuinely failed run is visually and semantically distinct from a
+ * healthy draft everywhere this status flows (runs list, run detail).
+ */
+function mapRunStatus(status: string): "draft" | "processing" | "completed" | "paid" | "failed" {
   if (status === "disbursed") return "paid";
   if (status === "approved") return "completed";
   if (status === "processing") return "processing";
   if (status === "draft") return "draft";
-  if (status === "failed") return "draft";
+  if (status === "failed") return "failed";
   return "processing";
 }
 
@@ -75,6 +85,10 @@ export async function listRuns(tenantId: string, limit: number, month?: string) 
     netAmount: Number(r.totalNetMinor) / 100,
     deductions: Math.max(0, Number(r.totalGrossMinor - r.totalNetMinor) / 100),
     status: mapRunStatus(r.status),
+    // payroll-critical fix: surface why, for a failed run, alongside the
+    // now-distinct 'failed' status above (migration 0046). null for every
+    // other status and for a failed run that predates this column.
+    failureReason: r.status === "failed" ? (r.lastError ?? null) : null,
   }));
 }
 
@@ -91,6 +105,8 @@ export async function getRunDetail(id: string, tenantId: string) {
     netAmount: Number(run.totalNetMinor) / 100,
     deductions: Math.max(0, Number(run.totalGrossMinor - run.totalNetMinor) / 100),
     status: mapRunStatus(run.status),
+    // payroll-critical fix: see the matching field in listRuns above.
+    failureReason: run.status === "failed" ? (run.lastError ?? null) : null,
     // BUG-2 fix: this payload's grossAmount/netAmount/deductions above are
     // already rupees (/100 of the minor-unit column), and the frontend's
     // run-detail view (SalarySlipsClientTable.tsx) renders these embedded
