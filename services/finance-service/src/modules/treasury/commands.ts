@@ -34,8 +34,11 @@ async function publishDisposition(
   // M3: derive a stable command id from the client idempotency key (scoped to
   // the topic + deposit) so a double-submit dedupes at the consumer instead of
   // creating a second disposition. Falls back to random when no key is supplied.
+  // BUG FIX (accounting-critical #4): tenantId must be included too — see
+  // idempotentId's doc comment (@civitasone/auth) for why an un-namespaced
+  // key collides across tenants and silently drops one caller's write.
   const id = idempotentId(
-    ctx.idempotencyKey ? { idempotencyKey: `${topic}:${depositId}:${ctx.idempotencyKey}` } : {},
+    ctx.idempotencyKey ? { idempotencyKey: `${topic}:${depositId}:${ctx.idempotencyKey}`, tenantId: ctx.tenantId } : {},
   );
   await queue.publish(topic, {
     messageId: id, type: topic,

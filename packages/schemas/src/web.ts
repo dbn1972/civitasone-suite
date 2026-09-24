@@ -654,7 +654,32 @@ export const GLEntrySummarySchema = z.object({
   credit: z.string().default("0"),
   narration: z.string().optional(),
   referenceNo: z.string().optional(),
-  type: z.enum(["payment", "receipt", "journal", "budget"]).optional(),
+  // BUG FIX (accounting-critical #3): this was a closed z.enum(["payment",
+  // "receipt", "journal", "budget"]) missing "contra" — a valid write-side
+  // journal type (gl/validators.ts postJournalBody's z.enum, ~line 19)
+  // created whenever a journal is reversed (gl/commands.ts reverseJournal ->
+  // gl/consumer.ts finance.gl.reverse posts the reversing entry with
+  // type: "contra"). Once any reversal existed in a tenant's history, GET
+  // /v1/finance/journals 400'd for every subsequent caller/role, permanently,
+  // since listJournalEntries returns every journal's lines including the
+  // reversing one.
+  //
+  // Widened to a plain string rather than enumerating "contra" plus the
+  // exact 4 original values: live-verified against a real running stack that
+  // several OTHER automated postings already write types this enum never
+  // covered either — depreciation and asset_disposal (gl/consumer.ts),
+  // payroll_settlement (gl/consumer.ts), payroll_accrual
+  // (integrations/consumer.ts), and asset_acquisition/asset_impairment/
+  // asset_revaluation/asset_maintenance (the full set fixed-asset/routes.ts
+  // itself already queries finance_journals.type for). finance_journals.type
+  // is an unconstrained varchar(32) at the DB layer (see gl/schema.ts) with
+  // new values added by any consumer module over time; a closed read-side
+  // enum here re-creates the exact same "one caller's legitimate write 400s
+  // the list for everyone" failure mode for the NEXT new type, not just this
+  // one. This is a display/filter field only (GLTable.tsx does a plain
+  // equality filter, no exhaustive switch), so widening it carries no
+  // authorization or correctness risk on the read side.
+  type: z.string().optional(),
 });
 export const GLEntrySummaryListSchema = z.array(GLEntrySummarySchema);
 

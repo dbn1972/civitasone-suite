@@ -7,6 +7,7 @@ import * as periodRepo from "./repo.js";
 import * as commands from "./commands.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
+const PERIOD_ADMIN_ROLES = ["finance_admin", "super_admin"];
 
 export async function isPeriodHardClosed(tenantId: string, period: string): Promise<boolean> {
   return periodRepo.isPeriodHardClosedDb(tenantId, period);
@@ -30,9 +31,17 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.closePeriod(ctx, period, "soft_close"));
   });
 
+  // POLICY DECISION (flagged for explicit review, not assumed obviously
+  // correct): previously FINANCE_ROLES, so a plain finance_officer could
+  // unilaterally hard-close a period even though only the SAME elevated tier
+  // (finance_admin/super_admin) could ever reopen it again below — a
+  // one-way door a baseline officer could close but not undo. Tied to the
+  // same PERIOD_ADMIN_ROLES tier as reopen for consistency. Soft-close above
+  // is left at FINANCE_ROLES: it is explicitly reversible by any finance
+  // officer re-closing/adjusting, unlike hard-close's period-locking intent.
   app.post("/v1/finance/periods/:period/hard-close", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, PERIOD_ADMIN_ROLES);
     const { period } = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM") }).parse(req.params);
 
     const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);
@@ -45,7 +54,7 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/finance/periods/:period/reopen", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ["finance_admin", "super_admin"]);
+    requireRole(ctx, PERIOD_ADMIN_ROLES);
     const { period } = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM") }).parse(req.params);
     const body = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
 

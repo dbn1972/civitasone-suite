@@ -62,9 +62,18 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveJournal(ctx, id));
   });
 
+  // POLICY DECISION (flagged for explicit review, not assumed obviously
+  // correct): previously FINANCE_ROLES (baseline finance_officer + the SoD
+  // "not the original creator" check in the consumer) while approving a
+  // journal already required the elevated JOURNAL_APPROVE_ROLES tier —
+  // reversal is at least as consequential as approval (it un-posts a
+  // finalized entry and posts a mirror contra journal) and arguably more so,
+  // so we tie it to the SAME elevated tier here. If a plain finance_officer
+  // being able to reverse their own team's postings unattended was in fact
+  // intentional, re-loosen this deliberately instead of by omission.
   app.post("/v1/finance/journals/:id/reverse", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, JOURNAL_APPROVE_ROLES);
     const { id } = reverseParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.reverseJournal(ctx, id));
   });

@@ -11,6 +11,17 @@ export const financePeriodClose = periodCloseSchema.table("finance_period_close"
   closedBy:   uuid("closed_by"),
   closedAt:   timestamp("closed_at", { withTimezone: true }),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // BUG FIX (accounting-critical #1): this table was actually created by
+  // 0005_world_class.sql, not 0006_period_close.sql (0006's CREATE TABLE IF
+  // NOT EXISTS silently no-op'd against the table 0005 already created — see
+  // migrations/0076_period_close_unique_constraint.sql). 0005's version carries
+  // a `created_by UUID NOT NULL` column with no default that this schema (built
+  // against 0006's never-applied shape) omitted entirely, so every insert
+  // attempt — once the ON CONFLICT target itself started resolving — failed
+  // with "null value in column \"created_by\" violates not-null constraint".
+  // Modelled here to match the live column, same pattern as
+  // financePeriodReopenLog.createdBy below.
+  createdBy:  uuid("created_by").notNull(),
 });
 
 

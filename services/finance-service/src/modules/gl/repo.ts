@@ -83,6 +83,37 @@ export async function getTrialBalance(tenantId: string) {
 }
 
 /**
+ * BUG FIX (accounting-critical #2): Financial Statements need each head's
+ * REAL chart-of-accounts classification (budget.finance_heads.code /
+ * .classification) to derive Asset/Liability/Income/Expenditure — the
+ * previous code in gl/queries.ts derived it from array-index parity instead,
+ * so it was wrong for every account. A dedicated query (rather than widening
+ * getTrialBalance above, which other callers depend on for its current
+ * shape) LEFT JOINs finance_heads onto the same per-head ledger aggregate so
+ * listFinancialStatements can classify correctly. LEFT JOIN (not INNER):
+ * a ledger row must never disappear from the statement just because its head
+ * lookup fails; deriveStatementType in queries.ts falls back sensibly when
+ * code/classification come back null.
+ */
+export async function getTrialBalanceWithClassification(tenantId: string) {
+  return scopedRead((tx) => tx
+    .select({
+      headId:         financeLedger.headId,
+      code:           financeHeads.code,
+      classification: financeHeads.classification,
+      totalDebit:     sql<bigint>`sum(${financeLedger.debitMinor})`.mapWith(BigInt),
+      totalCredit:    sql<bigint>`sum(${financeLedger.creditMinor})`.mapWith(BigInt),
+    })
+    .from(financeLedger)
+    .leftJoin(financeHeads, and(
+      eq(financeLedger.headId, financeHeads.id),
+      eq(financeHeads.tenantId, tenantId),
+    ))
+    .where(eq(financeLedger.tenantId, tenantId))
+    .groupBy(financeLedger.headId, financeHeads.code, financeHeads.classification));
+}
+
+/**
  * DOM-024: excludes pending_approval drafts — a manual journal awaiting a
  * checker's approval has not really happened yet (no ledger lines, no
  * budget/period effect) and must not appear in the GL entries list

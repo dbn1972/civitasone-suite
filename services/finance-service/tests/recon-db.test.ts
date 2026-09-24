@@ -362,7 +362,13 @@ describe("I8 – Subledger = control account reconciliation (HTTP route)", () =>
     const closeRes = await app1.inject({
       method: "POST",
       url: "/v1/finance/periods/2025-06/hard-close",
-      headers: { authorization: `Bearer ${token()}` },
+      // BUG FIX (accounting-critical, role-tiering): hard-close now requires
+      // the same elevated tier as reopen (finance_admin/super_admin) — see
+      // period-close/routes.ts's PERIOD_ADMIN_ROLES doc comment for why a
+      // baseline finance_officer being able to close what only an elevated
+      // role could ever reopen was a one-way-door gap. A plain
+      // finance_officer token here now correctly gets 403.
+      headers: { authorization: `Bearer ${token(["finance_admin"])}` },
     });
     await app1.close();
     // FIX: hard-close is a queue-first F3 route (sendAccepted -> 202), not the

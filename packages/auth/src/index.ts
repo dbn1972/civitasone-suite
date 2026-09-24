@@ -255,10 +255,39 @@ export function decodeUnverifiedClaims(token: string): CivitasJwtPayload | null 
  * EVT-4 (04-T4): derive a stable id from a client idempotency key so a
  * double-submit produces the same messageId/entity id and dedupes at the
  * consumer (`_inbox.processed`). Falls back to a random UUID when no key is set.
+ *
+ * BUG FIX (accounting-critical #4): this previously hashed the raw
+ * client-supplied idempotencyKey ALONE, with no tenant (or other caller)
+ * scoping. `_inbox.processed` dedups purely on messageId (no tenant_id
+ * column), so two unrelated requests that happened to send the SAME
+ * x-idempotency-key value -- most plausibly two DIFFERENT TENANTS, since nothing
+ * about the key format ties it to a caller -- collided on the identical derived
+ * id/messageId. Whichever request's message the consumer processed second was
+ * then silently discarded by markProcessed's ON CONFLICT DO NOTHING no-op path:
+ * the HTTP caller still got 202 Accepted with that shared id, but their actual
+ * write never happened -- no DB row, no DLQ entry (markProcessed's early
+ * `return` never throws), no differentiating log line. Reproduced live:
+ * concurrent journal-create calls from two different tenants sharing one
+ * x-idempotency-key header left one tenant's journal completely absent from
+ * gl.finance_journals while `_inbox.processed` held only a single row for the
+ * shared messageId.
+ *
+ * Mixing tenantId into the hash input (when the caller has one -- every real
+ * RequestContext does) confines a given client-supplied key's dedup scope to
+ * that tenant, so cross-tenant collisions can no longer happen. Behaviour is
+ * unchanged for: a caller with no idempotencyKey (still a fresh random UUID);
+ * a caller with no tenantId (falls back to the prior un-namespaced hash --
+ * only reachable for the few call sites that build a bespoke, non-
+ * RequestContext object, which should pass tenantId explicitly, see
+ * gl/commands.ts reverseJournal and treasury/commands.ts publishDisposition);
+ * and legitimate same-tenant, same-key double-submit protection (still
+ * dedupes to the same id as before, since the tenantId prefix is constant for
+ * that tenant).
  */
-export function idempotentId(ctx: { idempotencyKey?: string }): string {
+export function idempotentId(ctx: { idempotencyKey?: string; tenantId?: string }): string {
   if (!ctx.idempotencyKey) return cryptoRandomUUID();
-  const h = cryptoCreateHash("sha256").update(ctx.idempotencyKey).digest("hex");
+  const scoped = ctx.tenantId ? `${ctx.tenantId}:${ctx.idempotencyKey}` : ctx.idempotencyKey;
+  const h = cryptoCreateHash("sha256").update(scoped).digest("hex");
   return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20, 32)}`;
 }
 

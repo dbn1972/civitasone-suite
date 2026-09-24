@@ -49,7 +49,12 @@ export async function approveJournal(ctx: RequestContext, id: string): Promise<A
 export async function reverseJournal(ctx: RequestContext, journalId: string): Promise<Accepted> {
   // Deterministic message + reversing-journal id keyed off the source journal,
   // so a double-submit / redelivery cannot create two mirror journals.
-  const id = idempotentId({ idempotencyKey: `reverse:${journalId}` });
+  // BUG FIX (accounting-critical #4): tenantId must be passed here too — see
+  // idempotentId's doc comment (@civitasone/auth). Without it, a caller
+  // supplying (or guessing) another tenant's journalId in :id would derive
+  // the SAME messageId that tenant's own reversal of it would/will use,
+  // silently discarding whichever reversal the consumer processed second.
+  const id = idempotentId({ idempotencyKey: `reverse:${journalId}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.journalReverse, {
     messageId: id, type: COMMANDS.journalReverse,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

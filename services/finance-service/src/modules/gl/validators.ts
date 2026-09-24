@@ -11,7 +11,17 @@ const journalLine = z.object({
   accountCode: z.string().min(1),
   debitMinor:  zMoneyMinor,
   creditMinor: zMoneyMinor,
-});
+}).refine(
+  (l) => !(l.debitMinor > 0n && l.creditMinor > 0n),
+  // LOWER-PRIORITY FIX (accounting-critical, related): a single line with
+  // both debit and credit positive is not a valid double-entry line (it
+  // nets to a smaller one-sided movement while reporting inflated gross
+  // debit/credit totals) and was previously rejected only in the frontend
+  // form, with no server-side/schema-level enforcement — any direct API
+  // caller could post one. Enforced here, at the schema boundary, for every
+  // caller.
+  { message: "a journal line cannot have both debit and credit positive simultaneously", path: ["creditMinor"] },
+);
 
 export const postJournalBody = z.object({
   // Pass "AUTO" (or omit) to allocate a gapless, FY-sequential voucher number.
