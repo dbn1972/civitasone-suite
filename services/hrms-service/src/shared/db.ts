@@ -4,6 +4,7 @@
  * Reviewed for correctness (schema wiring), not style, per this service's PR.
  * See packages/db/src/create-tenant-db.ts for the createTenantDb() contract.
  */
+import { sql } from "drizzle-orm";
 import { createTenantDb } from "@civitasone/db";
 import { schema as employeeModule }    from "../modules/employee/schema.js";
 import { schema as recruitmentModule } from "../modules/recruitment/schema.js";
@@ -130,4 +131,49 @@ export const sqlPool = {
 export type ScopedTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 export function scopedRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
   return db.transaction(fn as Parameters<Db["transaction"]>[0]) as Promise<T>;
+}
+
+/**
+ * Effective-dating scheduler fix (Bug 1 follow-up to migration 0144): run a
+ * genuinely cross-tenant SELECT with the `app.platform_bypass` GUC set for
+ * the transaction, per the additional permissive SELECT-only RLS policy
+ * migration 0133_platform_bypass_read_policy.sql already added to
+ * employee.hrms_employees (originally for
+ * services/inventory-service/tests/data-quality.test.ts's DQ-HRMS-*
+ * checks). Used by lifecycle/effective-scheduler.ts to discover the full
+ * tenant universe before re-entering each tenant's own strict RLS context
+ * via runWithTenant to look for that tenant's due promotions/transfers.
+ *
+ * Why this is needed instead of a SECURITY DEFINER function (migration
+ * 0144's original approach for due_promotion_ids/due_transfer_ids): no role
+ * in this fleet may bypass RLS, by design (see bootstrap-postgres.sh's "L3
+ * lane" comment) — hrms_svc (this service's own connecting role, and the
+ * role hrms-service's migrations actually run as, per that script's
+ * SERVICE_DBS/needs_superuser routing) has no BYPASSRLS, and neither does
+ * civitas_admin (bootstrap_admin_role.sql: NOSUPERUSER NOBYPASSRLS,
+ * deliberately, so the "no %_svc role holds BYPASSRLS" assertion keeps
+ * meaning something). A SECURITY DEFINER function only elevates to its
+ * OWNER's privileges, and the owner here is hrms_svc either way, so it was
+ * never actually bypassing anything — migration 0144's due_promotion_ids/
+ * due_transfer_ids silently returned zero rows on every call, regardless of
+ * SECURITY DEFINER. Mirrors admin-service's/audit-service's/
+ * payroll-service's/inspection-service's identical scopedPlatformRead
+ * pattern exactly (inspection-service's worker.ts processOverdueFindings is
+ * the closest analog: platform-bypass read for tenant ids, then a
+ * runWithTenant loop for the actual per-tenant work).
+ *
+ * SECURITY: this must ONLY be called from trusted server-side code with no
+ * user-supplied input — never derived from a request header/param/JWT
+ * claim. It is SELECT-only by policy design (migration 0133 added an
+ * ADDITIONAL permissive SELECT policy; INSERT/UPDATE/DELETE on
+ * hrms_employees remain governed solely by the strict tenant-match policy),
+ * so this can never let a write skip tenant scoping.
+ */
+export function scopedPlatformRead<T>(fn: (tx: ScopedTx) => Promise<T>): Promise<T> {
+  return db.transaction(async (tx) => {
+    await (tx as unknown as { execute: (q: unknown) => Promise<unknown> }).execute(
+      sql`SELECT set_config('app.platform_bypass', 'true', true)`,
+    );
+    return fn(tx);
+  }) as Promise<T>;
 }

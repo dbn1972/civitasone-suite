@@ -21,6 +21,11 @@ const AUDIT = "audit.event.record";
  */
 const DEFAULT_DA_RATE_PCT = 50;
 
+/** ISO 'YYYY-MM-DD' for "today", used to decide whether an effectiveDate is due. */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function registerEmployeeConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.employeeCreate, async (msg) => {
@@ -111,18 +116,37 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Effective-dating fix (migration 0144): a transfer whose effectiveDate
+      // is still in the future must NOT be applied to the employee master
+      // yet — it is recorded "pending_effective" and picked up later by the
+      // scheduler (lifecycle/effective-scheduler.ts) once that date arrives.
+      // A transfer effective today or earlier keeps the prior immediate-
+      // apply behaviour (still "completed" the moment it's recorded).
+      const due = lifecycleRepo.isEffectiveDateDue(p.effectiveDate, todayISO());
       await lifecycleRepo.insertTransfer(tx, {
         id: msg.messageId, tenantId: p.tenantId, employeeId: p.employeeId,
         fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
         fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
-        effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null, status: "completed",
+        effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
+        status: due ? "completed" : "pending_effective",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      const patch: Parameters<typeof repo.updateEmployee>[2] = {
-        departmentId: p.toDeptId, status: "transferred", updatedBy: msg.actorId,
-      };
-      if (p.toDesigId) patch.designationId = p.toDesigId;
-      await repo.updateEmployee(tx, p.employeeId, patch);
+      if (due) {
+        // Previously ALSO set status: "transferred" directly on this update —
+        // that value was never part of the canonical employee status
+        // contract (employee/status.ts's EMPLOYEE_STATUSES / the
+        // hrms_employees_status_check CHECK constraint added by migration
+        // 0025, never widened for it the way "no_show" was in migration
+        // 0130). That write always violated the CHECK constraint, so this
+        // WHOLE transaction — including the transfer record and the
+        // markProcessed insert above — silently rolled back on every direct
+        // transfer; nothing here ever actually persisted. applyTransferEffect
+        // (shared with the eOffice-approved transfer path, which never had
+        // this bug) applies only departmentId/designationId.
+        await lifecycleRepo.applyTransferEffect(tx, {
+          tenantId: p.tenantId, employeeId: p.employeeId, toDeptId: p.toDeptId, toDesigId: p.toDesigId ?? null,
+        }, msg.actorId);
+      }
       await audit(tx, msg, "transfer", "employee", p.employeeId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));

@@ -4,7 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as employeeRepo from "../employee/repo.js";
 import * as leaveRepo from "../leave/repo.js";
 import * as attendanceRepo from "../attendance/repo.js";
-import { countWorkingDays } from "../leave/holidays.js";
+import { getHolidaysInRange, countWorkingDaysExcludingHolidays } from "../leave/rules-engine.js";
 import { activePaySuspendedEmployeeIds } from "../disciplinary/repo.js";
 import { loadTypeResolver, attendanceLopApplies } from "../employee/engagement-policy.js";
 
@@ -53,10 +53,25 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       if (!attendanceLopApplies(resolveType(emp.employeeType))) noSalaryLop.add(emp.id);
     }
 
+    // Bug fix: this used to call leave/holidays.ts's countWorkingDays(),
+    // sourced from a hardcoded RESTRICTED_HOLIDAYS calendar covering only
+    // 2024-2026, whose own `Math.max(count, 1)` floor meant a single-day
+    // leave landing on a weekend/holiday was still counted as 1 LOP day
+    // (weekends/holidays were never actually excluded). Now uses the real,
+    // tenant-configurable hrms_holidays calendar — the same source
+    // leave-application validation already uses (leave/rules-engine.ts) —
+    // fetched once for the whole date range covered by this month's
+    // LOP-eligible approved leaves rather than once per leave record.
     const lopByEmployee = new Map<string, number>();
-    for (const leave of approvedLeaves) {
-      if (noSalaryLop.has(leave.employeeId)) continue;
-      const days = countWorkingDays(leave.fromDate, leave.toDate);
+    const lopEligibleLeaves = approvedLeaves.filter((leave) => !noSalaryLop.has(leave.employeeId));
+    let holidaySet = new Set<string>();
+    if (lopEligibleLeaves.length > 0) {
+      const rangeFrom = lopEligibleLeaves.map((l) => l.fromDate).reduce((a, b) => (a < b ? a : b));
+      const rangeTo = lopEligibleLeaves.map((l) => l.toDate).reduce((a, b) => (a > b ? a : b));
+      holidaySet = new Set(await getHolidaysInRange(ctx.tenantId, rangeFrom, rangeTo));
+    }
+    for (const leave of lopEligibleLeaves) {
+      const days = countWorkingDaysExcludingHolidays(leave.fromDate, leave.toDate, holidaySet);
       lopByEmployee.set(leave.employeeId, (lopByEmployee.get(leave.employeeId) ?? 0) + days);
     }
 

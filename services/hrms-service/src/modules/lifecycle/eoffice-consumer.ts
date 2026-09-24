@@ -5,9 +5,13 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import * as employeeRepo from "../employee/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/** ISO 'YYYY-MM-DD' for "today", used to decide whether an effectiveDate is due. */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 /**
  * Closes the eOffice decision loop for HR transfers.
@@ -17,9 +21,14 @@ const AUDIT_TOPIC = "audit.event.record";
  * `pending_approval` and an eFile is raised into eOffice (source_ref_type
  * "hr_transfer"). Once the approval chain concludes, estab-service emits
  * `hrms.transfer.file_decided` and this consumer applies the decision:
- *   approved → execute the transfer: flip the request to "completed" and apply
- *              the posting (department/designation) to the employee master —
- *              the same state-change the hrms.employee.transfer command effects.
+ *   approved → the eOffice decision alone doesn't move the transfer straight
+ *              to "completed" any more (migration 0144): it first flips to
+ *              "pending_effective", and only continues on to actually effect
+ *              it — the posting (department/designation) applied to the
+ *              employee master, status "completed" — when the transfer's own
+ *              effectiveDate is today or earlier. A future-dated approval
+ *              stays "pending_effective" until the scheduler
+ *              (lifecycle/effective-scheduler.ts) finds it due.
  *   rejected → flip the request to "cancelled"; the employee is left unchanged.
  *   returned → leave the request pending for revision (audit only).
  *
@@ -43,18 +52,29 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
       if (cb.decision === "approved") {
         // Guarded execution: only a transfer still awaiting the eOffice decision
         // is moved. Reuses the existing lifecycle transition helper.
-        const transfer = await repo.transitionTransfer(msg.tenantId, cb.refId, cb.decidedBy, {
-          from: ["pending_approval"], to: "completed",
+        //
+        // Effective-dating fix (migration 0144): see promotion-eoffice-
+        // consumer.ts's identical comment — the eOffice decision only
+        // approves the ORDER; the transfer's own effectiveDate still governs
+        // when it lands on the employee master. Both transitions happen
+        // inside this same transaction, so a concurrent reader never
+        // observes the intermediate state.
+        const pending = await repo.transitionTransfer(msg.tenantId, cb.refId, cb.decidedBy, {
+          from: ["pending_approval"], to: "pending_effective",
         }, tx);
-        if (!transfer) return; // not ours / already decided
-        affectedEmployeeId = transfer.employeeId;
-        const patch: Parameters<typeof employeeRepo.updateEmployee>[2] = {
-          departmentId: transfer.toDeptId, updatedBy: cb.decidedBy,
-        };
-        if (transfer.toDesigId) patch.designationId = transfer.toDesigId;
-        await employeeRepo.updateEmployee(tx, transfer.employeeId, patch);
+        if (!pending) return; // not ours / already decided
+        affectedEmployeeId = pending.employeeId;
+
+        if (repo.isEffectiveDateDue(pending.effectiveDate, todayISO())) {
+          const transfer = await repo.transitionTransfer(msg.tenantId, cb.refId, cb.decidedBy, {
+            from: ["pending_effective"], to: "completed",
+          }, tx);
+          if (transfer) {
+            await repo.applyTransferEffect(tx, transfer, cb.decidedBy);
+          }
+        }
         await audit(tx, msg, "eoffice_approved", cb.refId, {
-          fileNo: cb.fileNo, employeeId: transfer.employeeId, dscHash: cb.dscHash ?? null,
+          fileNo: cb.fileNo, employeeId: pending.employeeId, dscHash: cb.dscHash ?? null,
         });
       } else if (cb.decision === "rejected") {
         const transfer = await repo.transitionTransfer(msg.tenantId, cb.refId, cb.decidedBy, {

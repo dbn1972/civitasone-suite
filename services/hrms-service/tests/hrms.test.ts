@@ -19,8 +19,19 @@ import { registerLeaveConsumers } from "../src/modules/leave/consumer.js";
 import {
   assertSufficientLeaveBalance,
   assertLeaveAppStatusTransition,
-  countWorkingDays,
 } from "../src/modules/leave/domain.js";
+// leave/domain.ts's re-export of countWorkingDays (from the now-deleted
+// leave/holidays.ts hardcoded-holiday module) was removed as part of the
+// holiday-calendar consolidation (migration 0145) — no production code
+// imports it anymore (confirmed: attendance/leave-sync.ts and
+// internal/routes.ts's payroll LOP calc already moved to
+// countWorkingDaysExcludingHolidays below, which sources holidays from the
+// real per-tenant leave.hrms_holidays table instead of a static, expiring
+// set). These two tests never actually depended on RESTRICTED_HOLIDAYS
+// content (neither date range below touches a holiday), so they port
+// directly onto the new function with an empty holiday set — same
+// weekend-exclusion behaviour, no re-export needed.
+import { countWorkingDaysExcludingHolidays } from "../src/modules/leave/rules-engine.js";
 
 const ACTOR   = "00000000-aaaa-4000-8000-000000000001";
 const TENANT  = "11111111-aaaa-4000-8000-000000000011";
@@ -87,11 +98,11 @@ describe("Leave domain — balance check (pure)", () => {
 
 describe("Leave domain — working days (pure)", () => {
   it("counts 5 working days in Mon-Fri week", () => {
-    expect(countWorkingDays("2024-06-03", "2024-06-07")).toBe(5); // Mon-Fri
+    expect(countWorkingDaysExcludingHolidays("2024-06-03", "2024-06-07", new Set())).toBe(5); // Mon-Fri
   });
 
   it("excludes weekends in 7-day span", () => {
-    expect(countWorkingDays("2024-06-03", "2024-06-09")).toBe(5); // Mon-Sun → 5 working
+    expect(countWorkingDaysExcludingHolidays("2024-06-03", "2024-06-09", new Set())).toBe(5); // Mon-Sun → 5 working
   });
 });
 

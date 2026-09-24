@@ -5,7 +5,7 @@
  */
 
 import { eq, and, gte, lte } from "drizzle-orm";
-import { scopedRead } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { hrmsHolidays } from "../holidays/schema.js";
 import { findTenantLeavePolicy } from "./repo.js";
 import type { LeavePolicyRuleRow } from "./policy-schema.js";
@@ -153,7 +153,33 @@ export async function getHolidaysInRange(tenantId: string, from: string, to: str
   return rows.map(r => String(r.date));
 }
 
-function isWeekend(dateStr: string): boolean {
+/**
+ * Tx-scoped variant of getHolidaysInRange: reads through the caller's
+ * already-open transaction instead of opening a nested one via scopedRead.
+ * scopedRead calls db.transaction() internally (see shared/db.ts) —
+ * invoking it from inside an ALREADY-OPEN db.transaction(), as
+ * attendance/leave-sync.ts's markLeaveDaysOnAttendance always is (called
+ * from within leave/consumer.ts's leaveApprove transaction), opens a SECOND
+ * transaction competing for a connection from the same pool as the outer
+ * one, deadlocking every in-flight command once concurrency reaches
+ * pool.max — see employee/repo.ts's findByIdTx, which documents and fixes
+ * the identical hazard for employee reads.
+ */
+export async function getHolidaysInRangeTx(
+  tx: Pick<typeof db, "select">, tenantId: string, from: string, to: string,
+): Promise<string[]> {
+  const rows = await (tx as typeof db).select({ date: hrmsHolidays.date }).from(hrmsHolidays)
+    .where(and(eq(hrmsHolidays.tenantId, tenantId), gte(hrmsHolidays.date, from), lte(hrmsHolidays.date, to)));
+  return rows.map(r => String(r.date));
+}
+
+// Exported (bug fix): attendance/leave-sync.ts and internal/routes.ts's
+// payroll LOP calc used to have their own second, hardcoded, expiring
+// holiday calendar (leave/holidays.ts) instead of using this module's real,
+// tenant-configurable hrms_holidays — see getHolidaysInRange below, which
+// they now call directly. Exporting isWeekend lets them apply the exact same
+// weekend rule this module already uses, with no second implementation.
+export function isWeekend(dateStr: string): boolean {
   const d = new Date(`${dateStr}T00:00:00Z`);
   return d.getUTCDay() === 0 || d.getUTCDay() === 6;
 }
