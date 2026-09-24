@@ -322,6 +322,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
   --bad:#f87171; --badbg:#450a0a; --badbd:#7f1d1d;
   --info:#60a5fa; --infobg:#172554; --infobd:#1e3a5f;
   --primary:#60a5fa; --primary-d:#93c5fd; --primary-soft:rgba(96,165,250,.15);
+  --indigo:#818cf8; --violet:#a78bfa; --amber:#fbbf24; --rose:#fb7185; --sky:#38bdf8; --cyan:#22d3ee;
   --sh:0 1px 2px rgba(0,0,0,.3); --sh-md:0 1px 3px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.5);
   --sh-lg:0 12px 32px -10px rgba(0,0,0,.6);
   color-scheme:dark;
