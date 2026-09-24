@@ -81,12 +81,16 @@ export async function insertRegularisation(tx: Writer, row: typeof hrmsAttendanc
 
 /** PPL-D1 fix: update a pending regularisation to approved or rejected.
  * Accepts a drizzle tx so the caller can enqueue an outbox event atomically.
- * Returns the updated row (with employeeId and date) or null if not found / already decided.
+ * Returns the updated row (with employeeId, date and requestedStatus) or
+ * null if not found / already decided. requestedStatus is what an approval
+ * must actually apply to hrms_attendance — see f3-consumer.ts's
+ * attendance_routes__0 (approving a regularisation used to update only this
+ * row's own status and never touch hrms_attendance at all).
  */
 export async function updateRegularisationStatus(
   tx: Writer,
   tenantId: string, id: string, status: "approved" | "rejected", actorId: string, reason?: string,
-): Promise<{ id: string; employeeId: string; date: string } | null> {
+): Promise<{ id: string; employeeId: string; date: string; requestedStatus: string } | null> {
   // Atomic: WHERE status='pending' guards against concurrent approve/reject races.
   const updated = await tx.update(hrmsAttendanceRegularisations)
     .set({ status, updatedBy: actorId, updatedAt: new Date(), ...(reason ? { reason } : {}) })
@@ -99,6 +103,7 @@ export async function updateRegularisationStatus(
       id: hrmsAttendanceRegularisations.id,
       employeeId: hrmsAttendanceRegularisations.employeeId,
       date: hrmsAttendanceRegularisations.date,
+      requestedStatus: hrmsAttendanceRegularisations.requestedStatus,
     });
   return updated[0] ?? null;
 }

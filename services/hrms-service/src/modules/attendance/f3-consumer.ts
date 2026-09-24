@@ -29,6 +29,16 @@ const log = pino({ name: "hrms-f3-attendance" });
  * that case is logged and skipped rather than thrown, matching the
  * established leftover-consumer convention for benign races.
  *
+ * Bug fix: `attendance_routes__0` (approve) used to stop at flipping this
+ * request's own status — it never actually applied the correction to
+ * hrms_attendance, so an approved regularisation left the employee's
+ * attendance record for that date completely unchanged (e.g. still
+ * "absent"). It now also upserts hrms_attendance with the regularisation's
+ * requestedStatus. No consumer anywhere subscribes to the
+ * EVENTS.regularisationApproved event this case already enqueues (confirmed
+ * by inspection — grep the whole hrms-service tree for it), so that event
+ * was never actually closing this loop either.
+ *
  * `attendance_routes__2` (create overtime request) restores the plain insert
  * that used to run synchronously; the route now generates the id upfront so
  * it can reply 202 with it.
@@ -64,6 +74,25 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
               log.warn({ op, regId, messageId: msg.messageId }, "regularisation already decided or missing before async approve");
               return;
             }
+            // Bug fix: approving a regularisation previously only flipped
+            // this request's own status — it never touched hrms_attendance,
+            // so the employee's attendance record for the date kept
+            // whatever it was before (e.g. still "absent") regardless of
+            // what correction was approved. upsertAttendance both corrects
+            // an existing row and creates one if none existed yet for the
+            // date (e.g. the employee never punched in at all, which is
+            // itself a common reason to file a regularisation — so this
+            // deliberately does NOT require a pre-existing attendance row).
+            await repo.upsertAttendance(tx, {
+              id: randomUUID(),
+              tenantId: p.tenantId,
+              employeeId: updated.employeeId,
+              attendanceDate: updated.date,
+              status: updated.requestedStatus,
+              source: "regularisation",
+              createdBy: msg.actorId,
+              updatedBy: msg.actorId,
+            });
             await enqueue(tx, {
               topic: EVENTS.regularisationApproved,
               eventType: EVENTS.regularisationApproved,
