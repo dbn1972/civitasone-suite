@@ -34,11 +34,16 @@ const ToastContext = createContext<ToastContextValue | null>(null);
 
 // ─── Styles ─────────────────────────────────────────────────────────────
 
+// Theme tokens (civitas-ds.css), not hardcoded hex: --good/--bad/--info/--warn
+// and their *bg pairs are redefined under `.dark` (toggled on <html> by
+// DarkModeToggle), so the toast now follows the active theme instead of
+// always rendering its light-mode colors. Fallbacks are the current
+// light-mode values, in case this ever renders before the stylesheet loads.
 const TYPE_STYLES: Record<ToastType, { bg: string; border: string; icon: string }> = {
-  success: { bg: "#f0fdf4", border: "#22c55e", icon: "✓" },
-  error: { bg: "#fef2f2", border: "#ef4444", icon: "✕" },
-  info: { bg: "#eff6ff", border: "#3b82f6", icon: "ℹ" },
-  warning: { bg: "#fffbeb", border: "#f59e0b", icon: "⚠" },
+  success: { bg: "var(--goodbg, #ecfdf3)", border: "var(--good, #067647)", icon: "✓" },
+  error: { bg: "var(--badbg, #fef3f2)", border: "var(--bad, #b42318)", icon: "✕" },
+  info: { bg: "var(--infobg, #eff8ff)", border: "var(--info, #175cd3)", icon: "ℹ" },
+  warning: { bg: "var(--warnbg, #fffaeb)", border: "var(--warn, #b54708)", icon: "⚠" },
 };
 
 const AUTO_DISMISS_MS = 4000;
@@ -105,7 +110,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
                 borderLeft: `4px solid ${s.border}`,
                 boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
                 fontSize: 14,
-                color: "#1e293b",
+                color: "var(--ink, #101828)",
                 minWidth: 260,
                 maxWidth: 380,
                 animation: item.removing

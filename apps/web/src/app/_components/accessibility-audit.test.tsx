@@ -105,10 +105,10 @@ describe("Accessibility Audit: WCAG 2.2 AA", () => {
       expect(screen.getByText("Active")).toHaveAttribute("role", "tab");
     });
 
-    it("each tab has tabIndex=0 for keyboard focus", () => {
+    it("uses roving tabindex: only the active tab sits in the page Tab order", () => {
       render(<Tabs tabs={["All", "Active"]} active="All" onChange={vi.fn()} />);
       expect(screen.getByText("All")).toHaveAttribute("tabindex", "0");
-      expect(screen.getByText("Active")).toHaveAttribute("tabindex", "0");
+      expect(screen.getByText("Active")).toHaveAttribute("tabindex", "-1");
     });
 
     it("responds to Enter keydown", () => {
@@ -116,6 +116,48 @@ describe("Accessibility Audit: WCAG 2.2 AA", () => {
       render(<Tabs tabs={["All", "Active"]} active="All" onChange={onChange} />);
       fireEvent.keyDown(screen.getByText("Active"), { key: "Enter" });
       expect(onChange).toHaveBeenCalledWith("Active");
+    });
+
+    it("ArrowRight moves to and activates the next tab", () => {
+      const onChange = vi.fn();
+      render(<Tabs tabs={["All", "Active", "Archived"]} active="All" onChange={onChange} />);
+      fireEvent.keyDown(screen.getByText("All"), { key: "ArrowRight" });
+      expect(onChange).toHaveBeenCalledWith("Active");
+    });
+
+    it("ArrowRight wraps from the last tab back to the first", () => {
+      const onChange = vi.fn();
+      render(<Tabs tabs={["All", "Active", "Archived"]} active="Archived" onChange={onChange} />);
+      fireEvent.keyDown(screen.getByText("Archived"), { key: "ArrowRight" });
+      expect(onChange).toHaveBeenCalledWith("All");
+    });
+
+    it("ArrowLeft moves to and activates the previous tab", () => {
+      const onChange = vi.fn();
+      render(<Tabs tabs={["All", "Active", "Archived"]} active="Active" onChange={onChange} />);
+      fireEvent.keyDown(screen.getByText("Active"), { key: "ArrowLeft" });
+      expect(onChange).toHaveBeenCalledWith("All");
+    });
+
+    it("ArrowLeft wraps from the first tab back to the last", () => {
+      const onChange = vi.fn();
+      render(<Tabs tabs={["All", "Active", "Archived"]} active="All" onChange={onChange} />);
+      fireEvent.keyDown(screen.getByText("All"), { key: "ArrowLeft" });
+      expect(onChange).toHaveBeenCalledWith("Archived");
+    });
+
+    it("Home moves focus and activation to the first tab", () => {
+      const onChange = vi.fn();
+      render(<Tabs tabs={["All", "Active", "Archived"]} active="Active" onChange={onChange} />);
+      fireEvent.keyDown(screen.getByText("Active"), { key: "Home" });
+      expect(onChange).toHaveBeenCalledWith("All");
+    });
+
+    it("End moves focus and activation to the last tab", () => {
+      const onChange = vi.fn();
+      render(<Tabs tabs={["All", "Active", "Archived"]} active="Active" onChange={onChange} />);
+      fireEvent.keyDown(screen.getByText("Active"), { key: "End" });
+      expect(onChange).toHaveBeenCalledWith("Archived");
     });
   });
 

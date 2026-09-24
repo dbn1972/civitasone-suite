@@ -19,11 +19,27 @@ export interface ExplainabilityTooltipProps {
  * ExplainabilityTooltip — hover/focus popover showing factor contribution bars.
  * Displays positive (green) and negative (red) direction indicators.
  * Keyboard accessible: appears on focus, closes on Escape.
+ * A short grace period on mouseleave (see HelpTip.tsx for the same fix and
+ * rationale) gives the pointer time to travel into the popover itself,
+ * across the gap below the trigger, before it closes.
  */
 export function ExplainabilityTooltip({ factors, children }: ExplainabilityTooltipProps) {
   const [open, setOpen] = useState(false);
   const id = useId();
   const wrapRef = useRef<HTMLSpanElement | null>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function cancelScheduledClose() {
+    if (closeTimer.current !== null) {
+      clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }
+
+  function scheduleClose() {
+    cancelScheduledClose();
+    closeTimer.current = setTimeout(() => setOpen(false), 200);
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -43,6 +59,9 @@ export function ExplainabilityTooltip({ factors, children }: ExplainabilityToolt
     };
   }, [open]);
 
+  // Cancel any pending close if the component unmounts mid-grace-period.
+  useEffect(() => cancelScheduledClose, []);
+
   if (!factors || factors.length === 0) {
     return <>{children}</>;
   }
@@ -53,8 +72,11 @@ export function ExplainabilityTooltip({ factors, children }: ExplainabilityToolt
     <span
       ref={wrapRef}
       className="relative inline-flex items-center"
-      onMouseEnter={() => setOpen(true)}
-      onMouseLeave={() => setOpen(false)}
+      onMouseEnter={() => {
+        cancelScheduledClose();
+        setOpen(true);
+      }}
+      onMouseLeave={scheduleClose}
       onFocus={() => setOpen(true)}
       onBlur={(e) => {
         if (!wrapRef.current?.contains(e.relatedTarget as Node)) {
@@ -67,6 +89,8 @@ export function ExplainabilityTooltip({ factors, children }: ExplainabilityToolt
         <span
           id={id}
           role="tooltip"
+          onMouseEnter={cancelScheduledClose}
+          onMouseLeave={scheduleClose}
           className="absolute top-full start-0 z-50 mt-2 w-64 rounded-lg bg-gray-900 p-3 text-white shadow-lg dark:bg-gray-800"
         >
           <span className="mb-2 block text-xs font-semibold text-gray-300">

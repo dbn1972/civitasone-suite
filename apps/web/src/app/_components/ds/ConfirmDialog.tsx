@@ -15,6 +15,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 import { Button } from "./Button";
 
 export interface ConfirmDialogProps {
@@ -135,6 +136,35 @@ export function ConfirmDialog({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [open, onCancel]);
 
+  // Make everything outside the dialog inert while open. The Tab-trap above
+  // only intercepts the Tab *key*; it does nothing to stop a screen reader's
+  // own browse-mode / virtual-cursor navigation from wandering into
+  // background content, since that never fires a Tab keydown at all.
+  // `inert` removes background content from the accessibility tree (and the
+  // tab order, and hit-testing) at the browser level instead. This requires
+  // the dialog to be a document.body-level child -- see the createPortal
+  // below -- and mirrors the same technique already proven in
+  // revenue/assessments/AssessmentsTable.tsx's FieldPanel.
+  useEffect(() => {
+    if (!open) return;
+    const hidden: HTMLElement[] = [];
+    Array.from(document.body.children).forEach((child) => {
+      if (
+        child instanceof HTMLElement &&
+        child !== panelRef.current &&
+        !child.contains(panelRef.current)
+      ) {
+        if (!child.hasAttribute("inert")) {
+          hidden.push(child);
+          child.setAttribute("inert", "");
+        }
+      }
+    });
+    return () => {
+      hidden.forEach((el) => el.removeAttribute("inert"));
+    };
+  }, [open]);
+
   if (!open) return null;
 
   const trimmedLen = reason.trim().length;
@@ -143,7 +173,7 @@ export function ConfirmDialog({
   const confirmDisabled =
     busy || (requireReason && (trimmedLen < minReasonLength || reasonTooLong));
 
-  return (
+  return createPortal(
     <div
       className="cd-overlay"
       role="presentation"
@@ -218,6 +248,7 @@ export function ConfirmDialog({
           </Button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

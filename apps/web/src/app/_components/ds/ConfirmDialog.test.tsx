@@ -139,9 +139,38 @@ describe("ConfirmDialog", () => {
 
   it("calls onCancel when overlay is clicked (not busy)", () => {
     const onCancel = vi.fn();
-    const { container } = render(<ConfirmDialog {...baseProps} onCancel={onCancel} />);
-    const overlay = container.querySelector(".cd-overlay")!;
+    // The dialog now renders through a body-level portal (see the inert
+    // test below), so it's no longer a descendant of RTL's local
+    // `container` -- query `document.body` directly instead.
+    render(<ConfirmDialog {...baseProps} onCancel={onCancel} />);
+    const overlay = document.body.querySelector(".cd-overlay")!;
     fireEvent.mouseDown(overlay);
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  describe("background inertness while open", () => {
+    it("makes document.body's other children inert while open, and restores them on close", () => {
+      // Stand-in for "the rest of the app": a body-level sibling with its
+      // own focusable control, entirely outside anything RTL's render()
+      // attaches.
+      const background = document.createElement("div");
+      const backgroundButton = document.createElement("button");
+      backgroundButton.textContent = "Background action";
+      background.appendChild(backgroundButton);
+      document.body.appendChild(background);
+
+      try {
+        const { rerender } = render(<ConfirmDialog {...baseProps} open={false} />);
+        expect(background.hasAttribute("inert")).toBe(false);
+
+        rerender(<ConfirmDialog {...baseProps} open />);
+        expect(background.hasAttribute("inert")).toBe(true);
+
+        rerender(<ConfirmDialog {...baseProps} open={false} />);
+        expect(background.hasAttribute("inert")).toBe(false);
+      } finally {
+        document.body.removeChild(background);
+      }
+    });
   });
 });

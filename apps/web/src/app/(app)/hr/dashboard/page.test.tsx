@@ -91,6 +91,15 @@ describe("HRDashboardPage", () => {
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
   });
 
+  // Regression: the page's own (sr-only) #hr-dash-heading h1 and
+  // GreetingHeader's personalized "Good morning, X" banner were both
+  // rendered as <h1>, giving the page two competing top-level headings.
+  // GreetingHeader's is now an <h2>.
+  it("has exactly one h1 on the page", async () => {
+    render(await HRDashboardPage());
+    expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+  });
+
   describe("profile absence is not a page failure", () => {
     // Regression for: a user with no linked employee record (e.g. an
     // admin/test account) got a false "We couldn't load employees" and a

@@ -63,6 +63,15 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
   const [localStatus, setLocalStatus] = useState<DocStatus>(doc.status);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  // Success is announced the same way failure already is: a conditionally
+  // rendered, role-bearing <p> right in this component (see the role="alert"
+  // paragraph below). A screen-reader user otherwise has no way to know an
+  // upload succeeded -- the StatusChip's text changes, but nothing announces
+  // that change. role="status" (implicit aria-live="polite") is used instead
+  // of role="alert" because this isn't an interruption/error, matching the
+  // severity-based status/alert convention already established elsewhere in
+  // this design system (FileUpload, ErrorState).
+  const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
 
   async function handleFile(file: File) {
     if (file.size > 10 * 1024 * 1024) {
@@ -83,11 +92,14 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
         setUploadError(null);
         setLocalFile(file.name);
         setLocalStatus("uploaded");
+        setUploadSuccessMessage(`${file.name} uploaded successfully.`);
         onUploaded?.(doc.id, key);
       } else {
+        setUploadSuccessMessage(null);
         setUploadError(`Could not prepare upload (${res.status})`);
       }
     } catch (err) {
+      setUploadSuccessMessage(null);
       setUploadError(err instanceof Error ? err.message : "Upload failed — please try again.");
     } finally {
       setUploading(false);
@@ -125,8 +137,10 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
             <span style={{ fontSize: 13, fontWeight: 600, color: "var(--heading, #1e293b)" }}>
               {doc.name}
             </span>
-            {doc.required && (
-              <span style={{ fontSize: 10, color: "var(--bad, #b91c1c)", fontWeight: 600 }}>Required</span>
+            {doc.required ? (
+              <span style={{ fontSize: 10, color: "var(--bad, #b91c1c)", fontWeight: 600 }}>(Required)</span>
+            ) : (
+              <span style={{ fontSize: 10, color: "var(--muted, #64748b)", fontWeight: 500 }}>(Optional)</span>
             )}
           </div>
           {doc.description && (
@@ -170,7 +184,7 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
           onClick={() => inputRef.current?.click()}
           role="button"
           tabIndex={0}
-          aria-label={`Upload ${doc.name}`}
+          aria-label={doc.required ? `Upload ${doc.name} (required)` : `Upload ${doc.name}`}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
           style={{
             border: `2px dashed ${dragging ? "var(--indigo, #4f46e5)" : "var(--border, #cbd5e1)"}`,
@@ -191,7 +205,8 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
               const f = e.target.files?.[0];
               if (f) void handleFile(f);
             }}
-            aria-label={`Choose file for ${doc.name}`}
+            aria-label={doc.required ? `Choose file for ${doc.name} (required)` : `Choose file for ${doc.name}`}
+            aria-required={doc.required ? "true" : undefined}
           />
           {uploading ? (
             <span style={{ fontSize: 12, color: "var(--indigo, #4f46e5)" }}>Uploading…</span>
@@ -207,6 +222,16 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
             </>
           )}
         </div>
+      )}
+
+      {/* Upload success — same mechanism as the error paragraph below (a
+          conditionally rendered, role-bearing <p>), just role="status"
+          (implicit aria-live="polite") instead of role="alert" since this
+          isn't an error. */}
+      {uploadSuccessMessage && (
+        <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--good, #067647)", fontWeight: 500 }}>
+          {uploadSuccessMessage}
+        </p>
       )}
 
       {/* Upload error */}

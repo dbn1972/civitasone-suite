@@ -16,6 +16,17 @@ function getGreeting(): HTMLElement {
 }
 
 describe("GreetingHeader", () => {
+  // Regression: this greeting was rendered as an <h1>, competing with the
+  // page's own (sr-only) #hr-dash-heading <h1> in page.tsx -- see
+  // page.test.tsx's "has exactly one h1 on the page" for the page-level
+  // check. GreetingHeader is a banner within the page, not the page's own
+  // title, so it belongs at h2.
+  it("renders the greeting as an h2, not an h1", () => {
+    render(<GreetingHeader {...baseProps} />);
+    expect(within(getGreeting()).queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
+    expect(within(getGreeting()).getByRole("heading", { level: 2 })).toHaveTextContent(/Good (morning|day), Asha/);
+  });
+
   it("shows the pending-count briefing when there are pending items", () => {
     render(<GreetingHeader {...baseProps} />);
     expect(within(getGreeting()).getByText(/3 items need your attention/)).toBeInTheDocument();
