@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
 
 type ApiRow = {
   id: string;
@@ -23,19 +24,12 @@ type Row = {
   caseRef: string;
   claimType: string;
   hospital: string;
-  amount: string;
-  approvedAmount: string;
+  amount: number | null;
+  approvedAmount: number | null;
   claimantType: string;
   filedDate: string;
   status: string;
 } & Record<string, unknown>;
-
-function formatINR(minor?: string): string {
-  if (!minor) return "—";
-  const n = Number(minor);
-  if (isNaN(n)) return "—";
-  return "₹" + (n / 100).toLocaleString("en-IN", { minimumFractionDigits: 0 });
-}
 
 async function getData(t: Awaited<ReturnType<typeof getTranslations>>): Promise<LoaderResult<Row[]>> {
   return fetchJson<unknown, Row[]>("/api/v1/hrms/medical/claims", [], {
@@ -43,17 +37,21 @@ async function getData(t: Awaited<ReturnType<typeof getTranslations>>): Promise<
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: ApiRow[] })?.data;
       if (!Array.isArray(arr)) return null;
-      return (arr as ApiRow[]).map((r) => ({
-        id: r.id,
-        caseRef: "MED/" + r.id.slice(0, 8).toUpperCase(),
-        claimType: r.claim_type ?? "—",
-        hospital: r.hospital_name ?? "—",
-        amount: formatINR(r.amount_minor),
-        approvedAmount: r.approved_amount_minor ? formatINR(r.approved_amount_minor) : "—",
-        claimantType: r.dependant_name ? t("claimantDependant", { relation: r.dependant_relation ?? "" }) : t("claimantSelf"),
-        filedDate: r.created_at ? r.created_at.slice(0, 10) : "—",
-        status: r.status,
-      }));
+      return (arr as ApiRow[]).map((r) => {
+        const amountNum = r.amount_minor != null ? Number(r.amount_minor) : null;
+        const approvedNum = r.approved_amount_minor != null ? Number(r.approved_amount_minor) : null;
+        return {
+          id: r.id,
+          caseRef: "MED/" + r.id.slice(0, 8).toUpperCase(),
+          claimType: r.claim_type ?? "—",
+          hospital: r.hospital_name ?? "—",
+          amount: amountNum != null && Number.isFinite(amountNum) ? amountNum : null,
+          approvedAmount: approvedNum != null && Number.isFinite(approvedNum) ? approvedNum : null,
+          claimantType: r.dependant_name ? t("claimantDependant", { relation: r.dependant_relation ?? "" }) : t("claimantSelf"),
+          filedDate: formatIndianDate(r.created_at ? r.created_at.slice(0, 10) : null),
+          status: r.status,
+        };
+      });
     },
   });
 }
@@ -67,14 +65,14 @@ export default async function MedicalPage() {
   const approved = items.filter((i) => i.status === "approved" || i.status === "paid").length;
   const rejected = items.filter((i) => i.status === "rejected").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount"; sortable?: boolean }[] = [
     { key: "caseRef", label: t("colClaimRef") },
     { key: "claimType", label: t("colClaimType") },
     { key: "hospital", label: t("colHospital") },
-    { key: "amount", label: t("colClaimedAmount") },
-    { key: "approvedAmount", label: t("colApproved") },
+    { key: "amount", label: t("colClaimedAmount"), cellType: "amount" },
+    { key: "approvedAmount", label: t("colApproved"), cellType: "amount" },
     { key: "claimantType", label: t("colClaimant") },
-    { key: "filedDate", label: t("colFiledDate") },
+    { key: "filedDate", label: t("colFiledDate"), sortable: false },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
@@ -84,6 +82,7 @@ export default async function MedicalPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr"
+        backLabel={t("backToHr")}
         actions={<span />}
       />
       <DataSourceBadge source={source} />

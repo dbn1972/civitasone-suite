@@ -23,16 +23,11 @@ type Row = {
   employee: string;
   department: string;
   loanType: string;
-  sanctionedAmount: string;
-  emi: string;
-  balance: string;
+  sanctionedAmount: number | null;
+  emi: number | null;
+  balance: number | null;
   status: string;
 } & Record<string, unknown>;
-
-function formatINR(minor: number): string {
-  if (!minor && minor !== 0) return "—";
-  return `₹${(minor / 100).toLocaleString("en-IN")}`;
-}
 
 function mapLoans(apiLoans: ApiLoan[]): Row[] {
   return apiLoans.map((l) => ({
@@ -40,9 +35,9 @@ function mapLoans(apiLoans: ApiLoan[]): Row[] {
     employee: l.employeeName ?? l.employeeId,
     department: l.department ?? "—",
     loanType: l.loanType,
-    sanctionedAmount: formatINR(l.sanctionedAmountMinor),
-    emi: l.emiMinor ? formatINR(l.emiMinor) : "—",
-    balance: l.outstandingMinor != null ? formatINR(l.outstandingMinor) : "—",
+    sanctionedAmount: l.sanctionedAmountMinor ?? null,
+    emi: l.emiMinor != null ? l.emiMinor : null,
+    balance: l.outstandingMinor != null ? l.outstandingMinor : null,
     status: l.status,
   }));
 }
@@ -67,19 +62,19 @@ export default async function LoansPage() {
   const pending = items.filter((i) => i.status === "pending").length;
   const completed = items.filter((i) => i.status === "completed" || i.status === "closed").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" }[] = [
     { key: "employee", label: t("colEmployee") },
     { key: "department", label: t("colDepartment") },
     { key: "loanType", label: t("colLoanType") },
-    { key: "sanctionedAmount", label: t("colSanctioned") },
-    { key: "emi", label: t("colEmi") },
-    { key: "balance", label: t("colBalance") },
+    { key: "sanctionedAmount", label: t("colSanctioned"), cellType: "amount" },
+    { key: "emi", label: t("colEmi"), cellType: "amount" },
+    { key: "balance", label: t("colBalance"), cellType: "amount" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={t("backToHr")} />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
         <StatCard icon="💰" iconBg="#e6f0ff" label={t("statTotalLoansLabel")} value={errored ? null : items.length} />
