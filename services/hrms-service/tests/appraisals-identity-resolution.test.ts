@@ -114,6 +114,45 @@ async function seedAppraisal(tenantId: string, opts: {
   return id;
 }
 
+/**
+ * Seeds two managers in `tenantId`, each with exactly ONE direct report and
+ * a non-overlapping report set (reportA reports ONLY to managerA, reportB
+ * ONLY to managerB), plus one "pending" appraisal per report -- so the
+ * tenant carries at least 2 distinct appraisals, one per manager's scope.
+ *
+ * Both cardinalities here are deliberate, and both are required for the
+ * cache-scoping regression to actually be observable:
+ *  - ONE report each (not zero): resolveAppraisalReadScope's manager branch
+ *    then returns a non-empty allowedEmployeeIds, so the request reaches
+ *    queries.listAppraisals's cache.getOrLoad at all -- a zero-reports
+ *    manager's request short-circuits on the `allowedEmployeeIds.length ===
+ *    0` guard before ever touching the cache (see the single-manager test
+ *    above, which cannot catch this bug class for exactly that reason).
+ *  - TWO distinct appraisals (not one): a cache collision then changes
+ *    WHICH appraisal(s) a caller gets back, not just whether a single
+ *    shared row is present-or-absent -- a full collision onto the wrong
+ *    scope's cache entry is otherwise indistinguishable from a correct
+ *    result when there is only one appraisal in the whole tenant.
+ */
+async function seedTwoManagerScopes(tenantId: string): Promise<{
+  managerAActor: string; managerBActor: string;
+  appraisalAId: string; appraisalBId: string;
+}> {
+  const managerAActor = randomUUID();
+  const managerBActor = randomUUID();
+  const reportAActor = randomUUID();
+  const reportBActor = randomUUID();
+  const managerAEmp = await seedEmployee(tenantId, { userRef: managerAActor, fullName: "Dan Manager-A", createdBy: managerAActor });
+  const managerBEmp = await seedEmployee(tenantId, { userRef: managerBActor, fullName: "Frank Manager-B", createdBy: managerBActor });
+  const reportAEmp = await seedEmployee(tenantId, { userRef: reportAActor, managerId: managerAEmp, fullName: "Erin Report-A", createdBy: managerAActor });
+  const reportBEmp = await seedEmployee(tenantId, { userRef: reportBActor, managerId: managerBEmp, fullName: "Grace Report-B", createdBy: managerBActor });
+  // "pending" (not an APPRAISAL_STAGES value) -- see the file header re:
+  // AppraisalSummarySchema's separate, pre-existing status-vocabulary gap.
+  const appraisalAId = await seedAppraisal(tenantId, { employeeId: reportAEmp, reportingOfficerId: managerAEmp, status: "pending", createdBy: managerAActor });
+  const appraisalBId = await seedAppraisal(tenantId, { employeeId: reportBEmp, reportingOfficerId: managerBEmp, status: "pending", createdBy: managerBActor });
+  return { managerAActor, managerBActor, appraisalAId, appraisalBId };
+}
+
 /** Direct DB read (bypassing the HTTP layer entirely -- there is no GET
  * /:id route on this module) to prove a PATCH + drain actually persisted,
  * not just that the route answered 202. */
@@ -233,6 +272,17 @@ describe("Appraisals — real-DB identity resolution (employeeId is hrms_employe
     expect((r.json() as Array<{ id: string }>).map((a) => a.id)).toContain(id);
   });
 
+  // NOTE: the single-manager test directly below is a WEAKER regression
+  // than it looks -- Carol has zero direct reports, so her read
+  // short-circuits queries.listAppraisals's `allowedEmployeeIds.length ===
+  // 0` guard and never touches cache.getOrLoad at all, and the tenant has
+  // only one appraisal total, so even a full cache collision would return
+  // the same (coincidentally correct) singleton either way. Reverting the
+  // cache-key fix leaves this test passing. Kept below as a still-valid,
+  // narrower case, but the two adversarial tests that follow it (two
+  // one-report managers, two distinct appraisals, cross-scope + both
+  // priming orders) are the real guard against this bug class -- see their
+  // own comments, and seedTwoManagerScopes above, for why.
   it("cache-scoping: an unrestricted HR read and a scoped manager read for the same tenant do not leak into each other's cache entry", async () => {
     // Regression for a risk found while building this fix, not something
     // APAR had to solve (apar/repo.ts's listAppraisals has no cache layer
@@ -262,6 +312,80 @@ describe("Appraisals — real-DB identity resolution (employeeId is hrms_employe
     // one must still correctly include it -- the inverse collision.
     const bobAfter = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, bobActor, ["manager"]) });
     expect((bobAfter.json() as Array<{ id: string }>).map((a) => a.id)).toContain(id);
+  });
+
+  it("cache-scoping (adversarial, order A -> HR -> B): HR's unrestricted read is not masked by a prior scoped read, and neither manager leaks into the other's scope", async () => {
+    // Two managers, ONE direct report each, non-overlapping report sets,
+    // TWO distinct appraisals -- see seedTwoManagerScopes's own comment for
+    // why both cardinalities matter. Fresh tenant, same reasoning as every
+    // other test in this block (no cache-invalidation-on-write, see file
+    // header).
+    const tenant = randomUUID();
+    const { managerAActor, managerBActor, appraisalAId, appraisalBId } = await seedTwoManagerScopes(tenant);
+
+    // 1) Manager A (narrower scope) reads first -- primes a cache entry
+    // keyed to A's scope.
+    const aFirst = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, managerAActor, ["manager"]) });
+    const aFirstIds = (aFirst.json() as Array<{ id: string }>).map((a) => a.id);
+    expect(aFirstIds).toContain(appraisalAId);
+    expect(aFirstIds).not.toContain(appraisalBId); // A must not see B's report's appraisal
+
+    // 2) HR's UNRESTRICTED read immediately after MUST see BOTH appraisals.
+    // Pre-fix (cache key = tenantId+limit only, ignoring scope), this is a
+    // HIT on the entry step 1 just primed -- HR would silently get back
+    // A's narrower cached result instead of the real tenant-wide list, an
+    // actual data loss for HR for up to CACHE_TTL seconds. This is the
+    // assertion the single-manager test above cannot make meaningfully: it
+    // has only one appraisal in the whole tenant, so a collided result and
+    // a correct one look identical.
+    const hrAfterA = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, randomUUID(), ["hr_admin"]) });
+    const hrAfterAIds = (hrAfterA.json() as Array<{ id: string }>).map((a) => a.id);
+    expect(hrAfterAIds).toContain(appraisalAId);
+    expect(hrAfterAIds).toContain(appraisalBId);
+
+    // 3) Manager B reads immediately after HR -- must see ONLY its own
+    // report's appraisal, never A's. Pre-fix, a cache HIT never overwrites
+    // the entry (getOrLoad returns on hit without recomputing), so the
+    // shared key would still hold A's original step-1 result here -- B
+    // would wrongly receive A's report's appraisal instead of its own.
+    const bAfterHr = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, managerBActor, ["manager"]) });
+    const bAfterHrIds = (bAfterHr.json() as Array<{ id: string }>).map((a) => a.id);
+    expect(bAfterHrIds).toContain(appraisalBId);
+    expect(bAfterHrIds).not.toContain(appraisalAId); // B must not see A's report's appraisal
+  });
+
+  it("cache-scoping (adversarial, order B -> A -> HR): reversed priming order does not leak Manager B's report's appraisal into Manager A's read", async () => {
+    // Same fixture shape as the test above, opposite priming order -- the
+    // fix must not be order-dependent: a scope-varying key has to be
+    // symmetric in who reads first, not just correct for the one order
+    // exercised above.
+    const tenant = randomUUID();
+    const { managerAActor, managerBActor, appraisalAId, appraisalBId } = await seedTwoManagerScopes(tenant);
+
+    // 1) Manager B reads first this time -- primes a cache entry keyed to
+    // B's scope.
+    const bFirst = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, managerBActor, ["manager"]) });
+    const bFirstIds = (bFirst.json() as Array<{ id: string }>).map((a) => a.id);
+    expect(bFirstIds).toContain(appraisalBId);
+    expect(bFirstIds).not.toContain(appraisalAId); // B must not see A's report's appraisal
+
+    // 2) Manager A reads immediately after. Pre-fix, same shared key -> HIT
+    // on B's just-primed entry -> A would wrongly receive B's report's
+    // appraisal AND be missing its own -- a leak and a data loss at once,
+    // in the direction the test above (A reading before B) never
+    // exercises.
+    const aAfterB = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, managerAActor, ["manager"]) });
+    const aAfterBIds = (aAfterB.json() as Array<{ id: string }>).map((a) => a.id);
+    expect(aAfterBIds).toContain(appraisalAId);
+    expect(aAfterBIds).not.toContain(appraisalBId); // A must not see B's report's appraisal
+
+    // 3) HR's unrestricted read, last -- must still see both, confirming
+    // the two scoped primes above (B's, then A's) each landed on their own
+    // cache entry rather than clobbering a shared one.
+    const hrLast = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, randomUUID(), ["hr_admin"]) });
+    const hrLastIds = (hrLast.json() as Array<{ id: string }>).map((a) => a.id);
+    expect(hrLastIds).toContain(appraisalAId);
+    expect(hrLastIds).toContain(appraisalBId);
   });
 });
 
