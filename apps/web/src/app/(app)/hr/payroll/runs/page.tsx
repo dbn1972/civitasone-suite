@@ -3,10 +3,8 @@ import { PageHeader, StatusPill, RefreshErrorState } from "../../../../_componen
 import { getPayrollRunDetails } from "@/app/_data/loaders";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { formatRupees } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
-
-const fmtRupees = (n: number) =>
-  "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default async function PayrollRunsPage() {
   // This used to be a client component fetching "/api/v1/hrms/payroll/runs"
@@ -27,7 +25,7 @@ export default async function PayrollRunsPage() {
   const errored = resource.status === "error";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -65,9 +63,9 @@ export default async function PayrollRunsPage() {
                     <td>
                       <Link href={`/hr/payroll/${run.id}`}>{run.payPeriod}</Link>
                     </td>
-                    <td style={{ textAlign: "end" }}>{run.employeeCount.toLocaleString("en-IN")}</td>
-                    <td style={{ textAlign: "end" }}>{fmtRupees(run.grossAmount)}</td>
-                    <td style={{ textAlign: "end" }}>{fmtRupees(run.netAmount)}</td>
+                    <td style={{ textAlign: "end" }}>{run.employeeCount != null ? run.employeeCount.toLocaleString("en-IN") : "—"}</td>
+                    <td style={{ textAlign: "end" }}>{formatRupees(run.grossAmount)}</td>
+                    <td style={{ textAlign: "end" }}>{formatRupees(run.netAmount)}</td>
                     <td>
                       <StatusPill status={run.status} />
                     </td>
@@ -78,6 +76,6 @@ export default async function PayrollRunsPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

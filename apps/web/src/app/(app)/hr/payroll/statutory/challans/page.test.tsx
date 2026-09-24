@@ -66,4 +66,18 @@ describe("ChallansPage", () => {
     renderPage(ui);
     expect(screen.getByText("No challans ingested for this period")).toBeInTheDocument();
   });
+
+  it("shows a real error state instead of an empty table on a fetch failure", async () => {
+    // Regression: the DataTable used to render unconditionally here, not
+    // gated on `errored` like every sibling statutory page (esi/gpf/lwf/
+    // nps/pf/pt) -- a real outage rendered an empty-looking table instead
+    // of the RefreshErrorState contract (retry/back/help).
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+
+    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    renderPage(ui);
+
+    expect(screen.getByText("We couldn't load TDS challans.")).toBeInTheDocument();
+    expect(screen.queryByText("No challans ingested for this period")).not.toBeInTheDocument();
+  });
 });

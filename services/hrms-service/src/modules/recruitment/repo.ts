@@ -157,6 +157,18 @@ export async function countApplicationsByJob(tenantId: string, jobIds: string[])
 // --- Interviews (P0-2: persisted in recruitment.hrms_interviews) ---
 
 
+/**
+ * Department scoping (HIGH finding): the set of a tenant's job-opening ids
+ * belonging to one department, used to scope interview-routes.ts's list
+ * endpoint for a manager/hiring_manager-role caller (see dept-scope.ts) to
+ * only the interviews for job openings in their own department.
+ */
+export async function listJobOpeningIdsByDepartment(tenantId: string, departmentId: string): Promise<string[]> {
+  const rows = await scopedRead((tx) => tx.select({ id: hrmsJobOpenings.id }).from(hrmsJobOpenings)
+    .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.departmentId, departmentId))));
+  return rows.map((r) => r.id);
+}
+
 export async function findJobOpeningByTenant(id: string, tenantId: string): Promise<JobOpeningRow | null> {
   const rows = await scopedRead((tx) => tx.select().from(hrmsJobOpenings)
     .where(and(eq(hrmsJobOpenings.id, id), eq(hrmsJobOpenings.tenantId, tenantId)))
@@ -189,16 +201,108 @@ export async function findInterviewByIdTx(tx: Writer, id: string, tenantId: stri
 
 export async function listInterviews(
   tenantId: string,
-  filters: { jobOpeningId?: string; applicationId?: string },
+  filters: { jobOpeningId?: string; applicationId?: string; jobOpeningIdIn?: string[] },
   limit = 50,
 ): Promise<InterviewRow[]> {
   const conds = [eq(hrmsInterviews.tenantId, tenantId)];
   if (filters.jobOpeningId) conds.push(eq(hrmsInterviews.jobOpeningId, filters.jobOpeningId));
   if (filters.applicationId) conds.push(eq(hrmsInterviews.applicationId, filters.applicationId));
+  // Department scoping (HIGH finding): restrict to interviews whose job
+  // opening belongs to one of the caller's department's job openings --
+  // see dept-scope.ts. Only set for a department-scoped (non-tenant-wide)
+  // caller; a privileged/tenant-wide caller never passes this.
+  if (filters.jobOpeningIdIn) {
+    if (filters.jobOpeningIdIn.length === 0) return [];
+    conds.push(inArray(hrmsInterviews.jobOpeningId, filters.jobOpeningIdIn));
+  }
   return scopedRead((tx) => tx.select().from(hrmsInterviews)
     .where(and(...conds))
     .orderBy(desc(hrmsInterviews.scheduledDate))
     .limit(limit));
+}
+
+/**
+ * HIGH finding: POST /v1/hrms/interviews had no double-booking check at all
+ * -- any number of interviews could be scheduled for the same interviewer(s)
+ * at overlapping times. Returns interviews sharing at least one interviewer
+ * with `interviewerIds` (excluding cancelled ones) whose
+ * [scheduledAt, scheduledAt+duration) window genuinely overlaps the given
+ * one -- a real half-open-interval comparison, not just an exact-match on
+ * start time.
+ *
+ * The DB query narrows to interviews sharing at least one interviewer
+ * (jsonb_array_elements_text over panel_members, which stores the
+ * interviewer id array as jsonb -- see schema.ts) and to a +-1 day window
+ * around the target date (cheap, index-friendly on scheduled_date; durationMinutes
+ * has no enforced upper bound in the route's Zod schema, so a same-day-only
+ * filter could in theory miss a pathologically long "interview" spanning
+ * midnight). The exact overlap comparison then runs in JS on the narrowed
+ * candidate set, reconstructing each side's start/end using the same UTC
+ * date+time convention interview-routes.ts already derives scheduledAt from
+ * (new Date(`${date}T${time}:00.000Z`)) -- doing the interval comparison
+ * itself in raw SQL across a `date` + `varchar` time pair invites interval-
+ * cast mistakes for little benefit at this table's scale.
+ */
+export async function findOverlappingInterviews(
+  tenantId: string,
+  interviewerIds: string[],
+  scheduledDate: string,
+  scheduledTime: string,
+  durationMinutes: number,
+): Promise<InterviewRow[]> {
+  return scopedRead((tx) => findOverlappingInterviewsTx(tx, tenantId, interviewerIds, scheduledDate, scheduledTime, durationMinutes));
+}
+
+/** Tx-scoped variant of findOverlappingInterviews -- see .claude/skills/16-production-readiness-audit.md section 1.
+ *  Used by f3-consumer.ts's recruitment_interview_routes__0 case as an atomic re-check: the route's own
+ *  synchronous pre-check (interview-routes.ts) gives fast HTTP feedback for the common case, but that
+ *  read-then-later-publish has its own race window (two near-simultaneous schedule requests) this alone
+ *  can't close -- mirrors the claimApplicationForOffer / claimVacancy precedent documented above. */
+export async function findOverlappingInterviewsTx(
+  tx: Writer,
+  tenantId: string,
+  interviewerIds: string[],
+  scheduledDate: string,
+  scheduledTime: string,
+  durationMinutes: number,
+  excludeInterviewId?: string,
+): Promise<InterviewRow[]> {
+  if (interviewerIds.length === 0) return [];
+  const newStart = new Date(`${scheduledDate}T${scheduledTime}:00.000Z`).getTime();
+  const newEnd = newStart + durationMinutes * 60_000;
+
+  const dayBefore = new Date(`${scheduledDate}T00:00:00.000Z`);
+  dayBefore.setUTCDate(dayBefore.getUTCDate() - 1);
+  const dayAfter = new Date(`${scheduledDate}T00:00:00.000Z`);
+  dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+  const windowStart = dayBefore.toISOString().slice(0, 10);
+  const windowEnd = dayAfter.toISOString().slice(0, 10);
+
+  const conds = [
+    eq(hrmsInterviews.tenantId, tenantId),
+    ne(hrmsInterviews.status, "cancelled"),
+    sql`${hrmsInterviews.scheduledDate} BETWEEN ${windowStart}::date AND ${windowEnd}::date`,
+  ];
+  if (excludeInterviewId) conds.push(ne(hrmsInterviews.id, excludeInterviewId));
+
+  // Interviewer overlap and the precise time-interval comparison both run in
+  // JS on this date-window-narrowed candidate set. An earlier version tried
+  // the interviewer match as a `jsonb_array_elements_text(...) = ANY(${arr})`
+  // SQL condition -- drizzle-orm's `sql` template does not serialize a plain
+  // JS array into a Postgres array literal for that context (confirmed live:
+  // it throws `malformed array literal` because the bound parameter lands as
+  // a single bare element, not "{...}"-wrapped), so this was a genuine bug,
+  // not a style choice. Doing it in JS sidesteps that entirely.
+  const candidates = await (tx as typeof db).select().from(hrmsInterviews).where(and(...conds));
+  const interviewerSet = new Set(interviewerIds);
+
+  return candidates.filter((iv) => {
+    const panelIds = (iv.panelMembers as unknown[]).map((m) => String(m));
+    if (!panelIds.some((pid) => interviewerSet.has(pid))) return false;
+    const start = new Date(`${iv.scheduledDate as unknown as string}T${iv.scheduledTime}:00.000Z`).getTime();
+    const end = start + iv.durationMinutes * 60_000;
+    return newStart < end && start < newEnd;
+  });
 }
 
 export async function updateInterviewScorecard(
@@ -258,13 +362,35 @@ export async function updateJobOpening(tx: Writer, id: string, patch: Partial<ty
 
 // --- Talent Pool (resume bank / candidate search) ---
 
+/**
+ * MEDIUM finding: the talent pool showed every application ever submitted,
+ * unfiltered by stage -- a candidate still mid-pipeline for one posting
+ * showed up indistinguishably when staffing a different one. These are the
+ * stages a candidate is genuinely OFF the active pipeline for and available
+ * to be considered elsewhere -- mirrors the frontend's own existing
+ * `activeStage` computation (talent-pool/page.tsx: everything NOT in this
+ * set counts as "active"). "not_selected" has no current backend writer
+ * (grep confirms only "applied"/"shortlisted"/"offered"/"hired"/"rejected"
+ * are ever assigned to `stage` today) but is kept for parity with that same
+ * frontend definition, which already anticipates it.
+ */
+export const AVAILABLE_STAGES: string[] = ["rejected", "withdrawn", "not_selected"];
+
 export async function searchApplications(
   tenantId: string,
-  filters: { skill?: string; minExp?: number; source?: string },
+  filters: { skill?: string; minExp?: number; source?: string; stage?: string; includeActive?: boolean },
   limit = 100,
 ): Promise<ApplicationRow[]> {
   const conds = [eq(hrmsApplications.tenantId, tenantId)];
   if (filters.source) conds.push(eq(hrmsApplications.source, filters.source));
+  // Explicit stage always wins. Otherwise, default to hiding active-pipeline
+  // candidates (AVAILABLE_STAGES only) unless the caller explicitly opts
+  // into the full unfiltered view via includeActive.
+  if (filters.stage) {
+    conds.push(eq(hrmsApplications.stage, filters.stage));
+  } else if (!filters.includeActive) {
+    conds.push(inArray(hrmsApplications.stage, AVAILABLE_STAGES));
+  }
   // Skill filter uses array containment (requires GIN index).
   // For simplicity, we filter in JS after fetch (acceptable for <10k rows per tenant).
   let rows = await scopedRead((tx) => tx.select().from(hrmsApplications)

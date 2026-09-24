@@ -13,22 +13,22 @@ export default async function LibraryBookDetailPage({ params }: { params: { id: 
     // the book does not exist.
     if (source === "error") {
       return (
-        <main className="page-main wrap" aria-labelledby="page-heading">
+        <div className="page-main wrap" aria-labelledby="page-heading">
           <PageHeader title="Book" back="/estab/library" />
           <RefreshErrorState error={toHumanError("load", { area: "book" })} backHref="/estab/library" />
-        </main>
+        </div>
       );
     }
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Book not found" back="/estab/library" />
         <p className="sub">The requested book could not be found in the catalogue.</p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={book.title}
         subtitle={book.author ? `by ${book.author}` : undefined}
@@ -77,6 +77,6 @@ export default async function LibraryBookDetailPage({ params }: { params: { id: 
           <span className="sub">No copies currently available to issue.</span>
         )}
       </p>
-    </main>
+    </div>
   );
 }

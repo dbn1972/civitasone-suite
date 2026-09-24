@@ -13,7 +13,7 @@ export default async function TenantSettingsPage() {
   const disabled = modules.filter((m) => !m.enabled).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Settings & Modules" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -53,6 +53,6 @@ export default async function TenantSettingsPage() {
           />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

@@ -119,7 +119,7 @@ export default async function InsuranceClaimsPage({
   });
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Insurance Claims"
         subtitle="Claims filed against asset insurance policies."
@@ -165,6 +165,6 @@ export default async function InsuranceClaimsPage({
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

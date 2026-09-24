@@ -9,7 +9,7 @@ export default async function ChequesPage() {
   const bounced = cheques.filter((c) => String(c.status).toLowerCase() === "bounced").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Cheque / DD Register"
         subtitle="Cheque and demand draft register with clearance and bounce tracking."
@@ -28,6 +28,6 @@ export default async function ChequesPage() {
       <Card title="Cheque Register">
         <ChequesTable cheques={cheques} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

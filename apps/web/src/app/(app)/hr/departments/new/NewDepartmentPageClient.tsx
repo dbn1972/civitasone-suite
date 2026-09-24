@@ -18,7 +18,7 @@ export function NewDepartmentPageClient() {
   const t = useTranslations("addDepartmentForm");
   const router = useRouter();
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
@@ -32,6 +32,6 @@ export function NewDepartmentPageClient() {
           setTimeout(() => { router.push("/hr/departments"); }, 1500);
         }}
       />
-    </main>
+    </div>
   );
 }

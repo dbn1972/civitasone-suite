@@ -14,7 +14,7 @@ export default async function AdminSessionsPage() {
   const suspicious = sessions.filter((s) => !s.mfaVerified && s.status === "active").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Active Sessions" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -41,6 +41,6 @@ export default async function AdminSessionsPage() {
           status: s.status,
         }))}
       />
-    </main>
+    </div>
   );
 }

@@ -24,7 +24,7 @@ export default async function ComplianceDashboardPage() {
   const errored = resource.status === "error";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Compliance" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -68,6 +68,6 @@ export default async function ComplianceDashboardPage() {
           </ol>
         </Card>
       )}
-    </main>
+    </div>
   );
 }

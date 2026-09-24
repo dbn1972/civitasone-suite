@@ -42,7 +42,7 @@ export default async function ReadinessPage() {
   const overallPct = readiness ? readiness.overall : Math.round((passed / total) * 100);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Readiness Score" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -92,6 +92,6 @@ export default async function ReadinessPage() {
           </Card>
         </>
       )}
-    </main>
+    </div>
   );
 }

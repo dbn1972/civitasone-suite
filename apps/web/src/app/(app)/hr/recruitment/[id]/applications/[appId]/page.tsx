@@ -188,28 +188,28 @@ export default function ApplicationDetailPage() {
 
   if (loading) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <p style={{ textAlign: "center", color: "var(--mut)", padding: "48px 0" }}>{t("loading")}</p>
-      </main>
+      </div>
     );
   }
 
   if (error || !application) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("notFoundTitle")} subtitle={t("notFoundSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} backLabel="Back to Applications" />
         <DataSourceBadge source={source} />
         <Card padding>
           <p style={{ color: "var(--mut)", textAlign: "center" }}>{error ?? t("notFoundMessage")}</p>
         </Card>
-      </main>
+      </div>
     );
   }
 
   const canHire = application.stage === "selected" || application.stage === "offered";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={application.applicantName}
         subtitle={t("subtitle")}
@@ -322,6 +322,6 @@ export default function ApplicationDetailPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

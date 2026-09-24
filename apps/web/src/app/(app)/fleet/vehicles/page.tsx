@@ -79,7 +79,7 @@ export default async function FleetVehiclesPage() {
   const { data: vehicles, source } = await getVehicles();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fleet Vehicles"
         subtitle="Government vehicles registered to the fleet."
@@ -108,6 +108,6 @@ export default async function FleetVehiclesPage() {
           emptyMessage="Register your first government vehicle in the Assets module."
         />
       </Card>
-    </main>
+    </div>
   );
 }

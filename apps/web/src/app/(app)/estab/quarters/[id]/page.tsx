@@ -42,14 +42,14 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
 
   if (!quarter) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Quarter" back="/estab/quarters" />
         {quarterSource === "error" ? (
           <DataSourceBadge source="error" />
         ) : (
           <p className="sub">The requested quarter could not be found.</p>
         )}
-      </main>
+      </div>
     );
   }
 
@@ -82,7 +82,7 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
   });
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={quarter.quarterNo}
         subtitle={`${quarter.quarterType.replace(/_/g, " ").toUpperCase()} · ${quarter.category}${quarter.locality ? ` · ${quarter.locality}` : ""}`}
@@ -134,6 +134,6 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

@@ -12,7 +12,7 @@ export default async function BillingPage() {
   const submitted = bills.filter((b) => b.status === "submitted_ifms").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside BillingTable, driven
           by the same useSeededResource call that produces its rows — not a
           second, independent read of `source` here that could disagree with
@@ -42,6 +42,6 @@ export default async function BillingPage() {
       <Card title="Works Bills">
         <BillingTable bills={bills} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

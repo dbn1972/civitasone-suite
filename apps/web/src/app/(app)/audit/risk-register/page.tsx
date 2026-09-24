@@ -14,7 +14,7 @@ export default async function RiskRegisterPage() {
   const low = items.filter((i) => i.riskScore < 6).length;
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
@@ -33,6 +33,6 @@ export default async function RiskRegisterPage() {
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <RiskTable items={items} />
-    </main>
+    </div>
   );
 }

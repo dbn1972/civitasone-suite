@@ -12,9 +12,9 @@ const sections: NavTile[] = [
 
 export default function Page() {
 	return (
-		<main className="page-main" aria-labelledby="page-heading">
+		<div className="page-main" aria-labelledby="page-heading">
 			<PageHeader title="AI & Copilot" subtitle="Conversational AI, copilot assistance, and multi-agent orchestration." help="ai" />
 			<LinkTiles tiles={sections} columns="four" />
-		</main>
+		</div>
 	);
 }

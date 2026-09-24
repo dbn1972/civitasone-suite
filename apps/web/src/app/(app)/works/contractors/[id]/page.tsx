@@ -173,7 +173,7 @@ export default async function ContractorDetailPage({
   }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={contractor.name}
         subtitle={`Reg. No. ${String(contractor.registrationNo ?? "—")}`}
@@ -353,6 +353,6 @@ export default async function ContractorDetailPage({
           roles={roles}
         />
       </div>
-    </main>
+    </div>
   );
 }

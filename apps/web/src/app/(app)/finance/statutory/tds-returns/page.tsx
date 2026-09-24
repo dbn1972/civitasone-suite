@@ -8,7 +8,7 @@ export default async function TDSReturnsPage() {
   const pending = returns.filter((r) => String(r.status).toLowerCase() === "pending").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="TDS Returns"
         subtitle="Quarterly vendor TDS deduction register, by section and quarter, with CSV export."
@@ -27,6 +27,6 @@ export default async function TDSReturnsPage() {
       <Card title="TDS Returns">
         <TDSReturnsTable returns={returns} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

@@ -150,7 +150,7 @@ export default function LibraryPage() {
   };
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Issue Library"
         subtitle="Reference catalogue of common UX, accessibility, security, and performance findings with remediation guidance."
@@ -275,6 +275,6 @@ export default function LibraryPage() {
           ))}
         </ul>
       )}
-    </main>
+    </div>
   );
 }

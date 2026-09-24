@@ -12,7 +12,7 @@ const {
   mockTx, dbTransactionFn, enqueuedMessages,
   insertEmployeeMock, updateEmployeeMock, findByIdMock,
   insertTransferMock, insertSeparationMock, insertPromotionMock,
-  findVersionForUpdateMock, updateEmployeeVersionedMock,
+  findVersionForUpdateMock, updateEmployeeVersionedMock, applyTransferEffectMock,
   updateEmployeeIfStatusMock,
 } = vi.hoisted(() => {
   const _mockTx = {
@@ -39,6 +39,15 @@ const {
     // employee fields" test below.
     findVersionForUpdateMock: vi.fn(async () => ({ version: 1, basicMinor: 5000000n })),
     updateEmployeeVersionedMock: vi.fn(async () => undefined as any),
+    // Bug 2 fix (lifecycle/repo.ts's applyTransferEffect version-guard):
+    // mocked as a plain spy here, not exercised for real — this file tests
+    // employee/consumer.ts's OWN control flow (does it call
+    // applyTransferEffect, with what arguments, when?) in isolation from
+    // lifecycle/repo.js, which is fully mocked below. applyTransferEffect's
+    // OWN internal optimistic-concurrency behaviour is exercised for real,
+    // against a real DB, by lifecycle/effective-dating.test.ts's "Bug 2"
+    // describe block instead.
+    applyTransferEffectMock: vi.fn(async () => undefined as any),
     // SEC (status-integrity fix): employeeConfirm now writes through this
     // status-guarded path (employee/repo.ts updateEmployeeIfStatus) instead
     // of the blind-overwrite updateEmployee. Defaults to "applied" (true);
@@ -78,6 +87,13 @@ vi.mock("../src/modules/lifecycle/repo.js", () => ({
   insertTransfer: (...a: any[]) => insertTransferMock(...a),
   insertSeparation: (...a: any[]) => insertSeparationMock(...a),
   insertPromotion: (...a: any[]) => insertPromotionMock(...a),
+  // employee/consumer.ts's employeeTransfer handler (migration 0144's
+  // effective-dating fix) also calls isEffectiveDateDue — a pure,
+  // side-effect-free function, so the real semantics are reproduced inline
+  // rather than mocked away — and applyTransferEffect, mocked as a spy (see
+  // applyTransferEffectMock's hoisted comment above for why).
+  isEffectiveDateDue: (effectiveDate: string, asOf: string) => effectiveDate <= asOf,
+  applyTransferEffect: (...a: any[]) => applyTransferEffectMock(...a),
 }));
 
 // Now import the consumer AFTER mocks
@@ -248,10 +264,16 @@ describe("employeeConfirm command", () => {
 });
 
 describe("employeeTransfer command", () => {
-  it("inserts transfer and updates employee department", async () => {
+  it("inserts transfer and calls applyTransferEffect when the effective date is due", async () => {
     const q = await buildQueue();
     const empId = randomUUID();
     const toDeptId = randomUUID();
+    // Past effective date -- isEffectiveDateDue(...) is due immediately, so
+    // this exercises the SAME "apply now" branch as before migration 0144
+    // (a future effectiveDate instead would insert as pending_effective and
+    // never call applyTransferEffect at all; see effective-dating.test.ts's
+    // "Bug 1" describe block for that path, and effective-scheduler.ts for
+    // how a deferred transfer is later applied by the scheduler tick).
     await q.publish(COMMANDS.employeeTransfer, makeMsg(COMMANDS.employeeTransfer, {
       employeeId: empId, tenantId: TENANT,
       fromDeptId: randomUUID(), toDeptId,
@@ -259,19 +281,37 @@ describe("employeeTransfer command", () => {
     }));
     await settle();
     expect(insertTransferMock).toHaveBeenCalledOnce();
-    expect(updateEmployeeMock).toHaveBeenCalledOnce();
-    const [, id, patch] = updateEmployeeMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
-    expect(id).toBe(empId);
-    expect(patch.departmentId).toBe(toDeptId);
-    expect(patch.status).toBe("transferred");
-    // No payStructureId in the payload -> must not be touched.
-    expect(patch).not.toHaveProperty("payStructureId");
+    const [, transferRow] = insertTransferMock.mock.calls[0]! as [unknown, Record<string, unknown>];
+    expect(transferRow.status).toBe("completed");
+    // No payStructureId in the payload -> recorded as null on the transfer row.
+    expect(transferRow.payStructureId).toBeNull();
+
+    // Bug 2 fix (version-guard parity with promotions): the actual employee
+    // write now happens inside lifecycle/repo.ts's applyTransferEffect,
+    // which reads the employee's current version via findVersionForUpdate
+    // and writes through updateEmployeeVersioned — same optimistic-
+    // concurrency guard applyPromotionEffect already used — instead of the
+    // old blind-overwrite updateEmployee. applyTransferEffect is mocked as
+    // a spy here (lifecycle/repo.js is fully mocked in this file); its
+    // internal version-guard behaviour, including a newer conflicting
+    // concurrent write throwing 409 EMPLOYEE_VERSION_CONFLICT instead of
+    // being silently reverted, is exercised for real against a real DB by
+    // effective-dating.test.ts's "Bug 2" describe block.
+    expect(updateEmployeeMock).not.toHaveBeenCalled();
+    expect(applyTransferEffectMock).toHaveBeenCalledOnce();
+    const [, transferArg, actorArg] = applyTransferEffectMock.mock.calls[0]! as
+      [unknown, Record<string, unknown>, string];
+    expect(transferArg.employeeId).toBe(empId);
+    expect(transferArg.toDeptId).toBe(toDeptId);
+    // No payStructureId in the payload -> must not be passed through either.
+    expect(transferArg.payStructureId).toBeNull();
+    expect(actorArg).toBe(ACTOR);
     await q.stop();
   });
 
   // HIGH regression: a transfer used to never update payStructureId and
   // never published any event at all (unlike create/update/separate).
-  it("updates payStructureId when the transfer payload provides one", async () => {
+  it("passes payStructureId through to applyTransferEffect and the transfer record when the payload provides one", async () => {
     const q = await buildQueue();
     const empId = randomUUID();
     const toDeptId = randomUUID();
@@ -282,8 +322,8 @@ describe("employeeTransfer command", () => {
       effectiveDate: "2026-06-01", payStructureId,
     }));
     await settle();
-    const [, , patch] = updateEmployeeMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
-    expect(patch.payStructureId).toBe(payStructureId);
+    const [, transferArg] = applyTransferEffectMock.mock.calls[0]! as [unknown, Record<string, unknown>];
+    expect(transferArg.payStructureId).toBe(payStructureId);
     const insertRow = insertTransferMock.mock.calls[0]![1] as Record<string, unknown>;
     expect(insertRow.payStructureId).toBe(payStructureId);
     await q.stop();

@@ -16,7 +16,7 @@ export default function PlatformAdminPage() {
   const isPlatformAdmin = roles.includes("platform_admin") || roles.includes("super_admin");
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Platform Admin" }]} />
       <PageHeader
         title="Platform Administration"
@@ -47,6 +47,6 @@ export default function PlatformAdminPage() {
           </a>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

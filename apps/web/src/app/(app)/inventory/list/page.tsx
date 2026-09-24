@@ -38,7 +38,7 @@ export default async function InventoryListPage() {
         subtitle="All SKUs shared with the inventory module and their current stock levels."
       />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory stock items">
+      <div aria-label="Inventory stock items">
         <StatGrid>
           <StatCard icon="📦" iconBg="#f1f5f9" label="Total SKUs" value={items.length} />
           <StatCard icon="⚠️" iconBg="#fee2e2" label="Low Stock" value={lowStockCount} />
@@ -58,7 +58,7 @@ export default async function InventoryListPage() {
         ) : null}
 
         <InventoryStockListClient items={items} />
-      </main>
+      </div>
     </>
   );
 }

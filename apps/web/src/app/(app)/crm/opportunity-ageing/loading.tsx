@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <div className="ph">
         <div>
           <h1 id="page-heading">Opportunity Ageing</h1>
@@ -14,6 +14,6 @@ export default function Loading() {
         </div>
         <div style={{ height: 280, borderRadius: 12, background: "#f1f5f9" }} />
       </div>
-    </main>
+    </div>
   );
 }

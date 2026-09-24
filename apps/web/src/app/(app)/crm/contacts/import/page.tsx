@@ -81,7 +81,7 @@ export default function ImportContactsPage() {
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Import Contacts"
         subtitle="Bulk load — CSV columns: name, email, phone, company, leadStatus"
@@ -196,6 +196,6 @@ export default function ImportContactsPage() {
           />
         </div>
       ) : null}
-    </main>
+    </div>
   );
 }

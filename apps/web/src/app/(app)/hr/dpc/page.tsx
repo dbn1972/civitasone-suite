@@ -79,7 +79,7 @@ export default async function DpcPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle", { asOf })}
@@ -141,6 +141,6 @@ export default async function DpcPage() {
           />
         </Card></div>
       )}
-    </main>
+    </div>
   );
 }

@@ -218,9 +218,21 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
           .where(eq(hrmsLeaveAllocs.id, application.allocId)).limit(1);
         const alloc = allocRows[0];
         if (alloc) {
-          await tx.update(hrmsLeaveAllocs)
-            .set({ balanceDays: (alloc.balanceDays ?? 0) + application.daysApplied, updatedAt: new Date() })
-            .where(eq(hrmsLeaveAllocs.id, alloc.id));
+          // HIGH fix: this used to be a plain JS read-modify-write
+          // (`balanceDays: (alloc.balanceDays ?? 0) + application.daysApplied`)
+          // instead of an atomic SQL-expression UPDATE. Two different approved
+          // leave applications that share this same allocation can be
+          // cancelled concurrently; under the old code both transactions could
+          // read the same pre-cancel balanceDays before either committed, so
+          // whichever transaction's blind SET landed last would silently
+          // clobber the other's credit (a lost update — under-crediting the
+          // employee's balance). repo.creditLeaveBalance uses the same
+          // `sql`${balanceDays} + ${days}`` atomic-increment pattern already
+          // used by debitLeaveBalance/creditLeaveBalance elsewhere in this
+          // module's repo.ts (H7 fix) — safe under concurrency because
+          // Postgres serializes the two UPDATEs via row-level locking on
+          // commit instead of relying on an out-of-transaction JS read.
+          await repo.creditLeaveBalance(tx, alloc.id, application.daysApplied);
         }
       }
       await enqueue(tx, {

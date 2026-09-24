@@ -382,29 +382,29 @@ export default function JobOpeningDetailPage() {
 
   if (loadingOpening) {
     return (
-      <main className="page-main">
+      <div className="page-main">
         <p className="text-center text-slate-500 dark:text-slate-400 py-12">{t("loadingVacancy")}</p>
-      </main>
+      </div>
     );
   }
 
   if (error ?? !opening) {
     return (
-      <main className="page-main">
+      <div className="page-main">
         <button onClick={() => router.back()} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline mb-4 block">
           {t("backToRecruitment")}
         </button>
         <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 p-6 shadow-sm">
           <p className="text-center text-slate-400 dark:text-slate-500">{error ?? t("vacancyNotFound")}</p>
         </div>
-      </main>
+      </div>
     );
   }
 
   const published = opening.isPublished === true || opening.isPublished === "true";
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       {/* ── Header ── */}
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -597,6 +597,6 @@ export default function JobOpeningDetailPage() {
           </button>
         </div>
       )}
-    </main>
+    </div>
   );
 }

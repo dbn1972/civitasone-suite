@@ -7,7 +7,7 @@ export default async function WorkflowDesignerPage() {
   const { data: definitions, source } = await getDesignerDefinitions();
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="BPMN Designer"
         subtitle="Visual drag-and-drop workflow designer — model business processes with BPMN 2.0 elements."
@@ -16,6 +16,6 @@ export default async function WorkflowDesignerPage() {
         actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <DesignerCanvas definitions={definitions} />
-    </main>
+    </div>
   );
 }

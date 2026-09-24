@@ -18,7 +18,7 @@ import { CondemnationWorkflow } from "./CondemnationWorkflow";
  */
 export default function CondemnationPage() {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Condemnation, Auction & Disposal"
         subtitle="Survey a condemned asset, record the committee's recommendation, and run the disposal auction."
@@ -26,6 +26,6 @@ export default function CondemnationPage() {
         backLabel="Assets"
       />
       <CondemnationWorkflow />
-    </main>
+    </div>
   );
 }

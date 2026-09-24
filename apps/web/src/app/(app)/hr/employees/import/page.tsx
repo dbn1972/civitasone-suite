@@ -31,7 +31,7 @@ export default async function BulkImportPage() {
 
   const t = await getTranslations("employeeImport");
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -81,6 +81,6 @@ export default async function BulkImportPage() {
         <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>{t("uploadHeading")}</h3>
         <ImportForm />
       </Card>
-    </main>
+    </div>
   );
 }

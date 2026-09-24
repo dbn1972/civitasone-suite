@@ -58,6 +58,28 @@ export async function listByTenant(tenantId: string, limit = 100, offset = 0, em
     .offset(offset));
 }
 
+/**
+ * Effective-dating scheduler fix: the full tenant universe for
+ * lifecycle/effective-scheduler.ts's per-tenant discovery loop. Every
+ * tenant that could possibly have a due promotion/transfer necessarily has
+ * at least one row here (hrms_promotions/hrms_transfers both FK to
+ * hrms_employees), so this is a safe, complete set to loop over — it may
+ * include a few extra tenants with employees but no lifecycle activity,
+ * which just costs one cheap, empty, tenant-scoped due-lookup each.
+ *
+ * MUST be called through shared/db.ts's scopedPlatformRead (never
+ * scopedRead / a bare query) — this table's FORCE ROW LEVEL SECURITY has
+ * no bypass for an unscoped cross-tenant SELECT otherwise; see that
+ * function's doc comment for the full story.
+ */
+export async function listEmployeeTenantIds(tx: Writer): Promise<string[]> {
+  const rows = await (tx as typeof db)
+    .select({ tenantId: hrmsEmployees.tenantId })
+    .from(hrmsEmployees)
+    .groupBy(hrmsEmployees.tenantId);
+  return rows.map((r) => r.tenantId);
+}
+
 export async function insertEmployee(tx: Writer, row: EmployeeInsert): Promise<void> {
   await tx.insert(hrmsEmployees).values(row);
 }

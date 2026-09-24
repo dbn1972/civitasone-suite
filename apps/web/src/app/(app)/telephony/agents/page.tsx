@@ -70,7 +70,7 @@ export default function TelephonyAgentsPage() {
       <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", minHeight: 16 }}>
         {cacheNote ?? (loading ? "Loading agents…" : "")}
       </p>
-      <main aria-label="Agent queue">
+      <div aria-label="Agent queue">
         <StatGrid>
           <StatCard icon="👥" iconBg="#eef2ff" label="Agents" value={agents.length.toLocaleString("en-IN")} />
           <StatCard icon="🟢" iconBg="#ecfdf5" label="Available" value={available.toLocaleString("en-IN")} />
@@ -81,7 +81,7 @@ export default function TelephonyAgentsPage() {
           <h2 className="sr-only">Agents table</h2>
           <DataTable<AgentRow> columns={columns} rows={agents} sortable filterable filterPlaceholder="Filter agents…" pageSize={15} />
         </div>
-      </main>
+      </div>
     </>
   );
 }

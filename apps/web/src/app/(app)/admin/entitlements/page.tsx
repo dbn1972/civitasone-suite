@@ -7,7 +7,7 @@ export default async function EntitlementsPage() {
   const active = entitlements.filter((e) => String(e.status).toLowerCase() === "active").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside EntitlementsTable,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
@@ -22,6 +22,6 @@ export default async function EntitlementsPage() {
       <Card title="Entitlement Matrix">
         <EntitlementsTable entitlements={entitlements} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

@@ -31,7 +31,7 @@ export default async function Page({ searchParams }: { searchParams?: { blocked?
   const reasons = topBlockReasons(audit.data);
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="AI Governance"
         subtitle="Model monitoring, the audit trail of every AI action, and the agent kill-switch."
@@ -93,6 +93,6 @@ export default async function Page({ searchParams }: { searchParams?: { blocked?
           <AgentKillSwitch agents={agents.data} />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

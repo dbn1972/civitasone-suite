@@ -160,7 +160,7 @@ export default function TenderDocumentsPage({
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <div style={{ maxWidth: 900 }}>
         <PageHeader
           title="Tender Documents"
@@ -377,6 +377,6 @@ export default function TenderDocumentsPage({
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

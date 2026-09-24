@@ -67,7 +67,7 @@ export default async function ActivationPage() {
   const ttfrt = agg.ttfrtMedianMinutes;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Activation"
         subtitle={
@@ -130,6 +130,6 @@ export default async function ActivationPage() {
         Events are kept in memory for this view; durable storage moves to the analytics service next.
         The biggest single drop tells you the most important thing to fix next.
       </p>
-    </main>
+    </div>
   );
 }

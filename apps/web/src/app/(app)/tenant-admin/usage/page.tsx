@@ -12,7 +12,7 @@ export default async function UsagePage() {
   const anyWarning = enriched.some((r) => r.percent >= 90);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside UsageDisplay, driven
           by the same useSeededResource call that produces its data — not a
           second, independent read of `source` here that could disagree
@@ -27,6 +27,6 @@ export default async function UsagePage() {
       </StatGrid>
 
       <UsageDisplay resources={enriched} anyWarning={anyWarning} source={source} />
-    </main>
+    </div>
   );
 }

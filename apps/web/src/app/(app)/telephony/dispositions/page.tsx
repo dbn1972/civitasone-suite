@@ -83,7 +83,7 @@ export default function TelephonyDispositionsPage() {
       <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px", minHeight: 16 }}>
         {cacheNote ?? (loading ? "Loading dispositions…" : "")}
       </p>
-      <main aria-label="Dispositions breakdown">
+      <div aria-label="Dispositions breakdown">
         <StatGrid>
           <StatCard icon="🗂" iconBg="#eef2ff" label="Completed" value={completedTotal.toLocaleString("en-IN")} />
           <StatCard icon="✅" iconBg="#dcfce7" label="Resolved" value={resolved.toLocaleString("en-IN")} />
@@ -93,7 +93,7 @@ export default function TelephonyDispositionsPage() {
           <h2 className="sr-only">Dispositions table</h2>
           <DataTable<DispositionRow> columns={columns} rows={rows} sortable pageSize={15} />
         </div>
-      </main>
+      </div>
     </>
   );
 }

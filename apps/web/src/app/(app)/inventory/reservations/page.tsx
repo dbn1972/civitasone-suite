@@ -21,7 +21,7 @@ export default async function InventoryReservationsPage() {
         subtitle="Quantities held against indents or POs — reduces available-to-promise without changing on-hand."
       />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory stock reservations">
+      <div aria-label="Inventory stock reservations">
         <StatGrid>
           <StatCard icon="🔒" iconBg="#fef3c7" label="Reservations" value={reservations.length} />
           <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={active} />
@@ -30,7 +30,7 @@ export default async function InventoryReservationsPage() {
         <Card title="Reservations">
           <ReservationsTable reservations={reservations} source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

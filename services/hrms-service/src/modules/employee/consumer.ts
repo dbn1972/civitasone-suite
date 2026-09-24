@@ -21,6 +21,11 @@ const AUDIT = "audit.event.record";
  */
 const DEFAULT_DA_RATE_PCT = 50;
 
+/** ISO 'YYYY-MM-DD' for "today", used to decide whether an effectiveDate is due. */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export function registerEmployeeConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.employeeCreate, async (msg) => {
@@ -112,42 +117,68 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // Effective-dating fix (migration 0144): a transfer whose effectiveDate
+      // is still in the future must NOT be applied to the employee master
+      // yet — it is recorded "pending_effective" and picked up later by the
+      // scheduler (lifecycle/effective-scheduler.ts) once that date arrives.
+      // A transfer effective today or earlier keeps the prior immediate-
+      // apply behaviour (still "completed" the moment it's recorded).
+      const due = lifecycleRepo.isEffectiveDateDue(p.effectiveDate, todayISO());
       await lifecycleRepo.insertTransfer(tx, {
         id: msg.messageId, tenantId: p.tenantId, employeeId: p.employeeId,
         fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
         fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+        // HIGH fix: a transfer that changes department can imply a different
+        // pay scale/structure. payStructureId is caller-supplied (mirrors how
+        // it's supplied at hire time -- there is no automatic
+        // department->pay-structure derivation anywhere in this codebase).
+        // Recorded on the transfer row itself (not just applied immediately
+        // below) so a deferred transfer's intended pay-structure survives
+        // until the scheduler later applies it -- see applyTransferEffect.
         payStructureId: p.payStructureId ?? null,
-        effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null, status: "completed",
+        effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
+        status: due ? "completed" : "pending_effective",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      const patch: Parameters<typeof repo.updateEmployee>[2] = {
-        departmentId: p.toDeptId, status: "transferred", updatedBy: msg.actorId,
-      };
-      if (p.toDesigId) patch.designationId = p.toDesigId;
-      // HIGH fix: a transfer that changes department can imply a different
-      // pay scale/structure. payStructureId is caller-supplied (mirrors how
-      // it's supplied at hire time -- there is no automatic
-      // department->pay-structure derivation anywhere in this codebase), and
-      // only applied when the caller actually provided one -- same
-      // "optional, apply-if-present" shape as toDesigId just above.
-      if (p.payStructureId) patch.payStructureId = p.payStructureId;
-      await repo.updateEmployee(tx, p.employeeId, patch);
-      // HIGH fix: previously no event was published after a transfer at all
-      // (unlike create/update/separate). Published unconditionally on every
-      // completed transfer, matching the separation-event pattern above.
-      await enqueue(tx, {
-        topic: EVENTS.employeeTransferred, eventType: EVENTS.employeeTransferred,
-        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: {
-          employeeId: p.employeeId, fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
-          fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
-          payStructureId: p.payStructureId ?? null, effectiveDate: p.effectiveDate,
-        },
-      });
+      if (due) {
+        // Previously ALSO set status: "transferred" directly on this update —
+        // that value was never part of the canonical employee status
+        // contract (employee/status.ts's EMPLOYEE_STATUSES / the
+        // hrms_employees_status_check CHECK constraint added by migration
+        // 0025, never widened for it the way "no_show" was in migration
+        // 0130). That write always violated the CHECK constraint, so this
+        // WHOLE transaction — including the transfer record and the
+        // markProcessed insert above — silently rolled back on every direct
+        // transfer; nothing here ever actually persisted. applyTransferEffect
+        // (shared with the eOffice-approved transfer path, which never had
+        // this bug) applies departmentId/designationId/payStructureId, and
+        // only once the effective date is actually due — a future-dated
+        // transfer stays "pending_effective" and is picked up later by the
+        // scheduler (lifecycle/effective-scheduler.ts), per the effective-
+        // dating fix.
+        await lifecycleRepo.applyTransferEffect(tx, {
+          tenantId: p.tenantId, employeeId: p.employeeId, toDeptId: p.toDeptId,
+          toDesigId: p.toDesigId ?? null, payStructureId: p.payStructureId ?? null,
+        }, msg.actorId);
+        // HIGH fix: previously no event was published after a transfer at all
+        // (unlike create/update/separate). Published once the transfer has
+        // actually taken effect -- i.e. under the same `due` gate as the
+        // employee-master update just above, since nothing has happened to
+        // the employee yet for a transfer that's still only pending_effective.
+        await enqueue(tx, {
+          topic: EVENTS.employeeTransferred, eventType: EVENTS.employeeTransferred,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            employeeId: p.employeeId, fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
+            fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+            payStructureId: p.payStructureId ?? null, effectiveDate: p.effectiveDate,
+          },
+        });
+      }
       await audit(tx, msg, "transfer", "employee", p.employeeId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
-    // M1: department and status change visible in list
+    // M1: department change visible in list (transfer no longer writes status -- see HIGH fix above)
     await cache.invalidateResource(msg.tenantId, "employee");
   });
 

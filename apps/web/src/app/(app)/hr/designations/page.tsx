@@ -54,7 +54,7 @@ export default async function DesignationsPage() {
   const uniqueLevels    = errored ? null : new Set(items.map((d) => String(d.level))).size;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -89,6 +89,6 @@ export default async function DesignationsPage() {
           <DesignationsTable items={items} canEdit={canEdit} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

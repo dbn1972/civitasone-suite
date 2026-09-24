@@ -11,9 +11,9 @@ export default async function RegularisationLoading() {
         subtitle={t("subtitleLoading")}
         back="/hr/attendance" backLabel="Back to Attendance"
       />
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <SkeletonTable rows={5} />
-      </main>
+      </div>
     </>
   );
 }

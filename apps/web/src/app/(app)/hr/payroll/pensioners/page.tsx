@@ -7,6 +7,7 @@ import { formatMoney } from "@/lib/formatters";
 import type { PensionerSummary } from "@civitasone/types";
 
 type Row = PensionerSummary;
+type DisplayRow = Row & { basicPensionDisplay: string };
 
 export default async function PensionersPage() {
   const t = await getTranslations("pensioners");
@@ -19,18 +20,21 @@ export default async function PensionersPage() {
     .reduce((sum, p) => sum + p.basicPensionMinor, 0);
   const inactivePensioners = pensioners.filter((p) => p.status !== "active").length;
 
-  const rows: Row[] = pensioners;
+  // Server-safe: DataTable's `render` prop cannot cross the server/client
+  // boundary (this is an async Server Component), so pre-format the display
+  // amount into a plain string field instead.
+  const rows: DisplayRow[] = pensioners.map((p) => ({ ...p, basicPensionDisplay: formatMoney(p.basicPensionMinor) }));
 
-  const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status"; render?: (r: Row) => string }[] = [
+  const columns: { key: keyof DisplayRow & string; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
     { key: "ppoNo", label: t("colPpoNo") },
     { key: "fullName", label: t("colName") },
-    { key: "basicPensionMinor", label: t("colBasicPension"), align: "right", render: (r) => formatMoney(r.basicPensionMinor) },
+    { key: "basicPensionDisplay", label: t("colBasicPension"), align: "right" },
     { key: "status", label: t("colStatus"), cellType: "status" },
     { key: "ddoCode", label: t("colDdoCode") },
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -47,7 +51,7 @@ export default async function PensionersPage() {
         <StatCard icon="🚫" iconBg="var(--badbg)" label={t("statInactive")} value={inactivePensioners} />
       </StatGrid>
       <Card title={t("recordsCardTitle")}>
-        <DataTable<Row>
+        <DataTable<DisplayRow>
           columns={columns}
           rows={rows}
           sortable
@@ -59,6 +63,6 @@ export default async function PensionersPage() {
           emptyMessage={t("emptyMessage")}
         />
       </Card>
-    </main>
+    </div>
   );
 }

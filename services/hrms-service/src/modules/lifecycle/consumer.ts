@@ -4,16 +4,19 @@ import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events"
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { and, eq } from "drizzle-orm";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import * as repo from "./repo.js";
-import * as employeeRepo from "../employee/repo.js";
 
 const log = pino({ name: "lifecycle-consumer" });
 const AUDIT = "audit.event.record";
+
+/** ISO 'YYYY-MM-DD' for "today", used to decide whether an effectiveDate is due. */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 export function registerLifecycleConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.lifecycleConfirm, async (msg) => {
@@ -184,24 +187,34 @@ export function registerLifecycleMutationConsumers(q: Queue): void {
     const p = msg.payload as Record<string, any>;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      const newBasicMinor = p.newBasicMinor !== undefined && p.newBasicMinor !== null ? BigInt(p.newBasicMinor) : null;
+      // Effective-dating fix (migration 0144): a promotion whose effectiveDate
+      // is still in the future must NOT be applied to the employee master
+      // yet — it is recorded "pending_effective" and picked up later by the
+      // scheduler (lifecycle/effective-scheduler.ts) once that date arrives.
+      // A promotion effective today or earlier keeps the prior immediate-
+      // apply behaviour (still "completed" the moment it's recorded).
+      const due = repo.isEffectiveDateDue(p.effectiveDate, todayISO());
       await repo.insertPromotion(tx, {
         id: p.id, tenantId: p.tenantId, createdBy: msg.actorId, updatedBy: msg.actorId,
         employeeId: p.employeeId, fromDesigId: p.fromDesigId, toDesigId: p.toDesigId,
         effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
-        newBasicMinor: p.newBasicMinor !== undefined && p.newBasicMinor !== null ? BigInt(p.newBasicMinor) : null,
+        newBasicMinor,
+        status: due ? "completed" : "pending_effective",
       });
-      // Concurrency guard: basicMinor is also written by the pay-matrix
-      // annual-increment consumer, the eOffice-approved promotion path, and
-      // the generic employee-update command. Read the row's current version
-      // fresh, inside this transaction, and use it as an optimistic-
-      // concurrency precondition so a promotion landing close together with
-      // one of those other writes can never silently clobber it (or be
-      // silently clobbered by it) — see employee/repo.ts updateEmployeeVersioned.
-      const emp = await employeeRepo.findVersionForUpdate(tx, p.employeeId, p.tenantId);
-      if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${p.employeeId} not found`);
-      const promoSet: Record<string, unknown> = { designationId: p.toDesigId };
-      if (p.newBasicMinor !== undefined && p.newBasicMinor !== null) promoSet.basicMinor = BigInt(p.newBasicMinor);
-      await employeeRepo.updateEmployeeVersioned(tx, p.employeeId, p.tenantId, emp.version, promoSet, msg.actorId);
+      if (due) {
+        // Concurrency guard: basicMinor is also written by the pay-matrix
+        // annual-increment consumer, the eOffice-approved promotion path, and
+        // the generic employee-update command. applyPromotionEffect reads the
+        // row's current version fresh, inside this same transaction, and
+        // uses it as an optimistic-concurrency precondition so a promotion
+        // landing close together with one of those other writes can never
+        // silently clobber it (or be silently clobbered by it) — see
+        // employee/repo.ts updateEmployeeVersioned.
+        await repo.applyPromotionEffect(tx, {
+          tenantId: p.tenantId, employeeId: p.employeeId, toDesigId: p.toDesigId, newBasicMinor,
+        }, msg.actorId);
+      }
       await tx.insert(hrmsServiceBookEntries).values({
         tenantId: p.tenantId, employeeId: p.employeeId, entryType: "promotion",
         effectiveDate: p.effectiveDate,

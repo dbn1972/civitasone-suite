@@ -21,7 +21,7 @@ export default async function FinanceConfigPage() {
   const activeFY = fys.find((f) => f.status === "active");
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title="Finance Configuration"
         subtitle="Set up your financial year, bank accounts, and opening balances before you start recording transactions."
@@ -97,6 +97,6 @@ export default async function FinanceConfigPage() {
         Create financial years and bank accounts via the setup wizard or the API.
         A full UI form is coming soon — for now, use <code>POST /v1/finance/fiscal-years</code> and <code>POST /v1/finance/bank-accounts</code>.
       </p>
-    </main>
+    </div>
   );
 }

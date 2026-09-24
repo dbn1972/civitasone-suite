@@ -142,11 +142,14 @@ describe("computeLeaveEncashExemption — Sec 10(10AA)", () => {
   it("private retiring: computes least of 4 limbs", () => {
     // avg salary = ₹80K (=8000000 paise), 20 years, 300 days balance
     // limb 1 (10-month avg): 8000000 × 10 = 80000000 (₹0.8L)
-    // limb 2 (cash equiv): daily=8000000/30=266666, maxDays=min(300, 20×30=600)→300
-    //   cashEquiv=266666*300=79999800 (₹0.8L)
+    // limb 2 (cash equiv): maxDays=min(300, 20×30=600)→300;
+    //   cashEquiv=(8000000×300)/30=80000000 exactly — multiply before
+    //   dividing (LOW, payroll-calc audit fix), so this ties limb 1 instead
+    //   of undershooting it via a truncated daily rate (the old
+    //   daily=8000000/30=266666 → 266666×300=79999800 was off by ₹2).
     // limb 3 (ceiling-prior): 2500000000 - 0 = 2500000000 (₹25L)
     // actual: 500000000 (₹5L)
-    // least = 79999800 (cash equivalent)
+    // least = 80000000 (tie between limb 1 and cash equivalent)
     const avgSalary = 8000000n;
     const result = computeLeaveEncashExemption({
       actualEncashmentMinor: 500000000n, // ₹5 lakh
@@ -158,8 +161,9 @@ describe("computeLeaveEncashExemption — Sec 10(10AA)", () => {
       ceilingMinor: CEILING,
       priorExemptionClaimedMinor: 0n,
     });
-    const dailySalary = avgSalary / 30n; // 266666
-    const cashEquiv = dailySalary * 300n; // 79999800
+    // Multiply before dividing, matching computeLeaveEncashExemption's fixed
+    // order — a truncate-first daily rate would understate this by ₹2.
+    const cashEquiv = (avgSalary * 300n) / 30n; // 80000000, exact (300/30 divides evenly)
     expect(result.exemptMinor).toBe(cashEquiv);
     expect(result.taxableMinor).toBe(500000000n - cashEquiv);
   });
@@ -194,13 +198,14 @@ describe("computeLeaveEncashExemption — Sec 10(10AA)", () => {
       ceilingMinor: CEILING,
       priorExemptionClaimedMinor: 0n,
     });
-    // cashEquivalent = (10000000/30) * 300 = 100000000 (₹10L)
+    // cashEquivalent = (10000000 × 300) / 30 = 100000000 (₹10L), exact —
+    // multiply before dividing (LOW, payroll-calc audit fix); a truncate-first
+    // daily rate (10000000/30=333333) would understate this to 99999900.
     // 10-month avg = ₹10L
     // ceiling = ₹25L
     // actual = ₹20L
     // least = ₹10L (cashEquivalent = 10-month avg in this case)
-    const dailySalary = avgSalary / 30n;
-    const expectedCashEquiv = dailySalary * 300n; // 300 days (capped)
+    const expectedCashEquiv = (avgSalary * 300n) / 30n; // 300 days (capped); exact, multiply-before-divide
     expect(result.exemptMinor).toBe(expectedCashEquiv);
   });
 });

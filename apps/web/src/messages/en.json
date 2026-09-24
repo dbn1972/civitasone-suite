@@ -2022,6 +2022,7 @@
   },
   "form16Wizard": {
     "stepAriaLabel": "Form 16 wizard steps",
+  "stepProgress": "Step {current} of {total}: {name}",
     "stepSelectFy": "Select FY",
     "stepReviewDeductions": "Review Deductions",
     "stepGenerateDownload": "Generate & Download",
@@ -3885,7 +3886,13 @@
     "vacanciesMin": "Vacancies must be at least 1.",
     "submitSuccessMessage": "Job opening submitted. It will appear in the vacancy list shortly.",
     "routeErrorBackLabel": "Back to Recruitment",
-    "routeErrorArea": "New Vacancy"
+    "routeErrorArea": "New Vacancy",
+    "qualification": "Qualification",
+    "qualificationPlaceholder": "e.g. B.Tech / MCA with 3+ years experience",
+    "payRange": "Pay Range",
+    "payRangePlaceholder": "e.g. Level 10, Rs 56,100 - 1,77,500",
+    "selectionProcess": "Selection Process",
+    "selectionProcessPlaceholder": "e.g. Written test, then interview, then document verification"
   },
   "recruitmentPipeline": {
     "ariaLabel": "Application pipeline",
@@ -4854,6 +4861,7 @@
   "payrollPeriod": {
     "title": "Payroll Periods",
     "subtitle": "Monthly payroll run history and processing status.",
+    "loadErrorMessage": "Couldn't load payroll periods — showing nothing",
     "statTotal": "Total",
     "statCompleted": "Completed",
     "statProcessing": "Processing",
@@ -4933,6 +4941,37 @@
     "netPay": "NET PAY (Take Home)",
     "footer": "This is a system-generated salary slip. No signature required.",
     "dashboardView": "Dashboard View"
+  },
+  "salarySlipDashboard": {
+    "title": "Salary Slip",
+    "notFoundMessage": "Salary slip not found or could not be loaded.",
+    "titleWithPeriod": "Salary Slip — {period}",
+    "printableSlipLink": "🖨 Printable Slip",
+    "downloadPdfLink": "⬇ Download PDF",
+    "statGross": "Gross Pay",
+    "statDeductions": "Total Deductions",
+    "statNetPay": "Net Pay",
+    "statStatus": "Status",
+    "slipDetailsTitle": "Slip Details",
+    "fieldEmployee": "Employee",
+    "fieldDepartment": "Department",
+    "fieldPayPeriod": "Pay Period",
+    "earningsTitle": "Earnings",
+    "deductionsTitle": "Deductions",
+    "colCode": "Code",
+    "colComponent": "Component",
+    "colAmount": "Amount",
+    "totalEarnings": "Total Earnings",
+    "totalDeductions": "Total Deductions",
+    "earningsUnavailable": "Detailed earnings breakdown not available for this slip.",
+    "deductionsUnavailable": "Detailed deductions breakdown not available for this slip.",
+    "statutoryTitle": "Statutory Contributions",
+    "pfEmployee": "PF (Employee)",
+    "pfEmployer": "PF (Employer)",
+    "esiEmployee": "ESI (Employee)",
+    "esiEmployer": "ESI (Employer)",
+    "tds": "TDS",
+    "statutoryUnavailable": "Statutory breakdown not available for this slip."
   },
   "payrollBonus": {
     "title": "Bonus",

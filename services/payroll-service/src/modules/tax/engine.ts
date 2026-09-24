@@ -127,8 +127,15 @@ export function roundTenRupeesMinor(x: bigint): bigint {
   return ((x + 500n) / 1000n) * 1000n;
 }
 
-/** Round-half-up bigint division (both operands positive), returned as bigint. */
-function divRoundBig(a: bigint, b: bigint): bigint {
+/**
+ * Round-half-up bigint division (both operands positive), returned as bigint.
+ * Exported (LOW, payroll-calc audit) so other modules needing a "round this
+ * bigint-paise amount to the nearest paisa/rupee after dividing" step (e.g.
+ * payroll/domain.ts's monthsRemaining-omitted TDS fallback) can reuse the
+ * exact same rounding this file already uses, instead of a second
+ * independently-truncating implementation.
+ */
+export function divRoundBig(a: bigint, b: bigint): bigint {
   return (a + b / 2n) / b;
 }
 
@@ -215,7 +222,13 @@ export function computeTax(taxableIncome: number, regime: Regime, startYear: num
   };
 }
 
-/** Monthly TDS (in paise) for a payroll run: project annual taxable, compute tax, spread /12. */
+/**
+ * Monthly TDS (in paise) for a payroll run: project annual taxable, compute
+ * tax, spread /12. (payroll-calc audit note: already round-half-up via
+ * roundRupeeMinor(divRoundBig(...)) below, NOT the truncating
+ * `/100n/12n*100n` pattern monthlyTdsFromTaxableMinor and the pension-run TDS
+ * bug had — nothing to fix here.)
+ */
 export function monthlyTdsMinor(annualGrossMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
   const stdDeductionMinor = BigInt(stdDeduction(regime, startYear, tenantId)) * 100n;
   const taxableMinor = roundTenRupeesMinor(maxBig(0n, annualGrossMinor - stdDeductionMinor));
@@ -241,9 +254,19 @@ export function annualTaxFromTaxableMinor(annualTaxableMinor: bigint, regime: Re
   return BigInt(computeTax(taxableRupees, regime, startYear, tenantId).totalTax) * 100n;
 }
 
-/** Monthly TDS (paise) from a precomputed ANNUAL TAXABLE income (flat /12). */
+/**
+ * Monthly TDS (paise) from a precomputed ANNUAL TAXABLE income (flat /12).
+ * LOW (payroll-calc audit) fix: was plain truncating bigint division
+ * (`/100n/12n*100n`), the same under-withholding pattern as the pension-run
+ * TDS bug (see consumer.ts's processPensionRun). Currently unreachable from
+ * any production call site (only monthsRemaining-driven trueUpTdsMinor is —
+ * see domain.ts computeSlip / consumer.ts processPensionRun) but is exported
+ * and directly unit-tested, so it is fixed for whenever a future caller (e.g.
+ * a tax preview/estimator with no run context) wires it up. Round-half-up via
+ * monthlyTdsMinor's own pattern, not a flat truncate.
+ */
 export function monthlyTdsFromTaxableMinor(annualTaxableMinor: bigint, regime: Regime, startYear: number, tenantId: string = PLATFORM_DEFAULT_TENANT_ID): bigint {
-  return annualTaxFromTaxableMinor(annualTaxableMinor, regime, startYear, tenantId) / 100n / 12n * 100n;
+  return roundRupeeMinor(divRoundBig(annualTaxFromTaxableMinor(annualTaxableMinor, regime, startYear, tenantId), 12n));
 }
 
 /**

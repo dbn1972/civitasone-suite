@@ -40,7 +40,7 @@ export function DomainInsightPage({
   statLabels,
 }: DomainInsightPageProps) {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/analytics/ml-insights">ML Insights</a>
       </nav>
@@ -88,6 +88,6 @@ export function DomainInsightPage({
           rowLinkPrefix={rowLinkPrefix}
         />
       </Card>
-    </main>
+    </div>
   );
 }

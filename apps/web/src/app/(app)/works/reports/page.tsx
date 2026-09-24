@@ -118,7 +118,7 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
   }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Works Reports"
         subtitle="Summary and status of all engineering works"
@@ -191,6 +191,6 @@ export default async function WorksReportsPage({ searchParams }: PageProps) {
           emptyMessage="No works match the selected filters."
         />
       </Card>
-    </main>
+    </div>
   );
 }

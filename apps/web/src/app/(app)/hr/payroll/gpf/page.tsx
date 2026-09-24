@@ -4,6 +4,7 @@ import { getGpfStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
 import { useResource } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { formatMoney } from "@/lib/formatters";
 
 type GpfRow = {
   id: string;
@@ -51,9 +52,6 @@ export default async function GpfStatementsPage() {
   // null placeholder — projectGpfCorpus() below needs a real number either way.
   const totalContrib = tableRows.reduce((s, r) => s + (Number(r.contrib) || 0), 0);
 
-  const formatMoney = (minor: number) =>
-    `₹${(minor / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
-
   // Period-wise trend
   const periodMap = new Map<string, number>();
   for (const r of tableRows) {
@@ -71,7 +69,7 @@ export default async function GpfStatementsPage() {
   const projectedCorpus = projectGpfCorpus(totalContrib, AVG_YEARS_TO_RETIRE);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t.rich("title", { term: () => <Term name="GPF" /> })}
         subtitle={t("subtitle")}
@@ -194,6 +192,6 @@ export default async function GpfStatementsPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

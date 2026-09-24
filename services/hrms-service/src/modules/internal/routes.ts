@@ -4,7 +4,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import * as employeeRepo from "../employee/repo.js";
 import * as leaveRepo from "../leave/repo.js";
 import * as attendanceRepo from "../attendance/repo.js";
-import { countWorkingDays } from "../leave/holidays.js";
+import { getHolidaysInRange, countWorkingDaysExcludingHolidays } from "../leave/rules-engine.js";
 import { activePaySuspendedEmployeeIds } from "../disciplinary/repo.js";
 import { loadTypeResolver, attendanceLopApplies } from "../employee/engagement-policy.js";
 
@@ -62,10 +62,25 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       if (!attendanceLopApplies(resolveType(emp.employeeType))) noSalaryLop.add(emp.id);
     }
 
+    // Bug fix: this used to call leave/holidays.ts's countWorkingDays(),
+    // sourced from a hardcoded RESTRICTED_HOLIDAYS calendar covering only
+    // 2024-2026, whose own `Math.max(count, 1)` floor meant a single-day
+    // leave landing on a weekend/holiday was still counted as 1 LOP day
+    // (weekends/holidays were never actually excluded). Now uses the real,
+    // tenant-configurable hrms_holidays calendar — the same source
+    // leave-application validation already uses (leave/rules-engine.ts) —
+    // fetched once for the whole date range covered by this month's
+    // LOP-eligible approved leaves rather than once per leave record.
     const lopByEmployee = new Map<string, number>();
-    for (const leave of approvedLeaves) {
-      if (noSalaryLop.has(leave.employeeId)) continue;
-      const days = countWorkingDays(leave.fromDate, leave.toDate);
+    const lopEligibleLeaves = approvedLeaves.filter((leave) => !noSalaryLop.has(leave.employeeId));
+    let holidaySet = new Set<string>();
+    if (lopEligibleLeaves.length > 0) {
+      const rangeFrom = lopEligibleLeaves.map((l) => l.fromDate).reduce((a, b) => (a < b ? a : b));
+      const rangeTo = lopEligibleLeaves.map((l) => l.toDate).reduce((a, b) => (a > b ? a : b));
+      holidaySet = new Set(await getHolidaysInRange(ctx.tenantId, rangeFrom, rangeTo));
+    }
+    for (const leave of lopEligibleLeaves) {
+      const days = countWorkingDaysExcludingHolidays(leave.fromDate, leave.toDate, holidaySet);
       lopByEmployee.set(leave.employeeId, (lopByEmployee.get(leave.employeeId) ?? 0) + days);
     }
 
@@ -146,22 +161,48 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId });
   });
   // Employee summaries for payroll service (id → fullName + departmentName)
+  //
+  // HIGH security fix: this route used to read req.headers["x-tenant-id"]
+  // directly with NO resolveContext/requireRole call at all -- unlike every
+  // other route in this file (payroll-input above; employees/:id/exists and
+  // attendance-lop-applies below), which correctly gate on
+  // resolveContext(req) + requireRole(ctx, INTERNAL_ROLES) and use
+  // ctx.tenantId. That meant ANY caller (no bearer token, no x-internal
+  // service secret, nothing) could pass an arbitrary x-tenant-id and read
+  // back that tenant's employee id/fullName/departmentId — a real
+  // authentication bypass, not merely a "trusts a header" gap: unlike the
+  // legacy assumption that RLS alone protected this (a spoofed tenant header
+  // only produces an empty-intersection query, not a breach, because
+  // scopedRead's GUC was never set from THIS header to begin with), there was
+  // no auth check here whatsoever.
+  //
+  // resolveServiceContext (packages/auth/src/context.ts) is the correct,
+  // already-proven-safe gate for this endpoint's real callers
+  // (payroll-service's and estab-service's hrms-client.ts, confirmed by
+  // reading both): they send x-internal:"1" + x-service-secret +
+  // x-tenant-id, exactly the header set resolveServiceContext's own
+  // service-account branch validates (constant-time compare against
+  // INTERNAL_SERVICE_SECRET) before trusting x-tenant-id as ctx.tenantId and
+  // granting the fixed internal-service role set. So switching to
+  // resolveContext+requireRole here closes the hole without breaking either
+  // real caller — it is the exact same mechanism their sibling routes
+  // (payroll-input, employees/:id/exists, attendance-lop-applies,
+  // slip-templates/default) already rely on.
   app.get("/v1/hrms/internal/employee-summaries", async (req, reply) => {
-    const headers = req.headers as Record<string, string>;
-    const tenantId = headers["x-tenant-id"] ?? "";
-    if (!tenantId) return reply.code(400).send({ code: "MISSING_TENANT" });
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
     const { scopedRead } = await import("../../shared/db.js");
     const { hrmsEmployees, hrmsDepartments } = await import("../employee/schema.js");
     const { eq, and } = await import("drizzle-orm");
     const employees = await scopedRead((tx) =>
       tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, departmentId: hrmsEmployees.departmentId })
         .from(hrmsEmployees)
-        .where(eq(hrmsEmployees.tenantId, tenantId))
+        .where(eq(hrmsEmployees.tenantId, ctx.tenantId))
         .limit(2000),
     );
     const deptIds = [...new Set(employees.map((e) => e.departmentId))];
     const depts = deptIds.length > 0
-      ? await scopedRead((tx) => tx.select({ id: hrmsDepartments.id, name: hrmsDepartments.name }).from(hrmsDepartments).where(and(eq(hrmsDepartments.tenantId, tenantId))))
+      ? await scopedRead((tx) => tx.select({ id: hrmsDepartments.id, name: hrmsDepartments.name }).from(hrmsDepartments).where(and(eq(hrmsDepartments.tenantId, ctx.tenantId))))
       : [];
     const deptMap = new Map(depts.map((d) => [d.id, d.name]));
     return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, departmentName: deptMap.get(e.departmentId) ?? "" })));

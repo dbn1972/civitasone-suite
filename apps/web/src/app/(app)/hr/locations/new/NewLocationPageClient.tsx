@@ -18,7 +18,7 @@ export function NewLocationPageClient() {
   const t = useTranslations("addLocationForm");
   const router = useRouter();
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
@@ -32,6 +32,6 @@ export function NewLocationPageClient() {
           setTimeout(() => { router.push("/hr/locations"); }, 1500);
         }}
       />
-    </main>
+    </div>
   );
 }

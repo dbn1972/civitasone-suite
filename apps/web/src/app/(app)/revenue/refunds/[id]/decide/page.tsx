@@ -53,7 +53,7 @@ export default async function RefundDecidePage({ params }: { params: { id: strin
   const loadFailed = source === "error" || !refund;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Decide Refund"
         subtitle="Approve or reject a pending refund. The deciding officer must differ from the officer who raised it."
@@ -100,6 +100,6 @@ export default async function RefundDecidePage({ params }: { params: { id: strin
         )}
         <RefundDecideForm refundId={refundId} refund={loadFailed ? null : refund} />
       </Card>
-    </main>
+    </div>
   );
 }

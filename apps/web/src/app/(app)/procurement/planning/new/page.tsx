@@ -102,7 +102,7 @@ export default function NewAnnualPlanPage() {
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <div style={{ maxWidth: 900 }}>
         <PageHeader
           title="New Annual Procurement Plan"
@@ -388,6 +388,6 @@ export default function NewAnnualPlanPage() {
           </div>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

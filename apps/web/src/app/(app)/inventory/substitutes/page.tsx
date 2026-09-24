@@ -24,7 +24,7 @@ export default async function InventorySubstitutesPage() {
         subtitle="Allowed replacement items with priority order and unit conversion factors."
       />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory item substitutes">
+      <div aria-label="Inventory item substitutes">
         <StatGrid>
           <StatCard icon="🔁" iconBg="#faf5ff" label="Substitute Links" value={substitutes.length} />
           <StatCard icon="📦" iconBg="#f1f5f9" label="Items Covered" value={uniqueItems} />
@@ -33,7 +33,7 @@ export default async function InventorySubstitutesPage() {
         <Card title="Substitutes">
           <SubstitutesTable substitutes={substitutes} source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

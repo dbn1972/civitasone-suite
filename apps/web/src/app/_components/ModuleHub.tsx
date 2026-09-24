@@ -21,10 +21,10 @@ export function ModuleHub({ title, description, links, children, help }: ModuleH
   }));
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <PageHeader title={title} subtitle={description} help={help} />
       {children}
       <LinkTiles tiles={tiles} columns="three" />
-    </main>
+    </div>
   );
 }

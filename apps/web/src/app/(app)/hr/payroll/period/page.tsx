@@ -1,8 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getPayrollRunDetails } from "@/app/_data/loaders";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { formatRupees } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
 // This page used to call GET /api/v1/finance/periods -- Finance's GL
@@ -30,6 +31,12 @@ type Row = {
   status: string;
 };
 
+type DisplayRow = Row & {
+  grossPayoutDisplay: string;
+  netPayoutDisplay: string;
+  deductionsDisplay: string;
+};
+
 function toRow(run: PayrollRunDetail): Row {
   // IMPORTANT: PayrollRunDetail's grossAmount/netAmount/deductions are
   // already rupees (payroll-service divides the minor-unit total before
@@ -53,31 +60,48 @@ function toRow(run: PayrollRunDetail): Row {
 export default async function PayrollPeriodPage() {
   const t = await getTranslations("payrollPeriod");
   const { data: runs, source } = await getPayrollRunDetails();
+  const errored = source === "error";
   const items = runs.map(toRow);
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right"; render?: (r: Row) => string }[] = [
+  // Server-safe: DataTable's `render` prop cannot cross the server/client
+  // boundary (this is an async Server Component), so pre-format the rupee
+  // display strings into plain fields instead of using `render`.
+  const displayItems: DisplayRow[] = items.map((r) => ({
+    ...r,
+    grossPayoutDisplay: formatRupees(r.grossPayout),
+    netPayoutDisplay: formatRupees(r.netPayout),
+    deductionsDisplay: formatRupees(r.deductions),
+  }));
+
+  const columns: { key: keyof DisplayRow & string; label: string; cellType?: "status"; align?: "left" | "right" }[] = [
     { key: "month", label: t("colMonth") },
     { key: "runDate", label: t("colRunDate") },
     { key: "employeesProcessed", label: t("colEmployees"), align: "right" },
-    { key: "grossPayout", label: t("colGross"), align: "right", render: (r) => formatRupees(r.grossPayout) },
-    { key: "netPayout", label: t("colNet"), align: "right", render: (r) => formatRupees(r.netPayout) },
-    { key: "deductions", label: t("colDeductions"), align: "right", render: (r) => formatRupees(r.deductions) },
+    { key: "grossPayoutDisplay", label: t("colGross"), align: "right" },
+    { key: "netPayoutDisplay", label: t("colNet"), align: "right" },
+    { key: "deductionsDisplay", label: t("colDeductions"), align: "right" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
-      <DataSourceBadge source={source} message="Couldn't load payroll periods — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statCompleted")} value={items.filter((i) => i.status === "completed" || i.status === "paid").length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statProcessing")} value={items.filter((i) => i.status === "processing" || i.status === "draft").length} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployees")} value={items.reduce((s, i) => s + (Number(i.employeesProcessed) || 0), 0).toLocaleString("en-IN")} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statCompleted")} value={errored ? null : items.filter((i) => i.status === "completed" || i.status === "paid").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statProcessing")} value={errored ? null : items.filter((i) => i.status === "processing" || i.status === "draft").length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployees")} value={errored ? null : items.reduce((s, i) => s + (Number(i.employeesProcessed) || 0), 0).toLocaleString("en-IN")} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📅" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "payroll periods" })} backHref="/hr" />
+          </div>
+        ) : (
+          <DataTable<DisplayRow> columns={columns} rows={displayItems} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📅" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
+        )}
       </Card>
-    </main>
+    </div>
   );
 }

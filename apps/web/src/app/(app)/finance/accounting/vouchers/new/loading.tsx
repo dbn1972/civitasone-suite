@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <main className="page-main wrap" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }} role="status" aria-live="polite" aria-label="Loading…">
+    <div className="page-main wrap" style={{ animation: "pulse 2s cubic-bezier(0.4,0,0.6,1) infinite" }} role="status" aria-live="polite" aria-label="Loading…">
       <div style={{ marginBottom: 24 }}>
         <div style={{ height: 16, width: 160, borderRadius: 4, background: "#e5e7eb", marginBottom: 8 }} />
         <div style={{ height: 32, width: 256, borderRadius: 4, background: "#e5e7eb" }} />
@@ -17,6 +17,6 @@ export default function Loading() {
         <div style={{ height: 120, borderRadius: 8, background: "#e5e7eb", marginBottom: 16 }} />
         <div style={{ height: 40, width: 140, borderRadius: 8, background: "#e5e7eb" }} />
       </div>
-    </main>
+    </div>
   );
 }

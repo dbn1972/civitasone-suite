@@ -45,6 +45,11 @@ describe("PayrollComparisonPage", () => {
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
     expect(screen.queryByText("No comparison data")).not.toBeInTheDocument();
+    // Regression: the render guard used to explicitly exclude the error case
+    // (`canCompare && !data && source !== "error"`), so a failed comparison
+    // fetch rendered nothing in the body except the top badge. A real error
+    // state must now appear instead of silence.
+    expect(screen.getByText("We couldn't load payroll comparison.")).toBeInTheDocument();
   });
 
   it("shows a genuine empty state when the API returns no data but is healthy", async () => {

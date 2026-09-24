@@ -48,14 +48,14 @@ export default async function OnboardingPage() {
   // what's actually true.
   if (status === 403) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader
           title={t("title")}
           subtitle={t("subtitle")}
           back="/hr" backLabel="Back to HR"
         />
         <PermissionDenied module="the onboarding tracker" requiredRoles={ONBOARDING_ROLES} />
-      </main>
+      </div>
     );
   }
 
@@ -83,7 +83,7 @@ export default async function OnboardingPage() {
   });
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -185,6 +185,6 @@ export default async function OnboardingPage() {
           </section>
         </>
       )}
-    </main>
+    </div>
   );
 }

@@ -75,7 +75,7 @@ export default async function LocationsPage() {
   const blockCount    = locations.filter((l) => !["state", "district"].includes(l.type)).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -181,6 +181,6 @@ export default async function LocationsPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

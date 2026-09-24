@@ -78,7 +78,7 @@ export default async function FleetDevicesPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fleet IoT Devices"
         subtitle="Telematics devices mounted on government vehicles."
@@ -104,6 +104,6 @@ export default async function FleetDevicesPage() {
       </Card>
 
       <TelemetryForm />
-    </main>
+    </div>
   );
 }

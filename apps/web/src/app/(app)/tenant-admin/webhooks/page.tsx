@@ -8,7 +8,7 @@ export default async function WebhooksPage() {
   const failedCount = webhooks.filter((w) => w.lastDeliveryStatus && w.lastDeliveryStatus >= 400).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside WebhooksClient,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
@@ -29,6 +29,6 @@ export default async function WebhooksPage() {
       </StatGrid>
 
       <WebhooksClient webhooks={webhooks} source={source} />
-    </main>
+    </div>
   );
 }

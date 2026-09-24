@@ -14,7 +14,7 @@ export default async function PfmsPage() {
   const submitted = scrolls.filter((s) => String(s.submissionStatus).toLowerCase() === "submitted").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="PFMS Integration"
         subtitle="Public Financial Management System — payment scroll tracking and beneficiary verification."
@@ -33,6 +33,6 @@ export default async function PfmsPage() {
       <Card title="Payment Scrolls">
         <PFMSTable scrolls={scrolls} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

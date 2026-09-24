@@ -124,7 +124,7 @@ export default async function DisbursementPage() {
   const failed = transfersErrored ? null : transfers.filter((tx) => tx.status === "failed").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -189,6 +189,6 @@ export default async function DisbursementPage() {
       <Card title={t("dscCardTitle")}>
         <DscConfigForm initial={rawDsc} />
       </Card>
-    </main>
+    </div>
   );
 }

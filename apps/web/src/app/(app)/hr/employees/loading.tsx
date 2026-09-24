@@ -7,7 +7,7 @@ import { getTranslations } from "next-intl/server";
 export default async function EmployeesLoading() {
   const t = await getTranslations("employees");
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("loadingTitle")}
         subtitle={t("loadingSubtitle")}
@@ -29,6 +29,6 @@ export default async function EmployeesLoading() {
         }
       />
       <SkeletonTable rows={10} />
-    </main>
+    </div>
   );
 }

@@ -140,7 +140,7 @@ export function RoleFeaturesManager({
   }, []);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Role Feature Visibility" subtitle="Control which features are visible to each role." back="/admin" />
       <DataSourceBadge source={source} message="Couldn't load role/feature data — showing nothing" />
       {error && (
@@ -254,6 +254,6 @@ export function RoleFeaturesManager({
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

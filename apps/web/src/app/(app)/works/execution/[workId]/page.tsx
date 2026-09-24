@@ -149,7 +149,7 @@ export default async function ExecutionDetailPage({
   }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Execution Progress"
         subtitle={`Work ${params.workId.slice(0, 8)}…`}
@@ -222,6 +222,6 @@ export default async function ExecutionDetailPage({
       </Card>
 
       <ExecutionActions workId={params.workId} />
-    </main>
+    </div>
   );
 }
