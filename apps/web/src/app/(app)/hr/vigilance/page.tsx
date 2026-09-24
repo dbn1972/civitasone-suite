@@ -52,9 +52,26 @@ export default async function VigilancePage() {
   const errored = source === "error";
   const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
 
-  const opened = items.filter((i) => i.status === "opened").length;
-  const inquiry = items.filter((i) => i.status === "inquiry" || i.status === "under_inquiry").length;
-  const closed = items.filter((i) => ["closed", "disposed", "finalised"].includes(i.status)).length;
+  // Real status enum (disciplinary/state-machine.ts's CaseStatus, shared by
+  // this table since a vigilance case is simply a proceeding_type='major'
+  // disciplinary case -- see gap-features/routes.ts's GET /v1/hrms/vigilance):
+  // opened, charge_memo_issued, inquiry_appointed, finding_recorded,
+  // pending_approval, penalty_imposed, appeal_filed, appeal_decided, closed,
+  // dropped -- 10 statuses total. "inquiry"/"under_inquiry" and
+  // "disposed"/"finalised" below were never real statuses for this table, so
+  // "Under Inquiry" could never show a nonzero count and 7 of the 10 real
+  // statuses (charge_memo_issued, inquiry_appointed, finding_recorded,
+  // pending_approval, penalty_imposed, appeal_filed, dropped) silently
+  // vanished from every stat card. Buckets below are mutually exclusive and
+  // jointly exhaustive over all 10 (2 + 6 + 2 = every case, exactly once),
+  // preserving each existing card's original intent/label rather than
+  // introducing new ones.
+  const chargeMemoStage = items.filter((i) => ["opened", "charge_memo_issued"].includes(i.status)).length;
+  const underInquiry = items.filter((i) => [
+    "inquiry_appointed", "finding_recorded", "pending_approval",
+    "penalty_imposed", "appeal_filed", "appeal_decided",
+  ].includes(i.status)).length;
+  const closed = items.filter((i) => ["closed", "dropped"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "caseRef", label: t("colCaseRef") },
@@ -82,8 +99,8 @@ export default async function VigilancePage() {
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
         <StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCasesLabel")} value={errored ? null : items.length} />
-        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statChargeMemoStageLabel")} value={errored ? null : opened} />
-        <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={errored ? null : inquiry} />
+        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statChargeMemoStageLabel")} value={errored ? null : chargeMemoStage} />
+        <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={errored ? null : underInquiry} />
         <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedClosedLabel")} value={errored ? null : closed} />
       </StatGrid>
       <Card title={t("cardTitle")}>
@@ -95,6 +112,18 @@ export default async function VigilancePage() {
           <DataTable<Row>
           columns={columns}
           rows={items}
+          // Regression fix: this table had no row-link props at all, so a
+          // vigilance case (a proceeding_type='major' disciplinary case --
+          // see the status-enum comment above) had no way to reach its own
+          // detail page from here. It already has one: the fully-built
+          // disciplinary/[id] page (breadcrumbs, case fields, e-Office raise
+          // action) is keyed by this same row's `id` and gated by the exact
+          // same role list (VIGILANCE_ROLES here === DISCIPLINARY_ROLES
+          // there), so rows link there -- mirroring hr/disciplinary/page.tsx's
+          // own rowLinkKey/rowLinkPrefix wiring -- instead of duplicating a
+          // second detail page for the same underlying case.
+          rowLinkKey="id"
+          rowLinkPrefix="/hr/disciplinary/"
           sortable
           filterable
           filterPlaceholder={t("filterPlaceholder")}

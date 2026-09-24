@@ -55,7 +55,11 @@ export default async function DisciplinaryListPage() {
 
   const major = items.filter((i) => i.proceeding_type === "major").length;
   const minor = items.filter((i) => i.proceeding_type === "minor").length;
-  const open = items.filter((i) => !["closed", "disposed", "finalised"].includes(i.status)).length;
+  // Real terminal statuses (disciplinary/state-machine.ts's CaseStatus) are
+  // "closed" and "dropped" -- "disposed"/"finalised" are not real statuses
+  // for this table, so a dropped (investigated-and-exonerated/discontinued)
+  // case was never excluded here and stayed counted as "open" forever.
+  const open = items.filter((i) => !["closed", "dropped"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "caseRef", label: t("colCaseRef") },
