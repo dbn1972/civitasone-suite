@@ -16,11 +16,15 @@ const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
 const USER   = "aaaaaaaa-1111-4000-8000-000000000001";
 const EMP_ID = "eeeeeeee-1111-4000-8000-000000000001";
 const ENTRY_ID = "ffffffff-1111-4000-8000-000000000001";
+const DEPT_A = "dddddddd-1111-4000-8000-00000000000a";
+const DEPT_B = "dddddddd-1111-4000-8000-00000000000b";
 
-const { listEntriesMock, getEntryMock, attestEntryMock } = vi.hoisted(() => ({
+const { listEntriesMock, getEntryMock, attestEntryMock, resolveEmployeeForActorMock, findEmployeeByIdMock } = vi.hoisted(() => ({
   listEntriesMock:  vi.fn(),
   getEntryMock:     vi.fn(),
   attestEntryMock:  vi.fn(),
+  resolveEmployeeForActorMock: vi.fn(),
+  findEmployeeByIdMock: vi.fn(),
 }));
 
 vi.mock("../src/modules/service-book/repo.js", () => ({
@@ -28,6 +32,19 @@ vi.mock("../src/modules/service-book/repo.js", () => ({
   insertServiceBookEntry: async () => {},
   getEntry:               (...a: unknown[]) => getEntryMock(...a),
   attestEntry:            (...a: unknown[]) => attestEntryMock(...a),
+}));
+
+// Dept-scoping fix (GET /v1/hrms/employees/:id/service-book): mocked
+// directly rather than reworking this file's bare-object scopedRead mock
+// (below) to support the .select().from().where() chain these two actually
+// use — same approach medical-routes.test.ts and rti-routes.test.ts take
+// for their own repo-level mocks.
+vi.mock("../src/modules/employee/actor-link.js", () => ({
+  resolveEmployeeForActor: (...a: unknown[]) => resolveEmployeeForActorMock(...a),
+  extractActorEmail: () => undefined,
+}));
+vi.mock("../src/modules/employee/repo.js", () => ({
+  findById: (...a: unknown[]) => findEmployeeByIdMock(...a),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -78,6 +95,12 @@ beforeEach(() => {
   listEntriesMock.mockResolvedValue([]);
   getEntryMock.mockResolvedValue(undefined);
   attestEntryMock.mockResolvedValue(ENTRY_ROW);
+  // Dept-scoping defaults: manager (USER) and the target employee (EMP_ID)
+  // are in the SAME department by default, so every existing manager-role
+  // test below keeps its original "200/allowed" expectation unless a test
+  // explicitly overrides one of these two mocks.
+  resolveEmployeeForActorMock.mockResolvedValue({ id: "manager-emp-row", departmentId: DEPT_A });
+  findEmployeeByIdMock.mockResolvedValue({ id: EMP_ID, departmentId: DEPT_A });
 });
 
 afterAll(async () => {
@@ -150,7 +173,7 @@ describe("GET /v1/hrms/employees/:id/service-book", () => {
     await app.close();
   });
 
-  it("200 — manager role is allowed", async () => {
+  it("200 — manager role is allowed for an employee in the manager's OWN department", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
@@ -158,6 +181,61 @@ describe("GET /v1/hrms/employees/:id/service-book", () => {
       headers: auth(USER, ["manager"]),
     });
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  // ── Dept-scoping regression (SEC finding: manager access had no
+  // department scope, tenant-wide by employee-id enumeration) ───────────
+  it("403 — manager CANNOT read service-book for an employee in a DIFFERENT department", async () => {
+    resolveEmployeeForActorMock.mockResolvedValue({ id: "manager-emp-row", departmentId: DEPT_A });
+    findEmployeeByIdMock.mockResolvedValue({ id: EMP_ID, departmentId: DEPT_B });
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/employees/${EMP_ID}/service-book`,
+      headers: auth(USER, ["manager"]),
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
+    expect(listEntriesMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("403 — manager with NO linked employee record (fails closed, not tenant-wide)", async () => {
+    resolveEmployeeForActorMock.mockResolvedValue(undefined);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/employees/${EMP_ID}/service-book`,
+      headers: auth(USER, ["manager"]),
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("NO_EMPLOYEE_LINK");
+    await app.close();
+  });
+
+  it("403 — manager querying a nonexistent employee id gets FORBIDDEN, not a 200 with empty data", async () => {
+    findEmployeeByIdMock.mockResolvedValue(null);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/employees/${EMP_ID}/service-book`,
+      headers: auth(USER, ["manager"]),
+    });
+    expect(r.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it("200 — HR role reads across departments unrestricted (never resolves an actor-employee link)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/employees/${EMP_ID}/service-book`,
+      headers: auth(), // default hr_admin
+    });
+    expect(r.statusCode).toBe(200);
+    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+    expect(findEmployeeByIdMock).not.toHaveBeenCalled();
     await app.close();
   });
 });
