@@ -27,6 +27,7 @@
  * parses against `tsc`.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../app.js";
@@ -347,5 +348,206 @@ describe("medical claims — real round-trip against medical.hrms_medical_claims
       url: `/v1/hrms/medical/claims?employeeId=${EMPLOYEE_ID}`,
     });
     expect([401, 403]).toContain(r.statusCode);
+  });
+
+  // ── CREATE-forgery regression ────────────────────────────────────────
+  // Audit finding: the POST create-claim route trusted `employeeId` straight
+  // from the request body for every SELF_ROLES caller, including a bare
+  // "employee" — so any employee could submit a claim under a colleague's
+  // identity. Fixed by routing employeeId through the same
+  // resolveSelfScopedEmployeeId helper the read routes already use: HR/
+  // finance/manager keep the ability to file on behalf of a given employee
+  // (see "HR files a claim for a SECOND employee" above), but a bare
+  // "employee" caller is always forced onto their own linked record.
+
+  it("POST /v1/hrms/medical/claims — a bare employee caller cannot forge a colleague's employeeId", async () => {
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        employeeId: OTHER_EMPLOYEE_ID, // attempted impersonation of a colleague
+        claimType: "outdoor",
+        amountMinor: 999900,
+        hospitalName: "Forgery Attempt Hospital",
+        diagnosis: "Attempted impersonation of another employee's claim",
+        documents: [],
+      }),
+    });
+
+    expect(r.statusCode).toBe(201);
+    const body = JSON.parse(r.body);
+    // Forced onto the caller's OWN linked employee, never the requested id.
+    expect(body.data.employeeId).toBe(EMPLOYEE_ID);
+    expect(body.data.employeeId).not.toBe(OTHER_EMPLOYEE_ID);
+
+    const [dbRow] = await asTenant((tx) => tx`
+      SELECT employee_id FROM medical.hrms_medical_claims WHERE id = ${body.data.id}
+    `);
+    if (!dbRow) throw new Error(`expected a row in medical.hrms_medical_claims for id ${body.data.id}`);
+    expect(dbRow.employee_id).toBe(EMPLOYEE_ID);
+    expect(dbRow.employee_id).not.toBe(OTHER_EMPLOYEE_ID);
+  });
+
+  // ── Double-approval race regression ──────────────────────────────────
+  // Audit finding: the approve handler SELECTed the current status, then
+  // UPDATEd unconditionally (WHERE id/tenant_id only, inside one
+  // sqlClient.begin() transaction — see withRawTenantGuc) — two concurrent
+  // approve requests against the same 'pending' claim could both pass the
+  // SELECT-based check before either committed, and both "succeed",
+  // double-processing the claim. Fixed by re-asserting status = 'pending'
+  // inside the UPDATE's own WHERE clause and checking RETURNING for zero
+  // rows.
+  //
+  // A Promise.all over two app.inject() calls was tried first and turned out
+  // NOT to reliably force the race window on these fast localhost queries —
+  // in practice one request's whole read-then-write sequence consistently
+  // finished before the other's read even ran, so it never actually
+  // exercised concurrent access (that version is why this suite instead
+  // drives two manually-interleaved raw connections below: deterministic,
+  // not dependent on scheduler luck). Both tests below reserve two
+  // independent physical connections (sqlClient.reserve()) and manually
+  // step through BEGIN → SELECT (both see 'pending') → UPDATE/COMMIT →
+  // UPDATE/COMMIT, so the "both readers observed pending before either
+  // writer committed" window is guaranteed, not hoped for.
+
+  it("REPRODUCTION: the pre-fix shape (blind UPDATE, no status guard) lets two concurrent transactions both approve the same claim", async () => {
+    const buggyClaimId = randomUUID();
+    await asTenant((tx) => tx`
+      INSERT INTO medical.hrms_medical_claims (
+        id, tenant_id, employee_id, claim_type, amount_minor, hospital_name,
+        diagnosis, documents, status, created_by, updated_by
+      ) VALUES (
+        ${buggyClaimId}, ${TENANT}, ${EMPLOYEE_ID}, 'outdoor', 150000, 'Race Repro Hospital',
+        'Reproduces the pre-fix race on the OLD unconditional-UPDATE shape', '[]', 'pending',
+        ${SEED_ACTOR}, ${SEED_ACTOR}
+      )
+    `);
+
+    const conn1 = await sqlClient.reserve();
+    const conn2 = await sqlClient.reserve();
+    try {
+      await conn1`BEGIN`;
+      await conn1`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      await conn2`BEGIN`;
+      await conn2`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+
+      // Both transactions independently read 'pending' — neither has
+      // written yet, so under READ COMMITTED both see the same pre-race state.
+      const [read1] = await conn1`SELECT status FROM medical.hrms_medical_claims WHERE id = ${buggyClaimId} AND tenant_id = ${TENANT}`;
+      const [read2] = await conn2`SELECT status FROM medical.hrms_medical_claims WHERE id = ${buggyClaimId} AND tenant_id = ${TENANT}`;
+      if (!read1 || !read2) throw new Error(`expected both connections to read a row for id ${buggyClaimId}`);
+      expect(read1.status).toBe("pending");
+      expect(read2.status).toBe("pending");
+
+      // The ORIGINAL routes.ts shape: WHERE id/tenant_id only, no status
+      // guard, no RETURNING check — exactly what this file's routes.ts
+      // looked like before the fix in this PR.
+      await conn1`
+        UPDATE medical.hrms_medical_claims
+        SET status = 'approved', approved_amount_minor = 150000, approved_at = NOW()
+        WHERE id = ${buggyClaimId} AND tenant_id = ${TENANT}
+      `;
+      await conn1`COMMIT`;
+
+      // conn2 already believes (from read2, above) that this claim is
+      // 'pending' — exactly the stale belief the real HTTP handler's own
+      // prior existing.status !== 'pending' check relied on. Its blind
+      // UPDATE, with no guard, "succeeds" anyway.
+      const upd2 = await conn2`
+        UPDATE medical.hrms_medical_claims
+        SET status = 'approved', approved_amount_minor = 150000, approved_at = NOW()
+        WHERE id = ${buggyClaimId} AND tenant_id = ${TENANT}
+      `;
+      await conn2`COMMIT`;
+
+      // THE BUG: both writers "won" — the second approval silently
+      // clobbered/re-applied over the first with no error, proving the
+      // pre-fix shape really does double-process a concurrent approval.
+      expect(upd2.count).toBe(1);
+    } finally {
+      conn1.release();
+      conn2.release();
+    }
+  });
+
+  it("PATCH .../approve real SQL shape — two literally-concurrent transactions racing the same 'pending' claim: exactly one commits, the guard serializes the other (real Postgres, no mocking)", async () => {
+    const raceClaimId = randomUUID();
+    await asTenant((tx) => tx`
+      INSERT INTO medical.hrms_medical_claims (
+        id, tenant_id, employee_id, claim_type, amount_minor, hospital_name,
+        diagnosis, documents, status, created_by, updated_by
+      ) VALUES (
+        ${raceClaimId}, ${TENANT}, ${EMPLOYEE_ID}, 'outdoor', 150000, 'Race Test Hospital',
+        'Manual two-connection race fixture for the fixed guarded UPDATE', '[]', 'pending',
+        ${SEED_ACTOR}, ${SEED_ACTOR}
+      )
+    `);
+
+    const conn1 = await sqlClient.reserve();
+    const conn2 = await sqlClient.reserve();
+    try {
+      await conn1`BEGIN`;
+      await conn1`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+      await conn2`BEGIN`;
+      await conn2`SELECT set_config('app.tenant_id', ${TENANT}, true)`;
+
+      const [read1] = await conn1`SELECT status FROM medical.hrms_medical_claims WHERE id = ${raceClaimId} AND tenant_id = ${TENANT}`;
+      const [read2] = await conn2`SELECT status FROM medical.hrms_medical_claims WHERE id = ${raceClaimId} AND tenant_id = ${TENANT}`;
+      if (!read1 || !read2) throw new Error(`expected both connections to read a row for id ${raceClaimId}`);
+      expect(read1.status).toBe("pending");
+      expect(read2.status).toBe("pending"); // conn2 ALSO sees pending — the exact race window
+
+      // conn1 commits the fixed (guarded) UPDATE first — routes.ts's exact
+      // post-fix SQL shape.
+      const upd1 = await conn1`
+        UPDATE medical.hrms_medical_claims
+        SET status = 'approved', approved_amount_minor = 150000, approved_at = NOW()
+        WHERE id = ${raceClaimId} AND tenant_id = ${TENANT} AND status = 'pending'
+        RETURNING id
+      `;
+      await conn1`COMMIT`;
+      expect(upd1.length).toBe(1); // conn1 wins
+
+      // conn2 still "believes" pending (from read2 above) and attempts the
+      // identical guarded UPDATE. Postgres re-validates the WHERE clause
+      // against the row's CURRENT (post-conn1-commit) state when conn2's
+      // UPDATE statement runs — the guard, not conn2's stale read, decides
+      // the outcome.
+      const upd2 = await conn2`
+        UPDATE medical.hrms_medical_claims
+        SET status = 'approved', approved_amount_minor = 150000, approved_at = NOW()
+        WHERE id = ${raceClaimId} AND tenant_id = ${TENANT} AND status = 'pending'
+        RETURNING id
+      `;
+      await conn2`COMMIT`;
+      expect(upd2.length).toBe(0); // conn2 loses the race — zero rows matched, exactly as the route now throws 409 on
+    } finally {
+      conn1.release();
+      conn2.release();
+    }
+
+    // Final state: exactly one approval landed, never double-processed.
+    const [finalRow] = await asTenant((tx) => tx`
+      SELECT status, approved_amount_minor::text AS approved_amount_minor
+      FROM medical.hrms_medical_claims WHERE id = ${raceClaimId}
+    `);
+    if (!finalRow) throw new Error(`expected a row in medical.hrms_medical_claims for id ${raceClaimId}`);
+    expect(finalRow.status).toBe("approved");
+    expect(finalRow.approved_amount_minor).toBe("150000");
+  });
+
+  it("PATCH .../approve — the real HTTP route rejects approving an already-approved claim with 409 WRONG_STATE", async () => {
+    // Sanity check at the HTTP layer (not timing-sensitive): once a claim is
+    // no longer 'pending', a second approve attempt through the actual route
+    // gets the 409 the guarded UPDATE now produces.
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/medical/claims/${claimId}/approve`, // already approved by an earlier test in this file
+      headers: { authorization: `Bearer ${hrToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ status: "approved", approvedAmountMinor: 200000 }),
+    });
+    expect(r.statusCode).toBe(409);
+    expect(JSON.parse(r.body).code).toBe("WRONG_STATE");
   });
 });

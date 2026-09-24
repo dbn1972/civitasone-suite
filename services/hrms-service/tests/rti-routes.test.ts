@@ -547,4 +547,39 @@ describe("POST /v1/hrms/rti/requests/:id/close", () => {
     expect(r.json().code).toBe("INVALID_STATE");
     await app.close();
   });
+
+  // ── SoD: the original handler cannot also decide the appeal ──────────
+  it("returns 403 SEGREGATION_OF_DUTIES when the officer closing an appealed request is the same pioId who handled it", async () => {
+    H.getRti.mockResolvedValue(rtiRow({ status: "appealed", pioId: USER }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/close`,
+      headers: auth(USER, ["hr_admin"]), payload,
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("SEGREGATION_OF_DUTIES");
+    await app.close();
+  });
+
+  it("allows a DIFFERENT officer to close (decide) an appealed request", async () => {
+    H.getRti.mockResolvedValue(rtiRow({ status: "appealed", pioId: PIO_ID }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/close`,
+      headers: auth(USER, ["hr_admin"]), payload, // USER !== PIO_ID
+    });
+    expect(r.statusCode).toBe(202);
+    await app.close();
+  });
+
+  it("does not apply the SoD check to a directly-closed 'responded' (never appealed) request, even for the same actor as pioId", async () => {
+    H.getRti.mockResolvedValue(rtiRow({ status: "responded", pioId: USER }));
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/rti/requests/${RTI_ID}/close`,
+      headers: auth(USER, ["hr_admin"]), payload,
+    });
+    expect(r.statusCode).toBe(202);
+    await app.close();
+  });
 });

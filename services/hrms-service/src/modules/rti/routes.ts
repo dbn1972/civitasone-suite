@@ -122,6 +122,19 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     if (!existing || (existing.status !== "responded" && existing.status !== "appealed")) {
       throw new HttpError(409, "INVALID_STATE", "request must be responded or appealed to close");
     }
+    // SoD: closing an APPEALED request is deciding the appeal against the
+    // original response. The PIO who handled (was assigned, per pioId) the
+    // original request must not also be the one who decides its own appeal.
+    // Only applies to the appealed path -- directly closing a merely-
+    // "responded" (never appealed) request is the normal single-officer
+    // disposal flow and is unaffected.
+    if (existing.status === "appealed" && existing.pioId && existing.pioId === ctx.actorId) {
+      throw new HttpError(
+        403,
+        "SEGREGATION_OF_DUTIES",
+        "the officer who handled the original request cannot also decide its appeal",
+      );
+    }
     await publishF3Write(ctx, "rti_routes__4", id, {
       body: { ...(req.body as Record<string, unknown>), from: ["responded", "appealed"], to: "closed" },
       params: req.params as Record<string, unknown>,

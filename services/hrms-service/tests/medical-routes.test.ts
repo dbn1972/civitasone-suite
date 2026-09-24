@@ -162,9 +162,38 @@ describe("POST /v1/hrms/medical/claims — submit medical claim", () => {
   });
 
   it("employees can submit their own claims (201)", async () => {
+    // Forgery fix: a bare "employee" caller's employeeId is now always
+    // re-derived via resolveEmployeeForActor (same actor->employee lookup
+    // the GET routes already use) instead of trusted from the body — mock
+    // that lookup resolving USER to EMP, exactly like the GET-route tests
+    // below already do.
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: "/v1/hrms/medical/claims", headers: auth(USER, ["employee"]), payload });
     expect(r.statusCode).toBe(201);
+    expect(r.json().data.employeeId).toBe(EMP);
+    await app.close();
+  });
+
+  it("a bare employee caller cannot forge a colleague's employeeId — always forced onto their own resolved id", async () => {
+    const OTHER_EMP = "bbbbbbbb-0002-4000-8000-000000000002";
+    H.selectFrom.mockResolvedValueOnce([{ id: EMP, tenantId: TENANT, userRef: USER, managerId: null }]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/medical/claims",
+      headers: auth(USER, ["employee"]), payload: { ...payload, employeeId: OTHER_EMP },
+    });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().data.employeeId).toBe(EMP); // forced onto own id, NOT the requested OTHER_EMP
+    await app.close();
+  });
+
+  it("employees with no linked employee record cannot submit a claim (403, fails closed)", async () => {
+    H.selectFrom.mockResolvedValueOnce([]); // resolveEmployeeForActor finds nothing
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/medical/claims", headers: auth(USER, ["employee"]), payload });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("NO_EMPLOYEE_LINK");
     await app.close();
   });
 
@@ -410,7 +439,11 @@ describe("GET /v1/hrms/medical/claims — list claims", () => {
 // =================== PATCH /v1/hrms/medical/claims/:id/approve ===================
 describe("PATCH /v1/hrms/medical/claims/:id/approve — HR approve/reject", () => {
   it("approves a pending claim (200)", async () => {
+    // Race fix: the UPDATE is now guarded (WHERE ... AND status = 'pending'
+    // RETURNING id) — a second queued mock return simulates it matching and
+    // returning the row, same as the first (existing-check SELECT).
     H.sqlClientQuery.mockReturnValueOnce([claimRow({ status: "pending", amount_minor: "50000" })]);
+    H.sqlClientQuery.mockReturnValueOnce([{ id: CLAIM_ID }]);
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/medical/claims/${CLAIM_ID}/approve`,
@@ -425,6 +458,7 @@ describe("PATCH /v1/hrms/medical/claims/:id/approve — HR approve/reject", () =
 
   it("approves without specifying amount — defaults to claim amount (200)", async () => {
     H.sqlClientQuery.mockReturnValueOnce([claimRow({ status: "pending", amount_minor: "75000" })]);
+    H.sqlClientQuery.mockReturnValueOnce([{ id: CLAIM_ID }]); // guarded UPDATE ... RETURNING id
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/medical/claims/${CLAIM_ID}/approve`,
@@ -437,6 +471,7 @@ describe("PATCH /v1/hrms/medical/claims/:id/approve — HR approve/reject", () =
 
   it("rejects a pending claim (200)", async () => {
     H.sqlClientQuery.mockReturnValueOnce([claimRow({ status: "pending" })]);
+    H.sqlClientQuery.mockReturnValueOnce([{ id: CLAIM_ID }]); // guarded UPDATE ... RETURNING id
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/medical/claims/${CLAIM_ID}/approve`,
@@ -450,12 +485,32 @@ describe("PATCH /v1/hrms/medical/claims/:id/approve — HR approve/reject", () =
 
   it("finance_officer can approve (200)", async () => {
     H.sqlClientQuery.mockReturnValueOnce([claimRow({ status: "pending", amount_minor: "50000" })]);
+    H.sqlClientQuery.mockReturnValueOnce([{ id: CLAIM_ID }]); // guarded UPDATE ... RETURNING id
     const app = await buildApp();
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/medical/claims/${CLAIM_ID}/approve`,
       headers: auth(USER, ["finance_officer"]), payload: { status: "approved" },
     });
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("returns 409 WRONG_STATE when the guarded UPDATE matches zero rows (lost a concurrent race) even though the initial read saw 'pending'", async () => {
+    // Simulates exactly the race window this fix closes: the existing-check
+    // SELECT still observes 'pending' (a concurrent approver hadn't
+    // committed yet when THIS request's read ran), but by the time this
+    // request's own guarded UPDATE executes, that concurrent approver has
+    // already won — RETURNING comes back empty, and the fix must surface a
+    // conflict instead of the old code's silent double-approval.
+    H.sqlClientQuery.mockReturnValueOnce([claimRow({ status: "pending", amount_minor: "50000" })]);
+    H.sqlClientQuery.mockReturnValueOnce([]); // guarded UPDATE matched zero rows
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/medical/claims/${CLAIM_ID}/approve`,
+      headers: auth(), payload: { status: "approved" },
+    });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("WRONG_STATE");
     await app.close();
   });
 

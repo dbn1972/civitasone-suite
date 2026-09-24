@@ -116,8 +116,19 @@ const EMP_OTHERDESIG_R = "22222222-6666-4000-8000-0000000000d9";
 const EMP_A_R       = "22222222-7777-4000-8000-0000000000d9"; // tie-break: lower merit grade
 const EMP_B_R       = "22222222-8888-4000-8000-0000000000d9"; // tie-break: higher merit grade -> ranked first
 
+// Dept-scoping regression fixtures: a manager linked (via userRef) to their
+// OWN hrms_employees row in a dedicated department, isolated from every
+// department/designation combination the tests above already assert exact
+// ranks/counts against, so seeding it cannot perturb any existing test.
+const DEPT_MGR_R    = "77777777-1234-4000-8000-0000000000d9";
+const DESIG_MGR_R   = "88888888-1234-4000-8000-0000000000d9";
+const MANAGER_ACTOR_R = "00000000-1234-4000-8000-0000000000d9";
+const MANAGER_EMP_R   = "22222222-1234-4000-8000-0000000000d9";
+
 const tokR = (roles = ["hr_admin"]) => signToken({ sub: ACTOR, tid: TENANT_R, roles, sid: "s" }, SECRET);
 const authR = (roles = ["hr_admin"]) => ({ authorization: `Bearer ${tokR(roles)}` });
+const tokManagerR = () => signToken({ sub: MANAGER_ACTOR_R, tid: TENANT_R, roles: ["manager"], sid: "s" }, SECRET);
+const authManagerR = () => ({ authorization: `Bearer ${tokManagerR()}` });
 
 async function wipeReadFixtures() {
   await runWithTenant(TENANT_R, () => db.transaction(async (tx) => {
@@ -134,10 +145,12 @@ async function seedReadFixtures() {
       { id: DEPT_R, tenantId: TENANT_R, code: "DEPT-R", name: "Read-coverage Dept", createdBy: ACTOR, updatedBy: ACTOR },
       { id: OTHER_DEPT_R, tenantId: TENANT_R, code: "DEPT-R-OTHER", name: "Other Dept", createdBy: ACTOR, updatedBy: ACTOR },
       { id: TIE_DEPT_R, tenantId: TENANT_R, code: "DEPT-R-TIE", name: "Tie-break Dept", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: DEPT_MGR_R, tenantId: TENANT_R, code: "DEPT-R-MGR", name: "Manager-scoping Dept", createdBy: ACTOR, updatedBy: ACTOR },
     ]);
     await tx.insert(hrmsDesignations).values([
       { id: DESIG_R, tenantId: TENANT_R, code: "DESIG-R", name: "Read-coverage Designation", createdBy: ACTOR, updatedBy: ACTOR },
       { id: OTHER_DESIG_R, tenantId: TENANT_R, code: "DESIG-R-OTHER", name: "Other Designation", createdBy: ACTOR, updatedBy: ACTOR },
+      { id: DESIG_MGR_R, tenantId: TENANT_R, code: "DESIG-R-MGR", name: "Manager-scoping Designation", createdBy: ACTOR, updatedBy: ACTOR },
     ]);
     await tx.insert(hrmsEmployees).values([
       {
@@ -186,6 +199,17 @@ async function seedReadFixtures() {
         id: EMP_B_R, tenantId: TENANT_R, employeeNo: "EMP-R-00B", fullName: "Beta",
         departmentId: TIE_DEPT_R, designationId: DESIG_R, dateOfJoining: "2018-01-01",
         dateOfBirth: "1985-05-05", status: "confirmed",
+        createdBy: ACTOR, updatedBy: ACTOR,
+      },
+      {
+        // Linked to MANAGER_ACTOR_R via userRef -- resolveEmployeeForActor
+        // resolves the manager-scoping tests' token to THIS row's
+        // departmentId (DEPT_MGR_R), isolated from every other fixture
+        // department above so it cannot perturb any existing rank/count
+        // assertion.
+        id: MANAGER_EMP_R, tenantId: TENANT_R, employeeNo: "EMP-R-MGR", fullName: "Manager Self",
+        departmentId: DEPT_MGR_R, designationId: DESIG_MGR_R, dateOfJoining: "2012-01-01",
+        dateOfBirth: "1978-01-01", status: "confirmed", userRef: MANAGER_ACTOR_R,
         createdBy: ACTOR, updatedBy: ACTOR,
       },
     ]);
@@ -387,6 +411,57 @@ describe("GET /v1/hrms/seniority", () => {
       headers: authR(["manager"]),
     });
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  // ── Dept-scoping regression (SEC finding: manager access had no
+  // department scope, tenant-wide by default) ───────────────────────────
+  it("200 — a manager linked to their own employee record is scoped to their OWN department, not tenant-wide, with NO filter supplied", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/seniority",
+      headers: authManagerR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    // Only the manager's own department's employee(s) come back.
+    expect(body.data.every((d: { departmentId: string }) => d.departmentId === DEPT_MGR_R)).toBe(true);
+    expect(body.data.some((d: { employeeNo: string }) => d.employeeNo === "EMP-R-MGR")).toBe(true);
+    // None of the OTHER departments' employees leak through.
+    expect(body.data.some((d: { employeeNo: string }) => d.employeeNo === "EMP-R-001")).toBe(false);
+    expect(body.data.some((d: { employeeNo: string }) => d.employeeNo === "EMP-R-005")).toBe(false);
+    await app.close();
+  });
+
+  it("200 — a manager requesting a DIFFERENT department's id is still forced onto their own (request ignored, not honoured)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/seniority?departmentId=${DEPT_R}`, // explicitly asks for someone else's department
+      headers: authManagerR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.data.every((d: { departmentId: string }) => d.departmentId === DEPT_MGR_R)).toBe(true);
+    expect(body.data.some((d: { employeeNo: string }) => d.employeeNo === "EMP-R-001")).toBe(false);
+    await app.close();
+  });
+
+  it("200 — HR role is NOT scoped: still sees other departments tenant-wide (never resolves an actor-employee link)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/seniority?departmentId=${DEPT_R}`,
+      headers: authR(), // default hr_admin
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    // HR's own explicit departmentId filter is honoured as requested (not
+    // forced anywhere else) -- this is the same "filters by departmentId"
+    // behavior as the earlier HR-role test above, just re-confirmed here
+    // alongside the manager tests for contrast.
+    expect(body.data.every((d: { departmentId: string }) => d.departmentId === DEPT_R)).toBe(true);
     await app.close();
   });
 });
@@ -622,6 +697,39 @@ describe("GET /v1/hrms/dpc/eligibility", () => {
       headers: authR(["manager"]),
     });
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  // ── Dept-scoping regression (same finding as GET /v1/hrms/seniority
+  // above -- DPC eligibility is the same underlying buildSeniority() list,
+  // just re-bucketed into eligible/ineligible) ──────────────────────────
+  it("200 — a manager is scoped to their OWN department's eligibility buckets, not tenant-wide", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dpc/eligibility?minQualifyingYears=0",
+      headers: authManagerR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    const all = [...body.eligible, ...body.ineligible];
+    expect(all.every((d: { departmentId: string }) => d.departmentId === DEPT_MGR_R)).toBe(true);
+    expect(all.some((d: { employeeNo: string }) => d.employeeNo === "EMP-R-MGR")).toBe(true);
+    expect(all.some((d: { employeeNo: string }) => d.employeeNo === "EMP-R-005")).toBe(false);
+    await app.close();
+  });
+
+  it("200 — a manager requesting a DIFFERENT department's eligibility list is still forced onto their own", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/dpc/eligibility?departmentId=${DEPT_R}&minQualifyingYears=0`,
+      headers: authManagerR(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    const all = [...body.eligible, ...body.ineligible];
+    expect(all.every((d: { departmentId: string }) => d.departmentId === DEPT_MGR_R)).toBe(true);
     await app.close();
   });
 });
