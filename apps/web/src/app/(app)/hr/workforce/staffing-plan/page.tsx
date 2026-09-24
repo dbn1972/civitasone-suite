@@ -97,10 +97,10 @@ export default async function StaffingPlanPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label={t('statSanctionedPosts')} value={errored ? null : totalSanctioned} />
-        <StatCard icon="👥" iconBg="#e6f7f0" label={t('statFilledPositions')} value={errored ? null : totalFilled} />
-        <StatCard icon="⬜" iconBg="#fff1f0" label={t('statVacantPosts')} value={errored ? null : totalVacant} />
-        <StatCard icon="📈" iconBg="#fffbe6" label={t('statFillRate')} value={errored ? null : overallFill} />
+        <StatCard icon="📊" iconBg="var(--infobg, #e6f0ff)" label={t('statSanctionedPosts')} value={errored ? null : totalSanctioned} />
+        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t('statFilledPositions')} value={errored ? null : totalFilled} />
+        <StatCard icon="⬜" iconBg="var(--badbg, #fff1f0)" label={t('statVacantPosts')} value={errored ? null : totalVacant} />
+        <StatCard icon="📈" iconBg="var(--warnbg, #fffbe6)" label={t('statFillRate')} value={errored ? null : overallFill} />
       </StatGrid>
 
       {highVacancyCount > 0 && (
@@ -108,12 +108,12 @@ export default async function StaffingPlanPage() {
           role="alert"
           aria-live="polite"
           style={{
-            background: '#fff1f0',
-            border: '1.5px solid #ffccc7',
+            background: 'var(--badbg, #fff1f0)',
+            border: '1.5px solid var(--badbd, #ffccc7)',
             borderRadius: 6,
             padding: '10px 14px',
             fontSize: 13,
-            color: '#cf1322',
+            color: 'var(--bad, #cf1322)',
             marginBottom: 12,
           }}
         >

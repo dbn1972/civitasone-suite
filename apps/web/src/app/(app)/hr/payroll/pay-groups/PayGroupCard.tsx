@@ -86,7 +86,7 @@ export function PayGroupCard({
               width: 9,
               height: 9,
               borderRadius: "50%",
-              background: isActive ? "#10b981" : "#94a3b8",
+              background: isActive ? "var(--good, #10b981)" : "var(--mut, #94a3b8)",
               flexShrink: 0,
             }}
           />

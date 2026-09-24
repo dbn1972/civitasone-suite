@@ -51,10 +51,10 @@ export default async function TravelRequestsPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="✈️" iconBg="#e6f0ff" label="Total Requests" value={errored ? null : items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={errored ? null : pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={errored ? null : approved} />
-        <StatCard icon="❌" iconBg="#fef2f2" label="Rejected" value={errored ? null : rejected} />
+        <StatCard icon="✈️" iconBg="var(--infobg, #e6f0ff)" label="Total Requests" value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending Approval" value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Approved" value={errored ? null : approved} />
+        <StatCard icon="❌" iconBg="var(--badbg, #fef2f2)" label="Rejected" value={errored ? null : rejected} />
       </StatGrid>
       <TravelRequestForm />
       <div style={{ marginTop: 16 }}>

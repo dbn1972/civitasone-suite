@@ -104,10 +104,10 @@ export default async function ContractualPage() {
         </span>
       )}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={errored ? "—" : active} />
-        <StatCard icon="📁" iconBg="#fffbe6" label={t("statExpiredLabel")} value={errored ? "—" : completed} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statAgenciesLabel")} value={errored ? "—" : agencies} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActiveLabel")} value={errored ? "—" : active} />
+        <StatCard icon="📁" iconBg="var(--warnbg, #fffbe6)" label={t("statExpiredLabel")} value={errored ? "—" : completed} />
+        <StatCard icon="🏢" iconBg="var(--bg, #f5f5f5)" label={t("statAgenciesLabel")} value={errored ? "—" : agencies} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {source === "error" ? (

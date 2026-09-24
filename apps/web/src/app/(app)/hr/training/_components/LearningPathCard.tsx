@@ -21,14 +21,14 @@ export interface LearningPathCardProps {
 }
 
 const PRIORITY_CONFIG = {
-  high:   { label: "High Priority",   bg: "#fef2f2", border: "#fca5a5", pill: "#dc2626", icon: "🔴" },
-  medium: { label: "Medium Priority", bg: "#fffbeb", border: "#fcd34d", pill: "#d97706", icon: "🟡" },
-  low:    { label: "Low Priority",    bg: "#f0fdf4", border: "#86efac", pill: "#15803d", icon: "🟢" },
+  high:   { label: "High Priority",   bg: "var(--badbg, #fef2f2)", border: "var(--badbd, #fca5a5)", pill: "var(--bad, #dc2626)", icon: "🔴" },
+  medium: { label: "Medium Priority", bg: "#fffbeb", border: "#fcd34d", pill: "var(--warn, #d97706)", icon: "🟡" },
+  low:    { label: "Low Priority",    bg: "var(--goodbg, #f0fdf4)", border: "var(--goodbd, #86efac)", pill: "var(--good, #15803d)", icon: "🟢" },
 };
 
 const MODE_STYLE = {
-  Mandatory:   { bg: "#dbeafe", color: "#1d4ed8" },
-  Recommended: { bg: "#f1f5f9", color: "#475569" },
+  Mandatory:   { bg: "#dbeafe", color: "var(--info, #1d4ed8)" },
+  Recommended: { bg: "var(--bg, #f1f5f9)", color: "var(--ink2, #475569)" },
 };
 
 function LevelBar({ current, required }: { current: number; required: number }) {
@@ -45,7 +45,7 @@ function LevelBar({ current, required }: { current: number; required: number }) 
             key={i}
             style={{
               width: 14, height: 14, borderRadius: 3,
-              background: filled ? "var(--good, #10b981)" : isGap ? "#fca5a5" : "var(--line, #e2e8f0)",
+              background: filled ? "var(--good, #10b981)" : isGap ? "var(--badbd, #fca5a5)" : "var(--line, #e2e8f0)",
               border: `1px solid ${filled ? "var(--good, #10b981)" : isGap ? "#f87171" : "var(--line, #e2e8f0)"}`,
             }}
             title={filled ? `Level ${idx} (achieved)` : isGap ? `Level ${idx} (gap)` : ""}
@@ -146,7 +146,7 @@ export function LearningPathCard({
                   onClick={(e) => { if (prog.onEnroll) { e.preventDefault(); prog.onEnroll(prog.id); } }}
                   style={{
                     flexShrink: 0, fontSize: 12, fontWeight: 700, padding: "5px 12px",
-                    border: "none", borderRadius: 6, background: "#1d4ed8", color: "#fff",
+                    border: "none", borderRadius: 6, background: "var(--info, #1d4ed8)", color: "#fff",
                     cursor: "pointer", textDecoration: "none", display: "inline-block",
                   }}
                 >

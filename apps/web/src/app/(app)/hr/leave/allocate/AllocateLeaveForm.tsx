@@ -14,8 +14,8 @@ const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
   borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
 };
-const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid #ef4444" };
-const fieldErrStyle: CSSProperties = { color: "#b91c1c", fontSize: 12, margin: "3px 0 0" };
+const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
+const fieldErrStyle: CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 function getCurrentFY(): string {
   const now = new Date();
@@ -119,7 +119,7 @@ export function AllocateLeaveForm() {
 
       <div>
         <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 500 }}>
-          {t("employeeLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+          {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
         </label>
         <select
           id={empId}
@@ -142,7 +142,7 @@ export function AllocateLeaveForm() {
 
       <div>
         <label htmlFor={ltId} style={{ fontSize: 13, fontWeight: 500 }}>
-          {t("leaveTypeLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+          {t("leaveTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
         </label>
         <select
           id={ltId}
@@ -166,7 +166,7 @@ export function AllocateLeaveForm() {
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
           <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 500 }}>
-            {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
           </label>
           <input
             id={fyId}
@@ -187,7 +187,7 @@ export function AllocateLeaveForm() {
         </div>
         <div>
           <label htmlFor={daysId} style={{ fontSize: 13, fontWeight: 500 }}>
-            {t("totalDaysLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("totalDaysLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
           </label>
           <input
             id={daysId}

@@ -20,12 +20,12 @@ type JdTemplate = {
 };
 
 const TYPE_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  regular:       { label: "Regular",       color: "#1e40af", bg: "#dbeafe" },
-  internship:    { label: "Internship",    color: "#7c2d12", bg: "#fed7aa" },
-  apprenticeship:{ label: "Apprenticeship",color: "#166534", bg: "#bbf7d0" },
-  volunteership: { label: "Volunteer",     color: "#0e7490", bg: "#cffafe" },
-  contractual:   { label: "Contractual",   color: "#6b21a8", bg: "#e9d5ff" },
-  deputation:    { label: "Deputation",    color: "#475569", bg: "#e2e8f0" },
+  regular:       { label: "Regular",       color: "var(--info, #1e40af)", bg: "#dbeafe" },
+  internship:    { label: "Internship",    color: "var(--warn, #7c2d12)", bg: "var(--warnbg, #fed7aa)" },
+  apprenticeship:{ label: "Apprenticeship",color: "var(--good, #166534)", bg: "#bbf7d0" },
+  volunteership: { label: "Volunteer",     color: "var(--info, #0e7490)", bg: "var(--infobg, #cffafe)" },
+  contractual:   { label: "Contractual",   color: "var(--violet, #6b21a8)", bg: "var(--primary-soft, #e9d5ff)" },
+  deputation:    { label: "Deputation",    color: "var(--ink2, #475569)", bg: "#e2e8f0" },
 };
 
 async function fetchTemplates(type?: string): Promise<LoaderResult<JdTemplate[]>> {
@@ -87,7 +87,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
             style={{
               padding: "6px 14px", borderRadius: 20, fontSize: 13, fontWeight: 600, textDecoration: "none",
               background: activeType === opt.value ? "var(--primary, #154089)" : "var(--bg, #f1f5f9)",
-              color: activeType === opt.value ? "#fff" : "var(--ink2, #475569)",
+              color: activeType === opt.value ? "var(--panel, #fff)" : "var(--ink2, #475569)",
               border: `1px solid ${activeType === opt.value ? "var(--primary, #154089)" : "var(--line, #e2e8f0)"}`,
             }}
           >
@@ -102,7 +102,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
         <div style={{ textAlign: "center", padding: "48px 24px", background: "var(--panel, #fff)", borderRadius: 12, border: "1px solid var(--line, #e2e8f0)" }}>
           <p style={{ fontSize: 40, margin: "0 0 12px" }}>📄</p>
           <h2 style={{ fontSize: 18, fontWeight: 700, margin: "0 0 8px" }}>No templates yet</h2>
-          <p style={{ color: "#64748b", fontSize: 14, margin: "0 0 16px" }}>Create your first JD template to speed up future job openings.</p>
+          <p style={{ color: "var(--mut, #64748b)", fontSize: 14, margin: "0 0 16px" }}>Create your first JD template to speed up future job openings.</p>
           {canManage && (
             <Link href="/hr/jd-templates/new" style={{ display: "inline-block", padding: "10px 20px", background: "var(--primary, #154089)", color: "#fff", borderRadius: 8, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
               Create template
@@ -112,7 +112,7 @@ export default async function JdTemplatesPage({ searchParams }: { searchParams: 
       ) : (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 16 }}>
           {templates.map((tmpl) => {
-            const ti = TYPE_LABELS[tmpl.vacancyType] ?? { label: tmpl.vacancyType, color: "#4f46e5", bg: "#eef2ff" };
+            const ti = TYPE_LABELS[tmpl.vacancyType] ?? { label: tmpl.vacancyType, color: "var(--indigo, #4f46e5)", bg: "#eef2ff" };
             return (
               <article key={tmpl.id} style={{ background: "var(--panel, #fff)", border: "1px solid var(--line, #e2e8f0)", borderRadius: 12, padding: "20px", display: "flex", flexDirection: "column", gap: 10 }}>
                 <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 8 }}>

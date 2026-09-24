@@ -66,10 +66,10 @@ export default async function CertificationsPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏅" iconBg="#e6f0ff" label="Total Certificates" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Valid"              value={valid} />
-        <StatCard icon="⚠️" iconBg="#fff7e6" label="Expiring Soon"      value={expiringSoon} />
-        <StatCard icon="🚫" iconBg="#fff1f0" label="Expired"            value={expired} />
+        <StatCard icon="🏅" iconBg="var(--infobg, #e6f0ff)" label="Total Certificates" value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Valid"              value={valid} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label="Expiring Soon"      value={expiringSoon} />
+        <StatCard icon="🚫" iconBg="var(--badbg, #fff1f0)" label="Expired"            value={expired} />
       </StatGrid>
 
       {/* Alert banner */}

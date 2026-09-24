@@ -57,10 +57,10 @@ async function getDevPlans(): Promise<LoaderResult<DevPlan[]>> {
 
 function buildCategoryScores(items: GoalRow[]): CategoryScore[] {
   const cats: Array<{ label: CategoryScore["label"]; color: string; keys: string[] }> = [
-    { label: "Performance",   color: "#3b82f6", keys: ["performance","kra","kpi"] },
-    { label: "Development",   color: "#10b981", keys: ["development","learning","training"] },
-    { label: "Behavioural",   color: "#f59e0b", keys: ["behavioural","behavioral","soft"] },
-    { label: "Organisational",color: "#8b5cf6", keys: ["org","organisational","organizational","strategic"] },
+    { label: "Performance",   color: "var(--info, #3b82f6)", keys: ["performance","kra","kpi"] },
+    { label: "Development",   color: "var(--good, #10b981)", keys: ["development","learning","training"] },
+    { label: "Behavioural",   color: "var(--warn, #f59e0b)", keys: ["behavioural","behavioral","soft"] },
+    { label: "Organisational",color: "var(--violet, #8b5cf6)", keys: ["org","organisational","organizational","strategic"] },
   ];
 
   return cats.map(({ label, color, keys }) => {
@@ -118,10 +118,10 @@ export default async function GoalsPage() {
 
       {/* Summary stats */}
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total Goals" value={items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="On Track" value={onTrack} />
-        <StatCard icon="⚠️" iconBg="#fff7e6" label="At Risk / Behind" value={atRisk} />
-        <StatCard icon="🏆" iconBg="#f5f5f5" label="Completed" value={completed} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label="Total Goals" value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="On Track" value={onTrack} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label="At Risk / Behind" value={atRisk} />
+        <StatCard icon="🏆" iconBg="var(--bg, #f5f5f5)" label="Completed" value={completed} />
       </StatGrid>
 
       {/* Progress rings summary */}
@@ -142,7 +142,7 @@ export default async function GoalsPage() {
         ) : items.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
-            <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No goals set</p>
+            <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>No goals set</p>
             <p style={{ fontSize: 13, margin: "4px 0 0" }}>
               Goals are assigned during the appraisal cycle. Create an appraisal to assign objectives.
             </p>

@@ -31,17 +31,17 @@ type Translator = Awaited<ReturnType<typeof getTranslations>>;
 
 function readinessConfig(t: Translator): Record<Readiness, { label: string; color: string; bg: string; order: number }> {
   return {
-    ready_now:        { label: t("readyNow"),       color: "#16a34a", bg: "#f0fdf4", order: 0 },
-    one_two_years:    { label: t("oneTwoYears"),     color: "#d97706", bg: "#fffbeb", order: 1 },
-    three_five_years: { label: t("threeFiveYears"),  color: "#6b7280", bg: "#f3f4f6", order: 2 },
+    ready_now:        { label: t("readyNow"),       color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", order: 0 },
+    one_two_years:    { label: t("oneTwoYears"),     color: "var(--warn, #d97706)", bg: "#fffbeb", order: 1 },
+    three_five_years: { label: t("threeFiveYears"),  color: "var(--mut, #6b7280)", bg: "var(--bg, #f3f4f6)", order: 2 },
   };
 }
 
 function riskConfig(t: Translator): Record<string, { label: string; color: string; bg: string }> {
   return {
-    high:   { label: t("highRisk"),   color: "#dc2626", bg: "#fef2f2" },
-    medium: { label: t("mediumRisk"), color: "#b45309", bg: "#fffbeb" },
-    low:    { label: t("lowRisk"),    color: "#16a34a", bg: "#f0fdf4" },
+    high:   { label: t("highRisk"),   color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)" },
+    medium: { label: t("mediumRisk"), color: "var(--warn, #b45309)", bg: "#fffbeb" },
+    low:    { label: t("lowRisk"),    color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
   };
 }
 
@@ -138,7 +138,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
           <span>
             {t("successorCount", { count: post.successors.length })}
           </span>
-          <span style={{ color: readyNow > 0 ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+          <span style={{ color: readyNow > 0 ? "var(--good, #16a34a)" : "var(--bad, #dc2626)", fontWeight: 600 }}>
             {readyNow > 0 ? t("readyNowCount", { count: readyNow }) : t("noneReadyNow")}
           </span>
         </div>
@@ -151,7 +151,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
           <div
             style={{
               padding: "14px 16px", fontSize: "0.875rem",
-              color: "#dc2626", background: "#fef2f2",
+              color: "var(--bad, #dc2626)", background: "var(--badbg, #fef2f2)",
               margin: "8px 16px", borderRadius: 8,
             }}
           >
@@ -222,7 +222,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                             key={g}
                             style={{
                               padding: "1px 7px", borderRadius: 10,
-                              background: "#fef3c7", color: "#92400e",
+                              background: "#fef3c7", color: "var(--warn, #92400e)",
                               fontSize: "0.6875rem",
                             }}
                           >
@@ -238,10 +238,10 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                     <a
                       href={s.devPlanUrl}
                       style={{
-                        fontSize: "0.75rem", color: "#2563eb",
+                        fontSize: "0.75rem", color: "var(--info, #2563eb)",
                         textDecoration: "none", flexShrink: 0,
                         padding: "3px 9px", borderRadius: 5,
-                        background: "#eff6ff", whiteSpace: "nowrap",
+                        background: "var(--infobg, #eff6ff)", whiteSpace: "nowrap",
                       }}
                       aria-label={t("devPlanAriaLabel", { name: s.name ?? s.employeeId })}
                     >

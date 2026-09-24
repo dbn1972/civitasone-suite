@@ -27,17 +27,17 @@ type Translator = ReturnType<typeof useTranslations>;
 
 function eventConfig(t: Translator): Record<string, { icon: string; color: string; bg: string; label: string }> {
   return {
-    join:        { icon: "🎉", color: "#16a34a", bg: "#f0fdf4", label: t("eventJoining") },
-    transfer:    { icon: "🔄", color: "#2563eb", bg: "#eff6ff", label: t("eventTransfer") },
-    posting:     { icon: "📍", color: "#2563eb", bg: "#eff6ff", label: t("eventPosting") },
-    promotion:   { icon: "⬆️", color: "#7c3aed", bg: "#f5f3ff", label: t("eventPromotion") },
-    increment:   { icon: "💹", color: "#0891b2", bg: "#ecfeff", label: t("eventIncrement") },
-    leave:       { icon: "🌴", color: "#d97706", bg: "#fffbeb", label: t("eventLeave") },
-    deputation:  { icon: "🏛️", color: "#0891b2", bg: "#ecfeff", label: t("eventDeputation") },
-    confirmation:{ icon: "✅", color: "#16a34a", bg: "#f0fdf4", label: t("eventConfirmation") },
-    suspension:  { icon: "⛔", color: "#dc2626", bg: "#fef2f2", label: t("eventSuspension") },
-    retirement:  { icon: "📤", color: "#64748b", bg: "#f8fafc", label: t("eventRetirement") },
-    other:       { icon: "📌", color: "#64748b", bg: "#f8fafc", label: t("eventOther") },
+    join:        { icon: "🎉", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventJoining") },
+    transfer:    { icon: "🔄", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)", label: t("eventTransfer") },
+    posting:     { icon: "📍", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)", label: t("eventPosting") },
+    promotion:   { icon: "⬆️", color: "var(--violet, #7c3aed)", bg: "var(--primary-soft, #f5f3ff)", label: t("eventPromotion") },
+    increment:   { icon: "💹", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventIncrement") },
+    leave:       { icon: "🌴", color: "var(--warn, #d97706)", bg: "#fffbeb", label: t("eventLeave") },
+    deputation:  { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputation") },
+    confirmation:{ icon: "✅", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventConfirmation") },
+    suspension:  { icon: "⛔", color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)", label: t("eventSuspension") },
+    retirement:  { icon: "📤", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventRetirement") },
+    other:       { icon: "📌", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventOther") },
   };
 }
 
@@ -291,7 +291,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                   padding: "5px 11px", borderRadius: 5, border: "none",
                   background:
                     pg === safePage ? "var(--primary, #2563eb)" : "var(--line2)",
-                  color: pg === safePage ? "#fff" : "var(--ink)",
+                  color: pg === safePage ? "var(--panel, #fff)" : "var(--ink)",
                   cursor: "pointer",
                 }}
               >

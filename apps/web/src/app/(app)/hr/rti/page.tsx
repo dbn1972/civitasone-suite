@@ -65,10 +65,10 @@ export default async function RtiPage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📂" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? null : items.length} />
-        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statPendingLabel")} value={errored ? null : pending} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label={t("statOverdueLabel")} value={errored ? null : overdue} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={errored ? null : disposed} />
+        <StatCard icon="📂" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? null : items.length} />
+        <StatCard icon="🔔" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? null : pending} />
+        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statOverdueLabel")} value={errored ? null : overdue} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedLabel")} value={errored ? null : disposed} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

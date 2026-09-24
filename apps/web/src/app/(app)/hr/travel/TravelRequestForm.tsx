@@ -10,8 +10,8 @@ const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
   borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
 };
-const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid #ef4444" };
-const fieldErrStyle: CSSProperties = { color: "#b91c1c", fontSize: 12, margin: "3px 0 0" };
+const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
+const fieldErrStyle: CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 type Fields = {
   purpose: string;
@@ -120,7 +120,7 @@ export function TravelRequestForm() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div>
               <label htmlFor={ids.purpose} style={{ fontSize: 13, fontWeight: 500 }}>
-                Purpose <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+                Purpose <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
               </label>
               <input id={ids.purpose} type="text" maxLength={200} value={fields.purpose}
                 onChange={(e) => set("purpose", e.target.value)}
@@ -132,7 +132,7 @@ export function TravelRequestForm() {
             </div>
             <div>
               <label htmlFor={ids.destination} style={{ fontSize: 13, fontWeight: 500 }}>
-                Destination <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+                Destination <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
               </label>
               <input id={ids.destination} type="text" maxLength={128} value={fields.destination}
                 onChange={(e) => set("destination", e.target.value)}
@@ -147,7 +147,7 @@ export function TravelRequestForm() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
             <div>
               <label htmlFor={ids.fromDate} style={{ fontSize: 13, fontWeight: 500 }}>
-                From Date <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+                From Date <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
               </label>
               <input id={ids.fromDate} type="date" value={fields.fromDate}
                 onChange={(e) => set("fromDate", e.target.value)}
@@ -157,7 +157,7 @@ export function TravelRequestForm() {
             </div>
             <div>
               <label htmlFor={ids.toDate} style={{ fontSize: 13, fontWeight: 500 }}>
-                To Date <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+                To Date <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
               </label>
               <input id={ids.toDate} type="date" value={fields.toDate}
                 onChange={(e) => set("toDate", e.target.value)}

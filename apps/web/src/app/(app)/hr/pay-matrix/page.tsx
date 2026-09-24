@@ -50,10 +50,10 @@ export default async function PayMatrixPage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statPayLevelsLabel")} value={errored ? null : levelCount} />
-        <StatCard icon="🗂️" iconBg="#f5f5f5" label={t("statTotalCellsLabel")} value={errored ? null : cellCount} />
-        <StatCard icon="💰" iconBg="#fffbe6" label={t("statMinBasicPayLabel")} value={errored ? null : minPay} />
-        <StatCard icon="💎" iconBg="#e6f7f0" label={t("statMaxBasicPayLabel")} value={errored ? null : maxPay} />
+        <StatCard icon="📊" iconBg="var(--infobg, #e6f0ff)" label={t("statPayLevelsLabel")} value={errored ? null : levelCount} />
+        <StatCard icon="🗂️" iconBg="var(--bg, #f5f5f5)" label={t("statTotalCellsLabel")} value={errored ? null : cellCount} />
+        <StatCard icon="💰" iconBg="var(--warnbg, #fffbe6)" label={t("statMinBasicPayLabel")} value={errored ? null : minPay} />
+        <StatCard icon="💎" iconBg="var(--goodbg, #e6f7f0)" label={t("statMaxBasicPayLabel")} value={errored ? null : maxPay} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

@@ -136,7 +136,7 @@ function DeptNode({
               style={{ ...inputStyle, flex: 1 }}
             />
             {rowError && (
-              <span style={{ color: "#b91c1c", fontSize: 11 }}>{rowError}</span>
+              <span style={{ color: "var(--bad, #b91c1c)", fontSize: 11 }}>{rowError}</span>
             )}
             <Button variant="primary" size="sm" onClick={() => onSaveEdit(node.id)} disabled={saving}>
               {saving ? t("savingBtn") : t("saveBtn")}

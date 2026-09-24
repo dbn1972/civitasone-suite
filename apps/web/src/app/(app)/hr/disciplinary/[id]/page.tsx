@@ -68,10 +68,10 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#eff6ff" label="Status" value={status.replace(/_/g, " ")} />
-        <StatCard icon="⚖️" iconBg="#faf5ff" label="Proceeding" value={proceedingType} />
-        <StatCard icon="🔎" iconBg="#fff7ed" label="Finding" value={finding} />
-        <StatCard icon="🚫" iconBg="#fef2f2" label="Penalty" value={penaltyType} />
+        <StatCard icon="📋" iconBg="var(--infobg, #eff6ff)" label="Status" value={status.replace(/_/g, " ")} />
+        <StatCard icon="⚖️" iconBg="var(--primary-soft, #faf5ff)" label="Proceeding" value={proceedingType} />
+        <StatCard icon="🔎" iconBg="var(--warnbg, #fff7ed)" label="Finding" value={finding} />
+        <StatCard icon="🚫" iconBg="var(--badbg, #fef2f2)" label="Penalty" value={penaltyType} />
       </StatGrid>
 
       <Card title="Case details" padding>

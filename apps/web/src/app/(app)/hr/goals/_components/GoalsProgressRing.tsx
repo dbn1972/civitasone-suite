@@ -27,7 +27,7 @@ function Ring({ pct, color, size = 88 }: { pct: number; color: string; size?: nu
   const dash = Math.min(pct / 100, 1) * c;
   return (
     <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth={7} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--line, #e2e8f0)" strokeWidth={7} />
       <circle
         cx={cx} cy={cy} r={r}
         fill="none"
@@ -56,10 +56,10 @@ function OverallRing({ score }: { score: number }) {
   const cy = 68;
   const c  = 2 * Math.PI * r;
   const dash = Math.min(score / 100, 1) * c;
-  const color = score >= 80 ? "#15803d" : score >= 60 ? "#d97706" : "#dc2626";
+  const color = score >= 80 ? "var(--good, #15803d)" : score >= 60 ? "var(--warn, #d97706)" : "#dc2626";
   return (
     <svg width={136} height={136} viewBox="0 0 136 136">
-      <circle cx={cx} cy={cy} r={r} fill="none" stroke="#e2e8f0" strokeWidth={10} />
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--line, #e2e8f0)" strokeWidth={10} />
       <circle
         cx={cx} cy={cy} r={r}
         fill="none"
@@ -70,8 +70,8 @@ function OverallRing({ score }: { score: number }) {
         transform={`rotate(-90 ${cx} ${cy})`}
       />
       <text x={cx} y={cy - 8} textAnchor="middle" style={{ fontSize: 26, fontWeight: 800, fill: color }}>{score}%</text>
-      <text x={cx} y={cy + 12} textAnchor="middle" style={{ fontSize: 11, fill: "#64748b", fontWeight: 500 }}>Overall</text>
-      <text x={cx} y={cy + 24} textAnchor="middle" style={{ fontSize: 11, fill: "#64748b", fontWeight: 500 }}>Score</text>
+      <text x={cx} y={cy + 12} textAnchor="middle" style={{ fontSize: 11, fill: "var(--mut, #64748b)", fontWeight: 500 }}>Overall</text>
+      <text x={cx} y={cy + 24} textAnchor="middle" style={{ fontSize: 11, fill: "var(--mut, #64748b)", fontWeight: 500 }}>Score</text>
     </svg>
   );
 }
@@ -85,8 +85,8 @@ export function GoalsProgressRing({ categories, overallScore }: GoalsProgressRin
         gap: 24,
         flexWrap: "wrap",
         padding: "16px 20px",
-        background: "#fff",
-        border: "1px solid #e2e8f0",
+        background: "var(--panel, #fff)",
+        border: "1px solid var(--line, #e2e8f0)",
         borderRadius: 12,
         boxShadow: "0 1px 4px rgba(0,0,0,0.07)",
       }}
@@ -97,7 +97,7 @@ export function GoalsProgressRing({ categories, overallScore }: GoalsProgressRin
       </div>
 
       {/* Divider */}
-      <div style={{ width: 1, height: 100, background: "#e2e8f0", flexShrink: 0 }} />
+      <div style={{ width: 1, height: 100, background: "var(--line, #e2e8f0)", flexShrink: 0 }} />
 
       {/* Category rings */}
       <div style={{ display: "flex", gap: 20, flexWrap: "wrap", flex: 1 }}>
@@ -106,7 +106,7 @@ export function GoalsProgressRing({ categories, overallScore }: GoalsProgressRin
           return (
             <div key={cat.label} style={{ textAlign: "center", minWidth: 80 }}>
               <Ring pct={pct} color={cat.color} />
-              <p style={{ margin: "4px 0 0", fontSize: 12, fontWeight: 600, color: "#475569" }}>
+              <p style={{ margin: "4px 0 0", fontSize: 12, fontWeight: 600, color: "var(--ink2, #475569)" }}>
                 {cat.label}
               </p>
               <p style={{ margin: 0, fontSize: 11, color: "var(--mut)" }}>

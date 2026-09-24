@@ -93,7 +93,7 @@ export function DeputationCard({ deputation }: Props) {
         <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
           <StatusPill status={deputation.status} label={statusLabel} />
           {isRecalled && (
-            <span style={{ fontSize: "0.75rem", color: "#dc2626", fontWeight: 600 }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--bad, #dc2626)", fontWeight: 600 }}>
               ↩ Recall Initiated
             </span>
           )}
@@ -104,7 +104,7 @@ export function DeputationCard({ deputation }: Props) {
         {/* Deputation-to highlighted block */}
         <div style={{
           padding: "10px 14px", background: "var(--panel, #f8fafc)",
-          borderRadius: 8, marginBottom: 12, borderInlineStart: "3px solid #2563eb",
+          borderRadius: 8, marginBottom: 12, borderInlineStart: "3px solid var(--info, #2563eb)",
         }}>
           <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
             Deputed to
@@ -127,7 +127,7 @@ export function DeputationCard({ deputation }: Props) {
                 {daysLeft !== null && (
                   <span style={{
                     marginInlineStart: 8, fontSize: "0.75rem", fontWeight: 600,
-                    color: daysLeft < 30 ? "#dc2626" : daysLeft < 90 ? "#d97706" : "#16a34a",
+                    color: daysLeft < 30 ? "var(--bad, #dc2626)" : daysLeft < 90 ? "var(--warn, #d97706)" : "#16a34a",
                   }}>
                     ({daysLeft > 0 ? `${daysLeft}d left` : "Overdue"})
                   </span>
@@ -144,7 +144,7 @@ export function DeputationCard({ deputation }: Props) {
           {revComp && (
             <div className="fld">
               <span className="l">Revised Compensation</span>
-              <span className="v" style={{ fontWeight: 600, color: "#0f766e" }}>{revComp}</span>
+              <span className="v" style={{ fontWeight: 600, color: "var(--good, #0f766e)" }}>{revComp}</span>
             </div>
           )}
           {deputation.recallStatus && (

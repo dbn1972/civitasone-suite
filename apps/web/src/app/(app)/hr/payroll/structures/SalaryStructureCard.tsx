@@ -67,10 +67,10 @@ function buildChartData(components: ComponentItem[]) {
   );
 
   return [
-    { label: `Earnings (${earnings.length})`, value: earnings.length, color: "#4f46e5" },
-    { label: `Deductions (${deductions.length})`, value: deductions.length, color: "#ef4444" },
-    { label: `Employer (${employer.length})`, value: employer.length, color: "#10b981" },
-    { label: `Other (${other.length})`, value: other.length, color: "#f59e0b" },
+    { label: `Earnings (${earnings.length})`, value: earnings.length, color: "var(--indigo, #4f46e5)" },
+    { label: `Deductions (${deductions.length})`, value: deductions.length, color: "var(--bad, #ef4444)" },
+    { label: `Employer (${employer.length})`, value: employer.length, color: "var(--good, #10b981)" },
+    { label: `Other (${other.length})`, value: other.length, color: "var(--warn, #f59e0b)" },
   ].filter((d) => d.value > 0);
 }
 
@@ -120,7 +120,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
             width: 9,
             height: 9,
             borderRadius: "50%",
-            background: isActive ? "#10b981" : "#94a3b8",
+            background: isActive ? "var(--good, #10b981)" : "var(--mut, #94a3b8)",
             flexShrink: 0,
           }}
         />

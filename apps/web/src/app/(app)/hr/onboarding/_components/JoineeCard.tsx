@@ -67,7 +67,7 @@ export function JoineeCard({
             width: 38,
             height: 38,
             borderRadius: "50%",
-            background: "linear-gradient(135deg,#6366f1,#8b5cf6)",
+            background: "linear-gradient(135deg,var(--indigo, #6366f1),var(--violet, #8b5cf6))",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -122,7 +122,7 @@ export function JoineeCard({
           <span>Progress</span>
           <span style={{ fontWeight: 700, color: pct === 100 ? "var(--good, #067647)" : "var(--body, #334155)" }}>{pct}%</span>
         </div>
-        <ProgressBar value={pct} color={isOverdue ? "#d97706" : undefined} />
+        <ProgressBar value={pct} color={isOverdue ? "var(--warn, #d97706)" : undefined} />
       </div>
 
       {/* View detail link */}
@@ -131,7 +131,7 @@ export function JoineeCard({
         style={{
           fontSize: 12,
           fontWeight: 600,
-          color: "#4f46e5",
+          color: "var(--indigo, #4f46e5)",
           textDecoration: "none",
           display: "inline-flex",
           alignItems: "center",

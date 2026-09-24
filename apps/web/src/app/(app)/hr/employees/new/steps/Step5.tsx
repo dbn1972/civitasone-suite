@@ -20,20 +20,20 @@ const ROW: React.CSSProperties = {
   justifyContent: "space-between",
   alignItems: "baseline",
   padding: "8px 0",
-  borderBottom: "1px solid #f1f5f9",
+  borderBottom: "1px solid var(--line, #f1f5f9)",
   gap: 8,
 };
 
 const LABEL: React.CSSProperties = {
   fontSize: 12,
-  color: "#64748b",
+  color: "var(--mut, #64748b)",
   minWidth: 160,
   flexShrink: 0,
 };
 
 const VALUE: React.CSSProperties = {
   fontSize: 13,
-  color: "#0f172a",
+  color: "var(--ink, #0f172a)",
   fontWeight: 500,
   textAlign: "end",
   wordBreak: "break-all",
@@ -41,7 +41,7 @@ const VALUE: React.CSSProperties = {
 
 const SECTION: React.CSSProperties = {
   marginBottom: 24,
-  border: "1px solid #e2e8f0",
+  border: "1px solid var(--line, #e2e8f0)",
   borderRadius: 8,
   padding: "16px 20px",
 };
@@ -105,7 +105,7 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
   function SectionHeader({ title, step }: { title: string; step: number }) {
     return (
       <div style={SECTION_HDR}>
-        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "#374151" }}>{title}</h3>
+        <h3 style={{ margin: 0, fontSize: 13, fontWeight: 700, color: "var(--ink, #374151)" }}>{title}</h3>
         <EditLink step={step} />
       </div>
     );
@@ -113,10 +113,10 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
 
   return (
     <>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: 8 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", marginTop: 0, marginBottom: 8 }}>
         {t("heading")}
       </h2>
-      <p style={{ fontSize: 13, color: "#64748b", marginBottom: 20, marginTop: 0 }}>
+      <p style={{ fontSize: 13, color: "var(--mut, #64748b)", marginBottom: 20, marginTop: 0 }}>
         {t.rich("introRich", { b: (chunks) => <strong>{chunks}</strong> })}
       </p>
 
@@ -168,11 +168,11 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
       <div
         style={{
           padding: "12px 16px",
-          background: "#fffbeb",
-          border: "1px solid #fde68a",
+          background: "var(--warnbg, #fffbeb)",
+          border: "1px solid var(--warnbd, #fde68a)",
           borderRadius: 8,
           fontSize: 12,
-          color: "#78350f",
+          color: "var(--warn, #78350f)",
           marginBottom: 8,
         }}
       >
@@ -180,7 +180,7 @@ export function Step5({ data, departments, designations, submitting, onGoToStep 
       </div>
 
       {submitting && (
-        <p style={{ fontSize: 13, color: "#047857", fontWeight: 500, margin: "12px 0 0" }}>
+        <p style={{ fontSize: 13, color: "var(--good, #047857)", fontWeight: 500, margin: "12px 0 0" }}>
           {t("creatingRecord")}
         </p>
       )}

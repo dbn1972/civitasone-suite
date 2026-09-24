@@ -99,15 +99,15 @@ export function PromotionCard({ promotion }: Props) {
             <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("currentLabel")}</p>
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 600 }}>{fromLabel}</p>
           </div>
-          <div style={{ fontSize: 22, color: "#2563eb", flexShrink: 0 }}>&#8594;</div>
+          <div style={{ fontSize: 22, color: "var(--info, #2563eb)", flexShrink: 0 }}>&#8594;</div>
           <div style={{ textAlign: "center" }}>
             <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("promotedToLabel")}</p>
-            <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 700, color: "#16a34a" }}>{toLabel}</p>
+            <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 700, color: "var(--good, #16a34a)" }}>{toLabel}</p>
           </div>
           {payStr && (
             <div style={{ marginInlineStart: "auto", textAlign: "end" }}>
               <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("newBasicLabel")}</p>
-              <p style={{ margin: "4px 0 0", fontSize: "1rem", fontWeight: 700, color: "#0f766e" }}>{payStr}</p>
+              <p style={{ margin: "4px 0 0", fontSize: "1rem", fontWeight: 700, color: "var(--good, #0f766e)" }}>{payStr}</p>
             </div>
           )}
         </div>
@@ -154,10 +154,10 @@ export function PromotionCard({ promotion }: Props) {
                 <div key={key} style={{
                   display: "flex", alignItems: "center", gap: 6,
                   padding: "6px 12px", borderRadius: 20, border: "1px solid",
-                  borderColor: done ? "#16a34a" : active ? "#2563eb" : "var(--line)",
-                  background:  done ? "#f0fdf4" : active ? "#eff6ff" : "transparent",
+                  borderColor: done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--line)",
+                  background:  done ? "var(--goodbg, #f0fdf4)" : active ? "var(--infobg, #eff6ff)" : "transparent",
                   fontSize: "0.8125rem", fontWeight: done || active ? 600 : 400,
-                  color: done ? "#16a34a" : active ? "#2563eb" : "var(--mut)",
+                  color: done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--mut)",
                 }}>
                   <span>{done ? "✓" : icon}</span>
                   <span>{t(labelKey)}</span>

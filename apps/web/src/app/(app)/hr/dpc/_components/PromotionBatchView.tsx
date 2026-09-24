@@ -37,10 +37,10 @@ export function PromotionBatchView({ promotions }: Props) {
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg, #e0f2fe)" label={t("statTotalInBatch")}  value={promotions.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg, #fef9c3)" label={t("statInitiated")}      value={initiated} />
-        <StatCard icon="🔄" iconBg="#ede9fe"                 label={t("statInApproval")}     value={inProgress} />
+        <StatCard icon="🔄" iconBg="var(--primary-soft, #ede9fe)"                 label={t("statInApproval")}     value={inProgress} />
         <StatCard icon="✅" iconBg="var(--goodbg, #dcfce7)"  label={t("statSignedIssued")}  value={signed} />
         {cancelled > 0 && (
-          <StatCard icon="❌" iconBg="#fee2e2" label={t("statCancelled")} value={cancelled} />
+          <StatCard icon="❌" iconBg="var(--badbg, #fee2e2)" label={t("statCancelled")} value={cancelled} />
         )}
       </StatGrid>
       <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", marginTop: 16 }}>

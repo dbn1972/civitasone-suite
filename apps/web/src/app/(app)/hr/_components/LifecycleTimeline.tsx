@@ -17,13 +17,13 @@ export type LifecycleEvent = {
 };
 
 const EVENT_CONFIG: Record<LifecycleEvent["type"], { icon: string; color: string; bg: string }> = {
-  join:         { icon: "🎉", color: "#16a34a", bg: "#f0fdf4" },
-  transfer:     { icon: "🔄", color: "#2563eb", bg: "#eff6ff" },
-  promotion:    { icon: "⬆️", color: "#7c3aed", bg: "#f5f3ff" },
-  deputation:   { icon: "🏛️", color: "#0891b2", bg: "#ecfeff" },
-  confirmation: { icon: "✅", color: "#16a34a", bg: "#f0fdf4" },
-  separation:   { icon: "📤", color: "#dc2626", bg: "#fef2f2" },
-  other:        { icon: "📌", color: "#64748b", bg: "#f8fafc" },
+  join:         { icon: "🎉", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
+  transfer:     { icon: "🔄", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)" },
+  promotion:    { icon: "⬆️", color: "var(--violet, #7c3aed)", bg: "var(--primary-soft, #f5f3ff)" },
+  deputation:   { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)" },
+  confirmation: { icon: "✅", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
+  separation:   { icon: "📤", color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)" },
+  other:        { icon: "📌", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)" },
 };
 
 interface Props {

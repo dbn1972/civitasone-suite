@@ -65,10 +65,10 @@ export default async function WorkforcePage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="👥" iconBg="#e6f0ff" label={t("statTotalHeadcount")} value={errored ? "—" : totalHeadcount} />
-        <StatCard icon="🏢" iconBg="#f5f5f5" label={t("statDepartments")} value={errored ? "—" : headcount.length} />
-        <StatCard icon="⏳" iconBg="#fff1f0" label={t("statRetiringSoon")} value={errored ? "—" : retiringSoon} />
-        <StatCard icon="📅" iconBg="#fffbe6" label={t("statRetiring12")} value={errored ? "—" : retiring12} />
+        <StatCard icon="👥" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalHeadcount")} value={errored ? "—" : totalHeadcount} />
+        <StatCard icon="🏢" iconBg="var(--bg, #f5f5f5)" label={t("statDepartments")} value={errored ? "—" : headcount.length} />
+        <StatCard icon="⏳" iconBg="var(--badbg, #fff1f0)" label={t("statRetiringSoon")} value={errored ? "—" : retiringSoon} />
+        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label={t("statRetiring12")} value={errored ? "—" : retiring12} />
       </StatGrid>
       <Card title={t("cardHeadcountByDept")}>
         <DataTable<HeadcountRow>

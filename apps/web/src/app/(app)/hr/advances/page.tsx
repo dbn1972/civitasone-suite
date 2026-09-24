@@ -40,10 +40,10 @@ export default async function AdvancesPage() {
       <PageHeader title="Salary Advances" subtitle="Request and track salary advance disbursements." back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="💰" iconBg="#e6f0ff" label="Total Advances" value={errored ? null : items.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending" value={errored ? null : pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={errored ? null : approved} />
-        <StatCard icon="❌" iconBg="#fdecea" label="Rejected" value={errored ? null : rejected} />
+        <StatCard icon="💰" iconBg="var(--infobg, #e6f0ff)" label="Total Advances" value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending" value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Approved" value={errored ? null : approved} />
+        <StatCard icon="❌" iconBg="var(--badbg, #fdecea)" label="Rejected" value={errored ? null : rejected} />
       </StatGrid>
 
       <RequestAdvanceForm />

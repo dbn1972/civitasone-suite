@@ -33,9 +33,9 @@ const CLEARANCE_DEPTS: Array<{ key: keyof RetirementRow; label: string }> = [
 
 function ClearanceChip({ status, label }: { status: string; label: string }) {
   const variants: Record<string, { bg: string; color: string; prefix: string }> = {
-    cleared: { bg: "#f0fdf4", color: "#16a34a", prefix: "✅" },
-    pending: { bg: "#fffbe6", color: "#b45309", prefix: "⏳" },
-    na:      { bg: "#f8fafc", color: "#64748b", prefix: "—" },
+    cleared: { bg: "var(--goodbg, #f0fdf4)", color: "var(--good, #16a34a)", prefix: "✅" },
+    pending: { bg: "var(--warnbg, #fffbe6)", color: "var(--warn, #b45309)", prefix: "⏳" },
+    na:      { bg: "var(--bg, #f8fafc)", color: "var(--mut, #64748b)", prefix: "—" },
   };
   const v = variants[status] ?? variants.pending;
   return (
@@ -65,9 +65,9 @@ function daysLeft(iso: string): number {
 }
 
 function borderColor(days: number): string {
-  if (days <= 30) return "#dc2626";
-  if (days <= 90) return "#f59e0b";
-  return "#2563eb";
+  if (days <= 30) return "var(--bad, #dc2626)";
+  if (days <= 90) return "var(--warn, #f59e0b)";
+  return "var(--info, #2563eb)";
 }
 
 interface Props {
@@ -136,7 +136,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
                 aria-hidden
                 style={{
                   width: 42, height: 42, borderRadius: "50%",
-                  background: "#e6f0ff",
+                  background: "var(--infobg, #e6f0ff)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 20, flexShrink: 0,
                 }}
@@ -168,7 +168,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
                 <dd
                   style={{
                     margin: 0, fontWeight: 600,
-                    color: days <= 30 ? "#dc2626" : "var(--ink)",
+                    color: days <= 30 ? "var(--bad, #dc2626)" : "var(--ink)",
                   }}
                 >
                   {formatIndianDate(row.superannuationDate)}
@@ -179,7 +179,7 @@ export function RetirementDashboard({ rows, selectedId, onSelect }: Props) {
                 <dd
                   style={{
                     margin: 0, fontWeight: 600,
-                    color: days <= 30 ? "#dc2626" : days <= 90 ? "#b45309" : "var(--ink)",
+                    color: days <= 30 ? "var(--bad, #dc2626)" : days <= 90 ? "var(--warn, #b45309)" : "var(--ink)",
                   }}
                 >
                   {days} days

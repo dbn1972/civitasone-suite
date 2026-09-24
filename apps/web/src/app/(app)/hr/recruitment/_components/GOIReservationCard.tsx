@@ -14,10 +14,10 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
   const [open, setOpen] = useState(false);
 
   const GFR_QUOTAS = [
-    { key: "sc",  label: "SC",  pct: 15,  color: "#3b82f6", note: t("noteSc") },
-    { key: "st",  label: "ST",  pct: 7.5, color: "#8b5cf6", note: t("noteSt") },
-    { key: "obc", label: "OBC", pct: 27,  color: "#f59e0b", note: t("noteObc") },
-    { key: "ph",  label: "PH",  pct: 3,   color: "#10b981", note: t("notePh") },
+    { key: "sc",  label: "SC",  pct: 15,  color: "var(--info, #3b82f6)", note: t("noteSc") },
+    { key: "st",  label: "ST",  pct: 7.5, color: "var(--violet, #8b5cf6)", note: t("noteSt") },
+    { key: "obc", label: "OBC", pct: 27,  color: "var(--warn, #f59e0b)", note: t("noteObc") },
+    { key: "ph",  label: "PH",  pct: 3,   color: "var(--good, #10b981)", note: t("notePh") },
   ] as const;
 
   return (

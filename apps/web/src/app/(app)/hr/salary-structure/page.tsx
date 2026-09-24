@@ -91,10 +91,10 @@ export default async function SalaryStructurePage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📊" iconBg="#e6f0ff" label={t("statStructuresLabel")} value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statActiveLabel")} value={errored ? null : active} />
-        <StatCard icon="👥" iconBg="#fffbe6" label={t("statEmployeesCoveredLabel")} value={errored ? null : totalEmployees.toLocaleString("en-IN")} />
-        <StatCard icon="📅" iconBg="#f5f5f5" label={t("statLastRevisionLabel")} value={errored ? null : lastRevision} />
+        <StatCard icon="📊" iconBg="var(--infobg, #e6f0ff)" label={t("statStructuresLabel")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActiveLabel")} value={errored ? null : active} />
+        <StatCard icon="👥" iconBg="var(--warnbg, #fffbe6)" label={t("statEmployeesCoveredLabel")} value={errored ? null : totalEmployees.toLocaleString("en-IN")} />
+        <StatCard icon="📅" iconBg="var(--bg, #f5f5f5)" label={t("statLastRevisionLabel")} value={errored ? null : lastRevision} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

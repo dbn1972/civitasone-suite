@@ -246,10 +246,10 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
       <div
         style={{
           padding: 24,
-          background: "#dcfce7",
-          border: "1px solid #86efac",
+          background: "var(--goodbg, #dcfce7)",
+          border: "1px solid var(--goodbd, #86efac)",
           borderRadius: 8,
-          color: "#166534",
+          color: "var(--good, #166534)",
           maxWidth: 520,
         }}
       >
@@ -283,9 +283,9 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
             marginBottom: 16,
             borderRadius: 8,
             fontSize: 13,
-            background: "#eff6ff",
-            border: "1px solid #bfdbfe",
-            color: "#1e40af",
+            background: "var(--infobg, #eff6ff)",
+            border: "1px solid var(--infobd, #bfdbfe)",
+            color: "var(--info, #1e40af)",
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
@@ -302,7 +302,7 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
             style={{
               background: "none",
               border: "none",
-              color: "#1e40af",
+              color: "var(--info, #1e40af)",
               fontSize: 12,
               cursor: "pointer",
               textDecoration: "underline",
@@ -326,9 +326,9 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
             marginBottom: 16,
             borderRadius: 8,
             fontSize: 14,
-            background: "#fee2e2",
-            border: "1px solid #fca5a5",
-            color: "#b91c1c",
+            background: "var(--badbg, #fee2e2)",
+            border: "1px solid var(--badbd, #fca5a5)",
+            color: "var(--bad, #b91c1c)",
           }}
         >
           {globalError}

@@ -37,8 +37,8 @@ function Dot({ filled, color }: { filled: boolean; color: string }) {
     <div
       style={{
         width: 16, height: 16, borderRadius: "50%",
-        background: filled ? color : "#f1f5f9",
-        border: `2px solid ${filled ? color : "#e2e8f0"}`,
+        background: filled ? color : "var(--bg, #f1f5f9)",
+        border: `2px solid ${filled ? color : "var(--line, #e2e8f0)"}`,
         flexShrink: 0,
       }}
       aria-label={filled ? "filled" : "empty"}
@@ -79,14 +79,14 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
           value={filterEmp}
           onChange={(e) => setFilterEmp(e.target.value)}
           style={{
-            padding: "5px 10px", fontSize: 13, border: "1px solid #cbd5e1",
+            padding: "5px 10px", fontSize: 13, border: "1px solid var(--line, #cbd5e1)",
             borderRadius: 6, flex: "1 1 160px", maxWidth: 200,
           }}
         />
         <select
           value={filterCat}
           onChange={(e) => setFilterCat(e.target.value)}
-          style={{ padding: "5px 10px", fontSize: 13, border: "1px solid #cbd5e1", borderRadius: 6 }}
+          style={{ padding: "5px 10px", fontSize: 13, border: "1px solid var(--line, #cbd5e1)", borderRadius: 6 }}
         >
           {categories.map((c) => <option key={c}>{c}</option>)}
         </select>
@@ -112,7 +112,7 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
         ].map(({ color, label }) => (
           <span key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Dot filled color={color} />
-            <span style={{ color: "#475569" }}>{label}</span>
+            <span style={{ color: "var(--ink2, #475569)" }}>{label}</span>
           </span>
         ))}
       </div>
@@ -124,19 +124,19 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
         ) : (
           <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 640, width: "100%" }}>
             <thead>
-              <tr style={{ background: "#f8fafc" }}>
-                <th style={{ textAlign: "start", padding: "8px 10px", border: "1px solid #e2e8f0", minWidth: 150, fontWeight: 700, color: "#1e293b" }}>
+              <tr style={{ background: "var(--bg, #f8fafc)" }}>
+                <th style={{ textAlign: "start", padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)", minWidth: 150, fontWeight: 700, color: "var(--ink, #1e293b)" }}>
                   Skill
                 </th>
-                <th style={{ textAlign: "start", padding: "8px 10px", border: "1px solid #e2e8f0", minWidth: 100, fontWeight: 700, color: "#1e293b" }}>
+                <th style={{ textAlign: "start", padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)", minWidth: 100, fontWeight: 700, color: "var(--ink, #1e293b)" }}>
                   Category
                 </th>
                 {COLS.map((level) => (
                   <th
                     key={level}
                     style={{
-                      textAlign: "center", padding: "8px 10px", border: "1px solid #e2e8f0",
-                      fontWeight: 700, color: "#1e293b", whiteSpace: "nowrap",
+                      textAlign: "center", padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)",
+                      fontWeight: 700, color: "var(--ink, #1e293b)", whiteSpace: "nowrap",
                     }}
                   >
                     {PROFICIENCY_LABELS[level]}
@@ -154,15 +154,15 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
                   return (
                     <tr
                       key={`${skill}::${emp}`}
-                      style={{ background: ei % 2 === 0 ? "#fff" : "#f8fafc" }}
+                      style={{ background: ei % 2 === 0 ? "var(--panel, #fff)" : "#f8fafc" }}
                     >
                       {ei === 0 && (
                         <>
                           <td
                             rowSpan={employees.filter((e) => lookup.has(`${e}::${skill}`)).length}
                             style={{
-                              padding: "8px 10px", border: "1px solid #e2e8f0",
-                              fontWeight: 600, color: "#1e293b", verticalAlign: "top",
+                              padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)",
+                              fontWeight: 600, color: "var(--ink, #1e293b)", verticalAlign: "top",
                             }}
                           >
                             {skill}
@@ -170,8 +170,8 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
                           <td
                             rowSpan={employees.filter((e) => lookup.has(`${e}::${skill}`)).length}
                             style={{
-                              padding: "8px 10px", border: "1px solid #e2e8f0",
-                              color: "#64748b", verticalAlign: "top",
+                              padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)",
+                              color: "var(--mut, #64748b)", verticalAlign: "top",
                             }}
                           >
                             {rec.category}
@@ -182,7 +182,7 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
                         const isFilled = rec.proficiency >= level;
                         const color    = dotColor(rec.proficiency as Proficiency, required as Proficiency);
                         return (
-                          <td key={level} style={{ textAlign: "center", padding: "8px 10px", border: "1px solid #e2e8f0" }}>
+                          <td key={level} style={{ textAlign: "center", padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)" }}>
                             <div style={{ display: "flex", justifyContent: "center" }}>
                               <Dot filled={isFilled} color={isFilled ? color : "#e2e8f0"} />
                             </div>

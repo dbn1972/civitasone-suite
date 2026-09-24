@@ -62,12 +62,12 @@ export default async function TransferPage() {
       <DataSourceBadge source={source} message="Couldn't load transfer orders — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="🔄" iconBg="#e6f0ff" label="Total Transfers"    value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Completed / Joined" value={errored ? null : completed} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending"            value={errored ? null : pending} />
-        <StatCard icon="👍" iconBg="#f0f5ff" label="Order Issued"       value={errored ? null : approved} />
+        <StatCard icon="🔄" iconBg="var(--infobg, #e6f0ff)" label="Total Transfers"    value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Completed / Joined" value={errored ? null : completed} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending"            value={errored ? null : pending} />
+        <StatCard icon="👍" iconBg="var(--infobg, #f0f5ff)" label="Order Issued"       value={errored ? null : approved} />
         {relieved > 0 && (
-          <StatCard icon="📍" iconBg="#fef9c3" label="Relieved" value={errored ? null : relieved} />
+          <StatCard icon="📍" iconBg="var(--warnbg, #fef9c3)" label="Relieved" value={errored ? null : relieved} />
         )}
       </StatGrid>
 

@@ -260,7 +260,7 @@ export function SalarySlipsClientTable({
     textAlign: "start",
     fontWeight: 600,
     borderBottom: "1px solid var(--line,#e2e8f0)",
-    color: "#64748b",
+    color: "var(--mut, #64748b)",
     fontSize: 11,
     textTransform: "uppercase",
     letterSpacing: "0.3px",
