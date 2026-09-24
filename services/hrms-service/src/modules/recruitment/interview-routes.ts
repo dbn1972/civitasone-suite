@@ -25,7 +25,11 @@ const scheduleInterviewBody = z.object({
   applicationId: z.string().uuid(),
   interviewerIds: z.array(z.string().uuid()).min(1),
   scheduledAt: z.string(), // ISO date-time
-  durationMinutes: z.number().int().min(15).default(60),
+  // Upper bound added alongside the existing 15-min floor: unbounded duration let a
+  // pathologically long interview slip past findOverlappingInterviews' SQL pre-filter
+  // window (repo.ts) undetected. 480min/8h matches this codebase's existing convention
+  // for a single scheduled slot (services/crm-service/src/modules/appointments/routes.ts).
+  durationMinutes: z.number().int().min(15).max(480).default(60),
   mode: z.enum(["in_person", "video", "phone"]).default("video"),
   roundType: z.enum(["screening", "technical", "hr", "panel", "final", "group_discussion", "domain", "behavioural", "presentation", "final_selection"]).default("technical"),
   roundNumber: z.number().int().min(1).default(1),

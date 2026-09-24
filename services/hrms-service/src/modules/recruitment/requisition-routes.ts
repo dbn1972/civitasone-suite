@@ -190,6 +190,15 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ comments: z.string().max(2000).optional() }).parse(req.body ?? {});
     const r = await mustReq(ctx.tenantId, id);
+    // HIGH finding: this route (like /return below) had NO department-scoping
+    // check at all — only the stage-role gate further down. A department-
+    // scoped hiring_manager (DEFAULT_GOVT_CHAIN's own stage-0 role) could
+    // approve ANY other department's requisition merely by holding that role
+    // tenant-wide. Both checks must now pass: the caller needs the correct
+    // stage role (below) AND (for non-HR/non-admin roles) to be scoped to
+    // this requisition's department — mirrors how /submit and /clone above
+    // already combine assertCanView with their own state/role checks.
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     if (r.status !== "pending_approval") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', not pending approval`);
     const chain = r.approvalChain as ApprovalStage[];
     const role = currentStageRole(chain, r.currentStage);
@@ -215,6 +224,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ comments: z.string().min(1).max(2000) }).parse(req.body ?? {}); // mandatory (R-RA-0054)
     const r = await mustReq(ctx.tenantId, id);
+    // HIGH finding: department scoping, same gap and same fix as /approve above.
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     if (r.status !== "pending_approval") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', not pending approval`);
     const chain = r.approvalChain as ApprovalStage[];
     const role = currentStageRole(chain, r.currentStage);

@@ -45,6 +45,17 @@ vi.mock("../src/modules/recruitment/requisition-repo.js", async (io) => ({
   listRequisitions: async () => [],
   listApprovals: async () => [],
 }));
+// This file is role/stage/SoD-focused; department scoping itself is covered
+// by tests/recruitment-hardening-remaining-e2e.test.ts against a real
+// Postgres with real employee/department fixtures. /approve and /return now
+// also call resolveDeptScope (see requisition-routes.ts) — mocked here to a
+// flat tenant-wide pass-through so it stays independent of the incomplete
+// db.js stub above (no `select`), consistent with this file predating
+// department-scoping on those two routes.
+vi.mock("../src/modules/recruitment/dept-scope.js", async (io) => ({
+  ...(await io<Record<string, unknown>>()),
+  resolveDeptScope: async () => ({ tenantWide: true, departmentId: null }),
+}));
 
 import { buildApp } from "../src/app.js";
 

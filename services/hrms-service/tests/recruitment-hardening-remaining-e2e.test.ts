@@ -303,6 +303,99 @@ describe("HIGH — department-scoped authorization: requisitions", () => {
 });
 
 // ═══════════════════════════════════════════════════════════════════════
+// Follow-up to the block above: /approve and /return were the two routes an
+// independent review found NOT wired into department scoping — their only
+// gate was the stage-role check (requireRole against the approval chain's
+// current stage), and DEFAULT_GOVT_CHAIN's stage 0 role is literally
+// "hiring_manager", one of the two roles this whole fix exists to constrain.
+// Live-reproduced pre-fix: a hiring_manager seeded into one department, with
+// no link to a requisition in a different department, got 200 (real stage
+// advance / real rejection) from both routes while correctly getting 404 from
+// GET. This block proves that gap is now closed the same way /submit and
+// /clone above are: assertCanView ADDED alongside the existing stage-role
+// gate, not replacing it — both must pass.
+describe("HIGH — department-scoped authorization: requisition approve/return", () => {
+  async function createRequisition(token: { authorization: string }, departmentId?: string): Promise<string> {
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/requisitions", headers: { ...token, ...CT },
+      payload: { title: uniq("ReqAR"), ...(departmentId ? { departmentId } : {}) },
+    });
+    expect(r.statusCode).toBe(201);
+    await drain();
+    return r.json().id as string;
+  }
+
+  /** hr_admin (HR's own token) both creates and submits, so the actor who
+   *  later approves/returns below is never the requisition's creator — keeps
+   *  these tests clear of the unrelated SOD_VIOLATION "creator cannot approve
+   *  their own requisition" gate, which is not what's under test here. */
+  async function createAndSubmitRequisition(departmentId: string): Promise<string> {
+    const id = await createRequisition(auth(["hr_admin"]), departmentId);
+    const submitRes = await app.inject({ method: "POST", url: `/v1/hrms/requisitions/${id}/submit`, headers: auth(["hr_admin"]) });
+    expect(submitRes.statusCode).toBe(200);
+    expect(submitRes.json().currentStage).toBe(0); // stage 0 = hiring_manager (DEFAULT_GOVT_CHAIN)
+    await drain();
+    return id;
+  }
+
+  it("a Finance hiring_manager CANNOT approve a PWD requisition, even holding the correct stage-role (404)", async () => {
+    const id = await createAndSubmitRequisition(DEPT_PWD);
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/requisitions/${id}/approve`, headers: { ...auth(["hiring_manager"], FIN_MGR_SUB), ...CT }, payload: {},
+    });
+    expect(r.statusCode).toBe(404); // same "hide existence" convention as GET/submit — not 403
+  });
+
+  it("a Finance hiring_manager CANNOT return a PWD requisition, even holding the correct stage-role (404)", async () => {
+    const id = await createAndSubmitRequisition(DEPT_PWD);
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/requisitions/${id}/return`, headers: { ...auth(["hiring_manager"], FIN_MGR_SUB), ...CT },
+      payload: { comments: "insufficient budget justification" },
+    });
+    expect(r.statusCode).toBe(404);
+  });
+
+  it("a PWD hiring_manager correctly scoped to their OWN department CAN approve it", async () => {
+    const id = await createAndSubmitRequisition(DEPT_PWD);
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/requisitions/${id}/approve`, headers: { ...auth(["hiring_manager"], PWD_MGR_SUB), ...CT }, payload: {},
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({ status: "pending_approval", currentStage: 1 }); // advanced past stage 0
+  });
+
+  it("a PWD hiring_manager correctly scoped to their OWN department CAN return it", async () => {
+    const id = await createAndSubmitRequisition(DEPT_PWD);
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/requisitions/${id}/return`, headers: { ...auth(["hiring_manager"], PWD_MGR_SUB), ...CT },
+      payload: { comments: "please add SC/ST reservation breakdown" },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().status).toBe("returned");
+  });
+
+  it("super_admin (tenant-wide) remains unaffected — can approve a PWD requisition despite no department link", async () => {
+    const id = await createAndSubmitRequisition(DEPT_PWD);
+    // UNLINKED_MGR_SUB has no hrms_employees row at all — proves this passes
+    // because super_admin is exempt (TENANT_WIDE_ROLES), not by accident of
+    // some resolvable department.
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/requisitions/${id}/approve`, headers: { ...auth(["super_admin"], UNLINKED_MGR_SUB), ...CT }, payload: {},
+    });
+    expect(r.statusCode).toBe(200);
+  });
+
+  it("super_admin (tenant-wide) remains unaffected — can return a PWD requisition despite no department link", async () => {
+    const id = await createAndSubmitRequisition(DEPT_PWD);
+    const r = await app.inject({
+      method: "POST", url: `/v1/hrms/requisitions/${id}/return`, headers: { ...auth(["super_admin"], UNLINKED_MGR_SUB), ...CT },
+      payload: { comments: "policy change, restart pipeline" },
+    });
+    expect(r.statusCode).toBe(200);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
 describe("HIGH — department-scoped authorization: interviews", () => {
   it("a Finance manager's interview list excludes a PWD job opening's interviews", async () => {
     const pwdJob = await createJobOpening(DEPT_PWD);
