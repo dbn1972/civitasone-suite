@@ -2,6 +2,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks, hrmsShifts,
+  hrmsOvertimeRequests,
   type AttendanceRow, type AttendanceInsert, type RegularisationRow, type AttendanceLockRow,
 } from "./schema.js";
 
@@ -47,6 +48,34 @@ export async function findByEmpsAndMonth(tenantId: string, employeeIds: string[]
     const list = byEmployee.get(row.employeeId);
     if (list) list.push(row);
     else byEmployee.set(row.employeeId, [row]);
+  }
+  return byEmployee;
+}
+
+/**
+ * MEDIUM fix: approved overtime hours by employee for a month, so the
+ * payroll-input feed (internal/routes.ts) can surface them to payroll-
+ * service -- previously HRMS had a full overtime request/approve workflow
+ * (this module's hrmsOvertimeRequests + routes.ts's /v1/hrms/overtime-requests)
+ * but payroll-service never referenced it anywhere, so approved overtime
+ * was tracked and never paid. Only "approved" requests count (pending/
+ * rejected must never leak into pay). Mirrors findApprovedLeaveInMonth's
+ * shape above: a bounded scan + in-memory month filter, consistent with
+ * this feed's existing per-employee aggregation pattern rather than a new
+ * one-off query style.
+ */
+export async function findApprovedOvertimeInMonth(tenantId: string, month: string): Promise<Map<string, number>> {
+  const byEmployee = new Map<string, number>();
+  const rows = await scopedRead((tx) => tx.select().from(hrmsOvertimeRequests)
+    .where(and(
+      eq(hrmsOvertimeRequests.tenantId, tenantId),
+      eq(hrmsOvertimeRequests.status, "approved"),
+    ))
+    .limit(2000));
+  for (const row of rows) {
+    if (!(row.requestDate ?? "").startsWith(month)) continue;
+    const hours = Number(row.hoursRequested ?? 0);
+    byEmployee.set(row.employeeId, (byEmployee.get(row.employeeId) ?? 0) + hours);
   }
   return byEmployee;
 }

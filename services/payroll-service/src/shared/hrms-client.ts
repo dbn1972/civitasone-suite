@@ -45,6 +45,17 @@ export type HrmsPayrollInput = {
   month: string;
   employees: PayrollInputEmployee[];
   lopDays: Record<string, number>;
+  /**
+   * MEDIUM fix: approved overtime hours by employeeId for the month (see
+   * hrms-service's attendanceRepo.findApprovedOvertimeInMonth) -- HRMS has a
+   * full overtime request/approve workflow that this service never
+   * referenced anywhere, so approved overtime was tracked and never paid.
+   * NOTE: surfacing only -- nothing in this service's payroll run/slip
+   * computation reads this field yet to actually pay for it. Wiring an
+   * overtime rate/component into the slip domain is a larger, separate
+   * change, deliberately deferred rather than done partially here.
+   */
+  overtimeHours: Record<string, number>;
 };
 
 export async function fetchPayrollInput(tenantId: string, month: string): Promise<HrmsPayrollInput> {

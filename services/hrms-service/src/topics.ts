@@ -155,6 +155,13 @@ export const EVENTS = {
   contractExpired:    "hrms.contract.expired",
   contractEscalated:  "hrms.contract.escalated",
   contractSeparated:  "hrms.contract.separated",
+  // HIGH fix: a transfer changes an employee's posting (and sometimes their
+  // pay-structure) but previously published nothing afterward -- unlike
+  // employeeCreated/employeeUpdated/employeeSeparated, there was no signal
+  // for anything downstream to react to a completed transfer. Published by
+  // BOTH transfer paths (employee/consumer.ts's direct employeeTransfer
+  // command, and lifecycle/eoffice-consumer.ts's eOffice-approved posting).
+  employeeTransferred: "hrms.employee.transferred",
 } as const;
 
 export const CONSUMED_EVENTS = {
@@ -182,6 +189,17 @@ export const CONSUMED_EVENTS = {
 
   // contracts
   contractRenewalDecided: "hrms.contract.renewal.decided",
+
+  // HIGH fix: payroll-service creates/approves a salary revision in one step
+  // (payroll.payroll_salary_revisions -- there is no separate approval
+  // status; the creating actor is recorded as approved_by) and already
+  // published this event, but nothing in hrms-service consumed it, so
+  // hrmsEmployees.basicMinor went stale the moment a revision landed in
+  // payroll. Consumed by modules/integration/consumer.ts to sync
+  // basicMinor -- hrms-service's own separation/gratuity computation reads
+  // emp.basicMinor directly, so a stale figure could otherwise be used at
+  // exit. Topic string must match payroll-service's src/topics.ts EVENTS.salaryRevisionCreated.
+  salaryRevisionCreated: "payroll.salary_revision.created",
 } as const;
 
 export const SERVICE = "hrms";

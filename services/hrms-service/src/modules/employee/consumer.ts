@@ -108,6 +108,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       employeeId: string; tenantId: string; fromDeptId: string; toDeptId: string;
       fromDesigId?: string; toDesigId?: string; effectiveDate: string; orderRef?: string;
+      payStructureId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -115,6 +116,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         id: msg.messageId, tenantId: p.tenantId, employeeId: p.employeeId,
         fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
         fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+        payStructureId: p.payStructureId ?? null,
         effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null, status: "completed",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -122,7 +124,26 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         departmentId: p.toDeptId, status: "transferred", updatedBy: msg.actorId,
       };
       if (p.toDesigId) patch.designationId = p.toDesigId;
+      // HIGH fix: a transfer that changes department can imply a different
+      // pay scale/structure. payStructureId is caller-supplied (mirrors how
+      // it's supplied at hire time -- there is no automatic
+      // department->pay-structure derivation anywhere in this codebase), and
+      // only applied when the caller actually provided one -- same
+      // "optional, apply-if-present" shape as toDesigId just above.
+      if (p.payStructureId) patch.payStructureId = p.payStructureId;
       await repo.updateEmployee(tx, p.employeeId, patch);
+      // HIGH fix: previously no event was published after a transfer at all
+      // (unlike create/update/separate). Published unconditionally on every
+      // completed transfer, matching the separation-event pattern above.
+      await enqueue(tx, {
+        topic: EVENTS.employeeTransferred, eventType: EVENTS.employeeTransferred,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          employeeId: p.employeeId, fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
+          fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+          payStructureId: p.payStructureId ?? null, effectiveDate: p.effectiveDate,
+        },
+      });
       await audit(tx, msg, "transfer", "employee", p.employeeId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
@@ -138,6 +159,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
     const p = msg.payload as {
       id: string; employeeId: string; tenantId: string; fromDeptId: string; toDeptId: string;
       fromDesigId?: string; toDesigId?: string; effectiveDate: string; orderRef?: string;
+      payStructureId?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -145,6 +167,11 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
         fromDeptId: p.fromDeptId, toDeptId: p.toDeptId,
         fromDesigId: p.fromDesigId ?? null, toDesigId: p.toDesigId ?? null,
+        // HIGH fix: carried on the pending request so the eOffice decision
+        // consumer (lifecycle/eoffice-consumer.ts) can apply it once approved
+        // -- submission and decision are separated in time, so this can't be
+        // re-supplied at approval; it has to survive on the row itself.
+        payStructureId: p.payStructureId ?? null,
         effectiveDate: p.effectiveDate, orderRef: p.orderRef ?? null,
         status: "pending_approval",
         createdBy: msg.actorId, updatedBy: msg.actorId,

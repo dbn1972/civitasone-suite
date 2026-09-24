@@ -3,7 +3,7 @@ import { parseDecisionCallback } from "@civitasone/eoffice-sdk";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { CONSUMED_EVENTS } from "../../topics.js";
+import { CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 
@@ -52,7 +52,24 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
           departmentId: transfer.toDeptId, updatedBy: cb.decidedBy,
         };
         if (transfer.toDesigId) patch.designationId = transfer.toDesigId;
+        // HIGH fix: apply the pay-structure change recorded at submission
+        // time (employee/commands.ts's submitTransferForApproval), same
+        // "apply only if present" shape as toDesigId above and as the
+        // direct-transfer path in employee/consumer.ts.
+        if (transfer.payStructureId) patch.payStructureId = transfer.payStructureId;
         await employeeRepo.updateEmployee(tx, transfer.employeeId, patch);
+        // HIGH fix: this eOffice-approved posting is the other transfer path
+        // that previously published no event at all. Mirrors the direct
+        // path's EVENTS.employeeTransferred.
+        await enqueue(tx, {
+          topic: EVENTS.employeeTransferred, eventType: EVENTS.employeeTransferred,
+          tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,
+          payload: {
+            employeeId: transfer.employeeId, fromDeptId: transfer.fromDeptId, toDeptId: transfer.toDeptId,
+            fromDesigId: transfer.fromDesigId ?? null, toDesigId: transfer.toDesigId ?? null,
+            payStructureId: transfer.payStructureId ?? null, effectiveDate: transfer.effectiveDate,
+          },
+        });
         await audit(tx, msg, "eoffice_approved", cb.refId, {
           fileNo: cb.fileNo, employeeId: transfer.employeeId, dscHash: cb.dscHash ?? null,
         });

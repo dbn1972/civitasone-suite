@@ -12,6 +12,14 @@ export const hrmsTransfers = lifecycleSchema.table("hrms_transfers", {
   toDeptId:     uuid("to_dept_id").notNull(),
   fromDesigId:  uuid("from_desig_id"),
   toDesigId:    uuid("to_desig_id"),
+  // HIGH fix: the new pay-structure a transfer should apply, when the
+  // transfer changes it. Nullable/optional -- most transfers don't change
+  // pay-structure. Persisted here (not just threaded through the command
+  // payload) because the eOffice-approval path separates submission from
+  // decision in time: the approving official applies whatever was on the
+  // pending request, so it has to survive that gap. See employee/consumer.ts
+  // (direct path) and lifecycle/eoffice-consumer.ts (eOffice-approved path).
+  payStructureId: uuid("pay_structure_id"),
   effectiveDate: date("effective_date").notNull(),
   orderRef:     text("order_ref"),
   fromStation:  varchar("from_station", { length: 128 }),

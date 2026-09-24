@@ -9,6 +9,7 @@ import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody } from
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "./schema.js";
+import { uuidV5 } from "../../shared/ids.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -134,9 +135,43 @@ export async function submitPromotionForApproval(ctx: RequestContext, id: string
   return { id: promotionId, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * HIGH fix: this used to publish via bare queue.publish() with no explicit
+ * messageId -- the queue auto-mints a fresh random one per call, so a
+ * retried or double-clicked Separate action for the SAME employee produced
+ * a SECOND, unrelated messageId that sailed straight past the queue's own
+ * idempotency dedup (markProcessed). The consumer (employee/consumer.ts)
+ * then re-ran the whole separation transaction a second time, republishing
+ * EVENTS.employeeSeparated -- which payroll-service's integration/consumer.ts
+ * reacts to by publishing payroll.fnf.compute, so a duplicate separation
+ * command risked a duplicate Full & Final settlement for one exit.
+ *
+ * Fix mirrors the now-merged pattern in recruitment/commands.ts's
+ * hireApplication() (PR #1542): derive a STABLE messageId via uuidV5 instead
+ * of a fresh randomUUID() per call.
+ *
+ * Deliberately keyed on employeeId + effectiveDate, NOT employeeId alone --
+ * unlike hireApplication's applicationId (which can only ever be hired
+ * once), an employeeId is NOT a one-time-use key here: lifecycle/consumer.ts's
+ * COMMANDS.lifecycleReinstate lets a terminated/separated/retired employee
+ * return to active service, after which they can legitimately be separated
+ * again, with a different (later) effectiveDate. Keying on employeeId alone
+ * would make that second, genuine separation collide with -- and be
+ * silently dropped by -- the dedup guard for the first. Two really-retried
+ * requests for the SAME separation always carry the same effectiveDate, so
+ * this still dedupes the actual bug (double-click / redelivery) without
+ * that false-collision risk.
+ *
+ * Defense in depth against the same duplicate-settlement outcome via a
+ * DIFFERENT path (e.g. payroll-service's own POST /v1/payroll/fnf/compute
+ * called twice) is a unique constraint on payroll.fnf_settlements(tenant_id,
+ * employee_id) -- see payroll-service/migrations/0044_fnf_settlements_unique.sql
+ * and fnf/consumer.ts's onConflictDoNothing.
+ */
 export async function separateEmployee(ctx: RequestContext, id: string, body: SeparateBody): Promise<Accepted> {
+  const messageId = uuidV5(`employee.separate:${id}:${body.effectiveDate}`);
   await queue.publish(COMMANDS.employeeSeparate, {
-    type: COMMANDS.employeeSeparate,
+    messageId, type: COMMANDS.employeeSeparate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...body, employeeId: id, tenantId: ctx.tenantId },
   });

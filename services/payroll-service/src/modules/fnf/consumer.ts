@@ -95,7 +95,19 @@ export function registerFnfConsumers(queue: Queue): void {
 
       const settlementId = randomUUID();
 
-      await tx.insert(fnfSettlements).values({
+      // HIGH fix (defense in depth): payroll.fnf_settlements now carries a
+      // unique (tenant_id, employee_id) index (migrations/
+      // 0044_fnf_settlements_unique.sql) guarding against two settlement
+      // rows for the same exit -- reachable both via a retried/duplicated
+      // hrms.employee.separated event (the main path, closed at the source
+      // by hrms-service's separateEmployee messageId fix) and via POST
+      // /v1/payroll/fnf/compute (fnf/routes.ts) being called twice directly,
+      // which that source-side fix cannot reach. onConflictDoNothing + the
+      // empty-`inserted` check below makes THIS command idempotent under
+      // that constraint too, instead of letting the insert throw an
+      // unhandled 23505 that would roll back markProcessed and retry
+      // forever (a poison message).
+      const [inserted] = await tx.insert(fnfSettlements).values({
         id: settlementId,
         tenantId: msg.tenantId,
         employeeId: p.employeeId,
@@ -126,7 +138,18 @@ export function registerFnfConsumers(queue: Queue): void {
         currency: "INR",
         createdBy: msg.actorId,
         updatedBy: msg.actorId,
-      });
+      })
+        .onConflictDoNothing({ target: [fnfSettlements.tenantId, fnfSettlements.employeeId] })
+        .returning({ id: fnfSettlements.id });
+
+      if (!inserted) {
+        // A settlement for this employee already exists -- duplicate
+        // compute request (retry / redelivery / double-click / a second
+        // caller). The original computation stands; skip emitting a second
+        // fnfComputed event and a second audit row for what is, from the
+        // ledger's point of view, the same settlement.
+        return;
+      }
 
       // Emit fnfComputed event
       await enqueue(tx, {

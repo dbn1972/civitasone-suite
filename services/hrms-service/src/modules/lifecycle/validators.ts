@@ -11,6 +11,14 @@ export const transferBody = z.object({
   toDesigId:     z.string().uuid().optional(),
   effectiveDate: DATE,
   orderRef:      z.string().max(128).optional(),
+  // HIGH fix: a transfer to a new department can imply a different pay
+  // scale/structure. There is no automatic department->pay-structure
+  // derivation anywhere in this codebase (payStructureId is caller-supplied
+  // at hire time too -- see employee/commands.ts's createEmployee), so this
+  // mirrors that same caller-supplied pattern rather than inventing a new
+  // one: optional, like toDesigId, and applied by the consumer only when
+  // given (a transfer that doesn't change pay-structure omits it).
+  payStructureId: z.string().uuid().optional(),
 });
 export type TransferBody = z.infer<typeof transferBody>;
 

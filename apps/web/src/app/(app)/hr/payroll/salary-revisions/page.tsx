@@ -3,10 +3,13 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } fr
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { CreateSalaryRevisionForm } from "./CreateSalaryRevisionForm";
 
-// Read-only: payroll-service exposes GET /v1/payroll/salary-revisions but no create route
-// (verified against world-class-routes.ts / gap-routes.ts / repo.ts). Revisions are sourced
-// upstream (HRMS pay-fixation); this screen does not offer a "create" action.
+// HIGH fix: the comment this replaced claimed "payroll-service exposes GET
+// /v1/payroll/salary-revisions but no create route" -- that was stale.
+// POST /v1/payroll/salary-revisions (world-class-routes.ts) exists and
+// works (publishes payroll.salary_revision.create; the consumer persists
+// it), it just had zero UI callers. See CreateSalaryRevisionForm.tsx.
 
 type Row = {
   id: string;
@@ -80,11 +83,7 @@ export default async function SalaryRevisionsPage() {
         <StatCard icon="🏛" iconBg="var(--panel)" label={t("statPayCommission")} value={errored ? null : items.filter((i) => i.revision_type === "pay_commission").length} />
       </StatGrid>
 
-      <Card>
-        <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
-          {t("readOnlyNotice")}
-        </p>
-      </Card>
+      <CreateSalaryRevisionForm />
 
       <Card title={t("historyCardTitle")}>
         {errored ? (
