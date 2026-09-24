@@ -60,7 +60,7 @@ export default async function WorkforcePage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />

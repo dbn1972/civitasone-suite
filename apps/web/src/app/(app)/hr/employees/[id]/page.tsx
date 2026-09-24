@@ -98,7 +98,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   if (!employee) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title={t("notFoundTitle")} back="/hr/employees" />
+        <PageHeader title={t("notFoundTitle")} back="/hr/employees" backLabel="Back to Employees" />
         <DataSourceBadge source={source} />
         <Card padding>
           <p className="text-center text-slate-600">{t("notFoundMessage")}</p>
@@ -140,7 +140,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={employee.name}
-        back="/hr/employees"
+        back="/hr/employees" backLabel="Back to Employees"
         actions={<EditEmployeeToggle employee={employee} />}
       />
       <DataSourceBadge source={source} />

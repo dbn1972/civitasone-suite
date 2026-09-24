@@ -76,7 +76,7 @@ export default async function NpsStatementsPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
 
       <StatGrid>

@@ -54,7 +54,7 @@ export default async function TransferPage() {
       <PageHeader
         title="Transfer Orders"
         subtitle="Employee transfer orders — initiation to relieving and joining."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<TransferWithApproval />}
       />
       <DataSourceBadge source={source} message="Couldn't load transfer orders — showing nothing" />

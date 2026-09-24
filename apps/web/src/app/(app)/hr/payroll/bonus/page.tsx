@@ -44,7 +44,7 @@ export default async function BonusPage() {
       <PageHeader
         title="Bonus"
         subtitle="Statutory bonus computation (Payment of Bonus Act) and bonus history."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>

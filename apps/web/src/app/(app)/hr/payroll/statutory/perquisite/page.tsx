@@ -57,7 +57,7 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory"
+        back="/hr/payroll/statutory" backLabel="Back to Statutory"
       />
       {canLookup && <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />}
 

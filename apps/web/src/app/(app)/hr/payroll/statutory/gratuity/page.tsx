@@ -54,7 +54,7 @@ export default async function GratuityPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory"
+        back="/hr/payroll/statutory" backLabel="Back to Statutory"
       />
 
       <StatGrid>

@@ -11,7 +11,7 @@ export default async function NewAppraisalPage() {
       <PageHeader
         title="New Appraisal"
         subtitle="Create a performance review record."
-        back="/hr/appraisals"
+        back="/hr/appraisals" backLabel="Back to Appraisals"
       />
       <DataSourceBadge source={source} />
       <NewAppraisalForm employees={employees} />

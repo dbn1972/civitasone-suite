@@ -27,7 +27,7 @@ export default async function NewJobOpeningPage() {
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
-        back="/hr/recruitment"
+        back="/hr/recruitment" backLabel="Back to Recruitment"
       />
       <Card>
         <Suspense fallback={<div className="text-sm text-slate-500">{t("loadingForm")}</div>}>

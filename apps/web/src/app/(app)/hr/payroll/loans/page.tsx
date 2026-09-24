@@ -32,7 +32,7 @@ export default async function LoansPage({
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       {empId && <DataSourceBadge source={result.source} message={t("loadErrorMessage")} />}
 

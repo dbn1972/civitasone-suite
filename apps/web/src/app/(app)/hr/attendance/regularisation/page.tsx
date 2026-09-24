@@ -26,7 +26,7 @@ export default async function AttendanceRegularisationPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitlePage")}
-        back="/hr/attendance"
+        back="/hr/attendance" backLabel="Back to Attendance"
         actions={<span />}
       />
       {/* UX-012: the data-source badge now lives inside RegularisationTable,

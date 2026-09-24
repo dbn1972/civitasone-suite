@@ -56,7 +56,7 @@ export default async function GrievancePage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />

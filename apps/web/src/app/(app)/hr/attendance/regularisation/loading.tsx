@@ -9,7 +9,7 @@ export default async function RegularisationLoading() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitleLoading")}
-        back="/hr/attendance"
+        back="/hr/attendance" backLabel="Back to Attendance"
       />
       <main className="page-main wrap">
         <SkeletonTable rows={5} />

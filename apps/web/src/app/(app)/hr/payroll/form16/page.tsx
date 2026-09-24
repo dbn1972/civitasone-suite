@@ -72,7 +72,7 @@ export default async function Form16Page({
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 

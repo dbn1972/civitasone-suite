@@ -68,7 +68,7 @@ export default async function ExpensesPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
         <StatCard icon="🧾" iconBg="#e6f0ff" label={t("statTotalClaimsLabel")} value={items.length} />

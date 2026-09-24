@@ -11,7 +11,7 @@ export default async function TaxDeclarationPage() {
   const t = await getTranslations("taxDeclaration");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Back to Payroll" />
       <TaxDeclarationForm />
     </main>
   );

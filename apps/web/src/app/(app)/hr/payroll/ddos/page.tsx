@@ -35,7 +35,7 @@ export default async function DdosPage() {
       <PageHeader
         title="DDO Management"
         subtitle="Drawing & Disbursing Officer (DDO) master data and department mapping for multi-DDO payroll."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 

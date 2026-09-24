@@ -112,7 +112,7 @@ export default async function GoalsPage() {
       <PageHeader
         title="Goals & Development"
         subtitle="Performance goals, OKRs, and development plans for the current appraisal cycle."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
       />
       <DataSourceBadge source={source} />
 

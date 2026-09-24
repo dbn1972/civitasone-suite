@@ -60,7 +60,7 @@ export default async function CertificationsPage() {
       <PageHeader
         title="Certifications"
         subtitle="Employee professional certifications, training completions, and validity tracking."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />

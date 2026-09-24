@@ -30,7 +30,7 @@ export default async function OffCyclePage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 

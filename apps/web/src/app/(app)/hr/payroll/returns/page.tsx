@@ -207,7 +207,7 @@ export default async function ReturnsPage({
       <PageHeader
         title="Quarterly TDS Returns"
         subtitle="Form-24Q (salary) and Form-26Q (non-salary) quarterly e-TDS returns."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
 
       <DataSourceBadge source={overallSource} message="Couldn't load — showing nothing" />

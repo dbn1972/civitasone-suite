@@ -57,7 +57,7 @@ export default async function SkillsPage() {
       <PageHeader
         title="Skill Matrix"
         subtitle="Employee competency mapping, proficiency levels, and skill gap identification."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />

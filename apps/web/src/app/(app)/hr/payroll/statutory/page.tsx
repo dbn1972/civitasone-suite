@@ -87,7 +87,7 @@ export default async function StatutoryHubPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
 
       <Card title={t("summaryCardTitle")}>

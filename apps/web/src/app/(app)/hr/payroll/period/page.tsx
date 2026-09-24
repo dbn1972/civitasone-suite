@@ -65,7 +65,7 @@ export default async function PayrollPeriodPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Payroll Periods" subtitle="Monthly payroll run history and processing status." back="/hr" />
+      <PageHeader title="Payroll Periods" subtitle="Monthly payroll run history and processing status." back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message="Couldn't load payroll periods — showing nothing" />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />

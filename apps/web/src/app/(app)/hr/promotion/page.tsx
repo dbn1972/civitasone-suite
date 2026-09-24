@@ -59,7 +59,7 @@ export default async function PromotionPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<PromoteWithApproval />}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />

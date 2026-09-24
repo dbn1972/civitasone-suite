@@ -6,7 +6,7 @@ export default function Loading() {
       <PageHeader
         title="Pay Groups"
         subtitle="Groups of employees paid on a common schedule."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <SkeletonTable rows={4} />
     </main>

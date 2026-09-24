@@ -45,7 +45,7 @@ export default async function IncomeTaxPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle", { fy })} back="/hr" />
+      <PageHeader title={t("title")} subtitle={t("subtitle", { fy })} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={items.length} />

@@ -49,7 +49,7 @@ export default async function RetirementPage() {
       <PageHeader
         title="Retirement & Separation"
         subtitle="Upcoming retirements within 6 months, processing wizard, and full separation register."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
       />
       <DataSourceBadge source={source} message="Couldn't load retirement records — showing nothing" />
 

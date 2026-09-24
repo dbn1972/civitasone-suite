@@ -46,7 +46,7 @@ export default async function OvertimePage() {
       <PageHeader
         title="Overtime Requests"
         subtitle="Review and track employee overtime requests — linked to payroll disbursement."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={
           <Link href="/hr/overtime/new" className="btn primary">+ New Request</Link>
         }

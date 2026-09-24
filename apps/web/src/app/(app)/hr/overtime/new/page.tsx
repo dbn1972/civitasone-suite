@@ -49,7 +49,7 @@ export default function OvertimeNewPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="New Overtime Request" subtitle="Submit an overtime claim for HR approval." back="/hr/overtime" />
+      <PageHeader title="New Overtime Request" subtitle="Submit an overtime claim for HR approval." back="/hr/overtime" backLabel="Back to Overtime" />
       <div style={{ maxWidth: 520, marginTop: 20 }}>
       <Card title="Request Details">
         <form onSubmit={handleSubmit} style={{ padding: "20px 24px", display: "flex", flexDirection: "column", gap: 16 }}>

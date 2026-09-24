@@ -102,7 +102,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/leave"
+        back="/hr/leave" backLabel="Back to Leave"
       />
       <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }} className="no-print">
         <PrintButton label={t("downloadButton")} />

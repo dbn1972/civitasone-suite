@@ -62,7 +62,7 @@ export default async function CostingPage({
       <PageHeader
         title="Cost Allocation"
         subtitle="Define cost-center allocation rules and view the monthly costing report."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       {period && <DataSourceBadge source={result.source} message="Couldn't load — showing nothing" />}
 

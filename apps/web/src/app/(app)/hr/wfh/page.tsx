@@ -51,7 +51,7 @@ export default async function WfhPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<Link href="/hr/workforce/wfh" className="btn primary">{t("newRequestBtn")}</Link>}
       />
       <DataSourceBadge source={source} />

@@ -34,7 +34,7 @@ export default async function PensionersPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
         actions={
           <Link href="/hr/payroll/pensioners/new" className="btn primary">{t("addPensionerLink")}</Link>
         }

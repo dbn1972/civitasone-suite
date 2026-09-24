@@ -60,7 +60,7 @@ export default async function ApplyLeavePage({
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/leave"
+        back="/hr/leave" backLabel="Back to Leave"
       />
       <DataSourceBadge source={resolvedSource} />
       {/* The employee profile's "Apply Leave" quick action links here with

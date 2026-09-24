@@ -46,7 +46,7 @@ export default async function FlexBenefitsPage() {
       <PageHeader
         title="Flex Benefits"
         subtitle="Flexible-benefit plans and employee component elections."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
