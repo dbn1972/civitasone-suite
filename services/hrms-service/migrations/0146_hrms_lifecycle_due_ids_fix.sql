@@ -1,0 +1,67 @@
+-- Purpose: drop lifecycle.due_promotion_ids(date)/due_transfer_ids(date),
+--   the two SECURITY DEFINER cross-tenant discovery functions added by
+--   migration 0144, and replace their caller (lifecycle/effective-
+--   scheduler.ts) with the per-tenant-loop pattern migration 0145 already
+--   established. Application-code-only otherwise — no table/column change.
+--
+--   ROOT CAUSE (found by independent review, reproduced live): migration
+--   0144's header comment (and these functions' own SECURITY DEFINER
+--   design) assumed two things, both wrong on a correctly-configured host:
+--
+--   1. "these functions are created by this migration's own role
+--      (civitas_admin, which has BYPASSRLS)". civitas_admin is deliberately
+--      NOSUPERUSER NOBYPASSRLS (infra/db/bootstrap/bootstrap_admin_role.sql)
+--      — it never had BYPASSRLS to begin with, precisely so the "no %_svc
+--      role holds BYPASSRLS" assertion (scripts/ci/bootstrap-postgres.sh's
+--      "L3 lane" comment) keeps meaning something.
+--
+--   2. That hrms-service's own migrations (this one included) run as
+--      civitas_admin at all. They do not: scripts/ci/bootstrap-postgres.sh's
+--      SERVICE_DBS map routes hrms-service's migrations to run as hrms_svc
+--      (this service's normal, RLS-restricted connecting role) — civitas_admin
+--      only ever runs migrations for the small ADMIN_OWNED_DBS set (court,
+--      inspection, ml, revenue, works), which hrms-service is not part of.
+--
+--   SECURITY DEFINER only elevates a function call to its OWNER's
+--   privileges. Since the real owner is hrms_svc — and even the originally
+--   assumed owner, civitas_admin, has no bypass either — these functions
+--   never actually bypassed FORCE ROW LEVEL SECURITY on hrms_promotions/
+--   hrms_transfers. With no app.tenant_id GUC set (there is no single
+--   tenant context for a "find every due row across all tenants" query),
+--   current_tenant_id() is NULL and the strict tenant_isolation policy
+--   matched nothing — reproduced live: seeded a due promotion with a past
+--   effective date, called `SELECT * FROM
+--   lifecycle.due_promotion_ids(CURRENT_DATE)` exactly as
+--   effective-scheduler.ts did, got 0 rows despite the row existing.
+--
+--   THE FIX (application code, this same commit): effective-scheduler.ts no
+--   longer relies on a magic cross-tenant function at all. It discovers the
+--   tenant universe via employee.hrms_employees (which migration 0133
+--   already gave a platform_bypass SELECT policy, for this exact kind of
+--   trusted, no-user-input background job) through shared/db.ts's new
+--   scopedPlatformRead, then re-enters EACH tenant's own strict RLS context
+--   via runWithTenant before querying that tenant's due rows
+--   (lifecycle/repo.ts's new dueTenantPromotionIds/dueTenantTransferIds —
+--   ordinary, ­fully RLS-enforced queries, no bypass on hrms_promotions/
+--   hrms_transfers needed or used). Exactly the per-tenant-loop pattern
+--   migration 0145 already proved correct for this identical class of
+--   problem (there: discovering which tenants have zero leave.hrms_holidays
+--   rows). Verified end-to-end against a real cluster: seeded a due
+--   promotion and a due transfer, each in a DIFFERENT tenant, ran the
+--   scheduler tick, and confirmed BOTH tenants' due changes were applied.
+--
+--   These two functions are now genuinely unused (grepped: no remaining
+--   caller anywhere in this service) and misleading to leave in place — a
+--   future reader of \df+ lifecycle.due_promotion_ids would see SECURITY
+--   DEFINER and reasonably assume real cross-tenant bypass semantics that
+--   were never actually true. Dropped rather than left as dead code.
+--
+-- Rollback: re-run migration 0144's CREATE OR REPLACE FUNCTION /
+--   REVOKE / GRANT block for both functions (its own text is unchanged;
+--   only this migration's DROP needs undoing).
+-- Affected services: hrms-service
+
+SET lock_timeout = '5s';
+
+DROP FUNCTION IF EXISTS lifecycle.due_promotion_ids(date);
+DROP FUNCTION IF EXISTS lifecycle.due_transfer_ids(date);

@@ -40,6 +40,7 @@ import { registerLifecycleMutationConsumers } from "./consumer.js";
 import { registerPromotionEOfficeConsumers } from "./promotion-eoffice-consumer.js";
 import { registerEOfficeDecisionConsumers } from "./eoffice-consumer.js";
 import { registerEmployeeConsumers } from "../employee/consumer.js";
+import * as employeeRepo from "../employee/repo.js";
 import { applyDueEffectiveChangesOnce } from "./effective-scheduler.js";
 import { COMMANDS, CONSUMED_EVENTS } from "../../topics.js";
 
@@ -297,6 +298,99 @@ describe("Bug 1 — effective-dating enforcement (migration 0144)", () => {
       expect(after?.departmentId).toBe(toDeptId);
       const transfer = await getTransfer(tenantId, transferId);
       expect(transfer?.status).toBe("completed");
+    } finally {
+      await cleanupEmployee(tenantId, employeeId);
+    }
+  });
+});
+
+/**
+ * Bug 2 regression test — applyTransferEffect version-guard parity with
+ * applyPromotionEffect (lifecycle/repo.ts).
+ *
+ * Before this fix, applyTransferEffect wrote via the plain, unguarded
+ * employeeRepo.updateEmployee — a blind overwrite with no precondition.
+ * Now that transfers can be DEFERRED by days/weeks via the Bug 1 scheduler,
+ * a newer, independent, ALSO-guarded write landing on the same employee
+ * before the deferred transfer's effective date is a realistic race, not a
+ * narrow theoretical one. This proves the fix with genuine concurrency (not
+ * a sequential apply, which findVersionForUpdate's fresh-inside-the-
+ * transaction read would simply absorb without ever conflicting) — same
+ * "TRUE CONCURRENCY" technique tests/basicminor-concurrency.test.ts already
+ * established for applyPromotionEffect's identical guard: fire both writers
+ * for the SAME employee together, no await in between, and let them
+ * genuinely interleave at the database level. Which one wins is not
+ * deterministic (real I/O timing), so the assertions below are invariants
+ * that must hold regardless of ordering — the same style
+ * basicminor-concurrency.test.ts's own "TRUE CONCURRENCY" test uses.
+ */
+describe("Bug 2 — applyTransferEffect version-guard (lifecycle/repo.ts)", () => {
+  it("a deferred transfer's scheduled apply races an independent guarded employee write: neither silently clobbers the other", async () => {
+    const { tenantId, employeeId, actorId, departmentId } = await seedEmployee();
+    try {
+      const toDeptId = randomUUID();
+      const effectiveDate = todayISO(); // due now, so the tick below applies it immediately
+      const transferId = randomUUID();
+
+      // Seed the deferred transfer directly at pending_effective — Bug 1's
+      // own tests above already cover the queue-driven creation path; this
+      // test is only about the apply-time version guard.
+      await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+        await tx.insert(hrmsTransfers).values({
+          id: transferId, tenantId, employeeId,
+          fromDeptId: departmentId, toDeptId,
+          effectiveDate, status: "pending_effective",
+          createdBy: actorId, updatedBy: actorId,
+        });
+      }));
+
+      const newMobile = "9998887770";
+      const [tickOutcome, raceOutcome] = await Promise.allSettled([
+        applyDueEffectiveChangesOnce(db, { asOf: effectiveDate }),
+        runWithTenant(tenantId, () => db.transaction(async (tx) => {
+          const emp = await employeeRepo.findVersionForUpdate(tx, employeeId, tenantId);
+          await employeeRepo.updateEmployeeVersioned(tx, employeeId, tenantId, emp!.version, { mobile: newMobile }, actorId);
+        })),
+      ]);
+
+      // The scheduler tick itself never rejects for a per-row conflict — a
+      // lost race is caught internally and counted in transfersFailed (see
+      // effective-scheduler.ts). Only a tick-wide failure would reject here.
+      expect(tickOutcome.status).toBe("fulfilled");
+      const result = tickOutcome.status === "fulfilled" ? tickOutcome.value : undefined;
+      expect((result?.transfersApplied ?? 0) + (result?.transfersFailed ?? 0)).toBe(1);
+
+      const empAfter = await getEmployee(tenantId, employeeId);
+      const transferAfter = await getTransfer(tenantId, transferId);
+
+      if (result?.transfersFailed === 1) {
+        // The transfer's apply LOST the race: it must report the conflict,
+        // not silently revert whichever change won. The transfer stays
+        // pending_effective — retried next tick, never falsely marked
+        // completed without actually landing, because the status
+        // transition and the apply share one transaction (see
+        // effective-scheduler.ts) — and the independent write's value is
+        // intact, not silently reverted.
+        expect(transferAfter?.status).toBe("pending_effective");
+        expect(raceOutcome.status).toBe("fulfilled"); // the independent write won
+        expect(empAfter?.mobile).toBe(newMobile);
+      } else {
+        // The transfer's apply WON the race: genuinely applied (department
+        // actually changed), not just marked complete.
+        expect(transferAfter?.status).toBe("completed");
+        expect(empAfter?.departmentId).toBe(toDeptId);
+        // The independent write either committed first — its mobile change
+        // survives alongside the transfer's departmentId change, since
+        // updateEmployeeVersioned's SET is field-scoped, not a whole-row
+        // replace — or it lost ITS OWN race against the transfer and was
+        // rejected with a version conflict. Never silently discarded
+        // either way.
+        if (raceOutcome.status === "fulfilled") {
+          expect(empAfter?.mobile).toBe(newMobile);
+        } else {
+          expect((raceOutcome.reason as { code?: string }).code).toBe("EMPLOYEE_VERSION_CONFLICT");
+        }
+      }
     } finally {
       await cleanupEmployee(tenantId, employeeId);
     }

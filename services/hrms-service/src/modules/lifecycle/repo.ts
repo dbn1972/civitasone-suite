@@ -1,4 +1,4 @@
-import { eq, and, inArray, sql } from "drizzle-orm";
+import { eq, and, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { hrmsTransfers, hrmsPromotions, hrmsSeparations, type TransferRow, type PromotionRow } from "./schema.js";
 import * as employeeRepo from "../employee/repo.js";
@@ -94,6 +94,45 @@ export function isEffectiveDateDue(effectiveDate: string, asOf: string): boolean
 }
 
 /**
+ * Tenant-scoped due-row discovery for the effective-changes scheduler
+ * (lifecycle/effective-scheduler.ts). Ordinary, fully RLS-enforced queries
+ * — ONLY correct when called inside runWithTenant(tenantId, ...) so the
+ * strict tenant_isolation policy has a GUC to match against.
+ *
+ * Replaces migration 0144's original due_promotion_ids/due_transfer_ids
+ * SECURITY DEFINER SQL functions (dropped by migration 0146): those could
+ * never return cross-tenant rows in the first place — neither hrms_svc
+ * (the role a SECURITY DEFINER function here actually runs as, being its
+ * owner) nor civitas_admin has BYPASSRLS, by design. The real fix is this
+ * per-tenant loop, discovering the tenant universe via shared/db.ts's
+ * scopedPlatformRead (employee.hrms_employees already carries a
+ * platform_bypass SELECT policy from migration 0133) and then re-entering
+ * each tenant's own strict RLS context — see effective-scheduler.ts's doc
+ * comment for the full mechanism. Explicit tenantId filter below is
+ * defense-in-depth alongside RLS, matching transitionTransfer/
+ * transitionPromotion's convention in this same file.
+ */
+export async function dueTenantPromotionIds(tx: Writer, tenantId: string, runDate: string): Promise<string[]> {
+  const rows = await (tx as typeof db).select({ id: hrmsPromotions.id }).from(hrmsPromotions)
+    .where(and(
+      eq(hrmsPromotions.tenantId, tenantId),
+      eq(hrmsPromotions.status, "pending_effective"),
+      lte(hrmsPromotions.effectiveDate, runDate),
+    ));
+  return rows.map((r) => r.id);
+}
+
+export async function dueTenantTransferIds(tx: Writer, tenantId: string, runDate: string): Promise<string[]> {
+  const rows = await (tx as typeof db).select({ id: hrmsTransfers.id }).from(hrmsTransfers)
+    .where(and(
+      eq(hrmsTransfers.tenantId, tenantId),
+      eq(hrmsTransfers.status, "pending_effective"),
+      lte(hrmsTransfers.effectiveDate, runDate),
+    ));
+  return rows.map((r) => r.id);
+}
+
+/**
  * Applies an already-decided promotion's designation (and, when carried,
  * basic pay) to the employee master. Shared by every path that can move a
  * promotion into its "completed" state — the direct-create route
@@ -138,16 +177,31 @@ export async function applyPromotionEffect(
  * documents for "no_show". Removed rather than reproduced here; see
  * employee/consumer.ts's employeeTransfer handler.
  *
- * Plain (non-versioned) update, matching both existing transfer-effecting
- * paths — neither has ever raced updateEmployeeVersioned's guarded field
- * (basicMinor); only promotions/increments/generic-update do.
+ * Bug 2 fix (version-guard parity with applyPromotionEffect above): this
+ * used to be a PLAIN (non-versioned) update via employeeRepo.updateEmployee
+ * — a blind overwrite with no precondition, on the reasoning that no
+ * transfer-effecting path had ever raced updateEmployeeVersioned's guarded
+ * field (basicMinor). Now that transfers can be DEFERRED by days or weeks
+ * via the scheduler (migration 0144), a newer, independent change to the
+ * SAME employee landing before the deferred transfer's effective date is a
+ * realistic, expected scenario, not just a narrow theoretical race — and a
+ * blind overwrite would silently apply on top of (or under, for
+ * whole-row-replace-style callers) whatever changed in between with no
+ * error and no audit trail, exactly the failure class
+ * updateEmployeeVersioned exists to catch. Reads the row's current version
+ * fresh (inside this transaction, same as applyPromotionEffect) and writes
+ * through updateEmployeeVersioned so a genuinely conflicting concurrent
+ * write throws (409 EMPLOYEE_VERSION_CONFLICT) instead of being silently
+ * discarded — see employee/repo.ts's updateEmployeeVersioned doc comment.
  */
 export async function applyTransferEffect(
   tx: Writer,
   transfer: Pick<TransferRow, "tenantId" | "employeeId" | "toDeptId" | "toDesigId">,
   actorId: string,
 ): Promise<void> {
-  const patch: Record<string, unknown> = { departmentId: transfer.toDeptId, updatedBy: actorId };
+  const emp = await employeeRepo.findVersionForUpdate(tx, transfer.employeeId, transfer.tenantId);
+  if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${transfer.employeeId} not found`);
+  const patch: Record<string, unknown> = { departmentId: transfer.toDeptId };
   if (transfer.toDesigId) patch.designationId = transfer.toDesigId;
-  await employeeRepo.updateEmployee(tx, transfer.employeeId, patch);
+  await employeeRepo.updateEmployeeVersioned(tx, transfer.employeeId, transfer.tenantId, emp.version, patch, actorId);
 }
