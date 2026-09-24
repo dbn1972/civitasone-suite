@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -34,6 +35,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 const TRAINING_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 export default async function TrainingNominationsPage() {
+  const t = await getTranslations("trainingNominations");
   const roles = getSessionRoles();
   const canAccess = roles.some((r: string) => TRAINING_ADMIN_ROLES.includes(r));
 
@@ -44,33 +46,33 @@ export default async function TrainingNominationsPage() {
   const { data: items, source } = await getData();
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "department", label: "Department" },
-    { key: "program", label: "Program" },
-    { key: "nominatedBy", label: "Nominated By" },
-    { key: "programDate", label: "Program Date" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employee", label: t("colEmployee") },
+    { key: "department", label: t("colDepartment") },
+    { key: "program", label: t("colProgram") },
+    { key: "nominatedBy", label: t("colNominatedBy") },
+    { key: "programDate", label: t("colProgramDate") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Training Nominations" subtitle="Nominations for upcoming training programs." back="/hr" backLabel="Back to HR" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label="Total" value={items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending" value={items.filter((i) => i.status === "pending").length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Approved" value={items.filter((i) => i.status === "approved").length} />
-        <StatCard icon="📚" iconBg="var(--bg, #f5f5f5)" label="Programs" value={new Set(items.map((i) => i.program)).size} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={items.filter((i) => i.status === "pending").length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={items.filter((i) => i.status === "approved").length} />
+        <StatCard icon="📚" iconBg="var(--bg, #f5f5f5)" label={t("statPrograms")} value={new Set(items.map((i) => i.program)).size} />
       </StatGrid>
-      <Card title="Training Nominations">
+      <Card title={t("cardTitle")}>
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "training nominations" })} />
         ) : (
-          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter…"
+          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="🎓"
-            emptyTitle="No training nominations"
-            emptyMessage="Employee nominations for training programmes appear here. Nominations are approved by the department head before enrolment."
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
           />
         )}
       </Card>

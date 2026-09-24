@@ -2,6 +2,7 @@ import { PageHeader } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewTemplateForm } from "./NewTemplateForm";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getTranslations } from "next-intl/server";
 
 export const metadata = { title: "New JD Template — HR" };
 
@@ -11,7 +12,8 @@ export const metadata = { title: "New JD Template — HR" };
  */
 const JD_TEMPLATE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
-export default function NewTemplatePage() {
+export default async function NewTemplatePage() {
+  const t = await getTranslations("jdTemplateNew");
   const roles = getSessionRoles();
   const canCreate = roles.some((r: string) => JD_TEMPLATE_ADMIN_ROLES.includes(r));
 
@@ -22,8 +24,8 @@ export default function NewTemplatePage() {
   return (
     <main className="page-main" aria-labelledby="page-heading">
       <PageHeader
-        title="New JD Template"
-        subtitle="Create a reusable job description template."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/jd-templates" backLabel="Back to JD Templates"
       />
       <NewTemplateForm />

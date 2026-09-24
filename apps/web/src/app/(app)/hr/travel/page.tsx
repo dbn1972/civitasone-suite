@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { TravelRequestForm } from "./TravelRequestForm";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -25,6 +26,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function TravelRequestsPage() {
+  const t = await getTranslations("travel");
   const { data: items, source } = await getData();
   const errored = source === "error";
 
@@ -33,32 +35,32 @@ export default async function TravelRequestsPage() {
   const rejected = items.filter((i) => i.status === "rejected").length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "destination", label: "Destination" },
-    { key: "purpose", label: "Purpose" },
-    { key: "from_date", label: "From" },
-    { key: "to_date", label: "To" },
-    { key: "mode", label: "Mode" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "destination", label: t("colDestination") },
+    { key: "purpose", label: t("colPurpose") },
+    { key: "from_date", label: t("colFrom") },
+    { key: "to_date", label: t("colTo") },
+    { key: "mode", label: t("colMode") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Travel Requests"
-        subtitle="Submit and track official travel approvals — LTC, tour advance, and TA/DA settlement."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="✈️" iconBg="var(--infobg, #e6f0ff)" label="Total Requests" value={errored ? null : items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending Approval" value={errored ? null : pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Approved" value={errored ? null : approved} />
-        <StatCard icon="❌" iconBg="var(--badbg, #fef2f2)" label="Rejected" value={errored ? null : rejected} />
+        <StatCard icon="✈️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={errored ? null : approved} />
+        <StatCard icon="❌" iconBg="var(--badbg, #fef2f2)" label={t("statRejected")} value={errored ? null : rejected} />
       </StatGrid>
       <TravelRequestForm />
       <div style={{ marginTop: 16 }}>
-        <Card title="Travel Requests">
+        <Card title={t("cardTitle")}>
           {errored ? (
             <div className="pad">
               <RefreshErrorState error={toHumanError("load", { area: "travel requests" })} backHref="/hr" />
@@ -69,11 +71,11 @@ export default async function TravelRequestsPage() {
               rows={items}
               sortable
               filterable
-              filterPlaceholder="Filter by destination or purpose…"
+              filterPlaceholder={t("filterPlaceholder")}
               pageSize={15}
               emptyIcon="✈️"
-              emptyTitle="No travel requests"
-              emptyMessage="Official travel requests submitted via the form above appear here for tracking and approval. Requests are reviewed by the reporting manager before booking."
+              emptyTitle={t("emptyTitle")}
+              emptyMessage={t("emptyMessage")}
             />
           )}
         </Card>
