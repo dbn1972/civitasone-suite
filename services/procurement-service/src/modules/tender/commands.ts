@@ -41,12 +41,43 @@ export async function publishTender(ctx: RequestContext, tenderId: string): Prom
 }
 
 export async function submitBid(ctx: RequestContext, tenderId: string, body: SubmitBidBody): Promise<Accepted> {
+  // G-ASYNC-1: defense-in-depth synchronous pre-check mirroring the
+  // consumer's own BIDDING_CLOSED / DUPLICATE_BID rejections
+  // (tender/consumer.ts's tenderBidSubmit handler) and this file's own C1
+  // pattern on awardTender() below. Rejects the common case with a proper
+  // 4xx instead of only asynchronously. This does NOT replace the consumer's
+  // check: a tender can still close, or a duplicate bid still land, in the
+  // window between this read and the consumer processing the command later
+  // — that residual race is exactly what `id` (the commandId) plus
+  // `GET /v1/procurement/tenders/commands/:id/status` (routes.ts) is for.
+  // This check only reduces how often a caller needs to fall back to it.
+  const tender = await repo.findTenderById(tenderId);
+  if (!tender || tender.tenantId !== ctx.tenantId) {
+    throw new HttpError(404, "NOT_FOUND", "tender not found");
+  }
+  if (tender.status !== "published") {
+    throw new HttpError(409, "BIDDING_CLOSED", `bids accepted only while tender is 'published' (is '${tender.status}')`);
+  }
+  if (tender.bidClosingDate) {
+    const closeMs = Date.parse(`${tender.bidClosingDate}T23:59:59.999Z`);
+    if (Number.isFinite(closeMs) && Date.now() > closeMs) {
+      throw new HttpError(409, "BIDDING_CLOSED", `bid closing date ${tender.bidClosingDate} has passed`);
+    }
+  }
+  const existingBids = await repo.findBidsByTender(tenderId);
+  if (existingBids.some((b) => b.vendorId === body.vendorId)) {
+    throw new HttpError(409, "DUPLICATE_BID", `vendor ${body.vendorId} has already submitted a bid for this tender`);
+  }
+
   const id = randomUUID();
   await queue.publish(COMMANDS.tenderBidSubmit, {
     messageId: id, type: COMMANDS.tenderBidSubmit,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenderId, tenantId: ctx.tenantId, ...body },
   });
+  // `id` is the commandId to poll — it is the same value forwarded as the
+  // queue message's messageId above, which relayOnce()/recordCommandOutcome
+  // key on end-to-end (see @civitasone/outbox's commandResults doc comment).
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 

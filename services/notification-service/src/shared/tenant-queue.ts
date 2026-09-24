@@ -13,15 +13,21 @@
  *
  * withTenantConsumer(handler) enters runWithTenant(msg.tenantId, () => handler(msg)).
  */
-import type { Queue } from "@civitasone/queue";
+import type { Queue, SubscribeOptions } from "@civitasone/queue";
 import { withTenantConsumer } from "@civitasone/db";
 
 export function tenantScoped(queue: Queue): Queue {
   return new Proxy(queue, {
     get(target, prop, receiver) {
       if (prop === "subscribe") {
-        return <T>(topic: string, handler: (msg: T) => Promise<void>): void =>
-          target.subscribe(topic, withTenantConsumer(handler as never) as never);
+        // G-ASYNC-1: this previously took only (topic, handler) and never
+        // forwarded a 3rd `options` argument to the real subscribe() at all
+        // — so ANY caller passing options (onOutcome, visibilityTimeout)
+        // through a tenantScoped() queue had them silently dropped, no error,
+        // no log. Exactly the class of silent failure this fix is about, one
+        // layer down in the transport plumbing. Forward it through.
+        return <T>(topic: string, handler: (msg: T) => Promise<void>, options?: SubscribeOptions): void =>
+          target.subscribe(topic, withTenantConsumer(handler as never) as never, options);
       }
       const value = Reflect.get(target, prop, receiver);
       return typeof value === "function" ? value.bind(target) : value;

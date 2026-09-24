@@ -15,7 +15,7 @@ import { eq, inArray, and } from "drizzle-orm";
 import { MemoryQueue } from "@civitasone/queue";
 import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
-import { processed, outboxMessages } from "../src/shared/outbox.js";
+import { processed, outboxMessages, commandResults, getCommandOutcome } from "../src/shared/outbox.js";
 import { notificationTemplates } from "../src/modules/templates/schema.js";
 import { registerApprovalConsumers } from "../src/modules/approval/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
@@ -32,6 +32,13 @@ async function cleanup(): Promise<void> {
   }));
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT));
+  }));
+  // G-ASYNC-1: command_results IS tenant-scoped (unlike processed below) — see
+  // its own cleanup here so a stray row from a previous local run of this
+  // suite can never make the new maker-checker outcome assertion pass for the
+  // wrong reason.
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(commandResults).where(eq(commandResults.tenantId, TENANT));
   }));
   // _inbox.processed is shared and not tenant-scoped: only drop this file's ids.
   if (deliveredMessageIds.size > 0) {
@@ -174,15 +181,30 @@ describe("approval consumer — approve (in_review → approved) and maker-check
     expect(await outboxTopics()).toEqual(["audit.event.record", EVENTS.templateApproved].sort());
   });
 
-  it("refuses when the submitter approves their own template (maker-checker)", async () => {
+  it("refuses when the submitter approves their own template (maker-checker) — and G-ASYNC-1 makes the refusal caller-visible, not just DLQ'd", async () => {
     await seedTemplate(TPL, "in_review", { submittedBy: MAKER });
-    const q = await deliver(COMMANDS.approveTemplate, "b0a1f002-1111-4000-8000-000000000202",
+    const rejectedMessageId = "b0a1f002-1111-4000-8000-000000000202";
+    const q = await deliver(COMMANDS.approveTemplate, rejectedMessageId,
       { templateId: TPL, tenantId: TENANT, approvedBy: MAKER }, MAKER);
 
     expect(q.dlq).toHaveLength(1);
     expect(q.dlq[0]?.error).toContain("MAKER_CHECKER_VIOLATION");
     expect((await templateById(TPL))?.status).toBe("in_review");
     expect(await outboxTopics()).toEqual([]);
+
+    // Before G-ASYNC-1, `q.dlq` above was the ONLY place this rejection was
+    // ever visible — a purely in-process, test-only introspection point on
+    // the queue's internals. No real caller of POST /v1/templates/:id/approve
+    // (whose 202 response returned this exact messageId as `id` — see
+    // approval/commands.ts's approve()) could ever have queried for it. Now
+    // GET /v1/templates/commands/:commandId/status (routes.ts) can, via the
+    // same commandResults row asserted here directly. command_results has no
+    // RLS (see its own doc comment) — tenantId is passed explicitly, exactly
+    // as the real route does via ctx.tenantId.
+    const outcome = await getCommandOutcome(db, TENANT, rejectedMessageId);
+    expect(outcome).not.toBeNull();
+    expect(outcome?.status).toBe("rejected");
+    expect(outcome?.reason).toContain("MAKER_CHECKER_VIOLATION");
   });
 
   it("allows approval when submittedBy was never recorded (no maker to compare)", async () => {

@@ -4,15 +4,19 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { getCommandOutcome } from "../../shared/outbox.js";
+import { db } from "../../shared/db.js";
 import { transitionState, validateMakerChecker } from "./domain.js";
 import * as commands from "./commands.js";
 import * as templateQueries from "../templates/queries.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin", "notification_admin"];
 const APPROVERS = ["platform_admin", "super_admin", "tenant_admin", "notification_admin", "notification_approver"];
+const READERS = [...APPROVERS];
 
 const templateIdParam = z.object({ id: z.string().uuid() });
 const rejectBody = z.object({ reason: z.string().min(1).max(500) });
+const commandIdParam = z.object({ commandId: z.string().uuid() });
 
 export async function approvalRoutes(app: FastifyInstance): Promise<void> {
   // Submit template for review
@@ -77,6 +81,34 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     if (!result.ok) throw new HttpError(422, "INVALID_TRANSITION", result.error);
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.publish(ctx, id));
+  });
+
+  // G-ASYNC-1: poll a command's eventual outcome using the `id` any of the
+  // 202 responses above returned (it is the underlying queue messageId —
+  // see @civitasone/outbox's commandResults doc comment). Answers
+  // docs/API-GUIDE.md §3.1's documented "poll the resource... or use the
+  // returned id to check status" contract. Every route above already does a
+  // synchronous pre-check (not-found / INVALID_TRANSITION /
+  // MAKER_CHECKER_VIOLATION) before publishing, but that check reads state
+  // at accept time — the consumer (approval/consumer.ts) re-validates the
+  // same conditions against whatever the state actually is when the command
+  // is processed, which can be later and can disagree. Before this change,
+  // that residual rejection was invisible: the 202 had already gone out and
+  // nothing else ever told the caller their approve/reject/submit/publish
+  // didn't actually happen.
+  app.get("/v1/templates/commands/:commandId/status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READERS);
+    const { commandId } = commandIdParam.parse(req.params);
+    // _inbox.command_results deliberately has NO row-level security (see its
+    // doc comment in @civitasone/outbox — the purge loop needs to delete old
+    // rows with no app.tenant_id GUC set, same reason _outbox.messages had
+    // FORCE RLS dropped fleet-wide). ctx.tenantId here is therefore the ONLY
+    // thing enforcing tenant isolation on this read — getCommandOutcome
+    // filters on it explicitly, not via RLS.
+    const outcome = await getCommandOutcome(db, ctx.tenantId, commandId);
+    if (!outcome) return reply.send({ commandId, status: "processing" });
+    return reply.send({ commandId, status: outcome.status, reason: outcome.reason, occurredAt: outcome.occurredAt });
   });
 
   app.setErrorHandler((err, req, reply) => {

@@ -25,4 +25,5 @@ export type {
   QueuePublishOptions,
   QueueConsumeOptions,
   IncomingMessage,
+  CommandOutcome,
 } from "@civitasone/queue-service";

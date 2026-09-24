@@ -14,7 +14,7 @@
  * the relay then publishes and marks rows published — "DB committed ⇒ event will
  * be delivered" with no dual-write hole.
  */
-import { pgSchema, uuid, varchar, jsonb, timestamp } from "drizzle-orm/pg-core";
+import { pgSchema, uuid, varchar, jsonb, timestamp, text } from "drizzle-orm/pg-core";
 import type { PgDatabase } from "drizzle-orm/pg-core";
 import { and, asc, eq, isNull, inArray, sql } from "drizzle-orm";
 import type { PostgresJsQueryResultHKT } from "drizzle-orm/postgres-js";
@@ -58,7 +58,138 @@ export const processed = inbox.table("processed", {
   processedAt: timestamp("processed_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
-export const outboxSchema = { outboxMessages, processed };
+/**
+ * G-ASYNC-1 — per-command terminal outcome, keyed by the SAME messageId the
+ * command was published with (already returned to the caller in the 202
+ * response as `commandId`/`id`; see relayOnce()'s SEC C1 comment above for
+ * why the outbox row id and the queue messageId are the same value).
+ *
+ * WHY THIS EXISTS: this fleet's CQRS write path (docs/API-GUIDE.md §3.1)
+ * documents "poll the resource, subscribe to the event, or use the returned
+ * id to check status" as the contract for every `202 Accepted` response. The
+ * pre-existing tables in this file do not fulfil that contract:
+ *   - `outboxMessages.publishedAt` only proves the relay handed the message to
+ *     the broker — it says nothing about what the CONSUMER did with it.
+ *   - `processed` is a pure idempotency marker (messageId -> "seen once"),
+ *     written only from the SUCCESS path inside a service's own handler — a
+ *     handler that throws NonRetryableError (a known, permanent business
+ *     rejection — see @civitasone/queue's NonRetryableError) or exhausts
+ *     retries never reaches its own markProcessed() call, so today NEITHER
+ *     table gains a row when a command is rejected. The only trace is a
+ *     Prometheus counter + a stderr JSON log line at DLQ time (bus.ts's
+ *     routeToDlq) — an on-call/ops signal, not anything a tenant-scoped API
+ *     caller or frontend can query.
+ * This table is the missing connective tissue, not a parallel new system:
+ * it is populated automatically by the SAME shared dispatch loop
+ * (services/queue-service's bus.ts) that already distinguishes success /
+ * NonRetryableError / retries-exhausted internally — via the `onOutcome`
+ * hook on `queue.subscribe(topic, handler, { onOutcome })` — so adopting a
+ * service is "wire one callback + add one GET route", not "build a status
+ * pipeline from scratch". See recordCommandOutcome()/getCommandOutcome()
+ * below.
+ *
+ * DELIBERATELY NO ROW-LEVEL SECURITY on this table — same resolution the
+ * fleet already applied to its sibling `outboxMessages` (see every service's
+ * `NNNN_outbox_messages_drop_rls.sql`: "packages/outbox relayOnce polls
+ * unpublished rows with no app.tenant_id GUC. Under FORCE RLS ... the
+ * NOBYPASSRLS service role sees ZERO rows every cycle — permanent stall.").
+ * purgeOutbox() below needs to delete old rows ACROSS ALL TENANTS with no
+ * tenant GUC set, exactly like it already does for outboxMessages/processed;
+ * some services' worker.ts additionally call it via a BYPASSRLS "scanner" db
+ * (see e.g. procurement-service/src/shared/scanner-db.ts) and some don't
+ * (e.g. notification-service, whose own scanner pool is documented
+ * read-only) — this table has to work purged via EITHER, so it can't depend
+ * on FORCE RLS being bypassable at all. Tenant isolation for READS is
+ * therefore enforced explicitly in getCommandOutcome() below (an explicit
+ * `tenantId` filter, not RLS) — the same "explicit filter, not RLS alone"
+ * defense-in-depth already used elsewhere in this fleet for tenant-scoped
+ * reads outside a request/consumer's own ambient GUC context (e.g.
+ * procurement-service's findTenderByIdTx filters by tenantId explicitly
+ * in addition to whatever RLS would otherwise enforce).
+ */
+export const commandResults = inbox.table("command_results", {
+  messageId:  uuid("message_id").primaryKey(),
+  tenantId:   uuid("tenant_id").notNull(),
+  topic:      varchar("topic", { length: 128 }).notNull(),
+  // 'succeeded' | 'rejected' (NonRetryableError — permanent business reason,
+  // e.g. BIDDING_CLOSED, MAKER_CHECKER_VIOLATION) | 'failed' (retries
+  // exhausted against a transient condition, e.g. a downstream dependency
+  // that was unavailable for the whole backoff window).
+  status:     varchar("status", { length: 16 }).notNull().$type<CommandOutcomeStatus>(),
+  reason:     text("reason"),
+  occurredAt: timestamp("occurred_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export const outboxSchema = { outboxMessages, processed, commandResults };
+
+export type CommandOutcomeStatus = "succeeded" | "rejected" | "failed";
+
+/** Structurally identical to @civitasone/queue's CommandOutcome (duck-typed, not imported — see that type's own doc comment for why). */
+export interface CommandOutcome {
+  messageId: string;
+  tenantId: string;
+  topic: string;
+  status: CommandOutcomeStatus;
+  reason?: string;
+}
+
+/**
+ * Record a command's terminal outcome. Call this from the `onOutcome`
+ * callback passed to `queue.subscribe(topic, handler, { onOutcome })` — NOT
+ * from business handler code directly; bus.ts invokes onOutcome exactly once
+ * per terminal delivery (success, NonRetryableError rejection, or
+ * retries-exhausted failure), so this only ever needs to persist what it is
+ * given.
+ *
+ * Idempotent (`ON CONFLICT DO NOTHING`): a redelivered message whose outcome
+ * was already recorded must not overwrite the first-recorded outcome or
+ * throw on the duplicate id.
+ *
+ * `tx` must already be scoped to the right tenant context (RLS) by the
+ * caller — mirrors enqueue()/markProcessed()'s existing contract of taking
+ * an already-scoped DrizzleTx rather than establishing context itself. In
+ * practice: wrap the onOutcome callback in the same `runWithTenant(tenantId,
+ * () => db.transaction(tx => ...))` shape those two functions' own callers
+ * already use.
+ */
+export async function recordCommandOutcome(tx: DrizzleTx, outcome: CommandOutcome): Promise<void> {
+  await tx
+    .insert(commandResults)
+    .values({
+      messageId: outcome.messageId,
+      tenantId: outcome.tenantId,
+      topic: outcome.topic,
+      status: outcome.status,
+      reason: outcome.reason ?? null,
+    })
+    .onConflictDoNothing();
+}
+
+/**
+ * Look up a command's outcome by the id returned in its 202 response.
+ * Returns null while the command is still in flight (not yet terminal, or
+ * never published) — callers should render that as "processing", matching
+ * docs/API-GUIDE.md §3.1's documented "use the returned id to check status"
+ * contract, which nothing previously fulfilled end-to-end.
+ *
+ * `tenantId` is REQUIRED and filtered on explicitly — this table has no RLS
+ * (see commandResults' own doc comment above for why), so this filter is the
+ * ONLY thing standing between a caller and another tenant's command outcome.
+ * Always pass the CALLER's own tenantId (e.g. from resolveContext(req) in a
+ * route), never a value taken from the request body/params.
+ */
+export async function getCommandOutcome(
+  db: DrizzleTx,
+  tenantId: string,
+  messageId: string,
+): Promise<{ status: CommandOutcomeStatus; reason: string | null; occurredAt: Date } | null> {
+  const rows = await db
+    .select({ status: commandResults.status, reason: commandResults.reason, occurredAt: commandResults.occurredAt })
+    .from(commandResults)
+    .where(and(eq(commandResults.messageId, messageId), eq(commandResults.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
 
 /**
  * Enqueue an event into the outbox — MUST be called inside the same tx as the
@@ -236,7 +367,11 @@ export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<b
 
 /**
  * G7: Scheduled outbox purge — deletes published outbox rows older than
- * `retentionDays` (default 7). Also purges old inbox/processed entries.
+ * `retentionDays` (default 7). Also purges old inbox/processed entries, and
+ * (G-ASYNC-1) old _inbox.command_results entries on the same retention
+ * window — a service adopting recordCommandOutcome() gets purge for free
+ * the moment it already calls this function for its outbox/inbox tables; no
+ * separate wiring needed.
  * Processes deletions in batches of `batchSize` (default 1000).
  * Returns the total number of deleted rows. Safe to call from any service worker.
  */
@@ -273,6 +408,25 @@ export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 
     inboxBatchDeleted = (result as unknown as { count?: number }).count ?? 0;
     totalDeleted += inboxBatchDeleted;
   } while (inboxBatchDeleted >= batchSize);
+
+  // G-ASYNC-1: command_results is _inbox.processed's sibling (same schema,
+  // same "consumer-side, one row per terminal delivery" shape) and needs the
+  // same retention — without this it grows unbounded for the lifetime of
+  // whichever service adopts it, same failure mode this function already
+  // exists to prevent for the other two tables.
+  let commandResultsBatchDeleted: number;
+  do {
+    const result = await db.execute(sql`
+      DELETE FROM _inbox.command_results
+      WHERE message_id IN (
+        SELECT message_id FROM _inbox.command_results
+        WHERE occurred_at < ${cutoff}
+        LIMIT ${sql.raw(String(batchSize))}
+      )
+    `);
+    commandResultsBatchDeleted = (result as unknown as { count?: number }).count ?? 0;
+    totalDeleted += commandResultsBatchDeleted;
+  } while (commandResultsBatchDeleted >= batchSize);
 
   return totalDeleted;
 }

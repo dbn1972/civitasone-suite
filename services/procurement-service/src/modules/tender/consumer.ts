@@ -3,7 +3,8 @@ import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, recordCommandOutcome, type CommandOutcome } from "../../shared/outbox.js";
+import { runWithTenant } from "@civitasone/db";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { allocateDocNo } from "../../shared/numbering.js";
 import { minorString } from "@civitasone/schemas/money";
@@ -19,6 +20,21 @@ const AUDIT_TOPIC = "audit.event.record";
 // C2: award value above this (Rs 1,000 in paise) must carry a sanctionRef,
 // matching po/consumer's SANCTION_REQUIRED_ABOVE_MINOR gate.
 const SANCTION_REQUIRED_ABOVE_MINOR = 100000n;
+
+/**
+ * G-ASYNC-1: persist this command's terminal outcome so
+ * `GET /v1/procurement/tenders/commands/:commandId/status` (routes.ts) can
+ * answer a caller who polls the `id` their 202 response returned — see that
+ * route, and @civitasone/outbox's recordCommandOutcome, for the full picture.
+ * Wrapped in runWithTenant + db.transaction (not a bare write) so the
+ * FORCE-RLS `_inbox.command_results` insert carries the right app.tenant_id
+ * GUC — bus.ts invokes onOutcome OUTSIDE any handler's own tenant context.
+ */
+async function recordTenderCommandOutcome(outcome: CommandOutcome): Promise<void> {
+  await runWithTenant(outcome.tenantId, () =>
+    db.transaction((tx) => recordCommandOutcome(tx, outcome)),
+  );
+}
 
 export function registerTenderConsumers(queue: Queue): void {
   // 1. Create tender (draft)
@@ -113,7 +129,7 @@ export function registerTenderConsumers(queue: Queue): void {
       });
       await audit(tx, msg, "bid_submit", "tender", p.tenderId);
     });
-  });
+  }, { onOutcome: recordTenderCommandOutcome });
 
   // 4. Technical evaluation / qualification. Moves tender published → technical_evaluation.
   queue.subscribe(COMMANDS.tenderTechEvaluate, async (msg) => {

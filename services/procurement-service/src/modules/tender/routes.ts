@@ -5,9 +5,13 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { getCommandOutcome } from "../../shared/outbox.js";
+import { db } from "../../shared/db.js";
 import * as queries from "./queries.js";
 import * as commands from "./commands.js";
 import { createTenderBody, submitBidBody, techEvaluateBody, awardTenderBody, idParam } from "./validators.js";
+
+const commandIdParam = z.object({ commandId: z.string().uuid() });
 
 const PROC_ROLES   = ["procurement_officer", "procurement_admin", "super_admin"];
 const READER_ROLES = [...PROC_ROLES, "audit_officer", "finance_officer"];
@@ -61,6 +65,33 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = submitBidBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitBid(ctx, id, body));
+  });
+
+  // G-ASYNC-1: poll a command's eventual outcome using the `id` any of this
+  // module's 202 responses returned (it is the underlying queue messageId —
+  // see @civitasone/outbox's commandResults doc comment). Answers
+  // docs/API-GUIDE.md §3.1's documented "poll the resource... or use the
+  // returned id to check status" contract, which nothing previously
+  // implemented for this (or, before this change, any) module: a bid
+  // rejected async as BIDDING_CLOSED or DUPLICATE_BID (tender/consumer.ts)
+  // was previously undetectable by the caller — the 202 already went out and
+  // the eventual rejection had no caller-visible trace. Wired for
+  // tenderBidSubmit today (see tender/consumer.ts's recordTenderCommandOutcome);
+  // this module's other five commands are equally trivial to wire the same
+  // way and are natural fast-follows, not done here to keep this change small.
+  app.get("/v1/procurement/tenders/commands/:commandId/status", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { commandId } = commandIdParam.parse(req.params);
+    // _inbox.command_results deliberately has NO row-level security (see its
+    // doc comment in @civitasone/outbox — the cross-tenant purge loop needs
+    // to delete old rows with no app.tenant_id GUC set, the same reason
+    // _outbox.messages had FORCE RLS dropped fleet-wide). ctx.tenantId here
+    // is therefore the ONLY thing enforcing tenant isolation on this read —
+    // getCommandOutcome filters on it explicitly, not via RLS.
+    const outcome = await getCommandOutcome(db, ctx.tenantId, commandId);
+    if (!outcome) return reply.send({ commandId, status: "processing" });
+    return reply.send({ commandId, status: outcome.status, reason: outcome.reason, occurredAt: outcome.occurredAt });
   });
 
   app.post("/v1/procurement/tenders/:id/technical-evaluation", async (req, reply) => {

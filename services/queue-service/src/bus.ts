@@ -92,15 +92,57 @@ export type PublishOptions = {
 };
 
 /**
- * Per-subscription options passed to queue.subscribe(). Currently supports
- * overriding the SQS VisibilityTimeout on a per-topic basis so long-running
- * consumers (e.g. billing finalize, payroll run) can hold a message invisible
- * longer than the global SQS_VISIBILITY_TIMEOUT default without risking
- * redelivery of a message still being processed.
+ * Terminal result of one command delivery, passed to SubscribeOptions.onOutcome.
+ * Deliberately a plain structural type, NOT imported from @civitasone/outbox
+ * (or any other persistence package) — this transport package takes zero
+ * dependency on how, or whether, a service chooses to persist an outcome.
+ * @civitasone/outbox's CommandOutcome is structurally identical by design.
+ */
+export type CommandOutcome = {
+  messageId: string;
+  tenantId: string;
+  topic: string;
+  status: "succeeded" | "rejected" | "failed";
+  reason?: string;
+};
+
+/**
+ * Per-subscription options passed to queue.subscribe(). Supports:
+ *   - overriding the SQS VisibilityTimeout on a per-topic basis so long-running
+ *     consumers (e.g. billing finalize, payroll run) can hold a message invisible
+ *     longer than the global SQS_VISIBILITY_TIMEOUT default without risking
+ *     redelivery of a message still being processed.
+ *   - G-ASYNC-1: an optional onOutcome hook — see its own doc comment below.
  */
 export type SubscribeOptions = {
   /** SQS VisibilityTimeout in seconds for this topic's ReceiveMessage call. */
   visibilityTimeout?: number;
+  /**
+   * G-ASYNC-1: invoked once per message with its TERMINAL outcome —
+   * 'succeeded' (every handler resolved), 'rejected' (a handler threw
+   * NonRetryableError: a permanent, known business rejection), or 'failed'
+   * (a handler kept throwing a retryable error until maxReceiveCount /
+   * maxAttempts was exhausted and the message was dead-lettered).
+   *
+   * Today these three outcomes are distinguished ONLY inside this dispatch
+   * loop and are observable afterwards solely as a DLQ'd message plus a
+   * metric/log line (see routeToDlq / logHandlerError below) — an on-call/ops
+   * signal, not anything queryable by the caller a 202 response was sent to,
+   * or attributable to that specific command. A route publishing a command
+   * and returning 202 has NO way, today, to ever learn the consumer rejected
+   * or permanently failed it. Wire onOutcome to close that loop: persist the
+   * outcome keyed by `messageId` (e.g. via @civitasone/outbox's
+   * recordCommandOutcome, called from the SUBSCRIBING SERVICE's own database
+   * — this package intentionally has and takes no DB dependency of its own)
+   * so a `GET .../commands/:id/status` route in that service can serve it
+   * back to whoever is polling the id their 202 response returned.
+   *
+   * Best-effort: a throwing/rejecting onOutcome is caught and logged (via
+   * logHandlerError for SqsQueue) — it can never block ack/DLQ routing or
+   * crash the poll loop. Optional and purely additive: existing subscribe()
+   * callers that don't pass it see no behaviour change whatsoever.
+   */
+  onOutcome?: (outcome: CommandOutcome) => void | Promise<void>;
 };
 
 export interface Queue {
@@ -182,7 +224,7 @@ export class MemoryQueue implements Queue {
   // subscriberId unique within this MemoryQueue instance. deliver() dedupes
   // per (topic, messageId, subscriberId) — see seen below — so two distinct
   // subscribers on the SAME topic are two distinct deliveries, not one.
-  private handlers = new Map<string, Array<{ subscriberId: number; handler: Handler }>>();
+  private handlers = new Map<string, Array<{ subscriberId: number; handler: Handler; onOutcome?: SubscribeOptions["onOutcome"] }>>();
   private nextSubscriberId = 0;
   /**
    * Idempotent-redelivery guard, keyed by `topic:messageId:subscriberId`.
@@ -227,12 +269,28 @@ export class MemoryQueue implements Queue {
     const settled = new Promise<void>((resolve) => {
       setTimeout(() => {
         void Promise.allSettled(
-          handlers.map((h) => this.deliver(topic, h.handler, msg, h.subscriberId)),
+          handlers.map((h) => this.deliver(topic, h.handler, msg, h.subscriberId, h.onOutcome)),
         ).then(() => resolve());
       }, 0);
     });
     this.track(settled);
     return msg.messageId;
+  }
+
+  /** Best-effort outcome emit: never let a broken onOutcome affect delivery. */
+  private async emitOutcome(
+    onOutcome: SubscribeOptions["onOutcome"],
+    outcome: CommandOutcome,
+  ): Promise<void> {
+    if (!onOutcome) return;
+    try {
+      await onOutcome(outcome);
+    } catch {
+      // Swallow — see onOutcome's own doc comment: it must never affect
+      // dispatch. (MemoryQueue has no logHandlerError sink of its own; a
+      // broken test-time onOutcome should fail the test's own assertions,
+      // not this delivery loop.)
+    }
   }
 
   private track(p: Promise<unknown>): void {
@@ -255,9 +313,9 @@ export class MemoryQueue implements Queue {
     }
   }
 
-  subscribe<T>(topic: string, handler: Handler<T>, _options?: SubscribeOptions): void {
+  subscribe<T>(topic: string, handler: Handler<T>, options?: SubscribeOptions): void {
     const list = this.handlers.get(topic) ?? [];
-    list.push({ subscriberId: this.nextSubscriberId++, handler: handler as Handler });
+    list.push({ subscriberId: this.nextSubscriberId++, handler: handler as Handler, onOutcome: options?.onOutcome });
     this.handlers.set(topic, list);
   }
 
@@ -297,6 +355,7 @@ export class MemoryQueue implements Queue {
     handler: Handler,
     msg: CommandEnvelope,
     subscriberId: number,
+    onOutcome?: SubscribeOptions["onOutcome"],
   ): Promise<void> {
     const key = `${topic}:${msg.messageId}:${subscriberId}`;
     if (this.seen.has(key)) return;
@@ -305,17 +364,31 @@ export class MemoryQueue implements Queue {
     const parsed = parseEnvelope(msg);
     if (!parsed.ok) {
       this.dlq.push({ topic, msg, error: `invalid_envelope: ${parsed.error}` });
+      if (msg.messageId && msg.tenantId) {
+        await this.emitOutcome(onOutcome, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "rejected", reason: `invalid_envelope: ${parsed.error}` });
+      }
       return;
     }
     this.seen.add(key);
     for (let attempt = 1; attempt <= this.maxAttempts; attempt++) {
       try {
         await handler(msg);
+        await this.emitOutcome(onOutcome, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "succeeded" });
         return;
       } catch (err) {
         if (err instanceof NonRetryableError || attempt === this.maxAttempts) {
           this.seen.delete(key);
           this.dlq.push({ topic, msg, error: err instanceof Error ? err.message : String(err) });
+          await this.emitOutcome(onOutcome, {
+            messageId: msg.messageId, tenantId: msg.tenantId, topic,
+            // G-ASYNC-1: NonRetryableError is a known, permanent business
+            // rejection; exhausting maxAttempts on a RETRYABLE error is a
+            // 'failed' (transient-condition-never-cleared), a distinct case a
+            // caller/frontend should be able to tell apart from an outright
+            // rejection.
+            status: err instanceof NonRetryableError ? "rejected" : "failed",
+            reason: err instanceof Error ? err.message : String(err),
+          });
           return;
         }
         await this.retryDelay(2 ** attempt * 10);
@@ -548,6 +621,8 @@ export class SqsQueue implements Queue {
   private readonly maxReceiveCount: number;
   private readonly visibilityTimeout: number;
   private readonly topicVisibilityTimeouts = new Map<string, number>();
+  /** G-ASYNC-1: per-topic onOutcome hook (see SubscribeOptions.onOutcome). */
+  private readonly topicOutcomeCallbacks = new Map<string, SubscribeOptions["onOutcome"]>();
 
   constructor() {
     // QUE-FANOUT: the per-service queue name needs a DISTINCT service id.
@@ -717,6 +792,20 @@ export class SqsQueue implements Queue {
     if (options?.visibilityTimeout != null) {
       this.topicVisibilityTimeouts.set(topic, options.visibilityTimeout);
     }
+    if (options?.onOutcome) {
+      this.topicOutcomeCallbacks.set(topic, options.onOutcome);
+    }
+  }
+
+  /** Best-effort outcome emit: never let a broken onOutcome affect ack/DLQ routing. */
+  private async emitOutcome(topic: string, outcome: CommandOutcome): Promise<void> {
+    const onOutcome = this.topicOutcomeCallbacks.get(topic);
+    if (!onOutcome) return;
+    try {
+      await onOutcome(outcome);
+    } catch (err) {
+      this.logHandlerError(topic, null, 0, err);
+    }
   }
 
   async start(): Promise<void> {
@@ -836,6 +925,11 @@ export class SqsQueue implements Queue {
             });
             await this.routeToDlq(topic, sqsMsg.Body ?? "", "invalid_envelope");
             await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            // G-ASYNC-1: still attributable to a command if the envelope at
+            // least carries messageId/tenantId despite failing validation.
+            if (msg.messageId && msg.tenantId) {
+              await this.emitOutcome(topic, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "rejected", reason: `invalid_envelope: ${parsed.error}` });
+            }
             continue;
           }
 
@@ -846,6 +940,11 @@ export class SqsQueue implements Queue {
           // vanish. Success of all handlers is required before delete.
           let allHandled = true;
           let nonRetryableHandled = false;
+          // G-ASYNC-1: last error seen across attempts on THIS receive, so the
+          // 'failed' outcome emitted once maxReceiveCount is exhausted (below,
+          // possibly several ReceiveMessage calls later than this one) can
+          // carry a real reason instead of a bare "retries exhausted".
+          let lastError: unknown;
           for (const h of handlers) {
             try {
               await h(msg);
@@ -857,10 +956,12 @@ export class SqsQueue implements Queue {
                 this.logHandlerError(topic, msg, receiveCount, err);
                 await this.routeToDlq(topic, sqsMsg.Body ?? "", "non_retryable_error");
                 await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+                await this.emitOutcome(topic, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "rejected", reason: err.message });
                 nonRetryableHandled = true;
                 break;
               }
               allHandled = false;
+              lastError = err;
               incrementConsumerError(this.service, topic);
               captureError(err, { service: this.service, topic, messageId: msg.messageId, correlationId: msg.correlationId, traceparent: msg.traceparent, receiveCount });
               this.logHandlerError(topic, msg, receiveCount, err);
@@ -871,6 +972,7 @@ export class SqsQueue implements Queue {
 
           if (allHandled) {
             await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            await this.emitOutcome(topic, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "succeeded" });
             continue;
           }
 
@@ -880,6 +982,10 @@ export class SqsQueue implements Queue {
           if (receiveCount >= this.maxReceiveCount) {
             await this.routeToDlq(topic, sqsMsg.Body ?? "", "max_receive_count_exceeded");
             await this.deleteSqsMessage(url, sqsMsg.ReceiptHandle!);
+            await this.emitOutcome(topic, {
+              messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "failed",
+              reason: lastError instanceof Error ? lastError.message : (lastError !== undefined ? String(lastError) : "retries exhausted"),
+            });
             continue;
           }
           // PERF-004: leave the message, but extend its visibility timeout on an
