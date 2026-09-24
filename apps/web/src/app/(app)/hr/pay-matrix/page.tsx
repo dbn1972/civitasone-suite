@@ -32,11 +32,11 @@ export default async function PayMatrixPage() {
   const minPay = rows.at(0)?.basic ?? "—";
   const maxPay = rows.at(-1)?.basic ?? "—";
 
-  const columns: { key: keyof Row & string; label: string; align?: "left" | "right" }[] = [
+  const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; sortable?: boolean }[] = [
     { key: "level", label: t("colLevel"), align: "right" },
     { key: "payGrade", label: t("colPayGrade") },
     { key: "cell", label: t("colCell"), align: "right" },
-    { key: "basic", label: t("colBasicPay"), align: "right" },
+    { key: "basic", label: t("colBasicPay"), align: "right", sortable: false },
   ];
 
   return (
@@ -45,6 +45,7 @@ export default async function PayMatrixPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr"
+        backLabel={t("backToHr")}
         actions={<span />}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />

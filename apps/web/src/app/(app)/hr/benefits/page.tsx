@@ -17,22 +17,17 @@ type Row = {
   id: string;
   plan_name: string;
   fy: string;
-  total_elected: string;
+  total_elected: number | null;
   components: string;
   status: string;
 } & Record<string, unknown>;
-
-function formatINR(minor: number): string {
-  if (minor == null) return "—";
-  return `₹${(minor / 100).toLocaleString("en-IN")}`;
-}
 
 function mapElections(rows: ApiElection[]): Row[] {
   return rows.map((e) => ({
     id: e.id,
     plan_name: e.plan_name ?? "—",
     fy: e.fy ?? "—",
-    total_elected: formatINR(e.total_elected_minor),
+    total_elected: e.total_elected_minor ?? null,
     components: Array.isArray(e.elections)
       ? e.elections.map((c) => c.component).join(", ")
       : "—",
@@ -60,11 +55,11 @@ export default async function BenefitsPage() {
   const processing = items.filter((i) => ["processing", "pending", "submitted"].includes(i.status)).length;
   const closed = items.filter((i) => ["closed", "lapsed", "expired"].includes(i.status)).length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" }[] = [
     { key: "plan_name", label: t("colPlan") },
     { key: "fy", label: t("colFinancialYear") },
     { key: "components", label: t("colComponents") },
-    { key: "total_elected", label: t("colTotalElected") },
+    { key: "total_elected", label: t("colTotalElected"), cellType: "amount" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
@@ -74,6 +69,7 @@ export default async function BenefitsPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr"
+        backLabel={t("backToHr")}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>

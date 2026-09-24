@@ -189,11 +189,18 @@ export function DataTable<T extends Record<string, unknown>>({
     }
   };
 
+  function csvCellValue<T2 extends Record<string, unknown>>(col: Column<T2>, row: T2): string {
+    if (col.cellType === "amount") return String(formatMoney(row[col.key] as number | null) ?? "");
+    if (col.cellType === "rupees") return String(formatRupees(row[col.key] as number | string | null) ?? "");
+    if (col.cellType === "status") return String(row[col.key] ?? "");
+    return String(row[col.key] ?? "");
+  }
+
   function downloadCsv() {
     const header = columns.map((c) => c.label).join(",");
     const csvRows = sorted.map((row) =>
       columns.map((col) => {
-        const val = String(row[col.key] ?? "").replace(/"/g, '""');
+        const val = csvCellValue(col, row).replace(/"/g, '""');
         return val.includes(",") || val.includes('"') || val.includes("\n") ? `"${val}"` : val;
       }).join(",")
     );

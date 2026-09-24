@@ -440,7 +440,8 @@
     "cardTitle": "Benefit Elections",
     "filterPlaceholder": "Filter by plan, FY or status…",
     "emptyTitle": "No benefits enrolled",
-    "emptyMessage": "Employee benefits enrollments (HRA, LTC, medical) appear here once elections are submitted during the benefit window."
+    "emptyMessage": "Employee benefits enrollments (HRA, LTC, medical) appear here once elections are submitted during the benefit window.",
+    "backToHr": "Back to HR"
   },
   "challans": {
     "errorBackLabel": "Back to Statutory",
@@ -2863,7 +2864,8 @@
     "cardTitle": "Loans Register",
     "filterPlaceholder": "Filter by employee, loan type or status…",
     "emptyTitle": "No employee loans",
-    "emptyMessage": "Employee salary advances and loans appear here. Loans are created via the Payroll › Loans module."
+    "emptyMessage": "Employee salary advances and loans appear here. Loans are created via the Payroll › Loans module.",
+    "backToHr": "Back to HR"
   },
   "loansTable": {
     "colLoanNo": "Loan No.",
@@ -2960,7 +2962,8 @@
     "cardTitle": "Medical Reimbursement Claims",
     "filterPlaceholder": "Filter by claim type, hospital or status…",
     "emptyTitle": "No medical claims filed",
-    "emptyMessage": "Medical reimbursement claims filed by employees under CGHS or CS(MA) Rules appear here. Both self and dependent claims are tracked."
+    "emptyMessage": "Medical reimbursement claims filed by employees under CGHS or CS(MA) Rules appear here. Both self and dependent claims are tracked.",
+    "backToHr": "Back to HR"
   },
   "misc": {
     "darkMode": "Dark mode",
@@ -3211,7 +3214,8 @@
     "emptyTitle": "Pay matrix not loaded",
     "emptyMessage": "The 7th CPC pay matrix data appears here. Use the filter to look up basic pay by level or grade.",
     "loadingSubtitle": "Loading pay matrix…",
-    "loadingCardTitle": "Pay Matrix Levels"
+    "loadingCardTitle": "Pay Matrix Levels",
+    "backToHr": "Back to HR"
   },
   "payroll": {
     "title": "Payroll",
@@ -3968,7 +3972,8 @@
     "cardTitle": "Salary Structures",
     "filterPlaceholder": "Filter by name, grade or status…",
     "emptyTitle": "No salary structures defined",
-    "emptyMessage": "Pay structure definitions by grade and level appear here. Structures define the component breakdown — basic pay, DA, HRA, transport, and special allowances — for each employee category."
+    "emptyMessage": "Pay structure definitions by grade and level appear here. Structures define the component breakdown — basic pay, DA, HRA, transport, and special allowances — for each employee category.",
+    "backToHr": "Back to HR"
   },
   "serviceBook": {
     "title": "Service Book",
@@ -4151,7 +4156,8 @@
     "cardTitle": "Sanctioned vs Filled Strength",
     "filterPlaceholder": "Filter by department, cadre or status…",
     "emptyTitle": "No staffing plan data",
-    "emptyMessage": "Sanctioned posts versus filled positions are recorded here for DPC planning, UPSC requisitions, and vacancy circulars."
+    "emptyMessage": "Sanctioned posts versus filled positions are recorded here for DPC planning, UPSC requisitions, and vacancy circulars.",
+    "backToHr": "Back to HR"
   },
   "stat": {
     "total": "Total",

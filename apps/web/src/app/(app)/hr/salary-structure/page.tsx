@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
 
 type ApiStructure = {
   id: string;
@@ -22,6 +23,7 @@ type Row = {
   components: string;
   basicPay: string;
   effectiveDate: string;
+  rawEffectiveDate: string;
   employees: string;
   status: string;
 } & Record<string, unknown>;
@@ -33,7 +35,8 @@ function mapStructures(apiItems: ApiStructure[]): Row[] {
     grade: s.grade ?? "—",
     components: s.components ?? "—",
     basicPay: s.basicPayRange ?? "—",
-    effectiveDate: s.effectiveDate ?? "—",
+    effectiveDate: formatIndianDate(s.effectiveDate),
+    rawEffectiveDate: s.effectiveDate ?? "",
     employees: s.employeeCount != null ? String(s.employeeCount) : "—",
     status: s.status,
   }));
@@ -60,18 +63,19 @@ export default async function SalaryStructurePage() {
     return sum + (isNaN(n) ? 0 : n);
   }, 0);
 
-  const lastRevision = items
-    .map((i) => i.effectiveDate)
-    .filter((d) => d && d !== "—")
+  const lastRevisionRaw = items
+    .map((i) => i.rawEffectiveDate)
+    .filter(Boolean)
     .sort()
-    .at(-1) ?? "—";
+    .at(-1);
+  const lastRevision = lastRevisionRaw ? formatIndianDate(lastRevisionRaw) : "—";
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status"; sortable?: boolean }[] = [
     { key: "name", label: t("colStructureName") },
     { key: "grade", label: t("colGradeLevel") },
     { key: "components", label: t("colComponents") },
-    { key: "basicPay", label: t("colBasicPayRange") },
-    { key: "effectiveDate", label: t("colEffectiveDate") },
+    { key: "basicPay", label: t("colBasicPayRange"), sortable: false },
+    { key: "effectiveDate", label: t("colEffectiveDate"), sortable: false },
     { key: "employees", label: t("colEmployees") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
@@ -82,6 +86,7 @@ export default async function SalaryStructurePage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr"
+        backLabel={t("backToHr")}
         actions={<span />}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />

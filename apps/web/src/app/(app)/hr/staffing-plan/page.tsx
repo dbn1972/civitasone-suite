@@ -3,8 +3,9 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
+import { formatPercent } from "@/lib/formatters";
 
-type Row = {
+type ApiRow = {
   id: string;
   department: string;
   cadre: string;
@@ -16,12 +17,31 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
+type Row = {
+  id: string;
+  department: string;
+  cadre: string;
+  sanctionedPosts: number;
+  filled: number;
+  vacant: number;
+  fillPercentage: string;
+  lastReview: string;
+  status: string;
+} & Record<string, unknown>;
+
+function mapRows(apiRows: ApiRow[]): Row[] {
+  return apiRows.map((r) => ({
+    ...r,
+    fillPercentage: formatPercent(r.fillPercentage, 0),
+  }));
+}
+
 async function getData(): Promise<LoaderResult<Row[]>> {
   return fetchJson<unknown, Row[]>("/api/v1/hrms/staffing-plan", [], {
     telemetryKey: "hr.staffing-plan",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+      const arr = Array.isArray(p) ? p : (p as { data?: ApiRow[] })?.data;
+      return Array.isArray(arr) ? mapRows(arr as ApiRow[]) : null;
     },
   });
 }
@@ -41,7 +61,7 @@ export default async function StaffingPlanPage() {
     { key: "sanctionedPosts", label: t("colSanctioned"), align: "right" },
     { key: "filled", label: t("colFilled"), align: "right" },
     { key: "vacant", label: t("colVacant"), align: "right" },
-    { key: "fillPercentage", label: t("colFillPercent") },
+    { key: "fillPercentage", label: t("colFillPercent"), align: "right" },
     { key: "lastReview", label: t("colLastReview") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
@@ -52,6 +72,7 @@ export default async function StaffingPlanPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr"
+        backLabel={t("backToHr")}
         actions={<span />}
       />
       <DataSourceBadge source={source} />
@@ -59,7 +80,7 @@ export default async function StaffingPlanPage() {
         <StatCard icon="📊" iconBg="#e6f0ff" label={t("statSanctionedPostsLabel")} value={errored ? null : totalSanctioned} />
         <StatCard icon="👥" iconBg="#e6f7f0" label={t("statFilledLabel")} value={errored ? null : totalFilled} />
         <StatCard icon="⬜" iconBg="#fff1f0" label={t("statVacantLabel")} value={errored ? null : totalVacant} />
-        <StatCard icon="📈" iconBg="#fffbe6" label={t("statFillRateLabel")} value={errored ? null : overallFill} />
+        <StatCard icon="📈" iconBg="#fffbe6" label={t("statFillRateLabel")} value={errored ? null : formatPercent(overallFill, 0)} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (
