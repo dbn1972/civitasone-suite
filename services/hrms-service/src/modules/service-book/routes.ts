@@ -22,10 +22,16 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id: employeeId } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = z.object({
-      entryType: z.string().min(1),
+      // SEC-CRIT-002 (trivial companion fix): bound free-text fields to their
+      // DB column widths so an oversized value 400s cleanly here instead of
+      // failing as a raw DB error later in the async F3 consumer (entry_type
+      // is varchar(30), document_ref is varchar(100) -- see schema.ts).
+      // description is a text column server-side; cap it to keep entries a
+      // genuine service-book note rather than unbounded free text.
+      entryType: z.string().min(1).max(30),
       effectiveDate: z.string(),
-      description: z.string().min(1),
-      documentRef: z.string().optional(),
+      description: z.string().min(1).max(2000),
+      documentRef: z.string().max(100).optional(),
     }).parse(req.body);
     const entryId = randomUUID();
     await publishF3Write(ctx, "service_book_routes__0", entryId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
@@ -38,8 +44,8 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { entryId } = z.object({ entryId: z.string().uuid() }).parse(req.params);
     const body = z.object({
-      description: z.string().min(1),
-      documentRef: z.string().optional(),
+      description: z.string().min(1).max(2000),
+      documentRef: z.string().max(100).optional(),
     }).parse(req.body);
     const entry = await repo.getEntry(ctx.tenantId, entryId);
     if (!entry) throw new HttpError(404, "NOT_FOUND", "service book entry not found");

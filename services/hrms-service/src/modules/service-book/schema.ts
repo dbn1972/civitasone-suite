@@ -16,6 +16,11 @@ export const hrmsServiceBookEntries = serviceBookSchema.table("hrms_service_book
   attestedAt:    timestamp("attested_at", { withTimezone: true }),
   attestRemarks: text("attest_remarks"),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // SEC-CRIT-002: audit trail for edits (no history table -- see the
+  // add/edit/attest audit.event.record emission in f3-consumer.ts for the
+  // append-only trail; these columns cover "who/when last touched the row").
+  updatedAt:     timestamp("updated_at", { withTimezone: true }),
+  updatedBy:     uuid("updated_by"),
 });
 
 export type ServiceBookRow = typeof hrmsServiceBookEntries.$inferSelect;
