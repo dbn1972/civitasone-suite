@@ -6,7 +6,7 @@ import { ZodError } from "zod";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { getCommandOutcome } from "../../shared/outbox.js";
-import { scopedRead } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import * as queries from "./queries.js";
 import * as commands from "./commands.js";
 import { createTenderBody, submitBidBody, techEvaluateBody, awardTenderBody, idParam } from "./validators.js";
@@ -83,11 +83,13 @@ export async function tenderRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { commandId } = commandIdParam.parse(req.params);
-    // scopedRead (shared/db.ts) runs inside db.transaction() so RLS's
-    // app.tenant_id GUC is actually set — a bare db.select() here would
-    // silently fail-closed to zero rows under this service's NOBYPASSRLS role
-    // (see repo.ts's findTenderById for the identical, established pattern).
-    const outcome = await scopedRead((tx) => getCommandOutcome(tx, commandId));
+    // _inbox.command_results deliberately has NO row-level security (see its
+    // doc comment in @civitasone/outbox — the cross-tenant purge loop needs
+    // to delete old rows with no app.tenant_id GUC set, the same reason
+    // _outbox.messages had FORCE RLS dropped fleet-wide). ctx.tenantId here
+    // is therefore the ONLY thing enforcing tenant isolation on this read —
+    // getCommandOutcome filters on it explicitly, not via RLS.
+    const outcome = await getCommandOutcome(db, ctx.tenantId, commandId);
     if (!outcome) return reply.send({ commandId, status: "processing" });
     return reply.send({ commandId, status: outcome.status, reason: outcome.reason, occurredAt: outcome.occurredAt });
   });

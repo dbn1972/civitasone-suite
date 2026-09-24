@@ -5,7 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { getCommandOutcome } from "../../shared/outbox.js";
-import { scopedRead } from "../../shared/db.js";
+import { db } from "../../shared/db.js";
 import { transitionState, validateMakerChecker } from "./domain.js";
 import * as commands from "./commands.js";
 import * as templateQueries from "../templates/queries.js";
@@ -100,9 +100,13 @@ export async function approvalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READERS);
     const { commandId } = commandIdParam.parse(req.params);
-    // scopedRead (shared/db.ts) runs inside db.transaction() so RLS's
-    // app.tenant_id GUC is actually set for this read.
-    const outcome = await scopedRead((tx) => getCommandOutcome(tx, commandId));
+    // _inbox.command_results deliberately has NO row-level security (see its
+    // doc comment in @civitasone/outbox — the purge loop needs to delete old
+    // rows with no app.tenant_id GUC set, same reason _outbox.messages had
+    // FORCE RLS dropped fleet-wide). ctx.tenantId here is therefore the ONLY
+    // thing enforcing tenant isolation on this read — getCommandOutcome
+    // filters on it explicitly, not via RLS.
+    const outcome = await getCommandOutcome(db, ctx.tenantId, commandId);
     if (!outcome) return reply.send({ commandId, status: "processing" });
     return reply.send({ commandId, status: outcome.status, reason: outcome.reason, occurredAt: outcome.occurredAt });
   });

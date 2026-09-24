@@ -87,6 +87,25 @@ export const processed = inbox.table("processed", {
  * service is "wire one callback + add one GET route", not "build a status
  * pipeline from scratch". See recordCommandOutcome()/getCommandOutcome()
  * below.
+ *
+ * DELIBERATELY NO ROW-LEVEL SECURITY on this table — same resolution the
+ * fleet already applied to its sibling `outboxMessages` (see every service's
+ * `NNNN_outbox_messages_drop_rls.sql`: "packages/outbox relayOnce polls
+ * unpublished rows with no app.tenant_id GUC. Under FORCE RLS ... the
+ * NOBYPASSRLS service role sees ZERO rows every cycle — permanent stall.").
+ * purgeOutbox() below needs to delete old rows ACROSS ALL TENANTS with no
+ * tenant GUC set, exactly like it already does for outboxMessages/processed;
+ * some services' worker.ts additionally call it via a BYPASSRLS "scanner" db
+ * (see e.g. procurement-service/src/shared/scanner-db.ts) and some don't
+ * (e.g. notification-service, whose own scanner pool is documented
+ * read-only) — this table has to work purged via EITHER, so it can't depend
+ * on FORCE RLS being bypassable at all. Tenant isolation for READS is
+ * therefore enforced explicitly in getCommandOutcome() below (an explicit
+ * `tenantId` filter, not RLS) — the same "explicit filter, not RLS alone"
+ * defense-in-depth already used elsewhere in this fleet for tenant-scoped
+ * reads outside a request/consumer's own ambient GUC context (e.g.
+ * procurement-service's findTenderByIdTx filters by tenantId explicitly
+ * in addition to whatever RLS would otherwise enforce).
  */
 export const commandResults = inbox.table("command_results", {
   messageId:  uuid("message_id").primaryKey(),
@@ -152,15 +171,22 @@ export async function recordCommandOutcome(tx: DrizzleTx, outcome: CommandOutcom
  * never published) — callers should render that as "processing", matching
  * docs/API-GUIDE.md §3.1's documented "use the returned id to check status"
  * contract, which nothing previously fulfilled end-to-end.
+ *
+ * `tenantId` is REQUIRED and filtered on explicitly — this table has no RLS
+ * (see commandResults' own doc comment above for why), so this filter is the
+ * ONLY thing standing between a caller and another tenant's command outcome.
+ * Always pass the CALLER's own tenantId (e.g. from resolveContext(req) in a
+ * route), never a value taken from the request body/params.
  */
 export async function getCommandOutcome(
   db: DrizzleTx,
+  tenantId: string,
   messageId: string,
 ): Promise<{ status: CommandOutcomeStatus; reason: string | null; occurredAt: Date } | null> {
   const rows = await db
     .select({ status: commandResults.status, reason: commandResults.reason, occurredAt: commandResults.occurredAt })
     .from(commandResults)
-    .where(eq(commandResults.messageId, messageId))
+    .where(and(eq(commandResults.messageId, messageId), eq(commandResults.tenantId, tenantId)))
     .limit(1);
   return rows[0] ?? null;
 }
@@ -341,7 +367,11 @@ export async function markProcessed(tx: DrizzleTx, messageId: string): Promise<b
 
 /**
  * G7: Scheduled outbox purge — deletes published outbox rows older than
- * `retentionDays` (default 7). Also purges old inbox/processed entries.
+ * `retentionDays` (default 7). Also purges old inbox/processed entries, and
+ * (G-ASYNC-1) old _inbox.command_results entries on the same retention
+ * window — a service adopting recordCommandOutcome() gets purge for free
+ * the moment it already calls this function for its outbox/inbox tables; no
+ * separate wiring needed.
  * Processes deletions in batches of `batchSize` (default 1000).
  * Returns the total number of deleted rows. Safe to call from any service worker.
  */
@@ -378,6 +408,25 @@ export async function purgeOutbox(db: DrizzleTx, retentionDays = 7, batchSize = 
     inboxBatchDeleted = (result as unknown as { count?: number }).count ?? 0;
     totalDeleted += inboxBatchDeleted;
   } while (inboxBatchDeleted >= batchSize);
+
+  // G-ASYNC-1: command_results is _inbox.processed's sibling (same schema,
+  // same "consumer-side, one row per terminal delivery" shape) and needs the
+  // same retention — without this it grows unbounded for the lifetime of
+  // whichever service adopts it, same failure mode this function already
+  // exists to prevent for the other two tables.
+  let commandResultsBatchDeleted: number;
+  do {
+    const result = await db.execute(sql`
+      DELETE FROM _inbox.command_results
+      WHERE message_id IN (
+        SELECT message_id FROM _inbox.command_results
+        WHERE occurred_at < ${cutoff}
+        LIMIT ${sql.raw(String(batchSize))}
+      )
+    `);
+    commandResultsBatchDeleted = (result as unknown as { count?: number }).count ?? 0;
+    totalDeleted += commandResultsBatchDeleted;
+  } while (commandResultsBatchDeleted >= batchSize);
 
   return totalDeleted;
 }

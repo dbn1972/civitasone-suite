@@ -198,8 +198,10 @@ describe("approval consumer — approve (in_review → approved) and maker-check
     // (whose 202 response returned this exact messageId as `id` — see
     // approval/commands.ts's approve()) could ever have queried for it. Now
     // GET /v1/templates/commands/:commandId/status (routes.ts) can, via the
-    // same commandResults row asserted here directly.
-    const outcome = await runWithTenant(TENANT, () => db.transaction((tx) => getCommandOutcome(tx, rejectedMessageId)));
+    // same commandResults row asserted here directly. command_results has no
+    // RLS (see its own doc comment) — tenantId is passed explicitly, exactly
+    // as the real route does via ctx.tenantId.
+    const outcome = await getCommandOutcome(db, TENANT, rejectedMessageId);
     expect(outcome).not.toBeNull();
     expect(outcome?.status).toBe("rejected");
     expect(outcome?.reason).toContain("MAKER_CHECKER_VIOLATION");

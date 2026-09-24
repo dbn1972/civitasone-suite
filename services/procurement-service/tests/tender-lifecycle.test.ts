@@ -237,7 +237,9 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
     // as `id` (see commands.ts's submitBid) now resolves to a queryable,
     // caller-visible rejection — exactly what
     // GET /v1/procurement/tenders/commands/:commandId/status (routes.ts) serves.
-    const outcome = await runWithTenant(TENANT, () => db.transaction((tx) => getCommandOutcome(tx, dupMsg.messageId)));
+    // command_results has no RLS (see its own doc comment) — tenantId is
+    // passed explicitly, exactly as the real route does via ctx.tenantId.
+    const outcome = await getCommandOutcome(db, TENANT, dupMsg.messageId);
     expect(outcome).not.toBeNull();
     expect(outcome?.status).toBe("rejected");
     expect(outcome?.reason).toMatch(/DUPLICATE_BID/);

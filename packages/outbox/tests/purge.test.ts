@@ -12,6 +12,12 @@
  * minimal fake exposing only `execute()`, called in the exact sequence
  * `purgeOutbox`/`startOutboxPurge` invoke it.
  *
+ * G-ASYNC-1: `purgeOutbox` now runs a THIRD batched delete loop, for
+ * `_inbox.command_results` (same retention window, same batching), after the
+ * existing outbox and inbox/processed loops — every `fakeDb([...])` queue
+ * below has a matching entry for it, and every `toHaveBeenCalledTimes(N)`
+ * assertion is N+1 versus this file's pre-G-ASYNC-1 history.
+ *
  * REL-029: the count-check branch's fixtures below (`[{ cnt: N }]`) must be a
  * bare array, matching the real shape drizzle's postgres-js driver returns
  * for a raw `db.execute()` SELECT. An earlier version of this file mocked
@@ -50,26 +56,35 @@ describe("purgeOutbox — batched deletion", () => {
   it("accumulates deleted rows across batches and stops once a batch is under batchSize", async () => {
     // Outbox loop: 1000, 1000, 300 (3 calls, stops at 300 < 1000).
     // Inbox loop: 500 (1 call, stops at 500 < 1000).
+    // Command-results loop (G-ASYNC-1): 1000, 200 (2 calls, stops at 200 < 1000)
+    // — given its own multi-batch scenario here, not just a trailing zero, so
+    // this test actually exercises the third loop's do/while continuation,
+    // not merely its presence.
     const db = fakeDb([
       { count: 1000 },
       { count: 1000 },
       { count: 300 },
       { count: 500 },
+      { count: 1000 },
+      { count: 200 },
     ]);
     const total = await purgeOutbox(db, 7, 1000);
-    expect(total).toBe(2800); // REL-034: inbox deletions are now included in the return value
-    expect((db.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(4);
+    expect(total).toBe(4000); // REL-034: inbox + command_results deletions are both included
+    expect((db.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(6);
   });
 
   it("performs exactly one batch per table when the first batch is already under batchSize", async () => {
-    const db = fakeDb([{ count: 42 }, { count: 0 }]);
+    // Third value (7) is deliberately non-zero so this asserts the
+    // command_results loop's contribution is actually summed, not just that
+    // a third call happens.
+    const db = fakeDb([{ count: 42 }, { count: 0 }, { count: 7 }]);
     const total = await purgeOutbox(db, 7, 1000);
-    expect(total).toBe(42);
-    expect((db.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
+    expect(total).toBe(49);
+    expect((db.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(3);
   });
 
   it("returns 0 and issues no unnecessary work when nothing is eligible for deletion", async () => {
-    const db = fakeDb([{ count: 0 }, { count: 0 }]);
+    const db = fakeDb([{ count: 0 }, { count: 0 }, { count: 0 }]);
     const total = await purgeOutbox(db, 7, 1000);
     expect(total).toBe(0);
   });
@@ -85,9 +100,11 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
 
   it("logs a WARN when a cycle deletes zero rows and the outbox exceeds 10,000 entries", async () => {
     const logger = { warn: vi.fn() };
-    // purgeOutbox: outbox loop (1 call, 0 deleted), inbox loop (1 call, 0 deleted).
-    // Then the zero-deleted count check queries _outbox.messages.
+    // purgeOutbox: outbox loop (1 call, 0 deleted), inbox loop (1 call, 0
+    // deleted), command_results loop (1 call, 0 deleted — G-ASYNC-1). Then
+    // the zero-deleted count check queries _outbox.messages.
     const db = fakeDb([
+      { count: 0 },
       { count: 0 },
       { count: 0 },
       [{ cnt: 15_000 }],
@@ -115,6 +132,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     const db = fakeDb([
       { count: 0 },
       { count: 0 },
+      { count: 0 },
       [{ cnt: 10_000 }],
     ]);
 
@@ -127,9 +145,11 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
 
   it("does not log a WARN, and does not query the count, when a cycle deletes rows", async () => {
     const logger = { warn: vi.fn() };
-    // Outbox loop deletes 500 (1 call, stop), inbox loop deletes 0 (1 call, stop).
-    // No third call — the count check only runs when deleted === 0.
-    const db = fakeDb([{ count: 500 }, { count: 0 }]);
+    // Outbox loop deletes 500 (1 call, stop), inbox loop deletes 0 (1 call,
+    // stop), command_results loop deletes 0 (1 call, stop — G-ASYNC-1).
+    // No 4th call — the count check only runs when the TOTAL deleted === 0,
+    // and outbox's 500 alone already makes that false.
+    const db = fakeDb([{ count: 500 }, { count: 0 }, { count: 0 }]);
 
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000, logger });
     await vi.advanceTimersByTimeAsync(1001);
@@ -138,12 +158,12 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     }
 
     expect(logger.warn).not.toHaveBeenCalled();
-    expect((db.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(2);
+    expect((db.execute as ReturnType<typeof vi.fn>)).toHaveBeenCalledTimes(3);
     clearInterval(timer);
   });
 
   it("is a no-op (never throws, never warns) when no logger is supplied", async () => {
-    const db = fakeDb([{ count: 0 }, { count: 0 }]);
+    const db = fakeDb([{ count: 0 }, { count: 0 }, { count: 0 }]);
     const timer = startOutboxPurge(db, { intervalMs: 1000, batchSize: 1000 });
     await expect(vi.advanceTimersByTimeAsync(1000)).resolves.not.toThrow();
     clearInterval(timer);
@@ -159,7 +179,7 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
   });
 
   it("defaults to a 60-minute interval and 1000-row batches when options are omitted", async () => {
-    const db = fakeDb([{ count: 0 }, { count: 0 }]);
+    const db = fakeDb([{ count: 0 }, { count: 0 }, { count: 0 }]);
     const executeSpy = db.execute as ReturnType<typeof vi.fn>;
     const timer = startOutboxPurge(db);
 
@@ -167,10 +187,12 @@ describe("startOutboxPurge — scheduled cycle + WARN threshold", () => {
     await vi.advanceTimersByTimeAsync(60 * 60_000 - 1);
     expect(executeSpy).not.toHaveBeenCalled();
 
-    // Crossing the 60-minute mark triggers exactly one purge cycle
-    // (outbox loop + inbox loop = 2 execute calls; deleted !== 0 so no count check).
+    // Crossing the 60-minute mark triggers exactly one purge cycle (outbox
+    // loop + inbox loop + command_results loop [G-ASYNC-1] = 3 execute
+    // calls; all return 0 rows so each loop stops after one call, and
+    // deleted===0 with no logger means no count query either).
     await vi.advanceTimersByTimeAsync(1);
-    expect(executeSpy).toHaveBeenCalledTimes(2); // outbox delete loop + inbox delete loop; both return 0 rows so each loop stops after one call, and deleted===0 with no logger means no count query
+    expect(executeSpy).toHaveBeenCalledTimes(3);
     clearInterval(timer);
   });
 
