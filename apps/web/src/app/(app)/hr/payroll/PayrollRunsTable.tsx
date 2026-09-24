@@ -43,6 +43,7 @@ export function PayrollRunsTable({ runs, source = "api", canAdminister = false }
         rows={rows}
         rowLinkKey="id"
         rowLinkPrefix="/hr/payroll/"
+        caption="Payroll runs listing with period, status, employee count, and totals"
         sortable
         filterable
         filterPlaceholder="Filter by period or status…"

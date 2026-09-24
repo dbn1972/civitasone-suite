@@ -3,6 +3,8 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } fr
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { WFHRequestForm } from "../../_components/WFHRequestForm";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 
 /**
@@ -39,7 +41,16 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   });
 }
 
+const WFH_ALLOWED_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin"];
+
 export default async function WFHPage() {
+  const roles = getSessionRoles();
+  const canView = roles.some((r: string) => WFH_ALLOWED_ROLES.includes(r));
+
+  if (!canView) {
+    return <PermissionDenied module="Work From Home requests" requiredRoles={WFH_ALLOWED_ROLES} />;
+  }
+
   const t = await getTranslations("workforceWfh");
   const { data: items, source } = await getData();
   const errored = source === "error";
@@ -88,6 +99,7 @@ export default async function WFHPage() {
             <DataTable<Row>
             columns={COLUMNS}
             rows={items}
+            caption="Work from home requests with employee, dates, and approval status"
             sortable
             filterable
             filterPlaceholder={t("filterPlaceholder")}

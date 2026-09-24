@@ -117,6 +117,7 @@ export default async function PayrollRegisterPage({
           <DataTable<Row>
           columns={columns}
           rows={items}
+          caption="Payroll register lines by department with gross, deductions, and net pay"
           sortable
           filterable
           filterPlaceholder="Filter by department…"

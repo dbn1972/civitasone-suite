@@ -222,9 +222,10 @@ export function WFHRequestForm({
             required
             aria-required="true"
             min={new Date().toISOString().split("T")[0]}
+            aria-describedby={formError.fieldError("fromDate") ? "wfh-from-err" : undefined}
           />
           {formError.fieldError("fromDate") && (
-            <span style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
+            <span id="wfh-from-err" role="alert" style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
               {formError.fieldError("fromDate")}
             </span>
           )}
@@ -240,9 +241,10 @@ export function WFHRequestForm({
             required
             aria-required="true"
             min={fromDate || new Date().toISOString().split("T")[0]}
+            aria-describedby={formError.fieldError("toDate") ? "wfh-to-err" : undefined}
           />
           {formError.fieldError("toDate") && (
-            <span style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
+            <span id="wfh-to-err" role="alert" style={{ display: "block", fontSize: 12, color: "var(--red, #dc2626)", marginTop: 4 }}>
               {formError.fieldError("toDate")}
             </span>
           )}
