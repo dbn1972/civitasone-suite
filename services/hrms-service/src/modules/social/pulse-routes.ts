@@ -1,7 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
-import { resolveContext, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlPool as sqlClient } from "../../shared/db.js";
 
 /**
@@ -9,6 +9,15 @@ import { sqlPool as sqlClient } from "../../shared/db.js";
  * Goals / OKR — personal and team goal tracking with check-ins.
  * Leaderboard — gamified recognition with points and ranks.
  */
+
+// Audit: this file called requireRole nowhere at all, despite the create-survey
+// comment below claiming "(HR admin)" -- any authenticated tenant user could
+// create org-wide surveys or read a supposedly-anonymous survey's results.
+// Scoped narrowly to the specific routes the audit flagged (create survey,
+// survey results, goal check-ins list); the rest of this file's routes are
+// unchanged and out of scope for this fix.
+const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
+const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
 
 const pulseCreateSchema = z.object({
   question: z.string().min(5).max(300),
@@ -51,6 +60,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   /** POST /v1/hrms/pulse-surveys — create a pulse survey (HR admin) */
   app.post("/v1/hrms/pulse-surveys", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
     const body = pulseCreateSchema.parse(req.body);
     const id = randomUUID();
 
@@ -111,9 +121,15 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ status: "submitted" });
   });
 
-  /** GET /v1/hrms/pulse-surveys/:id/results — survey results (aggregated) */
+  /**
+   * GET /v1/hrms/pulse-surveys/:id/results — survey results (aggregated).
+   * Audit: previously ungated, risking de-anonymization of a supposedly
+   * -anonymous survey in a small response pool (any authenticated user
+   * could pull the raw score distribution). HR/admin only.
+   */
   app.get("/v1/hrms/pulse-surveys/:id/results", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
     const { id } = req.params as { id: string };
 
     const stats = await sqlClient.query(
@@ -222,10 +238,31 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ status: "checked_in", progress: body.progress });
   });
 
-  /** GET /v1/hrms/goals/:id/checkins — list check-in history */
+  /**
+   * GET /v1/hrms/goals/:id/checkins — list check-in history.
+   * Audit: no requireRole call at all, and no ownership filter beyond
+   * WHERE goal_id/tenant_id -- any authenticated tenant user could read any
+   * employee's goal check-in notes/progress by UUID. hrms.goals.employee_id
+   * (and goal_checkins.employee_id) is keyed on ctx.actorId directly, NOT
+   * hrms_employees.id -- verified via the real INSERT paths above (POST
+   * /v1/hrms/goals writes ctx.actorId as employee_id; migrations/
+   * 0116_pulse_goals_leaderboard.sql carries no FK to hrms_employees on
+   * either column) -- so this mirrors the POST .../checkin ownership check
+   * immediately above with the SAME raw ctx.actorId comparison, not
+   * resolveEmployeeForActor (that resolution is for tables keyed on
+   * hrms_employees.id, a different id space -- see employee/actor-link.ts;
+   * this table simply isn't one of them).
+   */
   app.get("/v1/hrms/goals/:id/checkins", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
     const { id } = req.params as { id: string };
+
+    const goal = await sqlClient.query(
+      `SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
+      [id, ctx.tenantId, ctx.actorId],
+    );
+    if (goal.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Goal not found");
 
     const rows = await sqlClient.query(
       `SELECT id, progress, note, created_at FROM hrms.goal_checkins
@@ -373,9 +410,13 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
         [ctx.actorId, ctx.tenantId],
       );
       if (emp.rows[0]?.reporting_to) {
+        // Was missing the tenant_id filter every other query in this file
+        // carries -- harmless in practice (reporting_to is itself sourced
+        // from a tenant-scoped lookup just above), but inconsistent and
+        // one copy-paste away from a real cross-tenant read.
         const mgr = await sqlClient.query(
-          `SELECT first_name, last_name, designation FROM employee.hrms_employees WHERE id = $1`,
-          [emp.rows[0].reporting_to],
+          `SELECT first_name, last_name, designation FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
+          [emp.rows[0].reporting_to, ctx.tenantId],
         );
         if (mgr.rows[0]) {
           response = { text: `Your reporting manager is ${mgr.rows[0].first_name} ${mgr.rows[0].last_name} (${mgr.rows[0].designation}).` };

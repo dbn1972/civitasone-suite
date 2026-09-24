@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { ZodError, z } from "zod";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { analyzeGaps, mergeLevel } from "./domain.js";
@@ -9,10 +10,37 @@ import {
   createFrameworkBody, createCompetencyBody, roleRequirementBody, setEmployeeCompetencyBody,
 } from "./validators.js";
 import * as repo from "./repo.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
 const idParam = z.object({ id: z.string().uuid() });
+
+/**
+ * IDOR fix (audit): GET .../employees/:id/profile and .../gap-analysis took
+ * the target employee from the path/query with no ownership check -- any
+ * employee holding a colleague's hrms_employees.id (obtainable from
+ * org-chart/leaderboard endpoints) could pull their competency profile. A
+ * bare "employee" caller may only read their OWN resolved employee record
+ * (resolveEmployeeForActor -- not ctx.actorId, a different id space); HR
+ * and manager roles are unrestricted (no existing "manager scoped to
+ * direct reports" precedent in this module -- same judgment call
+ * medical/routes.ts's resolveSelfScopedEmployeeId documents). The write
+ * path (PUT .../employees/:id/competencies) is already correctly
+ * HR_ROLES-only and is untouched.
+ *
+ * Rejects with 404 (not 403) so an out-of-scope caller cannot distinguish
+ * "exists but isn't yours" from "does not exist" -- matches
+ * apar/routes.ts's assertReadable for the same single-record-by-id shape.
+ */
+async function assertEmployeeReadable(ctx: RequestContext, req: FastifyRequest, targetEmployeeId: string): Promise<void> {
+  const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+  if (isPrivileged) return;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  if (!actorEmp || actorEmp.id !== targetEmployeeId) {
+    throw new HttpError(404, "NOT_FOUND", "employee not found");
+  }
+}
 
 export async function competencyRoutes(app: FastifyInstance): Promise<void> {
   // ── Framework / dictionary ──────────────────────────────────────
@@ -84,6 +112,7 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const { id } = idParam.parse(req.params);
+    await assertEmployeeReadable(ctx, req, id);
     return reply.send(await repo.listEmployeeCompetencies(ctx.tenantId, id));
   });
 
@@ -95,6 +124,7 @@ export async function competencyRoutes(app: FastifyInstance): Promise<void> {
       employeeId: z.string().uuid(),
       roleCode:   z.string().min(1).max(64),
     }).parse(req.query);
+    await assertEmployeeReadable(ctx, req, employeeId);
     const [required, held] = await Promise.all([
       repo.listRoleRequirements(ctx.tenantId, roleCode),
       repo.listEmployeeCompetencies(ctx.tenantId, employeeId),

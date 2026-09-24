@@ -4600,11 +4600,13 @@
   "competency": {
     "title": "Competency Framework",
     "subtitle": "Frameworks, competency definitions, and core government competency radar.",
+    "dataSourceErrorMessage": "Couldn't load — showing nothing",
     "statFrameworks": "Frameworks",
     "statActive": "Active",
     "statTechnical": "Technical",
     "statBehavioural": "Behavioural",
     "radarCardTitle": "Core Government Competencies — Radar View",
+    "radarIllustrativeNote": "Illustrative sample data — not yet linked to individual employee assessments.",
     "frameworksCardTitle": "Competency Frameworks",
     "catalogueCardTitle": "Competency Catalogue",
     "colFrameworkName": "Framework Name",
@@ -5047,6 +5049,7 @@
   "appraisals": {
     "title": "Appraisals",
     "subtitle": "Employee performance review cycle — APAR (Annual Performance Appraisal Report).",
+    "dataSourceErrorMessage": "Couldn't load — showing nothing",
     "newAppraisal": "+ New Appraisal",
     "emptyTitle": "No active appraisal cycle",
     "emptyMessage": "Start an appraisal cycle to record employee performance ratings and manager reviews for the current period.",
