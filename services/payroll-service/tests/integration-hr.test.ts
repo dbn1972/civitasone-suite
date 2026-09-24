@@ -1,7 +1,7 @@
 /**
  * HR ↔ Payroll ↔ Finance integration contract tests (MemoryQueue, no HRMS HTTP).
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
 import { eq, inArray } from "drizzle-orm";
@@ -10,6 +10,22 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
 import { payrollLopLedger } from "../src/modules/integration/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
+
+// BUG-2 fix: registerIntegrationConsumers' leaveApproved/attendanceMarked
+// handlers now call fetchAttendanceLopApplies (a real HTTP call to
+// hrms-service, gating the ledger write on DIC engagement exemption) before
+// writing to payrollLopLedger. This file is a REAL-DB integration test with
+// "no HRMS HTTP" BY DESIGN (see file header) — there is no hrms-service
+// listening during this run, so the real fetch() would fail closed
+// (HrmsUnavailableError) and every ledger write below would silently never
+// happen. Mock just this one HTTP boundary, defaulting to `true` (LOP
+// applies) so every existing test below keeps its original real-DB behavior;
+// db/queue/payroll-consumer modules all stay real, matching the file's
+// existing design.
+vi.mock("../src/shared/hrms-client.js", () => ({
+  fetchAttendanceLopApplies: async () => true,
+}));
+
 import { registerPayrollConsumers } from "../src/modules/payroll/consumer.js";
 import { registerIntegrationConsumers } from "../src/modules/integration/consumer.js";
 import { COMMANDS, CONSUMED_EVENTS, EVENTS } from "../src/topics.js";

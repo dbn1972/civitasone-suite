@@ -20,6 +20,7 @@ const {
   dbTransactionFn,
   upsertLopDaysMock,
   markProcessedMock,
+  fetchAttendanceLopAppliesMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -37,11 +38,17 @@ const {
   });
   const _upsertLopDaysMock = vi.fn(async () => undefined);
   const _markProcessedMock = vi.fn(async () => true);
+  // BUG-2 fix: gates the ledger write on the same DIC engagement exemption the
+  // live-pull payroll-input feed applies. Defaults to `true` (LOP applies / not
+  // exempt) so every pre-existing test below -- none of which is about
+  // engagement exemption -- keeps its original behavior unmodified.
+  const _fetchAttendanceLopAppliesMock = vi.fn(async () => true);
   return {
     mockTx: _mockTx,
     dbTransactionFn: _dbTransactionFn as any,
     upsertLopDaysMock: _upsertLopDaysMock as any,
     markProcessedMock: _markProcessedMock as any,
+    fetchAttendanceLopAppliesMock: _fetchAttendanceLopAppliesMock as any,
   };
 });
 
@@ -73,6 +80,13 @@ vi.mock("../src/shared/infra.js", () => ({
     invalidate: vi.fn(async () => undefined),
     makeKey: vi.fn((...parts: string[]) => parts.join(":")),
   },
+}));
+
+// 6. hrms-client — BUG-2 fix: the engagement-exemption check the consumer now
+// calls before every ledger write. Mocked so these tests never make a real
+// network call; see fetchAttendanceLopAppliesMock's default above.
+vi.mock("../src/shared/hrms-client.js", () => ({
+  fetchAttendanceLopApplies: (...args: any[]) => fetchAttendanceLopAppliesMock(...args),
 }));
 
 // ---------------------------------------------------------------------------
@@ -112,6 +126,7 @@ const settle = () => new Promise<void>((r) => setTimeout(r, 150));
 beforeEach(() => {
   vi.clearAllMocks();
   markProcessedMock.mockResolvedValue(true);
+  fetchAttendanceLopAppliesMock.mockResolvedValue(true);
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => {
     await cb(mockTx);
   });
@@ -260,6 +275,125 @@ describe("hrms.attendance.marked → LOP ledger upsert", () => {
     );
     await settle();
 
+    expect(upsertLopDaysMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// BUG-2 fix — DIC engagement exemption (consultant/third-party/apprentice)
+// must gate the LOCAL LEDGER WRITE ITSELF, not just the live-pull HRMS
+// payroll-input feed. Previously, leaveApproved/attendanceMarked wrote to
+// payrollLopLedger unconditionally for EVERY employee type; the payroll run
+// then PREFERS the ledger over the correctly-exempting feed whenever any
+// ledger row exists for the month (see payroll/consumer.ts's "M2 LOP
+// double-count" comment), silently overriding the exemption. These tests
+// prove upsertLopDays is skipped entirely for an exempt employee, and still
+// runs normally for a non-exempt one.
+// ---------------------------------------------------------------------------
+describe("BUG-2: engagement exemption gates the ledger write", () => {
+  it("leaveApproved: exempt employee (fetchAttendanceLopApplies=false) never reaches upsertLopDays", async () => {
+    fetchAttendanceLopAppliesMock.mockResolvedValue(false);
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.leaveApproved,
+      makeMsg(CONSUMED_EVENTS.leaveApproved, {
+        employeeId: "consultant-1",
+        daysApplied: 3,
+        fromDate: "2025-06-01",
+      }),
+    );
+    await settle();
+
+    expect(fetchAttendanceLopAppliesMock).toHaveBeenCalledWith(TENANT, "consultant-1");
+    expect(upsertLopDaysMock).not.toHaveBeenCalled();
+    // A benignly-skipped (exempt) message must not be claimed either -- it's
+    // not "processed", it's correctly never-applicable, matching the existing
+    // attendanceMarked status-filter's same early-return-before-transaction
+    // shape elsewhere in this consumer.
+    expect(markProcessedMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("leaveApproved: non-exempt employee (fetchAttendanceLopApplies=true) still reaches upsertLopDays", async () => {
+    fetchAttendanceLopAppliesMock.mockResolvedValue(true);
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.leaveApproved,
+      makeMsg(CONSUMED_EVENTS.leaveApproved, {
+        employeeId: "pay-scale-1",
+        daysApplied: 3,
+        fromDate: "2025-06-01",
+      }),
+    );
+    await settle();
+
+    expect(fetchAttendanceLopAppliesMock).toHaveBeenCalledWith(TENANT, "pay-scale-1");
+    expect(upsertLopDaysMock).toHaveBeenCalledOnce();
+    const [, , employeeId, , source, days] = upsertLopDaysMock.mock.calls[0]!;
+    expect(employeeId).toBe("pay-scale-1");
+    expect(source).toBe("leave");
+    expect(days).toBe(3);
+    await q.stop();
+  });
+
+  it("attendanceMarked (absent): exempt employee never reaches upsertLopDays", async () => {
+    fetchAttendanceLopAppliesMock.mockResolvedValue(false);
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.attendanceMarked,
+      makeMsg(CONSUMED_EVENTS.attendanceMarked, {
+        employeeId: "apprentice-1",
+        attendanceDate: "2025-06-15",
+        status: "absent",
+      }),
+    );
+    await settle();
+
+    expect(fetchAttendanceLopAppliesMock).toHaveBeenCalledWith(TENANT, "apprentice-1");
+    expect(upsertLopDaysMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("attendanceMarked (absent): non-exempt employee still reaches upsertLopDays", async () => {
+    fetchAttendanceLopAppliesMock.mockResolvedValue(true);
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.attendanceMarked,
+      makeMsg(CONSUMED_EVENTS.attendanceMarked, {
+        employeeId: "pay-scale-2",
+        attendanceDate: "2025-06-15",
+        status: "absent",
+      }),
+    );
+    await settle();
+
+    expect(upsertLopDaysMock).toHaveBeenCalledOnce();
+    const [, , employeeId, , source, days] = upsertLopDaysMock.mock.calls[0]!;
+    expect(employeeId).toBe("pay-scale-2");
+    expect(source).toBe("attendance");
+    expect(days).toBe(1);
+    await q.stop();
+  });
+
+  it("attendanceMarked (present): exemption check is never even reached (status filter short-circuits first)", async () => {
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.attendanceMarked,
+      makeMsg(CONSUMED_EVENTS.attendanceMarked, {
+        employeeId: "pay-scale-3",
+        attendanceDate: "2025-06-15",
+        status: "present",
+      }),
+    );
+    await settle();
+
+    expect(fetchAttendanceLopAppliesMock).not.toHaveBeenCalled();
     expect(upsertLopDaysMock).not.toHaveBeenCalled();
     await q.stop();
   });

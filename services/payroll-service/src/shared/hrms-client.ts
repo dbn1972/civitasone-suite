@@ -136,6 +136,54 @@ export async function verifyEmployeeExists(tenantId: string, employeeId: string)
   return body.exists;
 }
 
+/**
+ * BUG-2 fix: DIC engagement-exemption check for a single employee, used by
+ * integration/consumer.ts to gate payrollLopLedger writes at ingest time
+ * (leaveApproved / attendanceMarked handlers), BEFORE lopRepo.upsertLopDays.
+ * Without this, an exempt employee's (consultant/third-party/apprentice)
+ * approved leave or marked attendance still lands in the ledger, and the
+ * payroll run PREFERS that ledger over this module's own fetchPayrollInput
+ * lopDays whenever any ledger row exists for the month (see payroll/
+ * consumer.ts's "M2 LOP double-count" comment) — silently overriding the
+ * correct exclusion.
+ *
+ * Mirrors hrms-service's own attendanceLopApplies (engagement-policy.ts)
+ * exactly via a dedicated internal lookup (rather than re-deriving the
+ * policy locally from fields this service doesn't have at ingest time), so
+ * the ledger-write gate and the payroll-input live-pull route can never
+ * disagree on who is exempt.
+ *
+ * Fails CLOSED (throws HrmsUnavailableError) on an unreachable/erroring
+ * HRMS, mirroring fetchPayrollInput/verifyEmployeeExists above — LOP
+ * correctness is financial, so this must never silently guess when HRMS
+ * cannot be reached; the caller lets the queue's own redelivery retry later.
+ *
+ * A 404 (employee not found in HRMS) is NOT unreachability — it returns
+ * `true` (LOP applies), the same permissive default DEFAULT_POLICY resolves
+ * to for an employee engagement-typing can't otherwise classify, so a
+ * lookup race never silently exempts someone it shouldn't.
+ */
+export async function fetchAttendanceLopApplies(tenantId: string, employeeId: string): Promise<boolean> {
+  const url = `${HRMS_URL}/v1/hrms/internal/employees/${encodeURIComponent(employeeId)}/attendance-lop-applies`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        "x-internal": "1",
+        "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
+        "x-tenant-id": tenantId,
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    throw new HrmsUnavailableError(`hrms attendance-lop-applies check unreachable: ${(err as Error).message}`);
+  }
+  if (res.status === 404) return true;
+  if (!res.ok) throw new HrmsUnavailableError(`hrms attendance-lop-applies check failed: ${res.status}`);
+  const body = await res.json() as { attendanceLopApplies: boolean };
+  return body.attendanceLopApplies;
+}
+
 export type PayrollSlipTemplate = {
   templateHtml: string;
   isDefault: boolean;

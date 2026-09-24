@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { uuidV5 } from "../../shared/ids.js";
 import type { CreateJobOpeningBody, CreateApplicationBody, OfferApplicationBody, HireApplicationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -37,7 +38,27 @@ export async function offerApplication(ctx: RequestContext, id: string, body: Of
 }
 
 export async function hireApplication(ctx: RequestContext, applicationId: string, body: HireApplicationBody): Promise<Accepted> {
-  const employeeId = randomUUID();
+  // BUG-3 fix: derive a STABLE employeeId/messageId from the applicationId
+  // instead of a fresh randomUUID() on every call. An application can only
+  // legitimately be hired once, so a retried or double-clicked Hire action
+  // for the SAME application must always produce the SAME messageId --
+  // that's what lets the queue's own idempotency guard (packages/outbox's
+  // markProcessed, an atomic `INSERT ... ON CONFLICT DO NOTHING RETURNING`,
+  // see bus.ts) dedupe it, instead of minting a second, unrelated messageId
+  // that sails straight past dedup and lets the consumer insert a second
+  // employee row for one application. uuidV5 is the established pattern for
+  // exactly this (see shared/ids.ts's own doc comment); the "recruitment.hire:"
+  // prefix namespaces this derivation from any other uuidV5(applicationId, ...)
+  // use elsewhere.
+  //
+  // This closes the common path (retry / redelivery / double-click all now
+  // collide on one messageId, caught cheaply before any DB write). The hire
+  // consumer additionally guards the employee-creation itself with an atomic
+  // application-status claim (recruitment/repo.ts's claimApplicationForHire)
+  // for the same reason leave/repo.ts guards approveLeaveApp with a
+  // WHERE-status UPDATE: defense in depth against two hire attempts that,
+  // for whatever reason, still reach the consumer under different messageIds.
+  const employeeId = uuidV5(`recruitment.hire:${applicationId}`);
   await queue.publish(COMMANDS.applicationHire, {
     messageId: employeeId, type: COMMANDS.applicationHire,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

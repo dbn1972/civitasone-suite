@@ -1,4 +1,4 @@
-import { eq, and, inArray, sql, desc } from "drizzle-orm";
+import { eq, and, inArray, sql, desc, ne } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, type ApplicationRow, type JobOpeningRow, type InterviewRow } from "./schema.js";
 
@@ -29,6 +29,30 @@ export async function insertApplication(tx: Writer, row: typeof hrmsApplications
 
 export async function updateApplication(tx: Writer, id: string, patch: Partial<typeof hrmsApplications.$inferInsert>): Promise<void> {
   await tx.update(hrmsApplications).set({ ...patch, updatedAt: new Date() }).where(eq(hrmsApplications.id, id));
+}
+
+/**
+ * BUG-3 fix: atomically claim an application for hiring. Mirrors leave/
+ * repo.ts's approveLeaveApp WHERE-status guard (H2): an UPDATE ... WHERE
+ * stage != 'hired' that only succeeds (and returns true) when this
+ * application hasn't already been hired. Returns false (0 rows affected)
+ * when it's already in the "hired" stage, so the hire consumer can skip
+ * creating a second employee record for a duplicate/redelivered
+ * applicationHire command that reaches it under a different messageId than
+ * the original attempt (see recruitment/commands.ts's hireApplication for
+ * the deterministic-messageId half of this fix) instead of racing past a
+ * blind updateApplication and creating two employees for one application.
+ */
+export async function claimApplicationForHire(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const result = await tx.update(hrmsApplications)
+    .set({ stage: "hired", status: "closed", updatedAt: new Date() })
+    .where(and(
+      eq(hrmsApplications.id, id),
+      eq(hrmsApplications.tenantId, tenantId),
+      ne(hrmsApplications.stage, "hired"),
+    ))
+    .returning({ id: hrmsApplications.id });
+  return result.length > 0;
 }
 
 export async function insertOffer(tx: Writer, row: typeof hrmsOffers.$inferInsert): Promise<void> {

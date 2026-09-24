@@ -10,6 +10,7 @@ const {
   mockTx, dbTransactionFn, enqueuedMessages,
   insertJobOpeningMock, insertApplicationMock, updateApplicationMock,
   insertOfferMock, findApplicationByIdMock, insertEmployeeMock,
+  claimApplicationForHireMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -28,6 +29,11 @@ const {
     insertOfferMock: vi.fn(async () => undefined),
     findApplicationByIdMock: vi.fn(async () => null as any),
     insertEmployeeMock: vi.fn(async () => undefined),
+    // BUG-3 fix: atomic application-status claim the hire handler now calls
+    // instead of the old blind updateApplication. Defaults to `true`
+    // (claim succeeds / not already hired) so the existing happy-path test
+    // below keeps its original behavior.
+    claimApplicationForHireMock: vi.fn(async () => true),
   };
 });
 
@@ -52,6 +58,8 @@ vi.mock("../src/modules/recruitment/repo.js", () => ({
   // now reads through its own already-open transaction instead of the
   // scopedRead-based findApplicationById above. Forwarded to the SAME mock.
   findApplicationByIdTx: (...a: any[]) => findApplicationByIdMock(...a),
+  // BUG-3 fix: atomic hire claim -- see claimApplicationForHireMock above.
+  claimApplicationForHire: (...a: any[]) => claimApplicationForHireMock(...a),
 }));
 vi.mock("../src/modules/employee/repo.js", () => ({
   insertEmployee: (...a: any[]) => insertEmployeeMock(...a),
@@ -80,6 +88,7 @@ beforeEach(() => {
   enqueuedMessages.length = 0;
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
   findApplicationByIdMock.mockResolvedValue({ applicantName: "Ravi Kumar", email: "ravi@gov.in", mobile: "9876543210" });
+  claimApplicationForHireMock.mockResolvedValue(true);
 });
 
 describe("jobCreate command", () => {
@@ -134,19 +143,23 @@ describe("applicationOffer command", () => {
 });
 
 describe("applicationHire command", () => {
-  it("creates employee, closes application, and emits employeeCreated", async () => {
+  it("claims the application (atomic hire guard), creates employee, and emits employeeCreated", async () => {
     const q = await buildQueue();
     const empId = randomUUID();
+    const appId = randomUUID();
     await q.publish(COMMANDS.applicationHire, makeMsg(COMMANDS.applicationHire, {
-      employeeId: empId, applicationId: randomUUID(), tenantId: TENANT,
+      employeeId: empId, applicationId: appId, tenantId: TENANT,
       employeeNo: "EMP-NEW-001", dateOfJoining: "2026-08-01",
       basicMinor: 5000000, departmentId: randomUUID(),
       designationId: randomUUID(), employeeType: "permanent",
     }));
     await settle();
-    expect(updateApplicationMock).toHaveBeenCalledOnce();
-    const [, appId, appPatch] = updateApplicationMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
-    expect(appPatch.stage).toBe("hired");
+    // BUG-3 fix: the hire handler now claims the application atomically
+    // (claimApplicationForHire, a guarded UPDATE ... WHERE stage != 'hired')
+    // instead of the old blind updateApplication -- see recruitment/repo.ts.
+    expect(claimApplicationForHireMock).toHaveBeenCalledOnce();
+    expect(claimApplicationForHireMock).toHaveBeenCalledWith(mockTx, appId, TENANT);
+    expect(updateApplicationMock).not.toHaveBeenCalled();
 
     expect(insertEmployeeMock).toHaveBeenCalledOnce();
     const emp = insertEmployeeMock.mock.calls[0]![1] as Record<string, unknown>;
@@ -156,6 +169,50 @@ describe("applicationHire command", () => {
 
     const evt = enqueuedMessages.find((m) => m.topic === EVENTS.employeeCreated);
     expect(evt).toBeDefined();
+    await q.stop();
+  });
+
+  // BUG-3 regression: a retried/double-clicked Hire action must never create
+  // two employee records for the same application. commands.ts now derives a
+  // DETERMINISTIC messageId from the applicationId (so a genuine retry is
+  // deduped upstream by the queue's own markProcessed) -- but this test
+  // simulates the case that fix alone can't cover: two hire commands for the
+  // SAME application reaching this consumer under DIFFERENT messageIds (e.g.
+  // two independent request-handler invocations before any dedup could kick
+  // in). Only the atomic claimApplicationForHire guard added to the consumer
+  // protects that case, so this test drives the mock exactly the way the real
+  // guarded UPDATE would behave: succeeds once, then reports "already hired".
+  it("does not create a second employee when the same application is hired twice under different messageIds", async () => {
+    const q = await buildQueue();
+    const appId = randomUUID();
+    // Mirrors the real guarded UPDATE ... WHERE stage != 'hired': true once,
+    // then false for every subsequent attempt on the same application.
+    let claimed = false;
+    claimApplicationForHireMock.mockImplementation(async () => {
+      if (claimed) return false;
+      claimed = true;
+      return true;
+    });
+
+    const basePayload = {
+      applicationId: appId, tenantId: TENANT,
+      employeeNo: "EMP-NEW-002", dateOfJoining: "2026-08-01",
+      basicMinor: 5000000, departmentId: randomUUID(),
+      designationId: randomUUID(), employeeType: "permanent",
+    };
+    // Two distinct messageIds/employeeIds for the SAME applicationId -- what
+    // the OLD commands.ts (fresh randomUUID() per call) would have produced
+    // for a double-clicked Hire button, and exactly what markProcessed's
+    // messageId-keyed dedup cannot catch.
+    await q.publish(COMMANDS.applicationHire, makeMsg(COMMANDS.applicationHire, { employeeId: randomUUID(), ...basePayload }));
+    await q.publish(COMMANDS.applicationHire, makeMsg(COMMANDS.applicationHire, { employeeId: randomUUID(), ...basePayload }));
+    await settle();
+
+    expect(claimApplicationForHireMock).toHaveBeenCalledTimes(2);
+    // The critical assertion: only ONE employee record, not two.
+    expect(insertEmployeeMock).toHaveBeenCalledOnce();
+    const evts = enqueuedMessages.filter((m) => m.topic === EVENTS.employeeCreated);
+    expect(evts.length).toBe(1);
     await q.stop();
   });
 });
