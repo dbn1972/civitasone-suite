@@ -26,6 +26,7 @@ import {
 } from "./requisition-domain.js";
 import * as repo from "./requisition-repo.js";
 import type { RequisitionRow } from "./requisition-schema.js";
+import { resolveDeptScope, type DeptScope } from "./dept-scope.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ADMIN_ROLES = ["hr_admin", "super_admin"];
@@ -122,7 +123,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CREATE_ROLES);
     const q = z.object({ status: z.string().max(20).optional() }).parse(req.query);
     const privileged = ctx.roles.some((r: string) => ADMIN_ROLES.includes(r));
-    return reply.send(jsonSafe({ data: await repo.listRequisitions(ctx.tenantId, { ...(q.status ? { status: q.status } : {}), privileged, viewerId: ctx.actorId }) }));
+    const deptScope = await resolveDeptScope(req, ctx);
+    return reply.send(jsonSafe({ data: await repo.listRequisitions(ctx.tenantId, { ...(q.status ? { status: q.status } : {}), privileged, viewerId: ctx.actorId, deptScope }) }));
   });
 
   app.get("/v1/hrms/requisitions/:id", async (req, reply) => {
@@ -130,7 +132,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CREATE_ROLES);
     const { id } = idParam.parse(req.params);
     const r = await mustReq(ctx.tenantId, id);
-    assertCanView(ctx, r);
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     return reply.send(jsonSafe(r));
   });
 
@@ -139,7 +141,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CREATE_ROLES);
     const { id } = idParam.parse(req.params);
     const r = await mustReq(ctx.tenantId, id);
-    assertCanView(ctx, r);
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     return reply.send(jsonSafe({ data: await repo.listApprovals(ctx.tenantId, id) }));
   });
 
@@ -148,7 +150,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CREATE_ROLES);
     const { id } = idParam.parse(req.params);
     const r = await mustReq(ctx.tenantId, id);
-    assertCanView(ctx, r); // a confidential requisition cannot be edited (or un-hidden) by a non-privileged non-creator
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx)); // a confidential requisition cannot be edited (or un-hidden) by a non-privileged non-creator; department-scoped callers similarly cannot edit another department's requisition
     if (!isEditable(r.status)) throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}'; only draft/returned are editable`);
     const b = reqBody.partial().parse(req.body ?? {});
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
@@ -172,6 +174,10 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CREATE_ROLES);
     const { id } = idParam.parse(req.params);
     const r = await mustReq(ctx.tenantId, id);
+    // HIGH finding: this route had NO ownership/department check at all --
+    // a department-scoped manager/hiring_manager could submit another
+    // department's requisition into the approval pipeline.
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     if (r.status !== "draft" && r.status !== "returned") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', cannot submit`);
     const chain = r.approvalChain as ApprovalStage[];
     if (!Array.isArray(chain) || chain.length === 0) throw new HttpError(400, "NO_APPROVAL_CHAIN", "requisition has no approval chain configured");
@@ -184,6 +190,15 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ comments: z.string().max(2000).optional() }).parse(req.body ?? {});
     const r = await mustReq(ctx.tenantId, id);
+    // HIGH finding: this route (like /return below) had NO department-scoping
+    // check at all — only the stage-role gate further down. A department-
+    // scoped hiring_manager (DEFAULT_GOVT_CHAIN's own stage-0 role) could
+    // approve ANY other department's requisition merely by holding that role
+    // tenant-wide. Both checks must now pass: the caller needs the correct
+    // stage role (below) AND (for non-HR/non-admin roles) to be scoped to
+    // this requisition's department — mirrors how /submit and /clone above
+    // already combine assertCanView with their own state/role checks.
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     if (r.status !== "pending_approval") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', not pending approval`);
     const chain = r.approvalChain as ApprovalStage[];
     const role = currentStageRole(chain, r.currentStage);
@@ -209,6 +224,8 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ comments: z.string().min(1).max(2000) }).parse(req.body ?? {}); // mandatory (R-RA-0054)
     const r = await mustReq(ctx.tenantId, id);
+    // HIGH finding: department scoping, same gap and same fix as /approve above.
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     if (r.status !== "pending_approval") throw new HttpError(409, "WRONG_STATE", `requisition is '${r.status}', not pending approval`);
     const chain = r.approvalChain as ApprovalStage[];
     const role = currentStageRole(chain, r.currentStage);
@@ -272,7 +289,7 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, CREATE_ROLES);
     const { id } = idParam.parse(req.params);
     const r = await mustReq(ctx.tenantId, id);
-    assertCanView(ctx, r);
+    assertCanView(ctx, r, await resolveDeptScope(req, ctx));
     const newId = randomUUID();
     const carried = cloneFields(r as unknown as Record<string, unknown>);
     await publishF3Write(ctx, "recruitment_requisition_routes__9", newId, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
@@ -310,11 +327,26 @@ export async function requisitionRoutes(app: FastifyInstance): Promise<void> {
     if (!r) throw new HttpError(404, "NOT_FOUND", "requisition not found");
     return r;
   }
-  function assertCanView(ctx: { roles: string[]; actorId: string }, r: RequisitionRow): void {
-    if (!r.confidential) return;
-    const privileged = ctx.roles.some((role) => ADMIN_ROLES.includes(role));
-    if (!privileged && r.createdBy !== ctx.actorId) {
-      throw new HttpError(404, "NOT_FOUND", "requisition not found"); // hide existence of confidential reqs
+  function assertCanView(ctx: { roles: string[]; actorId: string }, r: RequisitionRow, deptScope: DeptScope): void {
+    if (r.confidential) {
+      const privileged = ctx.roles.some((role) => ADMIN_ROLES.includes(role));
+      if (!privileged && r.createdBy !== ctx.actorId) {
+        throw new HttpError(404, "NOT_FOUND", "requisition not found"); // hide existence of confidential reqs
+      }
+    }
+    // HIGH finding: department scoping. A department-scoped (non-tenant-wide)
+    // caller may only act on a requisition tied to their own department, or
+    // one they created themselves (own creations are always visible/editable
+    // regardless of department resolution). Same "hide existence" 404 the
+    // confidentiality check above already uses, for consistency within this
+    // file -- a requisition's existence (title, that a dept is hiring at
+    // all) is exactly the kind of thing confidentiality already treats as
+    // sensitive here, so department-scope denial gets the same treatment
+    // rather than a 403 that would confirm the row exists.
+    if (!deptScope.tenantWide && r.createdBy !== ctx.actorId) {
+      if (!r.departmentId || r.departmentId !== deptScope.departmentId) {
+        throw new HttpError(404, "NOT_FOUND", "requisition not found");
+      }
     }
   }
 }

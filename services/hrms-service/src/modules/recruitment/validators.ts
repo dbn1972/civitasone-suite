@@ -17,6 +17,16 @@ export const createJobOpeningBody = z.object({
   isPublished:   z.boolean().default(false),
   postedAt:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   closesAt:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  // MEDIUM finding: JD-template linkage. templateId records which template
+  // (if any) this opening was created from, so jd-template-repo's useCount/
+  // traceability actually works regardless of which create path was used
+  // (this direct route, or jd-template-routes.ts's POST .../use). The other
+  // three mirror createJdTemplateBody's own field shapes/limits (validators.ts
+  // above) since they carry the SAME data through from a template.
+  templateId:        z.string().uuid().optional(),
+  selectionProcess:  z.string().max(3000).optional(),
+  requiredDocuments: z.array(z.string().max(200)).max(30).optional(),
+  eligibility:       z.record(z.unknown()).optional(),
 });
 export type CreateJobOpeningBody = z.infer<typeof createJobOpeningBody>;
 

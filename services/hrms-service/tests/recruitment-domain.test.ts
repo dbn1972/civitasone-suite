@@ -6,6 +6,7 @@ import { describe, it, expect } from "vitest";
 import { currentStageRole, isFinalStage, canPublish, isEditable, toVacancyType, cloneFields, DEFAULT_GOVT_CHAIN } from "../src/modules/recruitment/requisition-domain.js";
 import { computeCompensation, canRelease, isTerminal, isOfferEditable, isDeclineReasonCode, DECLINE_REASON_CODES } from "../src/modules/recruitment/offer-domain.js";
 import { detectConflicts } from "../src/modules/recruitment/coi-domain.js";
+import { stageForScreeningDecision } from "../src/modules/recruitment/screening.js";
 
 describe("requisition approval chain", () => {
   it("currentStageRole returns correct role at each stage", () => {
@@ -93,5 +94,20 @@ describe("COI detection", () => {
   it("no conflict when unrelated", () => {
     const r = detectConflicts({ name: "Alice Smith" }, [{ memberId: "m1", memberName: "Bob Jones" }]);
     expect(r.hasConflict).toBe(false);
+  });
+});
+
+describe("screening domain — stageForScreeningDecision", () => {
+  it('"shortlisted" decision maps to "shortlisted" stage', () => {
+    expect(stageForScreeningDecision("shortlisted")).toBe("shortlisted");
+  });
+  it('"ineligible" decision maps to "rejected" stage', () => {
+    expect(stageForScreeningDecision("ineligible")).toBe("rejected");
+  });
+  it("decisions with no stage counterpart return null (stage left untouched)", () => {
+    expect(stageForScreeningDecision("eligible")).toBeNull();
+    expect(stageForScreeningDecision("waitlisted")).toBeNull();
+    expect(stageForScreeningDecision("manual_review")).toBeNull();
+    expect(stageForScreeningDecision("pending")).toBeNull();
   });
 });

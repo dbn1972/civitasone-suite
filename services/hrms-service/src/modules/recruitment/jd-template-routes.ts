@@ -104,6 +104,10 @@ export async function jdTemplateRoutes(app: FastifyInstance): Promise<void> {
       qualification: (overrides.qualification as string | undefined) ?? tmpl.qualification,
       payRange: (overrides.payRange as string | undefined) ?? tmpl.payRange,
       selectionProcess: (overrides.selectionProcess as string | undefined) ?? tmpl.selectionProcess,
+      // MEDIUM finding: was missing entirely from this merge, so a
+      // template's requiredDocuments never carried through even via this
+      // "correctly snapshots" endpoint.
+      requiredDocuments: (overrides.requiredDocuments as string[] | undefined) ?? tmpl.requiredDocuments,
       eligibility: (overrides.eligibility as Record<string, unknown> | undefined) ?? tmpl.eligibility,
       closesAt: overrides.closesAt as string | undefined,
       isPublished: false,
@@ -117,8 +121,11 @@ export async function jdTemplateRoutes(app: FastifyInstance): Promise<void> {
       payload,
     });
 
-    // Increment useCount asynchronously (fire-and-forget)
-    void templateRepo.incrementUseCount(ctx.tenantId, templateId);
+    // MEDIUM finding: useCount incrementing moved to consumer.ts's jobCreate
+    // handler (keyed on payload.templateId, set above) so it fires exactly
+    // once regardless of create path instead of here AND there double-
+    // counting now that the direct POST /v1/hrms/job-openings path also
+    // carries templateId (validators.ts).
 
     return reply.code(202).send({ id: jobId, status: "accepted", templateId, correlationId: ctx.correlationId });
   });

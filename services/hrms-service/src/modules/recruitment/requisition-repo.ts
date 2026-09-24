@@ -30,14 +30,35 @@ export async function findRequisitionTx(tx: Writer, tenantId: string, id: string
  * List requisitions. Confidential ones are visible only to their creator or to a
  * privileged viewer (HR/super admin) — R-RA-0058. `privileged` collapses the
  * confidential filter; otherwise confidential rows are limited to `viewerId`.
+ *
+ * HIGH finding: department scoping. `deptScope` (dept-scope.ts) is a SEPARATE
+ * axis from `privileged` above -- hr_officer, for example, is tenant-wide for
+ * department (HR_ROLES) but not "privileged" for confidentiality (ADMIN_ROLES
+ * only), so both conditions can independently apply and AND together. A
+ * department-scoped (non-tenant-wide) caller sees only requisitions tied to
+ * their own department, OR ones they created themselves (an own-creation is
+ * always visible regardless of department resolution -- a pure identity
+ * check via createdBy, not reliant on the caller's department having
+ * resolved at all). A requisition with no department set (departmentId is
+ * nullable -- see requisition-schema.ts) is invisible to a scoped caller
+ * unless they created it: fails closed rather than treating "no department"
+ * as "everyone's".
  */
 export async function listRequisitions(
-  tenantId: string, opts: { status?: string; privileged: boolean; viewerId: string }, limit = 200,
+  tenantId: string,
+  opts: { status?: string; privileged: boolean; viewerId: string; deptScope: { tenantWide: boolean; departmentId: string | null } },
+  limit = 200,
 ): Promise<RequisitionRow[]> {
   const conds = [eq(hrmsRequisitions.tenantId, tenantId)];
   if (opts.status) conds.push(eq(hrmsRequisitions.status, opts.status));
   if (!opts.privileged) {
     conds.push(or(eq(hrmsRequisitions.confidential, false), eq(hrmsRequisitions.createdBy, opts.viewerId))!);
+  }
+  if (!opts.deptScope.tenantWide) {
+    conds.push(or(
+      opts.deptScope.departmentId ? eq(hrmsRequisitions.departmentId, opts.deptScope.departmentId) : sql`false`,
+      eq(hrmsRequisitions.createdBy, opts.viewerId),
+    )!);
   }
   return scopedRead((tx) => tx.select().from(hrmsRequisitions)
     .where(and(...conds)).orderBy(desc(hrmsRequisitions.createdAt)).limit(limit));

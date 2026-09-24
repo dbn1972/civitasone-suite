@@ -30,7 +30,7 @@ import {
 } from "./requisition-domain.js";
 import { DEFAULT_OFFER_CHAIN, computeCompensation } from "./offer-domain.js";
 import { normalizeEmail, mobileDedupKey } from "./candidate.js";
-import { autoScreenDecision } from "./screening.js";
+import { autoScreenDecision, stageForScreeningDecision, type ScreeningDecision } from "./screening.js";
 import { assessFee } from "./application-fee.js";
 import { commsEnabled, resolveDispatch, buildCommMessage, type InterviewCommType } from "./interview-comms.js";
 import { computeRetentionUntil, DEFAULT_RETENTION_DAYS } from "./interview-recording.js";
@@ -829,6 +829,20 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             const when = new Date(body.scheduledAt);
             const scheduledDate = when.toISOString().slice(0, 10);
             const scheduledTime = when.toISOString().slice(11, 16);
+            // HIGH finding: atomic re-check, same overlap condition
+            // interview-routes.ts's synchronous pre-check already enforces --
+            // that read-then-later-publish has its own race window (two
+            // near-simultaneous schedule requests for the same interviewer)
+            // this closes. Silently skips the insert (mirrors
+            // recruitment_application_fee_routes__0's "already exists ->
+            // return" and Bug 2's dedup suppression above) rather than
+            // throwing: the route already gave the caller a 409 for the
+            // common case, so a message that loses this race is a rare,
+            // genuinely-expected outcome, not a bug to alarm/retry on.
+            const stillOverlaps = await coreRepo.findOverlappingInterviewsTx(
+              tx, p.tenantId, body.interviewerIds as string[], scheduledDate, scheduledTime, numOr(body.durationMinutes, 60),
+            );
+            if (stillOverlaps.length > 0) { log.warn({ op, interviewerIds: body.interviewerIds }, "interview overlap race: skipped insert"); break; }
             await coreRepo.insertInterview(tx, {
                     id: interviewId,
                     tenantId: p.tenantId,
@@ -1685,11 +1699,18 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // Restored: the application (its job opening and version).
             const a = await screeningRepo.findApplicationTx(tx, p.tenantId, id);
             if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
+            // HIGH finding: also advance `stage` to match the decision (see
+            // screening.ts's stageForScreeningDecision doc comment) -- this
+            // used to write screening metadata only, so the frontend's
+            // optimistic stage update had nothing behind it and reverted to
+            // "applied" on reload.
+            const stagePatch = stageForScreeningDecision(body.decision as ScreeningDecision);
             await screeningRepo.setScreening(tx, p.tenantId, id, {
                       screeningDecision: body.decision,
                       screeningReasonCode: body.reasonCode ?? null,
                       screeningRemarks: body.remarks ?? null,
                       screenedBy: msg.actorId, screenedAt: new Date(),
+                      ...(stagePatch ? { stage: stagePatch } : {}),
                     }, a.version);
                     await screeningRepo.insertEvent(tx, {
                       tenantId: p.tenantId, applicationId: id, jobOpeningId: a.jobOpeningId,

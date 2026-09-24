@@ -38,6 +38,19 @@ export async function updateTemplate(tx: Writer, id: string, patch: Partial<JdTe
     .where(eq(hrmsJdTemplates.id, id));
 }
 
+/**
+ * MEDIUM finding fix-up: the write below used to be a bare `db.update()`,
+ * outside any `db.transaction(...)`. hrms_jd_templates carries FORCE RLS
+ * like every other hrms-service table (see actor-link.ts's
+ * resolveEmployeeForActor doc comment for the canonical explanation of this
+ * exact trap): a bare call runs on a pooled connection with no
+ * app.tenant_id GUC set, so under the NOBYPASSRLS service role the
+ * fail-closed RLS policy silently matched ZERO rows -- useCount never
+ * actually incremented, with no error to notice (confirmed live: this was
+ * the reason the regression test for this fix kept seeing useCount stay at
+ * 0). Wrapping in db.transaction makes wrapWithTenantGuc set the GUC from
+ * AsyncLocalStorage, same as every other real write in this codebase.
+ */
 export async function incrementUseCount(tenantId: string, id: string): Promise<void> {
   const rows = await scopedRead((tx) =>
     tx.select({ useCount: hrmsJdTemplates.useCount })
@@ -46,7 +59,9 @@ export async function incrementUseCount(tenantId: string, id: string): Promise<v
       .limit(1)
   );
   if (rows.length === 0) return;
-  await db.update(hrmsJdTemplates)
-    .set({ useCount: (rows[0]!.useCount ?? 0) + 1, updatedAt: new Date() })
-    .where(eq(hrmsJdTemplates.id, id));
+  await db.transaction(async (tx) => {
+    await tx.update(hrmsJdTemplates)
+      .set({ useCount: (rows[0]!.useCount ?? 0) + 1, updatedAt: new Date() })
+      .where(and(eq(hrmsJdTemplates.id, id), eq(hrmsJdTemplates.tenantId, tenantId)));
+  });
 }
