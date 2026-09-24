@@ -70,7 +70,7 @@ export function NewAppraisalForm({ employees }: Props) {
     >
       <div>
         <label htmlFor={employeeFieldId} className="block text-sm font-medium text-slate-700 mb-1">
-          Employee
+          Employee <span aria-hidden="true" className="text-red-500">*</span>
         </label>
         <select
           id={employeeFieldId}
@@ -78,6 +78,7 @@ export function NewAppraisalForm({ employees }: Props) {
           onChange={(e) => setEmployeeId(e.target.value)}
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
+          aria-required="true"
         >
           {employees.length === 0 ? (
             <option value="">No employees loaded</option>
@@ -96,7 +97,7 @@ export function NewAppraisalForm({ employees }: Props) {
 
       <div>
         <label htmlFor={periodFieldId} className="block text-sm font-medium text-slate-700 mb-1">
-          Appraisal Period
+          Appraisal Period <span aria-hidden="true" className="text-red-500">*</span>
         </label>
         <input
           id={periodFieldId}
@@ -106,9 +107,11 @@ export function NewAppraisalForm({ employees }: Props) {
           placeholder="e.g. 2025-26"
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
           required
+          aria-required="true"
+          aria-describedby={formError.fieldError("appraisalPeriod") ? "appraisal-period-error" : undefined}
         />
         {formError.fieldError("appraisalPeriod") && (
-          <p className="mt-1 text-xs text-red-600">{formError.fieldError("appraisalPeriod")}</p>
+          <p id="appraisal-period-error" role="alert" className="mt-1 text-xs text-red-600">{formError.fieldError("appraisalPeriod")}</p>
         )}
       </div>
 

@@ -3737,6 +3737,7 @@
     "experienceYears": "{count, plural, one {# yr} other {# yrs}}",
     "applied": "Applied",
     "hireDialogTitle": "Hire — {name}",
+    "hireDialogDescription": "Convert {name} from applicant to employee. Fill in onboarding details and confirm.",
     "employeeNo": "Employee No",
     "employeeNoPlaceholder": "e.g. EMP-2025-001",
     "dateOfJoining": "Date of Joining",

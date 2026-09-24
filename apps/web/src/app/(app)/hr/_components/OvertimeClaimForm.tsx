@@ -104,9 +104,10 @@ export function OvertimeClaimForm() {
           pattern="[0-9a-fA-F-]{36}"
           required
           aria-required="true"
+          aria-describedby={formError.fieldError("employeeId") ? "ot-claim-empid-err" : undefined}
         />
         {formError.fieldError("employeeId") && (
-          <span style={fieldErrorStyle}>{formError.fieldError("employeeId")}</span>
+          <span id="ot-claim-empid-err" role="alert" style={fieldErrorStyle}>{formError.fieldError("employeeId")}</span>
         )}
       </div>
 
@@ -121,9 +122,10 @@ export function OvertimeClaimForm() {
             onChange={(e) => setRequestDate(e.target.value)}
             required
             aria-required="true"
+            aria-describedby={formError.fieldError("requestDate") ? "ot-claim-date-err" : undefined}
           />
           {formError.fieldError("requestDate") && (
-            <span style={fieldErrorStyle}>{formError.fieldError("requestDate")}</span>
+            <span id="ot-claim-date-err" role="alert" style={fieldErrorStyle}>{formError.fieldError("requestDate")}</span>
           )}
         </div>
         <div>
@@ -140,9 +142,10 @@ export function OvertimeClaimForm() {
             placeholder="e.g. 2.5"
             required
             aria-required="true"
+            aria-describedby={formError.fieldError("hoursRequested") ? "ot-claim-hrs-err" : undefined}
           />
           {formError.fieldError("hoursRequested") && (
-            <span style={fieldErrorStyle}>{formError.fieldError("hoursRequested")}</span>
+            <span id="ot-claim-hrs-err" role="alert" style={fieldErrorStyle}>{formError.fieldError("hoursRequested")}</span>
           )}
         </div>
       </div>
@@ -156,9 +159,10 @@ export function OvertimeClaimForm() {
           onChange={(e) => setApprover(e.target.value)}
           placeholder="Approving officer's UUID"
           pattern="([0-9a-fA-F-]{36})?"
+          aria-describedby={formError.fieldError("dutyOfficerId") ? "ot-claim-approver-err" : undefined}
         />
         {formError.fieldError("dutyOfficerId") && (
-          <span style={fieldErrorStyle}>{formError.fieldError("dutyOfficerId")}</span>
+          <span id="ot-claim-approver-err" role="alert" style={fieldErrorStyle}>{formError.fieldError("dutyOfficerId")}</span>
         )}
       </div>
 

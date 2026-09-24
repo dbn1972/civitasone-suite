@@ -37,6 +37,7 @@ export function EmployeesTable({ employees, source = "api" }: { employees: EmpRo
         rows={rows}
         rowLinkKey="id"
         rowLinkPrefix="/hr/employees/"
+        caption="Employee roster with name, department, designation, and status"
         identifyingColumnKey="name"
         sortable
         filterable

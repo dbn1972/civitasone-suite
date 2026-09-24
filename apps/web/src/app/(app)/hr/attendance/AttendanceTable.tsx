@@ -52,6 +52,7 @@ export function AttendanceTable({ attendance, source = "api" }: { attendance: At
       <DataTable<AttendanceSummaryItem>
         columns={columns}
         rows={rows}
+        caption="Attendance summary with employee, check-in/out times, and status"
         sortable
         filterable
         filterPlaceholder={t("filterPlaceholder")}
