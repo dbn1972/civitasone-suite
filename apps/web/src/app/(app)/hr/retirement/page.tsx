@@ -10,6 +10,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import type { RetirementRow } from "./_components/RetirementDashboard";
 import { RetirementCaseWorkspace } from "./_components/RetirementCaseWorkspace";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 async function getData(): Promise<LoaderResult<RetirementRow[]>> {
   return fetchJson<unknown, RetirementRow[]>("/api/v1/hrms/retirements", [], {
@@ -21,16 +22,16 @@ async function getData(): Promise<LoaderResult<RetirementRow[]>> {
   });
 }
 
-const COLUMNS: { key: keyof RetirementRow & string; label: string; cellType?: "status" }[] = [
-  { key: "employee",          label: "Employee" },
-  { key: "department",        label: "Department" },
-  { key: "designation",       label: "Designation" },
-  { key: "superannuationDate",label: "Retirement Date" },
-  { key: "separationType",    label: "Type" },
-  { key: "status",            label: "Status", cellType: "status" },
-];
-
 export default async function RetirementPage() {
+  const t = await getTranslations("retirement");
+  const COLUMNS: { key: keyof RetirementRow & string; label: string; cellType?: "status" }[] = [
+    { key: "employee",          label: t("colEmployee") },
+    { key: "department",        label: t("colDepartment") },
+    { key: "designation",       label: t("colDesignation") },
+    { key: "superannuationDate",label: t("colRetirementDate") },
+    { key: "separationType",    label: t("colType") },
+    { key: "status",            label: t("colStatus"), cellType: "status" },
+  ];
   const { data: items, source } = await getData();
   const errored = source === "error";
 
@@ -47,18 +48,18 @@ export default async function RetirementPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Retirement & Separation"
-        subtitle="Upcoming retirements within 6 months, processing wizard, and full separation register."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
       />
       <DataSourceBadge source={source} message="Couldn't load retirement records — showing nothing" />
 
       {/* KPI strip */}
       <StatGrid>
-        <StatCard icon="👴" iconBg="var(--infobg, #e6f0ff)" label="Total"          value={errored ? null : items.length} />
-        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label="Next 6 Months"  value={errored ? null : upcoming} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Processed"       value={errored ? null : completed} />
-        <StatCard icon="📝" iconBg="var(--bg, #f5f5f5)" label="VRS"            value={errored ? null : vrs} />
+<StatCard icon="👴" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")}          value={errored ? null : items.length} />
+        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label={t("statUpcoming")}  value={errored ? null : upcoming} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statProcessed")}       value={errored ? null : completed} />
+        <StatCard icon="📝" iconBg="var(--bg, #f5f5f5)" label={t("statVrs")}            value={errored ? null : vrs} />
       </StatGrid>
 
       {/* Card grid + wizard, bound to the same selected retiree */}
@@ -66,7 +67,7 @@ export default async function RetirementPage() {
 
       {/* Full register */}
       <div style={{ marginTop: 16 }}>
-        <Card title="Full Separation Register">
+        <Card title={t("cardTitle")}>
           {errored ? (
             <div className="pad">
               <RefreshErrorState error={toHumanError("load", { area: "retirement" })} backHref="/hr" />
@@ -77,11 +78,11 @@ export default async function RetirementPage() {
               rows={items}
               sortable
               filterable
-              filterPlaceholder="Filter by employee, department or date…"
+              filterPlaceholder={t("filterPlaceholder")}
               pageSize={15}
               emptyIcon="🎓"
-              emptyTitle="No retirement or separation records"
-              emptyMessage="Superannuation, VRS, and resignation records appear here."
+              emptyTitle={t("emptyTitle")}
+              emptyMessage={t("emptyMessage")}
             />
           )}
         </Card>

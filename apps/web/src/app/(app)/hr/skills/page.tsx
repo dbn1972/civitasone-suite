@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { SkillMatrix, type SkillRecord } from "./_components/SkillMatrix";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -38,6 +39,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function SkillsPage() {
+  const t = await getTranslations("skills");
   const { data: items, source } = await getData();
 
   const expert   = items.filter((i) => ["expert","advanced"].includes((i.proficiency ?? "").toLowerCase())).length;
@@ -55,29 +57,29 @@ export default async function SkillsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Skill Matrix"
-        subtitle="Employee competency mapping, proficiency levels, and skill gap identification."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🎯" iconBg="var(--infobg, #e6f0ff)" label="Skill Records"        value={items.length} />
-        <StatCard icon="👤" iconBg="var(--bg, #f5f5f5)" label="Employees Mapped"     value={employees} />
-        <StatCard icon="⭐" iconBg="var(--warnbg, #fffbe6)" label="Expert / Advanced"    value={expert} />
-        <StatCard icon="📚" iconBg="var(--badbg, #fff1f0)" label="Beginner / Basic"     value={beginner} />
+<StatCard icon="🎯" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")}        value={items.length} />
+        <StatCard icon="👤" iconBg="var(--bg, #f5f5f5)" label={t("statEmployees")}     value={employees} />
+        <StatCard icon="⭐" iconBg="var(--warnbg, #fffbe6)" label={t("statExpert")}    value={expert} />
+        <StatCard icon="📚" iconBg="var(--badbg, #fff1f0)" label={t("statBeginner")}     value={beginner} />
       </StatGrid>
 
-      <Card title="Competency Grid">
+      <Card title={t("cardTitle")}>
         <div style={{ padding: "12px 16px 16px" }}>
           {source === "error" ? (
             <RefreshErrorState error={toHumanError("load", { area: "skill matrix" })} backHref="/hr" />
           ) : matrixRecords.length === 0 ? (
             <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
               <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
-              <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>No skill assessments recorded</p>
+<p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>{t("emptyTitle")}</p>
               <p style={{ fontSize: 13, margin: "4px 0 0" }}>
-                Skills appear after formal assessments during onboarding or training completions.
+                {t("emptyMessage")}
               </p>
             </div>
           ) : (

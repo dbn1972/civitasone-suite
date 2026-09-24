@@ -6,6 +6,7 @@ import { GoalsProgressRing, type CategoryScore } from "./_components/GoalsProgre
 import { GoalTrackerCard } from "./_components/GoalTrackerCard";
 import { DevelopmentPlanTimeline, type DevActivity } from "./_components/DevelopmentPlanTimeline";
 import type { CascadeLevel } from "./_components/GoalTrackerCard";
+import { getTranslations } from "next-intl/server";
 
 type GoalRow = {
   id: string;
@@ -83,6 +84,7 @@ function inferCascade(item: GoalRow): CascadeLevel {
 }
 
 export default async function GoalsPage() {
+  const t = await getTranslations("goals");
   const [{ data: items, source }, { data: devPlans }] = await Promise.all([
     getGoals(),
     getDevPlans(),
@@ -110,24 +112,24 @@ export default async function GoalsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Goals & Development"
-        subtitle="Performance goals, OKRs, and development plans for the current appraisal cycle."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
       />
       <DataSourceBadge source={source} />
 
       {/* Summary stats */}
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label="Total Goals" value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="On Track" value={onTrack} />
-        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label="At Risk / Behind" value={atRisk} />
-        <StatCard icon="🏆" iconBg="var(--bg, #f5f5f5)" label="Completed" value={completed} />
+<StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statOnTrack")} value={onTrack} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statAtRisk")} value={atRisk} />
+        <StatCard icon="🏆" iconBg="var(--bg, #f5f5f5)" label={t("statCompleted")} value={completed} />
       </StatGrid>
 
       {/* Progress rings summary */}
       {items.length > 0 && (
         <div style={{ marginTop: 4 }}>
-          <Card title="Goal Achievement by Category">
+          <Card title={t("achievementCardTitle")}>
             <div style={{ padding: "12px 0" }}>
               <GoalsProgressRing categories={categoryScores} overallScore={overallScore} />
             </div>
@@ -136,15 +138,15 @@ export default async function GoalsPage() {
       )}
 
       {/* Individual goal tracker cards */}
-      <Card title="My Goals">
+      <Card title={t("goalsCardTitle")}>
         {errored ? (
           <RefreshErrorState error={toHumanError("load", { area: "goals" })} />
         ) : items.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
-            <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>No goals set</p>
+<p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>{t("emptyTitle")}</p>
             <p style={{ fontSize: 13, margin: "4px 0 0" }}>
-              Goals are assigned during the appraisal cycle. Create an appraisal to assign objectives.
+              {t("emptyMessage")}
             </p>
           </div>
         ) : (
@@ -175,7 +177,7 @@ export default async function GoalsPage() {
       </Card>
 
       {/* Development Plan Timeline */}
-      <Card title="Development Plan — Next 12 Months">
+      <Card title={t("devPlanCardTitle")}>
         <div style={{ padding: "8px 16px 16px" }}>
           <DevelopmentPlanTimeline activities={activities} />
         </div>

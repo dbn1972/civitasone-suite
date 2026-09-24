@@ -8,6 +8,7 @@ import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
 import { OnboardingChecklist, type ChecklistStep } from "../_components/OnboardingChecklist";
 import { DocumentUploadCard, type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
+import { getTranslations } from "next-intl/server";
 
 const ONBOARDING_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
@@ -102,6 +103,7 @@ interface Props {
 }
 
 export default async function OnboardingDetailPage({ params }: Props) {
+  const t = await getTranslations("onboardingDetail");
   const { id } = await params;
 
   const { data: rows, source: summarySource, status: summaryStatus } = await fetchJson<unknown, ApiRow[]>(
@@ -119,7 +121,7 @@ export default async function OnboardingDetailPage({ params }: Props) {
   if (summaryStatus === 403) {
     return (
       <main className="page-main wrap">
-        <PageHeader title="Onboarding Details" back="/hr/onboarding" backLabel="Back to Onboarding" />
+        <PageHeader title={t("title")} back="/hr/onboarding" backLabel="Back to Onboarding" />
         <PermissionDenied module="onboarding details" requiredRoles={ONBOARDING_ROLES} />
       </main>
     );
@@ -234,8 +236,8 @@ export default async function OnboardingDetailPage({ params }: Props) {
         >
           <EmptyState
             icon="🗒️"
-            title="No onboarding tasks set up yet"
-            message="HR hasn't added any onboarding tasks for this joinee. Once tasks are added, their checklist and due-date calendar will appear here."
+            title={t("emptyTasksTitle")}
+            message={t("emptyTasksMessage")}
           />
         </div>
       ) : (

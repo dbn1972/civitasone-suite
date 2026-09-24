@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { getPayrollRunDetails } from "@/app/_data/loaders";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { formatRupees } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 
 // This page used to call GET /api/v1/finance/periods -- Finance's GL
 // period-close endpoint, gated to finance_officer/finance_admin/super_admin
@@ -50,31 +51,32 @@ function toRow(run: PayrollRunDetail): Row {
 }
 
 export default async function PayrollPeriodPage() {
+  const t = await getTranslations("payrollPeriod");
   const { data: runs, source } = await getPayrollRunDetails();
   const items = runs.map(toRow);
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status"; align?: "left" | "right"; render?: (r: Row) => string }[] = [
-    { key: "month", label: "Month" },
-    { key: "runDate", label: "Run Date" },
-    { key: "employeesProcessed", label: "Employees", align: "right" },
-    { key: "grossPayout", label: "Gross", align: "right", render: (r) => formatRupees(r.grossPayout) },
-    { key: "netPayout", label: "Net Payout", align: "right", render: (r) => formatRupees(r.netPayout) },
-    { key: "deductions", label: "Deductions", align: "right", render: (r) => formatRupees(r.deductions) },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "month", label: t("colMonth") },
+    { key: "runDate", label: t("colRunDate") },
+    { key: "employeesProcessed", label: t("colEmployees"), align: "right" },
+    { key: "grossPayout", label: t("colGross"), align: "right", render: (r) => formatRupees(r.grossPayout) },
+    { key: "netPayout", label: t("colNet"), align: "right", render: (r) => formatRupees(r.netPayout) },
+    { key: "deductions", label: t("colDeductions"), align: "right", render: (r) => formatRupees(r.deductions) },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Payroll Periods" subtitle="Monthly payroll run history and processing status." back="/hr" backLabel="Back to HR" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message="Couldn't load payroll periods — showing nothing" />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label="Total" value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Completed" value={items.filter((i) => i.status === "completed" || i.status === "paid").length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Processing" value={items.filter((i) => i.status === "processing" || i.status === "draft").length} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label="Total Employees" value={items.reduce((s, i) => s + (Number(i.employeesProcessed) || 0), 0).toLocaleString("en-IN")} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statCompleted")} value={items.filter((i) => i.status === "completed" || i.status === "paid").length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statProcessing")} value={items.filter((i) => i.status === "processing" || i.status === "draft").length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployees")} value={items.reduce((s, i) => s + (Number(i.employeesProcessed) || 0), 0).toLocaleString("en-IN")} />
       </StatGrid>
-      <Card title="Payroll Periods">
-        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder="Filter by period or status…" pageSize={15} emptyIcon="📅" emptyTitle="No payroll periods yet" emptyMessage="Payroll periods are created automatically each time a payroll run is processed. Run your first payroll from the Payroll page to generate a period record." />
+      <Card title={t("cardTitle")}>
+        <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📅" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
       </Card>
     </main>
   );

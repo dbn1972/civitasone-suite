@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_compo
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CompetencyRadarChart, type CompetencyScore } from "./_components/CompetencyRadarChart";
+import { getTranslations } from "next-intl/server";
 
 type Framework  = { id: string; name: string; description?: string; status: string } & Record<string, unknown>;
 type Competency = { id: string; name: string; category: string; maxLevel?: number } & Record<string, unknown>;
@@ -43,6 +44,7 @@ function buildRadarScores(competencies: Competency[]): CompetencyScore[] {
 }
 
 export default async function CompetencyPage() {
+  const t = await getTranslations("competency");
   const [fw, comp] = await Promise.all([getFrameworks(), getCompetencies()]);
   const frameworks  = fw.data;
   const competencies = comp.data;
@@ -55,34 +57,34 @@ export default async function CompetencyPage() {
   const radarScores = buildRadarScores(competencies);
 
   const fwCols: { key: keyof Framework & string; label: string; cellType?: "status" }[] = [
-    { key: "name",        label: "Framework Name" },
-    { key: "description", label: "Description" },
-    { key: "status",      label: "Status", cellType: "status" },
+    { key: "name",        label: t("colFrameworkName") },
+    { key: "description", label: t("colDescription") },
+    { key: "status",      label: t("colStatus"), cellType: "status" },
   ];
   const compCols: { key: keyof Competency & string; label: string }[] = [
-    { key: "name",     label: "Competency" },
-    { key: "category", label: "Category" },
-    { key: "maxLevel", label: "Proficiency Levels" },
+    { key: "name",     label: t("colCompetency") },
+    { key: "category", label: t("colCategory") },
+    { key: "maxLevel", label: t("colProficiencyLevels") },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Competency Framework"
-        subtitle="Frameworks, competency definitions, and core government competency radar."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏗️" iconBg="var(--infobg, #e6f0ff)" label="Frameworks"  value={frameworks.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)"  label="Active"      value={active} />
-        <StatCard icon="💻" iconBg="var(--warnbg, #fffbe6)"  label="Technical"   value={technical} />
-        <StatCard icon="🤝" iconBg="var(--bg, #f5f5f5)"  label="Behavioural" value={behavioural} />
+<StatCard icon="🏗️" iconBg="var(--infobg, #e6f0ff)" label={t("statFrameworks")}  value={frameworks.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)"  label={t("statActive")}      value={active} />
+        <StatCard icon="💻" iconBg="var(--warnbg, #fffbe6)"  label={t("statTechnical")}   value={technical} />
+        <StatCard icon="🤝" iconBg="var(--bg, #f5f5f5)"  label={t("statBehavioural")} value={behavioural} />
       </StatGrid>
 
       {/* Radar chart — core 6 government competencies */}
-      <Card title="Core Government Competencies — Radar View">
+      <Card title={t("radarCardTitle")}>
         <div style={{ padding: "12px 16px 20px", display: "flex", justifyContent: "center" }}>
           <CompetencyRadarChart
             scores={radarScores}
@@ -91,30 +93,30 @@ export default async function CompetencyPage() {
         </div>
       </Card>
 
-      <Card title="Competency Frameworks">
+      <Card title={t("frameworksCardTitle")}>
         <DataTable<Framework>
           columns={fwCols}
           rows={frameworks}
           sortable filterable
-          filterPlaceholder="Filter by framework name…"
+          filterPlaceholder={t("fwFilterPlaceholder")}
           pageSize={10}
           emptyIcon="🏗️"
-          emptyTitle="No competency frameworks defined"
-          emptyMessage="Add a framework to begin mapping role requirements."
+          emptyTitle={t("fwEmptyTitle")}
+          emptyMessage={t("fwEmptyMessage")}
         />
       </Card>
 
       <div style={{ marginTop: 16 }}>
-        <Card title="Competency Catalogue">
+        <Card title={t("catalogueCardTitle")}>
           <DataTable<Competency>
             columns={compCols}
             rows={competencies}
             sortable filterable
-            filterPlaceholder="Filter by competency name or category…"
+            filterPlaceholder={t("compFilterPlaceholder")}
             pageSize={15}
             emptyIcon="📚"
-            emptyTitle="No competencies defined"
-            emptyMessage="Add competencies within a framework to define proficiency levels."
+            emptyTitle={t("compEmptyTitle")}
+            emptyMessage={t("compEmptyMessage")}
           />
         </Card>
       </div>

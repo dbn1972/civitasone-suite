@@ -4,6 +4,7 @@ import { getDisciplinaryCaseById } from "@/app/_data/loaders";
 import { RaiseEOfficeNote } from "@/app/_components/RaiseEOfficeNote";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
+import { getTranslations } from "next-intl/server";
 
 /**
  * Must match the list page at disciplinary/page.tsx and the backend
@@ -21,6 +22,7 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
 }
 
 export default async function DisciplinaryCaseDetailPage({ params }: { params: { id: string } }) {
+  const t = await getTranslations("disciplinaryDetail");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => DISCIPLINARY_ROLES.includes(r));
@@ -37,8 +39,8 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
           <a href="/hr">HR</a> <span aria-hidden="true">›</span>{" "}
           <a href="/hr/disciplinary">Disciplinary</a> <span aria-hidden="true">›</span> Not found
         </nav>
-        <PageHeader title="Disciplinary Case" back="/hr/disciplinary" backLabel="Back to Disciplinary" />
-        <EmptyState icon="📁" title="Case not found" message="This disciplinary case may have been removed or the ID is invalid." />
+        <PageHeader title={t("notFoundTitle")} back="/hr/disciplinary" backLabel="Back to Disciplinary" />
+        <EmptyState icon="📁" title={t("notFoundEmptyTitle")} message={t("notFoundEmptyMessage")} />
       </main>
     );
   }
@@ -60,7 +62,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       </nav>
 
       <PageHeader
-        title={`Disciplinary case ${caseLabel}`}
+        title={t("title", { caseLabel })}
         subtitle={proceedingType !== "—" ? `${proceedingType} proceeding` : undefined}
         back="/hr/disciplinary" backLabel="Back to Disciplinary"
         actions={<StatusPill status={status} />}
@@ -68,22 +70,22 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #eff6ff)" label="Status" value={status.replace(/_/g, " ")} />
-        <StatCard icon="⚖️" iconBg="var(--primary-soft, #faf5ff)" label="Proceeding" value={proceedingType} />
-        <StatCard icon="🔎" iconBg="var(--warnbg, #fff7ed)" label="Finding" value={finding} />
-        <StatCard icon="🚫" iconBg="var(--badbg, #fef2f2)" label="Penalty" value={penaltyType} />
+<StatCard icon="📋" iconBg="var(--infobg, #eff6ff)" label={t("statStatus")} value={status.replace(/_/g, " ")} />
+        <StatCard icon="⚖️" iconBg="var(--primary-soft, #faf5ff)" label={t("statProceeding")} value={proceedingType} />
+        <StatCard icon="🔎" iconBg="var(--warnbg, #fff7ed)" label={t("statFinding")} value={finding} />
+        <StatCard icon="🚫" iconBg="var(--badbg, #fef2f2)" label={t("statPenalty")} value={penaltyType} />
       </StatGrid>
 
-      <Card title="Case details" padding>
+      <Card title={t("cardTitle")} padding>
         <div className="fields">
-          <div className="field"><span className="label">Case No</span><span className="mono">{caseNo}</span></div>
-          <div className="field"><span className="label">Proceeding Type</span><span>{proceedingType}</span></div>
-          <div className="field"><span className="label">Finding</span><span>{finding}</span></div>
-          <div className="field"><span className="label">Penalty</span><span>{penaltyType}</span></div>
-          <div className="field"><span className="label">Status</span><StatusPill status={status} /></div>
+          <div className="field"><span className="label">{t("fieldCaseNo")}</span><span className="mono">{caseNo}</span></div>
+          <div className="field"><span className="label">{t("fieldProceedingType")}</span><span>{proceedingType}</span></div>
+          <div className="field"><span className="label">{t("fieldFinding")}</span><span>{finding}</span></div>
+          <div className="field"><span className="label">{t("fieldPenalty")}</span><span>{penaltyType}</span></div>
+          <div className="field"><span className="label">{t("fieldStatus")}</span><StatusPill status={status} /></div>
           {allegation !== "—" && (
             <div className="field" style={{ gridColumn: "1 / -1" }}>
-              <span className="label">Allegation</span>
+              <span className="label">{t("fieldAllegation")}</span>
               <span style={{ whiteSpace: "pre-wrap" }}>{allegation}</span>
             </div>
           )}

@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { DeputationCard, type DeputationRow } from "./_components/DeputationCard";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 async function getData(): Promise<LoaderResult<DeputationRow[]>> {
   return fetchJson<unknown, DeputationRow[]>("/api/v1/hrms/deputation", [], {
@@ -15,6 +16,7 @@ async function getData(): Promise<LoaderResult<DeputationRow[]>> {
 }
 
 export default async function DeputationPage() {
+  const t = await getTranslations("deputation");
   const { data: items, source } = await getData();
   const errored = source === "error";
 
@@ -24,31 +26,31 @@ export default async function DeputationPage() {
   const recalled  = items.filter((i) => i.status === "recalled").length;
 
   const tableColumns: { key: keyof DeputationRow & string; label: string; cellType?: "status" }[] = [
-    { key: "employee",     label: "Employee"      },
-    { key: "parentOrg",   label: "Parent Org"    },
-    { key: "deputationOrg", label: "Deputed To"  },
-    { key: "fromDate",    label: "From"           },
-    { key: "toDate",      label: "To"             },
-    { key: "period",      label: "Period"         },
-    { key: "status",      label: "Status", cellType: "status" },
+    { key: "employee",     label: t("colEmployee")      },
+    { key: "parentOrg",   label: t("colParentOrg")    },
+    { key: "deputationOrg", label: t("colDeputedTo")  },
+    { key: "fromDate",    label: t("colFrom")           },
+    { key: "toDate",      label: t("colTo")             },
+    { key: "period",      label: t("colPeriod")         },
+    { key: "status",      label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Deputation"
-        subtitle="Officers on deputation to other government organisations."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
       />
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg, #e6f0ff)" label="Total Deputations" value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Active"            value={errored ? null : active} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending"           value={errored ? null : pending} />
-        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label="Completed"         value={errored ? null : completed} />
+<StatCard icon="🏛️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActive")}            value={errored ? null : active} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")}           value={errored ? null : pending} />
+        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statCompleted")}         value={errored ? null : completed} />
         {recalled > 0 && (
-          <StatCard icon="↩️" iconBg="var(--badbg, #fee2e2)" label="Recalled" value={errored ? null : recalled} />
+          <StatCard icon="↩️" iconBg="var(--badbg, #fee2e2)" label={t("statRecalled")} value={errored ? null : recalled} />
         )}
       </StatGrid>
 
@@ -56,7 +58,7 @@ export default async function DeputationPage() {
       {!errored && items.filter((i) => ["active", "pending"].includes(i.status)).length > 0 && (
         <div style={{ marginBottom: 24 }}>
           <h2 style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--ink2)", textTransform: "uppercase", letterSpacing: "0.05em", margin: "0 0 14px" }}>
-            Active Deputations
+            {t("activeSection")}
           </h2>
           <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>
             {items.filter((i) => ["active", "pending"].includes(i.status)).map((d) => (
@@ -67,7 +69,7 @@ export default async function DeputationPage() {
       )}
 
       {/* Full table */}
-      <Card title="Deputation List">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "deputation" })} backHref="/hr" />
@@ -78,11 +80,11 @@ export default async function DeputationPage() {
             rows={items}
             sortable
             filterable
-            filterPlaceholder="Filter by employee or organisation…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="🏛️"
-            emptyTitle="No deputation orders"
-            emptyMessage="Deputation orders appear when an officer is posted to another organisation on temporary assignment."
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
           />
         )}
       </Card>
