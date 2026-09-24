@@ -4,6 +4,7 @@ import { getGpfStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
 import { useResource } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { formatMoney } from "@/lib/formatters";
 
 type GpfRow = {
   id: string;
@@ -50,9 +51,6 @@ export default async function GpfStatementsPage() {
   // loader's empty fallback), so this stays a true 0 rather than needing a
   // null placeholder — projectGpfCorpus() below needs a real number either way.
   const totalContrib = tableRows.reduce((s, r) => s + (Number(r.contrib) || 0), 0);
-
-  const formatMoney = (minor: number) =>
-    `₹${(minor / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   // Period-wise trend
   const periodMap = new Map<string, number>();

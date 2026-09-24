@@ -37,10 +37,6 @@ async function getSlip(id: string): Promise<LoaderResult<Slip | null>> {
   });
 }
 
-function fmt(minor: number): string {
-  return `₹${(minor / 100).toLocaleString("en-IN")}`;
-}
-
 export default async function SalarySlipPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("salarySlipDetail");
   const roles = getSessionRoles();
@@ -121,12 +117,12 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
                 {earnings.map((c) => (
                   <tr key={c.code}>
                     <td style={{ padding: "3px 0" }}>{c.name}</td>
-                    <td style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{fmt(c.amountMinor)}</td>
+                    <td style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(c.amountMinor)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: "1px solid var(--color-border)", fontWeight: 700 }}>
                   <td style={{ padding: "6px 0 0" }}>{t("grossEarnings")}</td>
-                  <td style={{ padding: "6px 0 0", textAlign: "right", fontFamily: "monospace" }}>{fmt(slip.grossMinor)}</td>
+                  <td style={{ padding: "6px 0 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(slip.grossMinor)}</td>
                 </tr>
               </tbody>
             </table>
@@ -139,12 +135,12 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
                 {deductions.map((c) => (
                   <tr key={c.code}>
                     <td style={{ padding: "3px 0" }}>{c.name}</td>
-                    <td style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{fmt(c.amountMinor)}</td>
+                    <td style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(c.amountMinor)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: "1px solid var(--color-border)", fontWeight: 700 }}>
                   <td style={{ padding: "6px 0 0" }}>{t("totalDeductions")}</td>
-                  <td style={{ padding: "6px 0 0", textAlign: "right", fontFamily: "monospace" }}>{fmt(slip.totalDeductionsMinor)}</td>
+                  <td style={{ padding: "6px 0 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(slip.totalDeductionsMinor)}</td>
                 </tr>
               </tbody>
             </table>
@@ -154,7 +150,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         {/* Net Pay */}
         <div style={{ marginTop: 24, padding: "12px 16px", background: "var(--goodbg)", borderRadius: 8, border: "1px solid var(--goodbd)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: "var(--good)" }}>{t("netPay")}</span>
-          <span style={{ fontSize: 20, fontWeight: 800, color: "var(--good)", fontFamily: "monospace" }}>{fmt(slip.netMinor)}</span>
+          <span style={{ fontSize: 20, fontWeight: 800, color: "var(--good)", fontFamily: "monospace" }}>{formatMoney(slip.netMinor)}</span>
         </div>
 
         {/* Footer */}

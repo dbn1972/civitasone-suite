@@ -37,12 +37,14 @@ describe("GpfStatementsPage", () => {
     mockGpf({ data: [], source: "api" });
     render(await GpfStatementsPage());
     expect(screen.getByText("No GPF statements")).toBeInTheDocument();
-    // A real zero corpus — ₹0 — is an honest reading of zero contributions,
-    // not a dash. It legitimately appears twice (the stat card and the
-    // "Accumulated Corpus" dashboard box), and a third "₹0" projected-value
-    // box only when there is at least one period of history, so assert
-    // presence rather than count.
-    expect(screen.getAllByText("₹0").length).toBeGreaterThan(0);
+    // A real zero corpus — ₹0.00 — is an honest reading of zero
+    // contributions, not a dash. It legitimately appears twice (the stat
+    // card and the "Accumulated Corpus" dashboard box), and a third
+    // "₹0.00" projected-value box only when there is at least one period
+    // of history, so assert presence rather than count. (Uses the shared
+    // @/lib/formatters formatMoney, which always renders 2 decimal places
+    // — see the shadowed-formatter fix in this same page.)
+    expect(screen.getAllByText("₹0.00").length).toBeGreaterThan(0);
   });
 
   it("shows the error state and hides the fabricated ₹0 corpus on a real fetch failure (source: error)", async () => {
@@ -50,9 +52,9 @@ describe("GpfStatementsPage", () => {
     render(await GpfStatementsPage());
     expect(screen.getByText("We couldn't load GPF statements.")).toBeInTheDocument();
     expect(screen.queryByText("No GPF statements")).not.toBeInTheDocument();
-    // Accumulated Corpus / stat cards show "—", never a fabricated ₹0 derived
-    // from the empty error payload.
-    expect(screen.queryByText("₹0")).not.toBeInTheDocument();
+    // Accumulated Corpus / stat cards show "—", never a fabricated ₹0.00
+    // derived from the empty error payload.
+    expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 

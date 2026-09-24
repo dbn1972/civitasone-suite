@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, EmptyState, Button } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, Button, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
 type PeriodSummary = {
@@ -160,6 +161,12 @@ export default async function PayrollComparisonPage({
               </tbody>
             </table>
           </div>
+        </Card>
+      )}
+
+      {canCompare && source === "error" && (
+        <Card>
+          <RefreshErrorState error={toHumanError("load", { area: "payroll comparison" })} backHref="/hr/payroll" />
         </Card>
       )}
 

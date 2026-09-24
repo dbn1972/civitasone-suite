@@ -4,6 +4,7 @@ import { getNpsStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
 import { useResource } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { formatMoney } from "@/lib/formatters";
 
 type NpsRow = {
   id: string;
@@ -68,8 +69,6 @@ export default async function NpsStatementsPage() {
   // Projection: assume average 25 years remaining to retirement
   const AVG_YEARS_TO_RETIRE = 25;
   const projectedCorpus = projectCorpus(totalCorpus, AVG_YEARS_TO_RETIRE);
-  const formatMoney = (minor: number) =>
-    `₹${(minor / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">

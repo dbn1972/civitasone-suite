@@ -72,10 +72,14 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   // that row fell outside the fetched batch. Ask the backend for exactly
   // that one month instead.
   const prevIso = prevPeriodIso(run.payPeriod);
-  let previousGross = 0;
+  // `previousGross` distinguishes "no prior run existed" (a real 0 — no
+  // parseable previous period, or the fetch succeeded and simply found none)
+  // from "the fetch for the prior run failed" (null) — a fetch failure must
+  // not read as a fabricated ₹0 prior payroll in the MoM comparison below.
+  let previousGross: number | null = 0;
   if (prevIso) {
-    const { data: prevRuns } = await getPayrollRunDetails({ limit: 1, month: prevIso });
-    previousGross = prevRuns[0]?.grossAmount ?? 0;
+    const { data: prevRuns, source: prevSource } = await getPayrollRunDetails({ limit: 1, month: prevIso });
+    previousGross = prevSource === "error" ? null : (prevRuns[0]?.grossAmount ?? 0);
   }
 
   const slipRows = run.salarySlips as SalarySlipRow[];
