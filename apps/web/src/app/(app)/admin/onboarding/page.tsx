@@ -9,7 +9,7 @@ export default async function OnboardingPage() {
   const ready = queue.filter((q) => String(q.stage).toLowerCase() === "go-live pending").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside OnboardingTable,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
@@ -24,6 +24,6 @@ export default async function OnboardingPage() {
       <Card title="Onboarding Pipeline">
         <OnboardingTable queue={queue} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

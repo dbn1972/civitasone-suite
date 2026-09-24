@@ -80,7 +80,7 @@ export default async function ReconciliationWorkbenchPage() {
   const unbalancedRuns = runs.filter((r) => !r.balanced).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Reconciliation Workbench"
         subtitle="Review reconciliation runs, triage breaks, and confirm subledger↔GL agreement."
@@ -184,6 +184,6 @@ export default async function ReconciliationWorkbenchPage() {
           Last run started {formatIndianDate(runs[0]?.startedAt)}.
         </p>
       )}
-    </main>
+    </div>
   );
 }

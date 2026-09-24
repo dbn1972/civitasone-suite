@@ -22,14 +22,14 @@ export default async function ContractDetailPage({ params }: { params: { id: str
 
   if (!contract) {
     return (
-      <main className="wrap">
+      <div className="wrap">
         <Link href="/contracts/list" className="back"><ArrowLeft aria-hidden="true" size={14} /> Back</Link>
         <EmptyState
           icon="🔍"
           title="Contract not found"
           message="This contract may have been removed or the ID is invalid."
         />
-      </main>
+      </div>
     );
   }
 
@@ -39,7 +39,7 @@ export default async function ContractDetailPage({ params }: { params: { id: str
   } = deriveContractDisplayFields(contract);
 
   return (
-    <main className="wrap" aria-labelledby="page-heading">
+    <div className="wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/contracts" className="lnk">Contracts</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
@@ -171,6 +171,6 @@ export default async function ContractDetailPage({ params }: { params: { id: str
         notifyPath={`/api/proxy/v1/contract/contracts/${params.id}/submit-approval`}
         {...(amountMinor != null ? { amountMinor } : {})}
       />
-    </main>
+    </div>
   );
 }

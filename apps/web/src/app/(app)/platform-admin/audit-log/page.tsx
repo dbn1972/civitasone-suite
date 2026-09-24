@@ -29,7 +29,7 @@ export default async function PlatformAuditLogPage() {
   const uniqueActors = new Set(events.map((e) => e.actor)).size;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Audit Log" }]} />
       <PageHeader
         back="/platform-admin"
@@ -44,6 +44,6 @@ export default async function PlatformAuditLogPage() {
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <AuditLogTable events={events} />
-    </main>
+    </div>
   );
 }

@@ -16,7 +16,7 @@ export default async function BeneficiariesPage() {
   const notVerified = errored ? null : rows.filter((r) => r.verified === "rejected").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Beneficiaries" subtitle="Track project beneficiaries, verification status and disbursements." back="/projects" />
       <StatGrid>
         <StatCard icon="👥" iconBg="#eff6ff" label="Total Beneficiaries" value={total ?? "—"} />
@@ -35,6 +35,6 @@ export default async function BeneficiariesPage() {
           <BeneficiariesTable rows={rows} source={source === "error" ? "error" : "api"} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

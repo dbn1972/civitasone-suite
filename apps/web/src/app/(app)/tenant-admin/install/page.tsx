@@ -20,7 +20,7 @@ export default async function InstallStatusPage() {
   const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Installer Status" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -82,6 +82,6 @@ export default async function InstallStatusPage() {
           )}
         </>
       )}
-    </main>
+    </div>
   );
 }

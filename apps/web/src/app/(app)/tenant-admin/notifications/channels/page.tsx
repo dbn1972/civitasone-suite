@@ -33,7 +33,7 @@ export default async function NotificationChannelsPage() {
   const errored = useResource(result).status === "error";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Notification Channels"
         subtitle="Configure email, SMS, and push providers so approvals and alerts reach your team."
@@ -82,6 +82,6 @@ export default async function NotificationChannelsPage() {
           <p style={{ margin: "10px 0 0" }}>Supported providers: <strong>ses</strong> (AWS SES), <strong>smtp</strong> (any SMTP server), <strong>sns</strong> (AWS SNS for SMS), <strong>fcm</strong> (Firebase push).</p>
         </div>
       </Card>
-    </main>
+    </div>
   );
 }

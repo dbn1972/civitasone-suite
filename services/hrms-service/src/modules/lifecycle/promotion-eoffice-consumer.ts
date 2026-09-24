@@ -3,12 +3,15 @@ import { parseDecisionCallback } from "@civitasone/eoffice-sdk";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
-import { HttpError } from "../../shared/context.js";
 import { CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import * as employeeRepo from "../employee/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/** ISO 'YYYY-MM-DD' for "today", used to decide whether an effectiveDate is due. */
+function todayISO(): string {
+  return new Date().toISOString().slice(0, 10);
+}
 
 /**
  * Closes the eOffice decision loop for HR promotions.
@@ -18,10 +21,14 @@ const AUDIT_TOPIC = "audit.event.record";
  * `pending_approval` and an eFile is raised into eOffice (source_ref_type
  * "hr_promotion"). Once the approval chain concludes, estab-service emits
  * `hrms.promotion.file_decided` and this consumer applies the decision:
- *   approved → effect the promotion: flip the request to "completed" and apply
- *              the new designation (and basic pay, when carried) to the
- *              employee master — the same state-change the synchronous
- *              POST /v1/hrms/lifecycle/promotions route effects.
+ *   approved → the eOffice decision alone doesn't move the promotion straight
+ *              to "completed" any more (migration 0144): it first flips to
+ *              "pending_effective", and only continues on to actually effect
+ *              it — new designation (and basic pay, when carried) applied to
+ *              the employee master, status "completed" — when the
+ *              promotion's own effectiveDate is today or earlier. A
+ *              future-dated approval stays "pending_effective" until the
+ *              scheduler (lifecycle/effective-scheduler.ts) finds it due.
  *   rejected → flip the request to "cancelled"; the employee is left unchanged.
  *   returned → leave the request pending for revision (audit only).
  *
@@ -46,29 +53,44 @@ export function registerPromotionEOfficeConsumers(queue: Queue): void {
       if (cb.decision === "approved") {
         // Guarded execution: only a promotion still awaiting the eOffice
         // decision is effected. Tenant-scoped + status-guarded.
-        const promotion = await repo.transitionPromotion(msg.tenantId, cb.refId, cb.decidedBy, {
-          from: ["pending_approval"], to: "completed",
+        //
+        // Effective-dating fix (migration 0144): the eOffice decision only
+        // means the ORDER is approved — the promotion's own effectiveDate
+        // still governs when it actually lands on the employee master. Every
+        // approval moves the row to "pending_effective" first; only when
+        // that date is today or earlier does it immediately continue on to
+        // "completed" + apply. A future-dated approval is left at
+        // "pending_effective" for the scheduler
+        // (lifecycle/effective-scheduler.ts) to pick up once due. Both
+        // transitions happen inside this same transaction, so a concurrent
+        // reader never observes the intermediate state — see
+        // lifecycle/repo.ts's transitionPromotion doc comment.
+        const pending = await repo.transitionPromotion(msg.tenantId, cb.refId, cb.decidedBy, {
+          from: ["pending_approval"], to: "pending_effective",
         }, tx);
-        if (!promotion) return; // not ours / already decided
-        affectedEmployeeId = promotion.employeeId;
-        // Concurrency guard: this eOffice-approved promotion can carry a
-        // basicMinor change that lands close together with the direct
-        // promotion route, the pay-matrix annual increment, or a generic
-        // employee-update — all independent, asynchronous writers of the
-        // same field. Read the row's current version fresh, inside this
-        // transaction, and use it as an optimistic-concurrency precondition
-        // so this write can never silently clobber (or be silently
-        // clobbered by) one of those. See employee/repo.ts updateEmployeeVersioned.
-        const emp = await employeeRepo.findVersionForUpdate(tx, promotion.employeeId, msg.tenantId);
-        if (!emp) throw new HttpError(404, "NOT_FOUND", `employee ${promotion.employeeId} not found`);
-        const patch: Parameters<typeof employeeRepo.updateEmployeeVersioned>[4] = {
-          designationId: promotion.toDesigId,
-        };
-        if (promotion.newBasicMinor !== null) patch.basicMinor = promotion.newBasicMinor;
-        await employeeRepo.updateEmployeeVersioned(tx, promotion.employeeId, msg.tenantId, emp.version, patch, cb.decidedBy);
+        if (!pending) return; // not ours / already decided
+        affectedEmployeeId = pending.employeeId;
+
+        if (repo.isEffectiveDateDue(pending.effectiveDate, todayISO())) {
+          const promotion = await repo.transitionPromotion(msg.tenantId, cb.refId, cb.decidedBy, {
+            from: ["pending_effective"], to: "completed",
+          }, tx);
+          if (promotion) {
+            // Concurrency guard: this eOffice-approved promotion can carry a
+            // basicMinor change that lands close together with the direct
+            // promotion route, the pay-matrix annual increment, or a generic
+            // employee-update — all independent, asynchronous writers of the
+            // same field. applyPromotionEffect reads the row's current
+            // version fresh, inside this transaction, and uses it as an
+            // optimistic-concurrency precondition so this write can never
+            // silently clobber (or be silently clobbered by) one of those.
+            // See employee/repo.ts updateEmployeeVersioned.
+            await repo.applyPromotionEffect(tx, promotion, cb.decidedBy);
+          }
+        }
         await audit(tx, msg, "eoffice_approved", cb.refId, {
-          fileNo: cb.fileNo, employeeId: promotion.employeeId,
-          toDesigId: promotion.toDesigId, dscHash: cb.dscHash ?? null,
+          fileNo: cb.fileNo, employeeId: pending.employeeId,
+          toDesigId: pending.toDesigId, dscHash: cb.dscHash ?? null,
         });
       } else if (cb.decision === "rejected") {
         const promotion = await repo.transitionPromotion(msg.tenantId, cb.refId, cb.decidedBy, {

@@ -22,14 +22,14 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
 
   if (!scheme) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("titleNotFound")} back="/finance/expenditure/scheme-tracking" />
         <EmptyState
           icon="🎯"
           title={t("emptyTitleNotAvailable")}
           message={t("emptyMessageNotAvailable")}
         />
-      </main>
+      </div>
     );
   }
 
@@ -38,7 +38,7 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
   const utilisationPct = outlay > 0 ? Math.round((utilised / outlay) * 100) : 0;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={scheme.name}
         subtitle={scheme.funding ?? scheme.code}
@@ -65,6 +65,6 @@ export default async function SchemeDetailPage({ params }: { params: { id: strin
           <div className="field"><span className="label">{t("status")}</span><StatusPill status={scheme.status} /></div>
         </div>
       </Card>
-    </main>
+    </div>
   );
 }

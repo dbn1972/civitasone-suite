@@ -7,12 +7,12 @@ import { getTranslations } from "next-intl/server";
 export default async function AttendanceLoading() {
   const t = await getTranslations("attendance");
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
       />
       <SkeletonTable rows={8} />
-    </main>
+    </div>
   );
 }

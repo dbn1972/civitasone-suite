@@ -80,7 +80,7 @@ export default function WaiversPage() {
   const req = <span aria-hidden="true" style={{ color: "var(--bad)" }}>*</span>;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Waivers"
         subtitle="Raise penalty and interest waivers for assessee demands (maker-checker workflow)."
@@ -157,6 +157,6 @@ export default function WaiversPage() {
           demand remission.
         </p>
       </Card>
-    </main>
+    </div>
   );
 }

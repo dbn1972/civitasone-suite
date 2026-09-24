@@ -13,7 +13,7 @@ export function Card({ title, link, children, padding = false, style }: CardProp
     <div className="card" style={style}>
       {title && (
         <div className="card-h">
-          <h3>{title}</h3>
+          <h2>{title}</h2>
           {link && <div className="lnk">{link}</div>}
         </div>
       )}

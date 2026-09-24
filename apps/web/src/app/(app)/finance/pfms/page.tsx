@@ -60,7 +60,7 @@ export default async function PfmsOpsConsolePage() {
   const totalMinor = batches.reduce((sum, b) => sum + BigInt(b.amountMinor || "0"), 0n);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -83,6 +83,6 @@ export default async function PfmsOpsConsolePage() {
       </StatGrid>
 
       <PfmsConsole batches={batches} config={config} departments={departments} />
-    </main>
+    </div>
   );
 }

@@ -167,10 +167,12 @@ export function computeLeaveEncashExemption(input: LeaveEncashExemptionInput): L
   // Limb 1: 10 months' average salary
   const tenMonthsAvgMinor = avgSalaryLast10MonthsMinor * 10n;
 
-  // Limb 2: Cash equivalent of leave balance (max 30 days per year of service)
+  // Limb 2: Cash equivalent of leave balance (max 30 days per year of service).
+  // Multiply before dividing (LOW, payroll-calc audit): dividing the monthly
+  // salary by 30 first truncated the per-day rate before scaling by
+  // maxLeaveDays, under-stating this limb by a sub-rupee amount.
   const maxLeaveDays = Math.min(leaveBalanceDays, completedYears * 30);
-  const dailySalaryMinor = avgSalaryLast10MonthsMinor / 30n;
-  const cashEquivalentMinor = dailySalaryMinor * BigInt(maxLeaveDays);
+  const cashEquivalentMinor = (avgSalaryLast10MonthsMinor * BigInt(maxLeaveDays)) / 30n;
 
   // LEAST of four limbs
   const exempt = bigMin(

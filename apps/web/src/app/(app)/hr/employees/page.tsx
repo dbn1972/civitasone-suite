@@ -55,7 +55,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   const filteredTotal = typeFilter === "all" ? total : (countByType[typeFilter] ?? 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -120,6 +120,6 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           )}
         </nav>
       )}
-    </main>
+    </div>
   );
 }

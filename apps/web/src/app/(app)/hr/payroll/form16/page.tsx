@@ -68,7 +68,7 @@ export default async function Form16Page({
   const source: "api" | "error" = lookup.state === "error" ? "error" : "api";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -149,6 +149,6 @@ export default async function Form16Page({
       </Card>
 
       <VerifyForm16Form />
-    </main>
+    </div>
   );
 }

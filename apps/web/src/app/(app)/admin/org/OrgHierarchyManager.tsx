@@ -250,7 +250,7 @@ export function OrgHierarchyManager({ initialUnits, source }: { initialUnits: Ad
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Org Hierarchy"
         subtitle="Organisational structure — department, division, section, unit, branch."
@@ -307,6 +307,6 @@ export function OrgHierarchyManager({ initialUnits, source }: { initialUnits: Ad
           ))}
         </div>
       </div>
-    </main>
+    </div>
   );
 }

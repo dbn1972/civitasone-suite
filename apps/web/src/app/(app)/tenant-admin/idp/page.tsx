@@ -13,7 +13,7 @@ export default async function IdpListPage() {
   const totalSynced = errored ? 0 : providers.reduce((sum, p) => sum + p.usersSynced, 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Identity Providers" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -55,6 +55,6 @@ export default async function IdpListPage() {
           <IdpTable providers={providers} source={source} />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

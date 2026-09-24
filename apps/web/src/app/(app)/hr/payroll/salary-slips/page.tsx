@@ -25,7 +25,7 @@ export default async function SalarySlipsPage() {
   const draftCount = slips.filter((s) => s.status === "draft").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -40,6 +40,6 @@ export default async function SalarySlipsPage() {
         <StatCard icon="📄" iconBg="var(--warnbg)" label={t("statDraft")} value={draftCount} />
       </StatGrid>
       <SalarySlipsTable slips={slips} />
-    </main>
+    </div>
   );
 }

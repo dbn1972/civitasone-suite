@@ -45,7 +45,7 @@ export default async function ServiceBookPage({
   ).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={empId ? t("titleForEmployee", { employee: items[0]?.employee ?? t("defaultEmployeeName") }) : t("title")}
         subtitle={empId ? t("subtitleForEmployee") : t("subtitleAll")}
@@ -72,6 +72,6 @@ export default async function ServiceBookPage({
           </div>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

@@ -30,7 +30,7 @@ export default async function LoansPage({
   const totalEmiMinor = loans.reduce((s, l) => s + Number(l.emiMinor || 0), 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -79,6 +79,6 @@ export default async function LoansPage({
           message={t("recoveryEmptyMessage")}
         />
       </Card>
-    </main>
+    </div>
   );
 }

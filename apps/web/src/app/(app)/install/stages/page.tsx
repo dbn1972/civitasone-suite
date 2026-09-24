@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getInstallStages();
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/install/console">Install console</a>
       </nav>
@@ -20,6 +20,6 @@ export default async function Page() {
       <p className="back" style={{ marginTop: 16 }}>
         <a href="/install/domain-packs">Open Domain Pack activation (Stage 3) →</a>
       </p>
-    </main>
+    </div>
   );
 }

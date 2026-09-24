@@ -23,7 +23,7 @@ export default async function NewJobOpeningPage() {
 
   const t = await getTranslations("recruitmentNewJob");
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
@@ -34,6 +34,6 @@ export default async function NewJobOpeningPage() {
           <NewJobOpeningForm />
         </Suspense>
       </Card>
-    </main>
+    </div>
   );
 }

@@ -9,7 +9,7 @@ import { OvertimeClaimForm } from "../../../_components/OvertimeClaimForm";
 export default async function OvertimeNewPage() {
   const t = await getTranslations("workforceOvertimeNew");
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -20,6 +20,6 @@ export default async function OvertimeNewPage() {
           <OvertimeClaimForm />
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

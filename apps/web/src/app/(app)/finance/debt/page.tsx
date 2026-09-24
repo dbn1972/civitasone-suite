@@ -8,7 +8,7 @@ export default async function DebtPage() {
   const closedCount = loans.filter((l) => String(l.status).toLowerCase() === "closed").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Debt Management"
         subtitle="Loans, EMI schedules, and lender-wise outstanding debt."
@@ -28,6 +28,6 @@ export default async function DebtPage() {
       <Card title="Loan Portfolio">
         <DebtTable loans={loans} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

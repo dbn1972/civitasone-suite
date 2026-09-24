@@ -15,7 +15,7 @@ export default async function AuditObservationsPage() {
   const totalAmount = items.reduce((s, i) => s + (i.amount ?? 0), 0);
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
@@ -34,6 +34,6 @@ export default async function AuditObservationsPage() {
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <ObservationsTable items={items} />
-    </main>
+    </div>
   );
 }

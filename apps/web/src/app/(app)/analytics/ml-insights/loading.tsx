@@ -1,6 +1,6 @@
 export default function Loading() {
   return (
-    <main className="page-main wrap" aria-busy="true" aria-label="Loading ML Insights">
+    <div className="page-main wrap" aria-busy="true" aria-label="Loading ML Insights">
       <div className="skeleton-pulse" style={{ height: 32, width: "40%", marginBottom: 8 }} />
       <div className="skeleton-pulse" style={{ height: 16, width: "60%", marginBottom: 24 }} />
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -13,6 +13,6 @@ export default function Loading() {
           <div key={i} className="skeleton-pulse" style={{ height: 160, borderRadius: 8 }} />
         ))}
       </div>
-    </main>
+    </div>
   );
 }

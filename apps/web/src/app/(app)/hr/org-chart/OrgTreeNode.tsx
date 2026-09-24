@@ -10,6 +10,28 @@ interface OrgTreeNodeProps {
   expanded: Set<string>
   onToggle: (id: string) => void
   onFocus?: (id: string) => void
+  /**
+   * Roving-tabindex state, owned by the tree root (OrgChartClient): the id
+   * of the one treeitem in the whole tree that currently has tabIndex 0.
+   * Defaults to this node's own id so OrgTreeNode still behaves correctly
+   * (and renders as a standalone, always-tabbable node) when used outside
+   * a tree root that manages roving focus.
+   */
+  activeId?: string
+  /**
+   * Ids of every currently VISIBLE treeitem, in document order, respecting
+   * each ancestor's expand/collapse state. Used by ArrowUp/ArrowDown/Home/End
+   * to find the navigation target. Owned by the tree root; defaults to an
+   * empty array (arrow-key roving navigation is inert without it, but the
+   * existing Enter/Space/ArrowRight/ArrowLeft expand/collapse behavior is
+   * unaffected).
+   */
+  visibleOrder?: string[]
+  /** Move roving focus to the treeitem with this id. */
+  onNavigate?: (id: string) => void
+  /** Registers/unregisters this node's DOM element with the tree root so
+   * onNavigate can move real DOM focus to it. */
+  registerRef?: (id: string, el: HTMLDivElement | null) => void
 }
 
 function DesignationChip({ label }: { label: string }) {
@@ -36,7 +58,18 @@ function DesignationChip({ label }: { label: string }) {
   )
 }
 
-export function OrgTreeNode({ node, depth, search, expanded, onToggle, onFocus }: OrgTreeNodeProps) {
+export function OrgTreeNode({
+  node,
+  depth,
+  search,
+  expanded,
+  onToggle,
+  onFocus,
+  activeId = node.id,
+  visibleOrder = [],
+  onNavigate,
+  registerRef,
+}: OrgTreeNodeProps) {
   const term = search.toLowerCase().trim()
   const match =
     term !== '' &&
@@ -49,19 +82,43 @@ export function OrgTreeNode({ node, depth, search, expanded, onToggle, onFocus }
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLDivElement>) => {
-      if (!hasChildren) return
-      if (e.key === 'Enter' || e.key === ' ') {
+      if (hasChildren) {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onToggle(node.id)
+          return
+        } else if (e.key === 'ArrowRight' && !isExpanded) {
+          e.preventDefault()
+          onToggle(node.id)
+          return
+        } else if (e.key === 'ArrowLeft' && isExpanded) {
+          e.preventDefault()
+          onToggle(node.id)
+          return
+        }
+      }
+      // Roving-tabindex navigation (WAI-ARIA tree pattern): move focus to
+      // the next/previous/first/last VISIBLE treeitem. This runs for every
+      // node — leaf or branch — independent of the hasChildren block above,
+      // and is a no-op unless the tree root wired up onNavigate/visibleOrder.
+      if (!onNavigate || visibleOrder.length === 0) return
+      const idx = visibleOrder.indexOf(node.id)
+      if (idx === -1) return
+      if (e.key === 'ArrowDown') {
         e.preventDefault()
-        onToggle(node.id)
-      } else if (e.key === 'ArrowRight' && !isExpanded) {
+        onNavigate(visibleOrder[Math.min(idx + 1, visibleOrder.length - 1)] ?? node.id)
+      } else if (e.key === 'ArrowUp') {
         e.preventDefault()
-        onToggle(node.id)
-      } else if (e.key === 'ArrowLeft' && isExpanded) {
+        onNavigate(visibleOrder[Math.max(idx - 1, 0)] ?? node.id)
+      } else if (e.key === 'Home') {
         e.preventDefault()
-        onToggle(node.id)
+        onNavigate(visibleOrder[0] ?? node.id)
+      } else if (e.key === 'End') {
+        e.preventDefault()
+        onNavigate(visibleOrder[visibleOrder.length - 1] ?? node.id)
       }
     },
-    [hasChildren, isExpanded, node.id, onToggle],
+    [hasChildren, isExpanded, node.id, onToggle, visibleOrder, onNavigate],
   )
 
   const avatarColors = ['#00439C', '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843']
@@ -81,13 +138,14 @@ export function OrgTreeNode({ node, depth, search, expanded, onToggle, onFocus }
 
       {/* Node card */}
       <div
+        ref={(el) => registerRef?.(node.id, el)}
         role="treeitem"
         aria-selected={false}
         aria-expanded={hasChildren ? isExpanded : undefined}
         aria-label={`${node.name}, ${node.designation}, ${node.department}${
           hasChildren ? (isExpanded ? ', collapse' : ', expand') : ''
         }`}
-        tabIndex={0}
+        tabIndex={activeId === node.id ? 0 : -1}
         onClick={() => hasChildren && onToggle(node.id)}
         onKeyDown={handleKeyDown}
         onFocus={() => onFocus?.(node.id)}
@@ -165,6 +223,10 @@ export function OrgTreeNode({ node, depth, search, expanded, onToggle, onFocus }
                     expanded={expanded}
                     onToggle={onToggle}
                     onFocus={onFocus}
+                    activeId={activeId}
+                    visibleOrder={visibleOrder}
+                    onNavigate={onNavigate}
+                    registerRef={registerRef}
                   />
                 ))}
               </div>
@@ -179,6 +241,10 @@ export function OrgTreeNode({ node, depth, search, expanded, onToggle, onFocus }
                 expanded={expanded}
                 onToggle={onToggle}
                 onFocus={onFocus}
+                activeId={activeId}
+                visibleOrder={visibleOrder}
+                onNavigate={onNavigate}
+                registerRef={registerRef}
               />
             ))
           )}

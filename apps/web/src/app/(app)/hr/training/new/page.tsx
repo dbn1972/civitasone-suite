@@ -18,13 +18,13 @@ export default function NewTrainingPage() {
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="New Training Program"
         subtitle="Schedule a new capacity building initiative."
         back="/hr/training" backLabel="Back to Training"
       />
       <NewTrainingForm />
-    </main>
+    </div>
   );
 }

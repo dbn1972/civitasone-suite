@@ -145,7 +145,7 @@ export default async function RevenueAnalyticsPage({
   const topDefaulterOutstanding = defaulters[0]?.outstandingMinor;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Revenue Analytics"
         subtitle="Arrears aging, top defaulters, collection efficiency, and demand-vs-collection trends and forecast."
@@ -199,7 +199,7 @@ export default async function RevenueAnalyticsPage({
           defaultersSource={defaultersSource}
         />
       </Card>
-    </main>
+    </div>
   );
 }
 

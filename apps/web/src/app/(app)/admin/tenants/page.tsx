@@ -9,7 +9,7 @@ export default async function TenantsPage() {
   const suspended = tenants.filter((t) => String(t.status).toLowerCase() === "suspended").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside TenantsTable,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
@@ -24,6 +24,6 @@ export default async function TenantsPage() {
       <Card title="Tenant Directory">
         <TenantsTable tenants={tenants} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

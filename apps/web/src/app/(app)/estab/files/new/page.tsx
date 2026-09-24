@@ -76,7 +76,7 @@ export default function NewFilePage() {
   };
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Create File"
         subtitle={
@@ -291,6 +291,6 @@ export default function NewFilePage() {
           </div>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

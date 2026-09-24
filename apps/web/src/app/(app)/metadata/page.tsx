@@ -13,7 +13,7 @@ const LINKS = [
 
 export default function MetadataHubPage() {
   return (
-    <main className="page-main wrap" aria-label="Metadata hub">
+    <div className="page-main wrap" aria-label="Metadata hub">
       <PageHeader
         title="Metadata"
         subtitle="Configure custom entities, fields, rules, records and forms via /api/v1/metadata/*."
@@ -26,6 +26,6 @@ export default function MetadataHubPage() {
           </Card>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

@@ -16,7 +16,7 @@ export default async function DelayAnalysisPage() {
   const delayed = errored ? null : rows.filter((r) => r.rag === "overdue").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Delay Analysis" subtitle="RAG dashboard — identify at-risk and delayed projects with root causes." back="/projects" />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Total Projects" value={total ?? "—"} />
@@ -35,6 +35,6 @@ export default async function DelayAnalysisPage() {
           <DelayAnalysisTable rows={rows} source={source === "error" ? "error" : "api"} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

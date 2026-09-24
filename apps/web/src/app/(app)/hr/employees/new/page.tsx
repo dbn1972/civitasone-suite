@@ -65,7 +65,7 @@ export default async function NewEmployeePage() {
     managerResult.source === "error";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
@@ -78,6 +78,6 @@ export default async function NewEmployeePage() {
         designations={designations}
         managers={managers}
       />
-    </main>
+    </div>
   );
 }

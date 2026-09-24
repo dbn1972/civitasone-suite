@@ -49,7 +49,7 @@ export default async function AdminOperationsPage() {
 
   if (source === "error") {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Operations" }]} />
         <PageHeader
           back="/tenant-admin"
@@ -57,7 +57,7 @@ export default async function AdminOperationsPage() {
           subtitle="Monitor PM2 services, workers, queues, schedulers, cron activity, outbox backlog, and recent operational errors."
         />
         <RefreshErrorState error={toHumanError("load", { area: "operations dashboard" })} backHref="/tenant-admin" />
-      </main>
+      </div>
     );
   }
 
@@ -67,7 +67,7 @@ export default async function AdminOperationsPage() {
   const incident = incidentSummary(ops);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Operations" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -156,6 +156,6 @@ export default async function AdminOperationsPage() {
       </div>
 
       <p className="muted" style={{ marginTop: 18 }}>Last checked: {formatDate(ops.checkedAt)}. Log excerpts are redacted server-side before display.</p>
-    </main>
+    </div>
   );
 }

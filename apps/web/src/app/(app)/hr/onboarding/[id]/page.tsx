@@ -120,10 +120,10 @@ export default async function OnboardingDetailPage({ params }: Props) {
 
   if (summaryStatus === 403) {
     return (
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <PageHeader title={t("title")} back="/hr/onboarding" backLabel="Back to Onboarding" />
         <PermissionDenied module="onboarding details" requiredRoles={ONBOARDING_ROLES} />
-      </main>
+      </div>
     );
   }
 
@@ -192,7 +192,7 @@ export default async function OnboardingDetailPage({ params }: Props) {
     }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Onboarding — ${row.employee}`}
         subtitle={`${row.department} · Joining ${row.joiningDate}`}
@@ -294,6 +294,6 @@ export default async function OnboardingDetailPage({ params }: Props) {
           .onboarding-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
-    </main>
+    </div>
   );
 }

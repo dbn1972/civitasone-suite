@@ -86,7 +86,7 @@ export default async function ContractorsPage() {
   const unratedCount = total - ratedCount;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Contractors"
         subtitle="Registered contractors available for tender quotations."
@@ -126,6 +126,6 @@ export default async function ContractorsPage() {
           emptyMessage="Add contractors to enable quotation and award workflows."
         />
       </Card>
-    </main>
+    </div>
   );
 }

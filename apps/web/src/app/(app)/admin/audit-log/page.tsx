@@ -24,7 +24,7 @@ export default async function AuditLogPage() {
   const distinctActors = new Set(entries.map((e) => e.actor)).size;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Audit Log"
         subtitle="Platform-wide audit trail — real events from audit-service's append-only log."
@@ -38,6 +38,6 @@ export default async function AuditLogPage() {
         <StatCard icon="👤" iconBg="#eff6ff" label="Actors (distinct)" value={distinctActors} />
       </div>
       <AuditLogTable entries={entries} />
-    </main>
+    </div>
   );
 }

@@ -144,7 +144,7 @@ export default function LeaveHistoryClient({ roles, myEmployeeId }: Props) {
   const rejected  = apps.filter((a) => a.status === "rejected").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -316,6 +316,6 @@ export default function LeaveHistoryClient({ roles, myEmployeeId }: Props) {
         onConfirm={() => void confirmCancel()}
         onCancel={() => { closeCancelDialog(); setPendingCancel(null); }}
       />
-    </main>
+    </div>
   );
 }

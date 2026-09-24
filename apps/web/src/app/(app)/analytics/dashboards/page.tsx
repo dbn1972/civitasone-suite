@@ -26,7 +26,7 @@ export default async function AnalyticsDashboardsPage() {
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
           disagree with the table's own cache state (UX-002's pattern). */}
-      <main aria-label="Analytics dashboards">
+      <div aria-label="Analytics dashboards">
         <StatGrid>
           <StatCard icon="📊" iconBg="#f1f5f9" label="Total" value={errored ? "—" : dashboards.length} />
           <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={errored ? "—" : active} />
@@ -35,7 +35,7 @@ export default async function AnalyticsDashboardsPage() {
         <Card title="Dashboards">
           <DashboardsTable dashboards={dashboards} source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

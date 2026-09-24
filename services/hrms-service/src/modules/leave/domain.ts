@@ -19,8 +19,6 @@ export function assertSufficientLeaveBalance(balance: LeaveBalance, daysApplied:
   }
 }
 
-export { countWorkingDays } from "./holidays.js";
-
 export function assertLeaveAppStatusTransition(current: string, next: string): void {
   const allowed: Record<string, string[]> = {
     draft:   ["pending"],

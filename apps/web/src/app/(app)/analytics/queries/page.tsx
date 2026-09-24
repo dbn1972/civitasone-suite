@@ -24,7 +24,7 @@ export default async function AnalyticsQueriesPage() {
           not a second, independent read of `source` here that could
           disagree with the table's own cache state (UX-002's pattern). */}
 
-      <main aria-label="Analytics query results">
+      <div aria-label="Analytics query results">
         {/* ── Section 1: Run a new query ──────────────────────────────────── */}
         <Card title="Run a new query">
           <div style={{ padding: "16px 20px" }}>
@@ -46,7 +46,7 @@ export default async function AnalyticsQueriesPage() {
             <QueryResultsView runs={runs} source={source} />
           </Card>
         </section>
-      </main>
+      </div>
     </>
   );
 }

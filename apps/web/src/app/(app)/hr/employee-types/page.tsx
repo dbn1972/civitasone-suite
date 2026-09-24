@@ -55,7 +55,7 @@ export default async function EmployeeTypesPage() {
   }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -123,6 +123,6 @@ export default async function EmployeeTypesPage() {
           </p>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

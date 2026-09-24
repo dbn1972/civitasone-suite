@@ -14,7 +14,7 @@ export default async function AuditParasPage() {
   const settled = paras.filter((p) => String(p.status).toLowerCase() === "settled").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Audit Paras"
         subtitle="CAG audit observations and department responses."
@@ -33,6 +33,6 @@ export default async function AuditParasPage() {
       <Card title="Audit Observations">
         <AuditParasTable paras={paras} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

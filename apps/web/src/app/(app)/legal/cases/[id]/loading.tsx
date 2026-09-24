@@ -1,6 +1,6 @@
 export default function LegalCaseDetailLoading() {
   return (
-    <main className="wrap">
+    <div className="wrap">
       <div className="animate-pulse" aria-busy="true" aria-label="Loading case details">
         {/* Breadcrumb skeleton */}
         <div style={{ height: 16, width: 220, borderRadius: 4, background: "#e2e8f0", marginBottom: 12 }} />
@@ -21,6 +21,6 @@ export default function LegalCaseDetailLoading() {
           <div style={{ height: 200, borderRadius: 10, background: "#e2e8f0" }} />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

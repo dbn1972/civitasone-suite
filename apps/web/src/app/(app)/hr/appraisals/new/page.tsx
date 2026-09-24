@@ -9,7 +9,7 @@ export default async function NewAppraisalPage() {
   const { data: employees, source } = await getEmployees();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -17,6 +17,6 @@ export default async function NewAppraisalPage() {
       />
       <DataSourceBadge source={source} />
       <NewAppraisalForm employees={employees} />
-    </main>
+    </div>
   );
 }

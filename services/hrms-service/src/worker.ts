@@ -58,6 +58,7 @@ import { registerContractConsumers } from "./modules/contracts/consumer.js";
 import { registerContractExpiryConsumers } from "./modules/contracts/expiry-consumer.js";
 import { registerManpowerConsumers } from "./modules/manpower-planning/consumer.js";
 import { runSchedulerOnce } from "./modules/scheduler/tick.js";
+import { applyDueEffectiveChangesOnce } from "./modules/lifecycle/effective-scheduler.js";
 import { runWithTenant } from "@civitasone/db";
 import EventEmitter from "node:events";
 
@@ -173,6 +174,19 @@ async function schedulerTick(): Promise<void> {
     log.info({ event: "scheduler.tick", ...res }, "scheduler tick produced due-lists");
   } catch (err) {
     log.error({ err }, "scheduler tick failed");
+  }
+  try {
+    // Effective-dating fix (migration 0144): applies any promotion/transfer
+    // still "pending_effective" whose own effectiveDate has now arrived. Own
+    // try/catch so a failure here never blocks (or is blocked by) the
+    // due-lists tick above — see lifecycle/effective-scheduler.ts.
+    const effRes = await applyDueEffectiveChangesOnce(db);
+    log.info(
+      { event: "scheduler.tick", ...effRes },
+      "scheduler tick applied due effective-dated promotions/transfers",
+    );
+  } catch (err) {
+    log.error({ err }, "effective-changes scheduler tick failed");
   } finally {
     schedulerBusy = false;
   }

@@ -58,7 +58,7 @@ export default async function CertificationsPage() {
   });
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -132,6 +132,6 @@ export default async function CertificationsPage() {
           </div>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

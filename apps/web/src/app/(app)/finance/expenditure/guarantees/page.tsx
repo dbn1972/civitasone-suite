@@ -10,7 +10,7 @@ export default async function GuaranteesPage() {
   const released = guarantees.filter((g) => String(g.status).toLowerCase() === "released").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -29,6 +29,6 @@ export default async function GuaranteesPage() {
       <Card title={t("cardTitle")}>
         <GuaranteesTable guarantees={guarantees} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

@@ -14,7 +14,7 @@ export default async function SSOPage() {
   const totalUsers = providers.reduce((sum, p) => sum + (p.status === "active" ? 1 : 0), 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "SSO & Identity Providers" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -51,6 +51,6 @@ export default async function SSOPage() {
           <SsoTable providers={providers} source={source} />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

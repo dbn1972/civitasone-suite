@@ -176,13 +176,15 @@ describe("computeFnfSettlement — Private employee retiring after 20 years", ()
 
     // Leave encashment: retirement → exemption applies
     // 10-month avg = 11000000 × 10 = 110000000 (₹1.1L × 10 = ₹11L)
-    // cashEquiv = (11000000/30) × min(240, 20×30=600) → (366666) × 240 = 87999840
+    // cashEquiv = (11000000 × min(240, 20×30=600)) / 30 = (11000000×240)/30 = 88000000
+    //   — multiply before dividing (LOW, payroll-calc audit fix); a
+    //   truncate-first daily rate (11000000/30=366666) would understate this
+    //   to 87999840.
     // ceiling−prior = 2500000000 - 0 = 2500000000
     // actual = 800000000
-    // LEAST = cashEquiv (87999840) since it's smallest
-    const dailySalary = avgSalary10Mo / 30n;
+    // LEAST = cashEquiv (88000000) since it's smallest
     const maxDays = Math.min(240, 20 * 30);
-    const cashEquiv = dailySalary * BigInt(maxDays);
+    const cashEquiv = (avgSalary10Mo * BigInt(maxDays)) / 30n;
     const tenMonthAvg = avgSalary10Mo * 10n;
     // LEAST of (actual, ceiling, tenMonthAvg, cashEquiv)
     const expectedLeaveExempt = [800000000n, 2500000000n, tenMonthAvg, cashEquiv]

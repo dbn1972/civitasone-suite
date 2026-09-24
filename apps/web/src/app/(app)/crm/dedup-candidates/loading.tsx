@@ -1,6 +1,6 @@
 export default function DedupCandidatesLoading() {
   return (
-    <main className="min-h-screen bg-slate-50 p-6 md:p-8">
+    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
       <div className="mx-auto max-w-5xl animate-pulse space-y-5">
         {/* Back link + header skeleton */}
         <div className="h-4 w-32 rounded bg-slate-200" />
@@ -11,6 +11,6 @@ export default function DedupCandidatesLoading() {
           <div key={i} className="rounded-xl bg-slate-200" style={{ height: 200 }} />
         ))}
       </div>
-    </main>
+    </div>
   );
 }

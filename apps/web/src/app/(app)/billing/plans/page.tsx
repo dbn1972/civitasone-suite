@@ -4,7 +4,7 @@ import { getBillingPlans } from "../../../_data/loaders";
 export default async function BillingPlansPage() {
   const { data, source } = await getBillingPlans();
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <ModuleListPage
         title="Billing — Plans"
         description="All billing plans. Create new plans or view details."
@@ -15,6 +15,6 @@ export default async function BillingPlansPage() {
           + New Plan
         </a>
       </ModuleListPage>
-    </main>
+    </div>
   );
 }

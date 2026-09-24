@@ -54,7 +54,7 @@ export default async function PeriodCloseCockpitPage() {
   const hardClosedCount = periods.filter((p) => p.status === "hard_close").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Period-Close Cockpit"
         subtitle="Track accounting-period status and drive the soft-close, hard-close, and reopen workflow."
@@ -83,6 +83,6 @@ export default async function PeriodCloseCockpitPage() {
           <PeriodsTable periods={periods} canReopen={canReopen} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

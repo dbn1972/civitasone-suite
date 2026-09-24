@@ -191,7 +191,7 @@ export function WizardShell({
         <aside>
           <BlockRail blocks={blocks} activeBlockId={activeBlockId} onSelect={onBlockSelect} />
         </aside>
-        <main>{children}</main>
+        <div>{children}</div>
         {help ? (
           <aside aria-label="Context help" style={{ maxWidth: 260 }}>
             {help}

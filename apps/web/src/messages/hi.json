@@ -1996,6 +1996,7 @@
   },
   "form16Wizard": {
     "stepAriaLabel": "फॉर्म 16 विज़ार्ड चरण",
+  "stepProgress": "चरण {current} में से {total}: {name}",
     "stepSelectFy": "वित्त वर्ष चुनें",
     "stepReviewDeductions": "कटौतियों की समीक्षा करें",
     "stepGenerateDownload": "जनरेट करें और डाउनलोड करें",

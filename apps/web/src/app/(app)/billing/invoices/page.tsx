@@ -29,7 +29,7 @@ export default async function BillingInvoicesPage() {
   const { data: invoices, source } = await getInvoices();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Billing — Invoices"
         subtitle="Tenant invoices from the Billing service. Open an invoice to generate or cancel its GST e-invoice (IRN)."
@@ -58,6 +58,6 @@ export default async function BillingInvoicesPage() {
         emptyTitle="No invoices yet"
         emptyMessage="No invoices have been generated for this tenant."
       />
-    </main>
+    </div>
   );
 }

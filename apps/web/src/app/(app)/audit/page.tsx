@@ -12,7 +12,7 @@ export default async function AuditPage() {
   const failures = auditItems.filter((i) => i.outcome === "failure").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
@@ -41,6 +41,6 @@ export default async function AuditPage() {
           <AuditLogTable rows={auditItems} />
         </div>
       </div>
-    </main>
+    </div>
   );
 }

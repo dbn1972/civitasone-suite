@@ -22,7 +22,7 @@ export default async function AssesseesPage() {
   const waterCount = assessees.filter((a) => a.assesseeType === "water_connection").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Assessee Register"
         subtitle="Property and water-connection taxpayers registered for municipal revenue collection."
@@ -46,6 +46,6 @@ export default async function AssesseesPage() {
           <AssesseesTable assessees={assessees} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

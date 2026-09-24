@@ -13,7 +13,7 @@ export default async function AttendancePage() {
   const onLeave = attendance.filter((r) => r.status === "on_leave").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -32,6 +32,6 @@ export default async function AttendancePage() {
       <Card title={t("recordsCardTitle")}>
         <AttendanceTable attendance={attendance} source={source} />
       </Card>
-    </main>
+    </div>
   );
 }

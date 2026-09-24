@@ -38,7 +38,7 @@ export default async function BudgetMonitoringPage({
     : 0;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Budget Monitoring"
         subtitle="Real-time head-wise allocation, commitment, expenditure and forecast."
@@ -109,6 +109,6 @@ export default async function BudgetMonitoringPage({
       <Card title="Head-wise Budget vs Expenditure">
         <MonitoringTable lines={lines} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

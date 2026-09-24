@@ -139,7 +139,7 @@ export default async function BoqDetailPage({
   }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Bill of Quantities"
         subtitle={`Work ${params.workId.slice(0, 8)}…`}
@@ -222,6 +222,6 @@ export default async function BoqDetailPage({
           </div>
         </Card>
       )}
-    </main>
+    </div>
   );
 }

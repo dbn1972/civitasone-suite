@@ -98,7 +98,7 @@ export default async function WorkOrdersPage() {
   const { data: orders, source } = await getOrders();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Work Orders"
         subtitle="All civil/infrastructure work proposals in the current lifecycle."
@@ -127,6 +127,6 @@ export default async function WorkOrdersPage() {
           emptyMessage="Create a work proposal to begin the lifecycle."
         />
       </Card>
-    </main>
+    </div>
   );
 }

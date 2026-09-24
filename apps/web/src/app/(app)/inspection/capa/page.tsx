@@ -13,7 +13,7 @@ export default async function Page() {
   const resource = useResource(result);
   const errored = resource.status === "error";
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 8 }}>
         <Link href="/inspection" className="lnk">Inspection</Link>
         <span aria-hidden style={{ margin: "0 7px" }}>/</span>
@@ -55,6 +55,6 @@ export default async function Page() {
           </table>
         </div>
       )}
-    </main>
+    </div>
   );
 }

@@ -71,7 +71,7 @@ export default async function CtcConfigPage() {
   const pctComponents = config.filter((c) => c.calc_type.startsWith("pct_")).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -106,6 +106,6 @@ export default async function CtcConfigPage() {
       </Card>
 
       <CtcCalculatorForm />
-    </main>
+    </div>
   );
 }

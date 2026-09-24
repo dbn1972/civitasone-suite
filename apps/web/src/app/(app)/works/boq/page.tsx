@@ -22,7 +22,7 @@ export default async function BoqPage() {
   const scopes = new Set(items.map((i) => String(i.scope ?? ""))).size;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside BoqTable, driven by
           the same useSeededResource call that produces its rows — not a
           second, independent read of `source` here that could disagree with
@@ -57,6 +57,6 @@ export default async function BoqPage() {
       <Card title="BoQ Items">
         <BoqTable items={items} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }
