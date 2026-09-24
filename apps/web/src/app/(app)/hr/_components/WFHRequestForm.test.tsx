@@ -1,13 +1,28 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, act, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
+const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: pushMock, refresh: vi.fn() }),
 }));
 
 import { WFHRequestForm } from "./WFHRequestForm";
 
+// This component calls useTranslations() directly, which needs a real
+// NextIntlClientProvider in the tree -- every render() call below was
+// previously unwrapped, so every test in this file failed outright with
+// "Failed to call `useTranslations` because the context from
+// `NextIntlClientProvider` was not found" (a pre-existing gap, unrelated to
+// the redirectHref prop this fix adds, surfaced while fixing that).
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
+
 describe("WFHRequestForm", () => {
+  beforeEach(() => pushMock.mockReset());
+
   it("renders DoPT policy note", () => {
     render(<WFHRequestForm />);
     const notes = screen.getAllByRole("note");
@@ -94,6 +109,23 @@ describe("WFHRequestForm", () => {
     expect(screen.getByTestId("paylevel-warning")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /submit request/i })).not.toBeDisabled();
   });
+
+  // CRITICAL fix: redirectHref used to be hardcoded to /hr/workforce/wfh
+  // (role-gated, excluding `employee`), so embedding this form on the
+  // all-roles /hr/wfh page sent every submitter -- including the plain
+  // employees that page is for -- straight into a permission wall on
+  // Cancel or after a successful submit.
+  it("Cancel navigates to the default redirectHref (/hr/workforce/wfh) when not overridden", () => {
+    render(<WFHRequestForm />);
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(pushMock).toHaveBeenCalledWith("/hr/workforce/wfh");
+  });
+
+  it("Cancel navigates to a custom redirectHref when provided", () => {
+    render(<WFHRequestForm redirectHref="/hr/wfh" />);
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(pushMock).toHaveBeenCalledWith("/hr/wfh");
+  });
 });
 
 /**
@@ -109,8 +141,8 @@ describe("WFHRequestForm — UX-016 clerk-safe errors", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  async function submitValidForm() {
-    render(<WFHRequestForm payLevel={5} weeklyWfhCount={0} />);
+  async function submitValidForm(props: { redirectHref?: string } = {}) {
+    render(<WFHRequestForm payLevel={5} weeklyWfhCount={0} {...props} />);
     await act(async () => {
       fireEvent.change(screen.getByLabelText(/employee id/i), {
         target: { value: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" },
@@ -150,5 +182,14 @@ describe("WFHRequestForm — UX-016 clerk-safe errors", () => {
     await submitValidForm();
 
     expect(await screen.findByText("From date cannot be in the past.")).toBeInTheDocument();
+  });
+
+  it("redirects to a custom redirectHref after a successful submit", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "wfh-1", status: "pending" }), { status: 202 }));
+    await submitValidForm({ redirectHref: "/hr/wfh" });
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/submitted/i));
+    await new Promise((r) => setTimeout(r, 950));
+    expect(pushMock).toHaveBeenCalledWith("/hr/wfh");
   });
 });
