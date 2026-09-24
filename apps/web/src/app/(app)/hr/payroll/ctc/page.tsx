@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { CtcCalculatorForm } from "./CtcCalculatorForm";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type ConfigRow = {
   id: string;
@@ -33,6 +34,7 @@ const CALC_TYPE_LABEL: Record<string, string> = {
 };
 
 export default async function CtcConfigPage() {
+  const t = await getTranslations("payrollCtc");
   const { data: config, source } = await getData();
   const errored = source === "error";
 
@@ -57,11 +59,11 @@ export default async function CtcConfigPage() {
   type Row = (typeof rows)[number];
 
   const columns: { key: keyof Row & string; label: string; align?: "left" | "right" }[] = [
-    { key: "component_code", label: "Code" },
-    { key: "component_name", label: "Component" },
-    { key: "calcTypeLabel", label: "Calculation" },
-    { key: "valueDisplay", label: "Value", align: "right" },
-    { key: "employerCostLabel", label: "Employer Cost" },
+    { key: "component_code", label: t("colCode") },
+    { key: "component_name", label: t("colComponent") },
+    { key: "calcTypeLabel", label: t("colCalculation") },
+    { key: "valueDisplay", label: t("colValue"), align: "right" },
+    { key: "employerCostLabel", label: t("colEmployerCost") },
   ];
 
   const employerComponents = config.filter((c) => c.is_employer_cost).length;
@@ -71,19 +73,19 @@ export default async function CtcConfigPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="CTC Configuration"
-        subtitle="Cost-to-Company component rules used to break a CTC figure into pay components."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="⚙️" iconBg="var(--infobg)" label="Configured Components" value={errored ? null : config.length} />
-        <StatCard icon="🏛️" iconBg="var(--warnbg)" label="Employer-Cost" value={errored ? null : employerComponents} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active Components" value={errored ? null : activeComponents} />
-        <StatCard icon="📊" iconBg="var(--goodbg)" label="Percentage-Based" value={errored ? null : pctComponents} />
+        <StatCard icon="⚙️" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : config.length} />
+        <StatCard icon="🏛️" iconBg="var(--warnbg)" label={t("statEmployerCost")} value={errored ? null : employerComponents} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={errored ? null : activeComponents} />
+        <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statPctBased")} value={errored ? null : pctComponents} />
       </StatGrid>
 
-      <Card title="CTC Component Configuration">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "ctc" })} backHref="/hr/payroll" />
@@ -94,11 +96,11 @@ export default async function CtcConfigPage() {
           rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by code or component…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="⚙️"
-          emptyTitle="No CTC configuration found"
-          emptyMessage="No active payroll_ctc_config rows are configured for this tenant."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
         )}
       </Card>

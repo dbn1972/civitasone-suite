@@ -5,6 +5,7 @@ import { CreateStructureForm } from "./CreateStructureForm";
 import { SalaryStructureCard } from "./SalaryStructureCard";
 import { ComponentGrid } from "./ComponentGrid";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -43,6 +44,7 @@ async function getComponents(): Promise<LoaderResult<ComponentRow[]>> {
 }
 
 export default async function PayStructuresPage() {
+  const t = await getTranslations("payrollStructures");
   const [structuresResult, componentsResult] = await Promise.all([getData(), getComponents()]);
   const { data: structures, source: structuresSource } = structuresResult;
   const { data: rawComponents, source: componentsSource } = componentsResult;
@@ -65,35 +67,35 @@ export default async function PayStructuresPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Pay Structures"
-        subtitle="Define earning and deduction components that make up an employee's pay."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <StatGrid>
-        <StatCard icon="🧱" iconBg="var(--infobg)" label="Total Structures" value={structuresErrored ? "—" : structures.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Active" value={active ?? "—"} />
-        <StatCard icon="⭐" iconBg="var(--warnbg)" label="Default" value={defaultCount ?? "—"} />
-        <StatCard icon="🧩" iconBg="var(--panel)" label="Components" value={componentsErrored ? "—" : rawComponents.length} />
+        <StatCard icon="🧱" iconBg="var(--infobg)" label={t("statTotal")} value={structuresErrored ? "—" : structures.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={active ?? "—"} />
+        <StatCard icon="⭐" iconBg="var(--warnbg)" label={t("statDefault")} value={defaultCount ?? "—"} />
+        <StatCard icon="🧩" iconBg="var(--panel)" label={t("statComponents")} value={componentsErrored ? "—" : rawComponents.length} />
       </StatGrid>
 
       <CreateStructureForm />
 
       {structuresErrored ? (
-        <Card title="Pay Structures">
+        <Card title={t("structuresCardTitle")}>
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "pay structures" })} backHref="/hr/payroll" />
           </div>
         </Card>
       ) : structures.length === 0 ? (
-        <Card title="Pay Structures">
+        <Card title={t("structuresCardTitle")}>
           <EmptyState
             icon="🧱"
-            title="No pay structures yet"
-            message="Create your first salary structure using the form above."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         </Card>
       ) : (
-        <Card title="Salary Structure Cards">
+        <Card title={t("cardsTitle")}>
           <div
             style={{
               display: "grid",
@@ -115,7 +117,7 @@ export default async function PayStructuresPage() {
         </Card>
       )}
 
-      <Card title="Component Grid — Earnings, Deductions & Benefits">
+      <Card title={t("componentGridTitle")}>
         <ComponentGrid
           components={rawComponents.map((c) => ({
             id: c.id,

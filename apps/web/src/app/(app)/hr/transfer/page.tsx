@@ -6,6 +6,8 @@ import { TransferOrderCard, type TransferRow } from "./_components/TransferOrder
 import { TransferListFilters } from "./_components/TransferListFilters";
 import { toHumanError } from "@/lib/messages";
 
+import { getTranslations } from "next-intl/server";
+
 async function getData(): Promise<LoaderResult<TransferRow[]>> {
   // NOTE: this used to fall back to GET /api/v1/hrms/transfers whenever the
   // lifecycle endpoint's array came back empty -- but that fallback path
@@ -24,6 +26,7 @@ async function getData(): Promise<LoaderResult<TransferRow[]>> {
 }
 
 export default async function TransferPage() {
+  const t = await getTranslations("transfer");
   const { data: raw, source } = await getData();
   const errored = source === "error";
   // The raw backend row only carries employeeId/fromDeptId/toDeptId (no
@@ -42,32 +45,32 @@ export default async function TransferPage() {
   const relieved  = items.filter((i) => i.status === "relieved").length;
 
   const tableColumns: { key: keyof TransferRow & string; label: string; cellType?: "status" }[] = [
-    { key: "employee",     label: "Employee"      },
-    { key: "fromOffice",   label: "From"          },
-    { key: "toOffice",     label: "To"            },
-    { key: "effectiveDate",label: "Effective Date"},
-    { key: "orderNo",      label: "Order No."     },
-    { key: "relievedDate", label: "Relieved Date" },
-    { key: "status",       label: "Status", cellType: "status" },
+    { key: "employee",     label: t("colEmployee")      },
+    { key: "fromOffice",   label: t("colFrom")          },
+    { key: "toOffice",     label: t("colTo")            },
+    { key: "effectiveDate",label: t("colEffectiveDate")},
+    { key: "orderNo",      label: t("colOrderNo")     },
+    { key: "relievedDate", label: t("colRelievedDate") },
+    { key: "status",       label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Transfer Orders"
-        subtitle="Employee transfer orders — initiation to relieving and joining."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
         actions={<TransferWithApproval />}
       />
       <DataSourceBadge source={source} message="Couldn't load transfer orders — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="🔄" iconBg="var(--infobg, #e6f0ff)" label="Total Transfers"    value={errored ? null : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Completed / Joined" value={errored ? null : completed} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending"            value={errored ? null : pending} />
-        <StatCard icon="👍" iconBg="var(--infobg, #f0f5ff)" label="Order Issued"       value={errored ? null : approved} />
+<StatCard icon="🔄" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")}    value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statCompleted")} value={errored ? null : completed} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")}            value={errored ? null : pending} />
+        <StatCard icon="👍" iconBg="var(--infobg, #f0f5ff)" label={t("statApproved")}       value={errored ? null : approved} />
         {relieved > 0 && (
-          <StatCard icon="📍" iconBg="var(--warnbg, #fef9c3)" label="Relieved" value={errored ? null : relieved} />
+          <StatCard icon="📍" iconBg="var(--warnbg, #fef9c3)" label={t("statRelieved")} value={errored ? null : relieved} />
         )}
       </StatGrid>
 
@@ -75,7 +78,7 @@ export default async function TransferPage() {
       <TransferListFilters transfers={items} />
 
       {/* Table fallback for density view */}
-      <Card title="Transfer Orders — Table View">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "transfer" })} backHref="/hr" />
@@ -86,11 +89,11 @@ export default async function TransferPage() {
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee, office or order no…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📍"
-          emptyTitle="No transfer orders"
-          emptyMessage="Transfer orders appear here once issued. Use '+ Transfer with approval' to move an employee to another office."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
         )}
       </Card>

@@ -5,6 +5,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 /**
  * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's
@@ -36,6 +37,7 @@ async function getData(): Promise<LoaderResult<RawRow[]>> {
 }
 
 export default async function DisciplinaryListPage() {
+  const t = await getTranslations("disciplinary");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => DISCIPLINARY_ROLES.includes(r));
@@ -56,32 +58,32 @@ export default async function DisciplinaryListPage() {
   const open = items.filter((i) => !["closed", "disposed", "finalised"].includes(i.status)).length;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "caseRef", label: "Case Ref" },
-    { key: "employee", label: "Employee" },
-    { key: "department", label: "Department" },
-    { key: "type", label: "Proceeding Type" },
-    { key: "charges", label: "Charge / Grievance" },
-    { key: "inquiry_officer", label: "IO / HR Officer" },
-    { key: "filed_date", label: "Filed" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "caseRef", label: t("colCaseRef") },
+    { key: "employee", label: t("colEmployee") },
+    { key: "department", label: t("colDepartment") },
+    { key: "type", label: t("colType") },
+    { key: "charges", label: t("colCharge") },
+    { key: "inquiry_officer", label: t("colOfficer") },
+    { key: "filed_date", label: t("colFiled") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Disciplinary Cases"
-        subtitle="All departmental proceedings — major vigilance cases and minor grievances in one view."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
-        actions={<Link href="/hr/vigilance" className="btn-outline">Vigilance Only</Link>}
+        actions={<Link href="/hr/vigilance" className="btn-outline">{t("vigilanceOnly")}</Link>}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label="Total Cases" value={errored ? null : items.length} />
-        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label="Major (Vigilance)" value={errored ? null : major} />
-        <StatCard icon="🟡" iconBg="var(--warnbg, #fffbe6)" label="Minor (Grievance)" value={errored ? null : minor} />
-        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label="Active / Open" value={errored ? null : open} />
+<StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statMajor")} value={errored ? null : major} />
+        <StatCard icon="🟡" iconBg="var(--warnbg, #fffbe6)" label={t("statMinor")} value={errored ? null : minor} />
+        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOpen")} value={errored ? null : open} />
       </StatGrid>
-      <Card title="All Disciplinary Cases">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "disciplinary" })} backHref="/hr" />
@@ -99,11 +101,11 @@ export default async function DisciplinaryListPage() {
           rowLinkPrefix="/hr/disciplinary/"
           sortable
           filterable
-          filterPlaceholder="Filter by employee, department or charge…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="⚖️"
-          emptyTitle="No disciplinary cases on record"
-          emptyMessage="All departmental proceedings under CCS (CCA) Rules appear here — both major vigilance cases (charge memo / inquiry) and minor proceedings."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
         </>)}
       </Card>

@@ -3,6 +3,7 @@ import { PageHeader, StatusPill, RefreshErrorState } from "../../../../_componen
 import { getPayrollRunDetails } from "@/app/_data/loaders";
 import { useResource } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 const fmtRupees = (n: number) =>
   "₹" + n.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -19,6 +20,7 @@ export default async function PayrollRunsPage() {
   // working /hr/payroll root page already uses successfully, and pointed the
   // empty-state CTA at that same working page, where the real
   // CreatePayrollRunForm lives.
+  const t = await getTranslations("payrollRuns");
   const result = await getPayrollRunDetails();
   const { data: runs } = result;
   const resource = useResource(result);
@@ -27,8 +29,8 @@ export default async function PayrollRunsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Payroll Runs"
-        subtitle="Monthly salary processing and statutory run status."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll"
         backLabel="Payroll"
       />
@@ -39,22 +41,22 @@ export default async function PayrollRunsPage() {
         </div>
       ) : runs.length === 0 ? (
         <div className="card" style={{ padding: 32, textAlign: "center" }}>
-          <p style={{ color: "var(--ink2)", fontSize: 15, marginBottom: 14 }}>No payroll runs found.</p>
+          <p style={{ color: "var(--ink2)", fontSize: 15, marginBottom: 14 }}>{t("emptyMessage")}</p>
           <Link href="/hr/payroll" className="btn primary">
-            Create first run →
+            {t("createFirstRun")}
           </Link>
         </div>
       ) : (
         <div className="card">
           <div style={{ overflowX: "auto" }}>
-            <table className="data-table" role="table" aria-label="Payroll runs">
+            <table className="data-table" role="table" aria-label={t("tableAriaLabel")}>
               <thead>
                 <tr>
-                  <th scope="col">Period</th>
-                  <th scope="col" style={{ textAlign: "end" }}>Employees</th>
-                  <th scope="col" style={{ textAlign: "end" }}>Gross Pay</th>
-                  <th scope="col" style={{ textAlign: "end" }}>Net Pay</th>
-                  <th scope="col">Status</th>
+                  <th scope="col">{t("colPeriod")}</th>
+                  <th scope="col" style={{ textAlign: "end" }}>{t("colEmployees")}</th>
+                  <th scope="col" style={{ textAlign: "end" }}>{t("colGross")}</th>
+                  <th scope="col" style={{ textAlign: "end" }}>{t("colNet")}</th>
+                  <th scope="col">{t("colStatus")}</th>
                 </tr>
               </thead>
               <tbody>

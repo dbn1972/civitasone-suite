@@ -7,6 +7,7 @@ import { QuarterLookupForm } from "./QuarterLookupForm";
 import { ForceFileButton } from "./ForceFileButton";
 import { TaxReturnsSummary, type QuarterSummaryRow } from "./TaxReturnsSummary";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 /**
  * Plain-language failure message for a quarterly-return load, for this
@@ -145,6 +146,7 @@ export default async function ReturnsPage({
 }: {
   searchParams: { fy?: string; quarter?: string };
 }) {
+  const t = await getTranslations("payrollReturns");
   const { fy: defFy, quarter: defQuarter } = currentFyQuarter();
   const fy = searchParams.fy && FY_RE.test(searchParams.fy) ? searchParams.fy : defFy;
   const quarter = (QUARTERS as string[]).includes(searchParams.quarter ?? "")
@@ -161,10 +163,10 @@ export default async function ReturnsPage({
 
   const rows24 = f24Lookup.state === "ok" ? f24Lookup.data.deductees.map((d) => ({ ...d })) : [];
   const cols24: { key: keyof Deductee24Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "name", label: "Employee" },
-    { key: "pan", label: "PAN" },
-    { key: "tdsDeductedMinor", label: "TDS Deducted", align: "right", cellType: "amount" },
-    { key: "tdsDepositedMinor", label: "TDS Deposited", align: "right", cellType: "amount" },
+    { key: "name", label: t("colEmployee") },
+    { key: "pan", label: t("colPan") },
+    { key: "tdsDeductedMinor", label: t("colTdsDeducted"), align: "right", cellType: "amount" },
+    { key: "tdsDepositedMinor", label: t("colTdsDeposited"), align: "right", cellType: "amount" },
   ];
   const totalTdsDeductedMinor24 = rows24.reduce((s, d) => s + d.tdsDeductedMinor, 0);
   const totalTdsDepositedMinor24 = rows24.reduce((s, d) => s + d.tdsDepositedMinor, 0);
@@ -173,11 +175,11 @@ export default async function ReturnsPage({
   const rows26 = (f26?.deductees ?? []).map((d) => ({ ...d }));
   const totalAmountPaidMinor26 = rows26.reduce((s, d) => s + Number(d.amountPaidMinor ?? 0), 0);
   const cols26: { key: keyof Deductee26Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "name", label: "Deductee" },
-    { key: "pan", label: "PAN" },
-    { key: "section", label: "Section" },
-    { key: "amountPaidMinor", label: "Amount Paid", align: "right", cellType: "amount" },
-    { key: "tdsDeductedMinor", label: "TDS Deducted", align: "right", cellType: "amount" },
+    { key: "name", label: t("colDeductee") },
+    { key: "pan", label: t("colPan") },
+    { key: "section", label: t("colSection") },
+    { key: "amountPaidMinor", label: t("colAmountPaid"), align: "right", cellType: "amount" },
+    { key: "tdsDeductedMinor", label: t("colTdsDeducted"), align: "right", cellType: "amount" },
   ];
 
   // Build Q1-Q4 overview — current quarter gets real data, others stubbed as pending
@@ -205,15 +207,15 @@ export default async function ReturnsPage({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Quarterly TDS Returns"
-        subtitle="Form-24Q (salary) and Form-26Q (non-salary) quarterly e-TDS returns."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
 
       <DataSourceBadge source={overallSource} message="Couldn't load — showing nothing" />
 
       {/* Q1-Q4 annual overview with filing dates, challan refs, TDS totals */}
-      <Card title={"Annual TDS Returns Overview — FY " + fy}>
+      <Card title={t("annualOverviewTitle", { fy })}>
         <div className="pad">
           <TaxReturnsSummary fy={fy} quarters={quarterSummaries} />
         </div>
@@ -221,11 +223,11 @@ export default async function ReturnsPage({
 
       <QuarterLookupForm defaultFy={fy} defaultQuarter={quarter} quarters={QUARTERS} />
 
-      <Card title={"Form-24Q — Salary TDS — FY " + fy + " " + quarter}>
+      <Card title={t("form24qTitle", { fy, quarter })}>
         <div className="pad">
           {f24Lookup.state === "reconciliation_blocked" ? (
             <>
-              <EmptyState icon="⚠️" title={"Form-24Q blocked for FY " + fy + " " + quarter} message={f24Lookup.message} />
+              <EmptyState icon="⚠️" title={t("form24qBlockedTitle", { fy, quarter })} message={f24Lookup.message} />
               <ForceFileButton fy={fy} quarter={quarter} />
             </>
           ) : f24Lookup.state === "error" ? (
@@ -233,23 +235,23 @@ export default async function ReturnsPage({
               <DataSourceBadge source="error" message="Couldn't load — showing nothing" />
               <EmptyState
                 icon="⚠️"
-                title={"Could not load Form-24Q for FY " + fy + " " + quarter}
+                title={t("form24qErrorTitle", { fy, quarter })}
                 message={loadFailureMessage("Form-24Q return")}
               />
             </>
           ) : (
             <>
               <StatGrid>
-                <StatCard icon="👥" iconBg="var(--infobg)" label="Deductees" value={f24Lookup.data.deducteeCount} />
-                <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(totalTdsDeductedMinor24)} />
+                <StatCard icon="👥" iconBg="var(--infobg)" label={t("statDeductees")} value={f24Lookup.data.deducteeCount} />
+                <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeducted")} value={formatMoney(totalTdsDeductedMinor24)} />
                 <StatCard
                   icon={f24Lookup.data.reconciliation.matched ? "✅" : "⚠️"}
-                  iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
-                  label="Challan Reconciliation"
-                  value={f24Lookup.data.reconciliation.matched ? "Matched" : "Unreconciled"}
+iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
+                  label={t("statReconciliation")}
+                  value={f24Lookup.data.reconciliation.matched ? t("matched") : t("unreconciled")}
                 />
-                <StatCard icon="🏦" iconBg="var(--warnbg)" label="TDS Deposited" value={formatMoney(totalTdsDepositedMinor24)} />
-                <StatCard icon="⚠️" iconBg="var(--errorbg)" label="Variance" value={formatMoney(varianceMinor24)} />
+                <StatCard icon="🏦" iconBg="var(--warnbg)" label={t("statTdsDeposited")} value={formatMoney(totalTdsDepositedMinor24)} />
+                <StatCard icon="⚠️" iconBg="var(--errorbg)" label={t("statVariance")} value={formatMoney(varianceMinor24)} />
               </StatGrid>
               {f24Lookup.data.reconciliation.warning && (
                 <p role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
@@ -262,11 +264,11 @@ export default async function ReturnsPage({
                   rows={rows24}
                   sortable
                   filterable
-                  filterPlaceholder="Filter by employee or PAN…"
+                  filterPlaceholder={t("filterPlaceholder24q")}
                   pageSize={15}
                   emptyIcon="🧾"
-                  emptyTitle="No deductees this quarter"
-                  emptyMessage="No approved/disbursed payroll runs contributed TDS in this quarter yet."
+                  emptyTitle={t("noDeductees24qTitle")}
+                  emptyMessage={t("noDeductees24qMessage")}
                 />
               </div>
               <p style={{ fontSize: "12.5px", color: "var(--color-text-muted)", marginTop: 10 }}>{f24Lookup.data.note}</p>
@@ -275,7 +277,7 @@ export default async function ReturnsPage({
                   className="btn ghost sm"
                   href={"/api/proxy/v1/payroll/statutory/form24q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter + "&format=file"}
                 >
-                  <span aria-hidden="true">⬇</span> Download RPU flat file (.txt)
+                  <span aria-hidden="true">⬇</span> {t("downloadRpu")}
                 </a>
               </p>
             </>
@@ -283,32 +285,32 @@ export default async function ReturnsPage({
         </div>
       </Card>
 
-      <Card title={"Form-26Q — Non-Salary TDS — FY " + fy + " " + quarter}>
+      <Card title={t("form26qTitle", { fy, quarter })}>
         <div className="pad">
           {f26 === null ? (
             <>
               <DataSourceBadge source="error" message="Couldn't load — showing nothing" />
               <EmptyState
                 icon="⚠️"
-                title={"Could not load Form-26Q for FY " + fy + " " + quarter}
+                title={t("form26qErrorTitle", { fy, quarter })}
                 message={loadFailureMessage("Form-26Q return")}
               />
             </>
           ) : !f26.populated ? (
-            <EmptyState icon="🧾" title="Non-salary TDS not yet populated" message={f26.note} />
+            <EmptyState icon="🧾" title={t("form26qNotPopulated")} message={f26.note} />
           ) : (
             <>
               <DataSourceBadge source={src26 === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
               <StatGrid>
-                <StatCard icon="👥" iconBg="var(--infobg)" label="Deductees" value={f26.deducteeCount} />
-                <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(f26.totalTdsDeductedMinor)} />
+                <StatCard icon="👥" iconBg="var(--infobg)" label={t("statDeductees")} value={f26.deducteeCount} />
+                <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeducted")} value={formatMoney(f26.totalTdsDeductedMinor)} />
                 <StatCard
                   icon={f26.reconciliation.matched ? "✅" : "⚠️"}
-                  iconBg={f26.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
-                  label="Challan Reconciliation"
-                  value={f26.reconciliation.matched ? "Matched" : "Unreconciled"}
+iconBg={f26.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
+                  label={t("statReconciliation")}
+                  value={f26.reconciliation.matched ? t("matched") : t("unreconciled")}
                 />
-                <StatCard icon="💳" iconBg="var(--warnbg)" label="Amount Paid" value={formatMoney(totalAmountPaidMinor26)} />
+                <StatCard icon="💳" iconBg="var(--warnbg)" label={t("statAmountPaid")} value={formatMoney(totalAmountPaidMinor26)} />
               </StatGrid>
               <div style={{ marginTop: 12 }}>
                 <DataTable
@@ -316,10 +318,10 @@ export default async function ReturnsPage({
                   rows={rows26}
                   sortable
                   filterable
-                  filterPlaceholder="Filter by name, PAN, or section…"
+                  filterPlaceholder={t("filterPlaceholder26q")}
                   pageSize={15}
                   emptyIcon="🧾"
-                  emptyTitle="No non-salary deductees this quarter"
+                  emptyTitle={t("noDeductees26qTitle")}
                 />
               </div>
               <p style={{ fontSize: "12.5px", color: "var(--color-text-muted)", marginTop: 10 }}>{f26.note}</p>
@@ -328,7 +330,7 @@ export default async function ReturnsPage({
                   className="btn ghost sm"
                   href={"/api/proxy/v1/payroll/statutory/form26q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter + "&format=file"}
                 >
-                  <span aria-hidden="true">⬇</span> Download RPU flat file (.txt)
+                  <span aria-hidden="true">⬇</span> {t("downloadRpu")}
                 </a>
               </p>
             </>

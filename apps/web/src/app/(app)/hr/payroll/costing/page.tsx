@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CostingPeriodForm } from "./CostingPeriodForm";
 import { CreateCostingRuleForm } from "./CreateCostingRuleForm";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type ReportRow = {
   employee_group: string;
@@ -42,6 +43,7 @@ export default async function CostingPage({
 }: {
   searchParams: { period?: string };
 }) {
+  const t = await getTranslations("payrollCosting");
   const period = searchParams?.period?.trim() || "";
   // Only fetch once there is a period to report on -- avoid a request (and
   // its own loading/error state) for a report nobody has asked for yet.
@@ -53,30 +55,30 @@ export default async function CostingPage({
   const uniqueEmpGroups = new Set(rows.map((r) => r.employeeGroup)).size;
 
   const columns: { key: keyof DisplayRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "employeeGroup", label: "Employee Group" },
-    { key: "costCenterCode", label: "Cost Center" },
-    { key: "splitPct", label: "Split %", align: "right" },
-    { key: "allocatedMinor", label: "Allocated Amount", align: "right", cellType: "amount" },
+    { key: "employeeGroup", label: t("colEmployeeGroup") },
+    { key: "costCenterCode", label: t("colCostCenter") },
+    { key: "splitPct", label: t("colSplitPct"), align: "right" },
+    { key: "allocatedMinor", label: t("colAllocated"), align: "right", cellType: "amount" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Cost Allocation"
-        subtitle="Define cost-center allocation rules and view the monthly costing report."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       {period && <DataSourceBadge source={result.source} message="Couldn't load — showing nothing" />}
 
       <StatGrid>
-        <StatCard icon="📊" iconBg="var(--infobg)" label="Allocations (this period)" value={errored ? null : rows.length} />
-        <StatCard icon="🏢" iconBg="var(--warnbg)" label="Cost Centers (this period)" value={errored ? null : uniqueCostCenters} />
-        <StatCard icon="👥" iconBg="var(--goodbg)" label="Employee Groups (this period)" value={errored ? null : uniqueEmpGroups} />
+        <StatCard icon="📊" iconBg="var(--infobg)" label={t("statAllocations")} value={errored ? null : rows.length} />
+        <StatCard icon="🏢" iconBg="var(--warnbg)" label={t("statCostCenters")} value={errored ? null : uniqueCostCenters} />
+        <StatCard icon="👥" iconBg="var(--goodbg)" label={t("statEmpGroups")} value={errored ? null : uniqueEmpGroups} />
       </StatGrid>
 
       <CreateCostingRuleForm />
 
-      <Card title="Costing Rules">
+      <Card title={t("rulesCardTitle")}>
         {/*
           There is no rules-listing UI here yet: services/payroll-service's
           GET /v1/payroll/costing/rules (gap-routes.ts) exists, but this page
@@ -93,12 +95,12 @@ export default async function CostingPage({
         */}
         <EmptyState
           icon="📋"
-          title="Rules list not yet available"
-          message="Use the form above to create a cost-center allocation rule; a rules list view is not wired up yet."
+          title={t("rulesEmptyTitle")}
+          message={t("rulesEmptyMessage")}
         />
       </Card>
 
-      <Card title="Costing Report">
+      <Card title={t("reportCardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "costing" })} backHref="/hr/payroll" />
@@ -107,18 +109,18 @@ export default async function CostingPage({
           <>
           <CostingPeriodForm initialPeriod={period} />
         {!period ? (
-          <EmptyState icon="🗓️" title="Choose a period" message="Enter a period (YYYY-MM) above to view the cost allocation report." />
+          <EmptyState icon="🗓️" title={t("choosePeriodTitle")} message={t("choosePeriodMessage")} />
         ) : (
           <DataTable<DisplayRow>
             columns={columns}
             rows={rows}
             sortable
             filterable
-            filterPlaceholder="Filter by employee group…"
+            filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="📊"
-            emptyTitle="No allocations for this period"
-            emptyMessage="No active costing rules produced allocations for this period."
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
           />
         )}
           </>

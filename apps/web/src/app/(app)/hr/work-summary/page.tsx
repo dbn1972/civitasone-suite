@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 const WORK_SUMMARY_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin"];
 
@@ -57,6 +58,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function WorkSummaryPage() {
+  const t = await getTranslations("workSummary");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => WORK_SUMMARY_ROLES.includes(r));
@@ -72,31 +74,31 @@ export default async function WorkSummaryPage() {
   const employees = new Set(items.map((i) => i.employee).filter((e) => e !== "—")).size;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "employee", label: "Employee" },
-    { key: "department", label: "Department" },
-    { key: "period", label: "Period" },
-    { key: "periodType", label: "Type" },
-    { key: "tasks", label: "Tasks" },
-    { key: "rating", label: "Rating" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employee", label: t("colEmployee") },
+    { key: "department", label: t("colDepartment") },
+    { key: "period", label: t("colPeriod") },
+    { key: "periodType", label: t("colType") },
+    { key: "tasks", label: t("colTasks") },
+    { key: "rating", label: t("colRating") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Work Summaries"
-        subtitle="Annual appraisal period work summaries, task completions, and supervisor ratings."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📝" iconBg="var(--infobg, #e6f0ff)" label="Total Records" value={errored ? null : items.length} />
-        <StatCard icon="👤" iconBg="var(--bg, #f5f5f5)" label="Employees" value={errored ? null : employees} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Reviewed" value={errored ? null : reviewed} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending Review" value={errored ? null : pending} />
+<StatCard icon="📝" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="👤" iconBg="var(--bg, #f5f5f5)" label={t("statEmployees")} value={errored ? null : employees} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statReviewed")} value={errored ? null : reviewed} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
       </StatGrid>
-      <Card title="Work Summary Records">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "work summary" })} backHref="/hr" />
@@ -107,11 +109,11 @@ export default async function WorkSummaryPage() {
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee, period or status…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📝"
-          emptyTitle="No work summaries yet"
-          emptyMessage="Work summaries are derived from APAR appraisal records. Each annual appraisal cycle generates a summary of tasks completed and supervisor ratings."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
         )}
       </Card>

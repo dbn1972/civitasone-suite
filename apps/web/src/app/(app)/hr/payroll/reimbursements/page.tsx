@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { CreateReimbursementForm } from "./CreateReimbursementForm";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -27,16 +28,17 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function ReimbursementsPage() {
+  const t = await getTranslations("payrollReimbursements");
   const { data: items, source } = await getData();
   const errored = source === "error";
 
   const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
-    { key: "employee_id", label: "Employee" },
-    { key: "category", label: "Category" },
-    { key: "amount_minor", label: "Amount", align: "right", cellType: "amount" },
-    { key: "period", label: "Period" },
-    { key: "bill_ref", label: "Bill Ref" },
-    { key: "status", label: "Status", cellType: "status" },
+    { key: "employee_id", label: t("colEmployee") },
+    { key: "category", label: t("colCategory") },
+    { key: "amount_minor", label: t("colAmount"), align: "right", cellType: "amount" },
+    { key: "period", label: t("colPeriod") },
+    { key: "bill_ref", label: t("colBillRef") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   const totalMinor = items.reduce((sum, r) => sum + Number(r.amount_minor ?? 0), 0);
@@ -46,21 +48,21 @@ export default async function ReimbursementsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Reimbursements"
-        subtitle="Employee expense reimbursement claims (medical, travel, LTA, and more)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="🧾" iconBg="var(--infobg)" label="Total Claims" value={errored ? null : items.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg)" label="Pending" value={errored ? null : pendingCount} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Claimed" value={errored ? null : formatMoney(totalMinor)} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label="Approved" value={errored ? null : approvedReimb} />
+        <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pendingCount} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statClaimed")} value={errored ? null : formatMoney(totalMinor)} />
+        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={errored ? null : approvedReimb} />
       </StatGrid>
 
       <CreateReimbursementForm />
 
-      <Card title="Reimbursement Claims">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "reimbursements" })} backHref="/hr/payroll" />
@@ -71,11 +73,11 @@ export default async function ReimbursementsPage() {
           rows={items}
           sortable
           filterable
-          filterPlaceholder="Filter by employee or category…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="🧾"
-          emptyTitle="No reimbursement claims yet"
-          emptyMessage="Create your first claim using the form above."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
         )}
       </Card>

@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -37,6 +38,7 @@ export default async function PayrollRegisterPage({
 }: {
   searchParams?: { period?: string; runId?: string };
 }) {
+  const t = await getTranslations("payrollRegister");
   const period = searchParams?.period?.trim() || undefined;
   const runId = searchParams?.runId?.trim() || undefined;
   const { data: items, source } = await getData(period, runId);
@@ -48,16 +50,16 @@ export default async function PayrollRegisterPage({
     align?: "left" | "right";
     cellType?: "amount";
   }[] = [
-    { key: "department_name", label: "Department" },
-    { key: "employee_count", label: "Employees", align: "right" },
-    { key: "total_gross_minor", label: "Gross", align: "right", cellType: "amount" },
-    { key: "total_deductions_minor", label: "Deductions", align: "right", cellType: "amount" },
-    { key: "total_net_minor", label: "Net Pay", align: "right", cellType: "amount" },
-    { key: "total_pf_minor", label: "PF", align: "right", cellType: "amount" },
-    { key: "total_esi_minor", label: "ESI", align: "right", cellType: "amount" },
-    { key: "total_tds_minor", label: "TDS", align: "right", cellType: "amount" },
-    { key: "total_pt_minor", label: "PT", align: "right", cellType: "amount" },
-    { key: "period", label: "Period" },
+    { key: "department_name", label: t("colDepartment") },
+    { key: "employee_count", label: t("colEmployees"), align: "right" },
+    { key: "total_gross_minor", label: t("colGross"), align: "right", cellType: "amount" },
+    { key: "total_deductions_minor", label: t("colDeductions"), align: "right", cellType: "amount" },
+    { key: "total_net_minor", label: t("colNet"), align: "right", cellType: "amount" },
+    { key: "total_pf_minor", label: t("colPf"), align: "right", cellType: "amount" },
+    { key: "total_esi_minor", label: t("colEsi"), align: "right", cellType: "amount" },
+    { key: "total_tds_minor", label: t("colTds"), align: "right", cellType: "amount" },
+    { key: "total_pt_minor", label: t("colPt"), align: "right", cellType: "amount" },
+    { key: "period", label: t("colPeriod") },
   ];
 
   const totalEmployees = items.reduce((sum, r) => sum + Number(r.employee_count ?? 0), 0);
@@ -67,16 +69,16 @@ export default async function PayrollRegisterPage({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Payroll Register"
-        subtitle="Department-wise payroll summary for a run or period."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
-      <Card title="Filter Register" padding>
+      <Card title={t("filterCardTitle")} padding>
         <form method="get" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor="reg-period" style={{ fontSize: 13, fontWeight: 600 }}>Period</label>
+            <label htmlFor="reg-period" style={{ fontSize: 13, fontWeight: 600 }}>{t("labelPeriod")}</label>
             <input
               id="reg-period"
               name="period"
@@ -86,7 +88,7 @@ export default async function PayrollRegisterPage({
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor="reg-run-id" style={{ fontSize: 13, fontWeight: 600 }}>Run ID</label>
+            <label htmlFor="reg-run-id" style={{ fontSize: 13, fontWeight: 600 }}>{t("labelRunId")}</label>
             <input
               id="reg-run-id"
               name="runId"
@@ -96,19 +98,19 @@ export default async function PayrollRegisterPage({
             />
           </div>
           <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <Button type="submit" style={{ minHeight: 44 }}>Apply Filter</Button>
+            <Button type="submit" style={{ minHeight: 44 }}>{t("applyFilter")}</Button>
           </div>
         </form>
       </Card>
 
       <StatGrid>
-        <StatCard icon="🏢" iconBg="var(--infobg)" label="Departments" value={errored ? null : items.length} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees" value={errored ? null : totalEmployees} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Gross" value={errored ? null : formatMoney(totalGrossMinor)} />
-        <StatCard icon="🧾" iconBg="var(--warnbg)" label="Total Net Pay" value={errored ? null : formatMoney(totalNetMinor)} />
+        <StatCard icon="🏢" iconBg="var(--infobg)" label={t("statDepartments")} value={errored ? null : items.length} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployees")} value={errored ? null : totalEmployees} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")} value={errored ? null : formatMoney(totalGrossMinor)} />
+        <StatCard icon="🧾" iconBg="var(--warnbg)" label={t("statNet")} value={errored ? null : formatMoney(totalNetMinor)} />
       </StatGrid>
 
-      <Card title="Register Lines">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "register" })} backHref="/hr/payroll" />
@@ -120,11 +122,11 @@ export default async function PayrollRegisterPage({
           caption="Payroll register lines by department with gross, deductions, and net pay"
           sortable
           filterable
-          filterPlaceholder="Filter by department…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="📋"
-          emptyTitle="No register lines"
-          emptyMessage="No payroll register found for the given period or run. Try a different filter, or run payroll for this period first."
+          emptyTitle={t("emptyTitle")}
+          emptyMessage={t("emptyMessage")}
         />
         )}
       </Card>

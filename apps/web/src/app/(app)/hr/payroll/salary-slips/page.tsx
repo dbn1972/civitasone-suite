@@ -5,10 +5,12 @@ import { getSalarySlips } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { SalarySlipsTable } from "./SalarySlipsTable";
+import { getTranslations } from "next-intl/server";
 
 const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"];
 
 export default async function SalarySlipsPage() {
+  const t = await getTranslations("salarySlips");
   const roles = getSessionRoles();
   const canView = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
   if (!canView) {
@@ -25,17 +27,17 @@ export default async function SalarySlipsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Salary Slips"
-        subtitle="Individual employee salary statements."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
         help="payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--panel)" label="Total Slips" value={totalSlips} />
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Gross" value={formatMoney(totalGross)} />
-        <StatCard icon="✅" iconBg="var(--infobg)" label="Total Net" value={formatMoney(totalNet)} />
-        <StatCard icon="📄" iconBg="var(--warnbg)" label="Pending (Draft)" value={draftCount} />
+        <StatCard icon="📋" iconBg="var(--panel)" label={t("statTotal")} value={totalSlips} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")} value={formatMoney(totalGross)} />
+        <StatCard icon="✅" iconBg="var(--infobg)" label={t("statNet")} value={formatMoney(totalNet)} />
+        <StatCard icon="📄" iconBg="var(--warnbg)" label={t("statDraft")} value={draftCount} />
       </StatGrid>
       <SalarySlipsTable slips={slips} />
     </main>

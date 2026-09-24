@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, EmptyState, Button } from "../../
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { getTranslations } from "next-intl/server";
 
 type PeriodSummary = {
   period: string;
@@ -40,6 +41,7 @@ export default async function PayrollComparisonPage({
 }: {
   searchParams?: { period1?: string; period2?: string };
 }) {
+  const t = await getTranslations("payrollComparison");
   const period1 = searchParams?.period1?.trim();
   const period2 = searchParams?.period2?.trim();
   const canCompare = !!period1 && !!period2 && PERIOD_RE.test(period1) && PERIOD_RE.test(period2);
@@ -53,11 +55,11 @@ export default async function PayrollComparisonPage({
   }
 
   const filterForm = (
-    <Card title="Select Periods to Compare" padding>
+    <Card title={t("filterCardTitle")} padding>
       <form method="get" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor="cmp-period1" style={{ fontSize: 13, fontWeight: 600 }}>
-            Period 1 <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
+            {t("labelPeriod1")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
           </label>
           <input
             id="cmp-period1"
@@ -70,7 +72,7 @@ export default async function PayrollComparisonPage({
         </div>
         <div style={{ display: "grid", gap: 6 }}>
           <label htmlFor="cmp-period2" style={{ fontSize: 13, fontWeight: 600 }}>
-            Period 2 <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
+            {t("labelPeriod2")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
           </label>
           <input
             id="cmp-period2"
@@ -82,7 +84,7 @@ export default async function PayrollComparisonPage({
           />
         </div>
         <div style={{ display: "flex", alignItems: "flex-end" }}>
-          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>Compare</Button>
+          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>{t("compareButton")}</Button>
         </div>
       </form>
     </Card>
@@ -91,8 +93,8 @@ export default async function PayrollComparisonPage({
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Payroll Comparison"
-        subtitle="Month-on-month comparison of payroll register totals."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
@@ -101,8 +103,8 @@ export default async function PayrollComparisonPage({
         <StatGrid>
           <StatCard icon="💰" iconBg="var(--infobg)" label={`${data.period1.period} Gross`} value={formatMoney(data.period1.gross)} />
           <StatCard icon="💰" iconBg="var(--goodbg)" label={`${data.period2.period} Gross`} value={formatMoney(data.period2.gross)} />
-          <StatCard icon="👥" iconBg="var(--warnbg)" label="Headcount Δ" value={(data.period2.headcount - data.period1.headcount > 0 ? "+" : "") + String(data.period2.headcount - data.period1.headcount)} />
-          <StatCard icon="📊" iconBg="var(--goodbg)" label="Net Pay Δ" value={delta(Number(data.period1.net), Number(data.period2.net))} />
+          <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statHeadcountDelta")} value={(data.period2.headcount - data.period1.headcount > 0 ? "+" : "") + String(data.period2.headcount - data.period1.headcount)} />
+          <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statNetDelta")} value={delta(Number(data.period1.net), Number(data.period2.net))} />
         </StatGrid>
       )}
 
@@ -112,8 +114,8 @@ export default async function PayrollComparisonPage({
         <Card>
           <EmptyState
             icon="📊"
-            title="Choose two periods to compare"
-            message="Enter both periods above in YYYY-MM format (e.g. 2025-05 and 2025-06) and select Compare."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
           />
         </Card>
       )}
@@ -127,27 +129,27 @@ export default async function PayrollComparisonPage({
               </caption>
               <thead>
                 <tr>
-                  <th scope="col">Metric</th>
+                  <th scope="col">{t("colMetric")}</th>
                   <th scope="col" style={{ textAlign: "right" }}>{data.period1.period}</th>
                   <th scope="col" style={{ textAlign: "right" }}>{data.period2.period}</th>
-                  <th scope="col" style={{ textAlign: "right" }}>Delta</th>
+                  <th scope="col" style={{ textAlign: "right" }}>{t("colDelta")}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
-                  <th scope="row">Gross Pay</th>
+                  <th scope="row">{t("metricGross")}</th>
                   <td style={{ textAlign: "right" }}>{formatMoney(data.period1.gross)}</td>
                   <td style={{ textAlign: "right" }}>{formatMoney(data.period2.gross)}</td>
                   <td style={{ textAlign: "right" }}>{delta(Number(data.period1.gross), Number(data.period2.gross))}</td>
                 </tr>
                 <tr>
-                  <th scope="row">Net Pay</th>
+                  <th scope="row">{t("metricNet")}</th>
                   <td style={{ textAlign: "right" }}>{formatMoney(data.period1.net)}</td>
                   <td style={{ textAlign: "right" }}>{formatMoney(data.period2.net)}</td>
                   <td style={{ textAlign: "right" }}>{delta(Number(data.period1.net), Number(data.period2.net))}</td>
                 </tr>
                 <tr>
-                  <th scope="row">Headcount</th>
+                  <th scope="row">{t("metricHeadcount")}</th>
                   <td style={{ textAlign: "right" }}>{data.period1.headcount}</td>
                   <td style={{ textAlign: "right" }}>{data.period2.headcount}</td>
                   <td style={{ textAlign: "right" }}>
@@ -165,8 +167,8 @@ export default async function PayrollComparisonPage({
         <Card>
           <EmptyState
             icon="📊"
-            title="No comparison data"
-            message="No payroll register totals were found for one or both of the selected periods."
+            title={t("noDataTitle")}
+            message={t("noDataMessage")}
           />
         </Card>
       )}
