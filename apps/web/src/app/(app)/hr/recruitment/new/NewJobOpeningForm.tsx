@@ -47,6 +47,22 @@ export function NewJobOpeningForm() {
   const [description, setDescription] = useState("");
   const [closesAt, setClosesAt] = useState("");
   const [templateName, setTemplateName] = useState<string | null>(null);
+  // MEDIUM finding: payRange/selectionProcess/requiredDocuments/eligibility/
+  // qualification from a selected template used to be silently lost -- the
+  // fetch below read only name/vacancyType/description even though the
+  // template response already carried the rest, and submit never sent
+  // templateId at all (so jd-template-repo's useCount/traceability never
+  // fired). qualification/payRange/selectionProcess get real, editable
+  // fields below ("HR can override later", matching jd-template-routes.ts's
+  // own comment on the equivalent /use endpoint); requiredDocuments/
+  // eligibility are carried through as-is (no dedicated editor here -- a
+  // list/JSON editor is a larger scope than this fix) so the data reaches
+  // the job opening instead of vanishing.
+  const [qualification, setQualification] = useState("");
+  const [payRange, setPayRange] = useState("");
+  const [selectionProcess, setSelectionProcess] = useState("");
+  const [requiredDocuments, setRequiredDocuments] = useState<string[] | undefined>(undefined);
+  const [eligibility, setEligibility] = useState<Record<string, unknown> | undefined>(undefined);
 
   useEffect(() => {
     if (!templateId) return;
@@ -56,10 +72,18 @@ export function NewJobOpeningForm() {
           headers: { "content-type": "application/json" },
         });
         if (!res.ok) return;
-        const tmpl = await res.json() as { name?: string; vacancyType?: string; description?: string; qualification?: string; payRange?: string };
+        const tmpl = await res.json() as {
+          name?: string; vacancyType?: string; description?: string; qualification?: string; payRange?: string;
+          selectionProcess?: string; requiredDocuments?: string[]; eligibility?: Record<string, unknown>;
+        };
         if (tmpl.name) { setTitle(tmpl.name); setTemplateName(tmpl.name); }
         if (tmpl.vacancyType) setVacancyType(tmpl.vacancyType);
         if (tmpl.description) setDescription(tmpl.description);
+        if (tmpl.qualification) setQualification(tmpl.qualification);
+        if (tmpl.payRange) setPayRange(tmpl.payRange);
+        if (tmpl.selectionProcess) setSelectionProcess(tmpl.selectionProcess);
+        if (tmpl.requiredDocuments) setRequiredDocuments(tmpl.requiredDocuments);
+        if (tmpl.eligibility) setEligibility(tmpl.eligibility);
       } catch { /* ignore */ }
     })();
   }, [templateId]);
@@ -75,6 +99,9 @@ export function NewJobOpeningForm() {
   const descId = useId();
   const closesAtId = useId();
   const statusMsgId = useId();
+  const qualificationId = useId();
+  const payRangeId = useId();
+  const selectionProcessId = useId();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -125,6 +152,19 @@ export function NewJobOpeningForm() {
           vacancyType,
           description: description.trim() || undefined,
           closesAt: closesAt || undefined,
+          qualification: qualification.trim() || undefined,
+          payRange: payRange.trim() || undefined,
+          selectionProcess: selectionProcess.trim() || undefined,
+          // Carried through from the template unedited (see the state
+          // comment above) -- undefined when no template was selected, or
+          // the template had none, so nothing new is sent for a from-scratch
+          // job opening.
+          requiredDocuments,
+          eligibility,
+          // MEDIUM finding: previously never sent, so jd-template-repo's
+          // useCount/traceability never fired for a job opening created via
+          // this form even when it visibly said "Pre-filled from template".
+          templateId: templateId || undefined,
         }),
       });
 
@@ -239,6 +279,48 @@ export function NewJobOpeningForm() {
           rows={4}
           placeholder={t("descriptionPlaceholder")}
           style={{ ...inputStyle, resize: "none", minHeight: 96 }}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={qualificationId} style={labelStyle}>
+          {t("qualification")}
+        </label>
+        <input
+          id={qualificationId}
+          type="text"
+          value={qualification}
+          onChange={(e) => setQualification(e.target.value)}
+          placeholder={t("qualificationPlaceholder")}
+          style={inputStyle}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={payRangeId} style={labelStyle}>
+          {t("payRange")}
+        </label>
+        <input
+          id={payRangeId}
+          type="text"
+          value={payRange}
+          onChange={(e) => setPayRange(e.target.value)}
+          placeholder={t("payRangePlaceholder")}
+          style={inputStyle}
+        />
+      </div>
+
+      <div>
+        <label htmlFor={selectionProcessId} style={labelStyle}>
+          {t("selectionProcess")}
+        </label>
+        <textarea
+          id={selectionProcessId}
+          value={selectionProcess}
+          onChange={(e) => setSelectionProcess(e.target.value)}
+          rows={3}
+          placeholder={t("selectionProcessPlaceholder")}
+          style={{ ...inputStyle, resize: "none", minHeight: 72 }}
         />
       </div>
 

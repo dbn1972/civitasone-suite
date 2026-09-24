@@ -15,9 +15,18 @@ const log = pino({ name: "recruitment-consumer" });
 
 export function registerRecruitmentConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.jobCreate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; refNo: string; title: string; departmentId: string; designationId?: string; vacancies: number; description?: string; vacancyType?: string; location?: string; qualification?: string; payRange?: string; isPublished?: boolean; postedAt?: string; closesAt?: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
+    const p = msg.payload as {
+      id: string; tenantId: string; refNo: string; title: string; departmentId: string; designationId?: string;
+      vacancies: number; description?: string; vacancyType?: string; location?: string; qualification?: string;
+      payRange?: string; isPublished?: boolean; postedAt?: string; closesAt?: string;
+      // MEDIUM finding: these three were silently dropped here even when a
+      // caller (jd-template-routes.ts's POST .../use, or this route once
+      // validators.ts gained templateId) sent them -- neither this payload
+      // type nor the insertJobOpening call below read them at all.
+      templateId?: string; selectionProcess?: string; requiredDocuments?: string[]; eligibility?: Record<string, unknown>;
+    };
+    const didInsert = await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return false;
       await repo.insertJobOpening(tx, {
         id: p.id, tenantId: p.tenantId, refNo: p.refNo, title: p.title,
         departmentId: p.departmentId, designationId: p.designationId ?? null,
@@ -28,10 +37,33 @@ export function registerRecruitmentConsumers(queue: Queue): void {
         payRange: p.payRange ?? null,
         isPublished: p.isPublished ?? false,
         postedAt: p.postedAt ?? null, closesAt: p.closesAt ?? null, status: "open",
+        templateId: p.templateId ?? null,
+        selectionProcess: p.selectionProcess ?? null,
+        ...(p.requiredDocuments !== undefined ? { requiredDocuments: p.requiredDocuments } : {}),
+        ...(p.eligibility !== undefined ? { eligibility: p.eligibility } : {}),
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "job_opening", p.id);
+      return true;
     });
+    // MEDIUM finding: useCount/traceability. Centralized here (not in the
+    // route) so it fires exactly once regardless of which create path set
+    // templateId -- the direct route (validators.ts's new templateId field)
+    // or jd-template-routes.ts's POST .../use, which used to increment this
+    // itself right after publishing and has had that call removed to avoid
+    // double-counting now that this handles it for both paths uniformly.
+    // Gated on didInsert (not just "outside the transaction"): a redelivered
+    // message for an ALREADY-processed job opening must not increment a
+    // second time -- markProcessed's guard above already protects the
+    // insert itself, this mirrors that same guard for the side effect.
+    // Awaited, not fire-and-forget (the /use route's original version of
+    // this call was `void`-style): a fire-and-forget call here resolves the
+    // whole subscribed handler BEFORE the increment's own write lands, so
+    // the queue's drain() -- which this suite's tests rely on to mean "every
+    // effect of this message has landed" -- returns too early to observe it.
+    // Confirmed live: with `void` here, this regression test's useCount
+    // assertion saw 0 every time, not intermittently.
+    if (didInsert && p.templateId) await templateRepo.incrementUseCount(p.tenantId, p.templateId);
   });
 
   queue.subscribe(COMMANDS.applicationCreate, async (msg) => {

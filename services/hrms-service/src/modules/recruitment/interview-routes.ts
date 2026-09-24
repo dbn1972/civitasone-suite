@@ -14,6 +14,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
+import { resolveDeptScope } from "./dept-scope.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
@@ -59,10 +60,33 @@ export async function interviewRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const body = scheduleInterviewBody.parse(req.body);
 
+    // HIGH finding: department scoping. A department-scoped (non-tenant-wide)
+    // caller may only schedule interviews for job openings in their own
+    // department -- see dept-scope.ts.
+    const deptScope = await resolveDeptScope(req, ctx);
+    if (!deptScope.tenantWide) {
+      const opening = await repo.findJobOpeningByTenant(body.jobOpeningId, ctx.tenantId);
+      if (!opening || !deptScope.departmentId || opening.departmentId !== deptScope.departmentId) {
+        throw new HttpError(404, "NOT_FOUND", "job opening not found"); // hide existence, same convention as requisition-routes.ts's assertCanView
+      }
+    }
+
     const when = new Date(body.scheduledAt);
     if (Number.isNaN(when.getTime())) throw new HttpError(400, "VALIDATION_FAILED", "scheduledAt must be an ISO date-time");
     const scheduledDate = when.toISOString().slice(0, 10); // YYYY-MM-DD
     const scheduledTime = when.toISOString().slice(11, 16); // HH:MM
+
+    // HIGH finding: interview double-booking was entirely unchecked -- no
+    // query against existing interviews for the same interviewer(s) before
+    // inserting. Synchronous pre-check here (fast HTTP feedback, mirrors the
+    // routes.ts Bug-1 offer-eligibility precedent); f3-consumer.ts's
+    // recruitment_interview_routes__0 case re-checks the same condition
+    // atomically since this read-then-later-publish has its own race window
+    // this alone can't close.
+    const overlaps = await repo.findOverlappingInterviews(ctx.tenantId, body.interviewerIds, scheduledDate, scheduledTime, body.durationMinutes);
+    if (overlaps.length > 0) {
+      throw new HttpError(409, "INTERVIEWER_DOUBLE_BOOKED", `interviewer already has an overlapping interview scheduled at ${overlaps[0]!.scheduledDate} ${overlaps[0]!.scheduledTime}`);
+    }
 
     const id = randomUUID();
     await publishF3Write(ctx, "recruitment_interview_routes__0", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
@@ -76,9 +100,31 @@ export async function interviewRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const q = querySchema.parse(req.query);
 
-    const filters: { jobOpeningId?: string; applicationId?: string } = {};
+    const filters: { jobOpeningId?: string; applicationId?: string; jobOpeningIdIn?: string[] } = {};
     if (q.jobOpeningId) filters.jobOpeningId = q.jobOpeningId;
     if (q.applicationId) filters.applicationId = q.applicationId;
+
+    // HIGH finding: department scoping. A department-scoped caller only ever
+    // sees interviews for job openings in their own department -- previously
+    // any "manager" could pass any jobOpeningId (or none at all) and see
+    // every department's interviews tenant-wide.
+    const deptScope = await resolveDeptScope(req, ctx);
+    if (!deptScope.tenantWide) {
+      if (q.jobOpeningId) {
+        const opening = await repo.findJobOpeningByTenant(q.jobOpeningId, ctx.tenantId);
+        if (!opening || !deptScope.departmentId || opening.departmentId !== deptScope.departmentId) {
+          return reply.send({ data: [] }); // scoped list: empty, not an error -- mirrors manager-employee-read-scope's "sees NOTHING" convention
+        }
+      } else if (q.applicationId) {
+        const application = await repo.findApplicationById(q.applicationId, ctx.tenantId);
+        const opening = application ? await repo.findJobOpeningByTenant(application.jobOpeningId, ctx.tenantId) : null;
+        if (!opening || !deptScope.departmentId || opening.departmentId !== deptScope.departmentId) {
+          return reply.send({ data: [] });
+        }
+      } else {
+        filters.jobOpeningIdIn = deptScope.departmentId ? await repo.listJobOpeningIdsByDepartment(ctx.tenantId, deptScope.departmentId) : [];
+      }
+    }
 
     const results = await repo.listInterviews(ctx.tenantId, filters, q.limit);
     return reply.send({ data: results });
@@ -93,6 +139,15 @@ export async function interviewRoutes(app: FastifyInstance): Promise<void> {
 
     const interview = await repo.findInterviewById(id, ctx.tenantId);
     if (!interview) throw new HttpError(404, "NOT_FOUND", "interview not found");
+
+    // HIGH finding: department scoping, same as schedule/list above.
+    const deptScope = await resolveDeptScope(req, ctx);
+    if (!deptScope.tenantWide) {
+      const opening = await repo.findJobOpeningByTenant(interview.jobOpeningId, ctx.tenantId);
+      if (!opening || !deptScope.departmentId || opening.departmentId !== deptScope.departmentId) {
+        throw new HttpError(404, "NOT_FOUND", "interview not found");
+      }
+    }
 
     const scorecard: Record<string, unknown> = {
       ...body,

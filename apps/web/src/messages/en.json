@@ -3860,7 +3860,13 @@
     "vacanciesMin": "Vacancies must be at least 1.",
     "submitSuccessMessage": "Job opening submitted. It will appear in the vacancy list shortly.",
     "routeErrorBackLabel": "Back to Recruitment",
-    "routeErrorArea": "New Vacancy"
+    "routeErrorArea": "New Vacancy",
+    "qualification": "Qualification",
+    "qualificationPlaceholder": "e.g. B.Tech / MCA with 3+ years experience",
+    "payRange": "Pay Range",
+    "payRangePlaceholder": "e.g. Level 10, Rs 56,100 - 1,77,500",
+    "selectionProcess": "Selection Process",
+    "selectionProcessPlaceholder": "e.g. Written test, then interview, then document verification"
   },
   "recruitmentPipeline": {
     "ariaLabel": "Application pipeline",

@@ -38,6 +38,32 @@ export function autoScreenDecision(eligibilityResult: { eligible?: boolean } | n
 }
 
 /**
+ * HIGH finding: recording a screening decision (POST .../screening-decision)
+ * wrote screeningDecision/screeningReasonCode/screeningRemarks but never
+ * touched hrms_applications.stage, so it stayed at its "applied" insert
+ * default forever. The frontend ([id]/page.tsx's handleAction) optimistically
+ * sets stage: "shortlisted"/"rejected" right after this same call, which had
+ * nothing durable behind it and reverted to "applied" on the next load.
+ *
+ * Only "shortlisted" and "ineligible" (the UI's "reject" action) map to a
+ * pipeline stage here -- "eligible" / "waitlisted" / "manual_review" are
+ * intermediate screening states with no counterpart in the frontend's own
+ * STAGE_COLOR map (applied/shortlisted/interviewing/selected/offered/hired/
+ * rejected/withdrawn, see [id]/page.tsx) and deliberately return null so
+ * recording one of those leaves stage untouched, same as before this fix.
+ * Note this is a DIFFERENT vocabulary from hrms_applications.status's own
+ * CHECK constraint (active/shortlisted/rejected/offered/joined/withdrawn,
+ * migrations/0035) -- stage has no DB CHECK at all (free varchar(32)); the
+ * two columns track different things (pipeline position vs record
+ * lifecycle) and only coincidentally share some of the same words.
+ */
+export function stageForScreeningDecision(decision: ScreeningDecision): string | null {
+  if (decision === "shortlisted") return "shortlisted";
+  if (decision === "ineligible") return "rejected";
+  return null;
+}
+
+/**
  * Protected attributes withheld under blind screening (R-RA-0110) so a reviewer
  * ranks on merit without seeing identity / reservation / demographic fields.
  */

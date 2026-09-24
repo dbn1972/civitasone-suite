@@ -56,13 +56,23 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
       minExp: z.string().regex(/^\d+$/).optional().transform(Number),
       source: z.string().optional(),
       limit: z.string().regex(/^\d+$/).optional().transform(Number),
+      // MEDIUM finding: stage filtering. `stage` picks one exact stage;
+      // `includeActive=true` opts into the full unfiltered (pre-fix) view.
+      // With neither, repo.searchApplications defaults to
+      // repo.AVAILABLE_STAGES -- candidates genuinely off the active
+      // pipeline (rejected/withdrawn/not_selected), matching the frontend's
+      // own existing activeStage distinction (talent-pool/page.tsx).
+      stage: z.string().optional(),
+      includeActive: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
     });
     const q = talentPoolQuerySchema.parse(req.query);
     const rows = await repo.searchApplications(ctx.tenantId, {
       skill: q.skill || undefined,
       minExp: q.minExp ? Number(q.minExp) : undefined,
       source: q.source || undefined,
-    } as { skill?: string; minExp?: number; source?: string }, Math.min(200, Number(q.limit) || 100));
+      stage: q.stage || undefined,
+      includeActive: q.includeActive,
+    } as { skill?: string; minExp?: number; source?: string; stage?: string; includeActive?: boolean }, Math.min(200, Number(q.limit) || 100));
     return reply.send({
       data: rows.map((r) => ({
         id: r.id,
