@@ -2044,7 +2044,7 @@
   },
   "form16Wizard": {
     "stepAriaLabel": "Form 16 wizard steps",
-  "stepProgress": "Step {current} of {total}: {name}",
+    "stepProgress": "Step {current} of {total}: {name}",
     "stepSelectFy": "Select FY",
     "stepReviewDeductions": "Review Deductions",
     "stepGenerateDownload": "Generate & Download",
@@ -4164,7 +4164,9 @@
     "cardTitle": "Shift Change Requests",
     "filterPlaceholder": "Filter by employee, shift or status…",
     "emptyTitle": "No shift change requests",
-    "emptyMessage": "Requests appear here once employees apply to change their assigned shift. Approved by the reporting officer per DoPT staffing policy."
+    "emptyMessage": "Requests appear here once employees apply to change their assigned shift. Approved by the reporting officer per DoPT staffing policy.",
+    "cardNewRequest": "New Shift Change Request",
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you can't submit a shift-change request from here. Contact HR to get your account linked to your employee record."
   },
   "shifts": {
     "title": "Shift Definitions",
@@ -4452,7 +4454,9 @@
     "cardTitle": "WFH Requests",
     "filterPlaceholder": "Filter by employee, department or status…",
     "emptyTitle": "No WFH requests",
-    "emptyMessage": "Work-from-home requests appear here once employees raise them. Requests are approved by the reporting officer."
+    "emptyMessage": "Work-from-home requests appear here once employees raise them. Requests are approved by the reporting officer.",
+    "cardNewRequest": "New WFH Request",
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you can't submit a WFH request from here. Contact HR to get your account linked to your employee record."
   },
   "workforce": {
     "title": "Workforce Analytics",
@@ -5822,5 +5826,61 @@
     "frequencyMonthly": "Monthly",
     "frequencyBiWeekly": "Bi-weekly",
     "frequencyWeekly": "Weekly"
+  },
+  "wfhActions": {
+    "colEmployee": "Employee",
+    "colFrom": "From",
+    "colTo": "To",
+    "colReason": "Reason",
+    "colStatus": "Status",
+    "colDecision": "Decision",
+    "approveBtn": "Approve",
+    "rejectBtn": "Reject",
+    "toastApproved": "WFH request approved.",
+    "toastRejected": "WFH request rejected.",
+    "confirmApproveTitle": "Approve WFH request?",
+    "confirmRejectTitle": "Reject WFH request?",
+    "approvalRemarksLabel": "Approval remarks",
+    "rejectionReasonLabel": "Reason for rejection",
+    "confirmDescRich": "{verb} the WFH request from <strongName>{employeeName}</strongName> ({fromDate} – {toDate}){dayCount}.",
+    "dayCountSuffix": " ({count} day(s))",
+    "reasonLine": "Reason: {reason}"
+  },
+  "shiftChangeForm": {
+    "ariaLabel": "Shift change request form",
+    "policyNote": "Shift changes require supervisor approval per DoPT staffing guidelines.",
+    "labelEmployee": "Employee",
+    "placeholderEmployee": "Select employee…",
+    "labelCurrentShift": "Current Shift",
+    "labelRequestedShift": "Requested Shift",
+    "placeholderShift": "Select shift…",
+    "labelEffectiveDate": "Effective Date",
+    "labelReason": "Reason",
+    "placeholderReason": "Brief reason for the shift-change request…",
+    "successMessage": "Shift-change request submitted. Redirecting…",
+    "cancel": "Cancel",
+    "submitRequest": "Submit Request",
+    "submitting": "Submitting…",
+    "errorRequiredFields": "Current shift, requested shift, and effective date are all required.",
+    "errorSameShift": "Requested shift must be different from the current shift."
+  },
+  "shiftActions": {
+    "colEmployee": "Employee",
+    "colCurrentShift": "Current Shift",
+    "colRequestedShift": "Requested Shift",
+    "colEffectiveDate": "Effective Date",
+    "colReason": "Reason",
+    "colStatus": "Status",
+    "colDecision": "Decision",
+    "approveBtn": "Approve",
+    "rejectBtn": "Reject",
+    "toastApproved": "Shift-change request approved.",
+    "toastRejected": "Shift-change request rejected.",
+    "confirmApproveTitle": "Approve shift-change request?",
+    "confirmRejectTitle": "Reject shift-change request?",
+    "approvalRemarksLabel": "Approval remarks",
+    "rejectionReasonLabel": "Reason for rejection",
+    "confirmDescRich": "{verb} the shift-change request from <strongName>{employeeName}</strongName>: {currentShift} → {requestedShift}, effective {date}.",
+    "reasonLine": "Reason: {reason}"
   }
 }

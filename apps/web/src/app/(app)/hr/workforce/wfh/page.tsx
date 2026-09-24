@@ -1,41 +1,35 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { WFHRequestForm } from "../../_components/WFHRequestForm";
+import { WfhRequestsTable, type WfhRow } from "../../_components/WfhRequestsTable";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 
 /**
- * WFHPage — Work From Home requests and approvals.
+ * WFHPage — Work From Home requests and approvals (HR/manager admin view:
+ * file a request on behalf of any employee via the picker below).
  * DoPT WFH policy: max 2 days/week for eligible cadres.
  * Status chips: Pending / Approved / Rejected / Recalled.
+ *
+ * CRITICAL fix: this page had no approve/reject control anywhere despite
+ * PATCH /v1/hrms/wfh-requests/:id/approve|reject already working (WAVE-4) --
+ * added via the same WfhRequestsTable now shared with /hr/wfh (the
+ * all-roles page a plain `employee` actually reaches; this page stays
+ * role-gated as the HR/manager "file for anyone" tool).
  */
 
-type Row = {
-  id: string;
-  employeeName: string;
-  department: string;
-  fromDate: string;
-  toDate: string;
-  days: string;
-  reason: string;
-  status: string;
-} & Record<string, unknown>;
-
-async function getData(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/hrms/wfh-requests", [], {
+async function getData(): Promise<LoaderResult<WfhRow[]>> {
+  return fetchJson<unknown, WfhRow[]>("/api/v1/hrms/wfh-requests", [], {
     telemetryKey: "hr.workforce.wfh",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
+      const arr = Array.isArray(p) ? p : (p as { data?: WfhRow[] })?.data;
       if (!Array.isArray(arr)) return null;
       return arr.map((r) => ({
         ...r,
         employeeName: (r as Record<string, unknown>).employeeName as string ?? r.employeeId,
-        department: r.department ?? "—",
-        days: r.days ?? "—",
-        reason: r.reason ?? "—",
       }));
     },
   });
@@ -60,16 +54,6 @@ export default async function WFHPage() {
   const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
   const recalled = items.filter((i) => i.status === "recalled").length;
 
-  const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
-    { key: "employeeName", label: t("colEmployee") },
-    { key: "department", label: t("colDepartment") },
-    { key: "fromDate", label: t("colFrom") },
-    { key: "toDate", label: t("colTo") },
-    { key: "days", label: t("colDays") },
-    { key: "reason", label: t("colReason") },
-    { key: "status", label: t("colStatus"), cellType: "status" },
-  ];
-
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -86,7 +70,7 @@ export default async function WFHPage() {
       </StatGrid>
 
       <Card title={t("cardNewRequest")}>
-        <WFHRequestForm />
+        <WFHRequestForm redirectHref="/hr/workforce/wfh" />
       </Card>
 
       <div style={{ marginTop: 16 }}>
@@ -96,18 +80,13 @@ export default async function WFHPage() {
               <RefreshErrorState error={toHumanError("load", { area: "wfh" })} backHref="/hr/workforce" />
             </div>
           ) : (
-            <DataTable<Row>
-            columns={COLUMNS}
-            rows={items}
-            caption="Work from home requests with employee, dates, and approval status"
-            sortable
-            filterable
-            filterPlaceholder={t("filterPlaceholder")}
-            pageSize={15}
-            emptyIcon="🏠"
-            emptyTitle={t("emptyTitle")}
-            emptyMessage={t("emptyMessage")}
-          />
+            <WfhRequestsTable
+              rows={items}
+              canApprove
+              filterPlaceholder={t("filterPlaceholder")}
+              emptyTitle={t("emptyTitle")}
+              emptyMessage={t("emptyMessage")}
+            />
           )}
         </Card>
       </div>

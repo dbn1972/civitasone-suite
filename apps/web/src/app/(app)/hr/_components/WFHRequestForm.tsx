@@ -14,7 +14,9 @@ import { Button } from "../../../_components/ds";
 type EmployeeOption = { id: string; name?: string; employeeNo?: string };
 
 interface WFHRequestFormProps {
-  /** Pre-fill employee UUID (optional — admin filing on behalf) */
+  /** Pre-fill employee UUID (optional — admin filing on behalf, or the
+   *  current user's own id for self-service). When set, the employee
+   *  picker below is hidden entirely. */
   employeeId?: string;
   /**
    * Pay Level from the employee record (GoI pay matrix Level 1–18).
@@ -27,6 +29,18 @@ interface WFHRequestFormProps {
    * DoPT OM 2022 cap: 2 days/week for eligible staff.
    */
   weeklyWfhCount?: number;
+  /**
+   * Where to send the user after a successful submit (and where Cancel
+   * goes). Defaults to /hr/workforce/wfh — this form's original, and still
+   * valid, home for the HR/manager "file on behalf of" admin flow. Pass
+   * "/hr/wfh" when embedding on the all-roles WFH page instead, so a plain
+   * `employee` submitting their own request lands back on a page they can
+   * actually reach, rather than the role-gated admin one (CRITICAL fix —
+   * this was previously hardcoded, so embedding this form anywhere other
+   * than /hr/workforce/wfh silently sent every submitter into a permission
+   * wall of its own).
+   */
+  redirectHref?: string;
 }
 
 type SubmitState = "idle" | "submitting" | "done" | "error";
@@ -35,6 +49,7 @@ export function WFHRequestForm({
   employeeId: prefillId = "",
   payLevel,
   weeklyWfhCount,
+  redirectHref = "/hr/workforce/wfh",
 }: WFHRequestFormProps) {
   const router = useRouter();
   const t = useTranslations("wfhForm");
@@ -111,7 +126,7 @@ export function WFHRequestForm({
         return;
       }
       setState("done");
-      setTimeout(() => router.push("/hr/workforce/wfh"), 900);
+      setTimeout(() => router.push(redirectHref), 900);
     } catch {
       setErrorMsg(formError.fromException("save").message);
       setState("error");
@@ -282,7 +297,7 @@ export function WFHRequestForm({
           type="button"
           variant="ghost"
           style={{ minHeight: 44 }}
-          onClick={() => router.push("/hr/workforce/wfh")}
+          onClick={() => router.push(redirectHref)}
         >
           {t("cancel")}
         </Button>

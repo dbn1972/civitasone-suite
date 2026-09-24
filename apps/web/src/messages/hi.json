@@ -2043,7 +2043,7 @@
   },
   "form16Wizard": {
     "stepAriaLabel": "फॉर्म 16 विज़ार्ड चरण",
-  "stepProgress": "चरण {current} में से {total}: {name}",
+    "stepProgress": "चरण {current} में से {total}: {name}",
     "stepSelectFy": "वित्त वर्ष चुनें",
     "stepReviewDeductions": "कटौतियों की समीक्षा करें",
     "stepGenerateDownload": "जनरेट करें और डाउनलोड करें",
@@ -4906,7 +4906,9 @@
     "cardTitle": "शिफ्ट परिवर्तन अनुरोध",
     "filterPlaceholder": "कर्मचारी, शिफ्ट या स्थिति के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई शिफ्ट परिवर्तन अनुरोध नहीं",
-    "emptyMessage": "कर्मचारियों द्वारा अपनी नियत शिफ्ट बदलने हेतु आवेदन करने पर अनुरोध यहाँ दिखाई देते हैं। DoPT स्टाफिंग नीति के अनुसार रिपोर्टिंग अधिकारी द्वारा स्वीकृत।"
+    "emptyMessage": "कर्मचारियों द्वारा अपनी नियत शिफ्ट बदलने हेतु आवेदन करने पर अनुरोध यहाँ दिखाई देते हैं। DoPT स्टाफिंग नीति के अनुसार रिपोर्टिंग अधिकारी द्वारा स्वीकृत।",
+    "cardNewRequest": "नया शिफ्ट परिवर्तन अनुरोध",
+    "noLinkedProfileMessage": "आपके खाते से कोई कर्मचारी रिकॉर्ड लिंक नहीं है, इसलिए आप यहाँ से शिफ्ट परिवर्तन अनुरोध सबमिट नहीं कर सकते। अपने खाते को कर्मचारी रिकॉर्ड से लिंक कराने के लिए HR से संपर्क करें।"
   },
   "shifts": {
     "title": "शिफ़्ट परिभाषाएं",
@@ -5193,7 +5195,9 @@
     "cardTitle": "WFH अनुरोध",
     "filterPlaceholder": "कर्मचारी, विभाग या स्थिति के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई WFH अनुरोध नहीं",
-    "emptyMessage": "कर्मचारियों द्वारा अनुरोध उठाने पर वर्क-फ्रॉम-होम अनुरोध यहाँ दिखाई देते हैं। अनुरोध रिपोर्टिंग अधिकारी द्वारा स्वीकृत किए जाते हैं।"
+    "emptyMessage": "कर्मचारियों द्वारा अनुरोध उठाने पर वर्क-फ्रॉम-होम अनुरोध यहाँ दिखाई देते हैं। अनुरोध रिपोर्टिंग अधिकारी द्वारा स्वीकृत किए जाते हैं।",
+    "cardNewRequest": "नया WFH अनुरोध",
+    "noLinkedProfileMessage": "आपके खाते से कोई कर्मचारी रिकॉर्ड लिंक नहीं है, इसलिए आप यहाँ से WFH अनुरोध सबमिट नहीं कर सकते। अपने खाते को कर्मचारी रिकॉर्ड से लिंक कराने के लिए HR से संपर्क करें।"
   },
   "workforce": {
     "title": "कार्यबल विश्लेषण",
@@ -5436,5 +5440,61 @@
     "frequencyMonthly": "मासिक",
     "frequencyBiWeekly": "पाक्षिक",
     "frequencyWeekly": "साप्ताहिक"
+  },
+  "wfhActions": {
+    "colEmployee": "कर्मचारी",
+    "colFrom": "से",
+    "colTo": "तक",
+    "colReason": "कारण",
+    "colStatus": "स्थिति",
+    "colDecision": "निर्णय",
+    "approveBtn": "स्वीकृत करें",
+    "rejectBtn": "अस्वीकार करें",
+    "toastApproved": "WFH अनुरोध स्वीकृत किया गया।",
+    "toastRejected": "WFH अनुरोध अस्वीकृत किया गया।",
+    "confirmApproveTitle": "WFH अनुरोध स्वीकृत करें?",
+    "confirmRejectTitle": "WFH अनुरोध अस्वीकार करें?",
+    "approvalRemarksLabel": "अनुमोदन टिप्पणी",
+    "rejectionReasonLabel": "अस्वीकृति का कारण",
+    "confirmDescRich": "<strongName>{employeeName}</strongName> के WFH अनुरोध ({fromDate} – {toDate}){dayCount} को {verb}।",
+    "dayCountSuffix": " ({count} दिन)",
+    "reasonLine": "कारण: {reason}"
+  },
+  "shiftChangeForm": {
+    "ariaLabel": "शिफ्ट परिवर्तन अनुरोध फ़ॉर्म",
+    "policyNote": "DoPT स्टाफिंग दिशानिर्देशों के अनुसार शिफ्ट परिवर्तन के लिए पर्यवेक्षक की स्वीकृति आवश्यक है।",
+    "labelEmployee": "कर्मचारी",
+    "placeholderEmployee": "कर्मचारी चुनें…",
+    "labelCurrentShift": "वर्तमान शिफ्ट",
+    "labelRequestedShift": "अनुरोधित शिफ्ट",
+    "placeholderShift": "शिफ्ट चुनें…",
+    "labelEffectiveDate": "प्रभावी दिनांक",
+    "labelReason": "कारण",
+    "placeholderReason": "शिफ्ट परिवर्तन अनुरोध का संक्षिप्त कारण…",
+    "successMessage": "शिफ्ट परिवर्तन अनुरोध सबमिट किया गया। रीडायरेक्ट किया जा रहा है…",
+    "cancel": "रद्द करें",
+    "submitRequest": "अनुरोध सबमिट करें",
+    "submitting": "सबमिट किया जा रहा है…",
+    "errorRequiredFields": "वर्तमान शिफ्ट, अनुरोधित शिफ्ट, और प्रभावी दिनांक सभी आवश्यक हैं।",
+    "errorSameShift": "अनुरोधित शिफ्ट वर्तमान शिफ्ट से भिन्न होनी चाहिए।"
+  },
+  "shiftActions": {
+    "colEmployee": "कर्मचारी",
+    "colCurrentShift": "वर्तमान शिफ्ट",
+    "colRequestedShift": "अनुरोधित शिफ्ट",
+    "colEffectiveDate": "प्रभावी दिनांक",
+    "colReason": "कारण",
+    "colStatus": "स्थिति",
+    "colDecision": "निर्णय",
+    "approveBtn": "स्वीकृत करें",
+    "rejectBtn": "अस्वीकार करें",
+    "toastApproved": "शिफ्ट परिवर्तन अनुरोध स्वीकृत किया गया।",
+    "toastRejected": "शिफ्ट परिवर्तन अनुरोध अस्वीकृत किया गया।",
+    "confirmApproveTitle": "शिफ्ट परिवर्तन अनुरोध स्वीकृत करें?",
+    "confirmRejectTitle": "शिफ्ट परिवर्तन अनुरोध अस्वीकार करें?",
+    "approvalRemarksLabel": "अनुमोदन टिप्पणी",
+    "rejectionReasonLabel": "अस्वीकृति का कारण",
+    "confirmDescRich": "<strongName>{employeeName}</strongName> के शिफ्ट परिवर्तन अनुरोध ({currentShift} → {requestedShift}, प्रभावी {date}) को {verb}।",
+    "reasonLine": "कारण: {reason}"
   }
 }
