@@ -90,10 +90,10 @@ export default async function LocationsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🌍" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : locations.length} />
-        <StatCard icon="🏛️" iconBg="#e6f7f0" label={t("statStateLabel")}     value={errored ? "—" : stateCount} />
-        <StatCard icon="🏙️" iconBg="#fff7e6" label={t("statDistrictLabel")}  value={errored ? "—" : districtCount} />
-        <StatCard icon="🏘️" iconBg="#f5f5f5" label={t("statBlockLabel")}   value={errored ? "—" : blockCount} />
+        <StatCard icon="🌍" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : locations.length} />
+        <StatCard icon="🏛️" iconBg="var(--goodbg, #e6f7f0)" label={t("statStateLabel")}     value={errored ? "—" : stateCount} />
+        <StatCard icon="🏙️" iconBg="var(--warnbg, #fff7e6)" label={t("statDistrictLabel")}  value={errored ? "—" : districtCount} />
+        <StatCard icon="🏘️" iconBg="var(--bg, #f5f5f5)" label={t("statBlockLabel")}   value={errored ? "—" : blockCount} />
       </StatGrid>
       <Card title={t("cardTitleWithCount", { count: locations.length })}>
         {source === "error" ? (
@@ -131,8 +131,8 @@ export default async function LocationsPage() {
                           gap: 4,
                           padding: "2px 8px",
                           borderRadius: 10,
-                          background: "#eff6ff",
-                          color: "#1d4ed8",
+                          background: "var(--infobg, #eff6ff)",
+                          color: "var(--info, #1d4ed8)",
                           fontSize: 11,
                           fontWeight: 600,
                         }}
@@ -156,8 +156,8 @@ export default async function LocationsPage() {
                           gap: 4,
                           padding: "2px 8px",
                           borderRadius: 10,
-                          background: "#f0fdf4",
-                          color: "#15803d",
+                          background: "var(--goodbg, #f0fdf4)",
+                          color: "var(--good, #15803d)",
                           fontSize: 11,
                           fontWeight: 600,
                         }}

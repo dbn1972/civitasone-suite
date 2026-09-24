@@ -129,10 +129,10 @@ export default async function SuccessionPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏆" iconBg="#e6f0ff" label={t("statCriticalRolesLabel")}  value={pipeline.length} />
-        <StatCard icon="👥" iconBg="#f5f5f5" label={t("statTotalNomineesLabel")}  value={totalNominees} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statReadyNowLabel")}        value={readyNow} />
-        <StatCard icon="⚠️" iconBg="#fff1f0" label={t("statRolesAtRiskLabel")}   value={atRisk.length} />
+        <StatCard icon="🏆" iconBg="var(--infobg, #e6f0ff)" label={t("statCriticalRolesLabel")}  value={pipeline.length} />
+        <StatCard icon="👥" iconBg="var(--bg, #f5f5f5)" label={t("statTotalNomineesLabel")}  value={totalNominees} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statReadyNowLabel")}        value={readyNow} />
+        <StatCard icon="⚠️" iconBg="var(--badbg, #fff1f0)" label={t("statRolesAtRiskLabel")}   value={atRisk.length} />
       </StatGrid>
 
       {/* Rich succession plan cards */}

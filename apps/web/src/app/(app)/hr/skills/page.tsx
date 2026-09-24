@@ -62,10 +62,10 @@ export default async function SkillsPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🎯" iconBg="#e6f0ff" label="Skill Records"        value={items.length} />
-        <StatCard icon="👤" iconBg="#f5f5f5" label="Employees Mapped"     value={employees} />
-        <StatCard icon="⭐" iconBg="#fffbe6" label="Expert / Advanced"    value={expert} />
-        <StatCard icon="📚" iconBg="#fff1f0" label="Beginner / Basic"     value={beginner} />
+        <StatCard icon="🎯" iconBg="var(--infobg, #e6f0ff)" label="Skill Records"        value={items.length} />
+        <StatCard icon="👤" iconBg="var(--bg, #f5f5f5)" label="Employees Mapped"     value={employees} />
+        <StatCard icon="⭐" iconBg="var(--warnbg, #fffbe6)" label="Expert / Advanced"    value={expert} />
+        <StatCard icon="📚" iconBg="var(--badbg, #fff1f0)" label="Beginner / Basic"     value={beginner} />
       </StatGrid>
 
       <Card title="Competency Grid">
@@ -75,7 +75,7 @@ export default async function SkillsPage() {
           ) : matrixRecords.length === 0 ? (
             <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
               <p style={{ fontSize: 32, margin: "0 0 8px" }}>🎯</p>
-              <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No skill assessments recorded</p>
+              <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>No skill assessments recorded</p>
               <p style={{ fontSize: 13, margin: "4px 0 0" }}>
                 Skills appear after formal assessments during onboarding or training completions.
               </p>

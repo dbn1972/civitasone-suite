@@ -10,7 +10,7 @@ const LEAVE_COLORS: Record<string, { bg: string; color: string }> = {
   ML:  { bg: "var(--badbg, #fef2f2)", color: "var(--bad, #dc2626)" },
   HPL: { bg: "var(--badbg, #fef2f2)", color: "var(--bad, #dc2626)" },
   PL:  { bg: "var(--goodbg, #f0fdf4)", color: "var(--good, #16a34a)" },
-  CCL: { bg: "#fdf4ff", color: "#9333ea" },
+  CCL: { bg: "var(--primary-soft, #fdf4ff)", color: "var(--violet, #9333ea)" },
 };
 
 function initials(name: string) {
@@ -54,7 +54,7 @@ export function ActionInbox({ initialItems }: Props) {
 
       {items.length === 0 ? (
         <div className="inbox-empty">
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="1.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--good, #16a34a)" strokeWidth="1.5" aria-hidden="true"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
           <p>Inbox clear — no pending approvals</p>
         </div>
       ) : (
@@ -105,8 +105,8 @@ export function ActionInbox({ initialItems }: Props) {
         .inbox-panel { background: var(--panel,#fff); border-radius:8px; box-shadow:0 1px 3px rgba(15,34,64,.09); overflow:hidden; }
         .inbox-head { padding:13px 16px 11px; border-bottom:1px solid var(--line,#e2e8f0); display:flex; align-items:center; justify-content:space-between; }
         .inbox-title { font-size:12px; font-weight:700; display:flex; align-items:center; gap:7px; }
-        .inbox-dot { width:8px;height:8px;border-radius:50%;background:#dc2626;flex-shrink:0; }
-        .inbox-link { font-size:11px; color:#2563eb; font-weight:600; text-decoration:none; }
+        .inbox-dot { width:8px;height:8px;border-radius:50%;background:var(--bad, #dc2626);flex-shrink:0; }
+        .inbox-link { font-size:11px; color:var(--info, #2563eb); font-weight:600; text-decoration:none; }
         .inbox-empty { padding:28px 16px; text-align:center; color:var(--muted,#64748b); font-size:12px; display:flex; flex-direction:column; align-items:center; gap:8px; }
         .inbox-item { display:grid; grid-template-columns:36px 1fr auto; align-items:center; gap:10px; padding:12px 16px; border-bottom:1px solid var(--line,#e2e8f0); }
         .inbox-item:last-child { border-bottom:none; }
@@ -119,7 +119,7 @@ export function ActionInbox({ initialItems }: Props) {
         .btn-approve:disabled { opacity:.5;cursor:not-allowed; }
         .btn-decline { background:var(--badbg,#fef2f2);color:var(--bad,#dc2626);border:1px solid var(--badbd,#fecaca);border-radius:5px;font-size:11px;font-weight:600;padding:4px 10px;cursor:pointer; }
         .btn-decline:disabled { opacity:.5;cursor:not-allowed; }
-        .inbox-error { font-size:11px;color:#dc2626;font-weight:600;white-space:nowrap; }
+        .inbox-error { font-size:11px;color:var(--bad, #dc2626);font-weight:600;white-space:nowrap; }
       `}</style>
     </div>
   );

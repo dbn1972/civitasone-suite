@@ -138,7 +138,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
           display: "flex", gap: 8, alignItems: "flex-start",
           padding: "10px 14px", marginBottom: 16, borderRadius: 8,
           background: "var(--warnbg, #fffbe6)", border: "1px solid #f5d97a",
-          fontSize: "0.8125rem", color: "#8a6416",
+          fontSize: "0.8125rem", color: "var(--warn, #8a6416)",
         }}
       >
         <span aria-hidden="true">⚠️</span>
@@ -158,7 +158,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
           }}
         >
           <span>Overall progress</span>
-          <span style={{ fontWeight: 600, color: allDone ? "#16a34a" : "var(--ink)" }}>
+          <span style={{ fontWeight: 600, color: allDone ? "var(--good, #16a34a)" : "var(--ink)" }}>
             {overallPct}%
           </span>
         </div>
@@ -171,7 +171,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
           <div
             style={{
               height: "100%",
-              background: allDone ? "#16a34a" : "#2563eb",
+              background: allDone ? "var(--good, #16a34a)" : "#2563eb",
               width: `${overallPct}%`,
               borderRadius: 99,
               transition: "width 0.4s ease",
@@ -204,9 +204,9 @@ export function RetirementProcessWizard({ employeeName }: Props) {
                 background: active
                   ? "var(--primary, #2563eb)"
                   : done
-                  ? "#f0fdf4"
+                  ? "var(--goodbg, #f0fdf4)"
                   : "var(--bg2, #f1f5f9)",
-                color: active ? "#fff" : done ? "#16a34a" : "var(--ink)",
+                color: active ? "var(--panel, #fff)" : done ? "var(--good, #16a34a)" : "var(--ink)",
                 fontWeight: active ? 600 : 400,
                 fontSize: "0.8125rem",
                 transition: "background 0.2s, color 0.2s",
@@ -239,7 +239,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
               border: "1px solid var(--line, #e2e8f0)",
               borderRadius: 10,
               padding: 20,
-              background: done ? "#f0fdf4" : "var(--bg, #fff)",
+              background: done ? "var(--goodbg, #f0fdf4)" : "var(--bg, #fff)",
               transition: "background 0.3s",
             }}
           >
@@ -248,7 +248,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
               <div
                 style={{
                   width: 48, height: 48, borderRadius: 10,
-                  background: done ? "#dcfce7" : "#e6f0ff",
+                  background: done ? "var(--goodbg, #dcfce7)" : "#e6f0ff",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 24, flexShrink: 0,
                 }}
@@ -276,7 +276,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
                 <div
                   style={{
                     height: "100%",
-                    background: done ? "#16a34a" : "#2563eb",
+                    background: done ? "var(--good, #16a34a)" : "#2563eb",
                     width: `${stepPct}%`,
                     transition: "width 0.3s",
                   }}
@@ -307,7 +307,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
                         display: "flex", alignItems: "flex-start", gap: 12,
                         cursor: "pointer", padding: "10px 14px", borderRadius: 8,
                         background: isChecked
-                          ? "#f0fdf4"
+                          ? "var(--goodbg, #f0fdf4)"
                           : "var(--bg2, #f8fafc)",
                         transition: "background 0.2s",
                       }}
@@ -316,13 +316,13 @@ export function RetirementProcessWizard({ employeeName }: Props) {
                         type="checkbox"
                         checked={isChecked}
                         onChange={() => toggle(si, ci)}
-                        style={{ marginTop: 2, flexShrink: 0, accentColor: "#16a34a" }}
+                        style={{ marginTop: 2, flexShrink: 0, accentColor: "var(--good, #16a34a)" }}
                         aria-label={check}
                       />
                       <span
                         style={{
                           fontSize: "0.875rem",
-                          color: isChecked ? "#16a34a" : "var(--ink)",
+                          color: isChecked ? "var(--good, #16a34a)" : "var(--ink)",
                           textDecoration: isChecked ? "line-through" : "none",
                           transition: "color 0.2s, text-decoration 0.2s",
                         }}
@@ -357,7 +357,7 @@ export function RetirementProcessWizard({ employeeName }: Props) {
                 <span
                   style={{
                     padding: "8px 20px", borderRadius: 6,
-                    background: "#16a34a", color: "#fff",
+                    background: "var(--good, #16a34a)", color: "#fff",
                     fontSize: "0.875rem", fontWeight: 600,
                   }}
                 >

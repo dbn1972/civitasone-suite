@@ -33,11 +33,11 @@ function serviceGroup(level: number): string {
 function groupBadgeStyle(level: number): React.CSSProperties {
   const g = serviceGroup(level);
   const colors: Record<string, { bg: string; color: string }> = {
-    "Group-A": { bg: "#eff6ff", color: "#1d4ed8" },
-    "Group-B": { bg: "#f0fdf4", color: "#15803d" },
-    "Group-C": { bg: "#fff7ed", color: "#c2410c" },
-    "Group-D": { bg: "#f5f5f5", color: "#525252" },
-    "—":       { bg: "#f5f5f5", color: "var(--mut)" },
+    "Group-A": { bg: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)" },
+    "Group-B": { bg: "var(--goodbg, #f0fdf4)", color: "var(--good, #15803d)" },
+    "Group-C": { bg: "var(--warnbg, #fff7ed)", color: "var(--warn, #c2410c)" },
+    "Group-D": { bg: "var(--bg, #f5f5f5)", color: "var(--mut, #525252)" },
+    "—":       { bg: "var(--bg, #f5f5f5)", color: "var(--mut)" },
   };
   const { bg, color } = colors[g] ?? colors["—"];
   return {
@@ -70,7 +70,7 @@ const thStyle: React.CSSProperties = {
   textAlign: "start",
   fontWeight: 600,
   borderBottom: "1px solid var(--line,#e2e8f0)",
-  color: "#64748b",
+  color: "var(--mut, #64748b)",
   fontSize: 11,
   textTransform: "uppercase",
   letterSpacing: "0.3px",
@@ -207,7 +207,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                         style={inputStyle}
                       />
                       {rowError && (
-                        <p style={{ color: "#b91c1c", fontSize: 11, marginTop: 3, marginBottom: 0 }}>
+                        <p style={{ color: "var(--bad, #b91c1c)", fontSize: 11, marginTop: 3, marginBottom: 0 }}>
                           {rowError}
                         </p>
                       )}

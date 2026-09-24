@@ -65,8 +65,8 @@ const TAXABILITY_STYLE: Record<Taxability, { background: string; color: string; 
 };
 
 const TYPE_BADGE: Record<string, { bg: string; fg: string }> = {
-  earning: { bg: "#eff6ff", fg: "#1d4ed8" },
-  allowance: { bg: "#eff6ff", fg: "#1d4ed8" },
+  earning: { bg: "var(--infobg, #eff6ff)", fg: "#1d4ed8" },
+  allowance: { bg: "var(--infobg, #eff6ff)", fg: "#1d4ed8" },
   deduction: { bg: "var(--badbg)", fg: "var(--bad)" },
   employer_contribution: { bg: "var(--goodbg)", fg: "var(--good)" },
   reimbursement: { bg: "var(--warnbg)", fg: "var(--warn)" },
@@ -139,8 +139,8 @@ function FormulaTooltip({ code }: { code: string }) {
             bottom: "calc(100% + 6px)",
             insetInlineStart: "50%",
             transform: "translateX(-50%)",
-            background: "#1e293b",
-            color: "#f1f5f9",
+            background: "var(--ink, #1e293b)",
+            color: "var(--bg, #f1f5f9)",
             fontSize: 12,
             padding: "8px 12px",
             borderRadius: 8,
@@ -293,7 +293,7 @@ export function ComponentGrid({ components }: ComponentGridProps) {
                         width: 36,
                         height: 20,
                         borderRadius: 20,
-                        background: isEnabled ? "#10b981" : "#94a3b8",
+                        background: isEnabled ? "var(--good, #10b981)" : "var(--mut, #94a3b8)",
                         border: "none",
                         cursor: "pointer",
                         transition: "background 0.2s",
@@ -306,7 +306,7 @@ export function ComponentGrid({ components }: ComponentGridProps) {
                           width: 16,
                           height: 16,
                           borderRadius: "50%",
-                          background: "#fff",
+                          background: "var(--panel, #fff)",
                           boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
                           transition: "transform 0.2s",
                         }}

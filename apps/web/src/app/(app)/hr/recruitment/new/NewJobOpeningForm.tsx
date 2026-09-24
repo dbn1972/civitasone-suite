@@ -155,7 +155,7 @@ export function NewJobOpeningForm() {
       noValidate
     >
       {templateName && (
-        <div style={{ padding: "10px 14px", background: "#dbeafe", border: "1px solid #93c5fd", borderRadius: 8, fontSize: 13, color: "#1e40af" }}>
+        <div style={{ padding: "10px 14px", background: "var(--infobg, #dbeafe)", border: "1px solid #93c5fd", borderRadius: 8, fontSize: 13, color: "var(--info, #1e40af)" }}>
           {t("prefilledFromTemplatePrefix")} <strong>{templateName}</strong>{t("prefilledFromTemplateSuffix")}
         </div>
       )}

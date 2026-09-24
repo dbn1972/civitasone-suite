@@ -50,14 +50,14 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
 
   return (
     <>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", marginTop: 0, marginBottom: 20 }}>
         {t("step2Heading")}
       </h2>
       <div style={grid2}>
         {/* Employee ID */}
         <div style={fieldWrap}>
           <label htmlFor="w-empNo" style={labelStyle}>
-            {t("employeeIdFieldLabel")} <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
+            {t("employeeIdFieldLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
           </label>
           <input
             id="w-empNo"
@@ -72,7 +72,7 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
             style={errors.employeeNo ? inputErrorStyle : inputStyle}
           />
           {errors.employeeNo && (
-            <span id="w-empNo-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-empNo-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.employeeNo}
             </span>
           )}
@@ -81,7 +81,7 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
         {/* Date of Joining */}
         <div style={fieldWrap}>
           <label htmlFor="w-doj" style={labelStyle}>
-            {t("dateOfJoiningLabel")} <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
+            {t("dateOfJoiningLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
           </label>
           <input
             id="w-doj"
@@ -95,7 +95,7 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
             style={errors.dateOfJoining ? inputErrorStyle : inputStyle}
           />
           {errors.dateOfJoining && (
-            <span id="w-doj-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-doj-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.dateOfJoining}
             </span>
           )}
@@ -104,7 +104,7 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
         {/* Department */}
         <div style={fieldWrap}>
           <label htmlFor="w-dept" style={labelStyle}>
-            {t("departmentLabel")} <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
+            {t("departmentLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
           </label>
           <select
             id="w-dept"
@@ -122,7 +122,7 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
             ))}
           </select>
           {errors.departmentId && (
-            <span id="w-dept-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-dept-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.departmentId}
             </span>
           )}
@@ -131,7 +131,7 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
         {/* Designation */}
         <div style={fieldWrap}>
           <label htmlFor="w-desig" style={labelStyle}>
-            {t("designationLabel")} <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
+            {t("designationLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
           </label>
           <select
             id="w-desig"
@@ -149,7 +149,7 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
             ))}
           </select>
           {errors.designationId && (
-            <span id="w-desig-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-desig-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.designationId}
             </span>
           )}

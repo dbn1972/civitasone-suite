@@ -10,8 +10,8 @@ const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
   borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
 };
-const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid #ef4444" };
-const fieldErrStyle: CSSProperties = { color: "#b91c1c", fontSize: 12, margin: "3px 0 0" };
+const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
+const fieldErrStyle: CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 type EmployeeOption = { id: string; name: string; employeeNo: string };
 
@@ -120,7 +120,7 @@ export function RequestAdvanceForm() {
         <form onSubmit={handleSubmit} noValidate style={{ padding: "0 20px 20px", display: "grid", gap: 14 }}>
           <div>
             <label htmlFor={ids.employee} style={{ fontSize: 13, fontWeight: 500 }}>
-              Employee <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+              Employee <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
             </label>
             <select id={ids.employee} value={employeeId}
               onChange={(e) => { setEmployeeId(e.target.value); clearErr("employee"); }}
@@ -138,7 +138,7 @@ export function RequestAdvanceForm() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 14 }}>
             <div>
               <label htmlFor={ids.amount} style={{ fontSize: 13, fontWeight: 500 }}>
-                Amount (₹) <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+                Amount (₹) <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
               </label>
               <input id={ids.amount} type="number" min={1} step={1} value={amount}
                 onChange={(e) => { setAmount(e.target.value); clearErr("amount"); }}
@@ -152,7 +152,7 @@ export function RequestAdvanceForm() {
             </div>
             <div>
               <label htmlFor={ids.months} style={{ fontSize: 13, fontWeight: 500 }}>
-                Recovery Months <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+                Recovery Months <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
               </label>
               <input id={ids.months} type="number" min={1} max={12} step={1} value={months}
                 onChange={(e) => { setMonths(e.target.value); clearErr("months"); }}
@@ -174,7 +174,7 @@ export function RequestAdvanceForm() {
 
           <div>
             <label htmlFor={ids.purpose} style={{ fontSize: 13, fontWeight: 500 }}>
-              Purpose <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+              Purpose <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
             </label>
             <input id={ids.purpose} type="text" minLength={2} maxLength={200} value={purpose}
               onChange={(e) => { setPurpose(e.target.value); clearErr("purpose"); }}

@@ -53,10 +53,10 @@ export default async function OvertimePage() {
       />
       <DataSourceBadge source={result.source} />
       <StatGrid>
-        <StatCard icon="⏱️" iconBg="#e6f0ff" label="Total Requests" value={requests.length} />
-        <StatCard icon="⏳" iconBg="#fffbe6" label="Pending Approval" value={pending} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Approved" value={approved} />
-        <StatCard icon="🕐" iconBg="#f5f5f5" label="Total Hours" value={`${totalHrs.toFixed(1)} h`} />
+        <StatCard icon="⏱️" iconBg="var(--infobg, #e6f0ff)" label="Total Requests" value={requests.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label="Pending Approval" value={pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Approved" value={approved} />
+        <StatCard icon="🕐" iconBg="var(--bg, #f5f5f5)" label="Total Hours" value={`${totalHrs.toFixed(1)} h`} />
       </StatGrid>
       <Card title="All Overtime Requests">
         {result.source === "error" ? (

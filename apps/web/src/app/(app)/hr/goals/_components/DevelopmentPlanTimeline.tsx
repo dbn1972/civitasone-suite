@@ -28,17 +28,17 @@ const TYPE_ICON: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<string, { bg: string; color: string; dot: string }> = {
-  planned:     { bg: "#eff6ff", color: "#1d4ed8", dot: "#60a5fa" },
-  in_progress: { bg: "#fff7e6", color: "#d97706", dot: "#fbbf24" },
-  completed:   { bg: "#f0fdf4", color: "#15803d", dot: "#4ade80" },
-  deferred:    { bg: "#f8fafc", color: "#64748b", dot: "#94a3b8" },
-  cancelled:   { bg: "#fef2f2", color: "#dc2626", dot: "#f87171" },
+  planned:     { bg: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)", dot: "#60a5fa" },
+  in_progress: { bg: "#fff7e6", color: "var(--warn, #d97706)", dot: "#fbbf24" },
+  completed:   { bg: "var(--goodbg, #f0fdf4)", color: "var(--good, #15803d)", dot: "#4ade80" },
+  deferred:    { bg: "var(--bg, #f8fafc)", color: "var(--mut, #64748b)", dot: "#94a3b8" },
+  cancelled:   { bg: "var(--badbg, #fef2f2)", color: "var(--bad, #dc2626)", dot: "#f87171" },
 };
 
 const PRIORITY_COLOR: Record<string, string> = {
-  high:   "#dc2626",
-  medium: "#d97706",
-  low:    "#15803d",
+  high:   "var(--bad, #dc2626)",
+  medium: "var(--warn, #d97706)",
+  low:    "var(--good, #15803d)",
 };
 
 function getQuarter(date: Date): number {
@@ -84,7 +84,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
           top: 0,
           bottom: 0,
           width: 2,
-          background: "#e2e8f0",
+          background: "var(--line, #e2e8f0)",
           zIndex: 0,
         }}
       />
@@ -96,17 +96,17 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
             <div
               style={{
                 width: 32, height: 32, borderRadius: "50%",
-                background: "#1d4ed8", color: "#fff",
+                background: "var(--info, #1d4ed8)", color: "#fff",
                 display: "flex", alignItems: "center", justifyContent: "center",
                 fontSize: 11, fontWeight: 700, flexShrink: 0,
-                boxShadow: "0 0 0 4px #fff, 0 0 0 5px #e2e8f0",
+                boxShadow: "0 0 0 4px var(--panel, #fff), 0 0 0 5px var(--line, #e2e8f0)",
                 zIndex: 1, position: "relative",
               }}
             >
               {quarterLabel.split(" ")[0]}
             </div>
             <div>
-              <span style={{ fontWeight: 700, fontSize: 13, color: "#1e293b" }}>{quarterLabel}</span>
+              <span style={{ fontWeight: 700, fontSize: 13, color: "var(--ink, #1e293b)" }}>{quarterLabel}</span>
             </div>
           </div>
 
@@ -119,8 +119,8 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                 <div
                   key={act.id}
                   style={{
-                    background: "#fff",
-                    border: `1px solid ${isPast ? "#fca5a5" : "#e2e8f0"}`,
+                    background: "var(--panel, #fff)",
+                    border: `1px solid ${isPast ? "var(--badbd, #fca5a5)" : "#e2e8f0"}`,
                     borderInlineStart: `3px solid ${PRIORITY_COLOR[act.priority]}`,
                     borderRadius: 8,
                     padding: "10px 12px",
@@ -147,7 +147,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
                         <span style={{ fontSize: 14 }}>{TYPE_ICON[act.type] ?? "📌"}</span>
-                        <span style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>{act.title}</span>
+                        <span style={{ fontWeight: 600, fontSize: 13, color: "var(--ink, #1e293b)" }}>{act.title}</span>
                         <span
                           style={{
                             fontSize: 11, fontWeight: 600, background: ss.bg, color: ss.color,
@@ -157,18 +157,18 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                           {act.status.replace("_", " ")}
                         </span>
                         {isPast && (
-                          <span style={{ fontSize: 11, background: "#fee2e2", color: "#dc2626", borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>
+                          <span style={{ fontSize: 11, background: "var(--badbg, #fee2e2)", color: "var(--bad, #dc2626)", borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>
                             Overdue
                           </span>
                         )}
                       </div>
                       <div style={{ display: "flex", gap: 12, marginTop: 4, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 11, color: "#64748b" }}>
+                        <span style={{ fontSize: 11, color: "var(--mut, #64748b)" }}>
                           {formatDate(act.plannedDate)}
                           {act.durationDays ? ` · ${act.durationDays}d` : ""}
                         </span>
                         {act.skillTargeted && (
-                          <span style={{ fontSize: 11, color: "#64748b" }}>
+                          <span style={{ fontSize: 11, color: "var(--mut, #64748b)" }}>
                             Targets: <strong>{act.skillTargeted}</strong>
                           </span>
                         )}

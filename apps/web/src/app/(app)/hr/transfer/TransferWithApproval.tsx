@@ -169,7 +169,7 @@ export function TransferWithApproval() {
 
           {error && (
             <div role="alert" aria-live="assertive">
-              <p className="pad" style={{ color: "#b91c1c", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {error}</p>
+              <p className="pad" style={{ color: "var(--bad, #b91c1c)", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {error}</p>
             </div>
           )}
 
@@ -258,12 +258,12 @@ export function TransferWithApproval() {
           {step === 2 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               {submittedTransferId && (
-                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#fffbeb", borderRadius: 8, border: "1px solid #fde68a" }}>
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--warnbg, #fffbeb)", borderRadius: 8, border: "1px solid var(--warnbd, #fde68a)" }}>
                   The transfer request was already created — retrying now only raises the eFile, it will not create a duplicate.
                 </div>
               )}
               {selectedEmployee && (
-                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#f0f9ff", borderRadius: 8, border: "1px solid #bae6fd" }}>
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--infobg, #f0f9ff)", borderRadius: 8, border: "1px solid var(--infobd, #bae6fd)" }}>
                   <strong>{selectedEmployee.name}</strong> → {departments.find((d) => d.id === toDeptId)?.name ?? toDeptId}
                   {effectiveDate && <> · Effective {effectiveDate}</>}
                 </div>

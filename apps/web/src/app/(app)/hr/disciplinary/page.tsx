@@ -76,10 +76,10 @@ export default async function DisciplinaryListPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="#e6f0ff" label="Total Cases" value={errored ? null : items.length} />
-        <StatCard icon="🔴" iconBg="#fff1f0" label="Major (Vigilance)" value={errored ? null : major} />
-        <StatCard icon="🟡" iconBg="#fffbe6" label="Minor (Grievance)" value={errored ? null : minor} />
-        <StatCard icon="📋" iconBg="#f5f5f5" label="Active / Open" value={errored ? null : open} />
+        <StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label="Total Cases" value={errored ? null : items.length} />
+        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label="Major (Vigilance)" value={errored ? null : major} />
+        <StatCard icon="🟡" iconBg="var(--warnbg, #fffbe6)" label="Minor (Grievance)" value={errored ? null : minor} />
+        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label="Active / Open" value={errored ? null : open} />
       </StatGrid>
       <Card title="All Disciplinary Cases">
         {errored ? (

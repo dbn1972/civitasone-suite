@@ -75,10 +75,10 @@ export default async function CompetencyPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏗️" iconBg="#e6f0ff" label="Frameworks"  value={frameworks.length} />
-        <StatCard icon="✅" iconBg="#e6f7f0"  label="Active"      value={active} />
-        <StatCard icon="💻" iconBg="#fffbe6"  label="Technical"   value={technical} />
-        <StatCard icon="🤝" iconBg="#f5f5f5"  label="Behavioural" value={behavioural} />
+        <StatCard icon="🏗️" iconBg="var(--infobg, #e6f0ff)" label="Frameworks"  value={frameworks.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)"  label="Active"      value={active} />
+        <StatCard icon="💻" iconBg="var(--warnbg, #fffbe6)"  label="Technical"   value={technical} />
+        <StatCard icon="🤝" iconBg="var(--bg, #f5f5f5)"  label="Behavioural" value={behavioural} />
       </StatGrid>
 
       {/* Radar chart — core 6 government competencies */}

@@ -17,15 +17,15 @@ const inputStyle: React.CSSProperties = {
   fontSize: 14,
   border: "1px solid var(--line, #cbd5e1)",
   borderRadius: 10,
-  background: "#fff",
-  color: "#0f172a",
+  background: "var(--panel, #fff)",
+  color: "var(--ink, #0f172a)",
   minHeight: 44,
 };
 
 const labelStyle: React.CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
-  color: "#0f172a",
+  color: "var(--ink, #0f172a)",
 };
 
 export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
@@ -123,11 +123,11 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
                 padding: "10px 14px",
                 borderRadius: 8,
                 fontSize: 14,
-                background: tone === "success" ? "#dcfce7" : "#fee2e2",
+                background: tone === "success" ? "var(--goodbg, #dcfce7)" : "#fee2e2",
                 border: `1px solid ${
-                  tone === "success" ? "#86efac" : "#fca5a5"
+                  tone === "success" ? "var(--goodbd, #86efac)" : "var(--badbd, #fca5a5)"
                 }`,
-                color: tone === "success" ? "#166534" : "#b91c1c",
+                color: tone === "success" ? "var(--good, #166534)" : "var(--bad, #b91c1c)",
               }}
             >
               {tone === "success" ? "✅" : "⚠️"} {message}
@@ -146,7 +146,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={codeId} style={labelStyle}>
               {t("codeLabel")}{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>
+              <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}>
                 *
               </span>
             </label>
@@ -163,7 +163,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
               style={inputStyle}
             />
             {formError.fieldError("code") && (
-              <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("code")}</span>
+              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("code")}</span>
             )}
           </div>
 
@@ -171,7 +171,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={nameId} style={labelStyle}>
               {t("nameLabel")}{" "}
-              <span aria-hidden="true" style={{ color: "#b91c1c" }}>
+              <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}>
                 *
               </span>
             </label>
@@ -188,7 +188,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
               style={inputStyle}
             />
             {formError.fieldError("name") && (
-              <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("name")}</span>
+              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("name")}</span>
             )}
           </div>
         </div>

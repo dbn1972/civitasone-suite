@@ -150,10 +150,10 @@ function TrendChart({
         ))}
 
         {/* Area fill */}
-        <path d={areaPath} fill="#00439C" fillOpacity={0.08} />
+        <path d={areaPath} fill="var(--primary, #00439C)" fillOpacity={0.08} />
 
         {/* Line */}
-        <path d={linePath} fill="none" stroke="#00439C" strokeWidth={2} strokeLinejoin="round" />
+        <path d={linePath} fill="none" stroke="var(--primary, #00439C)" strokeWidth={2} strokeLinejoin="round" />
 
         {/* Data points */}
         {data.map((d, i) => (
@@ -162,8 +162,8 @@ function TrendChart({
               cx={px(i)}
               cy={py(d.headcount)}
               r={4}
-              fill="#00439C"
-              stroke="#fff"
+              fill="var(--primary, #00439C)"
+              stroke="var(--panel, #fff)"
               strokeWidth={1.5}
               aria-label={`${d.month}: ${d.headcount}`}
             />
@@ -206,7 +206,7 @@ function GenderBar({ female, male, t }: { female: number; male: number; t: Analy
     >
       <div style={{ display: 'flex', height: 18, borderRadius: 4, overflow: 'hidden' }}>
         <div style={{ width: `${fPct}%`, background: '#e040fb', transition: 'width 0.3s' }} aria-hidden />
-        <div style={{ width: `${mPct}%`, background: '#00439C', transition: 'width 0.3s' }} aria-hidden />
+        <div style={{ width: `${mPct}%`, background: 'var(--primary, #00439C)', transition: 'width 0.3s' }} aria-hidden />
       </div>
       <div style={{ display: 'flex', gap: 16, fontSize: 11, color: 'var(--muted, #64748b)' }}>
         <span>
@@ -214,7 +214,7 @@ function GenderBar({ female, male, t }: { female: number; male: number; t: Analy
           {t('genderFemaleLabel', { pct: fPct })}
         </span>
         <span>
-          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: '#00439C', marginInlineEnd: 4 }} aria-hidden />
+          <span style={{ display: 'inline-block', width: 8, height: 8, borderRadius: 2, background: 'var(--primary, #00439C)', marginInlineEnd: 4 }} aria-hidden />
           {t('genderMaleLabel', { pct: mPct })}
         </span>
       </div>
@@ -242,25 +242,25 @@ export default async function WorkforceAnalyticsPage() {
   const kpiCards = [
     {
       icon: '📉',
-      iconBg: '#fff1f0',
+      iconBg: 'var(--badbg, #fff1f0)',
       label: t('statTurnoverRate'),
       value: `${analytics.turnoverPct.toFixed(1)}%`,
     },
     {
       icon: '🏥',
-      iconBg: '#fffbe6',
+      iconBg: 'var(--warnbg, #fffbe6)',
       label: t('statAbsenteeismRate'),
       value: `${analytics.absenteeismPct.toFixed(1)}%`,
     },
     {
       icon: '📅',
-      iconBg: '#e6f7f0',
+      iconBg: 'var(--goodbg, #e6f7f0)',
       label: t('statAvgTenure'),
       value: analytics.avgTenureYears.toFixed(1),
     },
     {
       icon: '👥',
-      iconBg: '#e6f0ff',
+      iconBg: 'var(--infobg, #e6f0ff)',
       label: t('statTotalHeadcount'),
       value: totalHeadcount,
     },
@@ -300,7 +300,7 @@ export default async function WorkforceAnalyticsPage() {
         <div style={{ padding: '12px 0', display: 'flex', gap: 24, flexWrap: 'wrap' }}>
           <div>
             <div
-              style={{ fontSize: 28, fontWeight: 800, color: retiringSoon > 0 ? '#cf1322' : '#1a6d3c' }}
+              style={{ fontSize: 28, fontWeight: 800, color: retiringSoon > 0 ? 'var(--bad, #cf1322)' : 'var(--good, #1a6d3c)' }}
             >
               {retiringSoon}
             </div>
@@ -309,7 +309,7 @@ export default async function WorkforceAnalyticsPage() {
             </div>
           </div>
           <div>
-            <div style={{ fontSize: 28, fontWeight: 800, color: retiring12 > 0 ? '#d46b08' : '#1a6d3c' }}>
+            <div style={{ fontSize: 28, fontWeight: 800, color: retiring12 > 0 ? 'var(--warn, #d46b08)' : 'var(--good, #1a6d3c)' }}>
               {retiring12}
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted, #64748b)' }}>
@@ -360,7 +360,7 @@ export default async function WorkforceAnalyticsPage() {
                       <td style={{ padding: '8px 10px' }}>
                         <span
                           style={{
-                            color: months <= 6 ? '#cf1322' : months <= 12 ? '#d46b08' : undefined,
+                            color: months <= 6 ? 'var(--bad, #cf1322)' : months <= 12 ? 'var(--warn, #d46b08)' : undefined,
                             fontWeight: months <= 6 ? 700 : undefined,
                           }}
                         >

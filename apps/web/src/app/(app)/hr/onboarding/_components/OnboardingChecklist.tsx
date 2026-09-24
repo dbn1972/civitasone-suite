@@ -71,7 +71,7 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
           style={{
             height: "100%",
             width: `${(done / total) * 100}%`,
-            background: "linear-gradient(90deg,#4f46e5,#7c3aed)",
+            background: "linear-gradient(90deg,var(--indigo, #4f46e5),var(--violet, #7c3aed))",
             borderRadius: 99,
             transition: "width 0.4s ease",
           }}
@@ -117,7 +117,7 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
                     height: "100%",
                     background:
                       step.status === "completed"
-                        ? "#d1fae5"
+                        ? "var(--goodbg, #d1fae5)"
                         : "var(--border, #e2e8f0)",
                   }}
                 />
@@ -210,9 +210,9 @@ export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistPr
                     flexShrink: 0,
                     fontSize: 11,
                     fontWeight: 600,
-                    color: "#4f46e5",
+                    color: "var(--indigo, #4f46e5)",
                     background: "none",
-                    border: "1px solid #c7d2fe",
+                    border: "1px solid var(--primary-soft, #c7d2fe)",
                     borderRadius: 6,
                     padding: "3px 8px",
                     cursor: "pointer",

@@ -47,10 +47,10 @@ export default async function ConfirmationPage() {
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="On Probation"   value={errored ? null : items.length} />
-        <StatCard icon="⏰" iconBg="#fff1f0" label="Overdue"         value={errored ? null : overdue} />
-        <StatCard icon="📅" iconBg="#fffbe6" label="Due in 30 Days" value={errored ? null : dueSoon} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Timely"          value={errored ? null : timely} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label="On Probation"   value={errored ? null : items.length} />
+        <StatCard icon="⏰" iconBg="var(--badbg, #fff1f0)" label="Overdue"         value={errored ? null : overdue} />
+        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label="Due in 30 Days" value={errored ? null : dueSoon} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Timely"          value={errored ? null : timely} />
       </StatGrid>
 
       <Card title="Probation Register — Confirmation Due">

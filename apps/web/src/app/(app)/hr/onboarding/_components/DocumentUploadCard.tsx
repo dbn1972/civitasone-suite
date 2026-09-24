@@ -108,7 +108,7 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
     <div
       data-testid={`doc-card-${doc.id}`}
       style={{
-        border: `1px solid ${localStatus === "rejected" ? "#fecaca" : "var(--border, #e2e8f0)"}`,
+        border: `1px solid ${localStatus === "rejected" ? "var(--badbd, #fecaca)" : "var(--border, #e2e8f0)"}`,
         borderRadius: 10,
         padding: 16,
         background: "var(--card-bg, #fff)",
@@ -126,7 +126,7 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
               {doc.name}
             </span>
             {doc.required && (
-              <span style={{ fontSize: 10, color: "#b91c1c", fontWeight: 600 }}>Required</span>
+              <span style={{ fontSize: 10, color: "var(--bad, #b91c1c)", fontWeight: 600 }}>Required</span>
             )}
           </div>
           {doc.description && (
@@ -146,7 +146,7 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
             alignItems: "center",
             gap: 8,
             padding: "6px 10px",
-            background: "#f8fafc",
+            background: "var(--bg, #f8fafc)",
             borderRadius: 6,
             border: "1px solid var(--border, #e2e8f0)",
           }}
@@ -156,7 +156,7 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
             {localFile}
           </span>
           {localStatus === "verified" && (
-            <span style={{ fontSize: 11, color: "#166534" }}>✓ Verified</span>
+            <span style={{ fontSize: 11, color: "var(--good, #166534)" }}>✓ Verified</span>
           )}
         </div>
       )}
@@ -173,12 +173,12 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
           aria-label={`Upload ${doc.name}`}
           onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") inputRef.current?.click(); }}
           style={{
-            border: `2px dashed ${dragging ? "#4f46e5" : "var(--border, #cbd5e1)"}`,
+            border: `2px dashed ${dragging ? "var(--indigo, #4f46e5)" : "var(--border, #cbd5e1)"}`,
             borderRadius: 8,
             padding: "14px 10px",
             textAlign: "center",
             cursor: uploading ? "progress" : "pointer",
-            background: dragging ? "#ede9fe" : "#f8fafc",
+            background: dragging ? "var(--primary-soft, #ede9fe)" : "var(--bg, #f8fafc)",
             transition: "border-color 0.15s, background 0.15s",
           }}
         >
@@ -194,12 +194,12 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
             aria-label={`Choose file for ${doc.name}`}
           />
           {uploading ? (
-            <span style={{ fontSize: 12, color: "#4f46e5" }}>Uploading…</span>
+            <span style={{ fontSize: 12, color: "var(--indigo, #4f46e5)" }}>Uploading…</span>
           ) : (
             <>
               <div style={{ fontSize: 20, marginBottom: 4 }} aria-hidden>⬆</div>
               <div style={{ fontSize: 12, color: "var(--body, #334155)", fontWeight: 500 }}>
-                Drag &amp; drop or <span style={{ color: "#4f46e5", textDecoration: "underline" }}>browse</span>
+                Drag &amp; drop or <span style={{ color: "var(--indigo, #4f46e5)", textDecoration: "underline" }}>browse</span>
               </div>
               <div style={{ fontSize: 10, color: "var(--muted, #94a3b8)", marginTop: 2 }}>
                 PDF, JPG, PNG, DOCX · Max 10 MB
@@ -211,7 +211,7 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
 
       {/* Upload error */}
       {uploadError && (
-        <p role="alert" style={{ margin: 0, fontSize: 12, color: "#dc2626", fontWeight: 500 }}>
+        <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad, #dc2626)", fontWeight: 500 }}>
           {uploadError}
         </p>
       )}

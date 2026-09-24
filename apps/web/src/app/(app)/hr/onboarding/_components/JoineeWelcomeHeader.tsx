@@ -65,7 +65,7 @@ export function JoineeWelcomeHeader({
           width: 60,
           height: 60,
           borderRadius: "50%",
-          background: "linear-gradient(135deg,#4f46e5,#7c3aed)",
+          background: "linear-gradient(135deg,var(--indigo, #4f46e5),var(--violet, #7c3aed))",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
@@ -90,8 +90,8 @@ export function JoineeWelcomeHeader({
               fontWeight: 600,
               padding: "2px 8px",
               borderRadius: 99,
-              background: "#ede9fe",
-              color: "#5b21b6",
+              background: "var(--primary-soft, #ede9fe)",
+              color: "var(--violet, #5b21b6)",
               letterSpacing: "0.03em",
             }}
           >

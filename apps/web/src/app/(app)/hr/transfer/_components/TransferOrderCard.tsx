@@ -177,9 +177,9 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
           {PIPELINE.map(({ key, label }, i) => {
             const done   = i < currentIdx;
             const active = i === currentIdx;
-            const bg  = done ? "#16a34a" : active ? "#2563eb" : "var(--line, #e2e8f0)";
-            const fg  = done || active ? "#fff" : "var(--mut)";
-            const connBg = done ? "#16a34a" : "var(--line, #e2e8f0)";
+            const bg  = done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--line, #e2e8f0)";
+            const fg  = done || active ? "var(--panel, #fff)" : "var(--mut)";
+            const connBg = done ? "var(--good, #16a34a)" : "var(--line, #e2e8f0)";
             return (
               <div key={key} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -195,7 +195,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                   </div>
                   <span style={{
                     fontSize: "0.625rem", marginTop: 3,
-                    color: active ? "#2563eb" : done ? "#16a34a" : "var(--ink3)",
+                    color: active ? "var(--info, #2563eb)" : done ? "var(--good, #16a34a)" : "var(--ink3)",
                     fontWeight: active ? 600 : 400,
                     whiteSpace: "nowrap", maxWidth: 56, textAlign: "center",
                   }}>

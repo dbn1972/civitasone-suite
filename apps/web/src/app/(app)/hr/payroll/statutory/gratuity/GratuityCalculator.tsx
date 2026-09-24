@@ -125,7 +125,7 @@ export function GratuityCalculator() {
             borderRadius: 8,
             padding: "10px 14px",
             fontSize: 13,
-            color: "#92400e",
+            color: "var(--warn, #92400e)",
           }}
         >
           {t.rich("belowEligibilityMessage", {

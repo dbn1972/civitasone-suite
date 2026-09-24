@@ -244,7 +244,7 @@ export default async function ReturnsPage({
                 <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(totalTdsDeductedMinor24)} />
                 <StatCard
                   icon={f24Lookup.data.reconciliation.matched ? "✅" : "⚠️"}
-                  iconBg={f24Lookup.data.reconciliation.matched ? "#e6f7f0" : "#fdecea"}
+                  iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
                   label="Challan Reconciliation"
                   value={f24Lookup.data.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />
@@ -304,7 +304,7 @@ export default async function ReturnsPage({
                 <StatCard icon="💰" iconBg="var(--goodbg)" label="Total TDS Deducted" value={formatMoney(f26.totalTdsDeductedMinor)} />
                 <StatCard
                   icon={f26.reconciliation.matched ? "✅" : "⚠️"}
-                  iconBg={f26.reconciliation.matched ? "#e6f7f0" : "#fdecea"}
+                  iconBg={f26.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
                   label="Challan Reconciliation"
                   value={f26.reconciliation.matched ? "Matched" : "Unreconciled"}
                 />

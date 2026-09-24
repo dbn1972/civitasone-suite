@@ -21,14 +21,14 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
   const t = useTranslations("employeeWizard");
   return (
     <>
-      <h2 style={{ fontSize: 16, fontWeight: 700, color: "#0f172a", marginTop: 0, marginBottom: 20 }}>
+      <h2 style={{ fontSize: 16, fontWeight: 700, color: "var(--ink, #0f172a)", marginTop: 0, marginBottom: 20 }}>
         {t("step1Heading")}
       </h2>
       <div style={grid2}>
         {/* Full Name */}
         <div style={{ ...fieldWrap, gridColumn: "span 2" }}>
           <label htmlFor="w-fullName" style={labelStyle}>
-            {t("fullNameLabel")} <span style={{ color: "#ef4444" }} aria-hidden="true">*</span>
+            {t("fullNameLabel")} <span style={{ color: "var(--bad, #ef4444)" }} aria-hidden="true">*</span>
           </label>
           <input
             id="w-fullName"
@@ -44,7 +44,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
             style={errors.fullName ? inputErrorStyle : inputStyle}
           />
           {errors.fullName && (
-            <span id="w-fullName-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-fullName-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.fullName}
             </span>
           )}
@@ -128,7 +128,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
             style={errors.email ? inputErrorStyle : inputStyle}
           />
           {errors.email && (
-            <span id="w-email-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-email-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.email}
             </span>
           )}
@@ -150,7 +150,7 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
             style={errors.mobile ? inputErrorStyle : inputStyle}
           />
           {errors.mobile && (
-            <span id="w-mobile-err" role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>
+            <span id="w-mobile-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
               {errors.mobile}
             </span>
           )}

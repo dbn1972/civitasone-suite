@@ -99,7 +99,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
         <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statChallansForPeriod")} value={errored ? "—" : challans.length} />
         <StatCard
           icon={reconciliation?.matched ? "✅" : "⚠️"}
-          iconBg={reconciliation?.matched ? "#e6f7f0" : "#fdecea"}
+          iconBg={reconciliation?.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
           label={t("statReconciliationStatus")}
           value={errored ? "—" : (reconciliation?.perPeriod?.length ? reconciliation.perPeriod[0].status : t("unknownStatus"))}
         />

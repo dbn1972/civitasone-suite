@@ -37,17 +37,17 @@ function daysDiff(iso: string): number | null {
 }
 
 function dueMeta(days: number): { label: string; color: string } {
-  if (days < 0)   return { label: `${Math.abs(days)}d overdue`, color: "#dc2626" };
-  if (days === 0) return { label: "Due today",                  color: "#dc2626" };
-  if (days <= 7)  return { label: `Due in ${days}d`,            color: "#b45309" };
-  if (days <= 30) return { label: `Due in ${days}d`,            color: "#d97706" };
-  return { label: `Due in ${days}d`,                            color: "#2563eb" };
+  if (days < 0)   return { label: `${Math.abs(days)}d overdue`, color: "var(--bad, #dc2626)" };
+  if (days === 0) return { label: "Due today",                  color: "var(--bad, #dc2626)" };
+  if (days <= 7)  return { label: `Due in ${days}d`,            color: "var(--warn, #b45309)" };
+  if (days <= 30) return { label: `Due in ${days}d`,            color: "var(--warn, #d97706)" };
+  return { label: `Due in ${days}d`,                            color: "var(--info, #2563eb)" };
 }
 
 const REC_CONFIG: Record<string, { label: string; badge: string; color: string; bg: string }> = {
-  recommended:     { label: "Recommended",      badge: "👍", color: "#16a34a", bg: "#f0fdf4" },
-  not_recommended: { label: "Not Recommended",  badge: "👎", color: "#dc2626", bg: "#fef2f2" },
-  pending:         { label: "Awaiting Manager", badge: "⏳", color: "#b45309", bg: "#fffbe6" },
+  recommended:     { label: "Recommended",      badge: "👍", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
+  not_recommended: { label: "Not Recommended",  badge: "👎", color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)" },
+  pending:         { label: "Awaiting Manager", badge: "⏳", color: "var(--warn, #b45309)", bg: "var(--warnbg, #fffbe6)" },
 };
 
 function ProbationCard({ row }: { row: ConfirmationRow }) {
@@ -83,7 +83,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       className="card"
       style={{
         marginBottom: 0,
-        borderInlineStart: `4px solid ${days == null ? "var(--line, #e2e8f0)" : days < 0 ? "#dc2626" : days <= 14 ? "#f59e0b" : "var(--line, #e2e8f0)"}`,
+        borderInlineStart: `4px solid ${days == null ? "var(--line, #e2e8f0)" : days < 0 ? "var(--bad, #dc2626)" : days <= 14 ? "#f59e0b" : "var(--line, #e2e8f0)"}`,
       }}
       aria-label={`Probation confirmation for ${row.employee}`}
     >
@@ -92,7 +92,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
         <div
           aria-hidden
           style={{
-            width: 40, height: 40, borderRadius: "50%", background: "#eff6ff",
+            width: 40, height: 40, borderRadius: "50%", background: "var(--infobg, #eff6ff)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 18, flexShrink: 0,
           }}
@@ -112,8 +112,8 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
           <span
             style={{
               padding: "3px 12px", borderRadius: 20, fontSize: "0.75rem", fontWeight: 600,
-              background: action === "confirmed" ? "#f0fdf4" : "#fffbe6",
-              color:      action === "confirmed" ? "#16a34a" : "#b45309",
+              background: action === "confirmed" ? "var(--goodbg, #f0fdf4)" : "#fffbe6",
+              color:      action === "confirmed" ? "var(--good, #16a34a)" : "#b45309",
             }}
           >
             {action === "confirmed" ? "✅ Confirmed" : "🔄 Extended"}

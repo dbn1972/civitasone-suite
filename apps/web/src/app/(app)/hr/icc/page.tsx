@@ -123,10 +123,10 @@ export default async function IccPage() {
       )}
 
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="#e6f0ff" label={t("statTotalComplaintsLabel")} value={errored ? null : items.length} />
-        <StatCard icon="🔔" iconBg="#fffbe6" label={t("statFiledLabel")} value={errored ? null : filed} />
-        <StatCard icon="🔍" iconBg="#fff1f0" label={t("statUnderInquiryLabel")} value={errored ? null : inquiry} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label={t("statDisposedLabel")} value={errored ? null : closed} />
+        <StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalComplaintsLabel")} value={errored ? null : items.length} />
+        <StatCard icon="🔔" iconBg="var(--warnbg, #fffbe6)" label={t("statFiledLabel")} value={errored ? null : filed} />
+        <StatCard icon="🔍" iconBg="var(--badbg, #fff1f0)" label={t("statUnderInquiryLabel")} value={errored ? null : inquiry} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedLabel")} value={errored ? null : closed} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (

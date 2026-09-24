@@ -105,7 +105,7 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                   </span>
                 ) : (
                   colTasks.map((task) => {
-                    const dot = STATUS_DOT[task.status] ?? { color: "#94a3b8", label: "Pending" };
+                    const dot = STATUS_DOT[task.status] ?? { color: "var(--mut, #94a3b8)", label: "Pending" };
                     return (
                       <div
                         key={task.id}

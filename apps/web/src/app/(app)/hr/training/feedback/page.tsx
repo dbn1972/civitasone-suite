@@ -53,10 +53,10 @@ export default async function TrainingFeedbackPage() {
       <PageHeader title="Training Feedback" subtitle="Post-training feedback and program ratings." back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="#e6f0ff" label="Total" value={items.length} />
-        <StatCard icon="📚" iconBg="#e6f7f0" label="Programs" value={new Set(items.map((i) => i.program)).size} />
-        <StatCard icon="👥" iconBg="#fffbe6" label="Employees" value={new Set(items.map((i) => i.employee)).size} />
-        <StatCard icon="⭐" iconBg="#f5f5f5" label="Avg Rating" value={items.length > 0 ? (items.reduce((s, i) => s + i.rating, 0) / items.length).toFixed(1) : "—"} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label="Total" value={items.length} />
+        <StatCard icon="📚" iconBg="var(--goodbg, #e6f7f0)" label="Programs" value={new Set(items.map((i) => i.program)).size} />
+        <StatCard icon="👥" iconBg="var(--warnbg, #fffbe6)" label="Employees" value={new Set(items.map((i) => i.employee)).size} />
+        <StatCard icon="⭐" iconBg="var(--bg, #f5f5f5)" label="Avg Rating" value={items.length > 0 ? (items.reduce((s, i) => s + i.rating, 0) / items.length).toFixed(1) : "—"} />
       </StatGrid>
       <Card title="Training Feedback">
         {source === "error" ? (

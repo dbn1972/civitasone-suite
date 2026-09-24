@@ -96,10 +96,10 @@ export default async function OnboardingPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="👋" iconBg="#e6f0ff" label="Total Onboarding" value={items.length} />
-        <StatCard icon="🔄" iconBg="#fffbe6" label="In Progress" value={inProgress} />
-        <StatCard icon="✅" iconBg="#e6f7f0" label="Completed" value={completed} />
-        <StatCard icon="⚠️" iconBg="#fff1f0" label="Overdue Tasks" value={overdue} />
+        <StatCard icon="👋" iconBg="var(--infobg, #e6f0ff)" label="Total Onboarding" value={items.length} />
+        <StatCard icon="🔄" iconBg="var(--warnbg, #fffbe6)" label="In Progress" value={inProgress} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Completed" value={completed} />
+        <StatCard icon="⚠️" iconBg="var(--badbg, #fff1f0)" label="Overdue Tasks" value={overdue} />
       </StatGrid>
 
       {/* ── Joinee card grid (manager view) ─────────────────────────────────── */}

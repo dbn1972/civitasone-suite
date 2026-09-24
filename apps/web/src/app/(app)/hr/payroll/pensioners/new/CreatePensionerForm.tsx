@@ -119,7 +119,7 @@ export function CreatePensionerForm() {
       <form onSubmit={handleSubmit} className="pad" style={{ display: "grid", gap: 16 }}>
         <div>
           <label htmlFor={ppoFieldId} style={labelStyle}>
-            {t("ppoNoLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("ppoNoLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
           </label>
           <input
             id={ppoFieldId}
@@ -134,7 +134,7 @@ export function CreatePensionerForm() {
 
         <div>
           <label htmlFor={nameFieldId} style={labelStyle}>
-            {t("fullNameLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("fullNameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
           </label>
           <input
             id={nameFieldId}
@@ -149,7 +149,7 @@ export function CreatePensionerForm() {
 
         <div>
           <label htmlFor={dobFieldId} style={labelStyle}>
-            {t("dobLabel")} <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+            {t("dobLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
           </label>
           <input
             id={dobFieldId}

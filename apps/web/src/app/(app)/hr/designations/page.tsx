@@ -68,10 +68,10 @@ export default async function DesignationsPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🏅" iconBg="#e6f0ff" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="💰" iconBg="#e6f7f0" label={t("statWithPayGradeLabel")}     value={withPayGrade ?? "—"} />
-        <StatCard icon="—" iconBg="#fff7e6" label={t("statWithoutPayGradeLabel")}  value={withoutPayGrade ?? "—"} />
-        <StatCard icon="🎚️" iconBg="#f5f5f5" label={t("statUniqueLevelsLabel")}      value={uniqueLevels ?? "—"} />
+        <StatCard icon="🏅" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
+        <StatCard icon="💰" iconBg="var(--goodbg, #e6f7f0)" label={t("statWithPayGradeLabel")}     value={withPayGrade ?? "—"} />
+        <StatCard icon="—" iconBg="var(--warnbg, #fff7e6)" label={t("statWithoutPayGradeLabel")}  value={withoutPayGrade ?? "—"} />
+        <StatCard icon="🎚️" iconBg="var(--bg, #f5f5f5)" label={t("statUniqueLevelsLabel")}      value={uniqueLevels ?? "—"} />
       </StatGrid>
 
       <Card title={errored ? t("title") : t("cardTitleWithCount", { count: items.length })}>

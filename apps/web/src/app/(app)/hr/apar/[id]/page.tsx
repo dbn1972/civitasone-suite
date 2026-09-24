@@ -150,10 +150,10 @@ export default async function AparDetailPage({
       />
       <DataSourceBadge source={result.source} />
       <StatGrid>
-        <StatCard icon="\U0001f4cb" iconBg="#e6f0ff" label={t("statTotalCriteria")} value={scores.length} />
-        <StatCard icon="✅"       iconBg="#e6f7f0" label={t("statScored")}         value={scoredCount} />
-        <StatCard icon="\U0001f4ca" iconBg="#fff7e6" label={t("statAvgScore")}      value={avgScore} />
-        <StatCard icon="\U0001f4dc" iconBg="#f5f5f5" label={t("statStageChanges")}  value={history.length} />
+        <StatCard icon="\U0001f4cb" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCriteria")} value={scores.length} />
+        <StatCard icon="✅"       iconBg="var(--goodbg, #e6f7f0)" label={t("statScored")}         value={scoredCount} />
+        <StatCard icon="\U0001f4ca" iconBg="var(--warnbg, #fff7e6)" label={t("statAvgScore")}      value={avgScore} />
+        <StatCard icon="\U0001f4dc" iconBg="var(--bg, #f5f5f5)" label={t("statStageChanges")}  value={history.length} />
       </StatGrid>
 
       <Card title={t("appraisalDetailsTitle")}>

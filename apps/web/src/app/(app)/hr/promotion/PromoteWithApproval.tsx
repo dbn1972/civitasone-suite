@@ -177,7 +177,7 @@ export function PromoteWithApproval() {
 
           {error && (
             <div role="alert" aria-live="assertive">
-              <p className="pad" style={{ color: "#b91c1c", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {error}</p>
+              <p className="pad" style={{ color: "var(--bad, #b91c1c)", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {error}</p>
             </div>
           )}
 
@@ -276,12 +276,12 @@ export function PromoteWithApproval() {
           {step === 2 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               {submittedPromotionId && (
-                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#fffbeb", borderRadius: 8, border: "1px solid #fde68a" }}>
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--warnbg, #fffbeb)", borderRadius: 8, border: "1px solid var(--warnbd, #fde68a)" }}>
                   {t("resumeNotice")}
                 </div>
               )}
               {selectedEmployee && (
-                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+                <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--goodbg, #f0fdf4)", borderRadius: 8, border: "1px solid var(--goodbd, #bbf7d0)" }}>
                   <strong>{selectedEmployee.name}</strong>: {fromDesigName} → {designations.find((d) => d.id === toDesigId)?.name ?? toDesigId}
                   {effectiveDate && <> · {t("effectiveOn", { date: effectiveDate })}</>}
                 </div>

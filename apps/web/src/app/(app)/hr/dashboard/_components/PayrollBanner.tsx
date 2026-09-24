@@ -6,7 +6,7 @@ export function PayrollBanner({ daysLeft, monthName, headcount }: Props) {
   return (
     <div className="payroll-banner" role="alert" aria-label="Payroll deadline notice" data-testid="payroll-banner">
       <div className="pb-icon" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#d97706" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--warn, #d97706)" strokeWidth="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
       </div>
       <div className="pb-text">
         <div className="pb-label">Payroll Processing</div>
@@ -19,7 +19,7 @@ export function PayrollBanner({ daysLeft, monthName, headcount }: Props) {
         .pb-text { flex:1; }
         .pb-label { font-size:11px;font-weight:700;color:var(--warn, #92400e); }
         .pb-sub { font-size:11px;color:var(--ink,#0f172a);margin-top:1px; }
-        .pb-btn { background:#92400e;color:#fff;border-radius:5px;font-size:11px;font-weight:700;padding:5px 12px;text-decoration:none;white-space:nowrap;flex-shrink:0; }
+        .pb-btn { background:var(--warn, #92400e);color:var(--panel, #fff);border-radius:5px;font-size:11px;font-weight:700;padding:5px 12px;text-decoration:none;white-space:nowrap;flex-shrink:0; }
       `}</style>
     </div>
   );

@@ -215,7 +215,7 @@ export function ImportForm() {
     <form onSubmit={handleSubmit}>
       <div style={{ display: "grid", gap: 6, marginBottom: 12 }}>
         <label htmlFor="import-csv-file" style={{ fontSize: 13, fontWeight: 500, color: "var(--fg, #0f172a)" }}>
-          {t("fileLabel")} <span style={{ color: "#ef4444" }}>*</span>
+          {t("fileLabel")} <span style={{ color: "var(--bad, #ef4444)" }}>*</span>
         </label>
         <input
           ref={fileRef}
@@ -233,14 +233,14 @@ export function ImportForm() {
           {status === "uploading" ? t("importingProgress", { success: progress.success, total: progress.total }) : t("uploadBtn")}
         </Button>
         {status === "done" && (
-          <span style={{ fontSize: 13, color: progress.failed === 0 ? "#166534" : "#b91c1c" }}>
+          <span style={{ fontSize: 13, color: progress.failed === 0 ? "var(--good, #166534)" : "var(--bad, #b91c1c)" }}>
             {t("resultImported", { success: progress.success })}
             {progress.failed > 0 ? t("resultFailedSuffix", { failed: progress.failed }) : ""}
           </span>
         )}
       </div>
       {errors.length > 0 && (
-        <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 8, background: "#fef2f2", border: "1px solid #fecaca", fontSize: 12.5, color: "#b91c1c", maxHeight: 200, overflow: "auto" }}>
+        <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 8, background: "var(--badbg, #fef2f2)", border: "1px solid var(--badbd, #fecaca)", fontSize: 12.5, color: "var(--bad, #b91c1c)", maxHeight: 200, overflow: "auto" }}>
           {errors.map((e, i) => <div key={i}>{e}</div>)}
         </div>
       )}

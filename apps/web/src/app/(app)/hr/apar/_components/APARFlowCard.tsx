@@ -72,10 +72,10 @@ function deadlineMeta(
 ): { text: string; color: string } | null {
   if (!dl) return null;
   const days = Math.ceil((new Date(dl).getTime() - Date.now()) / 86_400_000);
-  if (days < 0)  return { text: t("overdueDays", { days: Math.abs(days) }), color: "#dc2626" };
-  if (days === 0) return { text: t("dueToday"),                            color: "#dc2626" };
-  if (days <= 7)  return { text: t("daysLeft", { days }),                  color: "#b45309" };
-  return { text: t("daysLeft", { days }),                                  color: "#2563eb" };
+  if (days < 0)  return { text: t("overdueDays", { days: Math.abs(days) }), color: "var(--bad, #dc2626)" };
+  if (days === 0) return { text: t("dueToday"),                            color: "var(--bad, #dc2626)" };
+  if (days <= 7)  return { text: t("daysLeft", { days }),                  color: "var(--warn, #b45309)" };
+  return { text: t("daysLeft", { days }),                                  color: "var(--info, #2563eb)" };
 }
 
 function APARCard({ record }: { record: AparRecord }) {
@@ -105,7 +105,7 @@ function APARCard({ record }: { record: AparRecord }) {
             <span
               style={{
                 padding: "2px 10px", borderRadius: 12,
-                background: "#e6f0ff", color: "#1d4ed8",
+                background: "var(--infobg, #e6f0ff)", color: "var(--info, #1d4ed8)",
                 fontSize: "0.75rem", fontWeight: 700,
               }}
             >
@@ -161,31 +161,31 @@ function APARCard({ record }: { record: AparRecord }) {
                 style={{
                   width: 34, height: 34, borderRadius: "50%",
                   background: isDisp
-                    ? "#fef2f2"
+                    ? "var(--badbg, #fef2f2)"
                     : isDone
-                    ? "#f0fdf4"
+                    ? "var(--goodbg, #f0fdf4)"
                     : isActive
                     ? "var(--primary, #2563eb)"
                     : "var(--bg2, #f1f5f9)",
                   border: `2px solid ${
                     isDisp
-                      ? "#dc2626"
+                      ? "var(--bad, #dc2626)"
                       : isDone
-                      ? "#16a34a"
+                      ? "var(--good, #16a34a)"
                       : isActive
                       ? "var(--primary, #2563eb)"
                       : "var(--line, #e2e8f0)"
                   }`,
                   color: isDisp
-                    ? "#dc2626"
+                    ? "var(--bad, #dc2626)"
                     : isDone
-                    ? "#16a34a"
+                    ? "var(--good, #16a34a)"
                     : isActive
-                    ? "#fff"
+                    ? "var(--panel, #fff)"
                     : "var(--mut)",
                   display: "flex", alignItems: "center", justifyContent: "center",
                   fontSize: 15,
-                  boxShadow: isActive ? "0 0 0 4px #dbeafe" : "none",
+                  boxShadow: isActive ? "0 0 0 4px var(--infobg, #dbeafe)" : "none",
                   transition: "all 0.2s",
                 }}
                 aria-label={t("stageBubbleAriaLabel", { stage: t(stage.labelKey), state: stageState })}
@@ -200,7 +200,7 @@ function APARCard({ record }: { record: AparRecord }) {
                   color: isActive
                     ? "var(--primary, #1d4ed8)"
                     : isDone
-                    ? "#16a34a"
+                    ? "var(--good, #16a34a)"
                     : "var(--mut)",
                   fontWeight: isActive ? 600 : 400,
                   maxWidth: 66,
@@ -224,7 +224,7 @@ function APARCard({ record }: { record: AparRecord }) {
       >
         <span>
           {t("stagePrefix")}&nbsp;
-          <strong style={{ color: isDisputed ? "#dc2626" : "var(--ink)" }}>
+          <strong style={{ color: isDisputed ? "var(--bad, #dc2626)" : "var(--ink)" }}>
             {isDisputed
               ? t("statusDisputed")
               : isClosed

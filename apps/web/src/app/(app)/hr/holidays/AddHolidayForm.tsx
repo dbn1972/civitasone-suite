@@ -9,8 +9,8 @@ const inputStyle: React.CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
   borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
 };
-const inputErrStyle: React.CSSProperties = { ...inputStyle, border: "1px solid #ef4444" };
-const fieldErrStyle: React.CSSProperties = { color: "#b91c1c", fontSize: 12, margin: "3px 0 0" };
+const inputErrStyle: React.CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
+const fieldErrStyle: React.CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
 type Fields = { name: string; date: string; type: string; applicableTo: string };
 const INITIAL: Fields = { name: "", date: "", type: "gazetted", applicableTo: "all" };
@@ -97,7 +97,7 @@ export function AddHolidayForm() {
 
           <div>
             <label htmlFor={ids.name} style={{ fontSize: 13, fontWeight: 500 }}>
-              Holiday Name <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+              Holiday Name <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
             </label>
             <input
               id={ids.name}
@@ -121,7 +121,7 @@ export function AddHolidayForm() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div>
               <label htmlFor={ids.date} style={{ fontSize: 13, fontWeight: 500 }}>
-                Date <span aria-hidden="true" style={{ color: "#ef4444" }}>*</span>
+                Date <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
               </label>
               <input
                 id={ids.date}
