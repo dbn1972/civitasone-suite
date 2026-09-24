@@ -4,6 +4,11 @@ import { queue } from "../src/shared/infra.js";
 import { registerF3_geo_attendance_Consumers } from "../src/modules/geo-attendance/f3-consumer.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
+import { db } from "../src/shared/db.js";
+import { hrmsEmployees } from "../src/modules/employee/schema.js";
 import { seedHrmsCoreFixtures, type HrmsLeaveTypeIds } from "./fixtures/core-seed.js";
 
 // Office-location creation and every geo punch are async F3 writes: the route
@@ -21,9 +26,12 @@ async function drainF3(): Promise<void> {
 let app: FastifyInstance;
 let leaveTypeIds: HrmsLeaveTypeIds;
 
-function mint(sub = "00000000-0000-0000-0000-000000000099", roles = ["super_admin","hr_admin","officer","employee"]) {
+const TENANT = "00000000-0000-0000-0000-000000000001";
+const DEFAULT_SUB = "00000000-0000-0000-0000-000000000099";
+
+function mint(sub = DEFAULT_SUB, roles = ["super_admin","hr_admin","officer","employee"]) {
   const S = process.env.JWT_SECRET ?? "civitasone-dev-secret";
-  const T = "00000000-0000-0000-0000-000000000001";
+  const T = TENANT;
   const n = Math.floor(Date.now() / 1000);
   const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const h = b64({ alg: "HS256", typ: "JWT" });
@@ -41,7 +49,20 @@ const DELHI_LAT = 28.6139; const DELHI_LNG = 77.2090;
 const AUTH = { authorization: `Bearer ${mint()}` };
 const CT = { "content-type": "application/json" };
 
-beforeAll(async () => { leaveTypeIds = await seedHrmsCoreFixtures(); app = await buildApp(); });
+beforeAll(async () => {
+  leaveTypeIds = await seedHrmsCoreFixtures();
+  app = await buildApp();
+  // SEC CRITICAL (IDOR fix, geo-check-in/out): geo-check-in/out now resolves
+  // the caller's OWN hrms_employees row (resolveEmployeeForActor, keyed on
+  // userRef = ctx.actorId) and requires body.employeeId to match it. Every
+  // existing test in sections B/C/D below authenticates as DEFAULT_SUB
+  // (mint()'s default) and acts on EMP1 — link them so those pre-existing
+  // (and still-valid) scenarios keep passing under the corrected, identity-
+  // checked behaviour instead of the pre-fix "any employeeId, no check" one.
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.update(hrmsEmployees).set({ userRef: DEFAULT_SUB }).where(eq(hrmsEmployees.id, EMP1));
+  }));
+});
 
 // ═══════════════════════════════════════════════════════════
 // A. OFFICE LOCATIONS & GEO-FENCING
@@ -96,10 +117,17 @@ describe("B. Geo-Fenced Attendance — Check-In", () => {
   });
 
   it("B2. Check-in OUTSIDE office geo-fence (1km away)", async () => {
+    // SEC (IDOR fix): was employeeId: EMP2 under the AUTH actor (linked to
+    // EMP1, not EMP2) — that only ever worked because geo-check-in used to
+    // accept ANY employeeId with no ownership check at all (the exact bug
+    // this suite's section H now regression-tests). This test's actual
+    // subject is the geofence distance/status math, not identity, so it's
+    // switched to EMP1 (self, under AUTH) rather than asserting on a
+    // now-rejected cross-employee request.
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/attendance/geo-check-in",
       headers: { ...AUTH, ...CT },
-      payload: { employeeId: EMP2, latitude: DELHI_LAT + 0.01, longitude: DELHI_LNG + 0.01, accuracyMeters: 15, selfieFileKey: "selfies/emp2-outside.jpg", officeLocationId: OFFICE_DELHI },
+      payload: { employeeId: EMP1, latitude: DELHI_LAT + 0.01, longitude: DELHI_LNG + 0.01, accuracyMeters: 15, selfieFileKey: "selfies/emp1-outside.jpg", officeLocationId: OFFICE_DELHI },
     });
     await drainF3();
     expect(r.statusCode).toBe(201);
@@ -311,5 +339,117 @@ describe("G. Full Employee Journey", () => {
   it("G4. Attendance summary available", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/hrms/attendance/summary", headers: AUTH });
     expect(r.statusCode).toBe(200);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════
+// H. SEC CRITICAL — SELF-ONLY ATTENDANCE IDENTITY ENFORCEMENT
+// Regression suite for the IDOR fix: geo-check-in/out used to take
+// `employeeId` from the request body with no check that it matched the
+// caller — ANY authenticated user (bare "employee" role included) could
+// clock in/out AS any other employee. Fixed by resolving the caller's own
+// hrms_employees row (resolveEmployeeForActor) and requiring body.employeeId
+// to match it, for every role — there is no "mark attendance on behalf of
+// someone else" workflow anywhere in this module. Also covers this bug's
+// tie-in to Bug 1's status-integrity theme: a terminated employee cannot be
+// clocked in at all.
+// ═══════════════════════════════════════════════════════════
+describe("H. Self-Only Attendance Identity Enforcement", () => {
+  const EMPLOYEE_ONLY_SUB = "00000000-0000-0000-0000-000000000097";
+  const UNLINKED_SUB = "00000000-0000-0000-0000-000000000096";
+  const employeeOnlyAuth = { authorization: `Bearer ${mint(EMPLOYEE_ONLY_SUB, ["employee"])}` };
+  const unlinkedAuth = { authorization: `Bearer ${mint(UNLINKED_SUB, ["employee"])}` };
+
+  beforeAll(async () => {
+    // Link a plain "employee"-role-only actor to EMP1, so H1/H2 exercise the
+    // narrowest role this bug allowed exploitation from — not the AUTH
+    // fixture's all-roles superuser identity used elsewhere in this file.
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.update(hrmsEmployees).set({ userRef: EMPLOYEE_ONLY_SUB }).where(eq(hrmsEmployees.id, EMP1));
+    }));
+  });
+
+  it("H1. An employee-role caller CAN still check in as themselves", async () => {
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/attendance/geo-check-in",
+      headers: { ...employeeOnlyAuth, ...CT },
+      payload: { employeeId: EMP1, latitude: DELHI_LAT, longitude: DELHI_LNG, officeLocationId: OFFICE_DELHI },
+    });
+    await drainF3();
+    expect(r.statusCode).toBe(201);
+  });
+
+  it("H2. An employee-role caller CANNOT check in as a different employee (403)", async () => {
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/attendance/geo-check-in",
+      headers: { ...employeeOnlyAuth, ...CT },
+      payload: { employeeId: EMP2, latitude: DELHI_LAT, longitude: DELHI_LNG, officeLocationId: OFFICE_DELHI },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("H3. An employee-role caller CANNOT check out as a different employee (403)", async () => {
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/attendance/geo-check-out",
+      headers: { ...employeeOnlyAuth, ...CT },
+      payload: { employeeId: EMP2, latitude: DELHI_LAT, longitude: DELHI_LNG },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("H4. An HR/admin-roled caller (not just plain 'employee') ALSO cannot check in as someone else — self-only applies to every role", async () => {
+    // Regression guard for the exact vulnerable pattern this bug described:
+    // the default AUTH fixture holds super_admin/hr_admin/officer/employee
+    // and is linked (beforeAll, top of file) to EMP1 — it must not be able
+    // to check in as EMP2 either, since no "mark attendance on behalf of"
+    // workflow exists in this module.
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/attendance/geo-check-in",
+      headers: { ...AUTH, ...CT },
+      payload: { employeeId: EMP2, latitude: DELHI_LAT, longitude: DELHI_LNG, officeLocationId: OFFICE_DELHI },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("H5. A caller with no linked employee record at all fails closed (403, not 500/201)", async () => {
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/attendance/geo-check-in",
+      headers: { ...unlinkedAuth, ...CT },
+      payload: { employeeId: EMP1, latitude: DELHI_LAT, longitude: DELHI_LNG, officeLocationId: OFFICE_DELHI },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("H6. A terminated employee cannot be clocked in (409) — ties back to Bug 1's status-integrity theme", async () => {
+    const terminatedEmpId = randomUUID();
+    // Must be a fresh id per run, NOT a fixed literal: resolveEmployeeForActor's
+    // primary lookup (actor-link.ts) has no LIMIT 1/ORDER BY, so if a fixed sub
+    // were reused across repeated test runs against a persistent dev DB (this
+    // suite has no row cleanup — matches the rest of this file's convention),
+    // more than one row could share that userRef and which one "wins" the
+    // lookup would be undefined — exactly the failure mode this test exists to
+    // catch, so the test itself must not be a source of it.
+    const terminatedActorSub = randomUUID();
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      // Reuse EMP1's department/designation via a raw copy of its org refs so
+      // this insert satisfies the NOT NULL FKs without needing its own fixture
+      // rows: read them, then insert a second employee with status
+      // "terminated" from the start.
+      const [emp1Row] = await tx.select({ departmentId: hrmsEmployees.departmentId, designationId: hrmsEmployees.designationId })
+        .from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP1)).limit(1);
+      await tx.insert(hrmsEmployees).values({
+        id: terminatedEmpId, tenantId: TENANT, employeeNo: `E-TERM-${terminatedEmpId.slice(0, 8)}`,
+        fullName: "Terminated Test Employee", departmentId: emp1Row!.departmentId, designationId: emp1Row!.designationId,
+        dateOfJoining: "2015-01-01", employeeType: "permanent", status: "terminated",
+        userRef: terminatedActorSub, createdBy: DEFAULT_SUB, updatedBy: DEFAULT_SUB,
+      });
+    }));
+    const terminatedAuth = { authorization: `Bearer ${mint(terminatedActorSub, ["employee"])}` };
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/attendance/geo-check-in",
+      headers: { ...terminatedAuth, ...CT },
+      payload: { employeeId: terminatedEmpId, latitude: DELHI_LAT, longitude: DELHI_LNG, officeLocationId: OFFICE_DELHI },
+    });
+    expect(r.statusCode).toBe(409);
   });
 });

@@ -67,6 +67,44 @@ export async function updateEmployee(tx: Writer, id: string, patch: Partial<Empl
 }
 
 /**
+ * Status-guarded employee write (SEC: hrms status-integrity fix — e.g.
+ * employeeConfirm). Mirrors updateEmployeeVersioned's WHERE-precondition
+ * pattern below, but keyed on `status` instead of `version`: the UPDATE's
+ * WHERE clause re-checks status = expectedStatus atomically WITH the write,
+ * so a concurrent status-changing writer (e.g. a separate/terminate command
+ * landing in the window between the caller's own precondition read and this
+ * write) can never be silently clobbered. hrms_employees has no automatic
+ * version bump on every write — only basicMinor writes opt into that via
+ * updateEmployeeVersioned below — so for a status transition, a plain
+ * read-then-blind-write is not actually race-safe on its own; this closes
+ * that gap by enforcing the precondition as part of the single UPDATE
+ * statement rather than as a separate round-trip.
+ *
+ * Returns false (does not throw) when the WHERE clause matched zero rows —
+ * either the row doesn't exist, or (assuming the caller already confirmed
+ * existence via a fresh read earlier in the same transaction) status no
+ * longer equals expectedStatus. Callers should treat false as a conflict.
+ */
+export async function updateEmployeeIfStatus(
+  tx: Writer,
+  id: string,
+  tenantId: string,
+  expectedStatus: string,
+  patch: Partial<EmployeeInsert>,
+): Promise<boolean> {
+  const res = await tx.update(hrmsEmployees)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(and(
+      eq(hrmsEmployees.id, id),
+      eq(hrmsEmployees.tenantId, tenantId),
+      eq(hrmsEmployees.status, expectedStatus),
+    ));
+  const rowCount = (res as { rowCount?: number; count?: number }).rowCount
+    ?? (res as { count?: number }).count ?? 0;
+  return rowCount > 0;
+}
+
+/**
  * Read {basicMinor, version} fresh, inside the caller's own transaction,
  * immediately before deciding what to write. Used by every consumer that
  * may write hrms_employees.basicMinor (annual increment, promotion — direct

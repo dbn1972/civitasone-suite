@@ -13,6 +13,7 @@ const {
   insertEmployeeMock, updateEmployeeMock, findByIdMock,
   insertTransferMock, insertSeparationMock, insertPromotionMock,
   findVersionForUpdateMock, updateEmployeeVersionedMock,
+  updateEmployeeIfStatusMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -38,6 +39,11 @@ const {
     // employee fields" test below.
     findVersionForUpdateMock: vi.fn(async () => ({ version: 1, basicMinor: 5000000n })),
     updateEmployeeVersionedMock: vi.fn(async () => undefined as any),
+    // SEC (status-integrity fix): employeeConfirm now writes through this
+    // status-guarded path (employee/repo.ts updateEmployeeIfStatus) instead
+    // of the blind-overwrite updateEmployee. Defaults to "applied" (true);
+    // tests that exercise the lost-race conflict override this to false.
+    updateEmployeeIfStatusMock: vi.fn(async () => true as any),
   };
 });
 
@@ -66,6 +72,7 @@ vi.mock("../src/modules/employee/repo.js", () => ({
   findByIdTx: (...a: any[]) => findByIdMock(...a),
   findVersionForUpdate: (...a: any[]) => findVersionForUpdateMock(...a),
   updateEmployeeVersioned: (...a: any[]) => updateEmployeeVersionedMock(...a),
+  updateEmployeeIfStatus: (...a: any[]) => updateEmployeeIfStatusMock(...a),
 }));
 vi.mock("../src/modules/lifecycle/repo.js", () => ({
   insertTransfer: (...a: any[]) => insertTransferMock(...a),
@@ -156,18 +163,86 @@ describe("employeeCreate command", () => {
 });
 
 describe("employeeConfirm command", () => {
-  it("updates employee status to confirmed", async () => {
-    const q = await buildQueue();
+  // SEC CRITICAL regression suite (status-integrity fix): employeeConfirm
+  // used to write status: "confirmed" unconditionally, with no check on the
+  // employee's prior status — a terminated/separated/retired employee (or
+  // one already confirmed) could be silently "re-confirmed". These tests
+  // cover both the valid transition and every invalid one.
+
+  it("confirms a valid pending-confirmation (probation) employee normally", async () => {
     const empId = randomUUID();
+    findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status: "probation" });
+    const q = await buildQueue();
     await q.publish(COMMANDS.employeeConfirm, makeMsg(COMMANDS.employeeConfirm, {
       id: empId, tenantId: TENANT, confirmationDate: "2026-01-15",
     }));
     await settle();
-    expect(updateEmployeeMock).toHaveBeenCalledOnce();
-    const [, id, patch] = updateEmployeeMock.mock.calls[0]! as [unknown, string, Record<string, unknown>];
+    expect(updateEmployeeIfStatusMock).toHaveBeenCalledOnce();
+    const [, id, tenantId, expectedStatus, patch] = updateEmployeeIfStatusMock.mock.calls[0]! as
+      [unknown, string, string, string, Record<string, unknown>];
     expect(id).toBe(empId);
+    expect(tenantId).toBe(TENANT);
+    expect(expectedStatus).toBe("probation");
     expect(patch.status).toBe("confirmed");
     expect(patch.confirmationDate).toBe("2026-01-15");
+    // The old blind-overwrite path must no longer be used for this transition.
+    expect(updateEmployeeMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("rejects confirming a nonexistent employee (404, no write attempted)", async () => {
+    const empId = randomUUID();
+    findByIdMock.mockResolvedValue(null);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.employeeConfirm, makeMsg(COMMANDS.employeeConfirm, {
+      id: empId, tenantId: TENANT, confirmationDate: "2026-01-15",
+    }));
+    await settle();
+    expect(updateEmployeeIfStatusMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it.each(["terminated", "separated", "retired", "confirmed", "on_leave", "suspended", "deputation", "no_show"])(
+    "rejects confirming an employee whose status is '%s'",
+    async (status) => {
+      const empId = randomUUID();
+      findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status });
+      const q = await buildQueue();
+      await q.publish(COMMANDS.employeeConfirm, makeMsg(COMMANDS.employeeConfirm, {
+        id: empId, tenantId: TENANT, confirmationDate: "2026-01-15",
+      }));
+      await settle();
+      // The write must never be attempted for any non-"probation" status —
+      // this is the core of the fix: terminated/separated/retired employees
+      // (this bug's named CRITICAL cases) can never be silently reactivated,
+      // and neither can any other invalid transition (e.g. re-confirming an
+      // already-confirmed employee).
+      expect(updateEmployeeIfStatusMock).not.toHaveBeenCalled();
+      expect(updateEmployeeMock).not.toHaveBeenCalled();
+      await q.stop();
+    },
+  );
+
+  it("does not report success when the guarded write loses a status race", async () => {
+    // Defense-in-depth case: findByIdTx's precondition read observed
+    // "probation", but the atomic guarded UPDATE (updateEmployeeIfStatus)
+    // itself found 0 matching rows at write time — e.g. a concurrent
+    // separate/terminate committed in between. Must not be swallowed as a
+    // silent success.
+    const empId = randomUUID();
+    findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status: "probation" });
+    updateEmployeeIfStatusMock.mockResolvedValue(false);
+    const q = await buildQueue();
+    await q.publish(COMMANDS.employeeConfirm, makeMsg(COMMANDS.employeeConfirm, {
+      id: empId, tenantId: TENANT, confirmationDate: "2026-01-15",
+    }));
+    await settle();
+    // Not toHaveBeenCalledOnce(): a throw here is retried by MemoryQueue's
+    // bounded backoff (same reasoning as the analogous basicMinor-conflict
+    // test above), so multiple attempts land within the settle() window.
+    expect(updateEmployeeIfStatusMock.mock.calls.length).toBeGreaterThanOrEqual(1);
+    // No audit/success signal reached the outbox for this employee.
+    expect(enqueuedMessages.some((m) => m.payload && (m.payload as any).resourceId === empId)).toBe(false);
     await q.stop();
   });
 });
@@ -277,6 +352,7 @@ describe("employeeUpdate command", () => {
   it("updates non-pay fields via the plain blind-overwrite path", async () => {
     const q = await buildQueue();
     const empId = randomUUID();
+    findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status: "confirmed" });
     await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
       id: empId, tenantId: TENANT,
       mobile: "9876543210", email: "test@gov.in",
@@ -305,6 +381,7 @@ describe("employeeUpdate command", () => {
     // blind-overwrite updateEmployee.
     const q = await buildQueue();
     const empId = randomUUID();
+    findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status: "confirmed" });
     await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
       id: empId, tenantId: TENANT,
       mobile: "9876543210", email: "test@gov.in",
@@ -342,6 +419,7 @@ describe("employeeUpdate command", () => {
     );
     const q = await buildQueue();
     const empId = randomUUID();
+    findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status: "confirmed" });
     await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
       id: empId, tenantId: TENANT, basicMinor: "7000000",
     }));
@@ -357,4 +435,54 @@ describe("employeeUpdate command", () => {
     expect(q.dlq.some((d) => d.msg.payload && (d.msg.payload as any).id === empId)).toBe(true);
     await q.stop();
   });
+
+  // SEC CRITICAL regression suite (status-integrity fix): this generic
+  // profile-update path had NO status check at all — a terminated/
+  // separated/retired employee's mobile/email/bank-account/IFSC could still
+  // be edited by any HR-role actor. Now hard-blocked for every exited status.
+  it.each(["terminated", "separated", "retired"])(
+    "rejects updating any field for an employee whose status is '%s'",
+    async (status) => {
+      const q = await buildQueue();
+      const empId = randomUUID();
+      findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status });
+      await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
+        id: empId, tenantId: TENANT,
+        mobile: "9876543210", email: "test@gov.in",
+        bankAccountNo: "12345678901234", bankIfsc: "SBIN0001234",
+      }));
+      await settle();
+      expect(updateEmployeeMock).not.toHaveBeenCalled();
+      expect(findVersionForUpdateMock).not.toHaveBeenCalled();
+      expect(updateEmployeeVersionedMock).not.toHaveBeenCalled();
+      await q.stop();
+    },
+  );
+
+  it("rejects a nonexistent employee (404, no write attempted)", async () => {
+    const q = await buildQueue();
+    const empId = randomUUID();
+    findByIdMock.mockResolvedValue(null);
+    await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
+      id: empId, tenantId: TENANT, mobile: "9876543210",
+    }));
+    await settle();
+    expect(updateEmployeeMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it.each(["probation", "on_leave", "suspended", "deputation", "no_show"])(
+    "still allows updates for a non-exited employee with status '%s'",
+    async (status) => {
+      const q = await buildQueue();
+      const empId = randomUUID();
+      findByIdMock.mockResolvedValue({ id: empId, tenantId: TENANT, status });
+      await q.publish(COMMANDS.employeeUpdate, makeMsg(COMMANDS.employeeUpdate, {
+        id: empId, tenantId: TENANT, mobile: "9876543210",
+      }));
+      await settle();
+      expect(updateEmployeeMock).toHaveBeenCalledOnce();
+      await q.stop();
+    },
+  );
 });

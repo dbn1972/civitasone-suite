@@ -1,12 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsGeoAttendance, hrmsOfficeLocations } from "./schema.js";
 import { hrmsHolidays } from "../holidays/schema.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { isExitedStatus } from "../employee/status.js";
+import type { RequestContext } from "@civitasone/types";
 
 const ALL_ROLES = ["super_admin", "admin", "hr_admin", "hr_officer", "officer", "employee"];
 const HR_ROLES = ["super_admin", "admin", "hr_admin"];
@@ -29,6 +32,46 @@ const geoCheckInBody = z.object({
   deviceId: z.string().optional(),
   officeLocationId: z.string().uuid().optional(),
 });
+
+/**
+ * SEC CRITICAL (IDOR fix): geo-check-in/out used to take `employeeId` from
+ * the request BODY, under ALL_ROLES (which includes bare "employee"), with
+ * NO check that it matched the caller — any authenticated user could clock
+ * in/out as any other employee by simply naming a different id, and neither
+ * this route nor its F3 consumer (f3-consumer.ts) ever queried
+ * hrms_employees to notice. This is a GPS + selfie "I am physically here"
+ * punch, so "mark attendance on behalf of someone else" has no coherent
+ * meaning for this specific endpoint the way it might for a manual
+ * attendance-regularisation workflow elsewhere — and no such on-behalf-of
+ * workflow exists anywhere in this module (checked: the only other routes
+ * here are office-locations CRUD, geo-history and reportees, none of which
+ * write an attendance row for anyone other than the row's own subject).
+ * Default: self-only for EVERY role, including HR/admin/super_admin — HR
+ * staff punch in through this same endpoint for their own attendance like
+ * anyone else. A caller with no resolvable hrms_employees record at all
+ * (e.g. a pure system/admin account) fails closed, same convention as
+ * employee/routes.ts's resolveManagerScope.
+ *
+ * Also ties back to the Bug 1 status-integrity theme: a terminated/
+ * separated/retired employee shouldn't be clockable-in at all. Free to check
+ * here since resolveEmployeeForActor already returns the full row (status
+ * included) — no extra query.
+ */
+async function resolveSelfEmployeeOrThrow(
+  ctx: RequestContext, req: FastifyRequest, claimedEmployeeId: string,
+): Promise<{ id: string }> {
+  const self = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  if (!self) {
+    throw new HttpError(403, "NO_EMPLOYEE_RECORD", "no employee record is linked to this account; attendance cannot be recorded");
+  }
+  if (claimedEmployeeId !== self.id) {
+    throw new HttpError(403, "FORBIDDEN", "you may only record attendance for yourself");
+  }
+  if (isExitedStatus(self.status)) {
+    throw new HttpError(409, "EMPLOYEE_EXITED", `attendance cannot be recorded — employee status is '${self.status}'`);
+  }
+  return { id: self.id };
+}
 
 export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
   // ── Office Locations CRUD ──
@@ -53,6 +96,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = geoCheckInBody.parse(req.body);
+    await resolveSelfEmployeeOrThrow(ctx, req, body.employeeId);
     const today = new Date().toISOString().slice(0, 10);
 
     // 1. Check if today is a holiday
@@ -103,6 +147,7 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const body = geoCheckInBody.parse(req.body);
+    await resolveSelfEmployeeOrThrow(ctx, req, body.employeeId);
     const today = new Date().toISOString().slice(0, 10);
 
     let officeLoc: any = null;

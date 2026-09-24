@@ -13,6 +13,8 @@ import { transferBody, separateBody } from "../lifecycle/validators.js";
 import { promotionBody } from "../lifecycle/validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
+import { isExitedStatus } from "./status.js";
 
 const HR_ROLES    = ["hr_admin", "hr_officer", "super_admin"];
 const READER_ROLES = [...HR_ROLES, "manager"];
@@ -97,6 +99,24 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = confirmEmployeeBody.parse(req.body);
+    // SEC CRITICAL (status-integrity fix): synchronous pre-check, same
+    // rationale as the fitness-status/activate/reverse-no-show routes in
+    // agent1-gap-routes.ts — confirmEmployee only PUBLISHES a command
+    // (commands.ts) and answers 202 immediately; without this check here, an
+    // invalid confirmation (of a terminated/separated/retired/already-
+    // confirmed employee) would fail silently in the async consumer after
+    // the caller already got a "success" response. A fresh, uncached read
+    // (repo.findById, not the cached queries.getEmployee) so a very recent
+    // status change is never masked by a stale cache entry.
+    const emp = await repo.findById(id, ctx.tenantId);
+    if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    if (emp.status !== "probation") {
+      throw new HttpError(
+        409,
+        "INVALID_STATUS_TRANSITION",
+        `employee cannot be confirmed from status '${emp.status}' — only an employee in 'probation' status can be confirmed`,
+      );
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.confirmEmployee(ctx, id, body));
   });
 
@@ -170,6 +190,18 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateEmployeeBody.parse(req.body);
+    // SEC CRITICAL (status-integrity fix): this generic profile-update route
+    // had no status check at all — a terminated/separated/retired employee's
+    // mobile/email/bank-account/IFSC etc. could still be edited. Synchronous
+    // pre-check here (fresh, uncached read) so the caller gets an immediate,
+    // clear rejection instead of a silently dropped async write; the
+    // consumer (employee/consumer.ts) re-checks the same precondition as a
+    // race-safety net.
+    const emp = await repo.findById(id, ctx.tenantId);
+    if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    if (isExitedStatus(emp.status)) {
+      throw new HttpError(409, "EMPLOYEE_EXITED", `employee has status '${emp.status}' and can no longer be updated via this endpoint`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateEmployee(ctx, id, body));
   });
 
