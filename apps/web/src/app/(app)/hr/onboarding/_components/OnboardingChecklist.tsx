@@ -25,9 +25,9 @@ const STATUS_CONFIG: Record<
   { icon: string; color: string; bg: string; label: string }
 > = {
   completed:   { icon: "✓", color: "var(--good, #067647)",  bg: "var(--goodbg, #dcfce7)",  label: "Completed" },
-  in_progress: { icon: "⟳", color: "var(--primary, #4f46e5)", bg: "var(--infobg, #ede9fe)",  label: "In progress" },
+  in_progress: { icon: "⟳", color: "var(--indigo, #4f46e5)", bg: "var(--infobg, #ede9fe)",  label: "In progress" },
   overdue:     { icon: "!", color: "var(--warn, #b45309)",    bg: "var(--warnbg, #fef3c7)",  label: "Overdue" },
-  pending:     { icon: "○", color: "var(--mut)",              bg: "var(--bg2, #f1f5f9)",     label: "Pending" },
+  pending:     { icon: "○", color: "var(--mut)",              bg: "var(--line2, #f1f5f9)",     label: "Pending" },
 };
 
 export function OnboardingChecklist({ steps, onComplete }: OnboardingChecklistProps) {

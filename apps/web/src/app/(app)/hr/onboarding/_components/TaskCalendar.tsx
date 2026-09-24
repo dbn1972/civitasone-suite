@@ -39,7 +39,7 @@ const STATUS_DOT: Partial<Record<CalendarTask["status"], { color: string; label:
   completed:   { color: "var(--good, #067647)",    label: "Done" },
   pending:     { color: "var(--mut, #94a3b8)",        label: "Pending" },
   overdue:     { color: "var(--warn, #d97706)",       label: "Overdue" },
-  in_progress: { color: "var(--primary, #4f46e5)",    label: "In progress" },
+  in_progress: { color: "var(--indigo, #4f46e5)",    label: "In progress" },
 };
 
 export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {

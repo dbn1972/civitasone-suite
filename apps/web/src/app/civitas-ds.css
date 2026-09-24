@@ -309,6 +309,37 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 }
 
 
+
+/* ============================================================
+   DARK MODE — token overrides
+   .dark class toggled by DarkModeToggle on <html>
+   ============================================================ */
+.dark{
+  --bg:#0f1419; --panel:#1a2332; --ink:#e7e9ed; --ink2:#9da5b4; --mut:#8b95a5; --muted:#8b95a5;
+  --line:#2d3748; --line2:#1e2a3a;
+  --good:#34d399; --goodbg:#064e3b; --goodbd:#065f46;
+  --warn:#fbbf24; --warnbg:#451a03; --warnbd:#78350f;
+  --bad:#f87171; --badbg:#450a0a; --badbd:#7f1d1d;
+  --info:#60a5fa; --infobg:#172554; --infobd:#1e3a5f;
+  --primary:#60a5fa; --primary-d:#93c5fd; --primary-soft:rgba(96,165,250,.15);
+  --sh:0 1px 2px rgba(0,0,0,.3); --sh-md:0 1px 3px rgba(0,0,0,.4),0 8px 24px -12px rgba(0,0,0,.5);
+  --sh-lg:0 12px 32px -10px rgba(0,0,0,.6);
+  color-scheme:dark;
+}
+.dark body{background:var(--bg);color:var(--ink)}
+.dark .tb{background:rgba(26,35,50,.9);border-color:var(--line)}
+.dark .iconbtn{background:var(--panel);border-color:var(--line)}
+.dark .tb-search{background:var(--panel);border-color:var(--line)}
+.dark .tb-search input{color:var(--ink)}
+.dark .tbl tbody tr:hover{background:rgba(96,165,250,.06)}
+.dark .tbl th{background:var(--panel)}
+.dark .seg .on{background:var(--panel);color:var(--ink)}
+.dark .kb-col{background:var(--bg)}
+.dark .kb-card,.dark .mcard,.dark .mtile,.dark .org .node{background:var(--panel)}
+.dark .alert{background:var(--panel);border-color:var(--line)}
+.dark .cd-panel{background:var(--panel)}
+.dark .cd-field input,.dark .cd-field textarea{background:var(--bg);border-color:var(--line);color:var(--ink)}
+
 /* ============================================================
    ACCESSIBILITY FOUNDATIONS (WCAG 2.2 AA)
    ============================================================ */
