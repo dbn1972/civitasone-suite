@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
@@ -9,13 +10,19 @@ type PayGroupResponse = {
   data: { id: string; name: string; frequency: string; payDayOfMonth: number; timezone: string; status: string };
 };
 
-const FREQUENCIES = [
-  { value: "monthly", label: "Monthly" },
-  { value: "bi_weekly", label: "Bi-weekly" },
-  { value: "weekly", label: "Weekly" },
-] as const;
+// UX-017: keys are the stable backend frequency codes, never translated --
+// only used to look up which message key holds the display label. Same safe
+// pattern as salary-revisions/page.tsx's REVISION_TYPE_KEYS.
+const FREQUENCY_VALUES = ["monthly", "bi_weekly", "weekly"] as const;
 
 export function CreatePayGroupForm() {
+  const t = useTranslations("createPayGroupForm");
+  const FREQUENCIES = FREQUENCY_VALUES.map((value) => ({
+    value,
+    label: t(
+      value === "monthly" ? "frequencyMonthly" : value === "bi_weekly" ? "frequencyBiWeekly" : "frequencyWeekly",
+    ),
+  }));
   const router = useRouter();
   const [name, setName] = useState("");
   const [frequency, setFrequency] = useState<"monthly" | "bi_weekly" | "weekly">("monthly");
@@ -34,22 +41,26 @@ export function CreatePayGroupForm() {
   const errId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
   const dayRef = useRef<HTMLInputElement>(null);
-  const nameInvalid = tone === "bad" && message === "Pay group name is required.";
-  const dayInvalid = tone === "bad" && !!message && message.startsWith("Pay day");
+  const [invalidField, setInvalidField] = useState<"name" | "day" | null>(null);
+  const nameInvalid = tone === "bad" && invalidField === "name";
+  const dayInvalid = tone === "bad" && invalidField === "day";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
     const day = parseInt(payDayOfMonth, 10);
     if (!name.trim()) {
       setTone("bad");
-      setMessage("Pay group name is required.");
+      setInvalidField("name");
+      setMessage(t("nameRequiredError"));
       nameRef.current?.focus();
       return;
     }
     if (Number.isNaN(day) || day < 1 || day > 31) {
       setTone("bad");
-      setMessage("Pay day must be between 1 and 31.");
+      setInvalidField("day");
+      setMessage(t("dayRangeError"));
       dayRef.current?.focus();
       return;
     }
@@ -72,12 +83,13 @@ export function CreatePayGroupForm() {
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(`Pay group "${res.data.name}" created.`);
+      setInvalidField(null);
+      setMessage(t("createdMessage", { name: res.data.name }));
       setName("");
       setPayDayOfMonth("28");
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -85,12 +97,12 @@ export function CreatePayGroupForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Create Pay Group" padding>
+      <Card title={t("formTitle")} padding>
       <div style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Name <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("nameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={nameId}
@@ -105,7 +117,7 @@ export function CreatePayGroupForm() {
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={freqId} style={{ fontSize: 13, fontWeight: 600 }}>Frequency</label>
+            <label htmlFor={freqId} style={{ fontSize: 13, fontWeight: 600 }}>{t("frequencyLabel")}</label>
             <select
               id={freqId}
               value={frequency}
@@ -119,7 +131,7 @@ export function CreatePayGroupForm() {
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={dayId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Pay Day of Month <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("payDayLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={dayId}
@@ -136,7 +148,7 @@ export function CreatePayGroupForm() {
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={tzId} style={{ fontSize: 13, fontWeight: 600 }}>Timezone</label>
+            <label htmlFor={tzId} style={{ fontSize: 13, fontWeight: 600 }}>{t("timezoneLabel")}</label>
             <input
               id={tzId}
               value={timezone}
@@ -149,7 +161,7 @@ export function CreatePayGroupForm() {
 
         <div>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-            Create Pay Group
+            {t("createPayGroupBtn")}
           </Button>
         </div>
 
@@ -169,16 +181,16 @@ export function CreatePayGroupForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this pay group?"
-        confirmLabel="Create pay group"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Create pay group <strong>{name}</strong> ({FREQUENCIES.find((f) => f.value === frequency)?.label},
-            pay day {payDayOfMonth}).
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          name,
+          frequencyLabel: FREQUENCIES.find((f) => f.value === frequency)?.label ?? frequency,
+          payDay: payDayOfMonth,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void createPayGroup()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

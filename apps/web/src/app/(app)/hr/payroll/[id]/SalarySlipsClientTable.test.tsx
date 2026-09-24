@@ -1,6 +1,19 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { SalarySlipsClientTable } from "./SalarySlipsClientTable";
+
+// UX-017: SalarySlipsClientTable now reads its copy through next-intl
+// (useTranslations("salarySlipsClientTable")), so every render needs a real
+// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
+function renderTable(props: React.ComponentProps<typeof SalarySlipsClientTable>) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <SalarySlipsClientTable {...props} />
+    </NextIntlClientProvider>,
+  );
+}
 
 const SLIPS = [
   { id: "s1", employeeId: "E1", employeeName: "Asha Rao", gross: 80000, deductions: 12000, net: 68000, status: "generated" },
@@ -16,7 +29,7 @@ const SLIPS = [
 // the converted controls' behavior.
 describe("SalarySlipsClientTable", () => {
   it("opens the salary slip preview modal and closes it via the (icon-only) close button", () => {
-    render(<SalarySlipsClientTable slips={SLIPS} payPeriod="2026-09" />);
+    renderTable({ slips: SLIPS, payPeriod: "2026-09" });
     fireEvent.click(screen.getAllByRole("button", { name: "Preview Slip" })[0]);
     const dialog = screen.getByRole("dialog");
     // "Asha Rao" also appears in the table row behind the modal -- scope to
@@ -37,7 +50,7 @@ describe("SalarySlipsClientTable", () => {
       net: 45000,
       status: "generated",
     }));
-    render(<SalarySlipsClientTable slips={manySlips} payPeriod="2026-09" />);
+    renderTable({ slips: manySlips, payPeriod: "2026-09" });
 
     const nextBtn = screen.getByRole("button", { name: /Next/ });
     const prevBtn = screen.getByRole("button", { name: /Previous/ });

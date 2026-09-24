@@ -32,7 +32,7 @@ export default async function SalarySlipsPage() {
         back="/hr/payroll" backLabel="Back to Payroll"
         help="payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--panel)" label={t("statTotal")} value={totalSlips} />
         <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")} value={formatMoney(totalGross)} />

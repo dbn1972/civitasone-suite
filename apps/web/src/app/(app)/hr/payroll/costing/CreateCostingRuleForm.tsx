@@ -2,12 +2,14 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
 type RuleResponse = { data: { id: string; employeeGroup: string; costCenterId: string; splitPct: number } };
 
 export function CreateCostingRuleForm() {
+  const t = useTranslations("createCostingRuleForm");
   const router = useRouter();
   const [employeeGroup, setEmployeeGroup] = useState("");
   const [costCenterId, setCostCenterId] = useState("");
@@ -35,7 +37,7 @@ export function CreateCostingRuleForm() {
     setGroupInvalid(groupMissing);
     setCenterInvalid(centerMissing);
     if (groupMissing || centerMissing) {
-      setError("Employee group and cost center are required.");
+      setError(t("groupCenterRequiredError"));
       if (groupMissing) {
         groupRef.current?.focus();
       } else {
@@ -59,13 +61,13 @@ export function CreateCostingRuleForm() {
         }),
       });
       setConfirmOpen(false);
-      setMessage(`Costing rule saved for ${res.data.employeeGroup} (${res.data.splitPct}%).`);
+      setMessage(t("savedMessage", { group: res.data.employeeGroup, pct: res.data.splitPct }));
       setEmployeeGroup("");
       setCostCenterId("");
       setSplitPct("100");
       router.refresh();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -73,11 +75,11 @@ export function CreateCostingRuleForm() {
 
   return (
     <form onSubmit={openConfirm} style={{ marginBottom: 16 }}>
-      <Card title="Create Costing Rule" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={groupField} style={{ fontSize: 13, fontWeight: 600 }}>
-              Employee Group <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("employeeGroupLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={groupField}
@@ -93,7 +95,7 @@ export function CreateCostingRuleForm() {
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={centerField} style={{ fontSize: 13, fontWeight: 600 }}>
-              Cost Center ID (UUID) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("costCenterIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
             <input
               id={centerField}
@@ -107,13 +109,13 @@ export function CreateCostingRuleForm() {
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={splitField} style={{ fontSize: 13, fontWeight: 600 }}>Split %</label>
+            <label htmlFor={splitField} style={{ fontSize: 13, fontWeight: 600 }}>{t("splitPctLabel")}</label>
             <input id={splitField} type="number" min={0} max={100} value={splitPct} onChange={(e) => setSplitPct(e.target.value)} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
           </div>
         </div>
         <div style={{ marginTop: 14 }}>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-            Save Rule
+            {t("saveRuleBtn")}
           </Button>
         </div>
         {error && !confirmOpen && (
@@ -126,16 +128,16 @@ export function CreateCostingRuleForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Save this costing rule?"
-        confirmLabel="Save rule"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            Allocate <strong>{splitPct}%</strong> of payroll cost for employee group{" "}
-            <strong>{employeeGroup}</strong> to cost center <strong>{costCenterId}</strong>.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          pct: splitPct,
+          group: employeeGroup,
+          center: costCenterId,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void save()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

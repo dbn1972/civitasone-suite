@@ -42,7 +42,7 @@ export default async function PayrollPage() {
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
-        subtitle="Monthly salary processing and statutory run status."
+        subtitle={t("subtitle")}
         help="payroll"
       />
       {/* UX-002: the payroll-runs data-source badge now lives inside
@@ -53,9 +53,9 @@ export default async function PayrollPage() {
         structures.length === 0 ? (
           <Card>
             <p style={{ color: "var(--ink2)", fontSize: 14, padding: "12px 20px" }}>
-              No pay structures configured — create one first.{" "}
+              {t("noStructuresMessage")}{" "}
               <Link href="/hr/payroll/structures" style={{ color: "var(--primary-d)", textDecoration: "underline" }}>
-                Go to pay structures →
+                {t("goToStructuresLink")}
               </Link>
             </p>
           </Card>
@@ -64,12 +64,12 @@ export default async function PayrollPage() {
         )
       )}
       <StatGrid>
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Total Runs" value={totalRuns ?? "—"} />
-        <StatCard icon="👥" iconBg="var(--infobg)" label="Employees Paid" value={totalEmployeesPaid === null ? "—" : totalEmployeesPaid.toLocaleString("en-IN")} />
-        <StatCard icon="🏛" iconBg="var(--warnbg)" label="Total Gross" value={totalGross === null ? "—" : formatRupees(totalGross)} />
-        <StatCard icon="📄" iconBg="var(--panel)" label="Pending" value={pending ?? "—"} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalRuns")} value={totalRuns ?? "—"} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statEmployeesPaid")} value={totalEmployeesPaid === null ? "—" : totalEmployeesPaid.toLocaleString("en-IN")} />
+        <StatCard icon="🏛" iconBg="var(--warnbg)" label={t("statTotalGross")} value={totalGross === null ? "—" : formatRupees(totalGross)} />
+        <StatCard icon="📄" iconBg="var(--panel)" label={t("statPending")} value={pending ?? "—"} />
       </StatGrid>
-      <Card title="Payroll Runs">
+      <Card title={t("runsCardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "payroll runs" })} backHref="/hr" />

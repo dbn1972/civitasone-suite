@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import { useTranslations } from "next-intl";
 
 interface ComponentRow {
   id: string;
@@ -31,37 +32,48 @@ function getTaxability(code: string, isTaxable: boolean): Taxability {
   return isTaxable ? "Taxable" : "Exempt";
 }
 
-// Known GoI salary component formulas
-const COMPONENT_FORMULAS: Record<string, string> = {
-  BASIC: "As per 7th CPC Pay Matrix Level × Pay Band",
-  DA: "BASIC × DA% (revised quarterly by FinMin — currently 46%)",
-  HRA: "BASIC × HRA% (X=27%, Y=18%, Z=9% by city class)",
-  TA: "Fixed slab by pay level (₹1,350 – ₹7,200/mo) + DA on TA",
-  TRANSPORT: "Flat rate per pay level as per FinMin OM",
-  MEDICAL: "Flat ₹500/mo or CGHS reimbursement as applicable",
-  LTA: "Reimbursement of travel fare — 1 trip per 2 years (Block)",
-  LTC: "Reimbursement of travel fare — 1 trip per 4 years (Block)",
-  NPS: "BASIC + DA × 10% (Employee); 14% (Employer from 2019)",
-  GPF: "BASIC + DA × 6%–100% (as opted, min ₹500/mo)",
-  PF: "BASIC × 12% (Employee); 12% (Employer on wage ceil.)",
-  EPF: "Capped at ₹15,000 basic — Employer 12% to EPF+EPS",
-  GRATUITY: "BASIC+DA × 15/26 × completed years (max ₹20L)",
-  BONUS: "BASIC × Bonus% (as per Payment of Bonus Act, 8.33–20%)",
-  INCENTIVE: "Variable — based on performance appraisal or output",
+// Known GoI salary component formulas. Keys are stable component-code
+// prefixes, never translated -- only used to look up which message key
+// holds the display formula text (same safe pattern as
+// salary-revisions/page.tsx's REVISION_TYPE_KEYS).
+const COMPONENT_FORMULA_KEYS: Record<string, string> = {
+  BASIC: "formulaBasic",
+  DA: "formulaDa",
+  HRA: "formulaHra",
+  TA: "formulaTa",
+  TRANSPORT: "formulaTransport",
+  MEDICAL: "formulaMedical",
+  LTA: "formulaLta",
+  LTC: "formulaLtc",
+  NPS: "formulaNps",
+  GPF: "formulaGpf",
+  PF: "formulaPf",
+  EPF: "formulaEpf",
+  GRATUITY: "formulaGratuity",
+  BONUS: "formulaBonus",
+  INCENTIVE: "formulaIncentive",
 };
 
-function getFormula(code: string): string {
+function getFormulaKey(code: string): string | null {
   const upper = code.toUpperCase();
-  for (const [key, formula] of Object.entries(COMPONENT_FORMULAS)) {
-    if (upper.includes(key)) return formula;
+  for (const key of Object.keys(COMPONENT_FORMULA_KEYS)) {
+    if (upper.includes(key)) return COMPONENT_FORMULA_KEYS[key];
   }
-  return "Formula not configured — contact payroll admin";
+  return null;
 }
 
 const TAXABILITY_STYLE: Record<Taxability, { background: string; color: string; border: string }> = {
   Taxable: { background: "var(--badbg)", color: "var(--bad)", border: "1px solid var(--badbd)" },
   Exempt: { background: "var(--goodbg)", color: "var(--good)", border: "1px solid var(--goodbd)" },
   "Partially Exempt": { background: "var(--warnbg)", color: "var(--warn)", border: "1px solid var(--warnbd)" },
+};
+
+// UX-017: keys are the stable Taxability discriminant values, never
+// translated directly -- only used to look up the display label and style.
+const TAXABILITY_LABEL_KEYS: Record<Taxability, string> = {
+  Taxable: "taxabilityTaxable",
+  Exempt: "taxabilityExempt",
+  "Partially Exempt": "taxabilityPartiallyExempt",
 };
 
 const TYPE_BADGE: Record<string, { bg: string; fg: string }> = {
@@ -72,8 +84,20 @@ const TYPE_BADGE: Record<string, { bg: string; fg: string }> = {
   reimbursement: { bg: "var(--warnbg)", fg: "var(--warn)" },
 };
 
+// UX-017: keys are the stable backend componentType codes, never translated
+// -- only used to look up which message key holds the display label.
+const TYPE_LABEL_KEYS: Record<string, string> = {
+  earning: "typeEarning",
+  allowance: "typeAllowance",
+  deduction: "typeDeduction",
+  employer_contribution: "typeEmployerContribution",
+  reimbursement: "typeReimbursement",
+};
+
 function TypeBadge({ type }: { type: string }) {
+  const t = useTranslations("componentGrid");
   const style = TYPE_BADGE[type] ?? { bg: "var(--line2)", fg: "var(--mut)" };
+  const labelKey = TYPE_LABEL_KEYS[type];
   return (
     <span
       style={{
@@ -83,26 +107,29 @@ function TypeBadge({ type }: { type: string }) {
         fontWeight: 600,
         padding: "2px 8px",
         borderRadius: 20,
-        textTransform: "capitalize",
+        textTransform: labelKey ? "none" : "capitalize",
       }}
     >
-      {type || "other"}
+      {labelKey ? t(labelKey) : type || t("typeOther")}
     </span>
   );
 }
 
 function TaxabilityBadge({ taxability }: { taxability: Taxability }) {
+  const t = useTranslations("componentGrid");
   const s = TAXABILITY_STYLE[taxability];
   return (
     <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 20, ...s }}>
-      {taxability}
+      {t(TAXABILITY_LABEL_KEYS[taxability])}
     </span>
   );
 }
 
 function FormulaTooltip({ code }: { code: string }) {
+  const t = useTranslations("componentGrid");
   const [visible, setVisible] = useState(false);
-  const formula = getFormula(code);
+  const formulaKey = getFormulaKey(code);
+  const formula = formulaKey ? t(formulaKey) : t("formulaNotConfigured");
   return (
     <span style={{ position: "relative", display: "inline-block" }}>
       <button
@@ -111,7 +138,7 @@ function FormulaTooltip({ code }: { code: string }) {
         onMouseLeave={() => setVisible(false)}
         onFocus={() => setVisible(true)}
         onBlur={() => setVisible(false)}
-        aria-label={`Calculation formula for ${code}`}
+        aria-label={t("calcFormulaAriaLabel", { code })}
         style={{
           background: "var(--line2)",
           border: "none",
@@ -159,6 +186,7 @@ function FormulaTooltip({ code }: { code: string }) {
 }
 
 export function ComponentGrid({ components }: ComponentGridProps) {
+  const t = useTranslations("componentGrid");
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() => {
     const init: Record<string, boolean> = {};
     for (const c of components) init[c.id] = true;
@@ -183,9 +211,9 @@ export function ComponentGrid({ components }: ComponentGridProps) {
         }}
       >
         <div style={{ fontSize: 32, marginBottom: 12 }}>🧩</div>
-        <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>No components yet</p>
+        <p style={{ margin: 0, fontWeight: 600, fontSize: 15 }}>{t("emptyTitle")}</p>
         <p style={{ margin: "6px 0 0", fontSize: 13 }}>
-          Components are added when a salary structure is created with earnings and deductions.
+          {t("emptyMessage")}
         </p>
       </div>
     );
@@ -196,8 +224,8 @@ export function ComponentGrid({ components }: ComponentGridProps) {
       <div style={{ marginBottom: 14, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
         <input
           type="search"
-          aria-label="Filter salary components by code, name or type"
-          placeholder="Filter by code, name or type…"
+          aria-label={t("filterAriaLabel")}
+          placeholder={t("filterPlaceholder")}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           style={{
@@ -213,7 +241,7 @@ export function ComponentGrid({ components }: ComponentGridProps) {
           }}
         />
         <span style={{ fontSize: 12, color: "var(--mut)" }}>
-          {filtered.length}/{components.length} components
+          {t("countSummary", { filtered: filtered.length, total: components.length })}
         </span>
       </div>
 
@@ -222,22 +250,22 @@ export function ComponentGrid({ components }: ComponentGridProps) {
           <thead>
             <tr style={{ borderBottom: "2px solid var(--line)" }}>
               <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Code
+                {t("colCode")}
               </th>
               <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Component Name
+                {t("colComponentName")}
               </th>
               <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Type
+                {t("colType")}
               </th>
               <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Formula
+                {t("colFormula")}
               </th>
               <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Taxability
+                {t("colTaxability")}
               </th>
               <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                Active
+                {t("colActive")}
               </th>
             </tr>
           </thead>
@@ -285,7 +313,7 @@ export function ComponentGrid({ components }: ComponentGridProps) {
                       type="button"
                       role="switch"
                       aria-checked={isEnabled}
-                      aria-label={`${isEnabled ? "Disable" : "Enable"} ${c.name}`}
+                      aria-label={isEnabled ? t("disableComponentAriaLabel", { name: c.name }) : t("enableComponentAriaLabel", { name: c.name })}
                       onClick={() => setEnabled((prev) => ({ ...prev, [c.id]: !prev[c.id] }))}
                       style={{
                         display: "inline-flex",

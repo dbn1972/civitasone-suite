@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 
 interface PayGroupCardProps {
   id: string;
@@ -20,13 +21,16 @@ const FREQUENCY_ICON: Record<string, string> = {
   weekly: "🗓️",
 };
 
-const FREQUENCY_LABEL: Record<string, string> = {
-  monthly: "Monthly",
-  bi_weekly: "Bi-weekly",
-  weekly: "Weekly",
+// UX-017: keys are the stable backend frequency codes, never translated --
+// only used to look up which message key holds the display label.
+const FREQUENCY_LABEL_KEYS: Record<string, string> = {
+  monthly: "frequencyMonthly",
+  bi_weekly: "frequencyBiWeekly",
+  weekly: "frequencyWeekly",
 };
 
 function RevisionBadge({ date }: { date?: string }) {
+  const t = useTranslations("payGroupCard");
   if (!date) return null;
   const parsed = new Date(date);
   const now = new Date();
@@ -36,7 +40,7 @@ function RevisionBadge({ date }: { date?: string }) {
 
   return (
     <span
-      title={`Last revised: ${parsed.toLocaleDateString("en-IN")}`}
+      title={t("lastRevisedTitle", { date: parsed.toLocaleDateString("en-IN") })}
       style={{
         fontSize: 11,
         fontWeight: 600,
@@ -47,7 +51,7 @@ function RevisionBadge({ date }: { date?: string }) {
         border: `1px solid ${isRecent ? "var(--goodbd, #bbf7d0)" : "var(--warnbd, #fde68a)"}`,
       }}
     >
-      Rev. {parsed.toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+      {t("revisionBadgeText", { date: parsed.toLocaleDateString("en-IN", { month: "short", year: "numeric" }) })}
     </span>
   );
 }
@@ -62,9 +66,11 @@ export function PayGroupCard({
   associatedStructureName,
   lastRevisionDate,
 }: PayGroupCardProps) {
+  const t = useTranslations("payGroupCard");
   const isActive = status === "active";
   const freqIcon = FREQUENCY_ICON[frequency] ?? "📅";
-  const freqLabel = FREQUENCY_LABEL[frequency] ?? frequency;
+  const freqLabelKey = FREQUENCY_LABEL_KEYS[frequency];
+  const freqLabel = freqLabelKey ? t(freqLabelKey) : frequency;
 
   return (
     <div
@@ -110,7 +116,7 @@ export function PayGroupCard({
             padding: "10px 12px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>Employees</p>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>{t("employeesLabel")}</p>
           <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
             {employeeCount.toLocaleString("en-IN")}
           </p>
@@ -122,7 +128,7 @@ export function PayGroupCard({
             padding: "10px 12px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>Frequency</p>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>{t("frequencyLabel")}</p>
           <p style={{ margin: "4px 0 0", fontSize: 13, fontWeight: 600, color: "var(--ink)" }}>
             {freqIcon} {freqLabel}
           </p>
@@ -134,7 +140,7 @@ export function PayGroupCard({
             padding: "10px 12px",
           }}
         >
-          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>Pay Day</p>
+          <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>{t("payDayLabel")}</p>
           <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
             {payDayOfMonth}
             <sup style={{ fontSize: 11 }}>th</sup>
@@ -155,7 +161,7 @@ export function PayGroupCard({
               color: "var(--mut)",
             }}
           >
-            Structure: <strong style={{ color: "var(--ink)" }}>{associatedStructureName}</strong>
+            {t.rich("structureLabel", { name: associatedStructureName, strong: (chunks) => <strong style={{ color: "var(--ink)" }}>{chunks}</strong> })}
           </span>
         )}
         <span

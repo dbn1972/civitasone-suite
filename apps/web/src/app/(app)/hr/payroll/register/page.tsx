@@ -73,7 +73,7 @@ export default async function PayrollRegisterPage({
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <Card title={t("filterCardTitle")} padding>
         <form method="get" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
@@ -93,7 +93,7 @@ export default async function PayrollRegisterPage({
               id="reg-run-id"
               name="runId"
               defaultValue={runId ?? ""}
-              placeholder="Run UUID"
+              placeholder={t("runIdPlaceholder")}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
           </div>

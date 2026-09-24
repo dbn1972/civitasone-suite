@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { formatMoney } from "@/lib/formatters";
@@ -36,6 +37,7 @@ type ForceFileResult = {
  * or prefetched — that can trigger this; only this confirmed POST can.
  */
 export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }) {
+  const t = useTranslations("forceFileButton");
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -64,7 +66,7 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
         warning: body?.reconciliation?.warning,
         note: body?.note,
       });
-      toast.success(`✓ Form-24Q for FY ${fy} ${quarter} filed with reconciliation override`);
+      toast.success(t("filedToast", { fy, quarter }));
       setOpen(false);
     } catch {
       setError(formError.fromException("save").message);
@@ -83,7 +85,7 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
           setOpen(true);
         }}
       >
-        File anyway — bypass reconciliation (force)
+        {t("fileAnywayBtn")}
       </Button>
 
       {/* Honest, response-driven feedback — this is a synchronous filing (the
@@ -92,32 +94,28 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
           this quarter, so we say so rather than implying it's now "fixed". */}
       {result && (
         <p role="status" aria-live="polite" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
-          Filed with override: {result.deducteeCount} deductee{result.deducteeCount === 1 ? "" : "s"},{" "}
-          {formatMoney(Math.round(result.totalTdsDeducted * 100))} TDS deducted.{" "}
-          {result.warning ?? "Recorded as a flagged/forced return."} This does not fix the underlying
-          discrepancy — viewing or downloading this quarter again will still be blocked until challans are
-          reconciled in TRACES.
+          {t("filedWithOverrideText", {
+            count: result.deducteeCount,
+            amount: formatMoney(Math.round(result.totalTdsDeducted * 100)),
+            note: result.warning ?? t("recordedAsFlaggedFallback"),
+          })}
         </p>
       )}
 
       <ConfirmDialog
         open={open}
-        title="File Form-24Q despite unreconciled TDS?"
-        confirmLabel="File with confirmed override"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         danger
         requireReason
-        reasonLabel="Reason for overriding the reconciliation gate (required)"
+        reasonLabel={t("reasonLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            TDS deducted for FY <strong>{fy}</strong> {quarter} does not match deposited challans (or no
-            challans have been ingested yet). Filing anyway records a{" "}
-            <strong>force_file_24q</strong> audit event with your identity, the per-period variance, and the
-            reason you give below. This does not fix the underlying discrepancy — reconcile challans in TRACES
-            before the statutory due date.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          fy,
+          quarter,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={confirm}
         onCancel={() => !busy && setOpen(false)}
       />

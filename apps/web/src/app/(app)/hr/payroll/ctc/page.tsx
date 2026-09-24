@@ -26,15 +26,14 @@ async function getData(): Promise<LoaderResult<ConfigRow[]>> {
   });
 }
 
-const CALC_TYPE_LABEL: Record<string, string> = {
-  pct_of_basic: "% of Basic",
-  pct_of_ctc: "% of CTC",
-  fixed: "Fixed",
-  formula: "Formula",
-};
-
 export default async function CtcConfigPage() {
   const t = await getTranslations("payrollCtc");
+  const CALC_TYPE_LABEL: Record<string, string> = {
+    pct_of_basic: t("calcTypePctOfBasic"),
+    pct_of_ctc: t("calcTypePctOfCtc"),
+    fixed: t("calcTypeFixed"),
+    formula: t("calcTypeFormula"),
+  };
   const { data: config, source } = await getData();
   const errored = source === "error";
 
@@ -52,7 +51,7 @@ export default async function CtcConfigPage() {
       ...c,
       calcTypeLabel: CALC_TYPE_LABEL[c.calc_type] ?? c.calc_type,
       valueDisplay,
-      employerCostLabel: c.is_employer_cost ? "Yes" : "No",
+      employerCostLabel: c.is_employer_cost ? t("yes") : t("no"),
     };
   });
 
@@ -77,7 +76,7 @@ export default async function CtcConfigPage() {
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
         <StatCard icon="⚙️" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : config.length} />
         <StatCard icon="🏛️" iconBg="var(--warnbg)" label={t("statEmployerCost")} value={errored ? null : employerComponents} />

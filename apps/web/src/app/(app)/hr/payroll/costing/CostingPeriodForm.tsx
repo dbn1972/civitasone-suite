@@ -2,9 +2,11 @@
 
 import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "../../../../_components/ds";
 
 export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) {
+  const t = useTranslations("costingPeriodForm");
   const router = useRouter();
   const [period, setPeriod] = useState(initialPeriod);
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +15,7 @@ export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!/^\d{4}-\d{2}$/.test(period.trim())) {
-      setError("Enter a period in YYYY-MM format.");
+      setError(t("periodFormatError"));
       return;
     }
     setError(null);
@@ -24,7 +26,7 @@ export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) 
     <form onSubmit={handleSubmit} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 14 }}>
       <div style={{ display: "grid", gap: 6 }}>
         <label htmlFor={fieldId} style={{ fontSize: 13, fontWeight: 600 }}>
-          Period (YYYY-MM) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+          {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
         </label>
         <input
           id={fieldId}
@@ -38,7 +40,7 @@ export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) 
         />
       </div>
       <Button type="submit" style={{ minHeight: 44 }}>
-        View Report
+        {t("viewReportBtn")}
       </Button>
       {error && (
         <p id={`${fieldId}-err`} role="alert" className="pill bad" style={{ width: "fit-content" }}>

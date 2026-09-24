@@ -1,5 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 import { MonthOverMonthCards } from "./MonthOverMonthCards";
 
@@ -9,6 +11,17 @@ const BASE_PROPS = {
   currentPeriod: "September 2026",
   previousPeriod: "August 2026",
 };
+
+// UX-017: MonthOverMonthCards now reads its copy through next-intl
+// (useTranslations("monthOverMonthCards")), so every render needs a real
+// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
+function renderCards(props: React.ComponentProps<typeof MonthOverMonthCards>) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <MonthOverMonthCards {...props} />
+    </NextIntlClientProvider>,
+  );
+}
 
 /**
  * Regression coverage for the MEDIUM fix: `previousGross` used to be typed
@@ -20,14 +33,14 @@ const BASE_PROPS = {
  */
 describe("MonthOverMonthCards", () => {
   it("shows a real previous-gross figure and a MoM delta when the prior run is known", () => {
-    const { container } = render(<MonthOverMonthCards {...BASE_PROPS} previousGross={500000} />);
+    const { container } = renderCards({ ...BASE_PROPS, previousGross: 500000 });
 
     expect(screen.getByText("₹5,00,000.00")).toBeInTheDocument();
     expect(container.textContent).toContain("↑ 20.0% vs August 2026");
   });
 
   it('shows "—" and no delta when the prior-run fetch failed (previousGross: null)', () => {
-    const { container } = render(<MonthOverMonthCards {...BASE_PROPS} previousGross={null} />);
+    const { container } = renderCards({ ...BASE_PROPS, previousGross: null });
 
     // formatRupees(null) -> "—", never a fabricated ₹0.00 standing in for
     // "we don't know".
@@ -40,7 +53,7 @@ describe("MonthOverMonthCards", () => {
   });
 
   it("shows a real ₹0.00 (not a dash) when there genuinely was no prior run, and still shows no delta", () => {
-    const { container } = render(<MonthOverMonthCards {...BASE_PROPS} previousGross={0} />);
+    const { container } = renderCards({ ...BASE_PROPS, previousGross: 0 });
 
     expect(screen.getByText("₹0.00")).toBeInTheDocument();
     // Dividing by a real zero base is still meaningless -- no delta line,

@@ -52,7 +52,7 @@ export default async function FlexBenefitsPage() {
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
         <StatCard icon="🧩" iconBg="var(--infobg)" label={t("statMyElections")} value={errored ? null : elections.length} />
         <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalElected")} value={errored ? null : formatMoney(totalElectedMinor)} />

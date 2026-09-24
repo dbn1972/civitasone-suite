@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -33,7 +35,11 @@ describe("PayrollRunActions — UX-016 clerk-safe errors", () => {
 
   it("shows a clerk-safe message, never the raw server text or status, when approve fails", async () => {
     fetchMock.mockResolvedValue(new Response("payroll-service: approve trace at line 90", { status: 500 }));
-    render(<PayrollRunActions {...PROPS} />);
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PayrollRunActions {...PROPS} />
+      </NextIntlClientProvider>,
+    );
 
     fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
     const dialog = await screen.findByRole("alertdialog");

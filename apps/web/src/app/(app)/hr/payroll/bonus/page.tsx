@@ -50,7 +50,7 @@ export default async function BonusPage() {
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
         <StatCard icon="🎁" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApproved")} value={errored ? null : items.filter((r) => r.status === "approved" || r.status === "paid").length} />

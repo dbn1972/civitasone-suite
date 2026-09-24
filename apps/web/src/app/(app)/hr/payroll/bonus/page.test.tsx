@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -25,7 +27,7 @@ describe("BonusPage", () => {
     });
 
     const ui = await BonusPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("e1")).toBeInTheDocument();
     expect(screen.getByText("2025-26")).toBeInTheDocument();
@@ -35,7 +37,7 @@ describe("BonusPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
     const ui = await BonusPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("No bonus records yet")).toBeInTheDocument();
   });
@@ -44,7 +46,7 @@ describe("BonusPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
     const ui = await BonusPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });

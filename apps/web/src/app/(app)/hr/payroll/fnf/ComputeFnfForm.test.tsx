@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -7,6 +9,17 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ComputeFnfForm } from "./ComputeFnfForm";
+
+// UX-017: ComputeFnfForm now reads its copy through next-intl
+// (useTranslations("computeFnfForm")), so every render needs a real
+// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <ComputeFnfForm />
+    </NextIntlClientProvider>,
+  );
+}
 
 function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/Employee ID \(UUID\)/), { target: { value: "11111111-1111-1111-1111-111111111111" } });
@@ -27,7 +40,7 @@ describe("ComputeFnfForm", () => {
   });
 
   it("requires the mandatory fields before opening the confirm dialog", () => {
-    render(<ComputeFnfForm />);
+    renderForm();
     fireEvent.click(screen.getByText("Compute Settlement"));
     expect(screen.getByText(/are all required/)).toBeInTheDocument();
   });
@@ -37,7 +50,7 @@ describe("ComputeFnfForm", () => {
       new Response(JSON.stringify({ data: { message: "fnf compute queued", employeeId: "e1" } }), { status: 202 }),
     );
 
-    render(<ComputeFnfForm />);
+    renderForm();
     fillRequiredFields();
     fireEvent.click(screen.getByText("Compute Settlement"));
 
@@ -53,7 +66,7 @@ describe("ComputeFnfForm", () => {
   it("surfaces a clerk-safe message on the confirm dialog, never the raw API error code (UX-016)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 
-    render(<ComputeFnfForm />);
+    renderForm();
     fillRequiredFields();
     fireEvent.click(screen.getByText("Compute Settlement"));
 

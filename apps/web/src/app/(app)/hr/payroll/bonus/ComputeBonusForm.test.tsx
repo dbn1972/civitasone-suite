@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -8,6 +10,17 @@ vi.mock("next/navigation", () => ({
 
 import { ComputeBonusForm } from "./ComputeBonusForm";
 
+// UX-017: ComputeBonusForm now reads its copy through next-intl
+// (useTranslations("computeBonusForm")), so every render needs a real
+// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
+function renderForm() {
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <ComputeBonusForm />
+    </NextIntlClientProvider>,
+  );
+}
+
 describe("ComputeBonusForm", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -15,7 +28,7 @@ describe("ComputeBonusForm", () => {
   });
 
   it("requires an employee id before opening the confirm dialog", () => {
-    render(<ComputeBonusForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Compute Bonus" }));
     expect(screen.getByText("Employee ID is required.")).toBeInTheDocument();
   });
@@ -28,7 +41,7 @@ describe("ComputeBonusForm", () => {
       ),
     );
 
-    render(<ComputeBonusForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
     fireEvent.change(screen.getByLabelText(/^Financial Year/), { target: { value: "2025-26" } });
     fireEvent.change(screen.getByLabelText(/^Basic Salary/), { target: { value: "50000" } });
@@ -46,7 +59,7 @@ describe("ComputeBonusForm", () => {
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 422 }));
 
-    render(<ComputeBonusForm />);
+    renderForm();
     fireEvent.change(screen.getByLabelText(/^Employee ID/), { target: { value: "e1" } });
     fireEvent.change(screen.getByLabelText(/^Financial Year/), { target: { value: "2025-26" } });
     fireEvent.change(screen.getByLabelText(/^Basic Salary/), { target: { value: "50000" } });

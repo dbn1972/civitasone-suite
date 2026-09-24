@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -28,7 +30,7 @@ describe("PayStructuresPage", () => {
       .mockResolvedValueOnce({ data: [], source: "api" });
 
     const ui = await PayStructuresPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Standard Grade Pay")).toBeInTheDocument();
     expect(screen.getByText("Contractual Pay")).toBeInTheDocument();
@@ -38,7 +40,7 @@ describe("PayStructuresPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
     const ui = await PayStructuresPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("No pay structures yet")).toBeInTheDocument();
   });
@@ -59,7 +61,7 @@ describe("PayStructuresPage", () => {
       });
 
     const ui = await PayStructuresPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Basic Pay")).toBeInTheDocument();
     expect(screen.getByText("Dearness Allowance")).toBeInTheDocument();
@@ -83,7 +85,7 @@ describe("PayStructuresPage", () => {
       });
 
     const ui = await PayStructuresPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     // Total structures = 2, active = 1, default = 1, components = 1
     expect(screen.getByText("2")).toBeInTheDocument(); // total or active

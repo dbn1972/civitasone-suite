@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useTranslations } from "next-intl";
 import { formatRupees } from "@/lib/formatters";
 import { Button, StatusPill } from "@/app/_components/ds";
 
@@ -93,6 +94,7 @@ function SalarySlipModal({
   payPeriod: string;
   onClose: () => void;
 }) {
+  const t = useTranslations("salarySlipsClientTable");
   const c = estimateComponents(slip.gross);
 
   return (
@@ -138,16 +140,16 @@ function SalarySlipModal({
         >
           <div>
             <div id="slip-dlg-title" style={{ fontWeight: 700, fontSize: 15 }}>
-              Pay Slip — {payPeriod}
+              {t("paySlipTitle", { period: payPeriod })}
             </div>
             <div style={{ fontSize: 11, color: "var(--mut,#64748b)", marginTop: 2 }}>
-              Government of India — Indicative slip (pre-disbursement)
+              {t("indicativeSlipNotice")}
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close pay slip preview"
+            aria-label={t("closePreviewAriaLabel")}
             style={{
               background: "none",
               border: "none",
@@ -172,27 +174,27 @@ function SalarySlipModal({
         >
           <div style={{ fontWeight: 700, fontSize: 14 }}>{slip.employeeName}</div>
           <div style={{ fontSize: 11, color: "var(--mut,#64748b)", marginTop: 2 }}>
-            Employee ID: {slip.employeeId} · Period: {payPeriod}
+            {t("employeeIdPeriodLine", { employeeId: slip.employeeId, period: payPeriod })}
           </div>
         </div>
 
         {/* Slip body */}
         <div style={{ padding: "14px 20px" }}>
-          <SlipSection title="Earnings">
-            <SlipLine label="Basic Pay"                    value={c.basic}   />
-            <SlipLine label="Dearness Allowance (DA) @46%" value={c.da}      />
-            <SlipLine label="House Rent Allowance (HRA)"   value={c.hra}     />
-            <SlipLine label="Transport Allowance"          value={c.ta}      />
-            <SlipLine label="Special Allowance"            value={c.special} />
-            <SlipLine label="Gross Earnings"               value={slip.gross} bold />
+          <SlipSection title={t("earningsSectionTitle")}>
+            <SlipLine label={t("basicPayLabel")} value={c.basic}   />
+            <SlipLine label={t("daLabel")} value={c.da}      />
+            <SlipLine label={t("hraLabel")} value={c.hra}     />
+            <SlipLine label={t("taLabel")} value={c.ta}      />
+            <SlipLine label={t("specialAllowanceLabel")} value={c.special} />
+            <SlipLine label={t("grossEarningsLabel")} value={slip.gross} bold />
           </SlipSection>
 
-          <SlipSection title="Deductions">
-            <SlipLine label="Provident Fund (EPF) — 12%"  value={c.pf}      />
-            <SlipLine label="ESI (Employee) — 0.75%"      value={c.esi}     />
-            <SlipLine label="Professional Tax (PT)"       value={c.pt}      />
-            <SlipLine label="Income Tax (TDS)"            value={c.tds}     />
-            <SlipLine label="Total Deductions"            value={c.totalDed} bold />
+          <SlipSection title={t("deductionsSectionTitle")}>
+            <SlipLine label={t("pfLabel")} value={c.pf}      />
+            <SlipLine label={t("esiLabel")} value={c.esi}     />
+            <SlipLine label={t("ptLabel")} value={c.pt}      />
+            <SlipLine label={t("tdsLabel")} value={c.tds}     />
+            <SlipLine label={t("totalDeductionsLabel")} value={c.totalDed} bold />
           </SlipSection>
 
           {/* Net Pay */}
@@ -206,7 +208,7 @@ function SalarySlipModal({
               marginTop: 2,
             }}
           >
-            <span style={{ fontWeight: 700, fontSize: 15 }}>Net Pay</span>
+            <span style={{ fontWeight: 700, fontSize: 15 }}>{t("netPayLabel")}</span>
             <span style={{ fontWeight: 700, fontSize: 17, color: "var(--primary,#2563eb)" }}>
               {formatRupees(slip.net)}
             </span>
@@ -221,8 +223,7 @@ function SalarySlipModal({
             borderTop: "1px solid var(--line,#e2e8f0)",
           }}
         >
-          System-generated indicative slip. Component breakdown is estimated; final figures
-          per pay order issued by DDO. Ref: 7th CPC pay matrix &amp; FR 8.
+          {t("slipFooterNotice")}
         </div>
       </div>
     </div>
@@ -240,6 +241,7 @@ export function SalarySlipsClientTable({
   slips,
   payPeriod,
 }: TableProps) {
+  const t = useTranslations("salarySlipsClientTable");
   const [preview, setPreview] = useState<SlipRow | null>(null);
   const [filter, setFilter] = useState("");
   const [page, setPage] = useState(0);
@@ -280,10 +282,10 @@ export function SalarySlipsClientTable({
       >
         <input
           type="search"
-          placeholder="Filter by employee or status…"
+          placeholder={t("filterPlaceholder")}
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
-          aria-label="Filter salary slips"
+          aria-label={t("filterAriaLabel")}
           style={{
             padding: "6px 10px",
             fontSize: 13,
@@ -302,11 +304,11 @@ export function SalarySlipsClientTable({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 14 }}>
           <thead>
             <tr>
-              <th style={thStyle}>Employee</th>
-              <th style={{ ...thStyle, textAlign: "end" }}>Gross</th>
-              <th style={{ ...thStyle, textAlign: "end" }}>Deductions</th>
-              <th style={{ ...thStyle, textAlign: "end" }}>Net</th>
-              <th style={thStyle}>Status</th>
+              <th style={thStyle}>{t("colEmployee")}</th>
+              <th style={{ ...thStyle, textAlign: "end" }}>{t("colGross")}</th>
+              <th style={{ ...thStyle, textAlign: "end" }}>{t("colDeductions")}</th>
+              <th style={{ ...thStyle, textAlign: "end" }}>{t("colNet")}</th>
+              <th style={thStyle}>{t("colStatus")}</th>
               <th style={{ ...thStyle }}></th>
             </tr>
           </thead>
@@ -314,7 +316,7 @@ export function SalarySlipsClientTable({
             {visible.length === 0 ? (
               <tr>
                 <td colSpan={6} style={{ padding: "24px 12px", textAlign: "center", color: "var(--mut,#64748b)" }}>
-                  No salary slips match your filter.
+                  {t("noSlipsMatchFilter")}
                 </td>
               </tr>
             ) : (
@@ -335,7 +337,7 @@ export function SalarySlipsClientTable({
                   </td>
                   <td style={{ padding: "10px 12px" }}>
                     <Button variant="ghost" size="sm" onClick={() => setPreview(slip)}>
-                      Preview Slip
+                      {t("previewSlipBtn")}
                     </Button>
                   </td>
                 </tr>
@@ -347,13 +349,13 @@ export function SalarySlipsClientTable({
         {totalVisible > SLIP_PAGE && (
           <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "10px 0", fontSize: 13 }}>
             <Button variant="ghost" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}>
-              {"←"} Previous
+              {t("previousBtn")}
             </Button>
             <span style={{ color: "var(--ink2)" }}>
-              {page * SLIP_PAGE + 1}–{Math.min((page + 1) * SLIP_PAGE, totalVisible)} of {totalVisible}
+              {t("paginationRangeSummary", { start: page * SLIP_PAGE + 1, end: Math.min((page + 1) * SLIP_PAGE, totalVisible), total: totalVisible })}
             </span>
             <Button variant="ghost" onClick={() => setPage((p) => p + 1)} disabled={(page + 1) * SLIP_PAGE >= totalVisible}>
-              Next {"→"}
+              {t("nextBtn")}
             </Button>
           </div>
         )}

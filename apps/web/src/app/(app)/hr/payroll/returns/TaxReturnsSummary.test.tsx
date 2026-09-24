@@ -1,6 +1,16 @@
 import { describe, it, expect } from "vitest";
 import { render, screen, within } from "@testing-library/react";
+import { createTranslator } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { TaxReturnsSummary, type QuarterSummaryRow } from "./TaxReturnsSummary";
+
+// UX-017: TaxReturnsSummary is a plain (non-async) component that now takes
+// its translator as a `t` prop (its caller, ReturnsPage, resolves it via
+// getTranslations("taxReturnsSummary") -- see TaxReturnsSummary.tsx's own
+// comment for why it isn't async itself). For this standalone unit test
+// there is no page/provider in the tree, so build a real translator
+// directly from the same en.json this ships with -- no React context needed.
+const t = createTranslator({ locale: "en", messages: enMessages, namespace: "taxReturnsSummary" });
 
 function baseRow(overrides: Partial<QuarterSummaryRow>): QuarterSummaryRow {
   return {
@@ -30,7 +40,7 @@ describe("TaxReturnsSummary — missing totalTdsDepositedMinor (UX-018)", () => 
         totalTdsDepositedMinor: undefined as unknown as number,
       }),
     ];
-    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} />);
+    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} t={t} />);
 
     // Scoped to the Q1 row: with only one quarter in the array, the annual
     // "Total TDS Deposited" tile now *also* shows "—" for this same missing
@@ -50,7 +60,7 @@ describe("TaxReturnsSummary — missing totalTdsDepositedMinor (UX-018)", () => 
         totalTdsDepositedMinor: null as unknown as number,
       }),
     ];
-    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} />);
+    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} t={t} />);
 
     // Scoped for the same reason as the case above (see UX-022).
     const q2Row = screen.getByText("Q2 — Jul to Sep").closest("div[style*='border']") as HTMLElement;
@@ -65,7 +75,7 @@ describe("TaxReturnsSummary — missing totalTdsDepositedMinor (UX-018)", () => 
         totalTdsDepositedMinor: 0,
       }),
     ];
-    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} />);
+    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} t={t} />);
 
     // Scoped to the Q3 row itself: the annual "Total TDS Deposited" summary
     // tile independently sums every quarter and would coincidentally also
@@ -79,7 +89,7 @@ describe("TaxReturnsSummary — missing totalTdsDepositedMinor (UX-018)", () => 
 
   it("does not render the TDS Deposited figure at all when deducteeCount is 0 (unrelated existing gate)", () => {
     const quarters = [baseRow({ quarter: "Q4", deducteeCount: 0 })];
-    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} />);
+    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} t={t} />);
 
     expect(screen.queryByText("TDS Deposited")).not.toBeInTheDocument();
   });
@@ -111,7 +121,7 @@ describe("TaxReturnsSummary — annual Total TDS Deposited tile (UX-022)", () =>
       baseRow({ quarter: "Q3", deducteeCount: 2, totalTdsDepositedMinor: 50000 }),
       baseRow({ quarter: "Q4", deducteeCount: 0, totalTdsDepositedMinor: 0 }),
     ];
-    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} />);
+    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} t={t} />);
 
     expect(within(totalTile()).getByText("₹4,000.00")).toBeInTheDocument();
   });
@@ -125,7 +135,7 @@ describe("TaxReturnsSummary — annual Total TDS Deposited tile (UX-022)", () =>
         totalTdsDepositedMinor: undefined as unknown as number,
       }),
     ];
-    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} />);
+    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} t={t} />);
 
     expect(within(totalTile()).getByText("—")).toBeInTheDocument();
     expect(screen.queryByText(/NaN/)).not.toBeInTheDocument();
@@ -140,7 +150,7 @@ describe("TaxReturnsSummary — annual Total TDS Deposited tile (UX-022)", () =>
         totalTdsDepositedMinor: null as unknown as number,
       }),
     ];
-    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} />);
+    render(<TaxReturnsSummary fy="2026-27" quarters={quarters} t={t} />);
 
     const tile = totalTile();
     expect(within(tile).getByText("—")).toBeInTheDocument();

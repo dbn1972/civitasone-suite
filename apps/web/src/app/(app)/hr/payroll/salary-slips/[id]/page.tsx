@@ -75,12 +75,12 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
           <PrintButton />
         </div>
       </div>
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       <div id="salary-slip" className="salary-slip-print" style={{ background: "var(--color-bg)", border: "1px solid var(--color-border)", borderRadius: 12, padding: 32, fontFamily: "system-ui" }}>
         <div className="print-header" aria-hidden="true">
-          <div className="slip-logo">CivitasOne HRMS</div>
-          <div className="print-meta">Government of India · HR Management System · Salary Slip</div>
+          <div className="slip-logo">{t("brandName")}</div>
+          <div className="print-meta">{t("printMeta")}</div>
         </div>
         {/* Header */}
         <div style={{ textAlign: "center", marginBottom: 24, borderBottom: "2px solid var(--ink)", paddingBottom: 16 }}>
