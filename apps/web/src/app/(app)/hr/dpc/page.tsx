@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, Tabs, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { fetchJson } from "@/app/_data/apiClient";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PromotionBatchView } from "./_components/PromotionBatchView";
 import { SeniorityListActions } from "./_components/SeniorityListActions";
