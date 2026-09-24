@@ -1,14 +1,41 @@
-import type { Queue } from "@civitasone/queue";
+import type { Queue, CommandOutcome } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { enqueue, markProcessed } from "../../shared/outbox.js";
+import { enqueue, markProcessed, recordCommandOutcome } from "../../shared/outbox.js";
+import { runWithTenant } from "@civitasone/db";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import { transitionState, validateMakerChecker } from "./domain.js";
 import * as templateRepo from "../templates/repo.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/**
+ * G-ASYNC-1: persist this command's terminal outcome so
+ * `GET /v1/templates/commands/:commandId/status` (routes.ts) can answer a
+ * caller polling the `id` their 202 response returned — see that route, and
+ * @civitasone/outbox's recordCommandOutcome, for the full picture.
+ *
+ * Every command here already has a synchronous pre-check in routes.ts
+ * (not-found / INVALID_TRANSITION / MAKER_CHECKER_VIOLATION, mirroring this
+ * consumer's own checks below) — this is still needed: the pre-check reads
+ * state at accept time, this consumer re-validates the SAME conditions
+ * against whatever the state actually is when the command is processed,
+ * which can be later and can disagree (another command may have changed the
+ * template's status in between). When it disagrees, this is currently the
+ * ONLY way that residual rejection is ever detectable by the caller.
+ *
+ * Wrapped in runWithTenant + db.transaction (not a bare write) so the
+ * FORCE-RLS `_inbox.command_results` insert carries the right app.tenant_id
+ * GUC — bus.ts invokes onOutcome OUTSIDE withTenantConsumer's scope (that
+ * wrapper only covers the handler call itself; see tenant-queue.ts).
+ */
+async function recordApprovalCommandOutcome(outcome: CommandOutcome): Promise<void> {
+  await runWithTenant(outcome.tenantId, () =>
+    db.transaction((tx) => recordCommandOutcome(tx, outcome)),
+  );
+}
 
 export function registerApprovalConsumers(q: Queue): void {
   // RLS (#146): every handler must run inside the message's tenant context.
@@ -51,6 +78,7 @@ export function registerApprovalConsumers(q: Queue): void {
       });
       await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.template, msg.payload.templateId));
     },
+    { onOutcome: recordApprovalCommandOutcome },
   );
 
   // Approve template: in_review → approved
@@ -97,6 +125,7 @@ export function registerApprovalConsumers(q: Queue): void {
       });
       await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.template, msg.payload.templateId));
     },
+    { onOutcome: recordApprovalCommandOutcome },
   );
 
   // Reject template: in_review → draft (returned for rework)
@@ -136,6 +165,7 @@ export function registerApprovalConsumers(q: Queue): void {
       });
       await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.template, msg.payload.templateId));
     },
+    { onOutcome: recordApprovalCommandOutcome },
   );
 
   // Publish template: approved → published
@@ -175,5 +205,6 @@ export function registerApprovalConsumers(q: Queue): void {
       await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.template, msg.payload.templateId));
       await cache.invalidate(cache.makeKey(msg.tenantId, `${RESOURCE.template}_list`, msg.tenantId));
     },
+    { onOutcome: recordApprovalCommandOutcome },
   );
 }

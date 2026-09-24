@@ -20,7 +20,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { MemoryQueue } from "@civitasone/queue";
-import type { Queue, Handler } from "@civitasone/queue";
+import type { Queue, Handler, SubscribeOptions } from "@civitasone/queue";
 import { and, eq } from "drizzle-orm";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
@@ -29,7 +29,7 @@ import {
 } from "../src/modules/tender/schema.js";
 import { procurementVendors } from "../src/modules/vendor/schema.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
-import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { outboxMessages, processed, commandResults, getCommandOutcome } from "../src/shared/outbox.js";
 import { registerTenderConsumers } from "../src/modules/tender/consumer.js";
 import { registerPoConsumers } from "../src/modules/po/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
@@ -57,8 +57,15 @@ function msg(type: string, payload: Record<string, unknown>, actorId = CREATOR, 
 
 function wireTenantAwareQueue(q: Queue): Queue {
   const rawSubscribe = q.subscribe.bind(q);
-  q.subscribe = ((topic: string, handler: Handler) =>
-    rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
+  // G-ASYNC-1: this previously took only (topic, handler) and never forwarded
+  // a 3rd `options` argument to the real subscribe() — so a consumer wired
+  // with `{ onOutcome }` through THIS test helper would have it silently
+  // dropped, same as the (now-fixed) production bugs in worker.ts's own
+  // monkeypatch and notification-service's tenantScoped() Proxy. Forwarding it
+  // here is what makes the new "duplicate bid ... is now visible" assertion
+  // below actually exercise the real onOutcome path instead of silently no-op'ing.
+  q.subscribe = ((topic: string, handler: Handler, options?: SubscribeOptions) =>
+    rawSubscribe(topic, withTenantConsumer(handler) as Handler, options)) as typeof q.subscribe;
   return q;
 }
 
@@ -75,6 +82,10 @@ async function seedVendor(id: string, vendorType = "registered") {
 async function wipeTenant(t: string) {
   await runWithTenant(t, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
+    // G-ASYNC-1: tenant-scoped, so cleaned up the same way as everything else
+    // here (unlike _inbox.processed, which is a shared, non-tenant-scoped
+    // dedup table left alone by this function already).
+    await tx.delete(commandResults).where(eq(commandResults.tenantId, t));
     await tx.delete(procurementPoItems).where(eq(procurementPoItems.tenantId, t));
     await tx.delete(procurementPos).where(eq(procurementPos.tenantId, t));
     await tx.delete(procurementTenderFinancialBids).where(eq(procurementTenderFinancialBids.tenantId, t));
@@ -199,20 +210,37 @@ describe("Tender lifecycle — full L1 competitive flow + SoD + finance commitme
     for (const f of fins) expect(f.sealed).toBe(true);
   });
 
-  it("duplicate bid from same vendor is rejected (no second bid row)", async () => {
+  it("duplicate bid from same vendor is rejected (no second bid row) AND the rejection is now visible via commandResults — G-ASYNC-1", async () => {
     const q = wireTenantAwareQueue(new MemoryQueue());
     registerTenderConsumers(q);
     await q.start();
-    await q.publish(COMMANDS.tenderBidSubmit, msg(COMMANDS.tenderBidSubmit, {
+    // Published directly to the queue (bypassing commands.ts's new synchronous
+    // DUPLICATE_BID pre-check) so this exercises the CONSUMER's own
+    // NonRetryableError rejection path specifically — the exact silent-failure
+    // shape G-ASYNC-1 is about: before this change, the ONLY way to observe
+    // this rejection at all was to inspect procurementTenderBids directly (as
+    // this test already did) — nothing a real caller/frontend could ever query
+    // recorded that the command was rejected, let alone why.
+    const dupMsg = msg(COMMANDS.tenderBidSubmit, {
       id: randomUUID(), tenderId, tenantId: TENANT, vendorId: V_L1, vendorName: "L1 Co dup",
       technicalScore: 99, financialAmountMinor: 1,
-    }));
+    });
+    await q.publish(COMMANDS.tenderBidSubmit, dupMsg);
     await drain(q);
     const bids = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
       tx.select().from(procurementTenderBids)
         .where(and(eq(procurementTenderBids.tenderId, tenderId), eq(procurementTenderBids.vendorId, V_L1)))
     ));
     expect(bids).toHaveLength(1);
+
+    // THE FIX: the same messageId a caller's 202 response would have returned
+    // as `id` (see commands.ts's submitBid) now resolves to a queryable,
+    // caller-visible rejection — exactly what
+    // GET /v1/procurement/tenders/commands/:commandId/status (routes.ts) serves.
+    const outcome = await runWithTenant(TENANT, () => db.transaction((tx) => getCommandOutcome(tx, dupMsg.messageId)));
+    expect(outcome).not.toBeNull();
+    expect(outcome?.status).toBe("rejected");
+    expect(outcome?.reason).toMatch(/DUPLICATE_BID/);
   });
 
   it("technical-evaluation → all qualified, tech evaluator recorded, status technical_evaluation", async () => {

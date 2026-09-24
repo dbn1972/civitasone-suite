@@ -59,10 +59,16 @@ assertPiiKeyConfigured();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const q = queue as any;
   const rawSubscribe = q.subscribe.bind(q);
+  // G-ASYNC-1: this wrapper previously dropped a 3rd `options` argument to
+  // subscribe() entirely (only `topic` and `handler` were forwarded to
+  // rawSubscribe) — silently defeating options like onOutcome or
+  // visibilityTimeout for EVERY consumer in this service, the exact
+  // silent-failure shape this fix is about, one layer down in the transport
+  // plumbing. Forward it through.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
+  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>, options?: any) =>
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
+    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)), options);
 }
 
 registerIndentConsumers(queue);
