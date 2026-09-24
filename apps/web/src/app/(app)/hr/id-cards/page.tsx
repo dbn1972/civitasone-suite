@@ -66,7 +66,7 @@ export default async function IdCardsPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -98,6 +98,6 @@ export default async function IdCardsPage() {
           emptyMessage={t("emptyMessage")}
         />
       </Card>
-    </main>
+    </div>
   );
 }

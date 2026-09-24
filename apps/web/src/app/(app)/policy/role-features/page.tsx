@@ -13,7 +13,7 @@ export default async function PolicyRoleFeaturesPage() {
   const roles = errored ? 0 : new Set(grants.map((g) => g.roleName)).size;
 
   return (
-    <main className="page-main wrap" aria-label="Role feature grants">
+    <div className="page-main wrap" aria-label="Role feature grants">
       <PageHeader
         title="Role Features"
         subtitle="Feature visibility grants loaded from /api/v1/policy/role-features."
@@ -66,6 +66,6 @@ export default async function PolicyRoleFeaturesPage() {
           </div>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

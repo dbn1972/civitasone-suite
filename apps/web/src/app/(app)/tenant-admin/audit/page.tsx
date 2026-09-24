@@ -17,7 +17,7 @@ export default async function TenantAuditPage() {
   const today24h = events.filter((e) => e.timestamp.slice(0, 10) === today).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Audit Log" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -48,6 +48,6 @@ export default async function TenantAuditPage() {
           outcome: event.outcome,
         }))}
       />
-    </main>
+    </div>
   );
 }

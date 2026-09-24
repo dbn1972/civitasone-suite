@@ -17,7 +17,7 @@ export default async function InventoryLowStockPage() {
       </nav>
       <PageHeader title="Low Stock & Reorder" subtitle="Items at or below their reorder level, with suggested replenishment." />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory low stock and reorder">
+      <div aria-label="Inventory low stock and reorder">
         <StatGrid>
           <StatCard icon="⚠️" iconBg="#fee2e2" label="Items Low" value={rows.length} />
           <StatCard icon="🛒" iconBg="#fef3c7" label="Total Suggested Reorder" value={totalSuggested} />
@@ -25,7 +25,7 @@ export default async function InventoryLowStockPage() {
         <Card title="Low Stock Items">
           <LowStockTable rows={rows} source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

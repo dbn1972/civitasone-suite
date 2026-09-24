@@ -10,7 +10,7 @@ export default async function OutcomeBudgetPage() {
   const inProgress = outcomes.filter((o) => { const p = achievementPct(o); return p > 0 && p < 100; }).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Outcome Budget"
         subtitle="Scheme output indicators and achievement tracking."
@@ -29,6 +29,6 @@ export default async function OutcomeBudgetPage() {
       <Card title="Outcome Indicators">
         <OutcomeBudgetTable outcomes={outcomes} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

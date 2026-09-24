@@ -28,7 +28,7 @@ export default async function MLInsightsHubPage() {
   const activeDomains = domains.filter((d) => d.modelVersion !== null).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="ML Insights"
         subtitle="Model performance, prediction accuracy, and explainability metrics across all ML-powered domains."
@@ -79,6 +79,6 @@ export default async function MLInsightsHubPage() {
           );
         })}
       </section>
-    </main>
+    </div>
   );
 }

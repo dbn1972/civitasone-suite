@@ -12,16 +12,16 @@ export default async function TaxDeclarationPage() {
   try {
     const t = await getTranslations("taxDeclaration");
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Back to Payroll" />
         <TaxDeclarationForm />
-      </main>
+      </div>
     );
   } catch {
     return (
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <RefreshErrorState error={toHumanError("load", { area: "tax declaration" })} backHref="/hr/payroll" />
-      </main>
+      </div>
     );
   }
 }

@@ -72,9 +72,12 @@ describe("PayrollRunsTable — UX-002 (single source of truth for data provenanc
     } as never);
     render(<PayrollRunsTable runs={[]} source="error" />);
 
-    const statusNodes = screen.getAllByRole("status");
-    expect(statusNodes).toHaveLength(1);
-    expect(statusNodes[0]).toHaveTextContent(/Couldn't load payroll runs — showing nothing/i);
+    // Two independent role="status" live regions now legitimately coexist here:
+    // the page-level DataSourceBadge (data-provenance banner) and EmptyState's
+    // own live region (a11y HIGH-3 — a screen reader must hear "no results"
+    // too, not just see it). Assert each by its specific text rather than
+    // assuming there is exactly one status node.
+    expect(screen.getByText(/Couldn't load payroll runs — showing nothing/i)).toBeInTheDocument();
     expect(screen.queryByText(/Showing saved data/i)).not.toBeInTheDocument();
     expect(screen.getByText("No payroll runs yet")).toBeInTheDocument();
   });

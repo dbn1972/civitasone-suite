@@ -109,7 +109,7 @@ export default async function OpeningBalancesPage({
   const overallSource = fySource === "error" || balancesSource === "error" ? "error" : "api";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Opening Balances"
         subtitle="View and set the starting debit/credit position for a fiscal year's accounts."
@@ -172,6 +172,6 @@ export default async function OpeningBalancesPage({
           </Card>
         </>
       )}
-    </main>
+    </div>
   );
 }

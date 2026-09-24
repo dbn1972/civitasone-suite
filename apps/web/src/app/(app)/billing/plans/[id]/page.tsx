@@ -7,13 +7,13 @@ export default async function PlanDetailPage({ params }: { params: { id: string 
 
   if (!plan) {
     return (
-      <main className="page-main" aria-labelledby="page-heading">
+      <div className="page-main" aria-labelledby="page-heading">
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
           <a href="/billing/plans">Plans</a> <span aria-hidden="true">›</span> Not found
         </nav>
         <PageHeader title="Plan Detail" back="/billing/plans" />
         <EmptyState icon="📋" title="Plan not found" message="This plan may have been removed or the ID is invalid." />
-      </main>
+      </div>
     );
   }
 
@@ -26,7 +26,7 @@ export default async function PlanDetailPage({ params }: { params: { id: string 
   const createdAt = (plan.createdAt as string) ?? "";
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
         <a href="/billing">Billing</a> <span aria-hidden="true">›</span>{" "}
         <a href="/billing/plans">Plans</a> <span aria-hidden="true">›</span>{" "}
@@ -63,6 +63,6 @@ export default async function PlanDetailPage({ params }: { params: { id: string 
           <div className="field"><span className="label">Status</span><span>{status}</span></div>
         </div>
       </Card>
-    </main>
+    </div>
   );
 }

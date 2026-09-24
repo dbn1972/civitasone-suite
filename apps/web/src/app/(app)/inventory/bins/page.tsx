@@ -18,7 +18,7 @@ export default async function InventoryBinsPage() {
       </nav>
       <PageHeader title="Bins & Racks" subtitle="Physical bin and rack locations within government stores." />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory bins and racks">
+      <div aria-label="Inventory bins and racks">
         <StatGrid>
           <StatCard icon="🗄️" iconBg="#f1f5f9" label="Total Bins" value={bins.length} />
           <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={active} />
@@ -27,7 +27,7 @@ export default async function InventoryBinsPage() {
         <Card title="Bins">
           <BinsTable bins={bins} source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

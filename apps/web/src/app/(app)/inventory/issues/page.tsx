@@ -18,7 +18,7 @@ export default async function InventoryIssuesPage() {
       </nav>
       <PageHeader title="Stock Issues" subtitle="Stock issued/consumed from stores against indents." />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory stock issues">
+      <div aria-label="Inventory stock issues">
         <StatGrid>
           <StatCard icon="📤" iconBg="#fee2e2" label="Issue Lines" value={issues.length} />
           <StatCard icon="🔢" iconBg="#f1f5f9" label="Total Qty Issued" value={totalQty} />
@@ -26,7 +26,7 @@ export default async function InventoryIssuesPage() {
         <Card title="Issues">
           <MovementsTable entries={ledger} kind="issue" source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

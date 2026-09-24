@@ -91,7 +91,7 @@ export default async function PayrollComparisonPage({
   );
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -172,6 +172,6 @@ export default async function PayrollComparisonPage({
           />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

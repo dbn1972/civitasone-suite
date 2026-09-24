@@ -273,7 +273,7 @@ export default function TradeLicensesPage() {
   const expiredCount = licenses.filter((l) => l.status === "expired").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Trade Licenses"
         subtitle="Issue, renew, and cancel municipal trade and business licenses."
@@ -300,6 +300,6 @@ export default function TradeLicensesPage() {
           <TradeLicensesTable licenses={licenses} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

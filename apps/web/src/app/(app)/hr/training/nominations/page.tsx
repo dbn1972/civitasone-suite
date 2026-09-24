@@ -55,7 +55,7 @@ export default async function TrainingNominationsPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} />
       <StatGrid>
@@ -76,6 +76,6 @@ export default async function TrainingNominationsPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

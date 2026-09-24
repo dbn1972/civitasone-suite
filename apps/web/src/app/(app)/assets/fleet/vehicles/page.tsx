@@ -81,7 +81,7 @@ export default async function FleetVehiclesPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fleet Vehicles"
         subtitle="Government vehicles registered to the fleet."
@@ -107,6 +107,6 @@ export default async function FleetVehiclesPage() {
       </Card>
 
       <RecordGpsForm />
-    </main>
+    </div>
   );
 }

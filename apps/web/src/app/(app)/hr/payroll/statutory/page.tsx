@@ -85,7 +85,7 @@ export default async function StatutoryHubPage() {
     const statutoryCards = STATUTORY_CARD_DEFS.map((def) => ({ ...def, label: t(def.labelKey) }));
 
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader
           title={t("title")}
           subtitle={t("subtitle")}
@@ -119,13 +119,13 @@ export default async function StatutoryHubPage() {
           </h2>
           <LinkTiles tiles={tiles} columns="three" />
         </div>
-      </main>
+      </div>
     );
   } catch {
     return (
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <RefreshErrorState error={toHumanError("load", { area: "statutory compliance" })} backHref="/hr/payroll" />
-      </main>
+      </div>
     );
   }
 }

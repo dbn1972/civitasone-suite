@@ -2,7 +2,7 @@ import { PageHeader } from "../../../../_components/ds";
 
 export default function PayrollRunsLoading() {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Payroll Runs"
         subtitle="Monthly salary processing and statutory run status."
@@ -29,6 +29,6 @@ export default function PayrollRunsLoading() {
           <div key={n} style={{ height: 48, borderRadius: 8, background: "var(--panel)" }} />
         ))}
       </div>
-    </main>
+    </div>
   );
 }

@@ -14,7 +14,7 @@ export default async function SiemPage() {
   const activeAlerts = alerts.filter((a) => a.status === "active" || a.status === "investigating").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "SIEM & Threat Monitoring" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -50,6 +50,6 @@ export default async function SiemPage() {
           <SiemTable alerts={alerts} source={source} />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

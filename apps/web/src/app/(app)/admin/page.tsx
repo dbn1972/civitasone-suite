@@ -24,9 +24,9 @@ const adminTiles: NavTile[] = [
 export default async function AdminPage() {
   const t = await getTranslations("admin");
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
       <LinkTiles tiles={adminTiles} columns="four" />
-    </main>
+    </div>
   );
 }

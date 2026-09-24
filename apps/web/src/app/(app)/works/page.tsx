@@ -50,7 +50,7 @@ export default async function WorksHub() {
   const pendingCount = dash.byStatus["submitted"]  ?? dash.byStatus["pending"] ?? 0;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Works & Billing"
         subtitle="Engineering works lifecycle — proposals to bills."
@@ -106,6 +106,6 @@ export default async function WorksHub() {
           </Link>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

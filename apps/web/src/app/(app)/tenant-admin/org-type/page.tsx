@@ -6,7 +6,7 @@ export default function OrgTypePage() {
   requireAnyRole(["admin", "tenant_admin", "platform_admin", "super_admin"]);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Organisation Type"
         subtitle="Choose what kind of organisation you are — this adjusts terminology, default policies, and which features are shown."
@@ -56,6 +56,6 @@ export default function OrgTypePage() {
           A full selector form is coming soon.
         </p>
       </Card>
-    </main>
+    </div>
   );
 }

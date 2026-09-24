@@ -72,7 +72,7 @@ export default async function NpsStatementsPage() {
     `₹${(minor / 100).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -199,6 +199,6 @@ export default async function NpsStatementsPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

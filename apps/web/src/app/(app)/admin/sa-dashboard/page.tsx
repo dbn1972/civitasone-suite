@@ -37,7 +37,7 @@ export default async function SaDashboardPage() {
     : `${Number(opsSummary.onlineProcesses ?? 0)}/${Number(opsSummary.totalProcesses ?? 0)}`;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Super Admin Dashboard"
         subtitle="Platform-wide health, revenue and growth overview."
@@ -53,6 +53,6 @@ export default async function SaDashboardPage() {
       <Card title="Platform KPIs">
         <SADashboardTable dashboard={dashboard} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

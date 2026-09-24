@@ -1,3 +1,3 @@
 export default function Loading() {
-  return <main className="wrap"><p>Loading inspection…</p></main>;
+  return <div className="wrap"><p>Loading inspection…</p></div>;
 }

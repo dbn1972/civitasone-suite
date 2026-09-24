@@ -66,7 +66,7 @@ export default async function PayrollPeriodPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message="Couldn't load payroll periods — showing nothing" />
       <StatGrid>
@@ -78,6 +78,6 @@ export default async function PayrollPeriodPage() {
       <Card title={t("cardTitle")}>
         <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📅" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
       </Card>
-    </main>
+    </div>
   );
 }

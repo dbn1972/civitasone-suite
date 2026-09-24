@@ -98,25 +98,25 @@ export default async function AparDetailPage({
 
   if (errored && !isNotFound) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("detailPageTitle")} subtitle={t("loadErrorSubtitle")} back="/hr/apar" backLabel="Back to APAR" />
         <DataSourceBadge source={result.source} />
         <Card title="">
           <RefreshErrorState error={toHumanError("load", { area: "APAR record" })} backHref="/hr/apar" />
         </Card>
-      </main>
+      </div>
     );
   }
 
   if (!detail) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("detailPageTitle")} subtitle={t("notFoundSubtitle")} back="/hr/apar" backLabel="Back to APAR" />
         <DataSourceBadge source={result.source} />
         <Card title="">
           <EmptyState icon="📋" title={t("notFoundEmptyTitle")} message={t("notFoundEmptyMessage")} />
         </Card>
-      </main>
+      </div>
     );
   }
 
@@ -142,7 +142,7 @@ export default async function AparDetailPage({
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("titleWithPeriod", { period: appraisal.appraisalPeriod })}
         subtitle={t("subtitleEmployeeStage", { employeeId: appraisal.employeeId, stageLabel })}
@@ -229,6 +229,6 @@ export default async function AparDetailPage({
         {" "}
         {t("workflowNoticeLine2")}
       </div>
-    </main>
+    </div>
   );
 }

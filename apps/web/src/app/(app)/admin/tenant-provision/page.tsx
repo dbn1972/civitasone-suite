@@ -22,7 +22,7 @@ export default function TenantProvisionPage() {
   const optional = PROVISIONING_STEPS.filter((s) => s.required === "Optional").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Tenant Provisioning" subtitle="Step-by-step wizard for onboarding new tenants to the platform." back="/admin" />
       <StatGrid>
         <StatCard icon="🚀" iconBg="#eef2ff" label="Total Steps" value={PROVISIONING_STEPS.length} />
@@ -46,6 +46,6 @@ export default function TenantProvisionPage() {
           emptyMessage="Provisioning steps not configured."
         />
       </Card>
-    </main>
+    </div>
   );
 }

@@ -20,7 +20,7 @@ export default async function VigilancePage() {
     : cases.filter((c) => c.outcome === "major_penalty" || c.outcome === "minor_penalty").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Vigilance Cases"
         subtitle="Departmental vigilance proceedings and inquiry outcomes."
@@ -53,6 +53,6 @@ export default async function VigilancePage() {
           <VigilanceTable rows={cases} source={source} />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

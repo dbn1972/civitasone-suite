@@ -28,23 +28,23 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
 
   if (resource.status === "error") {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Scheme" back="/projects/schemes" backLabel="Back to Schemes" />
         <RefreshErrorState error={toHumanError("load", { area: "scheme" })} />
-      </main>
+      </div>
     );
   }
 
   if (resource.status === "empty" || !resource.data) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Scheme" back="/projects/schemes" backLabel="Back to Schemes" />
         <EmptyState
           icon="🏛️"
           title="Scheme not found"
           message="This scheme does not exist, or you do not have access to it."
         />
-      </main>
+      </div>
     );
   }
 
@@ -57,7 +57,7 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
   }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, marginBottom: 4 }}>
         <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", gap: 6 }}>
           <li><Link href="/projects">Projects</Link></li>
@@ -115,6 +115,6 @@ export default async function SchemeDetailPage({ params }: { params: Promise<{ i
           <SchemeProjectsTable rows={rows} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

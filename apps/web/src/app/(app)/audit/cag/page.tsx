@@ -16,7 +16,7 @@ export default async function CagPage() {
   const departments = errored ? null : new Set(paras.map((p) => p.department)).size;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="CAG Audit Interaction"
         subtitle="Comptroller and Auditor General audit paragraphs and settlement tracking."
@@ -49,6 +49,6 @@ export default async function CagPage() {
           <CagTable rows={paras} source={source} />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

@@ -8,7 +8,7 @@ export default async function InvoicesPage() {
   const overdue = invoices.filter((i) => String(i.status).toLowerCase() === "overdue").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside InvoicesTable,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
@@ -23,6 +23,6 @@ export default async function InvoicesPage() {
       <Card title="Invoice Register">
         <InvoicesTable invoices={invoices} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

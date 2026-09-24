@@ -46,7 +46,7 @@ export default async function RetirementPage() {
   const vrs       = items.filter((i) => i.separationType === "VRS").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -87,6 +87,6 @@ export default async function RetirementPage() {
           )}
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

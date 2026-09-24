@@ -15,7 +15,7 @@ export default async function MfaManagementPage() {
   const enrollmentPct = totalUsers > 0 ? Math.round((enrolled / totalUsers) * 100) : 0;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "MFA Management" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -47,6 +47,6 @@ export default async function MfaManagementPage() {
           <MfaTable users={users} source={source} />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

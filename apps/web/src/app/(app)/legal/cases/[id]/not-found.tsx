@@ -3,7 +3,7 @@ import { EmptyState } from "../../../../_components/ds";
 
 export default function LegalCaseNotFound() {
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav
         aria-label="Breadcrumb"
         style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}
@@ -22,6 +22,6 @@ export default function LegalCaseNotFound() {
       <div style={{ marginTop: 16 }}>
         <Link href="/legal/list" className="btn ghost">← Back to cases</Link>
       </div>
-    </main>
+    </div>
   );
 }

@@ -11,7 +11,7 @@ export default async function EPaymentsPage() {
   const pending = orders.filter((o) => String(o.status).toLowerCase() === "pending approval").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="e-Payment Orders"
         subtitle="Electronic payment orders with bank references and status tracking."
@@ -31,6 +31,6 @@ export default async function EPaymentsPage() {
       <Card title="Payment Orders">
         <EPaymentsTable orders={orders} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

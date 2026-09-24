@@ -17,7 +17,7 @@ export default async function SubscriptionPage() {
     : null;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Subscription" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -86,6 +86,6 @@ export default async function SubscriptionPage() {
           <EmptyState icon="📋" title="No subscription data" message="Subscription information is unavailable." />
         </div>
       )}
-    </main>
+    </div>
   );
 }

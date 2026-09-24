@@ -50,7 +50,7 @@ export default function OvertimeNewPage() {
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/overtime" backLabel="Back to Overtime" />
       <div style={{ maxWidth: 520, marginTop: 20 }}>
       <Card title={t("cardTitle")}>
@@ -91,6 +91,6 @@ value={hours} onChange={(e) => setHours(e.target.value)} placeholder={t("placeho
         </form>
       </Card>
       </div>
-    </main>
+    </div>
   );
 }

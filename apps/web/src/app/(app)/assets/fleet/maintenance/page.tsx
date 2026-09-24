@@ -77,7 +77,7 @@ export default async function FleetMaintenancePage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fleet Maintenance"
         subtitle="Preventive maintenance scheduling for government vehicles."
@@ -101,6 +101,6 @@ export default async function FleetMaintenancePage() {
           emptyMessage="Schedule your first maintenance job using the form above."
         />
       </Card>
-    </main>
+    </div>
   );
 }

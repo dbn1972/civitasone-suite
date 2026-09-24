@@ -63,7 +63,7 @@ export default async function OrgHierarchyPage() {
   const rootName = orgTree.length > 0 ? orgTree[0].name : "—";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Organization Hierarchy" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -96,6 +96,6 @@ export default async function OrgHierarchyPage() {
           </ul>
         </Card>
       )}
-    </main>
+    </div>
   );
 }

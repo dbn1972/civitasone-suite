@@ -71,7 +71,7 @@ export default async function GpfStatementsPage() {
   const projectedCorpus = projectGpfCorpus(totalContrib, AVG_YEARS_TO_RETIRE);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t.rich("title", { term: () => <Term name="GPF" /> })}
         subtitle={t("subtitle")}
@@ -194,6 +194,6 @@ export default async function GpfStatementsPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

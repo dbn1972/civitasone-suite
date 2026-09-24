@@ -30,7 +30,7 @@ export default async function AttendanceConfigPage() {
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/attendance" backLabel={t("backLabel")} />
 
       {/*
@@ -100,6 +100,6 @@ export default async function AttendanceConfigPage() {
       <p style={{ marginTop: 16, color: "var(--mut)", fontSize: 13 }}>
         {t("footerNote")}
       </p>
-    </main>
+    </div>
   );
 }

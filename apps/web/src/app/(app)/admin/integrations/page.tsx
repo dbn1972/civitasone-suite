@@ -66,7 +66,7 @@ export default function IntegrationsPage() {
   const configured = forEnv.filter((r) => r.hasSecret || r.enabled).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Integrations"
         subtitle="External endpoints for AI, messaging, email, payments and files. Secrets are encrypted at rest and never displayed."
@@ -151,6 +151,6 @@ export default function IntegrationsPage() {
           onChanged={() => { void load(); }}
         />
       )}
-    </main>
+    </div>
   );
 }

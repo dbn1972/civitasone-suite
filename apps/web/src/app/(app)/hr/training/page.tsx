@@ -28,7 +28,7 @@ export default async function TrainingPage() {
   const completed = programs.filter((p) => p.status === "completed").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         back="/hr" backLabel="Back to HR"
@@ -95,6 +95,6 @@ export default async function TrainingPage() {
           </div>
         </>
       )}
-    </main>
+    </div>
   );
 }

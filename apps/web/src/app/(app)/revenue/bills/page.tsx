@@ -198,7 +198,7 @@ export default async function BillsPage({
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Bills & Demands"
         subtitle="Generate municipal tax bills from raised demands and review issued bills for an assessee."
@@ -293,6 +293,6 @@ export default async function BillsPage({
           </Card>
         </>
       )}
-    </main>
+    </div>
   );
 }

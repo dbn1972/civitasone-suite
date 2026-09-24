@@ -51,10 +51,10 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
 
   if (!para) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Audit Para Detail" back="/finance/audit-paras" />
         <EmptyState icon="📝" title="Audit para not found" message="This audit para may have been removed or the ID is invalid." />
-      </main>
+      </div>
     );
   }
 
@@ -68,7 +68,7 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
   const timeline = timelineOf(para);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Audit Para ${paraNo}`}
         subtitle={dept !== "—" ? dept : undefined}
@@ -118,6 +118,6 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
           </ol>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

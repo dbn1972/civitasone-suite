@@ -12,7 +12,7 @@ export default async function PolicyAbacPage() {
   const deny = errored ? 0 : rules.filter((r) => r.expression?.effect === "deny").length;
 
   return (
-    <main className="page-main wrap" aria-label="ABAC rules">
+    <div className="page-main wrap" aria-label="ABAC rules">
       <PageHeader
         title="ABAC Rules"
         subtitle="Attribute-based access rules loaded from /api/v1/policy/abac/rules."
@@ -63,6 +63,6 @@ export default async function PolicyAbacPage() {
           </div>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

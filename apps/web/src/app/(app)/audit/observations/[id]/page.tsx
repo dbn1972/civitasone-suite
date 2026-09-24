@@ -12,10 +12,10 @@ export default async function AuditObservationDetailPage({ params }: { params: {
 
   if (!obs) {
     return (
-      <main className="wrap">
+      <div className="wrap">
         <Link href="/audit/observations" className="back"><ArrowLeft aria-hidden="true" size={14} /> Back</Link>
         <EmptyState icon="🔍" title="Observation not found" message="This observation may have been removed or the ID is invalid." />
-      </main>
+      </div>
     );
   }
 
@@ -29,7 +29,7 @@ export default async function AuditObservationDetailPage({ params }: { params: {
   ];
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
@@ -86,6 +86,6 @@ export default async function AuditObservationDetailPage({ params }: { params: {
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

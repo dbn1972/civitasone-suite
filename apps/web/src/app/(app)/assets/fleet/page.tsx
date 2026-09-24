@@ -8,7 +8,7 @@ import { PageHeader, Card } from "../../../_components/ds";
  */
 export default function FleetOverviewPage() {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fleet & Telematics"
         subtitle="Government vehicles, GPS position, and IoT telematics devices."
@@ -44,6 +44,6 @@ export default function FleetOverviewPage() {
           </Link>
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

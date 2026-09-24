@@ -62,7 +62,7 @@ export default async function CorrectionsPage() {
   const approvedCount = items.filter((r) => r.status === "approved").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -104,6 +104,6 @@ export default async function CorrectionsPage() {
           {t("lopDescription")}
         </p>
       </Card>
-    </main>
+    </div>
   );
 }

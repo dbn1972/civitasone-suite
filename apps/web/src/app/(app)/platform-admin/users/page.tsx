@@ -24,7 +24,7 @@ export default async function PlatformUsersPage() {
   const mfaOn = users.filter((u) => u.mfaEnabled).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "User Management" }]} />
       <PageHeader
         back="/platform-admin"
@@ -46,6 +46,6 @@ export default async function PlatformUsersPage() {
           "Couldn't load — showing nothing" while real (cached) rows were
           visible directly underneath it. */}
       <UserManagementPage users={users} source={source} />
-    </main>
+    </div>
   );
 }

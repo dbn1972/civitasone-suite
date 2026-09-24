@@ -10,8 +10,8 @@ import { SkeletonTable } from "../../_components/ds";
  */
 export default function HRLoading() {
   return (
-    <main className="page-main wrap" aria-label="Loading…" aria-busy="true">
+    <div className="page-main wrap" aria-label="Loading…" aria-busy="true">
       <SkeletonTable rows={8} />
-    </main>
+    </div>
   );
 }

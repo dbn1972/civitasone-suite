@@ -14,7 +14,7 @@ export default async function AuditPlanPage() {
   const riskBased = total > 0 ? Math.round(((total - items.filter((i) => i.type === "routine").length) / total) * 100) : 0;
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
@@ -33,6 +33,6 @@ export default async function AuditPlanPage() {
       </div>
       {source === "error" && <DataSourceBadge source={source} />}
       <PlanTable items={items} />
-    </main>
+    </div>
   );
 }

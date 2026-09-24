@@ -3,13 +3,13 @@ import { PageHeader } from "../../../../_components/ds";
 
 export default function Loading() {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Pay Structures"
         subtitle="Define earning and deduction components that make up an employee's pay."
         back="/hr/payroll" backLabel="Back to Payroll"
       />
       <SkeletonTable rows={6} />
-    </main>
+    </div>
   );
 }

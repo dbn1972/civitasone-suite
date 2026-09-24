@@ -117,7 +117,7 @@ export function RolesPermissionsManager({
   const totalPermissionsGranted = selected.size;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Role Permissions"
         subtitle="Select a role to view and edit its granted permissions."
@@ -202,6 +202,6 @@ export function RolesPermissionsManager({
           </div>
         )}
       </div>
-    </main>
+    </div>
   );
 }

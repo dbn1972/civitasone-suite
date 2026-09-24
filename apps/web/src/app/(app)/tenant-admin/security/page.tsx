@@ -11,7 +11,7 @@ export default async function SecurityCenterPage() {
   const errored = useResource(result).status === "error";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Security Center" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -43,6 +43,6 @@ export default async function SecurityCenterPage() {
           <SecurityTable events={overview.events} source={source} />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

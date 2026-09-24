@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const { data, source } = await getThemeBranding();
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/themes">Themes</a>
       </nav>
@@ -17,6 +17,6 @@ export default async function Page() {
         rows={data}
         source={source}
       />
-    </main>
+    </div>
   );
 }

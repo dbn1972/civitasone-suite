@@ -8,7 +8,7 @@ export default async function EditionsPage() {
   const totalTenants = editions.reduce((s, e) => s + Number(e.tenants ?? 0), 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-012: the data-source badge now lives inside EditionsTable,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here that could
@@ -23,6 +23,6 @@ export default async function EditionsPage() {
       <Card title="Editions">
         <EditionsTable editions={editions} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

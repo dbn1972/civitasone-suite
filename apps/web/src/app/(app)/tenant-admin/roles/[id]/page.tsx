@@ -12,16 +12,16 @@ export default async function AdminRoleDetailPage({ params }: { params: { id: st
 
   if (!role) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: "Not found" }]} />
         <a href="/tenant-admin/roles" className="back"><ArrowLeft aria-hidden="true" size={14} /> Back</a>
         <p style={{ color: "var(--civitas-color-text-muted)", marginTop: 16 }}>Role not found.</p>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Manage Roles", href: "/tenant-admin/roles" }, { label: role.name }]} />
       <PageHeader
         back="/tenant-admin/roles"
@@ -53,6 +53,6 @@ export default async function AdminRoleDetailPage({ params }: { params: { id: st
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

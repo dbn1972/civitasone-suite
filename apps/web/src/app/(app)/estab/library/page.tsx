@@ -24,7 +24,7 @@ export default async function LibraryPage({
   const outOfStock = books.filter((b) => b.status === "unavailable").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Staff Library"
         subtitle="Catalogue of books held by the staff library, and copies currently available for issue."
@@ -59,6 +59,6 @@ export default async function LibraryPage({
           <BooksTable rows={books} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }
