@@ -142,7 +142,10 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         // markProcessed insert above — silently rolled back on every direct
         // transfer; nothing here ever actually persisted. applyTransferEffect
         // (shared with the eOffice-approved transfer path, which never had
-        // this bug) applies only departmentId/designationId.
+        // this bug) applies only departmentId/designationId, and only once
+        // the effective date is actually due — a future-dated transfer stays
+        // "pending_effective" and is picked up later by the scheduler
+        // (lifecycle/effective-scheduler.ts), per the effective-dating fix.
         await lifecycleRepo.applyTransferEffect(tx, {
           tenantId: p.tenantId, employeeId: p.employeeId, toDeptId: p.toDeptId, toDesigId: p.toDesigId ?? null,
         }, msg.actorId);
@@ -150,7 +153,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "transfer", "employee", p.employeeId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
-    // M1: department and status change visible in list
+    // M1: department change visible in list (transfer no longer writes status -- see HIGH fix above)
     await cache.invalidateResource(msg.tenantId, "employee");
   });
 

@@ -13,6 +13,7 @@ import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
 import { db } from "../src/shared/db.js";
 import { hrmsDepartments, hrmsDesignations, hrmsEmployees } from "../src/modules/employee/schema.js";
+import { hrmsAttendance } from "../src/modules/attendance/schema.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -56,10 +57,37 @@ beforeAll(async () => {
       departmentId: DEPT_ID, designationId: DESIG_ID, dateOfJoining: "2020-01-01",
       status: "confirmed", employeeType: "permanent", createdBy: PRIYA.id, updatedBy: PRIYA.id,
     });
+    // Same gap as MEERA above, hit by Phase 3 instead of Phase 7: buildApp()
+    // only wires HTTP routes, never the queue consumers (those are wired by
+    // worker.ts, a separate process this test never starts) -- see
+    // registerAttendanceConsumers/registerEmployeeConsumers call sites. So
+    // 3.1's "HR marks attendance (batch)" POST publishes attendanceMark and
+    // gets a 202, but nothing ever consumes it and no hrms_attendance row is
+    // ever actually written. That was invisible while 3.7's regularisation
+    // route did a blind insert with no existence check, but now that it does
+    // a real synchronous findAttendanceByEmpAndDate lookup (HIGH fix, see
+    // attendance/routes.ts), 3.7 needs a REAL row for (ARJUN, 2024-11-04) to
+    // find. Seed both ARJUN himself (hrms_attendance.employee_id FKs to
+    // hrms_employees.id -- migrations/0028_fk_constraints.sql
+    // fk_attendance_employee) and his attendance row directly, same fix as
+    // MEERA's. 3.1's own POST is left in place -- it still exercises the
+    // batch-mark endpoint's contract/permissions, it just can't be relied on
+    // to persist anything in this harness.
+    await tx.insert(hrmsEmployees).values({
+      id: ARJUN.id, tenantId: TENANT, employeeNo: "DIC-ENG-101", fullName: "Arjun Nair",
+      departmentId: DEPT_ID, designationId: DESIG_ID, dateOfJoining: "2024-11-01",
+      status: "probation", employeeType: "permanent", createdBy: PRIYA.id, updatedBy: PRIYA.id,
+    });
+    await tx.insert(hrmsAttendance).values({
+      id: randomUUID(), tenantId: TENANT, employeeId: ARJUN.id, attendanceDate: "2024-11-04",
+      status: "present", createdBy: PRIYA.id, updatedBy: PRIYA.id,
+    });
   }));
 });
 afterAll(async () => {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    // hrms_attendance.employee_id FKs to hrms_employees.id -- must go first.
+    await tx.delete(hrmsAttendance).where(eq(hrmsAttendance.tenantId, TENANT));
     await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
     await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
     await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
@@ -248,7 +276,7 @@ describe("Phase 3: Attendance", () => {
 
   it("3.7 HR creates regularisation", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/attendance/regularisations", headers: h(PRIYA), payload: {
-      employeeId: ARJUN.id, date: "2024-11-05", originalStatus: "absent", requestedStatus: "present", reason: "Was on field duty",
+      employeeId: ARJUN.id, date: "2024-11-04", originalStatus: "absent", requestedStatus: "present", reason: "Was on field duty",
     }});
     expect([202, 400]).toContain(r.statusCode);
     expect(r.statusCode).not.toBe(403);

@@ -51,6 +51,34 @@ export async function findByEmpsAndMonth(tenantId: string, employeeIds: string[]
   return byEmployee;
 }
 
+/**
+ * HIGH fix: gates regularisation creation (routes.ts POST
+ * /v1/hrms/attendance/regularisations) on a raw attendance record actually
+ * existing for this employee+date. repo.insertRegularisation was previously
+ * called with no existence/FK check at all, so a regularisation request
+ * could be filed -- and would sit as a legitimate-looking "pending" row --
+ * for a date nothing was ever marked for: a typo'd date, a date before the
+ * employee's joining, or another tenant's employee id. A regularisation is
+ * meant to be a correction against attendance that was actually marked, not
+ * a way to fabricate one. Real point lookup on (tenantId, employeeId,
+ * attendanceDate) -- the same triple upsertAttendance's onConflictDoUpdate
+ * target treats as the natural key for one row per employee per day --
+ * rather than reusing findByEmpAndMonth's capped scan-and-filter. Mirrors
+ * employeeRepo.findById's "real point lookup, not a paginated list scan"
+ * precedent (see internal/routes.ts's employees/:id/exists "round2 review
+ * fix" comment).
+ */
+export async function findAttendanceByEmpAndDate(tenantId: string, employeeId: string, date: string): Promise<AttendanceRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsAttendance)
+    .where(and(
+      eq(hrmsAttendance.tenantId, tenantId),
+      eq(hrmsAttendance.employeeId, employeeId),
+      eq(hrmsAttendance.attendanceDate, date),
+    ))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function insertAttendance(tx: Writer, row: AttendanceInsert): Promise<void> {
   await tx.insert(hrmsAttendance).values(row);
 }

@@ -45,6 +45,23 @@ export async function approveLeave(ctx: RequestContext, id: string): Promise<Acc
   if (leaveApp.createdBy === ctx.actorId) {
     throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "Maker-checker: you cannot approve your own leave application.");
   }
+  // HIGH fix: mirror rejectLeave's BUG-5 synchronous pre-check below — it was
+  // missing here entirely. Without it, a stale/duplicate approve call (e.g.
+  // an already-approved, already-rejected, or already-cancelled application)
+  // gets a false 202 while the write silently fails deep in the async
+  // consumer: the consumer's catch block only special-cases
+  // LEAVE_ALREADY_PROCESSED (H2's race-safe "WHERE status='pending'" guard),
+  // so a DomainError thrown by assertLeaveAppStatusTransition there is NOT
+  // caught by that special case and instead propagates as an unhandled
+  // consumer failure with no clear signal back to the caller. Assert the
+  // transition is legal *before* returning 202, using the same leaveApp row
+  // already fetched above for the self-approval check.
+  try {
+    assertLeaveAppStatusTransition(leaveApp.status, "approved");
+  } catch (err) {
+    if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
+    throw err;
+  }
   const messageId = randomUUID();
   await queue.publish(COMMANDS.leaveApprove, {
     messageId, type: COMMANDS.leaveApprove,

@@ -151,22 +151,48 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId });
   });
   // Employee summaries for payroll service (id → fullName + departmentName)
+  //
+  // HIGH security fix: this route used to read req.headers["x-tenant-id"]
+  // directly with NO resolveContext/requireRole call at all -- unlike every
+  // other route in this file (payroll-input above; employees/:id/exists and
+  // attendance-lop-applies below), which correctly gate on
+  // resolveContext(req) + requireRole(ctx, INTERNAL_ROLES) and use
+  // ctx.tenantId. That meant ANY caller (no bearer token, no x-internal
+  // service secret, nothing) could pass an arbitrary x-tenant-id and read
+  // back that tenant's employee id/fullName/departmentId — a real
+  // authentication bypass, not merely a "trusts a header" gap: unlike the
+  // legacy assumption that RLS alone protected this (a spoofed tenant header
+  // only produces an empty-intersection query, not a breach, because
+  // scopedRead's GUC was never set from THIS header to begin with), there was
+  // no auth check here whatsoever.
+  //
+  // resolveServiceContext (packages/auth/src/context.ts) is the correct,
+  // already-proven-safe gate for this endpoint's real callers
+  // (payroll-service's and estab-service's hrms-client.ts, confirmed by
+  // reading both): they send x-internal:"1" + x-service-secret +
+  // x-tenant-id, exactly the header set resolveServiceContext's own
+  // service-account branch validates (constant-time compare against
+  // INTERNAL_SERVICE_SECRET) before trusting x-tenant-id as ctx.tenantId and
+  // granting the fixed internal-service role set. So switching to
+  // resolveContext+requireRole here closes the hole without breaking either
+  // real caller — it is the exact same mechanism their sibling routes
+  // (payroll-input, employees/:id/exists, attendance-lop-applies,
+  // slip-templates/default) already rely on.
   app.get("/v1/hrms/internal/employee-summaries", async (req, reply) => {
-    const headers = req.headers as Record<string, string>;
-    const tenantId = headers["x-tenant-id"] ?? "";
-    if (!tenantId) return reply.code(400).send({ code: "MISSING_TENANT" });
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
     const { scopedRead } = await import("../../shared/db.js");
     const { hrmsEmployees, hrmsDepartments } = await import("../employee/schema.js");
     const { eq, and } = await import("drizzle-orm");
     const employees = await scopedRead((tx) =>
       tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, departmentId: hrmsEmployees.departmentId })
         .from(hrmsEmployees)
-        .where(eq(hrmsEmployees.tenantId, tenantId))
+        .where(eq(hrmsEmployees.tenantId, ctx.tenantId))
         .limit(2000),
     );
     const deptIds = [...new Set(employees.map((e) => e.departmentId))];
     const depts = deptIds.length > 0
-      ? await scopedRead((tx) => tx.select({ id: hrmsDepartments.id, name: hrmsDepartments.name }).from(hrmsDepartments).where(and(eq(hrmsDepartments.tenantId, tenantId))))
+      ? await scopedRead((tx) => tx.select({ id: hrmsDepartments.id, name: hrmsDepartments.name }).from(hrmsDepartments).where(and(eq(hrmsDepartments.tenantId, ctx.tenantId))))
       : [];
     const deptMap = new Map(depts.map((d) => [d.id, d.name]));
     return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, departmentName: deptMap.get(e.departmentId) ?? "" })));

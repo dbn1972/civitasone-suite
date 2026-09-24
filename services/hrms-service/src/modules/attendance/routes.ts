@@ -101,6 +101,24 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const body = regularisationCreateBody.parse(req.body);
     await assertPeriodsUnlocked(ctx.tenantId, [body.date]);
+    // HIGH fix: repo.insertRegularisation (consumer.ts) was a blind insert with
+    // no check that a raw attendance record exists for this employee+date -- a
+    // regularisation is meant to correct attendance that was actually marked,
+    // not fabricate a record for a day nothing was ever marked on. Synchronous
+    // pre-check, the same "fail fast with a clear error instead of a false 202
+    // that silently no-ops downstream" pattern already used by
+    // assertPeriodsUnlocked just above and by leave/commands.ts's
+    // approveLeave/rejectLeave transition checks -- the async consumer has no
+    // channel left to signal a rejection back to the caller once it has
+    // already replied 202.
+    const attendanceRecord = await repo.findAttendanceByEmpAndDate(ctx.tenantId, body.employeeId, body.date);
+    if (!attendanceRecord) {
+      throw new HttpError(
+        404,
+        "ATTENDANCE_RECORD_NOT_FOUND",
+        `no attendance record exists for employee ${body.employeeId} on ${body.date} -- mark attendance before requesting a regularisation`,
+      );
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createRegularisation(ctx, body));
   });
 
