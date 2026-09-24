@@ -141,7 +141,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "transfer", "employee", p.employeeId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
-    // M1: department and status change visible in list
+    // M1: department change visible in list (transfer no longer writes status -- see HIGH fix above)
     await cache.invalidateResource(msg.tenantId, "employee");
   });
 
