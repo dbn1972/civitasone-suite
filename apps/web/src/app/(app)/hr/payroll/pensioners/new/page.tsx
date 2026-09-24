@@ -9,7 +9,7 @@ export default async function NewPensionerPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/pensioners"
+        back="/hr/payroll/pensioners" backLabel="Back to Pensioners"
       />
       <CreatePensionerForm />
     </main>

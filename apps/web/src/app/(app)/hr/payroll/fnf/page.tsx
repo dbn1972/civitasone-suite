@@ -56,7 +56,7 @@ export default async function FnfPage() {
       <PageHeader
         title="Full & Final Settlement"
         subtitle="Compute and track F&F separation settlements — last salary, gratuity, leave encashment, arrears."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load F&F settlements — showing nothing" />
 

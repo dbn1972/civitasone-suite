@@ -13,7 +13,7 @@ export default async function OvertimeNewPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/workforce/overtime"
+        back="/hr/workforce/overtime" backLabel="Back to Overtime"
       />
       <div style={{ maxWidth: 540, marginTop: 20 }}>
         <Card title={t("cardTitle")}>

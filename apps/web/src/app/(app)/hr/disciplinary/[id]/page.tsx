@@ -37,7 +37,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
           <a href="/hr">HR</a> <span aria-hidden="true">›</span>{" "}
           <a href="/hr/disciplinary">Disciplinary</a> <span aria-hidden="true">›</span> Not found
         </nav>
-        <PageHeader title="Disciplinary Case" back="/hr/disciplinary" />
+        <PageHeader title="Disciplinary Case" back="/hr/disciplinary" backLabel="Back to Disciplinary" />
         <EmptyState icon="📁" title="Case not found" message="This disciplinary case may have been removed or the ID is invalid." />
       </main>
     );
@@ -62,7 +62,7 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
       <PageHeader
         title={`Disciplinary case ${caseLabel}`}
         subtitle={proceedingType !== "—" ? `${proceedingType} proceeding` : undefined}
-        back="/hr/disciplinary"
+        back="/hr/disciplinary" backLabel="Back to Disciplinary"
         actions={<StatusPill status={status} />}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />

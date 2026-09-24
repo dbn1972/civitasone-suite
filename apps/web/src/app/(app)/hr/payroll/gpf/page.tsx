@@ -75,7 +75,7 @@ export default async function GpfStatementsPage() {
       <PageHeader
         title={t.rich("title", { term: () => <Term name="GPF" /> })}
         subtitle={t("subtitle")}
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
         help="payroll"
       />
 

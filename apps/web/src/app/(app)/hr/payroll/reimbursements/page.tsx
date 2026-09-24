@@ -46,7 +46,7 @@ export default async function ReimbursementsPage() {
       <PageHeader
         title="Reimbursements"
         subtitle="Employee expense reimbursement claims (medical, travel, LTA, and more)."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>

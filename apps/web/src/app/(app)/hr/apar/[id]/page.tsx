@@ -99,7 +99,7 @@ export default async function AparDetailPage({
   if (errored && !isNotFound) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title={t("detailPageTitle")} subtitle={t("loadErrorSubtitle")} back="/hr/apar" />
+        <PageHeader title={t("detailPageTitle")} subtitle={t("loadErrorSubtitle")} back="/hr/apar" backLabel="Back to APAR" />
         <DataSourceBadge source={result.source} />
         <Card title="">
           <RefreshErrorState error={toHumanError("load", { area: "APAR record" })} backHref="/hr/apar" />
@@ -111,7 +111,7 @@ export default async function AparDetailPage({
   if (!detail) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title={t("detailPageTitle")} subtitle={t("notFoundSubtitle")} back="/hr/apar" />
+        <PageHeader title={t("detailPageTitle")} subtitle={t("notFoundSubtitle")} back="/hr/apar" backLabel="Back to APAR" />
         <DataSourceBadge source={result.source} />
         <Card title="">
           <EmptyState icon="📋" title={t("notFoundEmptyTitle")} message={t("notFoundEmptyMessage")} />
@@ -146,7 +146,7 @@ export default async function AparDetailPage({
       <PageHeader
         title={t("titleWithPeriod", { period: appraisal.appraisalPeriod })}
         subtitle={t("subtitleEmployeeStage", { employeeId: appraisal.employeeId, stageLabel })}
-        back="/hr/apar"
+        back="/hr/apar" backLabel="Back to APAR"
       />
       <DataSourceBadge source={result.source} />
       <StatGrid>

@@ -50,7 +50,7 @@ export default async function OnboardingPage() {
         <PageHeader
           title="Onboarding Tracker"
           subtitle="Onboarding checklist progress for new joinees — document collection, IT setup, and departmental induction."
-          back="/hr"
+          back="/hr" backLabel="Back to HR"
         />
         <PermissionDenied module="the onboarding tracker" requiredRoles={ONBOARDING_ROLES} />
       </main>
@@ -85,7 +85,7 @@ export default async function OnboardingPage() {
       <PageHeader
         title="Onboarding Tracker"
         subtitle="Onboarding checklist progress for new joinees — document collection, IT setup, and departmental induction."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={
           <Link href="/hr/employees/new" className="btn primary" aria-label="Add new joinee">
             + Add New Joinee

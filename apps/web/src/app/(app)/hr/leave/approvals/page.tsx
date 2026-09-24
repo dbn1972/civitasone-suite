@@ -6,7 +6,7 @@ export default async function LeaveApprovalsPage() {
   const t = await getTranslations("leaveApprovals");
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel="Back to Leave" />
       <LeaveApprovalsPanel />
     </main>
   );

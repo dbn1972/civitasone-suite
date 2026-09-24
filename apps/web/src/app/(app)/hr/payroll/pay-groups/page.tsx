@@ -42,7 +42,7 @@ export default async function PayGroupsPage() {
       <PageHeader
         title="Pay Groups"
         subtitle="Groups of employees paid on a common schedule (monthly, bi-weekly, or weekly)."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
 
       <StatGrid>

@@ -84,7 +84,7 @@ export default async function WorkSummaryPage() {
       <PageHeader
         title="Work Summaries"
         subtitle="Annual appraisal period work summaries, task completions, and supervisor ratings."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />

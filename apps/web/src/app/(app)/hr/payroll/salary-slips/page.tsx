@@ -27,7 +27,7 @@ export default async function SalarySlipsPage() {
       <PageHeader
         title="Salary Slips"
         subtitle="Individual employee salary statements."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
         help="payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />

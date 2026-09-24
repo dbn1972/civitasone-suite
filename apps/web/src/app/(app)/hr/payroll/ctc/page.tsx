@@ -71,7 +71,7 @@ export default async function CtcConfigPage() {
       <PageHeader
         title="CTC Configuration"
         subtitle="Cost-to-Company component rules used to break a CTC figure into pay components."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
       <StatGrid>

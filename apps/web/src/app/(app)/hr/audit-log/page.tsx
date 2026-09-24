@@ -40,7 +40,7 @@ export default async function HrAuditLogPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
       />
       {source === "error" && <DataSourceBadge source="error" />}
       <Card title={t("cardTitle")}>

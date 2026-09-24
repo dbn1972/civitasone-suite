@@ -41,7 +41,7 @@ export default async function LwfPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory"
+        back="/hr/payroll/statutory" backLabel="Back to Statutory"
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>

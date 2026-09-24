@@ -52,7 +52,7 @@ export default async function CheckinLogPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
       />
       <DataSourceBadge source={source} />
       <StatGrid>

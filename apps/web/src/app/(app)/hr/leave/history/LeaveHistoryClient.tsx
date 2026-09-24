@@ -148,7 +148,7 @@ export default function LeaveHistoryClient({ roles, myEmployeeId }: Props) {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/leave"
+        back="/hr/leave" backLabel="Back to Leave"
         actions={<Link href="/hr/leave/apply" className="btn primary">{t("applyLeaveAction")}</Link>}
       />
 

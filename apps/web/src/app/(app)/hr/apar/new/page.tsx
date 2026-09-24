@@ -68,7 +68,7 @@ export default function AparNewPage() {
 
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/apar" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/apar" backLabel="Back to APAR" />
 
       <div style={{ maxWidth: 600, marginTop: 20 }}>
       <Card title={t("cardTitle")}>

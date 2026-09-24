@@ -54,7 +54,7 @@ export default async function OvertimePage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/workforce"
+        back="/hr/workforce" backLabel="Back to Workforce"
         actions={
           <Link href="/hr/workforce/overtime/new" className="btn primary">
             {t("newRequest")}

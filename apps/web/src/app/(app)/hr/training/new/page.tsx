@@ -22,7 +22,7 @@ export default function NewTrainingPage() {
       <PageHeader
         title="New Training Program"
         subtitle="Schedule a new capacity building initiative."
-        back="/hr/training"
+        back="/hr/training" backLabel="Back to Training"
       />
       <NewTrainingForm />
     </main>

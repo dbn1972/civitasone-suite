@@ -93,7 +93,7 @@ export default async function PayrollComparisonPage({
       <PageHeader
         title="Payroll Comparison"
         subtitle="Month-on-month comparison of payroll register totals."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
 

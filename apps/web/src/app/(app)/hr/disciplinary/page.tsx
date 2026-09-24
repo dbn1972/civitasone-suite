@@ -69,7 +69,7 @@ export default async function DisciplinaryListPage() {
       <PageHeader
         title="Disciplinary Cases"
         subtitle="All departmental proceedings — major vigilance cases and minor grievances in one view."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<Link href="/hr/vigilance" className="btn-outline">Vigilance Only</Link>}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />

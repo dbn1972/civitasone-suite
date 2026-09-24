@@ -46,7 +46,7 @@ export default async function TravelRequestsPage() {
       <PageHeader
         title="Travel Requests"
         subtitle="Submit and track official travel approvals — LTC, tour advance, and TA/DA settlement."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />

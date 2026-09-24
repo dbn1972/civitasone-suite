@@ -119,7 +119,7 @@ export default async function OnboardingDetailPage({ params }: Props) {
   if (summaryStatus === 403) {
     return (
       <main className="page-main wrap">
-        <PageHeader title="Onboarding Details" back="/hr/onboarding" />
+        <PageHeader title="Onboarding Details" back="/hr/onboarding" backLabel="Back to Onboarding" />
         <PermissionDenied module="onboarding details" requiredRoles={ONBOARDING_ROLES} />
       </main>
     );

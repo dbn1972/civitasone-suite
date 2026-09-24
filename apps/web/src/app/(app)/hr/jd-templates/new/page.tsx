@@ -24,7 +24,7 @@ export default function NewTemplatePage() {
       <PageHeader
         title="New JD Template"
         subtitle="Create a reusable job description template."
-        back="/hr/jd-templates"
+        back="/hr/jd-templates" backLabel="Back to JD Templates"
       />
       <NewTemplateForm />
     </main>

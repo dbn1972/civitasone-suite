@@ -70,7 +70,7 @@ export default async function CompetencyPage() {
       <PageHeader
         title="Competency Framework"
         subtitle="Frameworks, competency definitions, and core government competency radar."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />

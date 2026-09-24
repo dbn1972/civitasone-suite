@@ -67,7 +67,7 @@ export default async function PayStructuresPage() {
       <PageHeader
         title="Pay Structures"
         subtitle="Define earning and deduction components that make up an employee's pay."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <StatGrid>
         <StatCard icon="🧱" iconBg="var(--infobg)" label="Total Structures" value={structuresErrored ? "—" : structures.length} />

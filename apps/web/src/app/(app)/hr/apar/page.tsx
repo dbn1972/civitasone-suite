@@ -44,7 +44,7 @@ export default async function AparListPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         help="hr"
         actions={
           <Link href="/hr/apar/new" className="btn primary">

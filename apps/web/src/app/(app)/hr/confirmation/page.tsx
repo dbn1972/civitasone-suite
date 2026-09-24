@@ -41,7 +41,7 @@ export default async function ConfirmationPage() {
       <PageHeader
         title="Probation Confirmations"
         subtitle="Employees due for service confirmation after the mandatory 2-year probation (CCS Conduct Rules)."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />

@@ -128,7 +128,7 @@ export default async function DisbursementPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       {anyError && <DataSourceBadge source="error" message={t("loadErrorMessage")} />}
 

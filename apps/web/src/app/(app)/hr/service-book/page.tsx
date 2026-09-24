@@ -49,7 +49,7 @@ export default async function ServiceBookPage({
       <PageHeader
         title={empId ? t("titleForEmployee", { employee: items[0]?.employee ?? t("defaultEmployeeName") }) : t("title")}
         subtitle={empId ? t("subtitleForEmployee") : t("subtitleAll")}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={empId ? <Link href="/hr/service-book" className="btn ghost">{t("viewAllEmployeesLink")}</Link> : <span />}
       />
       <DataSourceBadge source={source} />

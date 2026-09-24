@@ -81,7 +81,7 @@ export default async function DpcPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle", { asOf })}
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />

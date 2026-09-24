@@ -38,7 +38,7 @@ export default async function DeputationPage() {
       <PageHeader
         title="Deputation"
         subtitle="Officers on deputation to other government organisations."
-        back="/hr"
+        back="/hr" backLabel="Back to HR"
       />
       <DataSourceBadge source={source} />
 

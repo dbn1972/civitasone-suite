@@ -87,7 +87,7 @@ export default async function WorkSummaryPage() {
       <PageHeader
         title={t('title')}
         subtitle={t('subtitle')}
-        back="/hr/workforce"
+        back="/hr/workforce" backLabel="Back to Workforce"
       />
       <DataSourceBadge source={source} />
 

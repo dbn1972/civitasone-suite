@@ -67,7 +67,7 @@ export default async function PayrollRegisterPage({
       <PageHeader
         title="Payroll Register"
         subtitle="Department-wise payroll summary for a run or period."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 

@@ -7,7 +7,7 @@ export default function Loading() {
       <PageHeader
         title="Pay Structures"
         subtitle="Define earning and deduction components that make up an employee's pay."
-        back="/hr/payroll"
+        back="/hr/payroll" backLabel="Back to Payroll"
       />
       <SkeletonTable rows={6} />
     </main>
