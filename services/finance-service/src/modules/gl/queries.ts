@@ -102,6 +102,11 @@ function deriveStatementType(code: string | null, classification: string | null)
   if (d === "1") return "asset";
   if (d === "4" && (classification === "income" || classification === "revenue")) return "income";
   if (d === "5" || d === "6") return "expenditure";
+  // REVIEW FOLLOW-UP: natureOf() (financial-statements/routes.ts) special-cases
+  // 4200 (gain/loss on disposal, GAIN_LOSS in gl/consumer.ts) as expense before
+  // its generic "4" -> income fallback; this dropped that special case, so
+  // 4200 would misclassify as income. Reconciled to match.
+  if (code === "4200") return "expenditure";
   if (d === "4") return "income";
   if (d === "2" || d === "3") return "liability";
   // No usable code prefix (e.g. an orphaned ledger row) — fall back to the

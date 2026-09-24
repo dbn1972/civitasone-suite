@@ -337,6 +337,13 @@ export function registerGlConsumers(queue: Queue): void {
         });
       });
       await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+      // BUG FIX (review follow-up): listFinancialStatements caches under a
+      // sibling "gl_financial_statements" key (gl/queries.ts) with no
+      // invalidation anywhere -- proven live to serve up to 30s of stale
+      // data after a real posting. Invalidated at every point
+      // gl_trial_balance already is, since both derive from the same
+      // gl.finance_ledger rows this posting just changed.
+      await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
       return;
     }
 
@@ -378,6 +385,10 @@ export function registerGlConsumers(queue: Queue): void {
         });
       });
       await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+      // BUG FIX (review follow-up): see the matching comment above
+      // (depreciation branch) -- gl_financial_statements needs invalidating
+      // at every point gl_trial_balance already is.
+      await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
       return;
     }
 
@@ -387,6 +398,10 @@ export function registerGlConsumers(queue: Queue): void {
       await postJournal(tx, msg, p);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+    // BUG FIX (review follow-up): see the matching comment above
+    // (depreciation branch) -- gl_financial_statements needs invalidating at
+    // every point gl_trial_balance already is.
+    await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
   });
 
   // DOM-024 R11 (maker-checker) — a MANUAL journal entry (POST
@@ -474,6 +489,10 @@ export function registerGlConsumers(queue: Queue): void {
       });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+    // BUG FIX (review follow-up): see the matching comment above
+    // (depreciation branch) -- gl_financial_statements needs invalidating at
+    // every point gl_trial_balance already is.
+    await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
     await cache.invalidateResource(msg.tenantId, "journals");
   });
 
@@ -597,5 +616,9 @@ export function registerGlConsumers(queue: Queue): void {
       await repo.markJournalReversed(tx, original.id, msg.actorId);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
+    // BUG FIX (review follow-up): see the matching comment above
+    // (depreciation branch) -- gl_financial_statements needs invalidating at
+    // every point gl_trial_balance already is.
+    await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
   });
 }
