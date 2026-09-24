@@ -1,58 +1,60 @@
 "use client";
 
 import Link from "next/link";
+import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState } from "../../../../_components/ds";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import type { SalarySlipSummary } from "@civitasone/types";
 
 type Row = SalarySlipSummary & { printHref: string } & Record<string, unknown>;
 
-const columns: {
-  key: keyof Row & string;
-  label: string;
-  align?: "left" | "right" | "center";
-  cellType?: "status" | "amount";
-  sortable?: boolean;
-  render?: (row: Row) => React.ReactNode;
-}[] = [
-  {
-    key: "employeeName",
-    label: "Employee",
-    render: (r) => (
-      <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }} tabIndex={-1}>
-        {r.employeeName}
-      </Link>
-    ),
-  },
-  { key: "department", label: "Dept" },
-  { key: "payPeriod", label: "Pay Period" },
-  { key: "gross", label: "Gross", align: "right", cellType: "amount" },
-  { key: "deductions", label: "Deductions", align: "right", cellType: "amount" },
-  { key: "net", label: "Net", align: "right", cellType: "amount" },
-  { key: "status", label: "Status", cellType: "status" },
-  {
-    key: "printHref",
-    label: "Slip",
-    align: "center",
-    sortable: false,
-    render: (r) => <PrintDocumentLink href={r.printHref} label="Print" />,
-  },
-];
-
 export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
+  const t = useTranslations("salarySlipsTable");
+  const columns: {
+    key: keyof Row & string;
+    label: string;
+    align?: "left" | "right" | "center";
+    cellType?: "status" | "amount";
+    sortable?: boolean;
+    render?: (row: Row) => React.ReactNode;
+  }[] = [
+    {
+      key: "employeeName",
+      label: t("colEmployee"),
+      render: (r) => (
+        <Link href={`/hr/employees/${r.employeeId}`} style={{ color: "var(--primary-d)", fontWeight: 600 }} tabIndex={-1}>
+          {r.employeeName}
+        </Link>
+      ),
+    },
+    { key: "department", label: t("colDept") },
+    { key: "payPeriod", label: t("colPayPeriod") },
+    { key: "gross", label: t("colGross"), align: "right", cellType: "amount" },
+    { key: "deductions", label: t("colDeductions"), align: "right", cellType: "amount" },
+    { key: "net", label: t("colNet"), align: "right", cellType: "amount" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+    {
+      key: "printHref",
+      label: t("colSlip"),
+      align: "center",
+      sortable: false,
+      render: (r) => <PrintDocumentLink href={r.printHref} label={t("printLabel")} />,
+    },
+  ];
+
   const rows: Row[] = slips.map((s) => ({
     ...s,
     printHref: `/api/proxy/v1/payroll/slips/${s.id}/pdf`,
   }));
 
   return (
-    <Card title="All Salary Slips">
+    <Card title={t("cardTitle")}>
       {rows.length === 0 ? (
         <EmptyState
           icon="📄"
-          title="No salary slips yet"
-          message="Salary slips appear here once a payroll run has been processed."
-          action={<Link href="/hr/payroll" className="btn primary">Go to payroll runs</Link>}
+          title={t("emptyTitle")}
+          message={t("emptyMessage")}
+          action={<Link href="/hr/payroll" className="btn primary">{t("goToPayrollRunsLink")}</Link>}
         />
       ) : (
         <DataTable<Row>
@@ -62,10 +64,10 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
           rowLinkKey="id"
           sortable
           filterable
-          filterPlaceholder="Filter by employee, department or period…"
+          filterPlaceholder={t("filterPlaceholder")}
           pageSize={20}
-          emptyTitle="No slips match your filter"
-          emptyMessage="Try a different employee name, department or pay period."
+          emptyTitle={t("noMatchTitle")}
+          emptyMessage={t("noMatchMessage")}
         />
       )}
     </Card>

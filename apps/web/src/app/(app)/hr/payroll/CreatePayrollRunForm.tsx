@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { trackActivation } from "@/lib/activation";
@@ -22,6 +23,7 @@ const MONTHS = [
 ];
 
 export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props) {
+  const t = useTranslations("createPayrollRunForm");
   const router = useRouter();
   const { toast } = useToast();
   const now = new Date();
@@ -93,12 +95,12 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
       const body = text ? (JSON.parse(text) as { id?: string }) : {};
       setConfirmOpen(false);
       trackActivation("first_transaction");
-      toast.success(`Payroll run for ${MONTHS[selectedMonthIdx - 1]} ${selectedYear} created successfully.`);
+      toast.success(t("createdToast", { month: MONTHS[selectedMonthIdx - 1], year: selectedYear }));
       if (body.id) {
         router.push(`/hr/payroll/${body.id}`);
       } else {
         setTone("good");
-        setMessage("Payroll run created.");
+        setMessage(t("createdMessage"));
         router.refresh();
       }
     } catch {
@@ -112,13 +114,13 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
     e.preventDefault();
     setMessage(null);
     const errors: Record<string, string> = {};
-    if (!runNo.trim()) errors.runNo = "Run number is required.";
-    if (!structureId) errors.structureId = "Pay structure is required.";
-    if (!month) errors.month = "Month is required.";
+    if (!runNo.trim()) errors.runNo = t("runNoRequiredError");
+    if (!structureId) errors.structureId = t("structureRequiredError");
+    if (!month) errors.month = t("monthRequiredError");
     setFieldErrors(errors);
     if (Object.keys(errors).length > 0) {
       setTone("bad");
-      setMessage("Please complete all fields before creating a run.");
+      setMessage(t("incompleteFormError"));
       return;
     }
     setFieldErrors({});
@@ -137,13 +139,13 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
   return (
     <form onSubmit={handleSubmit} className="card" style={{ marginBottom: 16 }} data-testid="create-payroll-run-form">
       <div className="card-h">
-        <h3>Create Payroll Run</h3>
+        <h3>{t("formTitle")}</h3>
       </div>
       <div className="pad" style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
           {/* Month select */}
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={monthSelId} style={labelStyle}>Month</label>
+            <label htmlFor={monthSelId} style={labelStyle}>{t("monthLabel")}</label>
             <select
               id={monthSelId}
               value={selectedMonthIdx}
@@ -160,7 +162,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
           </div>
           {/* Year select */}
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={yearSelId} style={labelStyle}>Year</label>
+            <label htmlFor={yearSelId} style={labelStyle}>{t("yearLabel")}</label>
             <select
               id={yearSelId}
               value={selectedYear}
@@ -174,7 +176,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
           </div>
           {/* Run No */}
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={runNoId} style={labelStyle}>Run No.</label>
+            <label htmlFor={runNoId} style={labelStyle}>{t("runNoLabel")}</label>
             <input
               id={runNoId}
               value={runNo}
@@ -185,7 +187,7 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
           </div>
           {/* Pay structure */}
           <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={structId} style={labelStyle}>Pay Structure</label>
+            <label htmlFor={structId} style={labelStyle}>{t("structureLabel")}</label>
             <select
               id={structId}
               value={structureId}
@@ -202,13 +204,13 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
 
         {periodDuplicate && (
           <p id={errId} role="alert" className="pill warn" style={{ width: "fit-content" }}>
-            A run already exists for {MONTHS[selectedMonthIdx - 1]} {selectedYear}. Creating another may double-pay employees.
+            {t("periodDuplicateWarning", { month: MONTHS[selectedMonthIdx - 1], year: selectedYear })}
           </p>
         )}
 
         <div>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy || periodDuplicate}>
-            Create Run
+            {t("createRunBtn")}
           </Button>
         </div>
 
@@ -219,30 +221,33 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
         )}
 
         <p style={{ fontSize: 12, color: "var(--ink2)" }}>
-          After creation, open the run to approve and disburse.{" "}
+          {t("afterCreationHint")}{" "}
           <Link href="/hr/leave/approvals" style={{ color: "var(--primary-d)", textDecoration: "underline" }}>
-            Leave approvals
+            {t("leaveApprovalsLink")}
           </Link>
         </p>
       </div>
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this payroll run?"
+        title={t("confirmTitle")}
         danger={periodDuplicate}
-        confirmLabel="Create run"
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
-            Create run <strong>{runNo}</strong> for{" "}
-            <strong>{MONTHS[selectedMonthIdx - 1]} {selectedYear}</strong> using the{" "}
-            <strong>{selectedStructure?.name ?? "selected"}</strong> pay structure.
+            {t.rich("confirmDescriptionBase", {
+              runNo,
+              month: MONTHS[selectedMonthIdx - 1],
+              year: selectedYear,
+              structureName: selectedStructure?.name ?? t("selectedStructureFallback"),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
             {periodDuplicate && (
               <>
                 {" "}
-                <strong>Warning:</strong> a run already exists for this period — proceeding may
-                double-pay employees.
+                {t.rich("confirmDescriptionWarning", { strong: (chunks) => <strong>{chunks}</strong> })}
               </>
             )}
           </>

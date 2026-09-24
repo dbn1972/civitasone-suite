@@ -1,6 +1,7 @@
 "use client";
 
 import { useId, useRef, useState } from "react";
+import { useTranslations } from "next-intl";
 import { Button, Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -9,6 +10,7 @@ type CalcComponent = { code: string; name: string; amountMinor: number; isEmploy
 type CalcResult = { ctcMinor: number; grossMinor: number; employerCostMinor: number; components: CalcComponent[] };
 
 export function CtcCalculatorForm() {
+  const t = useTranslations("ctcCalculatorForm");
   const [ctc, setCtc] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -25,7 +27,7 @@ export function CtcCalculatorForm() {
 
     const rupees = parseFloat(ctc);
     if (Number.isNaN(rupees) || rupees <= 0) {
-      setError("Enter a valid annual CTC amount in rupees.");
+      setError(t("ctcRequiredError"));
       ctcRef.current?.focus();
       return;
     }
@@ -39,18 +41,18 @@ export function CtcCalculatorForm() {
       });
       setResult(res);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Calculation failed. Please try again.");
+      setError(err instanceof Error ? err.message : t("calcFailedError"));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Card title="CTC Calculator">
+    <Card title={t("formTitle")}>
       <form onSubmit={handleSubmit} style={{ display: "grid", gap: 14 }}>
         <div style={{ display: "grid", gap: 6, maxWidth: 320 }}>
           <label htmlFor={ctcId} style={{ fontSize: 13, fontWeight: 600 }}>
-            Annual CTC (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+            {t("annualCtcLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
           </label>
           <input
             id={ctcId}
@@ -60,7 +62,7 @@ export function CtcCalculatorForm() {
             step="0.01"
             value={ctc}
             onChange={(e) => setCtc(e.target.value)}
-            placeholder="e.g. 1200000"
+            placeholder={t("ctcPlaceholder")}
             aria-required="true"
             aria-invalid={error ? true : undefined}
             aria-describedby={error ? errId : undefined}
@@ -70,7 +72,7 @@ export function CtcCalculatorForm() {
 
         <div>
           <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-            {busy ? "Calculating…" : "Calculate Breakup"}
+            {busy ? t("calculatingBtn") : t("calculateBreakupBtn")}
           </Button>
         </div>
 
@@ -84,27 +86,27 @@ export function CtcCalculatorForm() {
           <div style={{ display: "grid", gap: 10 }}>
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontSize: 12, color: "var(--ink2)" }}>Gross Pay</div>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("grossPayLabel")}</div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>{formatMoney(result.grossMinor)}</div>
               </div>
               <div>
-                <div style={{ fontSize: 12, color: "var(--ink2)" }}>Employer Cost</div>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("employerCostLabel")}</div>
                 <div style={{ fontSize: 18, fontWeight: 700 }}>{formatMoney(result.employerCostMinor)}</div>
               </div>
             </div>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <caption className="sr-only">CTC breakup by component</caption>
+              <caption className="sr-only">{t("breakupCaption")}</caption>
               <thead>
                 <tr>
-                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>Component</th>
-                  <th scope="col" style={{ textAlign: "right", padding: "6px 8px", fontSize: 13 }}>Amount</th>
+                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>{t("colComponent")}</th>
+                  <th scope="col" style={{ textAlign: "right", padding: "6px 8px", fontSize: 13 }}>{t("colAmount")}</th>
                 </tr>
               </thead>
               <tbody>
                 {result.components.map((c) => (
                   <tr key={c.code}>
                     <td style={{ padding: "6px 8px", fontSize: 13 }}>
-                      {c.name}{c.isEmployerCost ? " (employer)" : ""}
+                      {c.name}{c.isEmployerCost ? t("employerSuffix") : ""}
                     </td>
                     <td style={{ padding: "6px 8px", fontSize: 13, textAlign: "right" }}>
                       {formatMoney(c.amountMinor)}

@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
@@ -16,24 +17,27 @@ type MoneyField =
 
 const REQUIRED_MONEY_FIELDS: MoneyField[] = ["lastDrawnWages", "avgSalaryLast10Months", "salaryYtd", "tdsYtd"];
 
-const MONEY_LABELS: Record<MoneyField, string> = {
-  noticeBuyout: "Notice Buyout (₹)",
-  leaveEncashmentGross: "Leave Encashment Gross (₹)",
-  gratuityGross: "Gratuity Gross (₹)",
-  retrenchmentComp: "Retrenchment Compensation (₹)",
-  vrsComp: "VRS Compensation (₹)",
-  arrears: "Arrears (₹)",
-  lastDrawnWages: "Last Drawn Wages (₹)",
-  avgSalaryLast10Months: "Avg Salary — Last 10 Months (₹)",
-  priorLeaveEncashExemption: "Prior Leave Encashment Exemption Used (₹)",
-  salaryYtd: "Salary YTD (₹)",
-  tdsYtd: "TDS YTD (₹)",
-  deductions80c: "Deductions — Section 80C (₹)",
-  deductions80d: "Deductions — Section 80D (₹)",
-  otherDeductions: "Other Deductions (₹)",
+// UX-017: keys are stable field identities, never translated -- only used to
+// look up which message key holds the display label. Same safe pattern as
+// salary-revisions/page.tsx's REVISION_TYPE_KEYS.
+const MONEY_FIELD_KEYS: Record<MoneyField, string> = {
+  noticeBuyout: "noticeBuyoutLabel",
+  leaveEncashmentGross: "leaveEncashmentGrossLabel",
+  gratuityGross: "gratuityGrossLabel",
+  retrenchmentComp: "retrenchmentCompLabel",
+  vrsComp: "vrsCompLabel",
+  arrears: "arrearsLabel",
+  lastDrawnWages: "lastDrawnWagesLabel",
+  avgSalaryLast10Months: "avgSalaryLast10MonthsLabel",
+  priorLeaveEncashExemption: "priorLeaveEncashExemptionLabel",
+  salaryYtd: "salaryYtdLabel",
+  tdsYtd: "tdsYtdLabel",
+  deductions80c: "deductions80cLabel",
+  deductions80d: "deductions80dLabel",
+  otherDeductions: "otherDeductionsLabel",
 };
 
-const MONEY_FIELDS = Object.keys(MONEY_LABELS) as MoneyField[];
+const MONEY_FIELDS = Object.keys(MONEY_FIELD_KEYS) as MoneyField[];
 
 // Non-money required fields, in tab/focus order, so the "first invalid field"
 // lookup below can walk one flat list instead of a chain of if/else.
@@ -47,6 +51,23 @@ function toMinorString(rupees: string): string {
 }
 
 export function ComputeFnfForm() {
+  const t = useTranslations("computeFnfForm");
+  const MONEY_LABELS: Record<MoneyField, string> = Object.fromEntries(
+    (Object.keys(MONEY_FIELD_KEYS) as MoneyField[]).map((f) => [f, t(MONEY_FIELD_KEYS[f])]),
+  ) as Record<MoneyField, string>;
+  const SEPARATION_TYPE_LABELS: Record<(typeof SEPARATION_TYPES)[number], string> = {
+    retirement: t("separationTypeRetirement"),
+    superannuation: t("separationTypeSuperannuation"),
+    resignation: t("separationTypeResignation"),
+    retrenchment: t("separationTypeRetrenchment"),
+    vrs: t("separationTypeVrs"),
+    death: t("separationTypeDeath"),
+  };
+  const EMPLOYEE_CATEGORY_LABELS: Record<(typeof EMPLOYEE_CATEGORIES)[number], string> = {
+    govt: t("employeeCategoryGovt"),
+    non_govt_covered: t("employeeCategoryNonGovtCovered"),
+    non_govt_uncovered: t("employeeCategoryNonGovtUncovered"),
+  };
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState("");
   const [separationDate, setSeparationDate] = useState("");
@@ -121,7 +142,7 @@ export function ComputeFnfForm() {
     setInvalidFields(missing);
 
     if (missing.size > 0) {
-      setError("Employee, separation date, completed years, leave balance, FY start year and the required money fields are all required.");
+      setError(t("requiredFieldsError"));
       const orderedKeys: FieldKey[] = [...REQUIRED_TOP_FIELDS, ...REQUIRED_MONEY_FIELDS];
       const firstInvalid = orderedKeys.find((k) => missing.has(k));
       if (firstInvalid) {
@@ -169,7 +190,7 @@ export function ComputeFnfForm() {
         }),
       });
       setConfirmOpen(false);
-      setMessage(res.data.message ?? "F&F compute queued.");
+      setMessage(res.data.message ?? t("computeQueuedMessage"));
       router.refresh();
     } catch {
       setError(formError.fromException("save").message);
@@ -180,12 +201,12 @@ export function ComputeFnfForm() {
 
   return (
     <form onSubmit={openConfirm} style={{ marginBottom: 16 }}>
-      <Card title="Compute F&F Settlement" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Employee ID (UUID) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={empIdField}
@@ -200,7 +221,7 @@ export function ComputeFnfForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Separation Date <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("separationDateLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={dateField}
@@ -215,27 +236,27 @@ export function ComputeFnfForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={sepTypeField} style={{ fontSize: 13, fontWeight: 600 }}>Separation Type</label>
+              <label htmlFor={sepTypeField} style={{ fontSize: 13, fontWeight: 600 }}>{t("separationTypeLabel")}</label>
               <select id={sepTypeField} value={separationType} onChange={(e) => setSeparationType(e.target.value as (typeof SEPARATION_TYPES)[number])} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}>
-                {SEPARATION_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
+                {SEPARATION_TYPES.map((v) => <option key={v} value={v}>{SEPARATION_TYPE_LABELS[v]}</option>)}
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={catField} style={{ fontSize: 13, fontWeight: 600 }}>Employee Category</label>
+              <label htmlFor={catField} style={{ fontSize: 13, fontWeight: 600 }}>{t("employeeCategoryLabel")}</label>
               <select id={catField} value={employeeCategory} onChange={(e) => setEmployeeCategory(e.target.value as (typeof EMPLOYEE_CATEGORIES)[number])} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}>
-                {EMPLOYEE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+                {EMPLOYEE_CATEGORIES.map((c) => <option key={c} value={c}>{EMPLOYEE_CATEGORY_LABELS[c]}</option>)}
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={regimeField} style={{ fontSize: 13, fontWeight: 600 }}>Tax Regime</label>
+              <label htmlFor={regimeField} style={{ fontSize: 13, fontWeight: 600 }}>{t("taxRegimeLabel")}</label>
               <select id={regimeField} value={taxRegime} onChange={(e) => setTaxRegime(e.target.value as "old" | "new")} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}>
-                <option value="old">Old</option>
-                <option value="new">New</option>
+                <option value="old">{t("taxRegimeOld")}</option>
+                <option value="new">{t("taxRegimeNew")}</option>
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={yearsField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Completed Years <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("completedYearsLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={yearsField}
@@ -252,7 +273,7 @@ export function ComputeFnfForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={leaveField} style={{ fontSize: 13, fontWeight: 600 }}>
-                Leave Balance (days) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("leaveBalanceLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={leaveField}
@@ -268,12 +289,12 @@ export function ComputeFnfForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={remainingField} style={{ fontSize: 13, fontWeight: 600 }}>Remaining Months to Retirement</label>
+              <label htmlFor={remainingField} style={{ fontSize: 13, fontWeight: 600 }}>{t("remainingMonthsLabel")}</label>
               <input id={remainingField} type="number" min={0} value={remainingMonthsToRetirement} onChange={(e) => setRemainingMonthsToRetirement(e.target.value)} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fyField} style={{ fontSize: 13, fontWeight: 600 }}>
-                FY Start Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("fyStartYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={fyField}
@@ -290,7 +311,7 @@ export function ComputeFnfForm() {
           </div>
 
           <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14 }}>
-            <legend style={{ fontSize: 13, fontWeight: 700, padding: "0 6px" }}>Amounts (₹)</legend>
+            <legend style={{ fontSize: 13, fontWeight: 700, padding: "0 6px" }}>{t("amountsLegend")}</legend>
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
               {MONEY_FIELDS.map((f) => {
                 const id = `${baseId}-${f}`;
@@ -322,7 +343,7 @@ export function ComputeFnfForm() {
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              Compute Settlement
+              {t("computeSettlementBtn")}
             </Button>
           </div>
 
@@ -337,18 +358,17 @@ export function ComputeFnfForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Compute this F&F settlement?"
+        title={t("confirmTitle")}
         danger
-        confirmLabel="Compute settlement"
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={
-          <>
-            This queues an F&amp;F settlement computation for employee <strong>{employeeId}</strong>{" "}
-            ({separationType}, {separationDate}). Statutory exemption and tax figures are computed
-            server-side from raw statutory rules — no values are rounded before display.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          employeeId,
+          separationType: SEPARATION_TYPE_LABELS[separationType],
+          separationDate,
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void compute()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

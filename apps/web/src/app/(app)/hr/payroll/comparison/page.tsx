@@ -98,12 +98,12 @@ export default async function PayrollComparisonPage({
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
-      <DataSourceBadge source={source === "error" ? "error" : "api"} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />
 
       {canCompare && data && (
         <StatGrid>
-          <StatCard icon="💰" iconBg="var(--infobg)" label={`${data.period1.period} Gross`} value={formatMoney(data.period1.gross)} />
-          <StatCard icon="💰" iconBg="var(--goodbg)" label={`${data.period2.period} Gross`} value={formatMoney(data.period2.gross)} />
+          <StatCard icon="💰" iconBg="var(--infobg)" label={t("periodGrossLabel", { period: data.period1.period })} value={formatMoney(data.period1.gross)} />
+          <StatCard icon="💰" iconBg="var(--goodbg)" label={t("periodGrossLabel", { period: data.period2.period })} value={formatMoney(data.period2.gross)} />
           <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statHeadcountDelta")} value={(data.period2.headcount - data.period1.headcount > 0 ? "+" : "") + String(data.period2.headcount - data.period1.headcount)} />
           <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statNetDelta")} value={delta(Number(data.period1.net), Number(data.period2.net))} />
         </StatGrid>
@@ -122,11 +122,11 @@ export default async function PayrollComparisonPage({
       )}
 
       {canCompare && data && (
-        <Card title={`${data.period1.period} vs ${data.period2.period}`}>
+        <Card title={t("comparisonCardTitle", { period1: data.period1.period, period2: data.period2.period })}>
           <div style={{ overflowX: "auto" }}>
             <table className="tbl">
               <caption className="sr-only">
-                Payroll comparison between {data.period1.period} and {data.period2.period}
+                {t("comparisonCaption", { period1: data.period1.period, period2: data.period2.period })}
               </caption>
               <thead>
                 <tr>

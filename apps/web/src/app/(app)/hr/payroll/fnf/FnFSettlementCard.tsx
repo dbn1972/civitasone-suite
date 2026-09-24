@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { StatusPill, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
@@ -24,35 +25,42 @@ const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "IN
 
 function rupees(minor: number) { return inrFmt.format(minor / 100); }
 
-const NEXT_ACTION: Record<string, { label: string; endpoint: string; confirm: string } | undefined> = {
-  draft: { label: "Submit for Approval", endpoint: "submit", confirm: "Submit this settlement for manager approval?" },
-  manager_approved: { label: "Finance Approve", endpoint: "finance-approve", confirm: "Mark this settlement as finance-approved?" },
-  finance_approved: { label: "Mark Disbursed", endpoint: "disburse", confirm: "Mark this settlement as disbursed?" },
+// UX-017: keys are the stable backend status codes, never translated -- only
+// used to look up which message keys hold the next-action button/dialog text
+// and the display label. Same safe pattern as salary-revisions/page.tsx's
+// REVISION_TYPE_KEYS.
+const NEXT_ACTION_KEYS: Record<string, { labelKey: string; endpoint: string; confirmKey: string } | undefined> = {
+  draft: { labelKey: "actionSubmitForApproval", endpoint: "submit", confirmKey: "confirmSubmitForApproval" },
+  manager_approved: { labelKey: "actionFinanceApprove", endpoint: "finance-approve", confirmKey: "confirmFinanceApprove" },
+  finance_approved: { labelKey: "actionMarkDisbursed", endpoint: "disburse", confirmKey: "confirmMarkDisbursed" },
 };
 
-const STATUS_LABELS: Record<string, string> = {
-  draft: "Draft",
-  manager_approved: "Manager Approved",
-  finance_approved: "Finance Approved",
-  disbursed: "Disbursed",
-  computed: "Computed",
-  settled: "Settled",
-  paid: "Paid",
+const STATUS_LABEL_KEYS: Record<string, string> = {
+  draft: "statusDraft",
+  manager_approved: "statusManagerApproved",
+  finance_approved: "statusFinanceApproved",
+  disbursed: "statusDisbursed",
+  computed: "statusComputed",
+  settled: "statusSettled",
+  paid: "statusPaid",
 };
 
 function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRow) => void }) {
+  const t = useTranslations("fnFSettlementCard");
   const [expanded, setExpanded] = useState(false);
 
   const components: { label: string; amountMinor: number }[] = [
-    ...(row.lastSalaryMinor ? [{ label: "Last Salary", amountMinor: row.lastSalaryMinor }] : []),
-    ...(row.gratuityMinor ? [{ label: "Gratuity", amountMinor: row.gratuityMinor }] : []),
-    ...(row.leaveEncashmentMinor ? [{ label: "Leave Encashment", amountMinor: row.leaveEncashmentMinor }] : []),
-    ...(row.bonusArrearsMinor ? [{ label: "Bonus / Arrears", amountMinor: row.bonusArrearsMinor }] : []),
-    ...(row.deductionsMinor ? [{ label: "Deductions", amountMinor: -Math.abs(row.deductionsMinor) }] : []),
+    ...(row.lastSalaryMinor ? [{ label: t("lastSalaryLabel"), amountMinor: row.lastSalaryMinor }] : []),
+    ...(row.gratuityMinor ? [{ label: t("gratuityLabel"), amountMinor: row.gratuityMinor }] : []),
+    ...(row.leaveEncashmentMinor ? [{ label: t("leaveEncashmentLabel"), amountMinor: row.leaveEncashmentMinor }] : []),
+    ...(row.bonusArrearsMinor ? [{ label: t("bonusArrearsLabel"), amountMinor: row.bonusArrearsMinor }] : []),
+    ...(row.deductionsMinor ? [{ label: t("deductionsLabel"), amountMinor: -Math.abs(row.deductionsMinor) }] : []),
   ];
 
-  const nextAction = NEXT_ACTION[row.status];
-  const statusLabel = STATUS_LABELS[row.status] ?? row.status;
+  const nextActionKeys = NEXT_ACTION_KEYS[row.status];
+  const nextAction = nextActionKeys ? { ...nextActionKeys, label: t(nextActionKeys.labelKey), confirm: t(nextActionKeys.confirmKey) } : undefined;
+  const statusKey = STATUS_LABEL_KEYS[row.status];
+  const statusLabel = statusKey ? t(statusKey) : row.status;
 
   return (
     <div style={{ border: "1px solid var(--line2)", borderRadius: 12, overflow: "hidden" }}>
@@ -81,7 +89,7 @@ function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRo
       {/* Net payable + breakdown toggle */}
       <div style={{ padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
-          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>Net Payable</div>
+          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("netPayableLabel")}</div>
           <div style={{ fontSize: 22, fontWeight: 700 }}>{rupees(Number(row.netPayableMinor))}</div>
         </div>
         {components.length > 0 && (
@@ -91,7 +99,7 @@ function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRo
             onClick={() => setExpanded((e) => !e)}
             aria-expanded={expanded}
           >
-            {expanded ? "Hide breakdown ▲" : "Show breakdown ▼"}
+            {expanded ? t("hideBreakdownBtn") : t("showBreakdownBtn")}
           </Button>
         )}
       </div>
@@ -110,7 +118,7 @@ function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRo
                 </tr>
               ))}
               <tr style={{ borderTop: "2px solid var(--line2)" }}>
-                <td style={{ padding: "8px 0", fontWeight: 700 }}>Net Payable</td>
+                <td style={{ padding: "8px 0", fontWeight: 700 }}>{t("netPayableLabel")}</td>
                 <td style={{ padding: "8px 0", textAlign: "end", fontWeight: 700 }}>{rupees(Number(row.netPayableMinor))}</td>
               </tr>
             </tbody>
@@ -122,8 +130,9 @@ function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRo
 }
 
 export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
+  const t = useTranslations("fnFSettlementCard");
   const router = useRouter();
-  const [pendingAction, setPendingAction] = useState<{ row: FnFCardRow; action: NonNullable<typeof NEXT_ACTION[string]> } | null>(null);
+  const [pendingAction, setPendingAction] = useState<{ row: FnFCardRow; action: { label: string; endpoint: string; confirm: string } } | null>(null);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
@@ -134,11 +143,11 @@ export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
     setDialogError(undefined);
     try {
       await browserJson(`v1/payroll/fnf/settlements/${pendingAction.row.id}/${pendingAction.action.endpoint}`, { method: "POST" });
-      setMessage(`${pendingAction.action.label} completed for ${pendingAction.row.employeeName ?? pendingAction.row.employeeId}.`);
+      setMessage(t("actionCompletedMessage", { action: pendingAction.action.label, name: pendingAction.row.employeeName ?? pendingAction.row.employeeId }));
       setPendingAction(null);
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -148,8 +157,8 @@ export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
     return (
       <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink2)" }}>
         <p style={{ fontSize: 32, margin: "0 0 8px" }}>🧮</p>
-        <p style={{ fontWeight: 600 }}>No F&amp;F settlements yet</p>
-        <p style={{ fontSize: 13 }}>Compute a settlement using the form above; it is processed asynchronously.</p>
+        <p style={{ fontWeight: 600 }}>{t("emptyTitle")}</p>
+        <p style={{ fontSize: 13 }}>{t("emptyMessage")}</p>
       </div>
     );
   }
@@ -167,8 +176,11 @@ export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
             key={row.id}
             row={row}
             onAction={(r) => {
-              const action = NEXT_ACTION[r.status];
-              if (action) { setDialogError(undefined); setPendingAction({ row: r, action }); }
+              const actionKeys = NEXT_ACTION_KEYS[r.status];
+              if (actionKeys) {
+                setDialogError(undefined);
+                setPendingAction({ row: r, action: { ...actionKeys, label: t(actionKeys.labelKey), confirm: t(actionKeys.confirmKey) } });
+              }
             }}
           />
         ))}
@@ -176,8 +188,8 @@ export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
 
       <ConfirmDialog
         open={pendingAction !== null}
-        title={pendingAction?.action.confirm ?? "Confirm action"}
-        confirmLabel={pendingAction?.action.label ?? "Confirm"}
+        title={pendingAction?.action.confirm ?? t("confirmActionFallbackTitle")}
+        confirmLabel={pendingAction?.action.label ?? t("confirmFallbackLabel")}
         busy={busy}
         errorMessage={dialogError}
         description={

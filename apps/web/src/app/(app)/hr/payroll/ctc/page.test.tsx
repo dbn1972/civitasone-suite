@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -23,7 +25,7 @@ describe("CtcConfigPage", () => {
     });
 
     const ui = await CtcConfigPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Basic Salary")).toBeInTheDocument();
     expect(screen.getByText("Employer PF")).toBeInTheDocument();
@@ -33,7 +35,7 @@ describe("CtcConfigPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
     const ui = await CtcConfigPage();
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("No CTC configuration found")).toBeInTheDocument();
   });

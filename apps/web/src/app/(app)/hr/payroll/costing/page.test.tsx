@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -18,7 +20,7 @@ describe("CostingPage", () => {
 
   it("prompts for a period when none is given, without fabricating data", async () => {
     const ui = await CostingPage({ searchParams: {} });
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Choose a period")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
@@ -31,7 +33,7 @@ describe("CostingPage", () => {
     });
 
     const ui = await CostingPage({ searchParams: { period: "2026-07" } });
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Group A")).toBeInTheDocument();
   });
@@ -40,14 +42,14 @@ describe("CostingPage", () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
     const ui = await CostingPage({ searchParams: { period: "2026-07" } });
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
   });
 
   it("notes the rules list endpoint is not available", async () => {
     const ui = await CostingPage({ searchParams: {} });
-    render(ui);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Rules list not yet available")).toBeInTheDocument();
   });

@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 import { Chart } from "@/app/_components/Chart";
 
 interface ComponentItem {
@@ -56,7 +57,7 @@ function inferPayBands(name: string): string[] {
   return ["MTS", "LDC", "UDC", "Assistant", "Section Officer"];
 }
 
-function buildChartData(components: ComponentItem[]) {
+function buildChartData(components: ComponentItem[], t: (key: string, values?: Record<string, string | number | Date>) => string) {
   const earnings = components.filter(
     (c) => c.componentType === "earning" || c.componentType === "allowance" || !c.componentType
   );
@@ -67,14 +68,15 @@ function buildChartData(components: ComponentItem[]) {
   );
 
   return [
-    { label: `Earnings (${earnings.length})`, value: earnings.length, color: "var(--indigo, #4f46e5)" },
-    { label: `Deductions (${deductions.length})`, value: deductions.length, color: "var(--bad, #ef4444)" },
-    { label: `Employer (${employer.length})`, value: employer.length, color: "var(--good, #10b981)" },
-    { label: `Other (${other.length})`, value: other.length, color: "var(--warn, #f59e0b)" },
+    { label: t("chartEarningsLabel", { count: earnings.length }), value: earnings.length, color: "var(--indigo, #4f46e5)" },
+    { label: t("chartDeductionsLabel", { count: deductions.length }), value: deductions.length, color: "var(--bad, #ef4444)" },
+    { label: t("chartEmployerLabel", { count: employer.length }), value: employer.length, color: "var(--good, #10b981)" },
+    { label: t("chartOtherLabel", { count: other.length }), value: other.length, color: "var(--warn, #f59e0b)" },
   ].filter((d) => d.value > 0);
 }
 
 export function SalaryStructureCard({ name, isDefault, status, components }: SalaryStructureCardProps) {
+  const t = useTranslations("salaryStructureCard");
   const payBands = inferPayBands(name);
   const hasComponents = components.length > 0;
   // COMP-004 fix-up (round 3): this card used to substitute a hardcoded
@@ -83,7 +85,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
   // distribution shown" as if it described this structure. A structure
   // with zero components is a real, valid state (not yet configured), so
   // render that honestly instead of a fabricated percentage chart.
-  const chartData = buildChartData(components);
+  const chartData = buildChartData(components, t);
   const isActive = status === "active";
 
   return (
@@ -110,7 +112,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
             borderRadius: 20,
           }}
         >
-          Default
+          {t("defaultBadge")}
         </span>
       )}
 
@@ -128,8 +130,8 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
       </div>
       <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--mut)" }}>
         {hasComponents
-          ? `${components.length} component${components.length !== 1 ? "s" : ""}`
-          : "No components configured yet"}{" "}
+          ? t("componentCount", { count: components.length })
+          : t("noComponentsConfiguredYet")}{" "}
         &bull; <span style={{ textTransform: "capitalize" }}>{status}</span>
       </p>
 
@@ -145,7 +147,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
               letterSpacing: "0.05em",
             }}
           >
-            % of Gross
+            {t("pctOfGrossLabel")}
           </p>
           {hasComponents ? (
             <Chart type="donut" data={chartData} height={130} />
@@ -165,7 +167,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
                 color: "var(--mut)",
               }}
             >
-              No components configured
+              {t("noComponentsConfigured")}
             </div>
           )}
         </div>
@@ -181,7 +183,7 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
               letterSpacing: "0.05em",
             }}
           >
-            Applicable Pay Levels
+            {t("applicablePayLevelsLabel")}
           </p>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {payBands.map((band) => (

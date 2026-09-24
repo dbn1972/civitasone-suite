@@ -1,8 +1,21 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 vi.mock("@/app/_components/ds/Toast", () => ({ useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }) }));
 
 import { ForceFileButton } from "./ForceFileButton";
+
+// UX-017: ForceFileButton now reads its copy through next-intl
+// (useTranslations("forceFileButton")), so every render needs a real
+// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
+function renderButton(props: React.ComponentProps<typeof ForceFileButton>) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <ForceFileButton {...props} />
+    </NextIntlClientProvider>,
+  );
+}
 
 /**
  * UX-016: this used to show the raw backend `message` (falling back to
@@ -19,7 +32,7 @@ describe("ForceFileButton — UX-016 clerk-safe errors", () => {
 
   it("shows a clerk-safe message, never the raw HTTP status, when the force-file request fails", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
-    render(<ForceFileButton fy="2026-27" quarter="Q2" />);
+    renderButton({ fy: "2026-27", quarter: "Q2" });
 
     fireEvent.click(screen.getByRole("button", { name: /file anyway/i }));
     const dialog = await screen.findByRole("alertdialog");
@@ -37,7 +50,7 @@ describe("ForceFileButton — UX-016 clerk-safe errors", () => {
         headers: { "content-type": "application/json" },
       }),
     );
-    render(<ForceFileButton fy="2026-27" quarter="Q2" />);
+    renderButton({ fy: "2026-27", quarter: "Q2" });
 
     fireEvent.click(screen.getByRole("button", { name: /file anyway/i }));
     const dialog = await screen.findByRole("alertdialog");

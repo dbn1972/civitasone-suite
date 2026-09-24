@@ -1,11 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
 
 import { useSeededResource } from "@/lib/sync/resource";
 import { PayrollRunsTable } from "./PayrollRunsTable";
 import { expectRupeeGroundTruthDisplayed } from "@/lib/testUtils/money";
+
+// UX-017: PayrollRunsTable now reads its copy through next-intl
+// (useTranslations("payrollRunsTable")), so every render needs a real
+// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
+function renderTable(props: React.ComponentProps<typeof PayrollRunsTable>) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <PayrollRunsTable {...props} />
+    </NextIntlClientProvider>,
+  );
+}
 
 const mockedHook = vi.mocked(useSeededResource);
 
@@ -32,7 +45,7 @@ describe("PayrollRunsTable — UX-002 (single source of truth for data provenanc
   });
 
   it("shows nothing extra when data is live", () => {
-    render(<PayrollRunsTable runs={sampleRuns} source="api" />);
+    renderTable({ runs: sampleRuns, source: "api" });
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
@@ -52,7 +65,7 @@ describe("PayrollRunsTable — UX-002 (single source of truth for data provenanc
       cachedAt: "2026-09-01T09:30:00.000Z",
       provenance: "cached",
     } as never);
-    render(<PayrollRunsTable runs={[]} source="error" />);
+    renderTable({ runs: [], source: "error" });
 
     const statusNodes = screen.getAllByRole("status");
     expect(statusNodes).toHaveLength(1);
@@ -70,7 +83,7 @@ describe("PayrollRunsTable — UX-002 (single source of truth for data provenanc
       cachedAt: null,
       provenance: "error-no-data",
     } as never);
-    render(<PayrollRunsTable runs={[]} source="error" />);
+    renderTable({ runs: [], source: "error" });
 
     // Two independent role="status" live regions now legitimately coexist here:
     // the page-level DataSourceBadge (data-provenance banner) and EmptyState's
@@ -104,7 +117,7 @@ describe("PayrollRunsTable — COMP-019 (rupee/paise unit-convention regression)
   // units, matching what the real API would have sent as paise before the
   // rupee conversion.
   it("renders Gross Pay / Net Pay as rupees, not 100x smaller (COMP-019, historically #312)", () => {
-    render(<PayrollRunsTable runs={sampleRuns} source="api" />);
+    renderTable({ runs: sampleRuns, source: "api" });
     expectRupeeGroundTruthDisplayed(screen, 450000000n); // sampleRuns[0].grossAmount = Rs 45,00,000
     expectRupeeGroundTruthDisplayed(screen, 410000000n); // sampleRuns[0].netAmount = Rs 41,00,000
   });

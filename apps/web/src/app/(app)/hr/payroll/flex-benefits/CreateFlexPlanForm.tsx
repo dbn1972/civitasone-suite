@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
@@ -13,6 +14,7 @@ type PlanResponse = { data: { id: string; name: string; fy: string; totalBudgetM
 const emptyComponent = (): PlanComponent => ({ name: "", maxAmount: "", taxExempt: false });
 
 export function CreateFlexPlanForm() {
+  const t = useTranslations("createFlexPlanForm");
   const router = useRouter();
   const [name, setName] = useState("");
   // Default to the current FY so the common case needs no typing — the field
@@ -35,10 +37,11 @@ export function CreateFlexPlanForm() {
   const budgetRef = useRef<HTMLInputElement>(null);
   const componentNameRefs = useRef<Array<HTMLInputElement | null>>([]);
 
-  const nameInvalid = tone === "bad" && message === "Plan name is required.";
-  const fyInvalid = tone === "bad" && !!message && message.startsWith("Financial year");
-  const budgetInvalid = tone === "bad" && !!message && message.startsWith("Total budget");
-  const compGroupInvalid = tone === "bad" && !!message && message.startsWith("Each component");
+  const [invalidField, setInvalidField] = useState<"name" | "fy" | "budget" | "components" | null>(null);
+  const nameInvalid = tone === "bad" && invalidField === "name";
+  const fyInvalid = tone === "bad" && invalidField === "fy";
+  const budgetInvalid = tone === "bad" && invalidField === "budget";
+  const compGroupInvalid = tone === "bad" && invalidField === "components";
 
   function isComponentInvalid(c: PlanComponent): boolean {
     if (!compGroupInvalid) return false;
@@ -52,22 +55,26 @@ export function CreateFlexPlanForm() {
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
+    setInvalidField(null);
     if (!name.trim()) {
       setTone("bad");
-      setMessage("Plan name is required.");
+      setInvalidField("name");
+      setMessage(t("nameRequiredError"));
       nameRef.current?.focus();
       return;
     }
     if (!/^\d{4}-\d{2}$/.test(fy.trim())) {
       setTone("bad");
-      setMessage("Financial year must be in YYYY-YY format, e.g. 2025-26.");
+      setInvalidField("fy");
+      setMessage(t("fyFormatError"));
       fyRef.current?.focus();
       return;
     }
     const budget = parseFloat(totalBudget);
     if (Number.isNaN(budget) || budget <= 0) {
       setTone("bad");
-      setMessage("Total budget must be a positive amount in rupees.");
+      setInvalidField("budget");
+      setMessage(t("budgetRequiredError"));
       budgetRef.current?.focus();
       return;
     }
@@ -75,7 +82,8 @@ export function CreateFlexPlanForm() {
     const firstInvalidIdx = components.findIndex((c) => !c.name.trim() || !(parseFloat(c.maxAmount) > 0));
     if (validComponents.length === 0 || validComponents.some((c) => !(parseFloat(c.maxAmount) > 0))) {
       setTone("bad");
-      setMessage("Each component needs a name and a positive maximum amount.");
+      setInvalidField("components");
+      setMessage(t("componentsRequiredError"));
       if (firstInvalidIdx >= 0) componentNameRefs.current[firstInvalidIdx]?.focus();
       return;
     }
@@ -100,13 +108,14 @@ export function CreateFlexPlanForm() {
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(`Flex benefit plan "${res.data.name}" created.`);
+      setInvalidField(null);
+      setMessage(t("createdMessage", { name: res.data.name }));
       setName("");
       setTotalBudget("");
       setComponents([emptyComponent()]);
       router.refresh();
     } catch (err) {
-      setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
+      setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
       setBusy(false);
     }
@@ -114,12 +123,12 @@ export function CreateFlexPlanForm() {
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
-      <Card title="Create Flex Benefit Plan" padding>
+      <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Plan Name <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("planNameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={nameId}
@@ -135,7 +144,7 @@ export function CreateFlexPlanForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Financial Year <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={fyId}
@@ -151,7 +160,7 @@ export function CreateFlexPlanForm() {
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={budgetId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Total Budget (₹) <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("totalBudgetLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
               <input
                 id={budgetId}
@@ -171,7 +180,7 @@ export function CreateFlexPlanForm() {
 
           <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
             <legend style={{ fontSize: 13, fontWeight: 600, padding: "0 4px" }}>
-              Plan Components <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              {t("planComponentsLegend")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </legend>
             <div style={{ display: "grid", gap: 10 }}>
               {components.map((c, idx) => {
@@ -182,7 +191,7 @@ export function CreateFlexPlanForm() {
                 return (
                   <div key={idx} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto auto", alignItems: "end" }}>
                     <div style={{ display: "grid", gap: 4 }}>
-                      <label htmlFor={compNameId} style={{ fontSize: 12 }}>Component Name</label>
+                      <label htmlFor={compNameId} style={{ fontSize: 12 }}>{t("componentNameLabel")}</label>
                       <input
                         id={compNameId}
                         ref={(el) => { componentNameRefs.current[idx] = el; }}
@@ -194,7 +203,7 @@ export function CreateFlexPlanForm() {
                       />
                     </div>
                     <div style={{ display: "grid", gap: 4 }}>
-                      <label htmlFor={compMaxId} style={{ fontSize: 12 }}>Max Amount (₹)</label>
+                      <label htmlFor={compMaxId} style={{ fontSize: 12 }}>{t("maxAmountLabel")}</label>
                       <input
                         id={compMaxId}
                         type="number"
@@ -214,16 +223,16 @@ export function CreateFlexPlanForm() {
                         checked={c.taxExempt}
                         onChange={(e) => updateComponent(idx, { taxExempt: e.target.checked })}
                       />
-                      <label htmlFor={compExemptId} style={{ fontSize: 12 }}>Tax exempt</label>
+                      <label htmlFor={compExemptId} style={{ fontSize: 12 }}>{t("taxExemptLabel")}</label>
                     </div>
                     <Button
                       variant="ghost"
                       style={{ minHeight: 40 }}
-                      aria-label={`Remove component ${idx + 1}${c.name ? `: ${c.name}` : ""}`}
+                      aria-label={c.name ? t("removeComponentNamedAriaLabel", { index: idx + 1, name: c.name }) : t("removeComponentAriaLabel", { index: idx + 1 })}
                       onClick={() => setComponents((prev) => prev.filter((_, i) => i !== idx))}
                       disabled={components.length === 1}
                     >
-                      Remove
+                      {t("removeBtn")}
                     </Button>
                   </div>
                 );
@@ -234,7 +243,7 @@ export function CreateFlexPlanForm() {
                   style={{ minHeight: 40 }}
                   onClick={() => setComponents((prev) => [...prev, emptyComponent()])}
                 >
-                  + Add component
+                  {t("addComponentBtn")}
                 </Button>
               </div>
             </div>
@@ -242,7 +251,7 @@ export function CreateFlexPlanForm() {
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy} loading={busy}>
-              Create Plan
+              {t("createPlanBtn")}
             </Button>
           </div>
 
@@ -262,16 +271,16 @@ export function CreateFlexPlanForm() {
 
       <ConfirmDialog
         open={confirmOpen}
-        title="Create this flex benefit plan?"
-        confirmLabel="Create plan"
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={
-          <>
-            Create plan <strong>{name}</strong> for FY {fy} with a total budget of{" "}
-            {formatMoney(Math.round((parseFloat(totalBudget) || 0) * 100))}.
-          </>
-        }
+        description={t.rich("confirmDescription", {
+          name,
+          fy,
+          amount: formatMoney(Math.round((parseFloat(totalBudget) || 0) * 100)),
+          strong: (chunks) => <strong>{chunks}</strong>,
+        })}
         onConfirm={() => void createPlan()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

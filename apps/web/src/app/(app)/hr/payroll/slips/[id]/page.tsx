@@ -23,7 +23,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
-        <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+        <DataSourceBadge source={source} message={t("loadErrorMessage")} />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--color-text-muted)" }}>
             {t("notFoundMessage")}
@@ -80,7 +80,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
         }
       />
 
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
       {/* Summary cards */}
       <StatGrid>

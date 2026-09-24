@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const mockPush = vi.fn();
 const mockRefresh = vi.fn();
@@ -40,8 +42,16 @@ import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 
 const STRUCTURES = [{ id: "s1", name: "Standard Grade Pay" }];
 
+// UX-017: CreatePayrollRunForm now reads its copy through next-intl
+// (useTranslations("createPayrollRunForm")), so every render needs a real
+// provider in the tree -- same pattern as
+// off-cycle/CreateOffCycleForm.test.tsx.
 function fillAndOpenDialog() {
-  render(<CreatePayrollRunForm structures={STRUCTURES} />);
+  render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <CreatePayrollRunForm structures={STRUCTURES} />
+    </NextIntlClientProvider>,
+  );
   fireEvent.click(screen.getByRole("button", { name: "Create Run" }));
 }
 

@@ -1,29 +1,31 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { useTranslations } from "next-intl";
 import { DataTable } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatRupees } from "@/lib/formatters";
 
-// grossAmount/netAmount come from the payroll-runs API already in RUPEES (not paise),
-// so they must NOT use cellType:"amount" (which runs formatMoney and divides by 100).
-const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount"; render?: (row: PayrollRunDetail) => ReactNode }[] = [
-  { key: "payPeriod", label: "Period" },
-  { key: "employeeCount", label: "Employees", align: "right" },
-  { key: "grossAmount", label: "Gross Pay", align: "right", render: (r) => formatRupees(r.grossAmount) },
-  { key: "netAmount", label: "Net Pay", align: "right", render: (r) => formatRupees(r.netAmount) },
-  { key: "status", label: "Status", cellType: "status" },
-];
-
 export function PayrollRunsTable({ runs, source = "api", canAdminister = false }: { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean }) {
+  const t = useTranslations("payrollRunsTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<PayrollRunDetail[]>(
     "hr.payroll.runs",
     runs,
     source,
     (d) => d.length === 0,
   );
+
+  // grossAmount/netAmount come from the payroll-runs API already in RUPEES (not paise),
+  // so they must NOT use cellType:"amount" (which runs formatMoney and divides by 100).
+  const columns: { key: keyof PayrollRunDetail & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount"; render?: (row: PayrollRunDetail) => ReactNode }[] = [
+    { key: "payPeriod", label: t("colPeriod") },
+    { key: "employeeCount", label: t("colEmployees"), align: "right" },
+    { key: "grossAmount", label: t("colGross"), align: "right", render: (r) => formatRupees(r.grossAmount) },
+    { key: "netAmount", label: t("colNet"), align: "right", render: (r) => formatRupees(r.netAmount) },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+  ];
 
   return (
     <>
@@ -36,25 +38,25 @@ export function PayrollRunsTable({ runs, source = "api", canAdminister = false }
         provenance={provenance ?? "live"}
         cachedAt={cachedAt}
         offline={offline}
-        message={provenance === "error-no-data" ? "Couldn't load payroll runs — showing nothing" : undefined}
+        message={provenance === "error-no-data" ? t("loadErrorMessage") : undefined}
       />
       <DataTable<PayrollRunDetail>
         columns={columns}
         rows={rows}
         rowLinkKey="id"
         rowLinkPrefix="/hr/payroll/"
-        caption="Payroll runs listing with period, status, employee count, and totals"
+        caption={t("tableCaption")}
         sortable
         filterable
-        filterPlaceholder="Filter by period or status…"
+        filterPlaceholder={t("filterPlaceholder")}
         pageSize={12}
         emptyIcon="💰"
-        emptyTitle="No payroll runs yet"
-        emptyMessage="Payroll runs process and disburse monthly salaries. Create your first run to get started."
+        emptyTitle={t("emptyTitle")}
+        emptyMessage={t("emptyMessage")}
         emptyAction={
           canAdminister ? (
             <p style={{ marginTop: 10, fontSize: 13, color: "var(--ink2)" }}>
-              Use the &quot;New Payroll Run&quot; form above to create your first run.
+              {t("emptyActionHint")}
             </p>
           ) : undefined
         }

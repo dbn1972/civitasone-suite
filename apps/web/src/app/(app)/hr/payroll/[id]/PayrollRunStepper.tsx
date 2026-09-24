@@ -1,11 +1,13 @@
 "use client";
 
+import { useTranslations } from "next-intl";
+
 const STEPS = [
-  { key: "data-lock", label: "Data Lock" },
-  { key: "calculate", label: "Calculate" },
-  { key: "review", label: "Review" },
-  { key: "approve", label: "Approve" },
-  { key: "disburse", label: "Disburse" },
+  { key: "data-lock" },
+  { key: "calculate" },
+  { key: "review" },
+  { key: "approve" },
+  { key: "disburse" },
 ] as const;
 
 function statusToStepIndex(status: string): number {
@@ -41,6 +43,14 @@ function Spinner() {
 }
 
 export function PayrollRunStepper({ status }: { status: string }) {
+  const t = useTranslations("payrollRunStepper");
+  const STEP_LABELS: Record<(typeof STEPS)[number]["key"], string> = {
+    "data-lock": t("stepDataLock"),
+    calculate: t("stepCalculate"),
+    review: t("stepReview"),
+    approve: t("stepApprove"),
+    disburse: t("stepDisburse"),
+  };
   const curIdx  = statusToStepIndex(status);
   const allDone = status === "paid" || status === "disbursed";
   const failed  = status === "failed";
@@ -58,7 +68,7 @@ export function PayrollRunStepper({ status }: { status: string }) {
         @keyframes prs-spin { to { transform: rotate(360deg); } }
       `}</style>
       <ol
-        aria-label="Payroll run progress"
+        aria-label={t("progressAriaLabel")}
         style={{ display: "flex", listStyle: "none", margin: 0, padding: 0 }}
       >
         {STEPS.map((step, i) => {
@@ -139,7 +149,7 @@ export function PayrollRunStepper({ status }: { status: string }) {
                   paddingInlineEnd: isLast ? 0 : 8,
                 }}
               >
-                {step.label}
+                {STEP_LABELS[step.key]}
               </div>
             </li>
           );

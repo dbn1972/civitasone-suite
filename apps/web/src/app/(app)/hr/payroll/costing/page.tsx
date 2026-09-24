@@ -68,7 +68,7 @@ export default async function CostingPage({
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
-      {period && <DataSourceBadge source={result.source} message="Couldn't load — showing nothing" />}
+      {period && <DataSourceBadge source={result.source} message={t("loadErrorMessage")} />}
 
       <StatGrid>
         <StatCard icon="📊" iconBg="var(--infobg)" label={t("statAllocations")} value={errored ? null : rows.length} />
