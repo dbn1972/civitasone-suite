@@ -57,4 +57,36 @@ describe("TransferPage", () => {
 
     expect(screen.getAllByText("emp-42").length).toBeGreaterThan(0);
   });
+
+  // UX-01x: a 403 (this route is HR-role-gated -- see
+  // services/hrms-service/src/modules/lifecycle/routes.ts's HR_ROLES guard
+  // on GET /v1/hrms/lifecycle/transfers) used to render the exact same
+  // "couldn't load, try again" panel as a real network failure. Retrying a
+  // permanent authorization boundary can never succeed, so that was actively
+  // misleading -- it must show the honest, specific reason instead.
+  it("shows an honest 'Access restricted' message (not the generic retry message) when the backend returns 403", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [],
+      source: "error",
+      status: 403,
+      errorMessage: "requires one of: hr_admin, hr_officer, super_admin",
+    });
+
+    const ui = await TransferPage();
+    render(ui);
+
+    expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
+    expect(screen.getByText("Requires one of: hr_admin, hr_officer, super_admin.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Try again" })).not.toBeInTheDocument();
+  });
+
+  it("still shows the generic 'try again' message for a genuine transient failure (no status -- e.g. a network error)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+
+    const ui = await TransferPage();
+    render(ui);
+
+    expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Access restricted" })).not.toBeInTheDocument();
+  });
 });

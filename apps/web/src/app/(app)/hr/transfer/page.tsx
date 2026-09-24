@@ -1,11 +1,9 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { TransferWithApproval } from "./TransferWithApproval";
 import { TransferOrderCard, type TransferRow } from "./_components/TransferOrderCard";
 import { TransferListFilters } from "./_components/TransferListFilters";
-import { toHumanError } from "@/lib/messages";
-
 import { getTranslations } from "next-intl/server";
 
 async function getData(): Promise<LoaderResult<TransferRow[]>> {
@@ -27,7 +25,7 @@ async function getData(): Promise<LoaderResult<TransferRow[]>> {
 
 export default async function TransferPage() {
   const t = await getTranslations("transfer");
-  const { data: raw, source } = await getData();
+  const { data: raw, source, status, errorMessage } = await getData();
   const errored = source === "error";
   // The raw backend row only carries employeeId/fromDeptId/toDeptId (no
   // joined names yet) -- degrade to the id rather than rendering a blank
@@ -81,7 +79,7 @@ export default async function TransferPage() {
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "transfer" })} backHref="/hr" />
+            <LoadErrorState result={{ status, errorMessage }} area="transfer" backHref="/hr" />
           </div>
         ) : (
           <DataTable<TransferRow>

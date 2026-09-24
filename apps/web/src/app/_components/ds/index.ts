@@ -19,6 +19,8 @@ export { Term } from "./Term";
 export { ErrorState } from "./ErrorState";
 export { RefreshErrorState } from "./RefreshErrorState";
 export type { RefreshErrorStateProps } from "./RefreshErrorState";
+export { LoadErrorState } from "./LoadErrorState";
+export type { LoadErrorStateProps } from "./LoadErrorState";
 export { Resource } from "./Resource";
 export type { ResourceProps } from "./Resource";
 export { FileUpload } from "./FileUpload";

@@ -1,8 +1,7 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { toHumanError } from "@/lib/messages";
 import { PromoteWithApproval } from "./PromoteWithApproval";
 import { PromotionCard, type PromotionRow } from "./_components/PromotionCard";
 
@@ -37,7 +36,7 @@ async function getData(): Promise<LoaderResult<PromotionRow[]>> {
 
 export default async function PromotionPage() {
   const t = await getTranslations("promotion");
-  const { data: items, source } = await getData();
+  const { data: items, source, status, errorMessage } = await getData();
 
   const approved  = items.filter((i) => ["approved", "signed", "completed", "finance_approved"].includes(i.status)).length;
   const pending   = items.filter((i) => ["pending"].includes(i.status)).length;
@@ -89,7 +88,7 @@ export default async function PromotionPage() {
       {/* Table view */}
       <Card title={t("tableViewTitle")}>
         {source === "error" ? (
-          <RefreshErrorState error={toHumanError("load", { area: "promotions" })} backHref="/hr" />
+          <LoadErrorState result={{ status, errorMessage }} area="promotions" backHref="/hr" />
         ) : (
           <DataTable<PromotionRow>
             columns={tableColumns}

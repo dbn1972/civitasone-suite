@@ -1,13 +1,12 @@
 import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatusPill, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, Card, StatusPill, LoadErrorState } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { EditEmployeeToggle } from "./EditEmployeeToggle";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
-import { toHumanError } from "@/lib/messages";
 
 type TransferItem = {
   id: string; status: string; toOffice?: string; fromOffice?: string;
@@ -93,7 +92,7 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
 }
 
 export default async function EmployeeDetailPage({ params }: { params: { id: string } }) {
-  const { data: employee, source } = await getEmployeeById(params.id);
+  const { data: employee, source, status, errorMessage } = await getEmployeeById(params.id);
   const errored = source === "error";
   const t = await getTranslations("employeeDetail");
 
@@ -102,7 +101,7 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("notFoundTitle")} back="/hr/employees" />
         <div className="pad">
-          <RefreshErrorState error={toHumanError("load", { area: "employee" })} backHref="/hr/employees" />
+          <LoadErrorState result={{ status, errorMessage }} area="employee" backHref="/hr/employees" />
         </div>
       </div>
     );

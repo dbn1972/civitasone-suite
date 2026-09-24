@@ -1,12 +1,11 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, Tabs, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, Tabs, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PromotionBatchView } from "./_components/PromotionBatchView";
 import { SeniorityListActions } from "./_components/SeniorityListActions";
 import type { PromotionRow } from "../promotion/_components/PromotionCard";
-import { toHumanError } from "@/lib/messages";
 
 // DOM-023: mirrors the backend's HR_ROLES guard exactly
 // (services/hrms-service/src/modules/seniority/routes.ts) for the
@@ -61,8 +60,13 @@ export default async function DpcPage() {
   const roles = getSessionRoles();
   const canAdministerSeniority = roles.some((r) => SENIORITY_ADMIN_ROLES.includes(r));
 
-  const [{ data, source }, { data: batchPromotions, source: promoSource }] = await Promise.all([getData(), getBatchPromotions()]);
+  const [
+    { data, source, status, errorMessage },
+    { data: batchPromotions, source: promoSource, status: promoStatus, errorMessage: promoErrorMessage },
+  ] = await Promise.all([getData(), getBatchPromotions()]);
   const errored = source === "error" || promoSource === "error";
+  const errorResult =
+    source === "error" ? { status, errorMessage } : { status: promoStatus, errorMessage: promoErrorMessage };
   const { asOf, eligibleCount, ineligibleCount, eligible, ineligible } = data ?? {
     asOf: "—", eligibleCount: 0, ineligibleCount: 0, eligible: [], ineligible: [],
   };
@@ -101,7 +105,7 @@ export default async function DpcPage() {
       <Card title={t("eligibleListTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "dpc" })} backHref="/hr" />
+            <LoadErrorState result={errorResult} area="dpc" backHref="/hr" />
           </div>
         ) : (
           <DataTable<EligibleRow>
