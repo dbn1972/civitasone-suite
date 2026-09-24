@@ -89,6 +89,25 @@ vi.mock("./repo.js", () => ({
   listScores: (...a: unknown[]) => R.listScores(...a),
   listScoresTx: (...a: unknown[]) => R.listScoresTx(...a),
 }));
+// stageOverride (cases 1-5) now resolves the acting actor to their own
+// hrms_employees.id before comparing against stageOwner()'s ownerId (see
+// f3-consumer.ts and apar/routes.ts's assertStageOwner for the identity
+// mismatch this closes: hrms_appraisals.employeeId/reportingOfficerId/etc.
+// are hrms_employees.id values, never actor ids). Every fixture below
+// already uses EMP/RO/RV/AA/HR (and the ad-hoc `admin` id) interchangeably
+// as both "the actor" and "the hrms_employees.id stored on the appraisal",
+// so an identity mapping here (actorId -> {id: actorId}) reproduces the
+// exact same effective ownership relationships these tests were built
+// around, including the "records a super_admin acting out of turn as an
+// audited override" case below (a genuinely different actor id resolves to
+// a genuinely different employee id, so it still correctly mismatches
+// ownerId). Mocked wholesale (not routed through the hoisted `R`/mockTx
+// machinery above) because the real resolveEmployeeForActor calls
+// scopedRead -> tx.select(), and this file's mocked db.js only implements
+// `insert` on its mockTx.
+vi.mock("../employee/actor-link.js", () => ({
+  resolveEmployeeForActor: async (_tenantId: string, actorId: string) => ({ id: actorId }),
+}));
 
 import { registerF3_apar_Consumers } from "./f3-consumer.js";
 import { COMMANDS } from "../../topics.js";

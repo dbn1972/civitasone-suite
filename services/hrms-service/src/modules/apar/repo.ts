@@ -12,21 +12,27 @@ export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
 /**
  * List appraisals for a tenant, optionally restricted to a set of employeeId
- * values. APAR's employeeId IS the acting user's actor id (see
- * apar/routes.ts's stageOwner/assertStageOwner, which already compares
- * a.employeeId directly against ctx.actorId for the self-appraisal /
- * representation stages) -- so the caller-scoping set below is expressed in
- * that same actor-id space.
+ * values. `hrms_appraisals.employeeId` is an `hrms_employees.id` -- the row
+ * HR selected via the employee picker when creating the APAR (apps/web's
+ * apar/new/page.tsx posts `emp.id`, and apar/f3-consumer.ts's
+ * apar_routes__0 stores it verbatim) -- it is NOT the acting user's actor
+ * id. Callers must resolve an actor to their own hrms_employees.id (via
+ * employee/actor-link.ts's resolveEmployeeForActor, keyed on
+ * hrms_employees.userRef) before building the scoping set below; see
+ * apar/routes.ts's resolveAparReadScope for the read-side resolution and
+ * stageOwner/assertStageOwner for the write-side equivalent.
  *
  *  - allowedEmployeeIds === null   unrestricted (HR/super_admin) -- "HR sees all".
  *  - allowedEmployeeIds === []     caller can read nothing (fail-closed scope
  *                                  from apar/routes.ts's resolveAparReadScope,
- *                                  e.g. a manager with no resolvable
- *                                  hrms_employees link). Short-circuits
- *                                  before querying.
+ *                                  e.g. a manager or employee with no
+ *                                  resolvable hrms_employees link).
+ *                                  Short-circuits before querying.
  *  - allowedEmployeeIds === [...]  restricted to appraisals whose employeeId
- *                                  is in this set (own record plus, for a
- *                                  manager, direct reports' records).
+ *                                  is in this set of hrms_employees.id
+ *                                  values (caller's own resolved employee id
+ *                                  plus, for a manager, direct reports'
+ *                                  employee ids).
  */
 export async function listAppraisals(
   tenantId: string,
@@ -109,18 +115,24 @@ export async function listHistory(tenantId: string, appraisalId: string, limit =
 
 /**
  * Direct reports of `managerEmployeeId` (an hrms_employees.id), returned as
- * their actor ids (hrms_employees.userRef) -- i.e. the same identity space
- * as hrms_appraisals.employeeId -- so callers can filter/compare appraisals
+ * their OWN hrms_employees.id values -- i.e. the same identity space as
+ * hrms_appraisals.employeeId -- so callers can filter/compare appraisals
  * directly without a per-row lookup. Used by apar/routes.ts's
  * resolveAparReadScope for the "manager sees own reports" read scope,
  * mirroring the hrms_employees.managerId relationship employee/routes.ts's
- * resolveManagerScope uses for the same purpose. Rows with no linked
- * userRef (not yet onboarded to a user account) are dropped -- they cannot
- * match any appraisal's actor-id-based employeeId anyway.
+ * resolveManagerScope uses for the same purpose.
+ *
+ * Returns `hrmsEmployees.id`, NOT `userRef`: a direct report's APAR rows
+ * are keyed by their employee id regardless of whether that report's own
+ * actor account has been linked yet (userRef populated) -- their manager
+ * can see the appraisal either way, so unlike an actor-facing lookup there
+ * is nothing to drop here. (Contrast resolveEmployeeForActor, which
+ * resolves the other direction -- actor id -> own employee row -- and IS
+ * userRef-gated because it has no employee id to fall back to.)
  */
-export async function listDirectReportActorIds(tenantId: string, managerEmployeeId: string): Promise<string[]> {
-  const rows = await scopedRead((tx) => tx.select({ userRef: hrmsEmployees.userRef })
+export async function listDirectReportEmployeeIds(tenantId: string, managerEmployeeId: string): Promise<string[]> {
+  const rows = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id })
     .from(hrmsEmployees)
     .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.managerId, managerEmployeeId))));
-  return rows.map((r) => r.userRef).filter((v): v is string => v != null);
+  return rows.map((r) => r.id);
 }
