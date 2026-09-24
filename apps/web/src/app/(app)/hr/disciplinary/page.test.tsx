@@ -64,4 +64,27 @@ describe("DisciplinaryPage", () => {
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
+
+  it("does not count a dropped (investigated-and-exonerated) case as open", async () => {
+    // Regression: the "open" stat excluded only "closed"/"disposed"/
+    // "finalised" -- of those, only "closed" is a real status for this table
+    // (disciplinary/state-machine.ts's CaseStatus), so a "dropped" case
+    // (investigated and discontinued/exonerated) was never excluded and
+    // stayed counted as open forever.
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "case-1", employee: "A. Kumar", department: "Revenue", proceeding_type: "minor", charges: "x", filed_date: "2026-01-01", inquiry_officer: "—", status: "opened" },
+        { id: "case-2", employee: "B. Rao", department: "Revenue", proceeding_type: "minor", charges: "y", filed_date: "2026-01-01", inquiry_officer: "—", status: "closed" },
+        { id: "case-3", employee: "C. Singh", department: "Revenue", proceeding_type: "major", charges: "z", filed_date: "2026-01-01", inquiry_officer: "—", status: "dropped" },
+      ],
+      source: "api",
+    });
+
+    const ui = await DisciplinaryPage();
+    render(ui);
+
+    const openCard = screen.getByText("Active / Open").closest(".stat");
+    expect(openCard).not.toBeNull();
+    expect(openCard!.querySelector(".val")?.textContent).toBe("1");
+  });
 });

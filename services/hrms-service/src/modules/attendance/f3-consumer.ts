@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
+import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { hrmsOvertimeRequests } from "./schema.js";
+import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests } from "./schema.js";
 import * as repo from "./repo.js";
 
 const log = pino({ name: "hrms-f3-attendance" });
@@ -47,6 +48,18 @@ const log = pino({ name: "hrms-f3-attendance" });
  * (status-integrity fix — see routes.ts and repo.updateOvertimeStatus), so a
  * missing-or-already-decided row here (again, only a race) is logged and
  * skipped rather than thrown.
+ *
+ * WAVE-4 gap closure: `attendance_routes__5`/`__6`/`__7` (WFH create/approve/
+ * reject) and `__8`/`__9`/`__10` (shift-change create/approve/reject) follow
+ * the exact same shape as `__2`/`__3`/`__4` above (plain insert on create;
+ * conditional update on approve/reject). Like `__3`/`__4` after the status-
+ * integrity fix above, the approve/reject updates here carry a
+ * `status = 'pending'` guard in their WHERE clause -- routes.ts already
+ * re-checks status==='pending' synchronously before publishing, so this is
+ * defense in depth against the same race the regularisation consumer above
+ * guards against with its own WHERE clause; a guard miss here is therefore
+ * only ever a race and is logged and skipped, same convention as every other
+ * case in this file.
  */
 export function registerF3_attendance_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
@@ -58,6 +71,12 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
       "attendance_routes__2",
       "attendance_routes__3",
       "attendance_routes__4",
+      "attendance_routes__5",
+      "attendance_routes__6",
+      "attendance_routes__7",
+      "attendance_routes__8",
+      "attendance_routes__9",
+      "attendance_routes__10",
     ]);
     if (!ops.has(op)) return;
     const body = p.body ?? {};
@@ -168,6 +187,88 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
             const updated = await repo.updateOvertimeStatus(tx, p.tenantId, otId, "rejected", msg.actorId, body.reason ?? null);
             if (!updated) {
               log.warn({ op, otId, messageId: msg.messageId }, "overtime request missing or already decided before async reject");
+            }
+            break;
+          }
+          case "attendance_routes__5": {
+            await tx.insert(hrmsWfhRequests).values({
+              id, tenantId: p.tenantId, employeeId: body.employeeId,
+              fromDate: body.fromDate, toDate: body.toDate,
+              reason: body.reason ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
+            });
+            break;
+          }
+          case "attendance_routes__6": {
+            const reqId = (params.id as string) || id;
+            // status='pending' guard: routes.ts already re-checks this
+            // synchronously before publishing, so a miss here is only ever a
+            // race (concurrent decide) -- log and skip, same convention as
+            // the regularisation cases above, not overtime's unguarded
+            // update.
+            const [updated] = await tx.update(hrmsWfhRequests)
+              .set({ status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
+                     updatedBy: msg.actorId, updatedAt: new Date() })
+              .where(and(
+                eq(hrmsWfhRequests.id, reqId), eq(hrmsWfhRequests.tenantId, p.tenantId),
+                eq(hrmsWfhRequests.status, "pending"),
+              ))
+              .returning({ id: hrmsWfhRequests.id });
+            if (!updated) {
+              log.warn({ op, reqId, messageId: msg.messageId }, "WFH request already decided or missing before async approve");
+            }
+            break;
+          }
+          case "attendance_routes__7": {
+            const reqId = (params.id as string) || id;
+            const [updated] = await tx.update(hrmsWfhRequests)
+              .set({ status: "rejected", rejectionReason: body.reason ?? null,
+                     updatedBy: msg.actorId, updatedAt: new Date() })
+              .where(and(
+                eq(hrmsWfhRequests.id, reqId), eq(hrmsWfhRequests.tenantId, p.tenantId),
+                eq(hrmsWfhRequests.status, "pending"),
+              ))
+              .returning({ id: hrmsWfhRequests.id });
+            if (!updated) {
+              log.warn({ op, reqId, messageId: msg.messageId }, "WFH request already decided or missing before async reject");
+            }
+            break;
+          }
+          case "attendance_routes__8": {
+            await tx.insert(hrmsShiftChangeRequests).values({
+              id, tenantId: p.tenantId, employeeId: body.employeeId,
+              currentShift: body.currentShift, requestedShift: body.requestedShift,
+              effectiveDate: body.effectiveDate,
+              reason: body.reason ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
+            });
+            break;
+          }
+          case "attendance_routes__9": {
+            const reqId = (params.id as string) || id;
+            const [updated] = await tx.update(hrmsShiftChangeRequests)
+              .set({ status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
+                     updatedBy: msg.actorId, updatedAt: new Date() })
+              .where(and(
+                eq(hrmsShiftChangeRequests.id, reqId), eq(hrmsShiftChangeRequests.tenantId, p.tenantId),
+                eq(hrmsShiftChangeRequests.status, "pending"),
+              ))
+              .returning({ id: hrmsShiftChangeRequests.id });
+            if (!updated) {
+              log.warn({ op, reqId, messageId: msg.messageId }, "shift-change request already decided or missing before async approve");
+            }
+            break;
+          }
+          case "attendance_routes__10": {
+            const reqId = (params.id as string) || id;
+            const [updated] = await tx.update(hrmsShiftChangeRequests)
+              .set({ status: "rejected", rejectionReason: body.reason ?? null,
+                     updatedBy: msg.actorId, updatedAt: new Date() })
+              .where(and(
+                eq(hrmsShiftChangeRequests.id, reqId), eq(hrmsShiftChangeRequests.tenantId, p.tenantId),
+                eq(hrmsShiftChangeRequests.status, "pending"),
+              ))
+              .returning({ id: hrmsShiftChangeRequests.id });
+            if (!updated) {
+              log.warn({ op, reqId, messageId: msg.messageId }, "shift-change request already decided or missing before async reject");
             }
             break;
           }
