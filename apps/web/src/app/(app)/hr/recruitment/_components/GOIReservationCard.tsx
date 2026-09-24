@@ -21,22 +21,22 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
   ] as const;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden mb-6">
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm overflow-hidden mb-6">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+        className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
       >
         <span className="flex items-center gap-2">
           <span aria-hidden="true" className="text-base">🏛️</span>
           {t("reservationStatus")}
-          <span className="text-xs font-normal text-slate-400 ms-0.5">{t("gfr2017")}</span>
+          <span className="text-xs font-normal text-slate-400 dark:text-slate-500 ms-0.5">{t("gfr2017")}</span>
         </span>
         <span
           aria-hidden="true"
           className={[
-            "text-slate-400 transition-transform duration-200 text-sm",
+            "text-slate-400 dark:text-slate-500 transition-transform duration-200 text-sm",
             open ? "rotate-180" : "",
           ].join(" ")}
         >
@@ -45,8 +45,8 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
       </button>
 
       {open && (
-        <div className="px-5 pb-5 pt-3 border-t border-slate-100">
-          <p className="text-xs text-slate-500 mb-4">
+        <div className="px-5 pb-5 pt-3 border-t border-slate-100 dark:border-slate-700">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
             {t("prescribedQuotasFor", { count: totalVacancies })}
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -57,22 +57,22 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
               return (
                 <div key={key}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-slate-700" title={note}>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300" title={note}>
                       {label}
                     </span>
-                    <span className="text-xs text-slate-500">
+                    <span className="text-xs text-slate-500 dark:text-slate-400">
                       {pct}%
-                      <span className="ms-1 text-slate-400">·</span>
+                      <span className="ms-1 text-slate-400 dark:text-slate-500">·</span>
                       <span className="ms-1">{t("postsCount", { count: posts })}</span>
                       {fillPct > 0 && (
-                        <span className="ms-1 text-emerald-600 font-medium">
+                        <span className="ms-1 text-emerald-600 dark:text-emerald-400 font-medium">
                           · {t("filledCount", { count: filledPosts })}
                         </span>
                       )}
                     </span>
                   </div>
                   {/* Track: quota vs filled */}
-                  <div className="relative h-2 rounded-full bg-slate-100 overflow-hidden">
+                  <div className="relative h-2 rounded-full bg-slate-100 dark:bg-slate-700 overflow-hidden">
                     {/* Quota band */}
                     <div
                       className="absolute start-0 top-0 h-full rounded-full opacity-25"
@@ -89,14 +89,14 @@ export function GOIReservationCard({ totalVacancies, fill = {} }: GOIReservation
                       aria-hidden="true"
                     />
                   </div>
-                  <p className="text-[10px] text-slate-400 mt-0.5">
+                  <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-0.5">
                     {t("prescribedPercentOfTotal", { pct })}
                   </p>
                 </div>
               );
             })}
           </div>
-          <p className="text-[10px] text-slate-400 mt-4 border-t border-slate-100 pt-3">
+          <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-4 border-t border-slate-100 dark:border-slate-700 pt-3">
             {t("footnote")}
           </p>
         </div>

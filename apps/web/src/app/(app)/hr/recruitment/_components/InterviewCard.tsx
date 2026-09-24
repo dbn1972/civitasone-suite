@@ -43,14 +43,14 @@ export function InterviewCard({
   const safeMeetLink = meetLink && /^https?:\/\//i.test(meetLink) ? meetLink : undefined;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white shadow-sm p-4 flex flex-col gap-3">
+    <div className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm p-4 flex flex-col gap-3">
       {/* Candidate + stage badge */}
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
-          <p className="font-semibold text-slate-800 text-sm truncate">{candidateName}</p>
-          <p className="text-xs text-slate-500 mt-0.5 truncate">{roleApplied}</p>
+          <p className="font-semibold text-slate-800 dark:text-slate-200 text-sm truncate">{candidateName}</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{roleApplied}</p>
         </div>
-        <span className="inline-flex items-center gap-1 shrink-0 rounded-full bg-purple-50 border border-purple-200 px-2.5 py-0.5 text-xs font-semibold text-purple-700">
+        <span className="inline-flex items-center gap-1 shrink-0 rounded-full bg-purple-50 dark:bg-purple-950 border border-purple-200 dark:border-purple-800 px-2.5 py-0.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
           <span aria-hidden="true">📅</span> {t("interview")}
         </span>
       </div>
@@ -58,17 +58,17 @@ export function InterviewCard({
       {/* Slot + interviewer details */}
       <dl className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
         <div>
-          <dt className="text-slate-500">{t("slot")}</dt>
-          <dd className="font-semibold text-slate-800 mt-0.5">{slotLabel}</dd>
+          <dt className="text-slate-500 dark:text-slate-400">{t("slot")}</dt>
+          <dd className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">{slotLabel}</dd>
         </div>
         <div>
-          <dt className="text-slate-500">{t("interviewer")}</dt>
-          <dd className="font-medium text-slate-800 mt-0.5">{interviewerName}</dd>
+          <dt className="text-slate-500 dark:text-slate-400">{t("interviewer")}</dt>
+          <dd className="font-medium text-slate-800 dark:text-slate-200 mt-0.5">{interviewerName}</dd>
         </div>
       </dl>
 
       {/* Action row */}
-      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+      <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-700">
         {safeMeetLink ? (
           <a
             href={safeMeetLink}
@@ -79,7 +79,7 @@ export function InterviewCard({
             <span aria-hidden="true">🎥</span> {t("joinMeet")}
           </a>
         ) : (
-          <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-400 cursor-not-allowed">
+          <span className="inline-flex items-center gap-1.5 rounded-md bg-slate-100 dark:bg-slate-800 px-3 py-1.5 text-xs font-medium text-slate-400 dark:text-slate-500 cursor-not-allowed">
             <span aria-hidden="true">🎥</span> {t("noLinkYet")}
           </span>
         )}
@@ -87,7 +87,7 @@ export function InterviewCard({
           <button
             type="button"
             onClick={onReschedule}
-            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors"
+            className="inline-flex items-center gap-1 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-1.5 text-xs font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
           >
             {t("reschedule")}
           </button>
@@ -96,7 +96,7 @@ export function InterviewCard({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex items-center gap-1 rounded-md border border-red-100 bg-red-50 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-100 transition-colors"
+            className="inline-flex items-center gap-1 rounded-md border border-red-100 dark:border-red-900 bg-red-50 dark:bg-red-950 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 hover:bg-red-100 dark:hover:bg-red-900 transition-colors"
           >
             {t("cancel")}
           </button>

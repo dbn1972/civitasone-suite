@@ -76,15 +76,15 @@ export default async function CertificationsPage() {
       {(expiringSoon > 0 || expired > 0) && (
         <div
           style={{
-            background: "#fffbeb",
-            border: "1px solid #fcd34d",
+            background: "var(--warnbg, #fffbeb)",
+            border: "1px solid var(--warnbd, #fcd34d)",
             borderRadius: 8,
             padding: "10px 14px",
             display: "flex",
             alignItems: "center",
             gap: 10,
             fontSize: 13,
-            color: "#92400e",
+            color: "var(--warn, #92400e)",
           }}
         >
           <span style={{ fontSize: 16 }}>⚠</span>
@@ -101,7 +101,7 @@ export default async function CertificationsPage() {
         ) : sorted.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🏅</p>
-            <p style={{ fontWeight: 600, color: "#475569", margin: 0 }}>No certifications recorded yet</p>
+            <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>No certifications recorded yet</p>
             <p style={{ fontSize: 13, margin: "4px 0 0" }}>
               Certifications appear here once employees complete external courses or government training programmes.
             </p>

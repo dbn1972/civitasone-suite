@@ -25,10 +25,10 @@ const STATUS_CONFIG: Record<
   DocStatus,
   { label: string; color: string; bg: string; border: string }
 > = {
-  pending: { label: "Pending", color: "#92400e", bg: "#fef3c7", border: "#fde68a" },
-  uploaded: { label: "Uploaded", color: "#1d4ed8", bg: "#dbeafe", border: "#bfdbfe" },
-  verified: { label: "Verified", color: "#166534", bg: "#dcfce7", border: "#bbf7d0" },
-  rejected: { label: "Rejected", color: "#991b1b", bg: "#fee2e2", border: "#fecaca" },
+  pending:  { label: "Pending",  color: "var(--warn, #92400e)",  bg: "var(--warnbg, #fef3c7)",  border: "var(--warnbd, #fde68a)" },
+  uploaded: { label: "Uploaded", color: "var(--info, #1d4ed8)",  bg: "var(--infobg, #dbeafe)",  border: "var(--infobd, #bfdbfe)" },
+  verified: { label: "Verified", color: "var(--good, #166534)",  bg: "var(--goodbg, #dcfce7)",  border: "var(--goodbd, #bbf7d0)" },
+  rejected: { label: "Rejected", color: "var(--bad, #991b1b)",   bg: "var(--badbg, #fee2e2)",   border: "var(--badbd, #fecaca)" },
 };
 
 function StatusChip({ status }: { status: DocStatus }) {
