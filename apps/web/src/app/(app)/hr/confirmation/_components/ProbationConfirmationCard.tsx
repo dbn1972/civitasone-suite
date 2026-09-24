@@ -73,10 +73,20 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
     onSuccess: () => setAction("confirmed"),
   });
 
+  // SEC CRITICAL (status-integrity fix): this used to be a deny-list
+  // (row.status !== "confirmed" && row.status !== "extended") that let the
+  // Confirm button show up for a terminated/separated/retired employee too
+  // (neither string excludes them) — clicking it hit the now-corrected
+  // backend precondition and got a 409, but the button itself should never
+  // have been actionable in the first place. Match the backend exactly
+  // (employee/routes.ts's PATCH .../confirm — "probation" is the only status
+  // confirmation is ever valid from) with an allow-list instead: strictly
+  // safer than enumerating every status that should be excluded, and it
+  // already covers "extended" too (not a real backend status — see file
+  // header comment — so it could never equal row.status anyway).
   const isActionable =
     action === "default" &&
-    row.status !== "confirmed" &&
-    row.status !== "extended";
+    row.status === "probation";
 
   return (
     <article

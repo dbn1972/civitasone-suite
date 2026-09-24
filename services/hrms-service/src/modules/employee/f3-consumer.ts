@@ -103,14 +103,29 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             // route had already answered 200 — the employee was reported
             // activated but stayed in their previous status. The route's
             // mandatory-condition gate (checkMandatoryConditions) and the
-            // "already active" guard have both already run at the HTTP layer and
-            // are not repeated here; only the version token is needed to write.
-            const rows = await tx.select({ id: hrmsEmployees.id, version: hrmsEmployees.version })
+            // status guard (only "probation" may activate) have both already
+            // run at the HTTP layer; the `status: hrmsEmployees.status` re-check
+            // below is NOT redundant with that, though — SEC (status-integrity
+            // fix): hrms_employees.version is bumped only by writes that opt
+            // into updateEmployeeVersioned (see employee/repo.ts); separate/
+            // confirm/etc go through the plain blind-overwrite updateEmployee,
+            // which never bumps version. So a status-changing write racing in
+            // the window between the route's read and this consumer's write
+            // (e.g. an HR admin separating this same employee moments after
+            // another admin's activate request was queued) would NOT change
+            // `version` and would slip past a version-only guard. Folding
+            // `status = 'probation'` into the same WHERE closes that race
+            // atomically, the same way updateEmployeeIfStatus does for the
+            // synchronous employeeConfirm path.
+            const rows = await tx.select({ id: hrmsEmployees.id, version: hrmsEmployees.version, status: hrmsEmployees.status })
                     .from(hrmsEmployees)
                     .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.tenantId, p.tenantId)))
                     .limit(1);
             const emp = rows[0];
             if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
+            if (emp.status !== "probation") {
+              throw new HttpError(409, "INVALID_STATUS", `employee cannot be activated from status '${emp.status}' — only employees in 'probation' status can be activated`);
+            }
             await tx.update(hrmsEmployees)
                     // migration 0025_employee_status_contract.sql retired "active" in
                     // favor of "confirmed" (dropped from hrms_employees_status_check);
@@ -118,7 +133,11 @@ export function registerF3_employee_Consumers(queue: Queue): void {
                     // whole transaction back silently. See lifecycle/consumer.ts's
                     // lifecycleReinstate fix (PR #893) for the identical bug.
                     .set({ status: "confirmed", updatedBy: msg.actorId, updatedAt: new Date() })
-                    .where(and(eq(hrmsEmployees.id, targetId), eq(hrmsEmployees.version, emp.version)));
+                    .where(and(
+                      eq(hrmsEmployees.id, targetId),
+                      eq(hrmsEmployees.version, emp.version),
+                      eq(hrmsEmployees.status, "probation"),
+                    ));
             break;
           }
           case "employee_agent1_gap_routes__2": {

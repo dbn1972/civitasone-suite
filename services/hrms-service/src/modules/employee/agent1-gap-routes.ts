@@ -69,6 +69,20 @@ export async function agent1GapRoutes(app: FastifyInstance): Promise<void> {
     if (emp.status === "confirmed") {
       throw new HttpError(409, "ALREADY_ACTIVE", "employee is already active");
     }
+    // SEC CRITICAL (status-integrity fix): the check above only ever excluded
+    // "confirmed" — a terminated/separated/retired/suspended/on_leave/
+    // deputation/no_show employee could all be "activated" too, since none of
+    // those equal "confirmed" either. "probation" is the only status this
+    // transition is valid from; reject everything else with a status-specific
+    // message (kept separate from the ALREADY_ACTIVE case above, whose
+    // message would be misleading for e.g. a terminated employee).
+    if (emp.status !== "probation") {
+      throw new HttpError(
+        409,
+        "INVALID_STATUS",
+        `employee cannot be activated from status '${emp.status}' — only employees in 'probation' status can be activated`,
+      );
+    }
 
     const result = checkMandatoryConditions({
       id: emp.id,
