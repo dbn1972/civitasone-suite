@@ -5,10 +5,13 @@
  * Tests: 200/201/202, 400, 401, 403, 404 for each endpoint.
  * Follows the established pattern from payroll-routes.test.ts (real DB, no mocks).
  */
-import { describe, it, expect, vi, afterAll } from "vitest";
+import { describe, it, expect, vi, afterAll, beforeAll, beforeEach } from "vitest";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant } from "@civitasone/db";
+import { eq } from "drizzle-orm";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { db, sqlClient } from "../src/shared/db.js";
+import { payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
 import { randomUUID } from "node:crypto";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -16,13 +19,20 @@ const TENANT = "aaaaaaaa-9999-4000-8000-000000000099";
 const ACTOR = "00000000-0009-4000-8000-000000000001";
 const UNKNOWN_ID = "00000000-dead-4000-8000-ffffffffffff";
 
-function makeToken(roles: string[] = ["payroll_admin"], sub = ACTOR) {
-  return signToken({ sub, tid: TENANT, roles, sid: "sess-core-001" }, SECRET);
+function makeToken(roles: string[] = ["payroll_admin"], sub = ACTOR, tid = TENANT) {
+  return signToken({ sub, tid, roles, sid: "sess-core-001" }, SECRET);
 }
 
-const auth = (roles?: string[], sub?: string) => ({
-  authorization: `Bearer ${makeToken(roles, sub)}`,
+const auth = (roles?: string[], sub?: string, tid?: string) => ({
+  authorization: `Bearer ${makeToken(roles, sub, tid)}`,
 });
+
+// payroll-critical fix: controllable stand-in for the new cross-service
+// resolver (hrms-client.ts's resolveActorEmployeeId) the payslip
+// self-service ownership check calls — real hrms-service isn't running in
+// this integration-test env (same reason verifyEmployeeExists is stubbed
+// below), so tests set its resolved value per case via mockResolvedValue.
+const resolveActorEmployeeId = vi.fn<[string, string, string | undefined], Promise<string | null>>();
 
 // External HRMS is not running in this service's isolated integration-test
 // env. commands.ts's assertEmployeeExists() (round2 employee-existence
@@ -33,7 +43,11 @@ const auth = (roles?: string[], sub?: string) => ({
 // DB, queue, and outbox stay real, per this file's stated convention.
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
-  return { ...actual, verifyEmployeeExists: async () => true };
+  return {
+    ...actual,
+    verifyEmployeeExists: async () => true,
+    resolveActorEmployeeId: (...args: [string, string, string | undefined]) => resolveActorEmployeeId(...args),
+  };
 });
 
 afterAll(async () => { await sqlClient.end(); });
@@ -390,6 +404,119 @@ describe("GET /v1/payroll/slips/:id (core)", () => {
     const res = await app.inject({ method: "GET", url: `/v1/payroll/slips/${UNKNOWN_ID}`, headers: auth(["citizen"]) });
     await app.close();
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// routes.ts — GET /v1/payroll/slips/:id — employee self-service ownership
+// (payroll-critical fix: previously READER_ROLES-only, so a plain `employee`
+// caller was rejected before any ownership check could even run — confirmed
+// no alternate self-service payslip route existed anywhere in the app).
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("GET /v1/payroll/slips/:id — employee self-service ownership (core)", () => {
+  const OWN_TENANT = "b0000000-51ec-4000-8000-000000000001";
+  const OWNER_ACTOR = "b0000000-51ec-4000-8000-000000000002";
+  const OWNER_EMPLOYEE_ID = "b0000000-51ec-4000-8000-000000000003";
+  const COLLEAGUE_EMPLOYEE_ID = "b0000000-51ec-4000-8000-000000000004";
+  let runId: string;
+  let ownSlipId: string;
+  let colleagueSlipId: string;
+
+  beforeAll(async () => {
+    runId = randomUUID();
+    ownSlipId = randomUUID();
+    colleagueSlipId = randomUUID();
+    await runWithTenant(OWN_TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(payrollRuns).values({
+        id: runId, tenantId: OWN_TENANT, runNo: "SELF-SVC-RUN", month: "2025-06",
+        structureId: randomUUID(), totalGrossMinor: 0n, totalNetMinor: 0n,
+        currency: "INR", status: "approved", createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(payrollSlips).values({
+        id: ownSlipId, tenantId: OWN_TENANT, runId, employeeId: OWNER_EMPLOYEE_ID, employeeNo: "SELF-EMP",
+        basicMinor: 3_000_000n, grossMinor: 5_000_000n, totalDeductionsMinor: 700_000n, netPayMinor: 4_300_000n,
+        currency: "INR", components: [], createdBy: ACTOR, updatedBy: ACTOR,
+      });
+      await tx.insert(payrollSlips).values({
+        id: colleagueSlipId, tenantId: OWN_TENANT, runId, employeeId: COLLEAGUE_EMPLOYEE_ID, employeeNo: "COLLEAGUE-EMP",
+        basicMinor: 3_000_000n, grossMinor: 5_000_000n, totalDeductionsMinor: 700_000n, netPayMinor: 4_300_000n,
+        currency: "INR", components: [], createdBy: ACTOR, updatedBy: ACTOR,
+      });
+    }));
+  });
+
+  afterAll(async () => {
+    await runWithTenant(OWN_TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(payrollSlips).where(eq(payrollSlips.tenantId, OWN_TENANT));
+      await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, OWN_TENANT));
+    }));
+  });
+
+  beforeEach(() => { resolveActorEmployeeId.mockReset(); });
+
+  it("200 — employee can view their OWN payslip", async () => {
+    resolveActorEmployeeId.mockResolvedValue(OWNER_EMPLOYEE_ID);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/slips/${ownSlipId}`,
+      headers: auth(["employee"], OWNER_ACTOR, OWN_TENANT),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().employeeId).toBe(OWNER_EMPLOYEE_ID);
+    expect(resolveActorEmployeeId).toHaveBeenCalledWith(OWN_TENANT, OWNER_ACTOR, undefined);
+  });
+
+  it("403 — employee is rejected viewing a COLLEAGUE's payslip", async () => {
+    resolveActorEmployeeId.mockResolvedValue(OWNER_EMPLOYEE_ID);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/slips/${colleagueSlipId}`,
+      headers: auth(["employee"], OWNER_ACTOR, OWN_TENANT),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe("FORBIDDEN");
+  });
+
+  it("403 — fails closed for a self-service employee with no linked hrms employee record", async () => {
+    resolveActorEmployeeId.mockResolvedValue(null);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/slips/${ownSlipId}`,
+      headers: auth(["employee"], OWNER_ACTOR, OWN_TENANT),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("200 — payroll_admin can view ANY employee's payslip, unaffected by the ownership check (and never calls the resolver)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/slips/${colleagueSlipId}`,
+      headers: auth(["payroll_admin"], undefined, OWN_TENANT),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json().employeeId).toBe(COLLEAGUE_EMPLOYEE_ID);
+    expect(resolveActorEmployeeId).not.toHaveBeenCalled();
+  });
+
+  it("200 — hr_admin (privileged reader role) can view either payslip too", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/slips/${ownSlipId}`,
+      headers: auth(["hr_admin"], undefined, OWN_TENANT),
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(resolveActorEmployeeId).not.toHaveBeenCalled();
   });
 });
 
