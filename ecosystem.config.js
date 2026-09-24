@@ -123,7 +123,23 @@ const JWT_ALGORITHM = process.env.JWT_ALGORITHM ?? "RS256";
 const RUNTIME_NODE_ENV = process.env.RUNTIME_NODE_ENV ?? "production";
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "https://civitasone.65-2-205-201.nip.io/auth";
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM ?? "civitasone";
-const INTERNAL_SERVICE_SECRET = requireSecret("INTERNAL_SERVICE_SECRET");
+// BUG (payroll-critical): this used to be a bare requireSecret() call, which
+// (like DEVICE_TRUST_SECRET/JWT_SECRET below) only THROWS when unset in
+// production -- outside production it silently returned "" with no fallback,
+// unlike its two siblings just below which both derive a stable dev value.
+// Confirmed live: every service PM2 launched on this host (payroll, payroll-
+// worker, hrms, hrms-worker, ...) had INTERNAL_SERVICE_SECRET="" in its actual
+// process env, so payroll-worker's internal calls to hrms-service always sent
+// x-service-secret:"" -- and hrms-service's resolveServiceContextInner
+// unconditionally rejects an empty configured secret before ever comparing
+// the header (packages/auth/src/context.ts), so EVERY internal call 401'd,
+// not just ones racing a concurrent duplicate run. Falls back to the same
+// literal scripts/dev/start-stack.sh already uses
+// (INTERNAL_SERVICE_SECRET:-civitasone-internal-dev-secret) so a mixed
+// PM2/bash-script dev environment gets a matching secret on both sides.
+const INTERNAL_SERVICE_SECRET = IS_PROD
+  ? requireSecret("INTERNAL_SERVICE_SECRET")
+  : (process.env.INTERNAL_SERVICE_SECRET ?? "civitasone-internal-dev-secret");
 // SEC-3 device trust: identity mints/validates device trust tokens with this.
 // Fail-closed in prod (no insecure default); dev/test gets a stable dev value.
 const DEVICE_TRUST_SECRET = IS_PROD
