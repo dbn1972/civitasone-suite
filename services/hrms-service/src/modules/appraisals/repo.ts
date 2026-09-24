@@ -1,12 +1,23 @@
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsAppraisals, type AppraisalRow, type AppraisalInsert } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update">;
 
-export async function listByTenant(tenantId: string, limit = 100): Promise<AppraisalRow[]> {
+/**
+ * `allowedEmployeeIds` (hrms_employees.id values), when given, restricts the
+ * result to rows whose employeeId is in that set -- the read-scope guard
+ * queries.ts's listAppraisals resolves via routes.ts's
+ * resolveAppraisalReadScope. Omitted/undefined/null means unrestricted
+ * (tenant-wide), matching the pre-fix behaviour for HR callers.
+ */
+export async function listByTenant(tenantId: string, limit = 100, allowedEmployeeIds?: string[] | null): Promise<AppraisalRow[]> {
+  const conditions = [eq(hrmsAppraisals.tenantId, tenantId)];
+  if (allowedEmployeeIds != null) {
+    conditions.push(inArray(hrmsAppraisals.employeeId, allowedEmployeeIds));
+  }
   return scopedRead((tx) => tx.select().from(hrmsAppraisals)
-    .where(eq(hrmsAppraisals.tenantId, tenantId))
+    .where(and(...conditions))
     .limit(limit));
 }
 

@@ -32,9 +32,19 @@ export function registerAppraisalConsumers(queue: Queue): void {
     });
   });
 
+  // Authorization (SoD + monotonic stage order) is enforced synchronously in
+  // routes.ts's PATCH handler -- assertAppraisalStageOwner -- BEFORE this
+  // command is ever published; this is the command's only publisher (see
+  // that route's comment). This handler is a trusted-internal executor, the
+  // same trust boundary apar/f3-consumer.ts relies on for apar/routes.ts's
+  // writes: it applies whatever already-authorised transition the route
+  // decided on, and records whether it was a privileged super_admin
+  // override (`p.override`, set by assertAppraisalStageOwner) so an
+  // override is never silently indistinguishable from a normal
+  // owner-performed transition in the audit trail.
   queue.subscribe(COMMANDS.appraisalAdvanceStage, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; stage: string; rating: string | null;
+      id: string; tenantId: string; stage: string; rating: string | null; override?: boolean;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -46,15 +56,15 @@ export function registerAppraisalConsumers(queue: Queue): void {
         rating: p.rating ?? existing.rating,
         updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "advance_stage", "appraisal", p.id);
+      await audit(tx, msg, "advance_stage", "appraisal", p.id, p.override === true);
     });
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, override = false): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "hrms", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "hrms", action, resourceType, resourceId, outcome: "success", ...(override ? { override: true } : {}) },
   });
 }
