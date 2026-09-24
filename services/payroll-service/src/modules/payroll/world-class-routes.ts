@@ -3,7 +3,7 @@ import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
@@ -90,7 +90,14 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, [...ROLES, "employee"]);
     const body = createReimbursementBody.parse(req.body);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.createReimbursement(ctx, body));
+    // SEC-P2-03: a self-service `employee` caller may only file a
+    // reimbursement claim for THEMSELVES — without this, any employee could
+    // supply a co-worker's UUID as employeeId and forge a reimbursement
+    // claim (with a payout) in that co-worker's name (IDOR / claim
+    // forgery). HR/payroll roles keep the existing ability to submit a
+    // claim on behalf of another employee (act-on-behalf).
+    const employeeId = enforceEmployeeOwnership(ctx, body.employeeId);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.createReimbursement(ctx, { ...body, employeeId }));
   });
 
   // Salary Revisions

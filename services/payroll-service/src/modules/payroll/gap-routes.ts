@@ -12,7 +12,7 @@ import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
@@ -272,7 +272,12 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/tax/optimization", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const q = z.object({ employeeId: z.string().uuid() }).parse(req.query);
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
+    // SEC-P2-02: a self-service `employee` caller may only see their OWN
+    // tax-optimization advice — without this, any employee could pass a
+    // co-worker's UUID as employeeId and read their 80C/80D declaration
+    // usage and remaining headroom (cross-employee financial disclosure).
+    const employeeId = enforceEmployeeOwnership(ctx, q.employeeId);
 
     // Fetch current declarations
     const now = new Date();
@@ -283,7 +288,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const decRows = (await scopedRead((tx) => tx.execute(sql`
       SELECT section_80c, section_80d, other_deductions, rent_paid_minor, regime
       FROM payroll.payroll_tax_declarations
-      WHERE tenant_id = ${ctx.tenantId}::uuid AND employee_id = ${q.employeeId}::uuid AND fy = ${fy}
+      WHERE tenant_id = ${ctx.tenantId}::uuid AND employee_id = ${employeeId}::uuid AND fy = ${fy}
       ORDER BY created_at DESC LIMIT 1
     `))) as unknown as Array<{ section_80c: string; section_80d: string; other_deductions: string; rent_paid_minor: string; regime: string }>;
     const dec = decRows[0];
@@ -330,7 +335,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     suggestions.push({ section: "80CCD(1B)", headroom: Number(sec80ccd1bCapMinor), suggestion: "Additional NPS (Tier-I) contribution to utilize 80CCD(1B) headroom, deductible beyond 80C" });
 
     return reply.send({
-      employeeId: q.employeeId, fy, regime: dec?.regime ?? "new",
+      employeeId, fy, regime: dec?.regime ?? "new",
       used80cMinor: Number(used80c), used80dMinor: Number(used80d),
       remaining80cMinor: Number(remaining80c), remaining80dMinor: Number(remaining80d),
       suggestions,
@@ -340,10 +345,16 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/tax/regime-comparison", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const q = z.object({ employeeId: z.string().uuid() }).parse(req.query);
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
+    // SEC-P2-02: same ownership guard as /v1/payroll/tax/optimization above.
+    // This route currently only returns stub/placeholder figures (see
+    // comment below), so it isn't independently exploitable today — fixed
+    // for consistency so it doesn't become a silent gap the moment real
+    // computation is wired in here.
+    const employeeId = enforceEmployeeOwnership(ctx, q.employeeId);
     // Simplified comparison — in production this calls the full tax engine
     return reply.send({
-      employeeId: q.employeeId,
+      employeeId,
       oldRegime: { estimatedTaxMinor: 0, note: "Requires full annual income computation" },
       newRegime: { estimatedTaxMinor: 0, note: "Requires full annual income computation" },
       recommendation: "Use GET /v1/payroll/tax/computation with regime=old and regime=new for exact comparison",
