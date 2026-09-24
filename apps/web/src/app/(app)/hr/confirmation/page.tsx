@@ -10,6 +10,7 @@ import {
   type ConfirmationRow,
 } from "./_components/ProbationConfirmationCard";
 import { toHumanError } from "@/lib/messages";
+import { getTranslations } from "next-intl/server";
 
 async function getData(): Promise<LoaderResult<ConfirmationRow[]>> {
   return fetchJson<unknown, ConfirmationRow[]>("/api/v1/hrms/confirmations", [], {
@@ -22,6 +23,7 @@ async function getData(): Promise<LoaderResult<ConfirmationRow[]>> {
 }
 
 export default async function ConfirmationPage() {
+  const t = await getTranslations("confirmation");
   const { data: items, source } = await getData();
   const errored = source === "error";
 
@@ -39,21 +41,21 @@ export default async function ConfirmationPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Probation Confirmations"
-        subtitle="Employees due for service confirmation after the mandatory 2-year probation (CCS Conduct Rules)."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
 
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label="On Probation"   value={errored ? null : items.length} />
-        <StatCard icon="⏰" iconBg="var(--badbg, #fff1f0)" label="Overdue"         value={errored ? null : overdue} />
-        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label="Due in 30 Days" value={errored ? null : dueSoon} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Timely"          value={errored ? null : timely} />
+<StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statOnProbation")}   value={errored ? null : items.length} />
+        <StatCard icon="⏰" iconBg="var(--badbg, #fff1f0)" label={t("statOverdue")}         value={errored ? null : overdue} />
+        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label={t("statDueSoon")} value={errored ? null : dueSoon} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statTimely")}          value={errored ? null : timely} />
       </StatGrid>
 
-      <Card title="Probation Register — Confirmation Due">
+      <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "confirmations" })} backHref="/hr" />

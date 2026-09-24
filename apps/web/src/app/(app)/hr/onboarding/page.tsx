@@ -5,6 +5,7 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { JoineeCard, type JoineeCardData } from "./_components/JoineeCard";
+import { getTranslations } from "next-intl/server";
 
 // Mirrors HR_ROLES in services/hrms-service/src/modules/lifecycle/onboarding-routes.ts
 // (GET /v1/hrms/onboarding) -- kept local rather than shared, matching how
@@ -34,6 +35,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function OnboardingPage() {
+  const t = await getTranslations("onboarding");
   const { data: items, source, status } = await getData();
 
   // A 403 here is a real, permanent role restriction (this is a tenant-wide
@@ -48,8 +50,8 @@ export default async function OnboardingPage() {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader
-          title="Onboarding Tracker"
-          subtitle="Onboarding checklist progress for new joinees — document collection, IT setup, and departmental induction."
+          title={t("title")}
+          subtitle={t("subtitle")}
           back="/hr" backLabel="Back to HR"
         />
         <PermissionDenied module="the onboarding tracker" requiredRoles={ONBOARDING_ROLES} />
@@ -83,12 +85,12 @@ export default async function OnboardingPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Onboarding Tracker"
-        subtitle="Onboarding checklist progress for new joinees — document collection, IT setup, and departmental induction."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
         actions={
           <Link href="/hr/employees/new" className="btn primary" aria-label="Add new joinee">
-            + Add New Joinee
+            {t("addJoinee")}
           </Link>
         }
       />
@@ -96,10 +98,10 @@ export default async function OnboardingPage() {
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="👋" iconBg="var(--infobg, #e6f0ff)" label="Total Onboarding" value={items.length} />
-        <StatCard icon="🔄" iconBg="var(--warnbg, #fffbe6)" label="In Progress" value={inProgress} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Completed" value={completed} />
-        <StatCard icon="⚠️" iconBg="var(--badbg, #fff1f0)" label="Overdue Tasks" value={overdue} />
+<StatCard icon="👋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="🔄" iconBg="var(--warnbg, #fffbe6)" label={t("statInProgress")} value={inProgress} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statCompleted")} value={completed} />
+        <StatCard icon="⚠️" iconBg="var(--badbg, #fff1f0)" label={t("statOverdue")} value={overdue} />
       </StatGrid>
 
       {/* ── Joinee card grid (manager view) ─────────────────────────────────── */}
@@ -125,8 +127,8 @@ export default async function OnboardingPage() {
         >
           <EmptyState
             icon="👋"
-            title="No joiners this month"
-            message="New joinee onboarding checklists appear here once a joining is initiated. Checklists track document collection, IT access setup, workstation assignment, ID card issuance, and induction completion."
+            title={t("emptyTitle")}
+            message={t("emptyMessage")}
             action={
               <Link
                 href="/hr/employees/new"

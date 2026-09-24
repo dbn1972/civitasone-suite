@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { CertificationCard } from "./_components/CertificationCard";
+import { getTranslations } from "next-intl/server";
 
 type Row = {
   id: string;
@@ -42,6 +43,7 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 }
 
 export default async function CertificationsPage() {
+  const t = await getTranslations("certifications");
   const { data: items, source } = await getData();
 
   const valid        = items.filter((i) => deriveCardStatus(i) === "valid").length;
@@ -58,18 +60,18 @@ export default async function CertificationsPage() {
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title="Certifications"
-        subtitle="Employee professional certifications, training completions, and validity tracking."
+        title={t("title")}
+        subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
         actions={<span />}
       />
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏅" iconBg="var(--infobg, #e6f0ff)" label="Total Certificates" value={items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label="Valid"              value={valid} />
-        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label="Expiring Soon"      value={expiringSoon} />
-        <StatCard icon="🚫" iconBg="var(--badbg, #fff1f0)" label="Expired"            value={expired} />
+<StatCard icon="🏅" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statValid")}              value={valid} />
+        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statExpiringSoon")}      value={expiringSoon} />
+        <StatCard icon="🚫" iconBg="var(--badbg, #fff1f0)" label={t("statExpired")}            value={expired} />
       </StatGrid>
 
       {/* Alert banner */}
@@ -95,15 +97,15 @@ export default async function CertificationsPage() {
         </div>
       )}
 
-      <Card title="Certifications Register">
+      <Card title={t("cardTitle")}>
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "certifications" })} backHref="/hr" />
         ) : sorted.length === 0 ? (
           <div style={{ padding: 32, textAlign: "center", color: "var(--mut)" }}>
             <p style={{ fontSize: 32, margin: "0 0 8px" }}>🏅</p>
-            <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>No certifications recorded yet</p>
+            <p style={{ fontWeight: 600, color: "var(--ink2, #475569)", margin: 0 }}>{t("emptyTitle")}</p>
             <p style={{ fontSize: 13, margin: "4px 0 0" }}>
-              Certifications appear here once employees complete external courses or government training programmes.
+              {t("emptyMessage")}
             </p>
           </div>
         ) : (
