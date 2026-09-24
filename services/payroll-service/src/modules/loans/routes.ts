@@ -2,7 +2,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
 import { createLoanBody, idParam, loanQueryParams } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -30,8 +30,11 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { empId } = loanQueryParams.parse(req.query);
-    if (!empId) throw new HttpError(400, "VALIDATION_FAILED", "empId is required");
-    return reply.send(await queries.getLoansByEmployee(ctx.tenantId, empId));
+    // SEC-P2-01: a self-service `employee` caller may only list their OWN
+    // loans — without this, any employee could pass a co-worker's UUID as
+    // empId and read their loan principal/EMI/outstanding balance (IDOR).
+    const effectiveEmpId = enforceEmployeeOwnership(ctx, empId);
+    return reply.send(await queries.getLoansByEmployee(ctx.tenantId, effectiveEmpId));
   });
 
   // ─── Gap: loan detail ────────────────────────────────────────────────────
@@ -41,6 +44,10 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const loan = await repo.findLoanById(id, ctx.tenantId);
     if (!loan) throw new HttpError(404, "NOT_FOUND", "loan not found");
+    // SEC-P2-01: a self-service `employee` caller may only view their OWN
+    // loan — without this, any employee could fetch any co-worker's loan by
+    // iterating loan ids (IDOR).
+    enforceEmployeeOwnership(ctx, loan.employeeId);
     return reply.send(loan);
   });
 
@@ -51,6 +58,10 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const loan = await repo.findLoanById(id, ctx.tenantId);
     if (!loan) throw new HttpError(404, "NOT_FOUND", "loan not found");
+    // SEC-P2-01: same ownership guard as the detail route above — a
+    // self-service employee must not be able to read a co-worker's
+    // repayment schedule by iterating loan ids (IDOR).
+    enforceEmployeeOwnership(ctx, loan.employeeId);
 
     const principal = Number(loan.principalMinor);
     const emiMinor  = Number(loan.emiMinor);

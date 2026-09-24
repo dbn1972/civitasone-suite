@@ -47,7 +47,12 @@ describe("Route: arrears/bonus/reimbursement CQRS handlers use sendAccepted (202
   });
 
   it("POST /v1/payroll/reimbursements calls sendAccepted(...) with commands.createReimbursement", () => {
-    const m = /app\.post\("\/v1\/payroll\/reimbursements",\s*async[\s\S]{0,400}?\}\);/.exec(src);
+    // SEC-P2-03: the char budget here was bumped from 400 to 900 — the
+    // ownership-enforcement fix (enforceEmployeeOwnership(ctx,
+    // body.employeeId), see shared/context.ts) added an explanatory comment
+    // plus one guard line to this handler, pushing its body past the
+    // original 400-char window before reaching its closing `});`.
+    const m = /app\.post\("\/v1\/payroll\/reimbursements",\s*async[\s\S]{0,900}?\}\);/.exec(src);
     expect(m).not.toBeNull();
     expect(m![0]).toContain("sendAccepted");
     expect(m![0]).toContain("commands.createReimbursement");
