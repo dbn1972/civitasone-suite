@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { PageHeader, Card, StatGrid, StatCard } from "../../../../../_components/ds";
@@ -9,6 +10,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"];
 
 export default async function PayslipDetailPage({ params }: { params: { id: string } }) {
+  const t = await getTranslations("salarySlipDashboard");
   const roles = getSessionRoles();
   const canView = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
   if (!canView) {
@@ -20,11 +22,11 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   if (!slip) {
     return (
       <main className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Salary Slip" back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
+        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
         <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--color-text-muted)" }}>
-            Salary slip not found or could not be loaded.
+            {t("notFoundMessage")}
           </p>
         </Card>
       </main>
@@ -53,7 +55,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   return (
     <main className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={`Salary Slip — ${slip.payPeriod}`}
+        title={t("titleWithPeriod", { period: slip.payPeriod })}
         subtitle={slip.employeeName}
         back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips"
         actions={
@@ -63,7 +65,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
               className="btn secondary"
               style={{ minHeight: 44 }}
             >
-              🖨 Printable Slip
+              {t("printableSlipLink")}
             </Link>
             <a
               href={`/api/proxy/v1/payroll/slips/${slip.id}/pdf`}
@@ -72,7 +74,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
               className="btn primary"
               style={{ minHeight: 44 }}
             >
-              ⬇ Download PDF
+              {t("downloadPdfLink")}
             </a>
           </>
         }
@@ -82,22 +84,22 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
       {/* Summary cards */}
       <StatGrid>
-        <StatCard icon="💰" iconBg="var(--goodbg)" label="Gross Pay" value={formatMoney(slip.gross)} />
-        <StatCard icon="📉" iconBg="var(--badbg)" label="Total Deductions" value={formatMoney(slip.deductions)} />
-        <StatCard icon="✅" iconBg="var(--infobg)" label="Net Pay" value={formatMoney(slip.net)} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")} value={formatMoney(slip.gross)} />
+        <StatCard icon="📉" iconBg="var(--badbg)" label={t("statDeductions")} value={formatMoney(slip.deductions)} />
+        <StatCard icon="✅" iconBg="var(--infobg)" label={t("statNetPay")} value={formatMoney(slip.net)} />
         <StatCard
           icon="📋"
           iconBg="var(--warnbg)"
-          label="Status"
+          label={t("statStatus")}
           value={slip.status.charAt(0).toUpperCase() + slip.status.slice(1)}
         />
       </StatGrid>
 
       {/* Employee details */}
-      <Card title="Slip Details" padding>
+      <Card title={t("slipDetailsTitle")} padding>
         <div className="fields">
           <div className="field">
-            <span className="lbl">Employee</span>
+            <span className="lbl">{t("fieldEmployee")}</span>
             <span className="val">
               <Link
                 href={`/hr/employees/${slip.employeeId}`}
@@ -108,11 +110,11 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
             </span>
           </div>
           <div className="field">
-            <span className="lbl">Department</span>
+            <span className="lbl">{t("fieldDepartment")}</span>
             <span className="val">{slip.department}</span>
           </div>
           <div className="field">
-            <span className="lbl">Pay Period</span>
+            <span className="lbl">{t("fieldPayPeriod")}</span>
             <span className="val">{slip.payPeriod}</span>
           </div>
         </div>
@@ -120,13 +122,13 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
       {/* Earnings table */}
       {earnings.length > 0 ? (
-        <Card title="Earnings">
+        <Card title={t("earningsTitle")}>
           <table className="tbl">
             <thead>
               <tr>
-                <th>Code</th>
-                <th>Component</th>
-                <th style={{ textAlign: "right" }}>Amount</th>
+                <th>{t("colCode")}</th>
+                <th>{t("colComponent")}</th>
+                <th style={{ textAlign: "right" }}>{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -138,29 +140,29 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
                 </tr>
               ))}
               <tr style={{ fontWeight: 700, borderTop: "2px solid var(--line)" }}>
-                <td colSpan={2}>Total Earnings</td>
+                <td colSpan={2}>{t("totalEarnings")}</td>
                 <td className="num">{formatMoney(slip.gross)}</td>
               </tr>
             </tbody>
           </table>
         </Card>
       ) : (
-        <Card title="Earnings" padding>
+        <Card title={t("earningsTitle")} padding>
           <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-            Detailed earnings breakdown not available for this slip.
+            {t("earningsUnavailable")}
           </p>
         </Card>
       )}
 
       {/* Deductions table */}
       {deductionItems.length > 0 ? (
-        <Card title="Deductions">
+        <Card title={t("deductionsTitle")}>
           <table className="tbl">
             <thead>
               <tr>
-                <th>Code</th>
-                <th>Component</th>
-                <th style={{ textAlign: "right" }}>Amount</th>
+                <th>{t("colCode")}</th>
+                <th>{t("colComponent")}</th>
+                <th style={{ textAlign: "right" }}>{t("colAmount")}</th>
               </tr>
             </thead>
             <tbody>
@@ -172,58 +174,58 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
                 </tr>
               ))}
               <tr style={{ fontWeight: 700, borderTop: "2px solid var(--line)" }}>
-                <td colSpan={2}>Total Deductions</td>
+                <td colSpan={2}>{t("totalDeductions")}</td>
                 <td className="num">{formatMoney(slip.deductions)}</td>
               </tr>
             </tbody>
           </table>
         </Card>
       ) : (
-        <Card title="Deductions" padding>
+        <Card title={t("deductionsTitle")} padding>
           <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-            Detailed deductions breakdown not available for this slip.
+            {t("deductionsUnavailable")}
           </p>
         </Card>
       )}
 
       {/* Statutory breakdown */}
-      <Card title="Statutory Contributions" padding>
+      <Card title={t("statutoryTitle")} padding>
         {stat ? (
           <div className="fields">
             {stat.pfEmployee != null && (
               <div className="field">
-                <span className="lbl">PF (Employee)</span>
+                <span className="lbl">{t("pfEmployee")}</span>
                 <span className="val">{formatMoney(stat.pfEmployee)}</span>
               </div>
             )}
             {stat.pfEmployer != null && (
               <div className="field">
-                <span className="lbl">PF (Employer)</span>
+                <span className="lbl">{t("pfEmployer")}</span>
                 <span className="val">{formatMoney(stat.pfEmployer)}</span>
               </div>
             )}
             {stat.esiEmployee != null && (
               <div className="field">
-                <span className="lbl">ESI (Employee)</span>
+                <span className="lbl">{t("esiEmployee")}</span>
                 <span className="val">{formatMoney(stat.esiEmployee)}</span>
               </div>
             )}
             {stat.esiEmployer != null && (
               <div className="field">
-                <span className="lbl">ESI (Employer)</span>
+                <span className="lbl">{t("esiEmployer")}</span>
                 <span className="val">{formatMoney(stat.esiEmployer)}</span>
               </div>
             )}
             {stat.tds != null && (
               <div className="field">
-                <span className="lbl">TDS</span>
+                <span className="lbl">{t("tds")}</span>
                 <span className="val">{formatMoney(stat.tds)}</span>
               </div>
             )}
           </div>
         ) : (
           <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>
-            Statutory breakdown not available for this slip.
+            {t("statutoryUnavailable")}
           </p>
         )}
       </Card>

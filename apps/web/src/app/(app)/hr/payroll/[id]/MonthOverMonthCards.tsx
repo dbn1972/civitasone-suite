@@ -4,7 +4,13 @@ import { formatRupees } from "@/lib/formatters";
 
 type Props = {
   currentGross: number;
-  previousGross: number;
+  /**
+   * null means "we don't know" (the prior-period fetch failed) — distinct
+   * from a real 0 (no prior period, or a prior period that genuinely had no
+   * run). Only a real number renders a MoM delta; null renders "—" with no
+   * delta line rather than a fabricated comparison against ₹0.
+   */
+  previousGross: number | null;
   currentNet: number;
   currentPeriod: string;
   previousPeriod: string;
@@ -17,9 +23,9 @@ export function MonthOverMonthCards({
   currentPeriod,
   previousPeriod,
 }: Props) {
-  const diff  = currentGross - previousGross;
-  const pct   = previousGross > 0 ? (diff / previousGross) * 100 : 0;
-  const isUp  = diff >= 0;
+  const diff  = previousGross !== null ? currentGross - previousGross : null;
+  const pct   = diff !== null && previousGross !== null && previousGross > 0 ? (diff / previousGross) * 100 : null;
+  const isUp  = diff !== null && diff >= 0;
   const ratio = currentGross > 0
     ? ((currentNet / currentGross) * 100).toFixed(1)
     : "—";
@@ -61,7 +67,7 @@ export function MonthOverMonthCards({
       <div style={cardStyle}>
         <div style={labelStyle}>{previousPeriod} — Gross</div>
         <div style={valueStyle}>{formatRupees(previousGross)}</div>
-        {previousGross > 0 && (
+        {pct !== null && (
           <div
             style={{
               marginTop: 4,
