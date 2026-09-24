@@ -75,6 +75,19 @@ vi.mock("../src/modules/payroll/repo.js", () => ({
   markSlipsPaidForRun: vi.fn(),
 }));
 
+// BUG-2 fix: leaveApproved/attendanceMarked now call fetchAttendanceLopApplies
+// (a real HTTP call to hrms-service, gating the ledger write on DIC engagement
+// exemption) before doing anything else. This file's whole design is to mock
+// the DB layer and test the consumer with "no live database required" -- a
+// real network call to hrms-service would make these tests depend on whatever
+// (if anything) happens to be listening on HRMS_URL on the host running them.
+// Mock it to default `true` (LOP applies) so every test below keeps its
+// original, already-mocked-DB behavior.
+const mockFetchAttendanceLopApplies = vi.fn(async () => true);
+vi.mock("../src/shared/hrms-client.js", () => ({
+  fetchAttendanceLopApplies: (...args: unknown[]) => mockFetchAttendanceLopApplies(...args),
+}));
+
 // ─── Import after mocks ──────────────────────────────────────────────────────
 
 import { registerIntegrationConsumers } from "../src/modules/integration/consumer.js";

@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
+import { pino } from "pino";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -10,6 +11,7 @@ import * as templateRepo from "./jd-template-repo.js";
 import * as employeeRepo from "../employee/repo.js";
 
 const AUDIT = "audit.event.record";
+const log = pino({ name: "recruitment-consumer" });
 
 export function registerRecruitmentConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.jobCreate, async (msg) => {
@@ -104,14 +106,27 @@ export function registerRecruitmentConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
-      // Fetch application for applicant details
+      // BUG-3 fix: atomically claim the application for hiring BEFORE
+      // creating the employee record (replaces the old blind
+      // updateApplication call below). 0 rows affected means this
+      // application is already in the "hired" stage -- a duplicate or
+      // redelivered hire command that reached this consumer under a
+      // different messageId than the original attempt (so markProcessed
+      // above didn't catch it -- see commands.ts's hireApplication for the
+      // deterministic-messageId half of this fix) -- so skip employee
+      // creation entirely rather than creating a second one for the same
+      // application.
+      const claimed = await repo.claimApplicationForHire(tx, p.applicationId, p.tenantId);
+      if (!claimed) {
+        log.warn({ applicationId: p.applicationId, tenantId: p.tenantId, employeeId: p.employeeId }, "duplicate hire suppressed: application already hired");
+        return;
+      }
+
+      // Fetch application for applicant details (already claimed above).
       const application = await repo.findApplicationByIdTx(tx, p.applicationId, p.tenantId);
       const fullName = application?.applicantName ?? "Unknown";
       const email = application?.email ?? null;
       const mobile = application?.mobile ?? null;
-
-      // Update application status to hired
-      await repo.updateApplication(tx, p.applicationId, { stage: "hired", status: "closed" });
 
       // Create the employee record
       await employeeRepo.insertEmployee(tx, {

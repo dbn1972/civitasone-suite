@@ -16,7 +16,25 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, INTERNAL_ROLES);
     const q = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/) }).parse(req.query);
 
-    const employees = await employeeRepo.listByTenant(ctx.tenantId, 500, 0);
+    // BUG-1 fix: this feed IS the complete payroll-input set for the run --
+    // payroll-service's fetchPayrollInput() (hrms-client.ts) does no pagination
+    // of its own and treats `employees` as the whole tenant. A hardcoded
+    // listByTenant(tenantId, 500, 0) silently dropped every employee past the
+    // 500th (no error, no truncation flag -- they just never got paid). Page
+    // through listByTenant until a short page proves there are no more, the
+    // same pattern already used for `active` bounds elsewhere in this file's
+    // batched pre-fetches. No known tenant is anywhere near a scale where
+    // returning everyone is itself a problem (contrast employee-summaries'
+    // .limit(2000) below and its own "round2 review fix" comment about an
+    // arbitrary cap silently producing an incomplete result) -- this is a
+    // correctness fix, not a premature optimization.
+    const PAGE_SIZE = 500;
+    const employees: Awaited<ReturnType<typeof employeeRepo.listByTenant>> = [];
+    for (let offset = 0; ; offset += PAGE_SIZE) {
+      const page = await employeeRepo.listByTenant(ctx.tenantId, PAGE_SIZE, offset);
+      employees.push(...page);
+      if (page.length < PAGE_SIZE) break;
+    }
     const active = employees.filter((e) => e.status !== "separated");
     // DIC engagement policy per employee (payroll excludes non-salary types +
     // gates statutory). Resolver = tenant type master over canonical catalogue.
@@ -157,6 +175,41 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const emp = await employeeRepo.findById(id, ctx.tenantId);
     return reply.send({ exists: emp !== null });
+  });
+
+  // BUG-2 fix: single-employee DIC engagement LOP-applicability check.
+  // payroll-service's integration/consumer.ts writes to a local LOP ledger
+  // (payrollLopLedger, via lopRepo.upsertLopDays) whenever hrms-service
+  // publishes hrms.attendance.marked / hrms.leave.approved -- unconditionally,
+  // for every engagement type. The payroll run then PREFERS that ledger over
+  // this route's own live-pull `lopDays` (see payroll/consumer.ts's "M2 LOP
+  // double-count" comment) whenever any ledger row exists for the month, so a
+  // ledger row written for an exempt employee (consultant/third-party/
+  // apprentice) silently overrides the correct exclusion computed above by
+  // `attendanceLopApplies`. Fixing this requires the SAME predicate to gate
+  // the ledger write itself, at the point it happens (payroll-service's
+  // consumer) -- but that's a different service/database with no direct
+  // access to engagement-policy.ts or this tenant's employee row, so it asks
+  // this route (via hrms-client.ts's fetchAttendanceLopApplies) rather than
+  // duplicating (and risking drifting from) the resolver logic. Both this
+  // route and the payroll-input route above share the exact same
+  // attendanceLopApplies + loadTypeResolver from engagement-policy.ts, so the
+  // two can never disagree on who is exempt.
+  app.get("/v1/hrms/internal/employees/:id/attendance-lop-applies", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const emp = await employeeRepo.findById(id, ctx.tenantId);
+    // Not found: 404, same shape as the slip-templates/default route below.
+    // The caller (fetchAttendanceLopApplies) treats this status -- not a body
+    // field -- as "default to true (LOP applies / not exempt)", the same
+    // permissive default DEFAULT_POLICY resolves to for a type engagement-
+    // typing can't classify, so a lookup miss/race never silently exempts an
+    // employee it shouldn't. Distinct from unreachability, which the caller
+    // must fail closed on instead of guessing.
+    if (!emp) return reply.code(404).send({ code: "NOT_FOUND", message: `employee ${id} not found` });
+    const resolveType = await loadTypeResolver(ctx.tenantId);
+    return reply.send({ attendanceLopApplies: attendanceLopApplies(resolveType(emp.employeeType)) });
   });
 
   // payroll-service cross-database gap fix: payroll.payroll_slip_templates

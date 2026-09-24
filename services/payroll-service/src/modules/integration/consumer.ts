@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS, COMMANDS } from "../../topics.js";
 import * as lopRepo from "./lop-repo.js";
+import { fetchAttendanceLopApplies } from "../../shared/hrms-client.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { computeGratuity } from "../payroll/domain.js";
 import { computeLtcExemption } from "../tax/ltc-exemption.js";
@@ -27,6 +28,18 @@ export function registerIntegrationConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.leaveApproved, async (msg) => {
     const p = msg.payload as { employeeId: string; daysApplied: number; fromDate: string };
     const month = p.fromDate.slice(0, 7);
+    // BUG-2 fix: gate the ledger write itself on the same DIC engagement
+    // exemption the live-pull payroll-input feed applies (consultant/
+    // third-party/apprentice are never docked salary LOP). Without this, an
+    // exempt employee's approved leave still lands in payrollLopLedger, and
+    // the payroll run PREFERS the ledger over the correctly-exempting feed
+    // whenever any ledger row exists for the month (see payroll/consumer.ts's
+    // "M2 LOP double-count" comment) -- silently overriding the exclusion.
+    // Checked BEFORE opening the transaction (a network call) and before
+    // markProcessed, mirroring the attendanceMarked status filter below: a
+    // legitimately-skipped message is simply never claimed, so a redelivery
+    // just re-evaluates the same (idempotent) skip decision.
+    if (!(await fetchAttendanceLopApplies(msg.tenantId, p.employeeId))) return;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await lopRepo.upsertLopDays(tx, msg.tenantId, p.employeeId, month, "leave", p.daysApplied);
@@ -37,6 +50,8 @@ export function registerIntegrationConsumers(queue: Queue): void {
     const p = msg.payload as { employeeId: string; attendanceDate: string; status: string };
     if (p.status !== "absent" && p.status !== "half_day") return;
     const month = p.attendanceDate.slice(0, 7);
+    // BUG-2 fix: same engagement-exemption gate as leaveApproved above.
+    if (!(await fetchAttendanceLopApplies(msg.tenantId, p.employeeId))) return;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await lopRepo.upsertLopDays(tx, msg.tenantId, p.employeeId, month, "attendance", 1);
