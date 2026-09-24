@@ -112,8 +112,8 @@ export default async function ContractualPage() {
             { key: "agency", label: t("colAgency") },
             { key: "department", label: t("colDepartment") },
             { key: "designation", label: t("colDesignation") },
-            { key: "contractFrom", label: t("colFrom") },
-            { key: "contractTo", label: t("colTo") },
+            { key: "contractFrom", label: t("colFrom"), sortable: false },
+            { key: "contractTo", label: t("colTo"), sortable: false },
             { key: "status", label: t("colStatus"), cellType: "status" },
           ]}
           rows={items}

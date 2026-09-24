@@ -9,6 +9,8 @@ import { OnboardingChecklist, type ChecklistStep } from "../_components/Onboardi
 import { DocumentUploadCard, type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
 
+const ONBOARDING_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -115,7 +117,12 @@ export default async function OnboardingDetailPage({ params }: Props) {
   );
 
   if (summaryStatus === 403) {
-    return <PermissionDenied module="onboarding details" requiredRoles={["hr_admin", "hr_officer"]} />;
+    return (
+      <main className="page-main wrap">
+        <PageHeader title="Onboarding Details" back="/hr/onboarding" />
+        <PermissionDenied module="onboarding details" requiredRoles={ONBOARDING_ROLES} />
+      </main>
+    );
   }
 
   const row = rows.find((r) => r.id === id);
