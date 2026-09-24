@@ -22,16 +22,29 @@ const H = vi.hoisted(() => ({
   upsertScore: vi.fn(),
   listScores: vi.fn(),
   listHistory: vi.fn(),
+  listAppraisals: vi.fn(),
+  listDirectReportEmployeeIds: vi.fn(),
+  resolveEmployeeForActor: vi.fn(),
 }));
 
 vi.mock("../src/modules/apar/repo.js", () => ({
-  listAppraisals: vi.fn(async () => []),
+  listAppraisals: (...a: unknown[]) => H.listAppraisals(...a),
   findAppraisal: (...a: unknown[]) => H.findAppraisal(...a),
   updateAppraisal: (...a: unknown[]) => H.updateAppraisal(...a),
   appendHistory: (...a: unknown[]) => H.appendHistory(...a),
   upsertScore: (...a: unknown[]) => H.upsertScore(...a),
   listScores: (...a: unknown[]) => H.listScores(...a),
   listHistory: (...a: unknown[]) => H.listHistory(...a),
+  listDirectReportEmployeeIds: (...a: unknown[]) => H.listDirectReportEmployeeIds(...a),
+}));
+
+// apar/routes.ts's resolveAparReadScope resolves "manager" callers through
+// this module (same actor<->employee identity link employee/routes.ts's
+// resolveManagerScope uses). Mocked wholesale like repo.js above so tests
+// control the link deterministically instead of needing a real DB row.
+vi.mock("../src/modules/employee/actor-link.js", () => ({
+  resolveEmployeeForActor: (...a: unknown[]) => H.resolveEmployeeForActor(...a),
+  extractActorEmail: () => undefined,
 }));
 
 vi.mock("../src/shared/db.js", () => {
@@ -75,6 +88,9 @@ beforeEach(() => {
   H.updateAppraisal.mockResolvedValue(undefined);
   H.appendHistory.mockResolvedValue(undefined);
   H.upsertScore.mockResolvedValue(undefined);
+  H.listAppraisals.mockResolvedValue([]);
+  H.listDirectReportEmployeeIds.mockResolvedValue([]);
+  H.resolveEmployeeForActor.mockResolvedValue(undefined);
 });
 afterAll(async () => { await sqlClient.end(); });
 
@@ -145,6 +161,10 @@ describe("APAR — POST /v1/hrms/apar (create)", () => {
 describe("APAR — POST /v1/hrms/apar/:id/self-appraisal", () => {
   it("200 — employee submits self-appraisal (happy path)", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "self_pending" }));
+    // employeeId on the appraisal is an hrms_employees.id, not the actor id
+    // (see apar/repo.ts's listAppraisals doc comment) -- assertStageOwner
+    // resolves the caller to their own employee row before comparing.
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/self-appraisal`,
       headers: auth(EMP, ["employee"]), payload: { selfAppraisal: "I did good work" } });
@@ -204,6 +224,7 @@ describe("APAR — POST /v1/hrms/apar/:id/self-appraisal", () => {
 describe("APAR — POST /v1/hrms/apar/:id/reporting", () => {
   it("200 — reporting officer submits scores (happy path)", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reporting_officer" }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: RO });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reporting`,
       headers: auth(RO, ["manager"]), payload: {
@@ -228,6 +249,10 @@ describe("APAR — POST /v1/hrms/apar/:id/reporting", () => {
 
   it("403 — employee cannot act as reporting officer", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reporting_officer" }));
+    // Must resolve to EMP's own employee id (== a.employeeId) for this to
+    // actually exercise SELF_REVIEW_FORBIDDEN rather than falling through to
+    // NOT_STAGE_OWNER via an unresolved (null) acting employee id.
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reporting`,
       headers: auth(EMP, ["employee"]), payload: { penPicture: "x", scores: [{ attribute: "a", weight: 100, score: 5 }] }});
@@ -259,6 +284,7 @@ describe("APAR — POST /v1/hrms/apar/:id/reviewing", () => {
   it("200 — reviewing officer concurs (happy path)", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reviewing_officer" }));
     H.listScores.mockResolvedValue([]);
+    H.resolveEmployeeForActor.mockResolvedValue({ id: RVO });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reviewing`,
       headers: auth(RVO, ["manager"]), payload: { decision: "concur", remarks: "I agree" }});
@@ -271,6 +297,7 @@ describe("APAR — POST /v1/hrms/apar/:id/reviewing", () => {
   it("200 — reviewing officer varies scores", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reviewing_officer" }));
     H.listScores.mockResolvedValue([{ attribute: "integrity", weight: "1", score: 8 }]);
+    H.resolveEmployeeForActor.mockResolvedValue({ id: RVO });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reviewing`,
       headers: auth(RVO, ["manager"]), payload: {
@@ -292,6 +319,7 @@ describe("APAR — POST /v1/hrms/apar/:id/reviewing", () => {
 
   it("403 — employee cannot review themselves", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reviewing_officer" }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/reviewing`,
       headers: auth(EMP, ["employee"]), payload: { decision: "concur", remarks: "x" }});
@@ -316,6 +344,7 @@ describe("APAR — POST /v1/hrms/apar/:id/accept (accepting authority)", () => {
       { attribute: "integrity", weight: "1", score: 9 },
       { attribute: "leadership", weight: "1", score: 8 },
     ]);
+    H.resolveEmployeeForActor.mockResolvedValue({ id: AA });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/accept`,
       headers: auth(AA, ["manager"]), payload: { remarks: "Finalised" }});
@@ -338,6 +367,10 @@ describe("APAR — POST /v1/hrms/apar/:id/accept (accepting authority)", () => {
   it("409 — no scores recorded", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "accepting_authority" }));
     H.listScores.mockResolvedValue([]);
+    // Required: assertStageOwner runs BEFORE the no-scores check, so AA must
+    // resolve to the accepting authority's own employee id or this would
+    // 403 NOT_STAGE_OWNER before ever reaching NO_SCORES.
+    H.resolveEmployeeForActor.mockResolvedValue({ id: AA });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/accept`,
       headers: auth(AA, ["manager"]), payload: { remarks: "ok" }});
@@ -348,6 +381,7 @@ describe("APAR — POST /v1/hrms/apar/:id/accept (accepting authority)", () => {
 
   it("403 — employee cannot act as accepting authority", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "accepting_authority" }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/accept`,
       headers: auth(EMP, ["employee"]), payload: { remarks: "x" }});
@@ -368,6 +402,7 @@ describe("APAR — POST /v1/hrms/apar/:id/accept (accepting authority)", () => {
 describe("APAR — POST /v1/hrms/apar/:id/representation", () => {
   it("200 — employee files representation (happy path)", async () => {
     H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "disclosed" }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
     const app = await buildApp();
     const r = await app.inject({ method: "POST", url: `/v1/hrms/apar/${APAR_ID}/representation`,
       headers: auth(EMP, ["employee"]), payload: { representation: "I disagree with the score" }});
@@ -489,6 +524,136 @@ describe("APAR — GET /v1/hrms/apar/:id", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth() });
     expect(r.statusCode).toBe(404);
+    await app.close();
+  });
+});
+
+// ── Regression: Bug 1 / Bug 2 — read-side IDOR (list + detail) ─────────────
+// GET /v1/hrms/apar was documented "HR sees all; employee sees own" but
+// repo.listAppraisals took no actor/employee filter at all; GET /:id had no
+// ownership check beyond tenant. Both allowed any employee/manager-role
+// caller to read any other employee's appraisal by enumerating ids or via
+// the unfiltered list. These tests prove that leak is closed while HR,
+// self, and manager-of-report access keep working.
+const OTHER_EMP = "aaaaaaaa-2222-4000-8000-000000000002";
+const MANAGER = "aaaaaaaa-6666-4000-8000-000000000001";
+const MANAGER_EMP_ROW_ID = "dddddddd-0001-4000-8000-000000000001";
+
+describe("APAR — GET /v1/hrms/apar (list) — read-scope regression", () => {
+  it("200 — employee role: only the caller's own appraisal(s) come back, repo scoped to [EMP]", async () => {
+    H.listAppraisals.mockResolvedValue([baseAppraisal({ employeeId: EMP })]);
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth(EMP, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data).toHaveLength(1);
+    expect(r.json().data[0].employeeId).toBe(EMP);
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, [EMP]);
+    // never falls back to unrestricted access for a bare employee caller
+    expect(H.listAppraisals).not.toHaveBeenCalledWith(TENANT, null);
+    await app.close();
+  });
+
+  it("200 — manager role with no resolvable employee link sees nothing (fail closed)", async () => {
+    H.resolveEmployeeForActor.mockResolvedValue(undefined);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth(MANAGER, ["manager"]) });
+    expect(r.statusCode).toBe(200);
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, []);
+    await app.close();
+  });
+
+  it("200 — manager role: repo scoped to direct reports' employeeIds only", async () => {
+    H.resolveEmployeeForActor.mockResolvedValue({ id: MANAGER_EMP_ROW_ID });
+    H.listDirectReportEmployeeIds.mockResolvedValue([EMP]);
+    H.listAppraisals.mockResolvedValue([baseAppraisal({ employeeId: EMP })]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth(MANAGER, ["manager"]) });
+    expect(r.statusCode).toBe(200);
+    expect(H.listDirectReportEmployeeIds).toHaveBeenCalledWith(TENANT, MANAGER_EMP_ROW_ID);
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, [EMP]);
+    await app.close();
+  });
+
+  it("200 — hr_admin: unrestricted tenant-wide access (scope null)", async () => {
+    H.listAppraisals.mockResolvedValue([
+      baseAppraisal({ employeeId: EMP }),
+      baseAppraisal({ id: "cccccccc-0002-4000-8000-000000000001", employeeId: OTHER_EMP }),
+    ]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth() }); // default hr_admin
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data).toHaveLength(2);
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, null);
+    await app.close();
+  });
+});
+
+describe("APAR — GET /v1/hrms/apar/:id — ownership regression (IDOR)", () => {
+  it("200 — employee fetching their own appraisal succeeds", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ employeeId: EMP }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(EMP, ["employee"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().appraisal.employeeId).toBe(EMP);
+    await app.close();
+  });
+
+  it("404 — employee CANNOT fetch another employee's appraisal by id (IDOR closed)", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ employeeId: OTHER_EMP }));
+    // Resolves successfully to EMP's own id -- proves the 404 comes from
+    // EMP's scope genuinely excluding OTHER_EMP, not merely from an
+    // unresolved (fail-closed) actor link.
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(EMP, ["employee"]) });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("NOT_FOUND");
+    await app.close();
+  });
+
+  it("404 — manager with no resolvable employee link cannot fetch a report's appraisal", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ employeeId: EMP }));
+    H.resolveEmployeeForActor.mockResolvedValue(undefined);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(MANAGER, ["manager"]) });
+    expect(r.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("200 — manager fetching a direct report's appraisal succeeds", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ employeeId: EMP }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: MANAGER_EMP_ROW_ID });
+    H.listDirectReportEmployeeIds.mockResolvedValue([EMP]);
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(MANAGER, ["manager"]) });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("404 — manager fetching a NON-report's appraisal is rejected", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ employeeId: OTHER_EMP }));
+    H.resolveEmployeeForActor.mockResolvedValue({ id: MANAGER_EMP_ROW_ID });
+    H.listDirectReportEmployeeIds.mockResolvedValue([EMP]); // OTHER_EMP is not a report
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(MANAGER, ["manager"]) });
+    expect(r.statusCode).toBe(404);
+    expect(r.json().code).toBe("NOT_FOUND");
+    await app.close();
+  });
+
+  it("200 — hr_admin can fetch any tenant appraisal regardless of employeeId", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ employeeId: OTHER_EMP }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth() }); // hr_admin
+    expect(r.statusCode).toBe(200);
     await app.close();
   });
 });

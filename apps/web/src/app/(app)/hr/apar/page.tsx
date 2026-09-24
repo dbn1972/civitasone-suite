@@ -11,6 +11,16 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { APARFlowList, type AparRecord } from "./_components/APARFlowCard";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
+
+// Mirrors the backend's ACTOR_ROLES (apar/routes.ts). "employee"/"manager"
+// are included here too -- the API scopes their view server-side (own
+// record / direct reports' records) rather than denying them outright, so
+// this gate only needs to keep roles with NO legitimate APAR access (e.g. a
+// citizen-only session) off the page. Defense in depth alongside the API's
+// own auth checks, matching the pattern on the RTI page.
+const APAR_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
 
 async function getApars() {
   return fetchJson<unknown, AparRecord[]>("/api/v1/hrms/apar", [], {
@@ -23,6 +33,13 @@ async function getApars() {
 }
 
 export default async function AparListPage() {
+  /* ── Role gate ─────────────────────────────────────────────── */
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r) => APAR_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="APAR appraisals" requiredRoles={APAR_ROLES} />;
+  }
+
   const t = await getTranslations("apar");
   const result = await getApars();
   const errored = result.source === "error";

@@ -16,7 +16,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  * officer assigned to the *current* stage. Out-of-turn actors are rejected
  * with 403. An immutable stage-history row is appended on every transition.
  */
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -24,14 +24,16 @@ import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import { computeOverallGrade, type ScoreInput } from "./engine.js";
 import type { AppraisalRow } from "../appraisals/schema.js";
+import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ACTOR_ROLES = [...HR_ROLES, "manager", "employee"];
 const idParam = z.object({ id: z.string().uuid() });
 
 /**
- * Returns the actor id that is authorised to act on the appraisal's current
- * stage. super_admin / hr_admin always bypass (they administer the workflow),
+ * Returns the hrms_employees.id (NOT an actor id -- see resolveAparReadScope
+ * below) that is authorised to act on the appraisal's current stage.
+ * super_admin / hr_admin always bypass (they administer the workflow),
  * mirroring the internal-bypass grants used for verification.
  */
 export function stageOwner(a: AppraisalRow): { stage: string; ownerId: string | null } {
@@ -60,19 +62,30 @@ export function stageOwner(a: AppraisalRow): { stage: string; ownerId: string | 
  *    true actor id/role in stage-history. hr_admin gets NO scoring override.
  *  - The appraisee can NEVER act on an officer stage (reporting/reviewing/
  *    accepting), even with an admin role.
+ *
+ * `stageOwner()`'s ownerId is an hrms_employees.id, not an actor id (same
+ * mismatch as resolveAparReadScope below), so the acting actor is resolved
+ * to their OWN hrms_employees.id first (via resolveEmployeeForActor, keyed
+ * on userRef with the established email-fallback/auto-link) and THAT is
+ * compared against ownerId/a.employeeId -- never ctx.actorId directly. A
+ * caller with no resolvable employee link simply cannot be the owner
+ * (fails closed into the super_admin-override-or-403 path below), the same
+ * fail-closed posture as the read-scope resolution.
  */
-export function assertStageOwner(ctx: RequestContext, a: AppraisalRow, expected: string): { override: boolean } {
+export async function assertStageOwner(ctx: RequestContext, req: FastifyRequest, a: AppraisalRow, expected: string): Promise<{ override: boolean }> {
   if (a.status !== expected) {
     throw new HttpError(409, "WRONG_STAGE", `appraisal is at stage '${a.status}', expected '${expected}'`);
   }
   const { ownerId } = stageOwner(a);
-  const isOwner = ownerId !== null && ctx.actorId === ownerId;
+  const actingEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actingEmployeeId = actingEmp?.id ?? null;
+  const isOwner = ownerId !== null && actingEmployeeId !== null && actingEmployeeId === ownerId;
   if (isOwner) return { override: false };
 
   // Not the owner. Officer stages must never be performed by the appraisee, and
   // only super_admin may override; hr_admin may not silently enter scores.
   const OFFICER_STAGES = new Set(["reporting_officer", "reviewing_officer", "accepting_authority"]);
-  if (OFFICER_STAGES.has(expected) && ctx.actorId === a.employeeId) {
+  if (OFFICER_STAGES.has(expected) && actingEmployeeId !== null && actingEmployeeId === a.employeeId) {
     throw new HttpError(403, "SELF_REVIEW_FORBIDDEN",
       `the appraisee cannot act as the officer for stage '${expected}'`);
   }
@@ -96,12 +109,76 @@ function trueActorRole(ctx: RequestContext, functionalRole: string, override: bo
   return ctx.roles[0] ?? functionalRole;
 }
 
+/**
+ * Read-scope for GET /v1/hrms/apar (list) and GET /v1/hrms/apar/:id (detail)
+ * ONLY. The stage-transition (POST) routes below do NOT use this — they rely
+ * entirely on assertStageOwner's per-stage ownership chain, which is already
+ * separately audited and must not be narrowed by this read-only visibility
+ * scope (e.g. a reporting officer must still be able to act on a stage even
+ * when they are not the employee's people-manager).
+ *
+ * Returns:
+ *  - null      caller holds an HR_ROLES role (hr_admin/hr_officer/
+ *              super_admin) — unrestricted, tenant-wide, matching the
+ *              "HR sees all" comment on the list route below.
+ *  - string[]  caller is "employee" and/or "manager" — the set of
+ *              `employeeId` values this caller may read. `hrms_appraisals.
+ *              employeeId` is an hrms_employees.id (the row HR picked via
+ *              the employee picker on create — see apar/repo.ts's
+ *              listAppraisals doc comment), NOT the acting actor's id, so
+ *              the caller is resolved to their OWN hrms_employees.id first
+ *              (resolveEmployeeForActor, keyed on userRef) before building
+ *              this set: their own resolved employee id ("employee" role)
+ *              unioned with their direct reports' employee ids ("manager"
+ *              role, via hrms_employees.managerId — the same reporting-line
+ *              relationship employee/routes.ts's resolveManagerScope uses).
+ *              An empty array means the caller can read nothing — e.g. an
+ *              employee/manager caller with no resolvable hrms_employees
+ *              link, which fails CLOSED rather than falling back to "see
+ *              everyone", mirroring resolveManagerScope's `null` case.
+ */
+async function resolveAparReadScope(ctx: RequestContext, req: FastifyRequest): Promise<string[] | null> {
+  if (HR_ROLES.some((r) => ctx.roles.includes(r))) return null;
+
+  const allowed = new Set<string>();
+  const needsOwnEmployee = ctx.roles.includes("employee") || ctx.roles.includes("manager");
+  // Resolved once and shared: an actor holding both "employee" and
+  // "manager" roles must not pay for (or risk divergent results from) two
+  // separate lookups of their own record.
+  const ownEmp = needsOwnEmployee
+    ? await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req))
+    : undefined;
+
+  if (ctx.roles.includes("employee") && ownEmp) {
+    allowed.add(ownEmp.id);
+  }
+  if (ctx.roles.includes("manager") && ownEmp) {
+    const reports = await repo.listDirectReportEmployeeIds(ctx.tenantId, ownEmp.id);
+    for (const employeeId of reports) allowed.add(employeeId);
+  }
+  // No resolvable employee link for this caller -> contributes nothing;
+  // fails CLOSED rather than granting tenant-wide (or any) visibility.
+  return [...allowed];
+}
+
+/**
+ * Single-record guard for GET /:id. Rejects with 404 (not 403) so an
+ * out-of-scope caller cannot distinguish "exists but isn't yours" from
+ * "does not exist" — this is a lookup by id (unlike the list route, which
+ * filters), so Bug 2 calls for reject/404 rather than filtering.
+ */
+function assertReadable(scope: string[] | null, a: AppraisalRow): void {
+  if (scope === null || scope.includes(a.employeeId)) return;
+  throw new HttpError(404, "NOT_FOUND", "appraisal not found");
+}
+
 export async function aparRoutes(app: FastifyInstance): Promise<void> {
   // --- list APARs for tenant (HR sees all; employee sees own) -----------------
   app.get("/v1/hrms/apar", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ACTOR_ROLES);
-    const rows = await repo.listAppraisals(ctx.tenantId);
+    const scope = await resolveAparReadScope(ctx, req);
+    const rows = await repo.listAppraisals(ctx.tenantId, scope);
     return reply.send({ data: rows });
   });
 
@@ -139,7 +216,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ selfAppraisal: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = assertStageOwner(ctx, a, "self_pending");
+    const { override } = await assertStageOwner(ctx, req, a, "self_pending");
     await publishF3Write(ctx, "apar_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "reporting_officer" }) as any;
   });
@@ -162,7 +239,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       ),
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = assertStageOwner(ctx, a, "reporting_officer");
+    const { override } = await assertStageOwner(ctx, req, a, "reporting_officer");
     await publishF3Write(ctx, "apar_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "reviewing_officer" }) as any;
   });
@@ -182,7 +259,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       })).optional(),
     }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = assertStageOwner(ctx, a, "reviewing_officer");
+    const { override } = await assertStageOwner(ctx, req, a, "reviewing_officer");
     await publishF3Write(ctx, "apar_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "accepting_authority", decision: body.decision }) as any;
   });
@@ -194,7 +271,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ remarks: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = assertStageOwner(ctx, a, "accepting_authority");
+    const { override } = await assertStageOwner(ctx, req, a, "accepting_authority");
     const scoreRows = await repo.listScores(ctx.tenantId, id);
     if (scoreRows.length === 0) throw new HttpError(409, "NO_SCORES", "no attribute scores to grade");
     const scores: ScoreInput[] = scoreRows.map((s) => ({
@@ -212,7 +289,7 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const body = z.object({ representation: z.string().min(1).max(8000) }).parse(req.body);
     const a = await mustFind(id, ctx.tenantId);
-    const { override } = assertStageOwner(ctx, a, "disclosed");
+    const { override } = await assertStageOwner(ctx, req, a, "disclosed");
     await publishF3Write(ctx, "apar_routes__5", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, status: "representation" }) as any;
   });
@@ -236,6 +313,8 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ACTOR_ROLES);
     const { id } = idParam.parse(req.params);
     const a = await mustFind(id, ctx.tenantId);
+    const scope = await resolveAparReadScope(ctx, req);
+    assertReadable(scope, a);
     const [scores, history] = await Promise.all([
       repo.listScores(ctx.tenantId, id),
       repo.listHistory(ctx.tenantId, id),
