@@ -4,7 +4,7 @@ import { ZodError, z } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { leaveListResponseSchema, LeaveRequestDetailListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -122,6 +122,59 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
   return result.computedDays;
 }
 
+/**
+ * IDOR fix (audit: leave-allocations had zero employee filter at all, and
+ * leave-applications/leave's `empId` query param was taken raw with no
+ * ownership check).
+ *
+ * Resolves the set of employeeIds a NON-HR caller is authorised to see on
+ * the read routes below — mirrors enforceCcsLeaveRules' ownership shape
+ * (self via resolveEmployeeForActor, manager via hrmsEmployees.managerId)
+ * applied to a list endpoint instead of a single write target. Callers must
+ * short-circuit HR-privileged actors BEFORE calling this — it only ever
+ * encodes the two non-privileged cases:
+ *   - bare "employee": exactly their own linked id, or [] if unlinked
+ *     (fails CLOSED — mirrors manager-employee-read-scope-real-db.test.ts's
+ *     "no resolvable link -> empty list" precedent — never tenant-wide).
+ *   - "manager" (without HR): `requested`, if it names one of their direct
+ *     reports; otherwise every one of their direct reports. So an omitted
+ *     or foreign `requested` still only ever resolves to people who report
+ *     to them — "my team" is direct reports, not self (same convention the
+ *     employee-list manager-scope precedent uses), and never tenant-wide.
+ */
+async function resolveNonHrEmployeeScope(
+  ctx: RequestContext,
+  req: FastifyRequest,
+  requested: string | undefined,
+): Promise<string[]> {
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  if (!actorEmp) return [];
+  if (!ctx.roles.includes("manager")) return [actorEmp.id];
+  const reports = await scopedRead((tx) => tx.select().from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.managerId, actorEmp.id))));
+  const reportIds = reports.map((r) => r.id);
+  if (requested && reportIds.includes(requested)) return [requested];
+  return reportIds;
+}
+
+/**
+ * Full scope resolution for the leave read routes, HR included:
+ *   - HR-privileged: `requested` as a single-element array, or `undefined`
+ *     (tenant-wide, unchanged) when no specific target was requested.
+ *   - everyone else: delegates to resolveNonHrEmployeeScope above, which
+ *     always returns a concrete (possibly empty) array — never `undefined`,
+ *     so a non-privileged caller can never fall through to an unscoped query.
+ */
+async function resolveLeaveReadScope(
+  ctx: RequestContext,
+  req: FastifyRequest,
+  requested: string | undefined,
+): Promise<string[] | undefined> {
+  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+  if (isHrActor) return requested ? [requested] : undefined;
+  return resolveNonHrEmployeeScope(ctx, req, requested);
+}
+
 export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   // AUTH-ORDERING FIX: Fastify's default JSON body parser throws
   // FST_ERR_CTP_EMPTY_JSON_BODY (400) for an empty body sent with
@@ -161,7 +214,11 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/leave-allocations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const allocs = await queries.listLeaveAllocations(ctx.tenantId, 50);
+    // IDOR guard: this route had zero employee scoping — self-service employees
+    // see only their own allocations, managers see their direct reports', HR
+    // keeps full tenant access (unchanged).
+    const employeeIds = await resolveLeaveReadScope(ctx, req, undefined);
+    const allocs = await queries.listLeaveAllocations(ctx.tenantId, 50, employeeIds);
     return reply.send({ data: allocs });
   });
 
@@ -258,8 +315,12 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = listQuerySchema.extend({ empId: z.string().uuid().optional() }).parse(req.query);
-    if (q.empId) {
-      const data = await queries.getLeaveApplicationsByEmp(ctx.tenantId, q.empId);
+    // IDOR guard: empId used to be taken raw with no ownership check.
+    const employeeIds = await resolveLeaveReadScope(ctx, req, q.empId);
+    if (employeeIds !== undefined) {
+      const data = employeeIds.length > 0
+        ? (await Promise.all(employeeIds.map((id) => queries.getLeaveApplicationsByEmp(ctx.tenantId, id)))).flat()
+        : [];
       return reply.send({ data, meta: { page: 1, pageSize: q.limit, total: data.length } });
     }
     const result = await queries.listLeaveApplications(ctx.tenantId, q.limit, q.offset);
@@ -270,8 +331,15 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = listQuerySchema.extend({ empId: z.string().uuid().optional() }).parse(req.query);
-    if (q.empId) {
-      sendValidated(reply, leaveListResponseSchema, await queries.listLeaveApplicationsByEmp(ctx.tenantId, q.empId));
+    // IDOR guard: empId used to be taken raw with no ownership check.
+    const employeeIds = await resolveLeaveReadScope(ctx, req, q.empId);
+    if (employeeIds !== undefined) {
+      if (employeeIds.length === 0) {
+        sendValidated(reply, leaveListResponseSchema, { data: [] });
+        return;
+      }
+      const parts = await Promise.all(employeeIds.map((id) => queries.listLeaveApplicationsByEmp(ctx.tenantId, id)));
+      sendValidated(reply, leaveListResponseSchema, { data: parts.flatMap((p) => p.data) });
       return;
     }
     sendValidated(reply, leaveListResponseSchema, await queries.listLeaveApplications(ctx.tenantId, q.limit, q.offset));
