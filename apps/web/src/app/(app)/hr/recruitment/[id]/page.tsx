@@ -272,6 +272,13 @@ export default function JobOpeningDetailPage() {
   const [decisionStates, setDecisionStates] = useState<DecisionState>({});
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
+  // Guards the "shortlist all pending" quick action below: without it,
+  // nothing stops a second click from firing a second overlapping
+  // Promise.all(...) batch of the same per-application POSTs while the
+  // first batch is still in flight (busy/disabled={busy} is this
+  // codebase's standard double-submit guard, e.g. IntegrationDrawer.tsx,
+  // EndConversationButton.tsx).
+  const [shortlistAllBusy, setShortlistAllBusy] = useState(false);
 
   const searchId = useId();
   const formError = useFormError("vacancy");
@@ -576,17 +583,30 @@ export default function JobOpeningDetailPage() {
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
+            disabled={shortlistAllBusy}
             onClick={() => {
+              // Without this guard, a second click while the first batch is
+              // still in flight fires an overlapping Promise.all(...) of the
+              // same per-application POSTs (double-submit) -- disabled below
+              // prevents the click, and this re-checks defensively in case
+              // the handler ever fires programmatically.
+              if (shortlistAllBusy) return;
               const pending = applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied");
               if (pending.length === 0) return; // ux-001-ok: local no-op guard on already-loaded, already error-gated data -- renders nothing, so there's no empty-vs-error UI to confuse
+              setShortlistAllBusy(true);
               // Per-row failures are already reflected in decisionStates (and the
               // per-row "Action failed" hint); this just avoids an unhandled
               // rejection when some (but not all) calls in the batch fail.
-              void Promise.all(pending.map((a) => handleAction(a.id, "shortlist"))).catch(() => {});
+              void Promise.all(pending.map((a) => handleAction(a.id, "shortlist")))
+                .catch(() => {})
+                .finally(() => setShortlistAllBusy(false));
             }}
-            className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50"
+            className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {t("shortlistAllPending", { count: applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied").length })}
+            {/* "…" while in flight, not a new translated string -- same
+                convention ContextMenu uses for its own per-row busy state
+                just above, so no new i18n key is needed across locales. */}
+            {shortlistAllBusy ? "…" : t("shortlistAllPending", { count: applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied").length })}
           </button>
           <button
             type="button"

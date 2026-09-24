@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -50,5 +51,45 @@ describe("CreateLeavePolicyForm — UX-016 clerk-safe errors", () => {
     const dialogText = screen.getByRole("alertdialog").textContent ?? "";
     expect(dialogText).not.toMatch(/policy-service/);
     expect(dialogText).not.toMatch(/\b500\b/);
+  });
+});
+
+/**
+ * Stale i18n closure regression: the leave-types load effect's .catch()
+ * calls t("couldNotLoadLeaveTypes"), but `t` was missing from the effect's
+ * dependency array (only [open, leaveTypes.length]) -- so it kept using
+ * whatever `t` was in scope when the effect last actually ran, regardless
+ * of a later locale switch, until `open`/`leaveTypes.length` changed again.
+ */
+describe("CreateLeavePolicyForm — locale-safe load-error message", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows the load-failure message in the new language after a locale switch, not the one active when the panel first opened", async () => {
+    fetchMock.mockResolvedValue(new Response("boom", { status: 500 }));
+
+    const { rerender } = render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <CreateLeavePolicyForm />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /new policy/i }));
+    await waitFor(() => expect(screen.getByText("Could not load leave types.")).toBeInTheDocument());
+
+    // The panel is still open and leaveTypes is still empty (the load
+    // failed) -- only `t` itself changes here, exactly the case the missing
+    // dependency mishandled.
+    rerender(
+      <NextIntlClientProvider locale="hi" messages={hiMessages}>
+        <CreateLeavePolicyForm />
+      </NextIntlClientProvider>,
+    );
+
+    await waitFor(() => expect(screen.getByText("अवकाश प्रकार लोड नहीं हो सके।")).toBeInTheDocument());
+    expect(screen.queryByText("Could not load leave types.")).not.toBeInTheDocument();
   });
 });

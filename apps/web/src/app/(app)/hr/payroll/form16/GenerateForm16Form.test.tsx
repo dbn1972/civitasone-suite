@@ -135,4 +135,46 @@ describe("GenerateForm16Form", () => {
     expect(screen.queryByLabelText(/कर्मचारी आईडी/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "पूरे रन के लिए फॉर्म-16 जनरेट करें" })).toBeInTheDocument();
   });
+
+  // `fy` used to be seeded from `defaultFy` via plain useState(), which React
+  // only honors on the very first mount -- a parent re-rendering this
+  // already-mounted form with a new defaultFy (e.g. a URL-driven fy changing
+  // on client-side navigation) left the field stuck on whichever FY was
+  // current at first mount. Fixed with a useEffect that resyncs `fy`
+  // whenever the prop itself changes.
+  describe("reseeds from defaultFy when the prop changes", () => {
+    it("updates the FY field when defaultFy changes on an already-mounted form", () => {
+      const { rerender } = render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <GenerateForm16Form defaultFy="2024-25" />
+        </NextIntlClientProvider>,
+      );
+      expect(screen.getByLabelText(/Financial Year/)).toHaveValue("2024-25");
+
+      rerender(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <GenerateForm16Form defaultFy="2023-24" />
+        </NextIntlClientProvider>,
+      );
+
+      expect(screen.getByLabelText(/Financial Year/)).toHaveValue("2023-24");
+    });
+
+    it("does not clobber the user's own edit on a re-render where defaultFy hasn't actually changed", () => {
+      const { rerender } = render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <GenerateForm16Form defaultFy="2024-25" />
+        </NextIntlClientProvider>,
+      );
+      fireEvent.change(screen.getByLabelText(/Financial Year/), { target: { value: "2024-25-draft" } });
+
+      rerender(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <GenerateForm16Form defaultFy="2024-25" />
+        </NextIntlClientProvider>,
+      );
+
+      expect(screen.getByLabelText(/Financial Year/)).toHaveValue("2024-25-draft");
+    });
+  });
 });

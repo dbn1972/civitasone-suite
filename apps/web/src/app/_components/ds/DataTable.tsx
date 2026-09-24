@@ -57,6 +57,38 @@ interface DataTableProps<T extends Record<string, unknown>> {
   exportFilename?: string;
   /** Screen-reader-only <caption> describing the table's purpose/scope. */
   caption?: string;
+  /**
+   * Opt-in: derive each row's React key from the row's own identity rather
+   * than the row shape's default `id` field — e.g. when a row's real
+   * identity lives at a different field, or is composite. Only needed when
+   * the default (below) doesn't fit; most call sites don't need this.
+   */
+  rowKey?: (row: T) => React.Key;
+}
+
+/**
+ * A row's identity for React's reconciliation — never its position in
+ * `visible`. Keying by array index (the previous behavior here) makes React
+ * treat "whatever is now at position i" as the same element as "whatever
+ * was at position i before", so a sort/filter silently re-labels an
+ * in-place DOM node (and anything the browser is tracking on it, like
+ * keyboard focus) with a different row's data instead of moving/unmounting
+ * it — a keyboard user tabbed to one row can end up acting on a different
+ * one after the rows reorder underneath them. Almost every row shape in
+ * this app already carries a stable `id` (string | number); fall back to
+ * the index only when a row genuinely has none, which keeps every existing
+ * call site working unchanged while fixing the identity bug for the
+ * overwhelming majority that do have one.
+ */
+function resolveRowKey<T extends Record<string, unknown>>(
+  row: T,
+  index: number,
+  rowKey?: (row: T) => React.Key,
+): React.Key {
+  if (rowKey) return rowKey(row);
+  const id = row.id;
+  if (typeof id === "string" || typeof id === "number") return id;
+  return index;
 }
 
 function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): ReactNode {
@@ -124,6 +156,7 @@ export function DataTable<T extends Record<string, unknown>>({
   exportable = false,
   exportFilename = "export",
   caption,
+  rowKey,
 }: DataTableProps<T>) {
   const router = useRouter();
 
@@ -287,7 +320,7 @@ export function DataTable<T extends Record<string, unknown>>({
               const href = resolveHref(row);
               return (
                 <tr
-                  key={i}
+                  key={resolveRowKey(row, i, rowKey)}
                   className={href ? "clickable row-link" : undefined}
                   onClick={href ? () => router.push(href) : undefined}
                   onKeyDown={href ? (e) => onRowKeyDown(e, href) : undefined}

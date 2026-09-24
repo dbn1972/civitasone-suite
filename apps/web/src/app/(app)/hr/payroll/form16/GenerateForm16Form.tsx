@@ -31,6 +31,16 @@ export function GenerateForm16Form({ defaultFy }: { defaultFy: string }) {
   const router = useRouter();
   const [mode, setMode] = useState<Mode>("single");
   const [fy, setFy] = useState(defaultFy);
+  // useState(defaultFy) above only seeds `fy` on the very first mount --
+  // React ignores the initializer argument on every render after that, so a
+  // parent re-rendering this already-mounted component with a new
+  // defaultFy (e.g. a URL-driven fy on client-side navigation, without a
+  // remounting key) would otherwise leave the field stuck on whichever FY
+  // was current when this component first mounted. Resync explicitly
+  // whenever the prop itself changes.
+  useEffect(() => {
+    setFy(defaultFy);
+  }, [defaultFy]);
   const [employeeId, setEmployeeId] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);

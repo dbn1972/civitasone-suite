@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Avatar } from "./Avatar";
@@ -145,15 +145,24 @@ export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {
   const pathname = usePathname();
   const enabledSet = enabledModules ? new Set(enabledModules) : null;
 
-  const [collapsed, setCollapsed] = useState<Set<string>>(() => {
-    if (typeof window === "undefined") return new Set();
+  // Server-safe default: always start expanded (an empty collapsed set),
+  // matching what the server rendered. Reading localStorage here in the
+  // initializer would run during the client's first (hydration) render too
+  // — by then `window` already exists, so it'd return real stored state
+  // that the server couldn't have known about, and React would flag a
+  // hydration mismatch between the two trees. Deferring the read to an
+  // effect (same pattern as DarkModeToggle) means the collapsed groups pop
+  // in a frame after mount instead — an acceptable, deliberate trade-off.
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
     try {
       const stored = localStorage.getItem(COLLAPSED_KEY);
-      return stored ? new Set(JSON.parse(stored) as string[]) : new Set();
+      if (stored) setCollapsed(new Set(JSON.parse(stored) as string[]));
     } catch {
-      return new Set();
+      /* noop */
     }
-  });
+  }, []);
 
   const toggleGroup = useCallback((group: string) => {
     setCollapsed((prev) => {

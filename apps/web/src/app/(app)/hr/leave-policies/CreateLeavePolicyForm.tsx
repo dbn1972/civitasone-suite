@@ -71,7 +71,15 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
       })
       .catch(() => setFieldError(t("couldNotLoadLeaveTypes")))
       .finally(() => setLtLoading(false));
-  }, [open, leaveTypes.length]);
+    // `t` must be a real dependency: it's captured in the .catch() closure
+    // below, and next-intl hands out a new `t` whenever the locale changes.
+    // Without it here, a locale switch while this panel happened to be open
+    // left the load-failure message frozen in whatever language was active
+    // when the effect last ran -- everything else on screen re-renders in
+    // the new locale, just not this one error string. Safe to add: the
+    // `leaveTypes.length > 0` guard above means a `t`-driven re-run past the
+    // first successful load is always a no-op, not a refetch loop.
+  }, [open, leaveTypes.length, t]);
 
   function validate() {
     if (!leaveTypeId) return t("selectLeaveTypeRequired");

@@ -1,6 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { Sidebar } from "./Sidebar";
+
+const COLLAPSED_KEY = "civitas-sidebar-collapsed";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
@@ -109,6 +111,49 @@ describe("Sidebar", () => {
       expect(screen.getByRole("link", { name: /Projects/ })).toBeInTheDocument();
       // Procurement not enabled
       expect(screen.queryByRole("link", { name: /Procurement/ })).not.toBeInTheDocument();
+    });
+  });
+
+  // Hydration safety: the collapsed-groups state must start at the same
+  // server-safe default (nothing collapsed) on both server and client, and
+  // only pick up a persisted localStorage value afterwards (in an effect).
+  // Reading localStorage straight from the useState initializer -- the
+  // previous shape of this code -- runs during the client's first render
+  // too, so it'd disagree with what the server rendered and React would
+  // flag a hydration mismatch. See Sidebar.tsx for the fuller note.
+  //
+  // The specific "the very first commit ignores a pre-seeded persisted
+  // value" property is verified by direct code review rather than a test
+  // here: a raw createRoot().render() left unwrapped from act() (the
+  // standard way to observe React's pre-effect commit) turned out to not
+  // be synchronous in this Vitest/jsdom setup, so that assertion couldn't
+  // reliably distinguish the fix from the bug it fixes. The initializer
+  // itself (`useState<Set<string>>(new Set())`, no function argument) is
+  // plainly free of any localStorage/window read -- confirmed by reading
+  // Sidebar.tsx directly.
+  describe("collapsed-group persistence (hydration-safe)", () => {
+    afterEach(() => {
+      localStorage.removeItem(COLLAPSED_KEY);
+    });
+
+    it("applies a persisted collapsed group after mount, via the effect", () => {
+      localStorage.setItem(COLLAPSED_KEY, JSON.stringify(["FINANCE"]));
+      render(<Sidebar enabledModules={null} />);
+      // Group header stays (only its items collapse away).
+      expect(screen.getByText("FINANCE")).toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: /^Finance$/ })).not.toBeInTheDocument();
+    });
+
+    it("defaults to fully expanded when nothing is persisted", () => {
+      render(<Sidebar enabledModules={null} />);
+      expect(screen.getByRole("link", { name: /^Finance$/ })).toBeInTheDocument();
+    });
+
+    it("tolerates corrupt localStorage content without crashing", () => {
+      localStorage.setItem(COLLAPSED_KEY, "{not-json");
+      expect(() => render(<Sidebar enabledModules={null} />)).not.toThrow();
+      // Falls back to fully expanded rather than propagating the parse error.
+      expect(screen.getByRole("link", { name: /^Finance$/ })).toBeInTheDocument();
     });
   });
 });

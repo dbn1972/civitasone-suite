@@ -62,4 +62,27 @@ describe("ElectFlexBenefitForm", () => {
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
+
+  // Row identity: election lines were keyed by array position, so removing
+  // an earlier line shifted later ones up into a different key -- React
+  // patched the focused line's DOM node in place with a different line's
+  // data instead of removing the right node and leaving the rest (and
+  // focus) alone.
+  it("keeps a line's own value and focus attached to it after an earlier line is removed", () => {
+    render(<ElectFlexBenefitForm />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Add line" }));
+    fireEvent.click(screen.getByRole("button", { name: "+ Add line" }));
+    // Three lines now. Fill and focus the third one's Component field.
+    const thirdComponent = screen.getAllByLabelText("Component")[2];
+    fireEvent.change(thirdComponent, { target: { value: "Meal Vouchers" } });
+    thirdComponent.focus();
+    expect(document.activeElement).toBe(thirdComponent);
+
+    // Remove the first line -- lines 2-3 shift up to become lines 1-2.
+    fireEvent.click(screen.getByRole("button", { name: "Remove election line 1" }));
+
+    const survivingThirdLine = screen.getAllByLabelText("Component")[1];
+    expect(survivingThirdLine).toHaveValue("Meal Vouchers");
+    expect(document.activeElement).toBe(survivingThirdLine);
+  });
 });

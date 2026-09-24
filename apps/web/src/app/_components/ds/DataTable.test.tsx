@@ -208,4 +208,66 @@ describe("DataTable", () => {
       expect(screen.getByRole("link", { name: "Open Office Supplies" })).toBeInTheDocument();
     });
   });
+
+  // Row identity: rows must be keyed by their own id, not by array position,
+  // so a sort/filter can't silently re-label an existing DOM node (and
+  // anything the browser is tracking on it, e.g. an in-progress edit or
+  // keyboard focus) with a different row's data. Proven here with an
+  // uncontrolled input per row: its DOM-held value only follows the right
+  // row across a resort if React is keying by identity.
+  describe("row identity across reorders", () => {
+    const colsWithNoteInput = [
+      { key: "id" as const, label: "ID" },
+      { key: "name" as const, label: "Name", sortable: true },
+      {
+        key: "status" as const,
+        label: "Note",
+        render: (row: Row) => <input aria-label={`note-${row.id}`} defaultValue="" />,
+      },
+    ];
+
+    it("keeps a row's own DOM state attached to that row's id after a resort moves it", () => {
+      render(<DataTable columns={colsWithNoteInput} rows={rows} sortable />);
+
+      // PO-001 ("Office Supplies") renders first pre-sort; type into its note.
+      fireEvent.change(screen.getByLabelText("note-PO-001"), { target: { value: "flagged" } });
+
+      // Ascending name-sort moves PO-001 ("Office Supplies") to the last
+      // position and PO-003 ("Furniture") to the first.
+      fireEvent.click(screen.getByText("Name"));
+
+      // The note must have followed PO-001, not stayed behind on whichever
+      // row now occupies PO-001's old position.
+      expect((screen.getByLabelText("note-PO-001") as HTMLInputElement).value).toBe("flagged");
+      expect((screen.getByLabelText("note-PO-003") as HTMLInputElement).value).toBe("");
+    });
+
+    it("supports an explicit rowKey override for identity that isn't the row's id field", () => {
+      type Keyless = { code: string; name: string };
+      const kRows: Keyless[] = [
+        { code: "A1", name: "Alpha" },
+        { code: "B2", name: "Beta" },
+      ];
+      const kCols = [
+        { key: "code" as const, label: "Code" },
+        { key: "name" as const, label: "Name" },
+      ];
+      const { container } = render(
+        <DataTable columns={kCols} rows={kRows} rowKey={(r) => r.code} />,
+      );
+      // Sanity: still renders both rows normally with the override in place.
+      expect(container.querySelectorAll("tbody tr").length).toBe(2);
+      expect(screen.getByText("Alpha")).toBeInTheDocument();
+      expect(screen.getByText("Beta")).toBeInTheDocument();
+    });
+
+    it("falls back to positional keying only when a row has no id field (back-compat)", () => {
+      type NoId = { label: string };
+      const plainRows: NoId[] = [{ label: "First" }, { label: "Second" }];
+      const plainCols = [{ key: "label" as const, label: "Label" }];
+      render(<DataTable columns={plainCols} rows={plainRows} />);
+      expect(screen.getByText("First")).toBeInTheDocument();
+      expect(screen.getByText("Second")).toBeInTheDocument();
+    });
+  });
 });

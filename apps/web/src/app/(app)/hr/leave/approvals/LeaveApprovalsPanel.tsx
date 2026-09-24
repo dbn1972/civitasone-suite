@@ -55,13 +55,13 @@ export function LeaveApprovalsPanel() {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const formError = useFormError("leave application");
 
-  const loadTasks = useCallback(async () => {
+  const loadTasks = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
       const [taskRes, leaveRes] = await Promise.all([
-        fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50"),
-        fetch("/api/proxy/v1/hrms/leave-requests").catch(() => null),
+        fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50", { signal }),
+        fetch("/api/proxy/v1/hrms/leave-requests", { signal }).catch(() => null),
       ]);
 
       if (!taskRes.ok) {
@@ -81,7 +81,13 @@ export function LeaveApprovalsPanel() {
         for (const l of leaveRows) if (l?.id) map[l.id] = l;
         setLeaveById(map);
       }
-    } catch {
+    } catch (e) {
+      // A signal abort (component unmounted, e.g. the user navigated away
+      // while this mount-time load was in flight) rejects the fetch with an
+      // AbortError -- that's an intentional teardown, not a real load
+      // failure, and must not paint this now-gone panel's error state onto
+      // whatever the user navigated to instead.
+      if (e instanceof Error && e.name === "AbortError") return;
       setSource("error");
       setError(formError.fromException("load").message);
     } finally {
@@ -94,7 +100,9 @@ export function LeaveApprovalsPanel() {
   }, []);
 
   useEffect(() => {
-    void loadTasks();
+    const controller = new AbortController();
+    void loadTasks(controller.signal);
+    return () => controller.abort();
   }, [loadTasks]);
 
   const enriched: EnrichedTask[] = useMemo(

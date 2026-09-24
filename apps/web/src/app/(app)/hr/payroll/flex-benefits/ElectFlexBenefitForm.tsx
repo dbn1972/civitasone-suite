@@ -32,6 +32,34 @@ export function ElectFlexBenefitForm() {
   const fyRef = useRef<HTMLInputElement>(null);
   const lineComponentRefs = useRef<Array<HTMLInputElement | null>>([]);
 
+  // Stable per-row React key, independent of array position -- see
+  // LineItemsEditor.tsx (apps/web/src/app/(app)/procurement/_components) for
+  // the full rationale: keying by index let removing an earlier line shift
+  // a later, focused one up into a different key, so React patched the
+  // focused DOM node in place with the wrong line's data instead of
+  // removing the right node and leaving the rest (and focus) alone.
+  // ElectionLine itself carries no id and stays that way (it's just
+  // { component, amount}, mapped straight into the submit payload) -- a
+  // parallel id list, generated once per row and advanced only by the three
+  // places `lines`'s length actually changes (addLine/removeLine/resetLines
+  // below), keeps every row's key stable across edits.
+  const nextLineRowId = useRef(0);
+  const [lineRowIds, setLineRowIds] = useState<number[]>(() => [nextLineRowId.current++]);
+  const lineKeyFor = (idx: number) => lineRowIds[idx] ?? idx;
+
+  function addLine() {
+    setLines((prev) => [...prev, emptyLine()]);
+    setLineRowIds((ids) => [...ids, nextLineRowId.current++]);
+  }
+  function removeLine(idx: number) {
+    setLines((prev) => prev.filter((_, i) => i !== idx));
+    setLineRowIds((ids) => ids.filter((_, i) => i !== idx));
+  }
+  function resetLines() {
+    setLines([emptyLine()]);
+    setLineRowIds([nextLineRowId.current++]);
+  }
+
   const planInvalid = tone === "bad" && message === "Plan ID is required.";
   const fyInvalid = tone === "bad" && !!message && message.startsWith("Financial year");
   const lineGroupInvalid = tone === "bad" && !!message && message.startsWith("Each election line");
@@ -97,7 +125,7 @@ export function ElectFlexBenefitForm() {
       setTone("good");
       setMessage(`Election submitted: ${formatMoney(res.data.totalElectedMinor)} elected.`);
       setPlanId("");
-      setLines([emptyLine()]);
+      resetLines();
       router.refresh();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
@@ -154,7 +182,7 @@ export function ElectFlexBenefitForm() {
                 const amtId = `${planIdField}-line-${idx}-amt`;
                 const rowInvalid = isLineInvalid(l);
                 return (
-                  <div key={idx} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto", alignItems: "end" }}>
+                  <div key={lineKeyFor(idx)} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto", alignItems: "end" }}>
                     <div style={{ display: "grid", gap: 4 }}>
                       <label htmlFor={compId} style={{ fontSize: 12 }}>Component</label>
                       <input
@@ -185,7 +213,7 @@ export function ElectFlexBenefitForm() {
                       variant="ghost"
                       style={{ minHeight: 40 }}
                       aria-label={`Remove election line ${idx + 1}${l.component ? `: ${l.component}` : ""}`}
-                      onClick={() => setLines((prev) => prev.filter((_, i) => i !== idx))}
+                      onClick={() => removeLine(idx)}
                       disabled={lines.length === 1}
                     >
                       Remove
@@ -197,7 +225,7 @@ export function ElectFlexBenefitForm() {
                 <Button
                   variant="ghost"
                   style={{ minHeight: 40 }}
-                  onClick={() => setLines((prev) => [...prev, emptyLine()])}
+                  onClick={addLine}
                 >
                   + Add line
                 </Button>
