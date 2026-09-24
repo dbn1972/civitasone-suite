@@ -16,7 +16,7 @@ export default async function InvestigationPage() {
   const total = errored ? null : investigations.length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Investigation Tracker"
         subtitle="Internal investigations with assignment, findings and resolution status."
@@ -49,6 +49,6 @@ export default async function InvestigationPage() {
           <InvestigationTable rows={investigations} source={source} />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

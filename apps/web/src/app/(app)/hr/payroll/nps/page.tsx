@@ -71,7 +71,7 @@ export default async function NpsStatementsPage() {
   const projectedCorpus = projectCorpus(totalCorpus, AVG_YEARS_TO_RETIRE);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -198,6 +198,6 @@ export default async function NpsStatementsPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

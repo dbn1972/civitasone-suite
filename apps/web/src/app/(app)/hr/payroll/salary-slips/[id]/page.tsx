@@ -49,12 +49,12 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
   const errored = source === "error";
   if (errored) {
     return (
-      <main className="page-main wrap" style={{ maxWidth: 800 }}>
+      <div className="page-main wrap" style={{ maxWidth: 800 }}>
         <PageHeader title={t("title")} back="/hr/payroll/salary-slips" />
         <div className="pad">
           <RefreshErrorState error={toHumanError("load", { area: "salary slip" })} backHref="/hr/payroll/salary-slips" />
         </div>
-      </main>
+      </div>
     );
   }
   if (!slip) notFound();
@@ -67,7 +67,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
     : "—";
 
   return (
-    <main className="page-main wrap" style={{ maxWidth: 800 }}>
+    <div className="page-main wrap" style={{ maxWidth: 800 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
         <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -158,6 +158,6 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
           {t("footer")}
         </p>
       </div>
-    </main>
+    </div>
   );
 }

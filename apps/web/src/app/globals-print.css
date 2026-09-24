@@ -7,7 +7,7 @@
     display: none !important;
   }
   /* Full width */
-  body, main, .hr-main { margin: 0 !important; padding: 0 !important; width: 100% !important; }
+  body, main, .hr-main, .page-shell { margin: 0 !important; padding: 0 !important; width: 100% !important; }
   /* Page breaks */
   .print-page-break { page-break-before: always; }
   .print-avoid-break { page-break-inside: avoid; }

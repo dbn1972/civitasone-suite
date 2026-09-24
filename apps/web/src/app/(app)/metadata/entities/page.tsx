@@ -11,7 +11,7 @@ export default async function MetadataEntitiesPage() {
   const resource = useResource(result);
   const errored = resource.status === "error";
   return (
-    <main className="page-main wrap" aria-label="Metadata entities">
+    <div className="page-main wrap" aria-label="Metadata entities">
       <PageHeader
         title="Entities"
         subtitle="Custom entity definitions from /api/v1/metadata/entities."
@@ -28,6 +28,6 @@ export default async function MetadataEntitiesPage() {
           <pre className="text-xs overflow-auto p-3">{JSON.stringify(data.slice(0, 50), null, 2)}</pre>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

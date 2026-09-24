@@ -55,7 +55,7 @@ export default async function GstConsolePage({ searchParams }: { searchParams?: 
   const transactionCount = summary.reduce((s, r) => s + Number(r.transaction_count ?? 0), 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="GST / ITC Console"
         subtitle="Output and input GST, the GST ledger, and input tax credit reconciliation for a filing period."
@@ -80,6 +80,6 @@ export default async function GstConsolePage({ searchParams }: { searchParams?: 
       <Card title={`GST / ITC — ${period}`}>
         <GstConsole period={period} summary={summary} ledger={ledger} itc={itc} />
       </Card>
-    </main>
+    </div>
   );
 }

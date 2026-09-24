@@ -11,7 +11,7 @@ export default async function MetadataRulesPage() {
   const resource = useResource(result);
   const errored = resource.status === "error";
   return (
-    <main className="page-main wrap" aria-label="Metadata rules">
+    <div className="page-main wrap" aria-label="Metadata rules">
       <PageHeader
         title="Rules"
         subtitle="Wired to /api/v1/metadata/entities (select entity to drill into rules)."
@@ -28,6 +28,6 @@ export default async function MetadataRulesPage() {
           <pre className="text-xs overflow-auto p-3">{JSON.stringify(data.slice(0, 50), null, 2)}</pre>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

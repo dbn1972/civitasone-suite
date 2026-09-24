@@ -58,7 +58,7 @@ export default async function RecoveryPage({
   const { data: assessees, source: assesseesSource } = await getAssessees();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Recovery Referrals"
         subtitle="Refer an assessee's arrears for coercive recovery action."
@@ -118,6 +118,6 @@ export default async function RecoveryPage({
           <code>referred</code>) and has no maker-checker decide step.
         </p>
       </Card>
-    </main>
+    </div>
   );
 }

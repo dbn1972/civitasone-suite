@@ -94,7 +94,7 @@ a{color:inherit;text-decoration:none}
 /* cards & grid */
 .card{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--sh-md);overflow:hidden}
 .card-h{display:flex;align-items:center;justify-content:space-between;padding:16px 18px;border-bottom:1px solid var(--line)}
-.card-h h3{font-size:15px;font-weight:700}
+.card-h h2{font-size:15px;font-weight:700}
 .card-h .lnk{color:var(--primary-d);font-size:12.5px;font-weight:650}
 .pad{padding:18px}
 .grid{display:grid;gap:18px}
@@ -278,7 +278,7 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 /* ===== Empty states ===== */
 .empty-state{text-align:center;padding:52px 22px;color:var(--mut)}
 .empty-state .ic{font-size:42px;margin-bottom:12px}
-.empty-state h4{font-size:15.5px;color:var(--ink);font-weight:750}
+.empty-state h3{font-size:15.5px;color:var(--ink);font-weight:750}
 .empty-state p{font-size:13px;margin:6px 0 16px}
 .gx-empty{display:none;text-align:center;padding:70px 20px;color:#8b93b5}
 .gx-empty .ic{font-size:48px;margin-bottom:14px}
@@ -356,6 +356,11 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 /* The TopBar search is a styled wrapper around a borderless input; surface the
    ring on the wrapper when the inner input is focused via keyboard. */
 .tb-search:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:10px}
+
+/* Same pattern for the DataTable filter input (.dt-filter input:focus:none
+   below) — without this, filtering a table with the keyboard leaves focus
+   with no visible indicator at all. */
+.dt-filter:focus-within{outline:2px solid var(--focus-ring);outline-offset:2px;border-radius:10px}
 
 /* Skip-to-content link — visually hidden until focused. */
 .skip-link{

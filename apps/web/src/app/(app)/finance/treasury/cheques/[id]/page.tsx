@@ -49,10 +49,10 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
 
   if (!cheque) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Cheque Detail" back="/finance/treasury/cheques" />
         <EmptyState icon="🏦" title="Cheque not found" message="This cheque may have been removed or the ID is invalid." />
-      </main>
+      </div>
     );
   }
 
@@ -65,7 +65,7 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
   const timeline = timelineOf(cheque);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Cheque #${chequeNo}`}
         subtitle={payee !== "—" ? payee : undefined}
@@ -108,6 +108,6 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
           </ol>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

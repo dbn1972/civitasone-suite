@@ -16,7 +16,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
 
   if (!tenant) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Tenant Not Found" back="/admin/tenants" />
         <Card>
           <EmptyState
@@ -25,7 +25,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
             message="No tenant exists for the given ID. It may have been removed."
           />
         </Card>
-      </main>
+      </div>
     );
   }
 
@@ -33,7 +33,7 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
   const totalUsers = modules.reduce((sum, m) => sum + m.users, 0);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Tenant: ${tenant.name}`}
         subtitle={`Edition: ${tenant.edition} · Status: ${tenant.status} · Region: ${tenant.region}`}
@@ -58,6 +58,6 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
           <TenantModulesTable modules={modules} source="api" />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

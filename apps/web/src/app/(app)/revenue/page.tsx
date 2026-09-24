@@ -24,9 +24,9 @@ const revenueTiles: NavTile[] = [
 
 export default function RevenueHubPage() {
 	return (
-		<main className="page-main" aria-labelledby="page-heading">
+		<div className="page-main" aria-labelledby="page-heading">
 			<PageHeader title="Revenue" subtitle="Municipal revenue — assessees, demands, collection, and rate configuration." />
 			<LinkTiles tiles={revenueTiles} />
-		</main>
+		</div>
 	);
 }

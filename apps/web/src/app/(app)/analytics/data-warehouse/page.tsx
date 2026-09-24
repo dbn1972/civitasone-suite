@@ -18,7 +18,7 @@ export default async function DataWarehousePage() {
   const attention = errored ? null : rows.length - rows.filter((r) => r.status === "Healthy").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Data Warehouse" subtitle="Consolidated datasets, refresh schedules and data quality metrics." back="/analytics" />
       <StatGrid>
         <StatCard icon="🗄️" iconBg="#eef2ff" label="Total Datasets" value={total ?? "—"} />
@@ -37,6 +37,6 @@ export default async function DataWarehousePage() {
           <DataWarehouseTable rows={rows} source={source === "error" ? "error" : "api"} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

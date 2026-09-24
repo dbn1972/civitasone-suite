@@ -13,7 +13,7 @@ export default async function NotificationPrefsPage() {
   const inAppEnabled = prefs.filter((p) => p.inAppEnabled).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Tenant Admin", href: "/tenant-admin" }, { label: "Notification Preferences" }]} />
       <PageHeader
         back="/tenant-admin"
@@ -50,6 +50,6 @@ export default async function NotificationPrefsPage() {
         </div>
         <NotificationPrefActions prefs={prefs} />
       </div>
-    </main>
+    </div>
   );
 }

@@ -69,7 +69,7 @@ export default async function ExpensesPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
@@ -92,6 +92,6 @@ export default async function ExpensesPage() {
         />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

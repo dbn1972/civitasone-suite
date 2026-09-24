@@ -22,13 +22,13 @@ export default async function NewTemplatePage() {
   }
 
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr/jd-templates" backLabel="Back to JD Templates"
       />
       <NewTemplateForm />
-    </main>
+    </div>
   );
 }

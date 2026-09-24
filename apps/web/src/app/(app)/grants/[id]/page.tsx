@@ -27,7 +27,7 @@ export default async function GrantDetailPage({ params }: { params: { id: string
       />
       {source === "error" && <DataSourceBadge source="error" />}
 
-      <main aria-label="Grant details">
+      <div aria-label="Grant details">
         <Card title="Grant Details" padding>
           <dl className="fields">
             <div>
@@ -74,7 +74,7 @@ export default async function GrantDetailPage({ params }: { params: { id: string
         <Card title="Utilization Certificates">
           <GrantUCsTable ucs={grant.ucs} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

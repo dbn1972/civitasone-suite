@@ -25,7 +25,7 @@ export default async function AdminUsersPage() {
   const other = users.length - active - suspended;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="User Management"
         subtitle="All platform users — roles, status, and access controls."
@@ -39,6 +39,6 @@ export default async function AdminUsersPage() {
         <StatCard icon="🔒" iconBg="#fffbeb" label="Locked / deactivated" value={other} />
       </div>
       <AdminUsersManager initialUsers={users} roles={roles} source={source} />
-    </main>
+    </div>
   );
 }

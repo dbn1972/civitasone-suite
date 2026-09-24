@@ -103,7 +103,7 @@ export default async function HRDashboardPage() {
   const recentEmployees = employees;
 
   return (
-    <main
+    <div
       className="hr-dashboard-root"
       aria-labelledby="hr-dash-heading"
       style={{ background: "var(--page-bg,#eef2f7)", minHeight: "100vh" }}
@@ -228,6 +228,6 @@ export default async function HRDashboardPage() {
         .status-pill { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600; }
         .status-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
       `}</style>
-    </main>
+    </div>
   );
 }

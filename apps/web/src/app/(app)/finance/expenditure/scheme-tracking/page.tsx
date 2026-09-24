@@ -10,7 +10,7 @@ export default async function SchemeTrackingPage() {
   const completed = schemes.filter((s) => String(s.status).toLowerCase() === "completed").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -29,6 +29,6 @@ export default async function SchemeTrackingPage() {
       <Card title={t("cardTitle")}>
         <SchemeTable schemes={schemes} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

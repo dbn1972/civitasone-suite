@@ -17,7 +17,7 @@ const shimmer = {
 export default async function LeaveLoading() {
   const t = await getTranslations("leave");
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -33,6 +33,6 @@ export default async function LeaveLoading() {
         }
       />
       <SkeletonTable rows={8} />
-    </main>
+    </div>
   );
 }

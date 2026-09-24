@@ -119,7 +119,7 @@ export default async function InsurancePoliciesPage() {
   });
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Asset Insurance"
         subtitle="Insurance policies covering registered assets, and claims filed against them."
@@ -177,6 +177,6 @@ export default async function InsurancePoliciesPage() {
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

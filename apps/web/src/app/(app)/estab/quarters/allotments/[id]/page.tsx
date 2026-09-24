@@ -52,14 +52,14 @@ export default async function AllotmentDetailPage({ params }: { params: { id: st
 
   if (!allotment) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Allotment" back="/estab/quarters/allotments" />
         {allotmentsSource === "error" ? (
           <DataSourceBadge source="error" />
         ) : (
           <p className="sub">The requested allotment could not be found.</p>
         )}
-      </main>
+      </div>
     );
   }
 
@@ -73,7 +73,7 @@ export default async function AllotmentDetailPage({ params }: { params: { id: st
     : null;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Allotment · ${quarter?.quarterNo ?? allotment.quarterId.slice(0, 8) + "…"}`}
         subtitle={`Employee ${allotment.employeeRef.slice(0, 8)}… · Applied ${formatIndianDate(allotment.appliedAt)}`}
@@ -118,6 +118,6 @@ export default async function AllotmentDetailPage({ params }: { params: { id: st
         monthlyLicenceFeeMinor={applicableRate ? applicableRate.monthlyMinor : null}
         licenceFeeSource={ratesSource}
       />
-    </main>
+    </div>
   );
 }

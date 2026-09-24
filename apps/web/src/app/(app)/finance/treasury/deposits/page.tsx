@@ -8,7 +8,7 @@ export default async function DepositsPage() {
   const matured = deposits.filter((d) => String(d.status).toLowerCase() === "matured").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fixed Deposits"
         subtitle="Fixed and term deposits across treasury banks with maturity tracking."
@@ -27,6 +27,6 @@ export default async function DepositsPage() {
       <Card title="Deposits Register">
         <DepositsTable deposits={deposits} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

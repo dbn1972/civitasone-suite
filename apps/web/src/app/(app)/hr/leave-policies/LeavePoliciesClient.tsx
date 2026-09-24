@@ -153,7 +153,7 @@ export default function LeavePoliciesClient() {
   const rows: PolicyRow[] = policies as PolicyRow[];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -470,6 +470,6 @@ export default function LeavePoliciesClient() {
         onConfirm={() => void saveEdit()}
         onCancel={() => !saving && setConfirmOpen(false)}
       />
-    </main>
+    </div>
   );
 }

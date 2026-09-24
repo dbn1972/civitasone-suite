@@ -82,7 +82,7 @@ export default function ApplyPage({ params }: ApplyPageProps) {
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/grants">Grants</a> <span aria-hidden="true">/</span>{" "}
         <a href="/grants/schemes">Schemes</a> <span aria-hidden="true">/</span>{" "}
@@ -311,6 +311,6 @@ export default function ApplyPage({ params }: ApplyPageProps) {
           .
         </p>
       </form>
-    </main>
+    </div>
   );
 }

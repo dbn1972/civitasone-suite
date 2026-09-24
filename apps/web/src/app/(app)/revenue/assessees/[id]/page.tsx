@@ -94,7 +94,7 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
   ].includes("error");
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={assessee ? assessee.ownerName : "Assessee"}
         subtitle={assessee ? `${assessee.identifierNo} · ${assessee.assesseeType} · Ward ${assessee.wardNo ?? "—"}` : undefined}
@@ -146,6 +146,6 @@ export default async function AssesseeDetailPage({ params }: { params: { id: str
           <DataSourceBadge source="error" />
         </Card>
       )}
-    </main>
+    </div>
   );
 }

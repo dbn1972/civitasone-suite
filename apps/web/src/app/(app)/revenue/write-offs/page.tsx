@@ -59,7 +59,7 @@ export default async function WriteOffsPage({
   const { data: assessees, source: assesseesSource } = await getAssessees();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Write-offs"
         subtitle="Write off irrecoverable arrears against an assessee, subject to checker approval."
@@ -120,6 +120,6 @@ export default async function WriteOffsPage({
         </p>
         <WriteOffLookupForm />
       </Card>
-    </main>
+    </div>
   );
 }

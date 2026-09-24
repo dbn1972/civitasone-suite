@@ -53,7 +53,7 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
     : 0;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -128,6 +128,6 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
           </div>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

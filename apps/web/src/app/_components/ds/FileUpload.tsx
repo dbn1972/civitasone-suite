@@ -105,9 +105,14 @@ export function FileUpload({
           disabled={status === "uploading"}
           style={{ fontSize: 13 }}
         />
-        {status === "uploading" && <span style={{ fontSize: 12, color: "#4f46e5" }}>Uploading…</span>}
-        {status === "done" && <span style={{ fontSize: 12, color: "#166534" }}>✅ {message}</span>}
-        {status === "error" && <span style={{ fontSize: 12, color: "#b91c1c" }}>❌ {message}</span>}
+        <div
+          role={status === "error" ? "alert" : "status"}
+          aria-live={status === "error" ? "assertive" : "polite"}
+        >
+          {status === "uploading" && <span style={{ fontSize: 12, color: "#4f46e5" }}>Uploading…</span>}
+          {status === "done" && <span style={{ fontSize: 12, color: "#166534" }}>✅ {message}</span>}
+          {status === "error" && <span style={{ fontSize: 12, color: "#b91c1c" }}>❌ {message}</span>}
+        </div>
       </div>
       <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--mut)" }}>
         Max {maxSizeMb}MB. Uploaded securely — no file passes through the server.

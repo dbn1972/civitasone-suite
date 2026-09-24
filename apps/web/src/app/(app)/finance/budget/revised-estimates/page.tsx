@@ -41,7 +41,7 @@ export default async function RevisedEstimatesPage() {
   const total = errored ? null : estimates.length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-002: the data-source badge now lives in RevisedEstimatesTable,
           driven by the same useSeededResource call that produces its rows —
           not a second, independent read of `source` here. */}
@@ -65,6 +65,6 @@ export default async function RevisedEstimatesPage() {
           <RevisedEstimatesTable estimates={estimates} source={source} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

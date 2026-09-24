@@ -18,7 +18,7 @@ export default async function InventoryReceiptsPage() {
       </nav>
       <PageHeader title="Goods Receipts" subtitle="Stock received into stores (GRN-in), valued at weighted-average cost." />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory goods receipts">
+      <div aria-label="Inventory goods receipts">
         <StatGrid>
           <StatCard icon="📥" iconBg="#dcfce7" label="Receipt Lines" value={receipts.length} />
           <StatCard icon="🔢" iconBg="#f1f5f9" label="Total Qty Received" value={totalQty} />
@@ -26,7 +26,7 @@ export default async function InventoryReceiptsPage() {
         <Card title="Receipts">
           <MovementsTable entries={ledger} kind="receipt" source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

@@ -16,7 +16,7 @@ export default async function WbsPage() {
   const notStarted = errored ? null : nodes.filter((n) => n.status === "pending" || n.status === "planned").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Work Breakdown Structure" subtitle="Hierarchical view of project phases, stages and activities." back="/projects" />
       <StatGrid>
         <StatCard icon="📋" iconBg="#eff6ff" label="Total Activities" value={total ?? "—"} />
@@ -35,6 +35,6 @@ export default async function WbsPage() {
           <WbsTree nodes={nodes} source={source === "error" ? "error" : "api"} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

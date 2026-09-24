@@ -53,7 +53,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
 
   if (!run) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel="Payroll Runs" />
         <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
         <Card padding>
@@ -61,7 +61,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
             {t("notFound")}
           </p>
         </Card>
-      </main>
+      </div>
     );
   }
 
@@ -86,7 +86,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   const exceptions = deriveExceptions(slipRows);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title", { period: run.payPeriod })}
         subtitle={t("subtitle", { date: formatIndianDate(run.runDate) })}
@@ -179,6 +179,6 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           />
         </div>
       </Card>
-    </main>
+    </div>
   );
 }

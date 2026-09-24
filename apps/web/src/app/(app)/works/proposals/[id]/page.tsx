@@ -200,7 +200,7 @@ export default async function WorkProposalDetailPage({
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={proposal.workNumber}
         subtitle={truncate(proposal.description, 80)}
@@ -320,6 +320,6 @@ export default async function WorkProposalDetailPage({
       </div>
 
       <ProposalExtActions workId={proposal.id ?? params.id} roles={roles} />
-    </main>
+    </div>
   );
 }

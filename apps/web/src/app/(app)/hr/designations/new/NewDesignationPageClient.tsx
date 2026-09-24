@@ -16,7 +16,7 @@ export function NewDesignationPageClient() {
   const t = useTranslations("addDesignationForm");
   const router = useRouter();
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("pageTitle")}
         subtitle={t("pageSubtitle")}
@@ -30,6 +30,6 @@ export function NewDesignationPageClient() {
           setTimeout(() => { router.push("/hr/designations"); }, 1500);
         }}
       />
-    </main>
+    </div>
   );
 }

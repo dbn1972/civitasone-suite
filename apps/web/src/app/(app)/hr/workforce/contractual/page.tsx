@@ -93,7 +93,7 @@ export default async function ContractualPage() {
   const agencies = new Set(items.map((i) => i.agency).filter((a) => a !== "—")).size;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -134,6 +134,6 @@ export default async function ContractualPage() {
         />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

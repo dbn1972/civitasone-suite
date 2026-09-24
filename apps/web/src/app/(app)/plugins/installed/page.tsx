@@ -25,7 +25,7 @@ export default async function Page() {
 	const disabled = errored || total === null || enabled === null ? null : total - enabled;
 
 	return (
-		<main className="wrap">
+		<div className="wrap">
 			<nav aria-label="Breadcrumb" className="back">
 				<ArrowLeft aria-hidden="true" size={14} /> <a href="/plugins">Plugins</a>
 			</nav>
@@ -62,6 +62,6 @@ export default async function Page() {
 					<PluginsTable rows={plugins} />
 				)}
 			</div>
-		</main>
+		</div>
 	);
 }

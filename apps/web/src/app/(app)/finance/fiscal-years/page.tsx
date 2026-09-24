@@ -48,7 +48,7 @@ export default async function FiscalYearsPage() {
   const activeYear = fiscalYears.find((fy) => fy.status === "active");
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fiscal Years"
         subtitle="Define financial years and set the one currently open for posting."
@@ -64,6 +64,6 @@ export default async function FiscalYearsPage() {
       <FiscalYearForm />
 
       <FiscalYearsTable rows={fiscalYears} />
-    </main>
+    </div>
   );
 }

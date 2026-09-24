@@ -22,7 +22,7 @@ export default async function AttendanceRegularisationPage() {
   const rejected = regs.filter((r) => r.status === "rejected").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitlePage")}
@@ -42,6 +42,6 @@ export default async function AttendanceRegularisationPage() {
       <Card title={t("cardTitle")}>
         <RegularisationTable regs={regs} source={source} canApprove={canApprove} />
       </Card>
-    </main>
+    </div>
   );
 }

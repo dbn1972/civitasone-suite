@@ -111,10 +111,10 @@ export default function GatewayConfigPage() {
 
   if (loading) {
     return (
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <PageHeader title="API Gateway Configuration" subtitle="Loading..." back="/admin" />
         <div style={{ textAlign: "center", padding: 48 }}>Loading gateway configuration...</div>
-      </main>
+      </div>
     );
   }
 
@@ -122,7 +122,7 @@ export default function GatewayConfigPage() {
   const halfOpenBreakers = breakers.filter((b) => b.state === "half-open").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="API Gateway Configuration" subtitle="Runtime-configurable gateway parameters. Changes take effect immediately." back="/admin" />
 
       <StatGrid>
@@ -248,7 +248,7 @@ export default function GatewayConfigPage() {
           </Button>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

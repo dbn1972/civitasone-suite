@@ -51,7 +51,7 @@ export default async function WriteOffDecidePage({ params }: { params: { id: str
   const loadFailed = source === "error" || !writeOff;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Decide Write-off"
         subtitle="Approve or reject a pending write-off. The deciding officer must differ from the officer who raised it."
@@ -94,6 +94,6 @@ export default async function WriteOffDecidePage({ params }: { params: { id: str
         )}
         <WriteOffDecideForm writeOffId={writeOffId} writeOff={loadFailed ? null : writeOff} />
       </Card>
-    </main>
+    </div>
   );
 }

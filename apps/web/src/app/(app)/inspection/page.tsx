@@ -23,7 +23,7 @@ export default async function InspectionHubPage() {
       : "api";
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       <PageHeader
         title="Inspection"
         subtitle="Plans, assignments, execution and CAPA — wired to inspection-service APIs."
@@ -45,6 +45,6 @@ export default async function InspectionHubPage() {
           </Link>
         ))}
       </div>
-    </main>
+    </div>
   );
 }

@@ -26,7 +26,7 @@ export default async function ContractsListPage() {
   }));
 
   return (
-    <main className="wrap" aria-labelledby="page-heading">
+    <div className="wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Contracts"
         subtitle="All registered contracts across departments."
@@ -57,6 +57,6 @@ export default async function ContractsListPage() {
           <ContractsTable rows={rows} />
         </div>
       )}
-    </main>
+    </div>
   );
 }

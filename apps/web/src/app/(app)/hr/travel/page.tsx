@@ -44,7 +44,7 @@ export default async function TravelRequestsPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -80,6 +80,6 @@ export default async function TravelRequestsPage() {
           )}
         </Card>
       </div>
-    </main>
+    </div>
   );
 }

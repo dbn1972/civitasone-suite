@@ -9,7 +9,7 @@ export default async function DemandGrantsPage() {
   const charged = grants.filter((g) => String(g.class).toLowerCase() === "charged").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Demand for Grants"
         subtitle="Parliamentary demand for grants with voted/charged breakup."
@@ -28,6 +28,6 @@ export default async function DemandGrantsPage() {
       <Card title="Demand for Grants">
         <DemandGrantsTable grants={grants} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

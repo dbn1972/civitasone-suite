@@ -56,7 +56,7 @@ export default async function TalentPoolPage({
   // zero access) and say plainly what's actually true.
   if (status === 403) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader
           title={t("title")}
           subtitle={t("subtitle")}
@@ -65,7 +65,7 @@ export default async function TalentPoolPage({
           help="hr"
         />
         <PermissionDenied module="the talent pool" requiredRoles={TALENT_POOL_ROLES} />
-      </main>
+      </div>
     );
   }
 
@@ -86,7 +86,7 @@ export default async function TalentPoolPage({
   }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -155,6 +155,6 @@ export default async function TalentPoolPage({
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

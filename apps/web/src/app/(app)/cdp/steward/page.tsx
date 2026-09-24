@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 
 export default function Page() {
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/cdp">Customer Data Platform</a>
       </nav>
@@ -15,6 +15,6 @@ export default function Page() {
         subtitle="Merge review queue — approve or reject profile-merge suggestions flagged by identity resolution."
       />
       <StewardQueuePanel />
-    </main>
+    </div>
   );
 }

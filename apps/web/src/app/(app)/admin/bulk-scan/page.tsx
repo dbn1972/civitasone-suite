@@ -12,7 +12,7 @@ import { PageHeader } from "@/app/_components/ds";
 // that doesn't exist.
 export default function AdminBulkScanPage() {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Bulk Scan"
         subtitle="Queue a WCAG/CWV/accessibility scan across multiple government domains at once."
@@ -72,6 +72,6 @@ export default function AdminBulkScanPage() {
           <p style={{ margin: 0, fontSize: 12.5 }}>Nothing is shown here because nothing real can be loaded yet.</p>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

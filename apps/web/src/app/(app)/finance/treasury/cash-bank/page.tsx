@@ -11,7 +11,7 @@ export default async function CashBankPage() {
   const payments = entries.filter((e) => Number(e.payment_minor ?? 0) > 0).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Cash & Bank Book"
         subtitle="Day book with receipts, payments, and running balance."
@@ -33,6 +33,6 @@ export default async function CashBankPage() {
       <Card title="Cash & Bank Entries">
         <CashBankTable entries={entries} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

@@ -32,7 +32,7 @@ export default async function AuditCompliancePage() {
   const displayCert: ComplianceRow[] = (certItems.length > 0 ? certItems : items.slice(Math.ceil(items.length / 2))) as ComplianceRow[];
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       <nav aria-label="Breadcrumb" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 4 }}>
         <Link href="/audit/dashboard" className="lnk">Audit</Link>
         <span aria-hidden="true" style={{ margin: "0 7px", color: "var(--line)" }}>/</span>
@@ -72,6 +72,6 @@ export default async function AuditCompliancePage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

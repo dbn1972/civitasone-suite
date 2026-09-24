@@ -11,7 +11,7 @@ export default async function AllocationPage() {
   const committed = allocations.filter((a) => Number(a.committedMinor ?? 0) > 0).length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Budget Allocation"
         subtitle="Department-wise allocation, release, and utilization."
@@ -30,6 +30,6 @@ export default async function AllocationPage() {
       <Card title="Budget Allocations">
         <AllocationTable allocations={allocations} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

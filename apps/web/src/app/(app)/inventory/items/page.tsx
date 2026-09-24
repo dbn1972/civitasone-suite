@@ -20,7 +20,7 @@ export default async function InventoryItemsPage() {
       </nav>
       <PageHeader title="Item Master" subtitle="Catalogued stock items with categories, units and reorder policy." />
       {source === "error" && <DataSourceBadge source="error" />}
-      <main aria-label="Inventory item master">
+      <div aria-label="Inventory item master">
         <StatGrid>
           <StatCard icon="📦" iconBg="#f1f5f9" label="Total Items" value={items.length} />
           <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={active} />
@@ -30,7 +30,7 @@ export default async function InventoryItemsPage() {
         <Card title="Items">
           <ItemsTable items={items} source={source} />
         </Card>
-      </main>
+      </div>
     </>
   );
 }

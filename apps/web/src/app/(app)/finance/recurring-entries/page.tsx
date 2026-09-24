@@ -110,7 +110,7 @@ export default async function RecurringEntriesPage() {
   ];
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Recurring Entries"
         subtitle="Standing journal instructions that post automatically on a schedule."
@@ -138,6 +138,6 @@ export default async function RecurringEntriesPage() {
           emptyMessage="Create your first standing journal instruction using the form above."
         />
       </Card>
-    </main>
+    </div>
   );
 }

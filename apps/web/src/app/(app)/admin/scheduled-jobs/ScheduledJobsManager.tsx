@@ -187,7 +187,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Scheduled Jobs" subtitle="Manage recurring background tasks and monitor execution history." back="/admin" />
       <DataSourceBadge source={source} />
       {error && (
@@ -348,6 +348,6 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }

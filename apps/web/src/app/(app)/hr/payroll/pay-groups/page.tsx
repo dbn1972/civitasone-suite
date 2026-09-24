@@ -40,7 +40,7 @@ export default async function PayGroupsPage() {
   const inactiveCount = errored ? null : groups.filter((g) => g.status !== "active").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -96,6 +96,6 @@ export default async function PayGroupsPage() {
           </div>
         </Card>
       )}
-    </main>
+    </div>
   );
 }

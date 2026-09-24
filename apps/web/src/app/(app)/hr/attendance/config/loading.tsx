@@ -3,7 +3,7 @@ import { getTranslations } from "next-intl/server";
 export default async function Loading() {
   const t = await getTranslations("attendanceConfig");
   return (
-    <main className="page-main" aria-labelledby="page-heading">
+    <div className="page-main" aria-labelledby="page-heading">
       <div className="ph">
         <div>
           <h1 id="page-heading">{t("loadingTitle")}</h1>
@@ -19,6 +19,6 @@ export default async function Loading() {
         </div>
         <div style={{ height: 240, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
       </div>
-    </main>
+    </div>
   );
 }

@@ -46,7 +46,7 @@ export default async function IncomeTaxPage() {
   const fy = currentFinancialYear();
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle", { fy })} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
@@ -69,6 +69,6 @@ export default async function IncomeTaxPage() {
         />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

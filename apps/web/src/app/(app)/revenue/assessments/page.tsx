@@ -22,7 +22,7 @@ export default async function AssessmentsPage() {
   const closedCount = assessments.filter((a) => a.status === "closed").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Assessments"
         subtitle="Raise, revise, and remit municipal tax assessments against registered assessees."
@@ -46,6 +46,6 @@ export default async function AssessmentsPage() {
           <AssessmentsTable assessments={assessments} />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

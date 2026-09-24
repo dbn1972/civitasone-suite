@@ -19,7 +19,7 @@ export default function UtilizationPage() {
   const unspent = "₹1,772.30 Cr";
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Fund Utilization" subtitle="Track allocation, releases and utilization across all projects." back="/projects" />
       <StatGrid>
         <StatCard icon="💰" iconBg="#eff6ff" label="Total Allocated" value={totalAllocated} />
@@ -30,6 +30,6 @@ export default function UtilizationPage() {
       <Card title="Project-wise Utilization">
         <UtilizationTable rows={rows} />
       </Card>
-    </main>
+    </div>
   );
 }

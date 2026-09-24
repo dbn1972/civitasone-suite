@@ -1997,6 +1997,7 @@
   },
   "form16Wizard": {
     "stepAriaLabel": "Form 16 wizard steps",
+  "stepProgress": "Step {current} of {total}: {name}",
     "stepSelectFy": "Select FY",
     "stepReviewDeductions": "Review Deductions",
     "stepGenerateDownload": "Generate & Download",

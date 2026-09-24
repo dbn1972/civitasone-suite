@@ -10,7 +10,7 @@ export default async function FundReleasesPage() {
   const pending      = releases.filter((r) => r.status === "pending").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Fund Releases"
         subtitle="Allocation distributions issued to subordinate offices and departments."
@@ -31,6 +31,6 @@ export default async function FundReleasesPage() {
       <Card title="Allocation Distributions (Fund Releases)">
         <FundReleasesTable releases={releases} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

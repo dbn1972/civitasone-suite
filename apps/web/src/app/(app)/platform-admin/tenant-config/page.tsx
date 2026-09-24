@@ -8,7 +8,7 @@ export default function TenantConfigPage() {
   const isPlatformAdmin = roles.includes("platform_admin") || roles.includes("super_admin");
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <Breadcrumb items={[{ label: "Platform Admin", href: "/platform-admin" }, { label: "Tenant Config" }]} />
       <PageHeader
         back="/platform-admin"
@@ -27,6 +27,6 @@ export default function TenantConfigPage() {
         </p>
       )}
       <TenantConfigCard isPlatformAdmin={isPlatformAdmin} />
-    </main>
+    </div>
   );
 }

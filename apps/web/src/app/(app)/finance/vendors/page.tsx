@@ -10,7 +10,7 @@ export default async function VendorsPage() {
   const pending = vendors.filter((v) => v.status.toLowerCase() === "pending").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       {/* UX-002: the data-source badge now lives in VendorsTable, driven by
           the same useSeededResource call that produces its rows. */}
       <PageHeader
@@ -27,6 +27,6 @@ export default async function VendorsPage() {
       <Card title="Vendors">
         <VendorsTable vendors={vendors} source={source === "error" ? "error" : "api"} />
       </Card>
-    </main>
+    </div>
   );
 }

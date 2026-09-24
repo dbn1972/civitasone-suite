@@ -4,7 +4,7 @@ export default function GrantNotFound() {
   return (
     <>
       <PageHeader back="/grants/list" backLabel="All grants" title="Grant not found" />
-      <main aria-label="Grant not found">
+      <div aria-label="Grant not found">
         <EmptyState
           icon="🔍"
           title="We couldn't find that grant"
@@ -15,7 +15,7 @@ export default function GrantNotFound() {
             </a>
           }
         />
-      </main>
+      </div>
     </>
   );
 }

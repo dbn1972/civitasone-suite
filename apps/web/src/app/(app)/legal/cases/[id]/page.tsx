@@ -82,7 +82,7 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
   const curStage = stageIndex(caseData.status);
 
   return (
-    <main className="wrap">
+    <div className="wrap">
       {/* Breadcrumb */}
       <nav
         aria-label="Breadcrumb"
@@ -201,6 +201,6 @@ export default async function LegalCaseDetailPage({ params }: { params: { id: st
           </div>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

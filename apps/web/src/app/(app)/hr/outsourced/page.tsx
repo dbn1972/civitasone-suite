@@ -18,11 +18,11 @@ export default async function OutsourcedPage() {
   const t = await getTranslations("outsourced");
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <Card title={t("cardTitle")}>
         <EmptyState icon="🏢" title={t("emptyTitle")} message={t("emptyMessage")} />
       </Card>
-    </main>
+    </div>
   );
 }

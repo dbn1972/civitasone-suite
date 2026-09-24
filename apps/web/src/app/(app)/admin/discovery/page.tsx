@@ -13,7 +13,7 @@ import { PageHeader } from "@/app/_components/ds";
 // doesn't exist.
 export default function AdminDiscoveryPage() {
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Service Discovery"
         subtitle="Scan and monitor all internal and external services connected to the platform."
@@ -76,6 +76,6 @@ export default function AdminDiscoveryPage() {
           <p style={{ margin: 0, fontSize: 12.5 }}>Nothing is shown here because nothing real can be loaded yet.</p>
         </div>
       </div>
-    </main>
+    </div>
   );
 }

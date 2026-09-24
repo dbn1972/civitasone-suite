@@ -21,7 +21,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
   if (!slip) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
         <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
         <Card padding>
@@ -29,7 +29,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
             {t("notFoundMessage")}
           </p>
         </Card>
-      </main>
+      </div>
     );
   }
 
@@ -53,7 +53,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   const stat = richSlip.statutory;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("titleWithPeriod", { period: slip.payPeriod })}
         subtitle={slip.employeeName}
@@ -229,6 +229,6 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
           </p>
         )}
       </Card>
-    </main>
+    </div>
   );
 }

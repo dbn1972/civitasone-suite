@@ -38,10 +38,10 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
 
   if (!vendor) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Vendor Detail" back="/finance/vendors" />
         <EmptyState icon="🏢" title="Vendor not found" message="This vendor may have been removed or the ID is invalid." />
-      </main>
+      </div>
     );
   }
 
@@ -73,7 +73,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
   }, undefined);
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={name}
         subtitle={category !== "—" ? category : undefined}
@@ -119,6 +119,6 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
           emptyMessage="No bills have been recorded for this vendor."
         />
       </Card>
-    </main>
+    </div>
   );
 }

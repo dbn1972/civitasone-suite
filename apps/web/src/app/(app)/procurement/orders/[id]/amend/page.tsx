@@ -63,7 +63,7 @@ export default function POAmendPage({ params }: { params: { id: string } }) {
   }
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <div style={{ maxWidth: 640 }}>
         <PageHeader
           title={
@@ -192,6 +192,6 @@ export default function POAmendPage({ params }: { params: { id: string } }) {
           </div>
         </form>
       </div>
-    </main>
+    </div>
   );
 }

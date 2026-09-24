@@ -7,20 +7,20 @@ export default async function NewPensionerPage() {
   try {
     const t = await getTranslations("pensionersNew");
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader
           title={t("title")}
           subtitle={t("subtitle")}
           back="/hr/payroll/pensioners" backLabel="Back to Pensioners"
         />
         <CreatePensionerForm />
-      </main>
+      </div>
     );
   } catch {
     return (
-      <main className="page-main wrap">
+      <div className="page-main wrap">
         <RefreshErrorState error={toHumanError("load", { area: "new pensioner" })} backHref="/hr/payroll/pensioners" />
-      </main>
+      </div>
     );
   }
 }

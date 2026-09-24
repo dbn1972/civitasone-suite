@@ -104,7 +104,7 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
 
   if (!policy) {
     return (
-      <main className="page-main wrap" aria-labelledby="page-heading">
+      <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Policy not found" back="/assets/insurance" backLabel="Asset Insurance" />
         {policySource === "error" ? (
           <Card title="Policy">
@@ -117,14 +117,14 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
             message="The requested policy could not be found. It may have lapsed or the link is incorrect."
           />
         )}
-      </main>
+      </div>
     );
   }
 
   const claimRows = claims.map((c) => ({ ...c, claimDateDisplay: formatIndianDate(c.claimDate) }));
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`${policy.policyNo} · ${policy.insurer}`}
         subtitle="Insurance policy details and claims filed against it."
@@ -177,6 +177,6 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
           />
         )}
       </Card>
-    </main>
+    </div>
   );
 }

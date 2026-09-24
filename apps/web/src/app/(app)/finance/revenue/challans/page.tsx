@@ -7,7 +7,7 @@ export default async function ChallansPage() {
   const verified = challans.filter((c) => String(c.status).toLowerCase() === "verified").length;
 
   return (
-    <main className="page-main wrap" aria-labelledby="page-heading">
+    <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Challan Register" subtitle="Government challans with deposit verification and bank reconciliation." back="/finance" />
       <StatGrid>
         <StatCard icon="📄" iconBg="#e7edfd" label="Total Challans" value={challans.length} />
@@ -21,6 +21,6 @@ export default async function ChallansPage() {
           second, independent read of `source` here that could disagree
           with the table's own cache state (UX-002's pattern). */}
       <Card title="Challans"><ChallansTable challans={challans} source={source === "error" ? "error" : "api"} /></Card>
-    </main>
+    </div>
   );
 }
