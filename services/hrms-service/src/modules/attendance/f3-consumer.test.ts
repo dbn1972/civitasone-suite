@@ -24,7 +24,10 @@ import { MemoryQueue, type Queue, type Handler } from "@civitasone/queue";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { hrmsAttendance, hrmsAttendanceRegularisations, type AttendanceRow, type RegularisationRow } from "./schema.js";
+import {
+  hrmsAttendance, hrmsAttendanceRegularisations, hrmsOvertimeRequests,
+  type AttendanceRow, type RegularisationRow, type OvertimeRequestRow,
+} from "./schema.js";
 import { registerF3_attendance_Consumers } from "./f3-consumer.js";
 import { COMMANDS } from "../../topics.js";
 
@@ -88,6 +91,30 @@ async function getAttendance(tenantId: string, employeeId: string, date: string)
 async function getRegularisation(tenantId: string, id: string): Promise<RegularisationRow | undefined> {
   return runWithTenant(tenantId, () => db.transaction(async (tx) => {
     const [row] = await tx.select().from(hrmsAttendanceRegularisations).where(eq(hrmsAttendanceRegularisations.id, id));
+    return row;
+  }));
+}
+
+async function seedOvertimeRequest(
+  tenantId: string, employeeId: string, actorId: string, status: "pending" | "approved" | "rejected",
+): Promise<string> {
+  const id = randomUUID();
+  await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    await tx.insert(hrmsOvertimeRequests).values({
+      id, tenantId, employeeId,
+      requestDate: pastDateISO(2), hoursRequested: "3.00", reason: "Month-end closing",
+      status,
+      ...(status === "approved" ? { approvedBy: actorId, approvedAt: new Date() } : {}),
+      ...(status === "rejected" ? { rejectionReason: "Insufficient justification" } : {}),
+      createdBy: actorId, updatedBy: actorId,
+    });
+  }));
+  return id;
+}
+
+async function getOvertimeRequest(tenantId: string, id: string): Promise<OvertimeRequestRow | undefined> {
+  return runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    const [row] = await tx.select().from(hrmsOvertimeRequests).where(eq(hrmsOvertimeRequests.id, id));
     return row;
   }));
 }
@@ -183,6 +210,106 @@ describe("Bug 2 — attendance regularisation approval actually corrects hrms_at
       // Fresh insert (no prior row to conflict with) — source is exactly
       // what the approve handler wrote.
       expect(after?.source).toBe("regularisation");
+    } finally {
+      await cleanupEmployee(tenantId, employeeId);
+    }
+  });
+});
+
+/**
+ * Wave 4 / cluster D regression tests — overtime approve/reject no longer
+ * allows illegal state reversal.
+ *
+ * Before this fix, `attendance_routes__3`/`__4` (see f3-consumer.ts) ran a
+ * blind UPDATE keyed only on id+tenantId, and routes.ts's synchronous
+ * pre-check only verified the row existed — neither layer checked status.
+ * An already-approved overtime request could later be rejected (or an
+ * already-rejected one later approved) with no error at all. This mirrors
+ * Bug 2's regularisation guard above but for hrms_overtime_requests,
+ * exercised the same way: seed a row directly at a terminal status, publish
+ * the f3RouteWrite command a real client would send, drain the real queue,
+ * and assert against the real row afterward.
+ */
+describe("Overtime approve/reject — decided requests cannot be re-decided", () => {
+  it("rejecting an already-approved overtime request leaves it approved (does not flip to rejected)", async () => {
+    const { tenantId, employeeId, actorId } = await seedEmployee();
+    try {
+      const otId = await seedOvertimeRequest(tenantId, employeeId, actorId, "approved");
+
+      const before = await getOvertimeRequest(tenantId, otId);
+      expect(before?.status).toBe("approved");
+
+      const q = await buildQueue();
+      await q.publish(COMMANDS.f3RouteWrite, {
+        messageId: randomUUID(), type: COMMANDS.f3RouteWrite,
+        tenantId, actorId, correlationId: randomUUID(), schemaVersion: "1.0",
+        payload: {
+          op: "attendance_routes__4", id: otId, tenantId,
+          body: { reason: "Trying to reverse an already-approved claim" },
+          params: { id: otId }, query: {},
+        },
+      });
+      await q.drain();
+
+      // Before the fix: this flipped to "rejected" with rejectionReason set
+      // — illegal state reversal, no error surfaced anywhere. After the
+      // fix: repo.updateOvertimeStatus's WHERE status='pending' guard
+      // matches zero rows, so the request is untouched.
+      const after = await getOvertimeRequest(tenantId, otId);
+      expect(after?.status).toBe("approved");
+      expect(after?.rejectionReason).toBeNull();
+    } finally {
+      await cleanupEmployee(tenantId, employeeId);
+    }
+  });
+
+  it("approving an already-rejected overtime request leaves it rejected (does not flip to approved)", async () => {
+    const { tenantId, employeeId, actorId } = await seedEmployee();
+    try {
+      const otId = await seedOvertimeRequest(tenantId, employeeId, actorId, "rejected");
+
+      const before = await getOvertimeRequest(tenantId, otId);
+      expect(before?.status).toBe("rejected");
+
+      const q = await buildQueue();
+      await q.publish(COMMANDS.f3RouteWrite, {
+        messageId: randomUUID(), type: COMMANDS.f3RouteWrite,
+        tenantId, actorId, correlationId: randomUUID(), schemaVersion: "1.0",
+        payload: {
+          op: "attendance_routes__3", id: otId, tenantId,
+          body: {}, params: { id: otId }, query: {},
+        },
+      });
+      await q.drain();
+
+      const after = await getOvertimeRequest(tenantId, otId);
+      expect(after?.status).toBe("rejected");
+      expect(after?.approvedBy).toBeNull();
+      expect(after?.approvedAt).toBeNull();
+    } finally {
+      await cleanupEmployee(tenantId, employeeId);
+    }
+  });
+
+  it("approving a genuinely pending overtime request still works (guard doesn't block the legitimate case)", async () => {
+    const { tenantId, employeeId, actorId } = await seedEmployee();
+    try {
+      const otId = await seedOvertimeRequest(tenantId, employeeId, actorId, "pending");
+
+      const q = await buildQueue();
+      await q.publish(COMMANDS.f3RouteWrite, {
+        messageId: randomUUID(), type: COMMANDS.f3RouteWrite,
+        tenantId, actorId, correlationId: randomUUID(), schemaVersion: "1.0",
+        payload: {
+          op: "attendance_routes__3", id: otId, tenantId,
+          body: {}, params: { id: otId }, query: {},
+        },
+      });
+      await q.drain();
+
+      const after = await getOvertimeRequest(tenantId, otId);
+      expect(after?.status).toBe("approved");
+      expect(after?.approvedBy).toBe(actorId);
     } finally {
       await cleanupEmployee(tenantId, employeeId);
     }

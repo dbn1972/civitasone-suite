@@ -165,6 +165,41 @@ export async function updateRegularisationStatus(
   return updated[0] ?? null;
 }
 
+/**
+ * Status-guard fix: approve/reject on an overtime request used to run a
+ * blind UPDATE keyed only on id+tenantId (routes.ts's synchronous pre-check
+ * only verified the row EXISTED, never that it was still "pending") -- so an
+ * already-approved request could later be rejected, or vice versa, with no
+ * error at all. Mirrors updateRegularisationStatus just above: the UPDATE's
+ * own WHERE clause re-checks status='pending' atomically WITH the write, so
+ * a decided request can never be silently re-decided, and a concurrent
+ * double-decide race resolves to exactly one winner instead of a last-write-
+ * wins clobber. Returns null (does not throw) when the WHERE clause matched
+ * zero rows -- not found, or already decided -- callers treat that the same
+ * way updateRegularisationStatus's callers do.
+ */
+export async function updateOvertimeStatus(
+  tx: Writer,
+  tenantId: string, id: string, status: "approved" | "rejected", actorId: string, rejectionReason?: string | null,
+): Promise<{ id: string } | null> {
+  // Atomic: WHERE status='pending' guards against approve/reject state reversal.
+  const updated = await tx.update(hrmsOvertimeRequests)
+    .set({
+      status,
+      updatedBy: actorId,
+      updatedAt: new Date(),
+      ...(status === "approved" ? { approvedBy: actorId, approvedAt: new Date() } : {}),
+      ...(rejectionReason !== undefined ? { rejectionReason } : {}),
+    })
+    .where(and(
+      eq(hrmsOvertimeRequests.tenantId, tenantId),
+      eq(hrmsOvertimeRequests.id, id),
+      eq(hrmsOvertimeRequests.status, "pending"),
+    ))
+    .returning({ id: hrmsOvertimeRequests.id });
+  return updated[0] ?? null;
+}
+
 /** Checkin-log: attendance rows with inTime/outTime formatted for the UI. */
 export async function listCheckinLog(tenantId: string, limit = 200) {
   const rows = await scopedRead((tx) =>

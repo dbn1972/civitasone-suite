@@ -291,15 +291,23 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    // Synchronous pre-check (existence): the old code's conditional UPDATE
-    // WHERE id+tenantId 404'd when no row matched. Mirror that here so an
-    // invalid id gets a real 404 instead of a silently dropped async write.
+    // Synchronous pre-check (existence + status): the old code only checked
+    // existence, so a conditional UPDATE WHERE id+tenantId 404'd on an
+    // invalid id but happily re-approved/re-rejected an already-decided
+    // request -- illegal state reversal (approve an already-rejected
+    // request or vice versa) with no error at all. Mirror the
+    // regularisation approve/reject guard just above: also require
+    // status='pending' here, and let the async consumer's
+    // repo.updateOvertimeStatus apply the same guard atomically as part of
+    // the write itself (see f3-consumer.ts's attendance_routes__3).
     const existing = await scopedRead((tx) =>
-      tx.select({ id: hrmsOvertimeRequests.id }).from(hrmsOvertimeRequests)
+      tx.select({ id: hrmsOvertimeRequests.id, status: hrmsOvertimeRequests.status }).from(hrmsOvertimeRequests)
         .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
         .limit(1),
     );
-    if (!existing[0]) return reply.code(404).send({ error: "Overtime request not found" });
+    if (!existing[0] || existing[0].status !== "pending") {
+      return reply.code(404).send({ error: "Overtime request not found or already decided" });
+    }
 
     await publishF3Write(ctx, "attendance_routes__3", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "approved" }) as any;
@@ -311,13 +319,17 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     z.object({ reason: z.string().max(500).optional() }).parse(req.body);
 
-    // Synchronous pre-check (existence) — same reasoning as the approve route.
+    // Synchronous pre-check (existence + status) — same reasoning as the
+    // approve route above: a decided request (approved or rejected) must
+    // not be re-decided in the other direction.
     const existing = await scopedRead((tx) =>
-      tx.select({ id: hrmsOvertimeRequests.id }).from(hrmsOvertimeRequests)
+      tx.select({ id: hrmsOvertimeRequests.id, status: hrmsOvertimeRequests.status }).from(hrmsOvertimeRequests)
         .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
         .limit(1),
     );
-    if (!existing[0]) return reply.code(404).send({ error: "Overtime request not found" });
+    if (!existing[0] || existing[0].status !== "pending") {
+      return reply.code(404).send({ error: "Overtime request not found or already decided" });
+    }
 
     await publishF3Write(ctx, "attendance_routes__4", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "rejected" }) as any;
