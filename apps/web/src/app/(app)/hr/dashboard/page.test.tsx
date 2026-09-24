@@ -7,12 +7,16 @@ vi.mock("../../../_data/loaders", () => ({
   getEmployees: vi.fn(),
   getDashboardLeaveInbox: vi.fn(),
   getMyProfile: vi.fn(),
+  getMyLeaveBalance: vi.fn(),
+  getMyAttendance: vi.fn(),
+  getMyLeaveApplications: vi.fn(),
 }));
 vi.mock("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key,
 }));
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionName: () => null,
+  getSessionRoles: vi.fn(),
 }));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -29,12 +33,20 @@ import {
   getEmployees,
   getDashboardLeaveInbox,
   getMyProfile,
+  getMyLeaveBalance,
+  getMyAttendance,
+  getMyLeaveApplications,
 } from "../../../_data/loaders";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 const mockedDash = vi.mocked(getHRDashboard);
 const mockedEmp = vi.mocked(getEmployees);
 const mockedInbox = vi.mocked(getDashboardLeaveInbox);
 const mockedProfile = vi.mocked(getMyProfile);
+const mockedBalance = vi.mocked(getMyLeaveBalance);
+const mockedAttendance = vi.mocked(getMyAttendance);
+const mockedMyApps = vi.mocked(getMyLeaveApplications);
+const mockedRoles = vi.mocked(getSessionRoles);
 
 const DASH_OK = {
   headcount: 245,
@@ -45,6 +57,7 @@ const DASH_OK = {
   payrollDue: 0,
   departmentBreakdown: [{ name: "Finance", count: 10 }],
   employeeTypeBreakdown: [],
+  routingFailedCount: 0,
 };
 
 // Same shape fetchJson's `empty` fallback gives getHRDashboard() on a real
@@ -58,6 +71,7 @@ const DASH_EMPTY = {
   payrollDue: 0,
   departmentBreakdown: [],
   employeeTypeBreakdown: [],
+  routingFailedCount: 0,
 };
 
 const EMP_ROW = { id: "e1", name: "Asha Rao", department: "Finance", status: "confirmed" };
@@ -71,16 +85,39 @@ const PROFILE_OK = {
   designation: "Officer",
 };
 
+const MY_BALANCE_OK = [
+  { leaveTypeId: "lt1", fy: "2026-27", total: 30, balance: 18, used: 12 },
+];
+const MY_ATTENDANCE_OK = [
+  { date: "2026-09-01", status: "present", inTime: "09:00", outTime: "18:00" },
+  { date: "2026-09-02", status: "present", inTime: "09:05", outTime: "18:02" },
+  { date: "2026-09-03", status: "absent", inTime: null, outTime: null },
+];
+const MY_APPS_OK = [
+  { id: "app1", leaveTypeId: "lt1", fromDate: "2026-09-10", toDate: "2026-09-12", days: 3, status: "pending" },
+];
+
 beforeEach(() => {
   mockedDash.mockReset();
   mockedEmp.mockReset();
   mockedInbox.mockReset();
   mockedProfile.mockReset();
-  // Sane, all-succeeding defaults -- each test only overrides what it cares about.
+  mockedBalance.mockReset();
+  mockedAttendance.mockReset();
+  mockedMyApps.mockReset();
+  mockedRoles.mockReset();
+  // Sane, all-succeeding defaults -- each test only overrides what it cares
+  // about. Default role is HR-admin so every pre-existing test below (all
+  // written against the admin/HR-staff dashboard) keeps exercising exactly
+  // that branch with no changes required.
   mockedDash.mockResolvedValue({ data: DASH_OK, source: "api" });
   mockedEmp.mockResolvedValue({ data: [EMP_ROW], source: "api" });
-  mockedInbox.mockResolvedValue({ data: [] });
+  mockedInbox.mockResolvedValue({ data: [], routingFailed: [] });
   mockedProfile.mockResolvedValue({ data: PROFILE_OK, source: "api" });
+  mockedBalance.mockResolvedValue({ data: MY_BALANCE_OK, source: "api" });
+  mockedAttendance.mockResolvedValue({ data: MY_ATTENDANCE_OK, source: "api" });
+  mockedMyApps.mockResolvedValue({ data: MY_APPS_OK, source: "api" });
+  mockedRoles.mockReturnValue(["hr_admin"]);
 });
 
 describe("HRDashboardPage", () => {
@@ -158,6 +195,94 @@ describe("HRDashboardPage", () => {
       expect(screen.getAllByText("—").length).toBeGreaterThan(0);
       expect(screen.getByText("Asha Rao")).toBeInTheDocument();
       expect(screen.queryByText("We couldn't load employees.")).not.toBeInTheDocument();
+    });
+  });
+
+  describe("HR-admin routing-failure alert", () => {
+    it("surfaces routing-failed leave applications to HR instead of staying silent", async () => {
+      mockedInbox.mockResolvedValue({
+        data: [],
+        routingFailed: [{
+          id: "rf1", employeeName: "Kiran Kumar", employeeNo: "E9", departmentName: "IT",
+          leaveTypeName: "Earned Leave", leaveTypeCode: "EL", fromDate: "2026-09-01", toDate: "2026-09-02",
+          daysApplied: 2, status: "routing_failed",
+        }],
+      });
+      render(await HRDashboardPage());
+      // testid, not role="alert": PayrollBanner (always rendered in this
+      // branch) is ALSO role="alert", so the role alone is ambiguous here.
+      expect(screen.getByTestId("routing-failed-alert")).toHaveTextContent(/could not be routed for approval/i);
+      expect(screen.getByText(/Kiran Kumar/)).toBeInTheDocument();
+    });
+
+    it("shows no routing-failure alert when there are none", async () => {
+      render(await HRDashboardPage());
+      expect(screen.queryByText(/could not be routed for approval/i)).not.toBeInTheDocument();
+    });
+  });
+
+  describe("employee role (non-HR-staff viewer)", () => {
+    // The live-audit bug this closes: loading /hr/dashboard as a plain
+    // "employee" used to call getHRDashboard()/getEmployees()/
+    // getDashboardLeaveInbox() unconditionally -- all three 403 for that
+    // role server-side (see hrms-service dashboard/routes.ts's
+    // READER_ROLES) -- so every KPI tile and the pending-actions banner
+    // went honest-blank on EVERY load, not a degraded case. isHRStaff now
+    // gates which loaders even get called.
+    beforeEach(() => {
+      mockedRoles.mockReturnValue(["employee"]);
+    });
+
+    it("never calls the HR-admin-only loaders for a plain employee", async () => {
+      render(await HRDashboardPage());
+      expect(mockedDash).not.toHaveBeenCalled();
+      expect(mockedEmp).not.toHaveBeenCalled();
+      expect(mockedInbox).not.toHaveBeenCalled();
+    });
+
+    it("renders genuinely useful self-service content with no error banner", async () => {
+      render(await HRDashboardPage());
+      expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+      expect(screen.queryByText(/We couldn't load your pending actions/)).not.toBeInTheDocument();
+      // Both the KPI tile ("Leave Balance") and the quick action ("My Leave
+      // Balance") legitimately match this text -- getAllByText on purpose.
+      expect(screen.getAllByText(/Leave Balance/i).length).toBeGreaterThan(0);
+      expect(screen.getByText(/My Leave Applications/i)).toBeInTheDocument();
+    });
+
+    it("still has exactly one h1 on the employee-role page", async () => {
+      render(await HRDashboardPage());
+      expect(screen.getAllByRole("heading", { level: 1 })).toHaveLength(1);
+    });
+
+    it("surfaces a routing_failed request honestly instead of a bare Pending", async () => {
+      mockedMyApps.mockResolvedValue({
+        data: [{ id: "a9", leaveTypeId: "lt1", fromDate: "2026-09-01", toDate: "2026-09-02", days: 2, status: "routing_failed" }],
+        source: "api",
+      });
+      render(await HRDashboardPage());
+      // Both the KPI strip's "My Requests" trend line and the leave-status
+      // panel's own status pill mention "needs attention" for the same
+      // condition -- getAllByText (not getByText) on purpose, since more
+      // than one match here is consistent messaging, not ambiguity.
+      expect(screen.getAllByText(/needs attention/i).length).toBeGreaterThan(0);
+      expect(screen.queryByText("Pending")).not.toBeInTheDocument();
+    });
+
+    it("shows an honest-blank KPI tile, not a fabricated zero, when a self-service loader fails", async () => {
+      mockedBalance.mockResolvedValue({ data: [], source: "error" });
+      render(await HRDashboardPage());
+      expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+      expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    });
+
+    it("does not show the admin employee directory table", async () => {
+      render(await HRDashboardPage());
+      // The admin table's <section> carries aria-label="Recent employees",
+      // giving it an implicit "region" role -- absent here means the whole
+      // admin-only employee-directory section never rendered.
+      expect(screen.queryByRole("region", { name: /recent employees/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole("table", { name: /recent employee records/i })).not.toBeInTheDocument();
     });
   });
 });

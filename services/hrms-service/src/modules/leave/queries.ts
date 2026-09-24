@@ -4,10 +4,11 @@ import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 import { hrmsLeaveAllocs, type LeaveAppRow } from "./schema.js";
 
-function mapLeaveStatus(status: string): "pending" | "approved" | "rejected" | "cancelled" {
+function mapLeaveStatus(status: string): "pending" | "approved" | "rejected" | "cancelled" | "routing_failed" {
   if (status === "approved") return "approved";
   if (status === "rejected") return "rejected";
   if (status === "cancelled") return "cancelled";
+  if (status === "routing_failed") return "routing_failed";
   return "pending";
 }
 

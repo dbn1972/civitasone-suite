@@ -15,7 +15,20 @@ interface Props {
   payrollDaysLeft: number;
   today: string;   // pre-formatted server-side to avoid hydration mismatch
   dayName: string;
+  // Optional so every existing caller/test (which all render the HR-admin
+  // dashboard) keeps getting the original two admin-shaped links with no
+  // changes required. hr/dashboard/page.tsx's employee-role branch passes a
+  // different, self-service-shaped pair instead -- "Export Report" and
+  // "+ Add Employee" are HR-admin actions a plain employee can't use (the
+  // backend 403s the add-employee POST for that role), so showing them
+  // there would just be this same class of bug in miniature.
+  actions?: { label: string; href: string; primary?: boolean }[];
 }
+
+const DEFAULT_ACTIONS: NonNullable<Props["actions"]> = [
+  { label: "Export Report", href: "/hr/payroll" },
+  { label: "+ Add Employee", href: "/hr/employees/new", primary: true },
+];
 
 // A failed dashboard load must read as "we don't know", not as a fabricated
 // zero -- a hard `0` here falls through to "No urgent actions today", which
@@ -26,7 +39,7 @@ function hasValue(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today, dayName }: Props) {
+export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today, dayName, actions = DEFAULT_ACTIONS }: Props) {
   // hasValue(pendingCount) is checked first and short-circuits the rest of
   // the chain on purpose: if we don't know the real pending count, we can't
   // conclude "nothing urgent", and silently falling back to the payroll
@@ -67,8 +80,9 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
           >
             ❓ How this works
           </Link>
-          <Link href="/hr/payroll" className="btn-ghost-nav">Export Report</Link>
-          <Link href="/hr/employees/new" className="btn-primary-nav">+ Add Employee</Link>
+          {actions.map((a) => (
+            <Link key={a.href + a.label} href={a.href} className={a.primary ? "btn-primary-nav" : "btn-ghost-nav"}>{a.label}</Link>
+          ))}
         </div>
       </div>
       <style>{`

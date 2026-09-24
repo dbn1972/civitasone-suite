@@ -742,6 +742,8 @@ export type HRDashboard = {
   departmentBreakdown: { name: string; count: number }[];
   /** Tenant-wide headcount grouped by employeeType (excludes separated), independent of any list pagination. */
   employeeTypeBreakdown: { name: string; count: number }[];
+  /** Leave applications stuck in "routing_failed" -- see hrms-service leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber. */
+  routingFailedCount: number;
 };
 
 export type LeaveInboxItem = {

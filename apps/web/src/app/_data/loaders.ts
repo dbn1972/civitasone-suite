@@ -1175,6 +1175,75 @@ export async function getMyProfile(): Promise<LoaderResult<{ id: string; name: s
   return result;
 }
 
+export type MyLeaveBalanceItem = { leaveTypeId: string; fy: string; total: number; balance: number; used: number };
+
+/**
+ * Self-service leave balance for the logged-in employee -- no admin/manager
+ * role required (see services/hrms-service/src/modules/self-service/
+ * routes.ts's GET /v1/hrms/me/leave-balance, scoped server-side to the
+ * caller's own linked employee record). Used by hr/dashboard's employee-role
+ * view, which must NOT call the HR-admin-only getHRDashboard() for a plain
+ * "employee" viewer (that 403s -- see page.tsx).
+ */
+export async function getMyLeaveBalance(): Promise<LoaderResult<MyLeaveBalanceItem[]>> {
+  return fetchJson<{ data: unknown }, MyLeaveBalanceItem[]>(
+    "/api/v1/hrms/me/leave-balance",
+    [] as MyLeaveBalanceItem[],
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "hr.me.leave_balance",
+      mapResponse: (raw) => {
+        if (!raw || !Array.isArray(raw.data)) return [];
+        return raw.data as MyLeaveBalanceItem[];
+      },
+    },
+  );
+}
+
+export type MyAttendanceItem = { date: string; status: string; inTime: string | null; outTime: string | null };
+
+/** Self-service "my attendance this month" — same scoping as getMyLeaveBalance above. */
+export async function getMyAttendance(limit = 31): Promise<LoaderResult<MyAttendanceItem[]>> {
+  return fetchJson<{ data: unknown }, MyAttendanceItem[]>(
+    `/api/v1/hrms/me/attendance?limit=${limit}`,
+    [] as MyAttendanceItem[],
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "hr.me.attendance",
+      mapResponse: (raw) => {
+        if (!raw || !Array.isArray(raw.data)) return [];
+        return raw.data as MyAttendanceItem[];
+      },
+    },
+  );
+}
+
+export type MyLeaveApplicationItem = {
+  id: string; leaveTypeId: string; fromDate: string; toDate: string; days: number; status: string;
+};
+
+/**
+ * Self-service "my own leave applications" — same scoping as
+ * getMyLeaveBalance above. Status can be "routing_failed" (see
+ * hrms-service leave/domain.ts) when the request's workflow instance was
+ * never actually routed to anyone for approval; callers that render this
+ * should surface that honestly rather than folding it into "pending".
+ */
+export async function getMyLeaveApplications(): Promise<LoaderResult<MyLeaveApplicationItem[]>> {
+  return fetchJson<{ data: unknown }, MyLeaveApplicationItem[]>(
+    "/api/v1/hrms/me/leave-applications",
+    [] as MyLeaveApplicationItem[],
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "hr.me.leave_applications",
+      mapResponse: (raw) => {
+        if (!raw || !Array.isArray(raw.data)) return [];
+        return raw.data as MyLeaveApplicationItem[];
+      },
+    },
+  );
+}
+
 export async function getLeaveRequests(limit = 50, offset = 0): Promise<LoaderResult<LeaveRequestSummary[]>> {
   return fetchJson(`/api/v1/hrms/leave-applications?limit=${limit}&offset=${offset}`, [] as LeaveRequestSummary[], {
     revalidateSeconds: 30,
@@ -2143,6 +2212,7 @@ const HR_DASHBOARD_EMPTY: HRDashboard = {
   payrollDue: 0,
   departmentBreakdown: [],
   employeeTypeBreakdown: [],
+  routingFailedCount: 0,
 };
 
 function mapHRDashboard(payload: unknown): HRDashboard | null {
@@ -2161,26 +2231,30 @@ function mapHRDashboard(payload: unknown): HRDashboard | null {
     employeeTypeBreakdown: Array.isArray(raw.employeeTypeBreakdown)
       ? (raw.employeeTypeBreakdown as { name: string; count: number }[])
       : [],
+    routingFailedCount: typeof raw.routingFailedCount === "number" ? raw.routingFailedCount : 0,
   };
 }
 
-export async function getDashboardLeaveInbox(): Promise<{ data: LeaveInboxItem[] }> {
+export async function getDashboardLeaveInbox(): Promise<{ data: LeaveInboxItem[]; routingFailed: LeaveInboxItem[] }> {
   try {
-    const res = await fetchJson<unknown, { data: LeaveInboxItem[] }>(
+    const res = await fetchJson<unknown, { data: LeaveInboxItem[]; routingFailed: LeaveInboxItem[] }>(
       "/api/v1/hrms/dashboard/pending-leaves",
-      { data: [] as LeaveInboxItem[] },
+      { data: [] as LeaveInboxItem[], routingFailed: [] as LeaveInboxItem[] },
       {
         revalidateSeconds: 30,
         telemetryKey: "hr.dashboard.pending_leaves",
         mapResponse: (p) => {
-          if (!isRecord(p) || !Array.isArray(p.data)) return { data: [] as LeaveInboxItem[] };
-          return { data: p.data as LeaveInboxItem[] };
+          if (!isRecord(p) || !Array.isArray(p.data)) return { data: [] as LeaveInboxItem[], routingFailed: [] as LeaveInboxItem[] };
+          return {
+            data: p.data as LeaveInboxItem[],
+            routingFailed: Array.isArray(p.routingFailed) ? (p.routingFailed as LeaveInboxItem[]) : [],
+          };
         },
       }
     );
     return res.data;
   } catch {
-    return { data: [] };
+    return { data: [], routingFailed: [] };
   }
 }
 

@@ -592,3 +592,117 @@ describe("leaveAllocate command", () => {
     await q.stop();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Live-audit bug: a leave application whose workflow.instance.create request
+// came back rejected (e.g. the tenant has no active "leave_approval"
+// workflow.definitions row) used to sit on status "pending" forever — no
+// workflow.tasks row was ever created for it, and nothing told either the
+// applicant or HR. These tests cover the fix: hrms-service now subscribes to
+// workflow-service's "workflow.instance.rejected" event and reacts.
+describe("WORKFLOW_INSTANCE_REJECTED subscriber (routing-failure visibility)", () => {
+  const PENDING_APP = {
+    id: "app-rf-1",
+    tenantId: TENANT,
+    employeeId: EMP,
+    leaveTypeId: LT_ID,
+    allocId: ALLOC_ID,
+    fromDate: "2025-06-01",
+    toDate: "2025-06-03",
+    daysApplied: 3,
+    reason: null,
+    approvedBy: null,
+    status: "pending",
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    createdBy: ACTOR,
+    updatedBy: ACTOR,
+    version: 1,
+  };
+
+  const WORKFLOW_INSTANCE_REJECTED = "workflow.instance.rejected";
+
+  it("moves a still-pending leave application to routing_failed", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...PENDING_APP });
+    const q = await buildQueue();
+    await q.publish(
+      WORKFLOW_INSTANCE_REJECTED,
+      makeMsg(WORKFLOW_INSTANCE_REJECTED, {
+        instanceId: "wf-1", reason: "unknown_definition", definitionCode: "leave_approval",
+        refType: "leave_app", refId: PENDING_APP.id,
+      }),
+    );
+    await settle();
+    expect(updateLeaveAppMock).toHaveBeenCalledOnce();
+    const [, updatedId, patch] = updateLeaveAppMock.mock.calls[0]!;
+    expect(updatedId).toBe(PENDING_APP.id);
+    expect((patch as Record<string, unknown>).status).toBe("routing_failed");
+    await q.stop();
+  });
+
+  it("enqueues an audit record and a notification to the applicant", async () => {
+    findLeaveAppByIdMock.mockResolvedValue({ ...PENDING_APP });
+    const q = await buildQueue();
+    await q.publish(
+      WORKFLOW_INSTANCE_REJECTED,
+      makeMsg(WORKFLOW_INSTANCE_REJECTED, {
+        instanceId: "wf-1", reason: "unknown_definition", definitionCode: "leave_approval",
+        refType: "leave_app", refId: PENDING_APP.id,
+      }),
+    );
+    await settle();
+    const audit = enqueuedMessages.find((m) => m.topic === "audit.event.record" && (m.payload as any)?.action === "routing_failed");
+    expect(audit).toBeDefined();
+    expect((audit!.payload as any).resourceId).toBe(PENDING_APP.id);
+    const notification = enqueuedMessages.find((m) => m.topic === "notification.send");
+    expect(notification).toBeDefined();
+    expect((notification!.payload as any).recipientId ?? (notification!.payload as any).recipient).toBe(PENDING_APP.employeeId);
+    await q.stop();
+  });
+
+  it("ignores the event for a different refType (e.g. another domain's workflow instance)", async () => {
+    const q = await buildQueue();
+    await q.publish(
+      WORKFLOW_INSTANCE_REJECTED,
+      makeMsg(WORKFLOW_INSTANCE_REJECTED, {
+        instanceId: "wf-2", reason: "unknown_definition", definitionCode: "finance_approval",
+        refType: "finance_bill", refId: "bill-1",
+      }),
+    );
+    await settle();
+    expect(updateLeaveAppMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("does not clobber a leave application that was already actioned through another path", async () => {
+    // e.g. HR approved it directly before this (stale/replayed) rejection
+    // event arrived — the real decision must win, not a late system signal.
+    findLeaveAppByIdMock.mockResolvedValue({ ...PENDING_APP, status: "approved" });
+    const q = await buildQueue();
+    await q.publish(
+      WORKFLOW_INSTANCE_REJECTED,
+      makeMsg(WORKFLOW_INSTANCE_REJECTED, {
+        instanceId: "wf-3", reason: "unknown_definition", definitionCode: "leave_approval",
+        refType: "leave_app", refId: PENDING_APP.id,
+      }),
+    );
+    await settle();
+    expect(updateLeaveAppMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+
+  it("no-ops when the referenced leave application cannot be found", async () => {
+    findLeaveAppByIdMock.mockResolvedValue(null);
+    const q = await buildQueue();
+    await q.publish(
+      WORKFLOW_INSTANCE_REJECTED,
+      makeMsg(WORKFLOW_INSTANCE_REJECTED, {
+        instanceId: "wf-4", reason: "unknown_definition", definitionCode: "leave_approval",
+        refType: "leave_app", refId: "does-not-exist",
+      }),
+    );
+    await settle();
+    expect(updateLeaveAppMock).not.toHaveBeenCalled();
+    await q.stop();
+  });
+});

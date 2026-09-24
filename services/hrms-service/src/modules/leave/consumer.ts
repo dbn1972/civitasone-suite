@@ -15,6 +15,14 @@ import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT = "audit.event.record";
 const WORKFLOW_CREATE = "workflow.instance.create";
+// Emitted by workflow-service's instances consumer when a requested
+// definitionCode has no active workflow.definitions row for the tenant
+// (its own "R13" fail-closed path: it persists a `rejected` *workflow
+// instance*, records history, and emits this -- but never touches the
+// domain row that asked for routing in the first place). Subscribed to
+// below so a leave application whose routing silently failed doesn't sit
+// on a bare "pending" status forever with nothing telling anyone.
+const WORKFLOW_INSTANCE_REJECTED = "workflow.instance.rejected";
 const LEAVE_WORKFLOW_NAME = "Leave Approval Workflow";
 
 export function registerLeaveConsumers(rawQueue: Queue): void {
@@ -117,6 +125,66 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       await audit(tx, msg, "apply", "leave_app", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", (msg.payload as any).employeeId));
+  });
+
+  // See WORKFLOW_INSTANCE_REJECTED's own comment above. Guarded to
+  // refType === "leave_app": this exact event/topic also fires for every
+  // OTHER domain that asks workflow-service to route something (finance/
+  // procurement/file_noting/grant_disbursement/recruitment/contracts all
+  // publish their own workflow.instance.create), and this handler only
+  // knows how to react to leave applications.
+  queue.subscribe(WORKFLOW_INSTANCE_REJECTED, async (msg) => {
+    const p = msg.payload as {
+      instanceId?: string; reason?: string; definitionCode?: string; refType?: string; refId?: string;
+    };
+    const refId = p.refId;
+    if (p.refType !== "leave_app" || !refId) return;
+    let notifyEmployeeId = "";
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const app = await repo.findLeaveAppByIdTx(tx, refId, msg.tenantId);
+      // Only a still-`pending` application can become routing_failed (see
+      // domain.ts's transition map). If HR somehow already actioned it
+      // through a different path, or this is a stale/replayed event
+      // arriving after the fact, leave the real status alone rather than
+      // clobbering a legitimate decision with a stale rejection signal.
+      if (!app || app.status !== "pending") return;
+      await repo.updateLeaveApp(tx, refId, { status: "routing_failed", updatedBy: msg.actorId });
+      notifyEmployeeId = app.employeeId;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: "routing_failed", resourceType: "leave_app", resourceId: refId,
+          outcome: "failure",
+          metadata: {
+            reason: p.reason ?? "unknown", definitionCode: p.definitionCode ?? null,
+            workflowInstanceId: p.instanceId ?? null,
+          },
+        },
+      });
+      // Proactively tell the applicant -- their own Leave History honestly
+      // shows "routing_failed" once this transaction commits (see
+      // queries.ts's mapLeaveStatus and the web leave/history page), but a
+      // notification means they don't have to go looking for it. Falls
+      // back to the system default template like the sibling
+      // "hrms.leave.rejected" notification above already does -- no
+      // dedicated template is registered for this event type either.
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.leave.routing_failed",
+          recipient: app.employeeId,
+          recipientId: app.employeeId,
+          variables: { leaveAppId: refId },
+        }),
+      });
+    });
+    if (notifyEmployeeId) {
+      await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", refId));
+      await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", notifyEmployeeId));
+    }
   });
 
   queue.subscribe(COMMANDS.leaveApprove, async (msg) => {

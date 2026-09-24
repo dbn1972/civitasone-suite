@@ -42,7 +42,54 @@ const ACTIONS: QuickAction[] = [
   },
 ];
 
-export function QuickActionsPanel() {
+// Employee-role counterpart: none of ACTIONS above apply to a plain
+// employee (add-employee/run-payroll/approve-leaves/download-org-report
+// are all HR-admin-only, and the backend 403s them for that role) -- see
+// hr/dashboard/page.tsx's isHRStaff branch.
+const EMPLOYEE_ACTIONS: QuickAction[] = [
+  {
+    label: "Apply for Leave",
+    desc: "New leave request",
+    href: "/hr/leave/apply",
+    iconColor: "var(--infobg, #eff6ff)",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--info, #2563eb)" strokeWidth="2" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>,
+  },
+  {
+    label: "My Leave Balance",
+    desc: "Days available by type",
+    href: "/hr/leave/balance",
+    iconColor: "var(--goodbg, #f0fdf4)",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--good, #16a34a)" strokeWidth="2" aria-hidden="true"><path d="M12 2v20M2 12h20"/></svg>,
+  },
+  {
+    label: "My Leave History",
+    desc: "Past & pending requests",
+    href: "/hr/leave/history",
+    iconColor: "var(--warnbg, #fffbeb)",
+    icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--warn, #d97706)" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>,
+  },
+];
+
+interface Props {
+  variant?: "admin" | "employee";
+  /** Only used when variant="employee", to build the "My Profile" link. Omitted (no linked employee record yet) simply drops that one action. */
+  myEmployeeId?: string | null;
+}
+
+export function QuickActionsPanel({ variant = "admin", myEmployeeId }: Props = {}) {
+  const actions: QuickAction[] = variant === "employee"
+    ? [
+        ...EMPLOYEE_ACTIONS,
+        ...(myEmployeeId ? [{
+          label: "My Profile",
+          desc: "View my employee record",
+          href: `/hr/employees/${myEmployeeId}`,
+          iconColor: "var(--bg, #f1f5f9)",
+          icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--mut, #64748b)" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg>,
+        }] : []),
+      ]
+    : ACTIONS;
+
   return (
     <div className="qa-panel">
       <div className="qa-head">
@@ -52,8 +99,8 @@ export function QuickActionsPanel() {
         </span>
       </div>
       <div className="qa-grid">
-        {ACTIONS.map((a) => (
-          <Link key={a.href} href={a.href} className="qa-btn">
+        {actions.map((a) => (
+          <Link key={a.label} href={a.href} className="qa-btn">
             <div className="qa-icon" style={{ background: a.iconColor }}>{a.icon}</div>
             <div>
               <div className="qa-label">{a.label}</div>
