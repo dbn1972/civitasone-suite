@@ -53,6 +53,52 @@ async function mustEmployee(tenantId: string, id: string) {
   return emp;
 }
 
+/**
+ * Per-case ownership guard for the mutating routes below (audit finding:
+ * "the named inquiry officer field is captured on a disciplinary case but
+ * never enforced -- any user with a disciplinary-adjacent role can act on
+ * ANY case, not just ones they're assigned to").
+ *
+ * Unlike apar/routes.ts's `assertStageOwner` or medical/routes.ts's
+ * `resolveSelfScopedEmployeeId` -- whose "who may act" fields are
+ * hrms_employees.id, resolved through resolveEmployeeForActor (userRef =
+ * actorId) -- this table's equivalent fields live in the OTHER identity
+ * convention this codebase uses: the raw actor id (JWT `sub` / ctx.actorId),
+ * never an hrms_employees row. This was traced from the real write path, not
+ * assumed:
+ *  - created_by / updated_by are PROVEN actor-id-space: f3-consumer.ts's
+ *    disciplinary_routes__0 / disciplinary_routes__1 handlers persist
+ *    `actorId` / `msg.actorId` verbatim (this file's own `transition()`
+ *    forwards its caller's `ctx.actorId` as that `actorId`), and neither
+ *    those handlers nor this module ever call resolveEmployeeForActor.
+ *  - inquiry_officer_id has no DB-level FK to hrms_employees at all --
+ *    migration 0038_fk_indexes_followup.sql adds only a covering index for
+ *    it, generically commented "FK-style lookup column" (never a REFERENCES
+ *    clause) -- and it is populated straight from a client-supplied uuid in
+ *    the POST .../inquiry body (optional, alongside a free-text
+ *    inquiry_officer_name), sitting on the same row as created_by/updated_by,
+ *    not a second convention.
+ * So ownership here is a direct ctx.actorId comparison; resolveEmployeeForActor
+ * would compare against the wrong id space entirely (and silently deny
+ * everyone, since hrms_employees.id values never equal a JWT actor id).
+ *
+ * Deliberately only the two clauses the finding names -- the assigned inquiry
+ * officer, or the case's own creator -- with no hr_admin/super_admin blanket
+ * override: that would reintroduce a narrower version of the exact bug being
+ * fixed. created_by/updated_by always record the true ctx.actorId regardless
+ * (see transition() below and f3-consumer.ts), so this is a closed allow-list,
+ * not a silent bypass; if an operational override is ever needed it should be
+ * its own explicit, separately-reviewed addition (mirroring APAR's audited
+ * super_admin override), not silently folded in here.
+ */
+function assertCaseOwner(ctx: RequestContext, c: DisciplinaryCaseRow): void {
+  const isCreator = ctx.actorId === c.createdBy;
+  const isInquiryOfficer = c.inquiryOfficerId !== null && ctx.actorId === c.inquiryOfficerId;
+  if (isCreator || isInquiryOfficer) return;
+  throw new HttpError(403, "NOT_CASE_OWNER",
+    "actor is neither the case's assigned inquiry officer nor its creator");
+}
+
 export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
   async function mustCase(tenantId: string, caseId: string): Promise<DisciplinaryCaseRow> {
     const c = await repo.findCase(tenantId, caseId);
@@ -69,6 +115,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const check = canTransition(
       c.status as CaseStatus, action, c.proceedingType as "minor" | "major");
     if (!check.ok || !check.to) throw new HttpError(409, "WRONG_STATE", check.reason ?? "invalid transition");
+    assertCaseOwner(ctx, c);
     const to: CaseStatus = check.to;
     await publishF3Write(ctx, "disciplinary_routes__0", randomUUID(), {
       body: (req.body as Record<string, unknown>) ?? {},
@@ -226,6 +273,7 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const check = canTransition(
       c.status as CaseStatus, "submit_for_approval", c.proceedingType as "minor" | "major");
     if (!check.ok) throw new HttpError(409, "WRONG_STATE", check.reason ?? "invalid transition");
+    assertCaseOwner(ctx, c);
     const accepted = await commands.submitDisciplinaryForApproval(ctx, id, {
       penaltyType: body.penaltyType, penaltyClass: pclass, penaltyDate: body.penaltyDate,
       ...(body.penaltyDetail ? { penaltyDetail: body.penaltyDetail } : {}),

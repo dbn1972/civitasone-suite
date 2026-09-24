@@ -273,20 +273,67 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: rows });
   });
 
+  /**
+   * IDOR fix (audit): "same flat-role, no-ownership pattern as disciplinary,
+   * on a different table" -- ALL_ROLES (which includes bare "employee") could
+   * complete a step on ANY onboarding instance by guessing/enumerating its
+   * uuid; nothing compared the instance's own employee_id to the caller.
+   * Mirrors this file's OWN established precedent (resolveOwnEmployeeIdIfBareEmployee
+   * above): HR + manager stay privileged/tenant-wide (this module has no
+   * "manager scoped to direct reports" precedent of its own), a bare
+   * "employee" caller must be the instance's own employee (resolved via
+   * resolveEmployeeForActor -- NOT ctx.actorId, a different id space), and an
+   * unresolvable/mismatched actor gets 404 (not 403) so the check does not
+   * leak whether a given instance id exists, the same single-record-lookup
+   * rationale apar/routes.ts's assertReadable documents.
+   *
+   * GUC fix (found while making the ownership check above reachable at all):
+   * employee.onboarding_instances has FORCE ROW LEVEL SECURITY
+   * (0123_rls_completeness.sql), but sqlPool.query() never sets app.tenant_id
+   * -- shared/db.ts's sqlPool is a bare wrapper over sqlClient.unsafe(); only
+   * the Drizzle `db` export goes through wrapWithTenantGuc. Verified directly
+   * against a real Postgres instance: an INSERT/SELECT through sqlPool.query
+   * on a FORCE RLS table is rejected/returns zero rows for every caller,
+   * privileged or not, regardless of whether the target row exists -- this
+   * route (as it stood) could not have completed a step for ANYONE, so the
+   * ownership check just added could never have been exercised. Wrapped in
+   * sqlClient.begin() + set_config() -- the same fix already applied to the
+   * staffing-plan route below (see its own comment on why set_config(), not
+   * `SET`, is required with a bind parameter). The sibling onboarding routes
+   * (POST .../onboarding/templates, GET .../onboarding/active) have this same
+   * gap and are consequently also non-functional today; left alone here as
+   * out of scope for this ownership-focused fix.
+   */
   app.post("/v1/hrms/onboarding/:id/steps/:stepIdx/complete", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const { id, stepIdx } = z.object({ id: z.string().uuid(), stepIdx: z.coerce.number().int().min(0) }).parse(req.params);
-    // Mark step complete in the JSONB steps array
-    const { rows } = await sqlPool.query<{ steps: Array<Record<string, unknown>> }>(`SELECT steps FROM employee.onboarding_instances WHERE id = $1 AND tenant_id = $2`, [id, ctx.tenantId]);
-    if (!rows[0]) throw new HttpError(404, "NOT_FOUND", "onboarding instance not found");
-    const steps = rows[0].steps;
-    if (stepIdx >= steps.length) throw new HttpError(400, "INVALID_STEP", "step index out of range");
-    steps[stepIdx] = { ...steps[stepIdx], completed: true, completedAt: new Date().toISOString() };
-    const completedCount = steps.filter((s: Record<string, unknown>) => s.completed).length;
-    const pct = Math.round((completedCount / steps.length) * 100);
-    const status = pct === 100 ? "completed" : "active";
-    await sqlPool.query(`UPDATE employee.onboarding_instances SET steps = $1, completion_pct = $2, status = $3 WHERE id = $4 AND tenant_id = $5`, [JSON.stringify(steps), pct, status, id, ctx.tenantId]);
-    return reply.send({ data: { id, stepIdx, completionPct: pct, status } });
+    const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+    const actorEmp = isPrivileged
+      ? null
+      : await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+    const outcome = await sqlClient.begin(async (sql) => {
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      const rows = (await sql.unsafe(
+        `SELECT steps, employee_id FROM employee.onboarding_instances WHERE id = $1 AND tenant_id = $2`,
+        [id, ctx.tenantId],
+      )) as unknown as Array<{ steps: Array<Record<string, unknown>>; employee_id: string }>;
+      const row = rows[0];
+      if (!row) return null;
+      if (!isPrivileged && (!actorEmp || actorEmp.id !== row.employee_id)) return null;
+      const steps = row.steps;
+      if (stepIdx >= steps.length) throw new HttpError(400, "INVALID_STEP", "step index out of range");
+      steps[stepIdx] = { ...steps[stepIdx], completed: true, completedAt: new Date().toISOString() };
+      const completedCount = steps.filter((s: Record<string, unknown>) => s.completed).length;
+      const pct = Math.round((completedCount / steps.length) * 100);
+      const status = pct === 100 ? "completed" : "active";
+      await sql.unsafe(
+        `UPDATE employee.onboarding_instances SET steps = $1, completion_pct = $2, status = $3 WHERE id = $4 AND tenant_id = $5`,
+        [JSON.stringify(steps), pct, status, id, ctx.tenantId],
+      );
+      return { stepIdx, completionPct: pct, status };
+    });
+    if (!outcome) throw new HttpError(404, "NOT_FOUND", "onboarding instance not found");
+    return reply.send({ data: { id, ...outcome } });
   });
 
   // ─── Gap 7: 360° Feedback ─────────────────────────────────────────────────
