@@ -19,6 +19,7 @@ import {
   type VrsExemptionResult,
 } from "../tax/exemptions.js";
 import { computeTax, stdDeduction, type Regime } from "../tax/engine.js";
+import { DEFAULT_STATUTORY_CONFIG, type StatutoryConfig } from "../payroll/domain.js";
 
 export interface FnfInput {
   employeeId: string;
@@ -53,10 +54,19 @@ export interface FnfInput {
   taxRegime: Regime;
   salaryYtdMinor: bigint;          // total salary already paid this FY
   tdsYtdMinor: bigint;             // total TDS already deducted this FY
-  deductions80cMinor: bigint;       // Ch VI-A deductions declared
-  deductions80dMinor: bigint;
-  otherDeductionsMinor: bigint;
+  deductions80cMinor: bigint;       // Ch VI-A deductions declared (capped at statutoryConfig.sec80cCapMinor)
+  deductions80dMinor: bigint;       // capped at statutoryConfig.sec80dCapMinor
+  otherDeductionsMinor: bigint;     // no statutory cap — matches the monthly payroll engine
   fyStartYear: number;
+  /**
+   * Statutory Chapter VI-A caps (Sec 80C, Sec 80D). Optional — defaults to
+   * DEFAULT_STATUTORY_CONFIG, exactly mirroring SlipInput.statutoryConfig in
+   * payroll/domain.ts, so every existing/omitting caller (fnf/consumer.ts,
+   * all current tests) keeps working: the only behaviour change is that
+   * declared amounts above the default cap are now clipped instead of
+   * silently passing through uncapped.
+   */
+  statutoryConfig?: StatutoryConfig;
   // Exemption ceilings (loaded from DB)
   gratuityCeilingMinor: bigint;
   leaveEncashCeilingMinor: bigint;
@@ -169,8 +179,17 @@ export function computeFnfSettlement(input: FnfInput): FnfResult {
   const totalSalaryIncomeMinor = input.salaryYtdMinor + totalTaxableOnSeparationMinor;
   // DOM-008 (completing #1117): resolved for this employee's own tenant.
   const stdDed = BigInt(stdDeduction(input.taxRegime, input.fyStartYear, input.tenantId)) * 100n; // convert rupees to paise
+  // Chapter VI-A deductions are statutorily capped (Sec 80C, Sec 80D), exactly
+  // as the monthly payroll engine caps them (payroll/domain.ts computeSlip,
+  // d80c/d80d against statutoryConfig.sec80cCapMinor/sec80dCapMinor). F&F used
+  // to sum the raw declared amounts uncapped here, silently under-withholding
+  // TDS on separation. otherDeductionsMinor has no statutory cap in the
+  // monthly engine either, so it is intentionally left uncapped below.
+  const statutoryConfig = input.statutoryConfig ?? DEFAULT_STATUTORY_CONFIG;
+  const cappedD80c = input.deductions80cMinor > statutoryConfig.sec80cCapMinor ? statutoryConfig.sec80cCapMinor : input.deductions80cMinor;
+  const cappedD80d = input.deductions80dMinor > statutoryConfig.sec80dCapMinor ? statutoryConfig.sec80dCapMinor : input.deductions80dMinor;
   const chapterViA = input.taxRegime === "old"
-    ? input.deductions80cMinor + input.deductions80dMinor + input.otherDeductionsMinor
+    ? cappedD80c + cappedD80d + input.otherDeductionsMinor
     : 0n; // New regime: no Ch VI-A deductions
 
   let annualTaxableMinor = totalSalaryIncomeMinor - stdDed - chapterViA;

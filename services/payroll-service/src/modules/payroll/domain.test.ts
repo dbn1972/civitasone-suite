@@ -16,6 +16,7 @@ import {
   computePension,
   computeGratuity,
   additionalPensionPct,
+  hraSlabPct,
   DomainError,
   roundRupee,
   DEFAULT_STATUTORY_CONFIG,
@@ -446,5 +447,43 @@ describe("DOM-008 — effective-dated resolution (resolveStatutoryConfig)", () =
   it("falls back to the literal DEFAULT_STATUTORY_CONFIG when no row matches at all", () => {
     const cfg = resolveStatutoryConfig([], "tenant-z", "2025-06");
     expect(cfg).toEqual(DEFAULT_STATUTORY_CONFIG);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// hraSlabPct — DA threshold boundaries
+// ---------------------------------------------------------------------------
+// Real 7th CPC rule (Dept. of Expenditure OM No. 2/5/2017-E.II(B), 7 July
+// 2017): HRA steps from the base slab (24/16/8%) to the middle slab
+// (27/18/9%) when DA crosses 25%, and to the top slab (30/20/10%) when DA
+// crosses 50% — NOT at 50%/100%. Boundary-exact, not just "some value below
+// /above", to catch an off-by-one on the >= comparisons.
+describe("hraSlabPct — DA threshold boundaries (steps at 25% / 50%)", () => {
+  it("DA just below 25% (2400 bps) stays in tier 0 (24% for X-class)", () => {
+    expect(hraSlabPct("X", 2400n)).toBe(24n);
+  });
+
+  it("DA exactly at 25% (2500 bps) steps up to tier 1 (27% for X-class)", () => {
+    expect(hraSlabPct("X", 2500n)).toBe(27n);
+  });
+
+  it("DA just below 50% (4900 bps) stays in tier 1 (27% for X-class)", () => {
+    expect(hraSlabPct("X", 4900n)).toBe(27n);
+  });
+
+  it("DA exactly at 50% (5000 bps) steps up to tier 2 (30% for X-class)", () => {
+    expect(hraSlabPct("X", 5000n)).toBe(30n);
+  });
+
+  it("the same boundaries hold for the Y-class and Z-class tables", () => {
+    expect(hraSlabPct("Y", 2400n)).toBe(16n);
+    expect(hraSlabPct("Y", 2500n)).toBe(18n);
+    expect(hraSlabPct("Y", 4900n)).toBe(18n);
+    expect(hraSlabPct("Y", 5000n)).toBe(20n);
+
+    expect(hraSlabPct("Z", 2400n)).toBe(8n);
+    expect(hraSlabPct("Z", 2500n)).toBe(9n);
+    expect(hraSlabPct("Z", 4900n)).toBe(9n);
+    expect(hraSlabPct("Z", 5000n)).toBe(10n);
   });
 });

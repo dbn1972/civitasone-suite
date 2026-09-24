@@ -328,3 +328,93 @@ describe("computeFnfSettlement — Conservation: exempt + taxable = gross", () =
       .toBe(result.totalGrossMinor);
   });
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Chapter VI-A deduction caps (Sec 80C / Sec 80D) — F&F must cap the same way
+// the monthly payroll engine does (payroll/domain.ts computeSlip, d80c/d80d
+// against statutoryConfig.sec80cCapMinor/sec80dCapMinor). Previously summed
+// the raw declared amounts uncapped, silently under-withholding TDS.
+//
+// All scenarios below zero out every separation-gross field (via
+// baseFnfInput's own defaults) so totalTaxableOnSeparationMinor is always 0
+// and totalSalaryIncomeMinor == salaryYtdMinor — that keeps the arithmetic
+// fully predictable: annualTaxableMinor = salaryYtdMinor − stdDed − chapterViA.
+// stdDeduction values below are the fixed FY2024 test fixtures registered in
+// tests/setup-tax-config.ts (OLD.stdDeduction = 50_000; the FY2024 "new"
+// entry's stdDeduction = 75_000) — not guessed.
+// ══════════════════════════════════════════════════════════════════════════════
+describe("computeFnfSettlement — Chapter VI-A deduction caps (Sec 80C / Sec 80D)", () => {
+  const SALARY_YTD_MINOR = 200_000_000n; // ₹20,00,000 — comfortably above stdDed + any chapterViA, so the annualTaxableMinor floor-at-0 clamp never triggers below
+  const STD_DED_OLD_2024_MINOR = 5_000_000n; // ₹50,000
+
+  it("80C=₹3,00,000 and 80D=₹1,00,000 (old regime) are capped to ₹2,25,000, not summed raw to ₹4,00,000", () => {
+    const overCap = computeFnfSettlement(baseFnfInput({
+      taxRegime: "old",
+      fyStartYear: 2024,
+      salaryYtdMinor: SALARY_YTD_MINOR,
+      deductions80cMinor: 30_000_000n, // ₹3,00,000 declared — 2x the ₹1,50,000 cap
+      deductions80dMinor: 10_000_000n, // ₹1,00,000 declared — above the ₹75,000 cap
+      otherDeductionsMinor: 0n,
+    }));
+
+    // Expected chapterViA is the CAPPED total (₹1,50,000 + ₹75,000 = ₹2,25,000
+    // = 22_500_000n paise), not the raw declared ₹4,00,000 (40_000_000n).
+    const expectedAnnualTaxableMinor = SALARY_YTD_MINOR - STD_DED_OLD_2024_MINOR - 22_500_000n;
+    expect(overCap.annualTaxableMinor).toBe(expectedAnnualTaxableMinor); // 172_500_000n
+
+    // Cross-check: declaring exactly at the cap must produce an IDENTICAL
+    // result — proving the excess above the cap contributed nothing. On the
+    // old (uncapped) code this would differ by the uncapped excess
+    // (₹1,75,000 = 17_500_000n paise), so this fails pre-fix and passes post-fix.
+    const atCap = computeFnfSettlement(baseFnfInput({
+      taxRegime: "old",
+      fyStartYear: 2024,
+      salaryYtdMinor: SALARY_YTD_MINOR,
+      deductions80cMinor: 15_000_000n, // ₹1,50,000 — exactly the Sec 80C cap
+      deductions80dMinor: 7_500_000n,  // ₹75,000 — exactly the Sec 80D cap
+      otherDeductionsMinor: 0n,
+    }));
+    expect(overCap.annualTaxableMinor).toBe(atCap.annualTaxableMinor);
+  });
+
+  it("declarations below the caps pass through unclipped", () => {
+    const underCap = computeFnfSettlement(baseFnfInput({
+      taxRegime: "old",
+      fyStartYear: 2024,
+      salaryYtdMinor: SALARY_YTD_MINOR,
+      deductions80cMinor: 5_000_000n, // ₹50,000 — well under the ₹1,50,000 cap
+      deductions80dMinor: 2_500_000n, // ₹25,000 — well under the ₹75,000 cap
+      otherDeductionsMinor: 0n,
+    }));
+    // chapterViA = ₹75,000 (7_500_000n), fully unclipped since both are under cap.
+    const expectedAnnualTaxableMinor = SALARY_YTD_MINOR - STD_DED_OLD_2024_MINOR - 7_500_000n;
+    expect(underCap.annualTaxableMinor).toBe(expectedAnnualTaxableMinor); // 187_500_000n
+  });
+
+  it("otherDeductionsMinor has no statutory cap, matching the monthly payroll engine", () => {
+    const result = computeFnfSettlement(baseFnfInput({
+      taxRegime: "old",
+      fyStartYear: 2024,
+      salaryYtdMinor: SALARY_YTD_MINOR,
+      deductions80cMinor: 0n,
+      deductions80dMinor: 0n,
+      otherDeductionsMinor: 50_000_000n, // ₹5,00,000 — large, no Sec 80C/80D-style ceiling applies to this field
+    }));
+    const expectedAnnualTaxableMinor = SALARY_YTD_MINOR - STD_DED_OLD_2024_MINOR - 50_000_000n;
+    expect(result.annualTaxableMinor).toBe(expectedAnnualTaxableMinor); // 145_000_000n
+  });
+
+  it("new regime ignores all Chapter VI-A deductions regardless of amount (unchanged behaviour)", () => {
+    const result = computeFnfSettlement(baseFnfInput({
+      taxRegime: "new",
+      fyStartYear: 2024,
+      salaryYtdMinor: SALARY_YTD_MINOR,
+      deductions80cMinor: 30_000_000n,
+      deductions80dMinor: 10_000_000n,
+      otherDeductionsMinor: 10_000_000n,
+    }));
+    const STD_DED_NEW_2024_MINOR = 7_500_000n; // ₹75,000 (FY2024 "new" regime fixture)
+    const expectedAnnualTaxableMinor = SALARY_YTD_MINOR - STD_DED_NEW_2024_MINOR;
+    expect(result.annualTaxableMinor).toBe(expectedAnnualTaxableMinor); // 192_500_000n
+  });
+});

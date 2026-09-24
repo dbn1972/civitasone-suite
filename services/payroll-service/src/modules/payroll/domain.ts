@@ -227,9 +227,9 @@ function pct(base: bigint, percent: bigint): bigint {
   return roundRupee((base * percent) / 100n);
 }
 
-/** 7th CPC HRA slab % by city class, escalating with DA threshold (50% / 100%). */
+/** 7th CPC HRA slab % by city class, escalating with DA threshold (25% / 50%). */
 export function hraSlabPct(cityClass: CityClass, daRateBps: bigint): bigint {
-  const tier = daRateBps >= 10000n ? 2 : daRateBps >= 5000n ? 1 : 0; // DA>=100% / >=50%
+  const tier = daRateBps >= 5000n ? 2 : daRateBps >= 2500n ? 1 : 0; // DA>=50% / >=25%
   const table: Record<CityClass, [bigint, bigint, bigint]> = {
     X: [24n, 27n, 30n],
     Y: [16n, 18n, 20n],
