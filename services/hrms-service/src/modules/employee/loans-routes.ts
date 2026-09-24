@@ -154,6 +154,19 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const loan = (await scopedRead((tx) => tx.select().from(hrmsLoans).where(and(eq(hrmsLoans.id, id), eq(hrmsLoans.tenantId, ctx.tenantId)))))[0];
     if (!loan) return reply.code(404).send({ code: "NOT_FOUND", message: "loan not found" });
+    // Status-guard fix: recording an EMI payment against a loan that is no
+    // longer "active" (already fully repaid -- "completed" -- or any other
+    // terminal status) used to succeed with no check at all: the async
+    // consumer (loans-consumer.ts) would keep decrementing an
+    // already-zeroed outstandingMinor and bumping emisPaid past totalEmis
+    // on every stray/duplicate payroll-deduction retry. Synchronous
+    // pre-check mirroring attendance/routes.ts's regularisation and
+    // overtime approve/reject guards: fail fast with a clear 409 instead of
+    // a false 202 that the consumer's own status-guarded UPDATE would then
+    // silently no-op.
+    if (loan.status !== "active") {
+      throw new HttpError(409, "LOAN_NOT_ACTIVE", `cannot record an EMI payment against loan ${id}: status is "${loan.status}", not "active"`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await loanCommands.recordEmiPaid(ctx, id));
   });
 

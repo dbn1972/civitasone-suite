@@ -37,7 +37,15 @@ export default async function OvertimePage() {
   ];
   const result = await getOvertimeRequests();
   const requests = result.data;
-
+  // Fabricated-data fix: this was the only one of the attendance-adjacent
+  // self-service pages whose stat cards weren't gated on fetch failure --
+  // requests defaults to [] on error (see getOvertimeRequests' fetchJson
+  // fallback), so every stat below silently rendered as a genuine "0"
+  // instead of the honest "we don't know" the sibling pages already show
+  // (work-summary/page.tsx, travel/page.tsx, advances/page.tsx, loans/page.tsx,
+  // expenses/page.tsx all gate the same way). StatCard's own displayValue
+  // renders null as "—", so this is a value-level guard, not a new render path.
+  const errored = result.source === "error";
   const pending = requests.filter((r) => r.status === "pending").length;
   const approved = requests.filter((r) => r.status === "approved").length;
   const totalHrs = requests.reduce((s, r) => s + (parseFloat(String(r.hoursRequested)) || 0), 0);
@@ -54,13 +62,13 @@ export default async function OvertimePage() {
       />
       <DataSourceBadge source={result.source} />
       <StatGrid>
-<StatCard icon="⏱️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={requests.length} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={pending} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={approved} />
-        <StatCard icon="🕐" iconBg="var(--bg, #f5f5f5)" label={t("statHours")} value={`${totalHrs.toFixed(1)} h`} />
+<StatCard icon="⏱️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : requests.length} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={errored ? null : approved} />
+        <StatCard icon="🕐" iconBg="var(--bg, #f5f5f5)" label={t("statHours")} value={errored ? null : `${totalHrs.toFixed(1)} h`} />
       </StatGrid>
       <Card title={t("cardTitle")}>
-        {result.source === "error" ? (
+        {errored ? (
           <RefreshErrorState error={toHumanError("load", { area: "overtime requests" })} backHref="/hr" />
         ) : requests.length === 0 ? (
           <EmptyState

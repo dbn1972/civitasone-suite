@@ -1,9 +1,12 @@
 import type { Queue } from "@civitasone/queue";
+import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { pgSchema, uuid, varchar, integer, bigint, timestamp, text, date } from "drizzle-orm/pg-core";
+
+const log = pino({ name: "hrms-loans-consumer" });
 
 const employeeSchema = pgSchema("employee");
 const hrmsLoans = employeeSchema.table("hrms_loans", {
@@ -70,10 +73,30 @@ export function registerLoanConsumers(q: Queue): void {
       const newOutstanding = loan.outstandingMinor - loan.emiMinor;
       const newPaid = loan.emisPaid + 1;
       const newStatus = newOutstanding <= 0n ? "completed" : "active";
-      await tx.update(hrmsLoans).set({
+      // Status-guard fix: this UPDATE's WHERE clause used to check only
+      // `id` (not even tenantId) -- a payment could be recorded against a
+      // loan in ANY status, including one already "completed" (fully
+      // repaid), which would keep decrementing outstandingMinor below zero
+      // and bumping emisPaid past totalEmis on a stray/duplicate
+      // payroll-deduction retry. Mirror attendance/repo.ts's
+      // updateRegularisationStatus / updateOvertimeStatus: re-check
+      // `status='active'` atomically as part of the UPDATE's own WHERE
+      // clause (a separate read-then-write would still race), restore
+      // tenantId to the WHERE clause to match every other guarded update in
+      // this codebase, and treat zero rows affected as a benign
+      // already-closed race -- log and skip rather than throw, matching
+      // this service's sibling f3 consumers (attendance/f3-consumer.ts).
+      const updated = await tx.update(hrmsLoans).set({
         outstandingMinor: newOutstanding < 0n ? 0n : newOutstanding,
         emisPaid: newPaid, status: newStatus,
-      }).where(eq(hrmsLoans.id, p.id));
+      }).where(and(
+        eq(hrmsLoans.id, p.id),
+        eq(hrmsLoans.tenantId, p.tenantId),
+        eq(hrmsLoans.status, "active"),
+      )).returning({ id: hrmsLoans.id });
+      if (!updated[0]) {
+        log.warn({ loanId: p.id, messageId: msg.messageId }, "loan already closed/not active before async EMI payment");
+      }
     });
   });
   q.subscribe(COMMANDS.salaryAdvanceCreate, async (msg) => {

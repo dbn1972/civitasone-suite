@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
-import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -44,8 +43,10 @@ const log = pino({ name: "hrms-f3-attendance" });
  * it can reply 202 with it.
  *
  * `attendance_routes__3`/`__4` (overtime approve/reject) restore the
- * conditional update; the route now pre-checks existence itself, so a
- * missing row here (again, only a race) is logged and skipped.
+ * conditional update; the route now pre-checks existence AND status itself
+ * (status-integrity fix — see routes.ts and repo.updateOvertimeStatus), so a
+ * missing-or-already-decided row here (again, only a race) is logged and
+ * skipped rather than thrown.
  */
 export function registerF3_attendance_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
@@ -146,25 +147,27 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
           }
           case "attendance_routes__3": {
             const otId = (params.id as string) || id;
-            const [updated] = await tx.update(hrmsOvertimeRequests)
-              .set({ status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
-                     updatedBy: msg.actorId, updatedAt: new Date() })
-              .where(and(eq(hrmsOvertimeRequests.id, otId), eq(hrmsOvertimeRequests.tenantId, p.tenantId)))
-              .returning({ id: hrmsOvertimeRequests.id });
+            // Status-guard fix: this used to be a blind UPDATE keyed only on
+            // id+tenantId, so an already-decided request (approved or
+            // rejected) could be silently re-approved with no error --
+            // illegal state reversal. repo.updateOvertimeStatus adds the
+            // same WHERE status='pending' guard used by
+            // updateRegularisationStatus above; the route now also
+            // pre-checks status itself (see routes.ts), so a null result
+            // here is only reachable under a race and is logged and skipped
+            // rather than thrown, matching that established convention.
+            const updated = await repo.updateOvertimeStatus(tx, p.tenantId, otId, "approved", msg.actorId);
             if (!updated) {
-              log.warn({ op, otId, messageId: msg.messageId }, "overtime request missing before async approve");
+              log.warn({ op, otId, messageId: msg.messageId }, "overtime request missing or already decided before async approve");
             }
             break;
           }
           case "attendance_routes__4": {
             const otId = (params.id as string) || id;
-            const [updated] = await tx.update(hrmsOvertimeRequests)
-              .set({ status: "rejected", rejectionReason: body.reason ?? null,
-                     updatedBy: msg.actorId, updatedAt: new Date() })
-              .where(and(eq(hrmsOvertimeRequests.id, otId), eq(hrmsOvertimeRequests.tenantId, p.tenantId)))
-              .returning({ id: hrmsOvertimeRequests.id });
+            // Status-guard fix — same reasoning as attendance_routes__3 above.
+            const updated = await repo.updateOvertimeStatus(tx, p.tenantId, otId, "rejected", msg.actorId, body.reason ?? null);
             if (!updated) {
-              log.warn({ op, otId, messageId: msg.messageId }, "overtime request missing before async reject");
+              log.warn({ op, otId, messageId: msg.messageId }, "overtime request missing or already decided before async reject");
             }
             break;
           }
