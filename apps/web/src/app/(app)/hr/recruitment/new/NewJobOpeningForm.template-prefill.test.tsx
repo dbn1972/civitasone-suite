@@ -43,6 +43,13 @@ function mockFetchForTemplateFlow() {
     if (url === "/api/proxy/v1/hrms/job-openings" && init?.method === "POST") {
       return { ok: true, status: 202, text: async () => "{}" } as Response;
     }
+    // MEDIUM finding: the form now fetches the department list on mount, to
+    // populate the friendly dropdown. Not the focus of this file's tests, so
+    // an empty list here (falls back to the same raw-UUID input these tests
+    // already fill in).
+    if (url === "/api/proxy/v1/hrms/departments?limit=200") {
+      return { ok: true, status: 200, json: async () => ({ data: [] }) } as Response;
+    }
     throw new Error(`unexpected fetch: ${url}`);
   });
   vi.stubGlobal("fetch", fn);
@@ -77,7 +84,7 @@ describe("NewJobOpeningForm — template pre-fill (MEDIUM finding)", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/reference no/i), { target: { value: "JOB-2027-0099" } });
-    fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "3f2504e0-4f89-41d3-9a0c-0305e82c3301" } });
+    fireEvent.change(screen.getByLabelText(/department/i), { target: { value: "3f2504e0-4f89-41d3-9a0c-0305e82c3301" } });
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
 
     await waitFor(() => {

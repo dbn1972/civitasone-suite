@@ -23,7 +23,12 @@ function renderForm() {
 function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/reference no/i), { target: { value: "JOB-2026-0001" } });
   fireEvent.change(screen.getByLabelText(/^title/i), { target: { value: "Junior Engineer" } });
-  fireEvent.change(screen.getByLabelText(/department id/i), {
+  // MEDIUM finding: the raw "Department ID (UUID)" text box is now a
+  // friendly "Department" dropdown (falling back to the same raw-UUID input,
+  // still matched here, when the departments list hasn't loaded -- exactly
+  // the case in these tests, since the shared bare `fetch` mock below never
+  // resolves a real department list).
+  fireEvent.change(screen.getByLabelText(/department/i), {
     target: { value: "3f2504e0-4f89-41d3-9a0c-0305e82c3301" },
   });
 }
@@ -90,7 +95,11 @@ describe("NewJobOpeningForm", () => {
     renderForm();
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
     expect(screen.getByText(/reference no is required/i)).toBeInTheDocument();
-    expect(fetch).not.toHaveBeenCalled();
+    // MEDIUM finding: the form now fetches the department list on mount (to
+    // populate the new dropdown), so `fetch` itself is no longer called
+    // zero times overall -- what must still hold is that the SUBMIT
+    // endpoint specifically is never reached when client validation blocks.
+    expect(fetch).not.toHaveBeenCalledWith("/api/proxy/v1/hrms/job-openings", expect.anything());
   });
 
   it("surfaces a real server error instead of a false success", async () => {

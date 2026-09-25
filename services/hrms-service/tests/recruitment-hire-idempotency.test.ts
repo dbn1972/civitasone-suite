@@ -71,8 +71,16 @@ describe("BUG-3: hireApplication derives a deterministic employeeId/messageId", 
     expect(a.id).not.toBe(b.id);
   });
 
-  it("the derived id is a syntactically valid v5 UUID (envelope/employee-id columns are typed uuid)", async () => {
+  it("the derived id is a syntactically valid UUID (envelope/employee-id columns are typed uuid)", async () => {
+    // MEDIUM finding follow-up: hireApplication now derives this via
+    // idempotentId() (@civitasone/auth, tenant-scoped since PR #1565)
+    // instead of the ad hoc uuidV5() helper -- see this function's own doc
+    // comment. idempotentId() slices a SHA-256 digest directly into
+    // UUID-shaped groups without forcing an RFC 4122 version/variant
+    // nibble, so this no longer asserts specifically "version 5" (it isn't
+    // one any more) -- only what actually matters for a `uuid`-typed
+    // column: the hex-and-hyphen shape.
     const result = await hireApplication(ctx(), randomUUID(), body);
-    expect(result.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(result.id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   });
 });

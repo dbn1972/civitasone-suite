@@ -3839,6 +3839,7 @@
     "dateOfJoining": "Date of Joining",
     "basicPay": "Basic Pay (₹)",
     "basicPayPlaceholder": "in paise",
+    "basicPayRequired": "Basic Pay is required and must be greater than 0 (amount in paise).",
     "departmentId": "Department ID",
     "designationId": "Designation ID",
     "uuidPlaceholder": "UUID",
@@ -3952,7 +3953,8 @@
     "postsCount": "{count, plural, one {# post} other {# posts}}",
     "filledCount": "{count} filled",
     "prescribedPercentOfTotal": "Prescribed: {pct}% of total posts",
-    "footnote": "* Reservation percentages as per DoPT policy. Actual allocations subject to roaster maintenance and horizontal/vertical reservation rules."
+    "footnote": "* Reservation percentages as per DoPT policy. Actual allocations subject to roaster maintenance and horizontal/vertical reservation rules.",
+    "noCategoryData": "Reservation category has not been recorded for any application against this opening yet, so fill percentages cannot be shown."
   },
   "recruitmentInterviewCard": {
     "interview": "Interview",
@@ -3977,6 +3979,7 @@
     "titlePlaceholder": "e.g. Senior Software Engineer",
     "departmentIdUuid": "Department ID (UUID)",
     "departmentIdPlaceholder": "e.g. 3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+    "department": "Department",
     "vacancies": "Vacancies",
     "description": "Description",
     "descriptionPlaceholder": "Job responsibilities, requirements, and qualifications",
