@@ -4,6 +4,16 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErr
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+/**
+ * Mirrors hr/recruitment/new/page.tsx's RECRUITMENT_ADMIN_ROLES exactly
+ * (that page's own POST /v1/hrms/job-openings gate). GET is broader (that
+ * page's own comment: ALL_ROLES additionally includes "manager"), so this
+ * page itself stays visible to more roles than may create a vacancy --
+ * only the New Vacancy / Post First Job affordances are restricted here.
+ */
+const RECRUITMENT_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type DashboardStats = {
   totalOpenings: number;
@@ -46,6 +56,8 @@ async function getOpenings(): Promise<LoaderResult<Opening[]>> {
 
 export default async function RecruitmentPage() {
   const t = await getTranslations("recruitment");
+  const roles = getSessionRoles();
+  const canCreate = roles.some((r) => RECRUITMENT_ADMIN_ROLES.includes(r));
   const [{ data: stats, source: statsSource }, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
   const totalApps = stats.applicationsInternal + stats.applicationsPublic;
   // Either fetch failing is worth telling the clerk about -- the stat cards
@@ -80,7 +92,7 @@ export default async function RecruitmentPage() {
         actions={
           <>
             <Link href="/hr/recruitment/talent-pool" className="btn ghost">{t("talentPool")}</Link>
-            <Link href="/hr/recruitment/new" className="btn primary">{t("newVacancy")}</Link>
+            {canCreate && <Link href="/hr/recruitment/new" className="btn primary">{t("newVacancy")}</Link>}
           </>
         }
       />
@@ -101,7 +113,7 @@ export default async function RecruitmentPage() {
             icon="💼"
             title={t("emptyTitle")}
             message={t("emptyMessage")}
-            action={<Link href="/hr/recruitment/new" className="btn primary">{t("postFirstJob")}</Link>}
+            action={canCreate ? <Link href="/hr/recruitment/new" className="btn primary">{t("postFirstJob")}</Link> : undefined}
           />
         ) : (
           <DataTable<Opening>

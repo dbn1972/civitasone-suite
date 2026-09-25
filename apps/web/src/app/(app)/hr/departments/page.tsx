@@ -74,9 +74,11 @@ export default async function DepartmentsPage() {
         backLabel={t("backLabel")}
         help="hr"
         actions={
-          <Link href="/hr/departments/new" style={newBtnStyle}>
-            {t("newBtn")}
-          </Link>
+          canEdit ? (
+            <Link href="/hr/departments/new" style={newBtnStyle}>
+              {t("newBtn")}
+            </Link>
+          ) : undefined
         }
       />
 

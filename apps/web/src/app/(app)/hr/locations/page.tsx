@@ -4,6 +4,16 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+/**
+ * Mirrors hr/locations/new/page.tsx's LOCATION_ADMIN_ROLES exactly (that
+ * page's own POST /v1/locations gate, owned by location-service). Without
+ * this, a role that can view this list but isn't in the set saw a fully
+ * working "Add Location" button that led straight to that page's
+ * PermissionDenied wall.
+ */
+const LOCATION_ADMIN_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 type Location = {
   id: string;
@@ -68,6 +78,8 @@ function MapPin({ size = 14, color = "currentColor" }: { size?: number; color?: 
 export default async function LocationsPage() {
   const t = await getTranslations("locations");
   const { data: locations, source } = await getLocations();
+  const roles = getSessionRoles();
+  const canCreate = roles.some((r) => LOCATION_ADMIN_ROLES.includes(r));
 
   const errored = source === "error";
   const stateCount    = locations.filter((l) => l.type === "state").length;
@@ -83,9 +95,11 @@ export default async function LocationsPage() {
         backLabel={t("backLabel")}
         help="hr"
         actions={
-          <Link href="/hr/locations/new" style={newBtnStyle}>
-            {t("newBtn")}
-          </Link>
+          canCreate ? (
+            <Link href="/hr/locations/new" style={newBtnStyle}>
+              {t("newBtn")}
+            </Link>
+          ) : undefined
         }
       />
       <DataSourceBadge source={source} />

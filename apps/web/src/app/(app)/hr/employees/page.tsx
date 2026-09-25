@@ -3,8 +3,19 @@ import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
 import { getEmployees, getHRDashboard } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 const PAGE_SIZE = 50;
+
+/**
+ * Mirrors hr/employees/new/page.tsx's EMPLOYEE_ADMIN_ROLES exactly (that
+ * page's own POST /v1/hrms/employees gate). Without this, a role that can
+ * view this directory but isn't in the list (e.g. "manager") saw a fully
+ * working "Add Employee" button that led straight to that page's
+ * PermissionDenied wall -- same bug class as hr/departments/new's own doc
+ * comment already describes for that module.
+ */
+const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 function empPageHref(type: string, p: number): string {
   const qs: string[] = [];
@@ -22,9 +33,26 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   ]);
   const t = await getTranslations("employees");
   const employees = rawEmployees as EmpRow[];
+  const roles = getSessionRoles();
+  const canCreate = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
 
   const SERVING = new Set(["probation", "confirmed", "deputation"]);
-  const total = hrDashboard.headcount || employees.length;
+  // hrDashboard.headcount is a separately-scoped aggregate (see
+  // getHRDashboard/mapHRDashboard) that can disagree with the concrete rows
+  // this page actually fetched -- e.g. a first-time manager whose dashboard
+  // summary reports headcount:1 while their own direct-reports query (this
+  // page's `employees`) genuinely returns none yet. Trusting headcount
+  // unconditionally then showed "Total: 1" right next to EmployeesTable's
+  // own "no employees yet -- add your first one" empty state: same page,
+  // two disagreeing numbers. On page 0 (the only page where "empty" can't
+  // just mean "off the end of a longer list"), an empty `employees` is the
+  // more trustworthy signal for THIS viewer's scope, so the header/tabs/
+  // pagination total all fall back to 0 and agree with what's actually on
+  // screen. Beyond page 0, a legitimately out-of-range page must not zero
+  // out a real headcount -- same reasoning applies for hr_admin as manager,
+  // it just practically triggers only when a scoped query and the
+  // dashboard aggregate disagree, which is rarer tenant-wide.
+  const total = page === 0 && employees.length === 0 ? 0 : (hrDashboard.headcount || employees.length);
   // NOTE: `active`/`others` below still derive from the current page only (same
   // page-scoped-math class as the type-tabs bug this fix targets), because there is
   // no existing tenant-wide "serving" aggregate to source them from without adding a
@@ -62,7 +90,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         back="/hr" backLabel="Back to HR"
         help="hr"
         actions={
-          <Link href="/hr/employees/new" className="btn primary">{t("add")}</Link>
+          canCreate ? <Link href="/hr/employees/new" className="btn primary">{t("add")}</Link> : undefined
         }
       />
       {/* UX-012: the data-source badge now lives inside EmployeesTable, driven
@@ -94,7 +122,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         ))}
       </div>
       <Card title={t("cardTitle")}>
-        <EmployeesTable employees={filtered} source={source} />
+        <EmployeesTable employees={filtered} source={source} canCreate={canCreate} />
       </Card>
 
       {filteredTotal > PAGE_SIZE && (

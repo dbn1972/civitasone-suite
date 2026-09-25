@@ -62,9 +62,11 @@ export default async function DesignationsPage() {
         backLabel={t("backLabel")}
         help="hr"
         actions={
-          <Link href="/hr/designations/new" style={newBtnStyle}>
-            {t("newBtn")}
-          </Link>
+          canEdit ? (
+            <Link href="/hr/designations/new" style={newBtnStyle}>
+              {t("newBtn")}
+            </Link>
+          ) : undefined
         }
       />
       <StatGrid>

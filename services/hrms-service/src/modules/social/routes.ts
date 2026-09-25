@@ -90,6 +90,10 @@ const travelRequestSchema = z.object({
   mode: z.enum(["air", "rail", "road", "own_vehicle"]).optional(),
 });
 
+const birthdayWishSchema = z.object({
+  message: z.string().min(1).max(200).optional(),
+});
+
 const expenseClaimSchema = z.object({
   category: z.enum(["travel", "food", "accommodation", "transport", "medical", "stationery", "communication", "other"]),
   amount: z.number().int().min(1), // paise
@@ -410,11 +414,43 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
-  /** POST /v1/hrms/birthdays/:id/wish — send birthday wish */
+  /**
+   * POST /v1/hrms/birthdays/:id/wish — send birthday wish.
+   * Audit: this handler took `id` straight from the URL and `message`
+   * straight from the body with no Zod schema, no check that the target
+   * employee exists, and no tenant scoping at all — unlike every other
+   * write in this file. A caller could "wish" an arbitrary UUID, including
+   * one belonging to a different tenant; recipient/recipientId on the
+   * published event were never validated against anything. Fixed the same
+   * way the kudos handler above already validates its own receiverId:
+   * existence + tenant scope in one withTenantGuc-wrapped query (`WHERE
+   * id = $1 AND tenant_id = $2`), which is also what makes a cross-tenant
+   * id 404 instead of silently "succeeding". A self-wish guard mirrors this
+   * file's existing SELF_APPROVAL pattern (travel-requests/expenses above).
+   */
   app.post("/v1/hrms/birthdays/:id/wish", async (req, reply) => {
     const ctx = resolveContext(req);
     const { id } = req.params as { id: string };
-    const { message } = (req.body as any) ?? {};
+    const body = birthdayWishSchema.parse(req.body ?? {});
+
+    const { giverName } = await withTenantGuc(ctx.tenantId, async (pool) => {
+      const targetRow = await pool.query(
+        `SELECT id FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
+        [id, ctx.tenantId],
+      );
+      if (!targetRow.rows[0]) throw new HttpError(404, "RECEIVER_NOT_FOUND", "Employee not found");
+
+      const giverRow = await pool.query(
+        `SELECT id, full_name FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
+        [ctx.actorId, ctx.tenantId],
+      );
+      const giver = giverRow.rows[0];
+      if (giver?.id === id) {
+        throw new HttpError(400, "SELF_WISH", "Cannot send a birthday wish to yourself");
+      }
+
+      return { giverName: giver?.full_name ?? undefined };
+    });
 
     // Send push notification as birthday wish
     await queue.publish("notification.send", {
@@ -431,7 +467,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         recipientId: id,
         channel: "push",
         eventType: "hrms.birthday.wish",
-        variables: { message: message ?? "Happy Birthday! 🎂" },
+        variables: { message: body.message ?? "Happy Birthday! 🎂", ...(giverName ? { giverName } : {}) },
       },
     });
 
