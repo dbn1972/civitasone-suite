@@ -31,7 +31,11 @@ export default function DesignerReviewPage() {
 
   useEffect(() => {
     if (!wizard.def?.serviceKey) return;
-    void fetchPublishedByKey(wizard.def.serviceKey).then(setPublished);
+    let live = true;
+    void fetchPublishedByKey(wizard.def.serviceKey).then((data) => {
+      if (live) setPublished(data);
+    });
+    return () => { live = false; };
   }, [wizard.def?.serviceKey]);
 
   const isSubmitter = Boolean(

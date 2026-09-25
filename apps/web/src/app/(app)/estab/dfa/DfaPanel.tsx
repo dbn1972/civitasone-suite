@@ -48,11 +48,11 @@ export function DfaPanel() {
   const [currentStepTitle, setCurrentStepTitle] = useState("");
   const { fromResponse, fromException, clear } = useFormError("DFA");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const qs = filter === "all" ? "?limit=100" : `?status=${filter}&limit=100`;
-      const res = await fetch(`/api/proxy/v1/estab/dfa${qs}`);
+      const res = await fetch(`/api/proxy/v1/estab/dfa${qs}`, { signal });
       if (!res.ok) {
         setError((await fromResponse(res, "load")).message);
         return;
@@ -60,14 +60,22 @@ export function DfaPanel() {
       const body = (await res.json()) as { data?: Dfa[] };
       setRows(body.data ?? []);
       setError("");
-    } catch {
+    } catch (err) {
+      // An abort means this panel unmounted, or (just as real a risk here,
+      // since this effect re-fires on every filter change) a newer load for
+      // a different filter has already superseded this one.
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(fromException("load").message);
     } finally {
       setLoading(false);
     }
   }, [filter, fromResponse, fromException]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const create = useCallback(async () => {
     setSaving(true); setMessage(""); setError("");

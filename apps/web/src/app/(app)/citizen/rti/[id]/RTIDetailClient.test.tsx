@@ -68,7 +68,9 @@ describe("RTIDetailClient -- PERF-009 tranche 3 (SSR loader integration)", () =>
     renderClient({ initialSource: "error" });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    expect(fetch).toHaveBeenCalledWith("/api/proxy/v1/citizen/rti/rti-001", { cache: "no-store" });
+    // UX-fetch-cancellation: the mount-time fetch is now threaded an
+    // AbortSignal (cleaned up on unmount) -- see load()'s AbortController.
+    expect(fetch).toHaveBeenCalledWith("/api/proxy/v1/citizen/rti/rti-001", { cache: "no-store", signal: expect.any(AbortSignal) });
     expect(await screen.findByText("Budget Expenditure Details FY 2024")).toBeInTheDocument();
   });
 

@@ -50,7 +50,11 @@ export function OutputIssuanceBuilder({
   latest.current = design;
 
   useEffect(() => {
-    fetchTenantPositions().then(setPositions).catch(() => setPositions([]));
+    let live = true;
+    fetchTenantPositions()
+      .then((data) => { if (live) setPositions(data); })
+      .catch(() => { if (live) setPositions([]); });
+    return () => { live = false; };
   }, []);
 
   useEffect(() => {

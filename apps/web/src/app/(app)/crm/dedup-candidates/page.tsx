@@ -163,14 +163,19 @@ export default function DedupCandidatesPage() {
   const [mergeBusy, setMergeBusy]     = useState(false);
   const [mergeError, setMergeError]   = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isLive: () => boolean = () => true) => {
     setSource("loading");
     const { data, source: s } = await getDedupCandidates();
+    if (!isLive()) return;
     setPairs(data);
     setSource(s);
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    let live = true;
+    void load(() => live);
+    return () => { live = false; };
+  }, [load]);
 
   async function handleDismiss(pair: DedupPair) {
     setBusy(pair.pairId);

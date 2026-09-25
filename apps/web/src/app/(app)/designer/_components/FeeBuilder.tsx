@@ -95,7 +95,11 @@ export function FeeBuilder({
   }, [initial, onDesignChange]);
 
   useEffect(() => {
-    fetchHoaOptions().then(setHoaOptions).catch(() => setHoaOptions([]));
+    let live = true;
+    fetchHoaOptions()
+      .then((data) => { if (live) setHoaOptions(data); })
+      .catch(() => { if (live) setHoaOptions([]); });
+    return () => { live = false; };
   }, []);
 
   const sampleFields = useMemo(

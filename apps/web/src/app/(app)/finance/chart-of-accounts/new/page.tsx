@@ -36,9 +36,9 @@ export default function MapHeadOfAccountPage() {
   const [loadError, setLoadError] = useState("");
   const loadFormError = useFormError("accounts");
 
-  const loadAccounts = useCallback(async () => {
+  const loadAccounts = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
+      const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" }, signal });
       if (!res.ok) {
         setLoadError((await loadFormError.fromResponse(res, "load")).message);
         return;
@@ -46,7 +46,8 @@ export default function MapHeadOfAccountPage() {
       const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
       const rows = Array.isArray(json) ? json : json.data ?? [];
       setAccounts(rows);
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setLoadError(loadFormError.fromException("load").message);
     }
     // loadFormError.fromResponse/fromException are stable (useCallback'd on a
@@ -57,7 +58,9 @@ export default function MapHeadOfAccountPage() {
   }, []);
 
   useEffect(() => {
-    void loadAccounts();
+    const controller = new AbortController();
+    void loadAccounts(controller.signal);
+    return () => controller.abort();
   }, [loadAccounts]);
 
   // ── Create a new head of account ──────────────────────────────────────

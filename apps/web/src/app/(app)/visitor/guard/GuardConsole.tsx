@@ -69,7 +69,7 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [busyPass, setBusyPass] = useState<string | null>(null);
 
-  const loadRoster = useCallback(async () => {
+  const loadRoster = useCallback(async (isLive: () => boolean = () => true) => {
     if (!locationId) {
       setRoster([]);
       setRosterState("idle");
@@ -79,9 +79,13 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
     setRosterError(null);
     try {
       const rows = await fetchRoster(locationId);
+      // Skip if the console unmounted (or a newer load for a different
+      // location has already superseded this one).
+      if (!isLive()) return;
       setRoster(rows.filter((r) => !r.evacuated));
       setRosterState("ok");
     } catch (err) {
+      if (!isLive()) return;
       setRoster([]);
       setRosterState("error");
       setRosterError(err instanceof Error ? err.message : "Could not load the roster.");
@@ -89,7 +93,9 @@ export function GuardConsole({ locations, expectedToday, expectedTodaySource }: 
   }, [locationId]);
 
   useEffect(() => {
-    void loadRoster();
+    let live = true;
+    void loadRoster(() => live);
+    return () => { live = false; };
   }, [loadRoster]);
 
   const overstays = useMemo(

@@ -45,12 +45,13 @@ export function PromoteWithApproval() {
 
   useEffect(() => {
     if (!open) return;
+    const controller = new AbortController();
     void (async () => {
       try {
         const [empRes, desigRes, offRes] = await Promise.all([
-          fetch("/api/proxy/v1/hrms/employees?limit=200"),
-          fetch("/api/proxy/v1/hrms/designations?limit=200"),
-          fetch("/api/proxy/v1/identity/users?limit=200"),
+          fetch("/api/proxy/v1/hrms/employees?limit=200", { signal: controller.signal }),
+          fetch("/api/proxy/v1/hrms/designations?limit=200", { signal: controller.signal }),
+          fetch("/api/proxy/v1/identity/users?limit=200", { signal: controller.signal }),
         ]);
         if (empRes.ok) {
           const body = (await empRes.json()) as { data?: Employee[] } | Employee[];
@@ -64,8 +65,12 @@ export function PromoteWithApproval() {
           const body = (await offRes.json()) as { data?: Officer[] } | Officer[];
           setOfficers(Array.isArray(body) ? body : (body.data ?? []));
         }
-      } catch { /* graceful fallback */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* graceful fallback */
+      }
     })();
+    return () => controller.abort();
   }, [open]);
 
   const reset = () => {

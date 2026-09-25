@@ -87,7 +87,7 @@ export function MonitoringMap() {
   const [selected, setSelected] = useState<MonitoringMarker | null>(null);
   const formError = useFormError("map marker");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
@@ -95,14 +95,15 @@ export function MonitoringMap() {
       if (domain) qs.set("domain", domain);
       if (status) qs.set("status", status);
       if (date) qs.set("date", date);
-      const res = await fetch(`${API}?${qs.toString()}`);
+      const res = await fetch(`${API}?${qs.toString()}`, { signal });
       if (!res.ok) {
         setError((await formError.fromResponse(res, "load")).message);
         return;
       }
       const body = await res.json();
       setMarkers(normalizeMarkers(body));
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(formError.fromException("load").message);
     } finally {
       setLoading(false);
@@ -117,7 +118,9 @@ export function MonitoringMap() {
   }, [domain, status, date]);
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   const mapMarkers: MapMarker[] = useMemo(

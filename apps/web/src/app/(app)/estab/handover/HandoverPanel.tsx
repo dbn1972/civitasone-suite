@@ -29,13 +29,13 @@ export function HandoverPanel() {
   const [error, setError] = useState("");
   const [loadError, setLoadError] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError("");
     try {
       const [opRes, hoRes] = await Promise.all([
-        fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500"),
-        fetch("/api/proxy/v1/estab/handovers?limit=100"),
+        fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500", { signal }),
+        fetch("/api/proxy/v1/estab/handovers?limit=100", { signal }),
       ]);
       // A non-OK status is a real failure — never swallow it into an empty list,
       // which would falsely read as "no handovers recorded".
@@ -44,13 +44,19 @@ export function HandoverPanel() {
       setOperators(((await opRes.json()) as { data?: Operator[] }).data ?? []);
       setRows(((await hoRes.json()) as { data?: Handover[] }).data ?? []);
     } catch (err) {
+      // An abort means the panel unmounted while the request was in flight.
+      if (err instanceof Error && err.name === "AbortError") return;
       setLoadError(err instanceof Error ? err.message : "Failed to load");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const label = useCallback((empId: string) => {
     const o = operators.find((x) => x.employeeId === empId);

@@ -47,17 +47,23 @@ export function StewardQueuePanel() {
   const [message, setMessage] = useState<string | null>(null);
   const [submittedIds, setSubmittedIds] = useState<Set<string>>(new Set());
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (isLive: () => boolean = () => true) => {
     setSource("loading");
     setMessage(null);
     const { data, source: s } = await getStewardQueue();
+    // Skip if the panel unmounted (or a newer load superseded this one)
+    // while the request was in flight -- otherwise a stale response could
+    // overwrite a newer one on fast navigation.
+    if (!isLive()) return;
     setItems(data);
     setSubmittedIds(new Set());
     setSource(s);
   }, []);
 
   useEffect(() => {
-    void load();
+    let live = true;
+    void load(() => live);
+    return () => { live = false; };
   }, [load]);
 
   const handleDecide = useCallback(

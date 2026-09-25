@@ -110,11 +110,12 @@ export default function ApplicationDetailPage() {
   // Fetched only once the dialog is actually opened.
   useEffect(() => {
     if (!showHireDialog) return;
+    const controller = new AbortController();
     void (async () => {
       try {
         const [deptRes, desigRes] = await Promise.all([
-          fetch("/api/proxy/v1/hrms/departments?limit=200"),
-          fetch("/api/proxy/v1/hrms/designations?limit=200"),
+          fetch("/api/proxy/v1/hrms/departments?limit=200", { signal: controller.signal }),
+          fetch("/api/proxy/v1/hrms/designations?limit=200", { signal: controller.signal }),
         ]);
         if (deptRes.ok) {
           const body = (await deptRes.json()) as { data?: Department[] } | Department[];
@@ -124,8 +125,12 @@ export default function ApplicationDetailPage() {
           const body = (await desigRes.json()) as { data?: Designation[] } | Designation[];
           setDesignations(Array.isArray(body) ? body : (body.data ?? []));
         }
-      } catch { /* graceful fallback to raw-UUID inputs below */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* graceful fallback to raw-UUID inputs below */
+      }
     })();
+    return () => controller.abort();
   }, [showHireDialog]);
 
   // Focus-trap: lock Tab inside the hire dialog while open; Escape closes.

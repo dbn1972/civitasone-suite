@@ -5,7 +5,7 @@
  * follow the source==="error" pattern: on a failed load we show the saved-info
  * badge and never fabricate an empty rule set as fact.
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { EmptyState, Button } from "../ds";
 import {
@@ -58,15 +58,33 @@ export function DedupRulesEditor() {
   const [error, setError] = useState("");
   const headingId = useId();
 
-  async function load() {
+  // Stable per-row React key, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
+  // for the full rationale: keying by index let removing an earlier rule
+  // shift a later, focused one up into a different key, so React patched the
+  // focused DOM node in place with the wrong rule's data instead of removing
+  // the right node and leaving the rest (and focus) alone. DedupRule itself
+  // carries no id, so a parallel id list (regenerated whenever load()
+  // replaces the whole array, and kept in step by addRule/removeRule below)
+  // stands in for one.
+  const nextRuleRowId = useRef(0);
+  const [ruleRowIds, setRuleRowIds] = useState<number[]>([]);
+  const ruleKeyFor = (idx: number) => ruleRowIds[idx] ?? idx;
+
+  async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getDedupRules();
+    // Skip if the editor unmounted while this request was in flight.
+    if (!isLive()) return;
     setRules(data);
+    setRuleRowIds(data.map(() => nextRuleRowId.current++));
     setSource(s);
   }
 
   useEffect(() => {
-    void load();
+    let live = true;
+    void load(() => live);
+    return () => { live = false; };
   }, []);
 
   function update(idx: number, patch: Partial<DedupRule>) {
@@ -78,10 +96,12 @@ export function DedupRulesEditor() {
       ...prev,
       { field: "email", matchType: "exact", weight: 1, threshold: 90, enabled: true },
     ]);
+    setRuleRowIds((ids) => [...ids, nextRuleRowId.current++]);
   }
 
   function removeRule(idx: number) {
     setRules((prev) => prev.filter((_, i) => i !== idx));
+    setRuleRowIds((ids) => ids.filter((_, i) => i !== idx));
   }
 
   async function save() {
@@ -143,7 +163,7 @@ export function DedupRulesEditor() {
           </thead>
           <tbody>
             {rules.map((rule, idx) => (
-              <tr key={idx}>
+              <tr key={ruleKeyFor(idx)}>
                 <td>
                   <label className="sr-only" htmlFor={`${headingId}-field-${idx}`}>Field for rule {idx + 1}</label>
                   <select

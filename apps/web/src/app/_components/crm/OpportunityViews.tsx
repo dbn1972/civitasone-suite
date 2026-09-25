@@ -75,29 +75,35 @@ export function OpportunityViews() {
     };
   }, []);
 
-  const reload = useCallback(async () => {
+  const reload = useCallback(async (isLive: () => boolean = () => true) => {
     if (!pipelineId) return;
     if (view === "Board") {
       const { data, source } = await getKanban(pipelineId);
+      if (!isLive()) return;
       setKanban(data);
       setKanbanSource(source);
     } else if (view === "List") {
       const { data, source } = await getOpportunities(pipelineId);
+      if (!isLive()) return;
       setList(data);
       setListSource(source);
     } else if (view === "Calendar") {
       const { data, source } = await getCalendar(pipelineId);
+      if (!isLive()) return;
       setCalendar(data);
       setCalendarSource(source);
     } else {
       const { data, source } = await getFunnel(pipelineId);
+      if (!isLive()) return;
       setFunnel(data);
       setFunnelSource(source);
     }
   }, [pipelineId, view]);
 
   useEffect(() => {
-    void reload();
+    let live = true;
+    void reload(() => live);
+    return () => { live = false; };
   }, [reload]);
 
   const selectedPipeline = useMemo(() => pipelines.find((p) => p.id === pipelineId) ?? null, [pipelines, pipelineId]);

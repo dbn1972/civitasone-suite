@@ -64,12 +64,12 @@ export function IntegrationDrawer({
   const [ingestion, setIngestion] = useState<IngestionConfigDraft>(EMPTY_INGESTION_DRAFT);
   const formError = useFormError(provider.label);
 
-  const load = useCallback(async (scope: EnvScope) => {
+  const load = useCallback(async (scope: EnvScope, signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     setTestResult(null);
     try {
-      const res = await fetch(`${API}/${provider.id}/${scope}`);
+      const res = await fetch(`${API}/${provider.id}/${scope}`, { signal });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "load");
         setError(resolved.message);
@@ -93,7 +93,11 @@ export function IntegrationDrawer({
       if (provider.id === "sftp") {
         setIngestion(extractIngestionDraft(body.data.config));
       }
-    } catch {
+    } catch (err) {
+      // An abort means this drawer unmounted, or (just as real a risk here,
+      // since this effect re-fires on every env switch) a newer load for a
+      // different environment scope has already superseded this one.
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(formError.fromException("load").message);
     } finally {
       setLoading(false);
@@ -105,7 +109,11 @@ export function IntegrationDrawer({
   // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, [provider]);
 
-  useEffect(() => { void load(env); }, [env, load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(env, controller.signal);
+    return () => controller.abort();
+  }, [env, load]);
 
   // Close on Escape for keyboard accessibility.
   useEffect(() => {

@@ -22,16 +22,20 @@ export function EstabApprovalsPanel() {
   const [loadError, setLoadError] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const loadTasks = useCallback(async () => {
+  const loadTasks = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError(false);
     try {
-      const res = await fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50");
+      const res = await fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50", { signal });
       if (!res.ok) throw new Error(await res.text());
       const body = await res.json() as { data?: WorkflowTask[] } | WorkflowTask[];
       const rows = Array.isArray(body) ? body : (body.data ?? []);
       setTasks(rows.filter((t) => t.refType === "estab_file" && t.status === "pending"));
-    } catch {
+    } catch (e) {
+      // An abort means the panel unmounted (or a newer mount-time load
+      // superseded this one) while the request was in flight -- that's an
+      // intentional teardown, not a real load failure.
+      if (e instanceof Error && e.name === "AbortError") return;
       // A failed load must not read as "No approvals pending" — an approver
       // would wrongly believe there is nothing to sign.
       setLoadError(true);
@@ -40,7 +44,11 @@ export function EstabApprovalsPanel() {
     }
   }, []);
 
-  useEffect(() => { void loadTasks(); }, [loadTasks]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadTasks(controller.signal);
+    return () => controller.abort();
+  }, [loadTasks]);
 
   const complete = useCallback(
     async (taskId: string, decision: "approve" | "reject", reason?: string) => {

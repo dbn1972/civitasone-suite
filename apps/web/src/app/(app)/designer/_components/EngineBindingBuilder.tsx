@@ -52,6 +52,22 @@ export function EngineBindingBuilder({
   const latest = useRef(bindings);
   latest.current = bindings;
 
+  // Stable per-row key for exemption-category rows, independent of array
+  // position -- see ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/
+  // payroll/flex-benefits) for the full rationale. The previous key
+  // (`${cat.code}-${idx}`) degenerated to plain index-keying whenever two
+  // rows shared a code -- most commonly "", since a freshly added row starts
+  // blank -- letting removal of an earlier blank row shift a later, focused
+  // one into the removed row's key. Scoped per binding id (a Record) since
+  // each binding owns its own independent exemptionCategories array.
+  const nextExemptionRowId = useRef(0);
+  const [exemptionRowIds, setExemptionRowIds] = useState<Record<string, number[]>>(() =>
+    Object.fromEntries(
+      initial.map((b) => [b.id, b.config.exemptionCategories.map(() => nextExemptionRowId.current++)]),
+    ),
+  );
+  const exemptionKeyFor = (bindingId: string, idx: number) => exemptionRowIds[bindingId]?.[idx] ?? idx;
+
   useEffect(() => {
     let cancelled = false;
     fetchEngineRegistry()
@@ -98,12 +114,22 @@ export function EngineBindingBuilder({
   }, []);
 
   // Live sample preview via engine API (Studio parameters only).
+  //
+  // UX-fetch-cancellation follow-up: the debounce timer above is only half of
+  // cancellation. Once it fires and the preview fetch is in flight, neither
+  // unmounting nor switching to a different binding stopped it -- the
+  // now-stale response would still call setPreview/setPreviewError for
+  // whatever binding happens to be selected when it finally resolves. An
+  // AbortController closes that gap the same way GlobalSearch.tsx's debounced
+  // search fetch does: aborted on cleanup (dependency change or unmount), and
+  // an AbortError is treated as "superseded", not a real failure.
   useEffect(() => {
     if (!selected) {
       setPreview(null);
       return;
     }
     if (previewTimer.current) clearTimeout(previewTimer.current);
+    const controller = new AbortController();
     previewTimer.current = setTimeout(async () => {
       const rupees = Number(sampleBaseRupees);
       const basePrincipalMinor = Number.isFinite(rupees) ? Math.round(rupees * 100) : 0;
@@ -114,14 +140,16 @@ export function EngineBindingBuilder({
           selectedExemptions,
           applyRebate,
           applyPenalty,
-        });
+        }, controller.signal);
         setPreview(result);
         setPreviewError(null);
       } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return;
         setPreview(null);
         setPreviewError(e instanceof Error ? e.message : "Preview failed.");
       }
     }, 300);
+    return () => controller.abort();
   }, [selected, sampleBaseRupees, selectedExemptions, applyRebate, applyPenalty]);
 
   const bindEngine = (eng: EngineDescriptorUi) => {
@@ -138,6 +166,10 @@ export function EngineBindingBuilder({
     const nextBinding = bindingFromDescriptor(eng, blockFilter);
     const next = [...withoutBlock, nextBinding];
     setSelectedId(nextBinding.id);
+    setExemptionRowIds((ids) => ({
+      ...ids,
+      [nextBinding.id]: nextBinding.config.exemptionCategories.map(() => nextExemptionRowId.current++),
+    }));
     updateBindings(next);
   };
 
@@ -305,7 +337,7 @@ export function EngineBindingBuilder({
                         <div style={{ display: "grid", gap: 8 }}>
                           {selected.config.exemptionCategories.map((cat, idx) => (
                             <div
-                              key={`${cat.code}-${idx}`}
+                              key={exemptionKeyFor(selected.id, idx)}
                               style={{ display: "grid", gridTemplateColumns: "1fr 1.4fr 100px auto", gap: 8 }}
                             >
                               <input
@@ -352,6 +384,10 @@ export function EngineBindingBuilder({
                                 onClick={() => {
                                   const exemptionCategories = selected.config.exemptionCategories.filter((_, i) => i !== idx);
                                   patchConfig({ exemptionCategories });
+                                  setExemptionRowIds((ids) => ({
+                                    ...ids,
+                                    [selected.id]: (ids[selected.id] ?? []).filter((_, i) => i !== idx),
+                                  }));
                                 }}
                               >
                                 Remove
@@ -362,9 +398,15 @@ export function EngineBindingBuilder({
                         <Button
                           variant="ghost"
                           style={{ marginTop: 8 }}
-                          onClick={() => patchConfig({
-                            exemptionCategories: [...selected.config.exemptionCategories, newExemptionRow()],
-                          })}
+                          onClick={() => {
+                            patchConfig({
+                              exemptionCategories: [...selected.config.exemptionCategories, newExemptionRow()],
+                            });
+                            setExemptionRowIds((ids) => ({
+                              ...ids,
+                              [selected.id]: [...(ids[selected.id] ?? []), nextExemptionRowId.current++],
+                            }));
+                          }}
                         >
                           Add exemption category
                         </Button>

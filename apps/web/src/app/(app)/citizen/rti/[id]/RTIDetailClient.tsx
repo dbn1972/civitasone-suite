@@ -57,15 +57,16 @@ export function RTIDetailClient({
   // before (unconditional fetch).
   const skipFirstFetch = useRef(initialSource === "api");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError("");
     try {
-      const res = await fetch(`/api/proxy/v1/citizen/rti/${id}`, { cache: "no-store" });
+      const res = await fetch(`/api/proxy/v1/citizen/rti/${id}`, { cache: "no-store", signal });
       if (res.status === 404) { setRti(null); return; }
       if (!res.ok) throw new Error((await res.text()) || "Failed to load RTI application.");
       setRti((await res.json()) as RtiDetail);
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       setLoadError(e instanceof Error ? e.message : "Failed to load RTI application.");
     } finally {
       setLoading(false);
@@ -77,7 +78,9 @@ export function RTIDetailClient({
       skipFirstFetch.current = false;
       return;
     }
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   const afterMutate = useCallback((msg: string) => {

@@ -21,9 +21,10 @@ export function CreateRFQForm() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    const controller = new AbortController();
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/procurement/indents?limit=100");
+        const res = await fetch("/api/proxy/v1/procurement/indents?limit=100", { signal: controller.signal });
         if (res.ok) {
           const body = await res.json() as { data?: IndentOption[] } | IndentOption[];
           const rows = Array.isArray(body) ? body : (body.data ?? []);
@@ -31,18 +32,25 @@ export function CreateRFQForm() {
           setIndents(clean);
           if (clean[0]?.id) setIndentId(clean[0].id);
         }
-      } catch { /* optional */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* optional */
+      }
     })();
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/procurement/vendors?limit=100");
+        const res = await fetch("/api/proxy/v1/procurement/vendors?limit=100", { signal: controller.signal });
         if (res.ok) {
           const body = await res.json() as { data?: VendorOption[] } | VendorOption[];
           const rows = Array.isArray(body) ? body : (body.data ?? []);
           setVendors(rows.filter((v) => v.id && v.name));
         }
-      } catch { /* optional */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* optional */
+      }
     })();
+    return () => controller.abort();
   }, []);
 
   function toggleVendor(id: string) {

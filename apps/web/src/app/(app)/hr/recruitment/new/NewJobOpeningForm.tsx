@@ -86,10 +86,12 @@ export function NewJobOpeningForm() {
 
   useEffect(() => {
     if (!templateId) return;
+    const controller = new AbortController();
     void (async () => {
       try {
         const res = await fetch(`/api/proxy/v1/hrms/jd-templates/${templateId}`, {
           headers: { "content-type": "application/json" },
+          signal: controller.signal,
         });
         if (!res.ok) return;
         const tmpl = await res.json() as {
@@ -104,8 +106,12 @@ export function NewJobOpeningForm() {
         if (tmpl.selectionProcess) setSelectionProcess(tmpl.selectionProcess);
         if (tmpl.requiredDocuments) setRequiredDocuments(tmpl.requiredDocuments);
         if (tmpl.eligibility) setEligibility(tmpl.eligibility);
-      } catch { /* ignore */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* ignore */
+      }
     })();
+    return () => controller.abort();
   }, [templateId]);
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");

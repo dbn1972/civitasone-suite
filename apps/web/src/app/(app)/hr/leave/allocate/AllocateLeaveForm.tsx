@@ -46,9 +46,10 @@ export function AllocateLeaveForm() {
   const daysId = useId();
 
   useEffect(() => {
+    const controller = new AbortController();
     Promise.all([
-      fetch("/api/proxy/v1/hrms/employees?limit=500").then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
-      fetch("/api/proxy/v1/hrms/leave-types").then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
+      fetch("/api/proxy/v1/hrms/leave-types", { signal: controller.signal }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
     ])
       .then(([empBody, ltBody]) => {
         const empRows: EmployeeOption[] = Array.isArray(empBody) ? empBody : (empBody.data ?? []);
@@ -58,10 +59,12 @@ export function AllocateLeaveForm() {
         if (empRows[0]) setEmployeeId(empRows[0].id);
         if (ltRows[0]) setLeaveTypeId(ltRows[0].id);
       })
-      .catch(() => {
+      .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
         setStatus("error");
         setMessage(t("loadOptionsError"));
       });
+    return () => controller.abort();
   }, [t]);
 
   function clearErr(field: string) {

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import type { ConditionOperator, FormFieldDefinition, VisibilityCondition } from "./formTypes";
 import { Button } from "../Button";
 
@@ -25,10 +26,33 @@ export function ConditionBuilder({
 }: ConditionBuilderProps) {
   const sources = availableFields.filter((f) => f.id !== currentFieldId);
 
+  // Stable per-row React key, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
+  // for the full rationale. VisibilityCondition carries no id, so a parallel
+  // id list stands in for one. This builder is reused live for whichever
+  // form field is currently selected in the property panel (FormBuilder.tsx
+  // never unmounts it between selections), so `conditions` can be swapped
+  // out wholesale for a *different* field's rule list while this component
+  // stays mounted -- the id list must be reseeded when that happens, not
+  // just on add/remove. Detected via currentFieldId (each field's own id)
+  // changing, using React's documented "adjust state when a prop changes"
+  // pattern (a setState call during render, guarded so it only fires once
+  // per actual change) rather than an effect, which would paint one stale
+  // frame with the previous field's ids first.
+  const nextRowId = useRef(0);
+  const [rowIds, setRowIds] = useState<number[]>(() => conditions.map(() => nextRowId.current++));
+  const [rowIdsForField, setRowIdsForField] = useState(currentFieldId);
+  if (rowIdsForField !== currentFieldId) {
+    setRowIdsForField(currentFieldId);
+    setRowIds(conditions.map(() => nextRowId.current++));
+  }
+  const keyFor = (idx: number) => rowIds[idx] ?? idx;
+
   const addRow = () => {
     const first = sources[0];
     if (!first) return;
     onChange([...conditions, { sourceFieldId: first.id, operator: "eq", value: "" }]);
+    setRowIds((ids) => [...ids, nextRowId.current++]);
   };
 
   const updateRow = (idx: number, patch: Partial<VisibilityCondition>) => {
@@ -37,6 +61,7 @@ export function ConditionBuilder({
 
   const removeRow = (idx: number) => {
     onChange(conditions.filter((_, i) => i !== idx));
+    setRowIds((ids) => ids.filter((_, i) => i !== idx));
   };
 
   if (sources.length === 0) {
@@ -58,7 +83,7 @@ export function ConditionBuilder({
           const op = OPERATORS.find((o) => o.id === row.operator) ?? OPERATORS[0]!;
           return (
             <div
-              key={idx}
+              key={keyFor(idx)}
               style={{
                 display: "grid",
                 gap: 8,

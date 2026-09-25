@@ -66,7 +66,9 @@ describe("RequestDetailClient -- PERF-009 tranche 2 (SSR loader integration)", (
     renderClient({ initialSource: "error" });
 
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
-    expect(fetch).toHaveBeenCalledWith("/api/proxy/v1/citizen/grievances/gr1", { cache: "no-store" });
+    // UX-fetch-cancellation: the mount-time fetch is now threaded an
+    // AbortSignal (cleaned up on unmount) -- see load()'s AbortController.
+    expect(fetch).toHaveBeenCalledWith("/api/proxy/v1/citizen/grievances/gr1", { cache: "no-store", signal: expect.any(AbortSignal) });
     expect(await screen.findByText("Garbage not collected")).toBeInTheDocument();
   });
 

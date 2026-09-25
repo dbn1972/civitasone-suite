@@ -83,8 +83,21 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternC
     });
   };
 
+  // Stable per-row key, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
+  // for the full rationale: keying by index let removing an earlier reference
+  // shift a later, focused one up into a different key, so React patched the
+  // focused DOM node in place with the wrong reference's data instead of
+  // removing the right node and leaving the rest (and focus) alone.
+  const nextStatutoryRowId = useRef(0);
+  const [statutoryRowIds, setStatutoryRowIds] = useState<number[]>(() =>
+    initial.statutoryReferences.map(() => nextStatutoryRowId.current++),
+  );
+  const statutoryKeyFor = (idx: number) => statutoryRowIds[idx] ?? idx;
+
   const addStatutory = () => {
     setField("statutoryReferences", [...values.statutoryReferences, { act: "" }]);
+    setStatutoryRowIds((ids) => [...ids, nextStatutoryRowId.current++]);
   };
 
   const updateStatutory = (idx: number, patch: Partial<StatutoryReference>) => {
@@ -96,6 +109,7 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternC
 
   const removeStatutory = (idx: number) => {
     setField("statutoryReferences", values.statutoryReferences.filter((_, i) => i !== idx));
+    setStatutoryRowIds((ids) => ids.filter((_, i) => i !== idx));
   };
 
   const showCertWarning = useMemo(
@@ -243,7 +257,7 @@ export function CatalogueB1Form({ definitionId, initial, onSaveState, onPatternC
           ) : (
             <div style={{ display: "grid", gap: 12 }}>
               {values.statutoryReferences.map((row, idx) => (
-                <div key={idx} style={{ display: "grid", gap: 8, padding: 12, border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
+                <div key={statutoryKeyFor(idx)} style={{ display: "grid", gap: 8, padding: 12, border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}>
                   <input
                     className="input"
                     aria-label={`Act name (statutory reference ${idx + 1})`}

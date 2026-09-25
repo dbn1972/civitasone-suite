@@ -72,16 +72,17 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   const [currentWith, setCurrentWith] = useState("");
   const [note, setNote] = useState("");
 
-  const loadStatus = useCallback(async () => {
+  const loadStatus = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
       const qs = new URLSearchParams({ refType, refId });
-      const res = await fetch(`/api/proxy/v1/estab/files/by-ref?${qs.toString()}`);
+      const res = await fetch(`/api/proxy/v1/estab/files/by-ref?${qs.toString()}`, { signal });
       if (res.status === 404) { setFile(null); return; }
       if (!res.ok) throw new Error(await res.text());
       const body = (await res.json()) as { data?: LinkedFile };
       setFile(body.data ?? null);
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       // Status is best-effort; a failure here shouldn't block the raise action.
       setFile(null);
     } finally {
@@ -89,7 +90,11 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     }
   }, [refType, refId]);
 
-  useEffect(() => { void loadStatus(); }, [loadStatus]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadStatus(controller.signal);
+    return () => controller.abort();
+  }, [loadStatus]);
 
   const submit = useCallback(async () => {
     setError("");

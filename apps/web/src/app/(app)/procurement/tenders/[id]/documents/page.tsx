@@ -64,15 +64,17 @@ export default function TenderDocumentsPage({
     return `${human.what} ${human.next}`;
   }
 
-  async function load() {
+  async function load(signal?: AbortSignal) {
     setLoading(true);
     try {
       const res = await fetch(
         "/api/proxy/v1/procurement/tenders/" + params.id + "/documents",
+        { signal },
       );
       const json = (await res.json()) as { data?: TenderDoc[] };
       setDocs(Array.isArray(json.data) ? json.data : []);
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError("Failed to load documents.");
     } finally {
       setLoading(false);
@@ -80,7 +82,9 @@ export default function TenderDocumentsPage({
   }
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- load is redefined each render but only closes over values already listed in this array; nothing else it reads can change independently.
   }, [params.id]);
 

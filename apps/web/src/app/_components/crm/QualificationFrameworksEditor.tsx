@@ -6,7 +6,7 @@
  * deleted behind a ConfirmDialog. On a failed load we show the saved-info badge
  * and never fabricate an empty framework set as fact (source==="error").
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { ConfirmDialog, EmptyState, Button } from "../ds";
 import {
@@ -47,11 +47,33 @@ export function QualificationFrameworksEditor() {
   const [confirmIdx, setConfirmIdx] = useState<number | null>(null);
   const headingId = useId();
 
+  // Stable per-row React keys, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
+  // for the full rationale. Two levels here:
+  //  - Outer (frameworks): a saved framework already keys on its real
+  //    `fw.id`; only an unsaved draft (no id yet) fell back to the array
+  //    index, so removing one unsaved draft while a later one was focused
+  //    shifted it into the removed draft's key.
+  //  - Inner (questions): QualQuestion carries no id at all, so every
+  //    framework's question list was fully index-keyed.
+  // Both carry no server/domain id suitable to send back to the API, so
+  // parallel id lists (regenerated whenever load() replaces the whole
+  // frameworks array, and kept in step by the mutators below) stand in.
+  const nextFrameworkRowId = useRef(0);
+  const [frameworkRowIds, setFrameworkRowIds] = useState<number[]>([]);
+  const frameworkKeyFor = (fi: number) => frameworkRowIds[fi] ?? fi;
+
+  const nextQuestionRowId = useRef(0);
+  const [questionRowIds, setQuestionRowIds] = useState<number[][]>([]);
+  const questionKeyFor = (fi: number, qi: number) => questionRowIds[fi]?.[qi] ?? qi;
+
   async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getFrameworks();
     if (!isLive()) return;
     setFrameworks(data);
+    setFrameworkRowIds(data.map(() => nextFrameworkRowId.current++));
+    setQuestionRowIds(data.map((f) => f.questions.map(() => nextQuestionRowId.current++)));
     setSource(s);
   }
 
@@ -77,12 +99,14 @@ export function QualificationFrameworksEditor() {
     setFrameworks((prev) =>
       prev.map((f, i) => (i === fi ? { ...f, questions: [...f.questions, { text: "", weight: 1 }] } : f)),
     );
+    setQuestionRowIds((prev) => prev.map((ids, i) => (i === fi ? [...ids, nextQuestionRowId.current++] : ids)));
   }
 
   function removeQuestion(fi: number, qi: number) {
     setFrameworks((prev) =>
       prev.map((f, i) => (i === fi ? { ...f, questions: f.questions.filter((_, j) => j !== qi) } : f)),
     );
+    setQuestionRowIds((prev) => prev.map((ids, i) => (i === fi ? ids.filter((_, j) => j !== qi) : ids)));
   }
 
   async function save(idx: number) {
@@ -113,6 +137,8 @@ export function QualificationFrameworksEditor() {
     if (!fw.id) {
       // Unsaved draft — just drop it from the list.
       setFrameworks((prev) => prev.filter((_, i) => i !== idx));
+      setFrameworkRowIds((ids) => ids.filter((_, i) => i !== idx));
+      setQuestionRowIds((ids) => ids.filter((_, i) => i !== idx));
       setConfirmIdx(null);
       return;
     }
@@ -147,7 +173,15 @@ export function QualificationFrameworksEditor() {
         {message ? <p role="status" aria-live="polite" style={{ fontSize: 13, color: "#047857", padding: "0 12px" }}>{message}</p> : null}
         {error ? <p role="alert" aria-live="assertive" style={{ fontSize: 13, color: "#b42318", padding: "0 12px" }}>{error}</p> : null}
         <div className="pad">
-          <Button type="button" variant="ghost" onClick={() => setFrameworks((prev) => [...prev, blankFramework()])}>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={() => {
+              setFrameworks((prev) => [...prev, blankFramework()]);
+              setFrameworkRowIds((ids) => [...ids, nextFrameworkRowId.current++]);
+              setQuestionRowIds((ids) => [...ids, []]);
+            }}
+          >
             + Add framework
           </Button>
         </div>
@@ -161,7 +195,7 @@ export function QualificationFrameworksEditor() {
         />
       ) : (
         frameworks.map((fw, fi) => (
-          <div className="card" key={fw.id ?? `new-${fi}`} aria-label={`Framework ${fi + 1}`}>
+          <div className="card" key={fw.id ?? frameworkKeyFor(fi)} aria-label={`Framework ${fi + 1}`}>
             <div className="pad" style={{ display: "grid", gap: 14 }}>
               <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))" }}>
                 <div>
@@ -198,7 +232,7 @@ export function QualificationFrameworksEditor() {
                     </thead>
                     <tbody>
                       {fw.questions.map((q, qi) => (
-                        <tr key={qi}>
+                        <tr key={q.id ?? questionKeyFor(fi, qi)}>
                           <td>
                             <label className="sr-only" htmlFor={`${headingId}-q-${fi}-${qi}`}>Question {qi + 1} text</label>
                             <input id={`${headingId}-q-${fi}-${qi}`} value={q.text} onChange={(e) => updateQuestion(fi, qi, { text: e.target.value })} style={inputStyle} />

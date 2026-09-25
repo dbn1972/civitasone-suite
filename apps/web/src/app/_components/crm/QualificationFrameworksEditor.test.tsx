@@ -74,4 +74,57 @@ describe("QualificationFrameworksEditor (LQ-001 admin)", () => {
     fireEvent.click(within(dialog).getByRole("button", { name: /delete framework/i }));
     await waitFor(() => expect(lq.deleteFramework).toHaveBeenCalledWith("f1"));
   });
+
+  // Row identity (outer list): an unsaved framework fell back to
+  // key={`new-${fi}`} (array position) since it has no id yet, so removing
+  // an earlier unsaved framework shifted a later, focused one into the
+  // removed framework's key -- React patched the focused DOM node in place
+  // with a different framework's data instead of removing the right node
+  // and leaving the rest (and focus) alone. A *saved* framework already
+  // keys on its real id and isn't affected.
+  it("keeps an unsaved framework's own value and focus attached to it after an earlier unsaved framework is removed", async () => {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [], source: "api" });
+    render(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByText(/no frameworks yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add framework/i }));
+
+    const thirdName = screen.getAllByLabelText("Name")[2]!;
+    fireEvent.change(thirdName, { target: { value: "MEDDPICC" } });
+    thirdName.focus();
+    expect(document.activeElement).toBe(thirdName);
+
+    // Delete the first (unsaved) framework -- frameworks 2-3 shift up.
+    fireEvent.click(screen.getAllByRole("button", { name: "Delete" })[0]!);
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /delete framework/i }));
+
+    const survivingNames = await screen.findAllByLabelText("Name");
+    expect(survivingNames[1]).toHaveValue("MEDDPICC");
+    expect(document.activeElement).toBe(survivingNames[1]);
+  });
+
+  // Row identity (inner list): QualQuestion carries no id, so a framework's
+  // question list was fully index-keyed -- same hazard, one level deeper.
+  it("keeps a question's own value and focus attached to it after an earlier question is removed", async () => {
+    vi.mocked(lq.getFrameworks).mockResolvedValue({ data: [fw], source: "api" });
+    render(<QualificationFrameworksEditor />);
+    await waitFor(() => expect(screen.getByDisplayValue("BANT")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add question/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add question/i }));
+    // fw already has 1 question ("Has budget?"), plus 2 new blank ones = 3.
+
+    const thirdQuestion = screen.getAllByLabelText(/question \d text/i)[2]!;
+    fireEvent.change(thirdQuestion, { target: { value: "Has authority?" } });
+    thirdQuestion.focus();
+    expect(document.activeElement).toBe(thirdQuestion);
+
+    // Remove the first question -- questions 2-3 shift up to become 1-2.
+    fireEvent.click(screen.getAllByRole("button", { name: /remove question/i })[0]!);
+
+    const survivingThirdQuestion = screen.getAllByLabelText(/question \d text/i)[1]!;
+    expect(survivingThirdQuestion).toHaveValue("Has authority?");
+    expect(document.activeElement).toBe(survivingThirdQuestion);
+  });
 });

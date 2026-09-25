@@ -62,15 +62,20 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
   useEffect(() => {
     if (!open || leaveTypes.length > 0) return;
     setLtLoading(true);
-    fetch("/api/proxy/v1/hrms/leave-types")
+    const controller = new AbortController();
+    fetch("/api/proxy/v1/hrms/leave-types", { signal: controller.signal })
       .then((r) => r.json())
       .then((body: unknown) => {
         const arr = Array.isArray(body) ? body : (body as { data?: LeaveType[] })?.data ?? [];
         setLeaveTypes(arr as LeaveType[]);
         if ((arr as LeaveType[])[0]) setLeaveTypeId((arr as LeaveType[])[0].id);
       })
-      .catch(() => setFieldError(t("couldNotLoadLeaveTypes")))
+      .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setFieldError(t("couldNotLoadLeaveTypes"));
+      })
       .finally(() => setLtLoading(false));
+    return () => controller.abort();
     // `t` must be a real dependency: it's captured in the .catch() closure
     // below, and next-intl hands out a new `t` whenever the locale changes.
     // Without it here, a locale switch while this panel happened to be open

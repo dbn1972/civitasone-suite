@@ -150,4 +150,33 @@ describe("CustomFieldsManager", () => {
     fireEvent.click(screen.getByRole("tab", { name: /^Deals$/i }));
     await waitFor(() => expect(cf.listCustomFields).toHaveBeenCalledWith("deals"));
   });
+
+  // Row identity: a custom field's options were keyed by array position, so
+  // removing an earlier option shifted later ones up into a different key
+  // -- React patched the focused option's DOM node in place with a
+  // different option's data instead of removing the right node and leaving
+  // the rest (and focus) alone.
+  it("keeps an option's own value and focus attached to it after an earlier option is removed", async () => {
+    vi.mocked(cf.listCustomFields).mockResolvedValue({ data: [], source: "api" });
+    render(<CustomFieldsManager />);
+    await waitFor(() => expect(screen.getByText(/no custom fields yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add custom field/i }));
+    fireEvent.change(screen.getByLabelText(/custom field type/i), { target: { value: "select" } });
+
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add option/i }));
+
+    const thirdOption = screen.getAllByLabelText(/^Option \d+$/)[2]!;
+    fireEvent.change(thirdOption, { target: { value: "West" } });
+    thirdOption.focus();
+    expect(document.activeElement).toBe(thirdOption);
+
+    // Remove the first option -- options 2-3 shift up to become 1-2.
+    fireEvent.click(screen.getAllByRole("button", { name: /remove option/i })[0]!);
+
+    const survivingThirdOption = screen.getAllByLabelText(/^Option \d+$/)[1]!;
+    expect(survivingThirdOption).toHaveValue("West");
+    expect(document.activeElement).toBe(survivingThirdOption);
+  });
 });

@@ -44,4 +44,30 @@ describe("ReasonCodesEditor (LQ-004 admin)", () => {
     expect(vi.mocked(lq.saveReasonCodes).mock.calls[0][0][0].label).toBe("No funds");
     expect(await screen.findByText(/reason codes saved/i)).toBeInTheDocument();
   });
+
+  // Row identity: reason codes were keyed by array position, so removing an
+  // earlier code shifted later ones up into a different key -- React
+  // patched the focused code's DOM node in place with a different code's
+  // data instead of removing the right node and leaving the rest (and
+  // focus) alone.
+  it("keeps a reason code's own value and focus attached to it after an earlier one is removed", async () => {
+    vi.mocked(lq.getReasonCodes).mockResolvedValue({ data: [], source: "api" });
+    render(<ReasonCodesEditor />);
+    await waitFor(() => expect(screen.getByText(/no reason codes yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add reason code/i }));
+
+    const thirdLabel = screen.getAllByLabelText(/label for reason/i)[2]!;
+    fireEvent.change(thirdLabel, { target: { value: "No funds" } });
+    thirdLabel.focus();
+    expect(document.activeElement).toBe(thirdLabel);
+
+    // Remove the first code -- codes 2-3 shift up to become codes 1-2.
+    fireEvent.click(screen.getAllByRole("button", { name: /remove reason/i })[0]!);
+
+    const survivingThirdLabel = screen.getAllByLabelText(/label for reason/i)[1]!;
+    expect(survivingThirdLabel).toHaveValue("No funds");
+    expect(document.activeElement).toBe(survivingThirdLabel);
+  });
 });

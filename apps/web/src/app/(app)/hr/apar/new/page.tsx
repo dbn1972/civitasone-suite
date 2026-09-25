@@ -33,12 +33,17 @@ export default function AparNewPage() {
   // PromoteWithApproval/TransferWithApproval. All 4 roles are picked from
   // the same employee directory.
   useEffect(() => {
-    fetch("/api/proxy/v1/hrms/employees?limit=200")
+    const controller = new AbortController();
+    fetch("/api/proxy/v1/hrms/employees?limit=200", { signal: controller.signal })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((body: { data?: EmployeeOption[] } | EmployeeOption[]) => {
         setEmployees(Array.isArray(body) ? body : (body.data ?? []));
       })
-      .catch(() => { /* graceful fallback to raw-UUID inputs below */ });
+      .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* graceful fallback to raw-UUID inputs below */
+      });
+    return () => controller.abort();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {

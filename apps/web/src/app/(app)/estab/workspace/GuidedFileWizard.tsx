@@ -61,12 +61,17 @@ export function GuidedFileWizard() {
   const [dfaNo, setDfaNo] = useState<string>("");
 
   useEffect(() => {
+    const controller = new AbortController();
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=true&limit=500");
+        const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=true&limit=500", { signal: controller.signal });
         if (res.ok) setOperators(((await res.json()) as { data?: Operator[] }).data ?? []);
-      } catch { /* picker optional */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* picker optional */
+      }
     })();
+    return () => controller.abort();
   }, []);
 
   const activeOps = useMemo(() => operators.filter((o) => o.active), [operators]);
