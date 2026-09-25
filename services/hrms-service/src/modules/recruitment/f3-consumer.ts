@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -225,6 +226,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
       "recruitment_publication_routes__1",
       "recruitment_publication_routes__2",
       "recruitment_publication_routes__3",
+      "recruitment_publication_routes__4",
       "recruitment_qualification_routes__0",
       "recruitment_reference_routes__0",
       "recruitment_reference_routes__1",
@@ -1194,6 +1196,20 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             await publicationRepo.insertCorrigendum(tx, { tenantId: p.tenantId, jobOpeningId: id, seq, action: "cancellation", changes: body.reason, actorId: msg.actorId });
                   // Cancel preserves the advert (row untouched except status) — R-RA-0068.
                   await publicationRepo.updateVacancy(tx, p.tenantId, id, { status: "cancelled", corrigendumCount: seq, updatedBy: msg.actorId }, v.version);
+            break;
+          }
+          case "recruitment_publication_routes__4": {
+            // Restored: the vacancy (for the optimistic-version guard) and the
+            // isPublished flag the route validated.
+            const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
+            if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
+            await publicationRepo.updateVacancy(tx, p.tenantId, id, { isPublished: body.isPublished === true, updatedBy: msg.actorId }, v.version);
+            // queries.listJobOpenings caches under resource "job_opening" (see
+            // shared/infra.ts's cache instance) -- without this, the detail
+            // page's Published/Not Published badge would keep reading the
+            // pre-publish value for up to the cache's TTL after a successful
+            // publish/unpublish.
+            await cache.invalidateResourceAfterCommit(tx, p.tenantId, "job_opening");
             break;
           }
           case "recruitment_qualification_routes__0": {

@@ -6,9 +6,16 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ApplicationPipeline } from "../_components/ApplicationPipeline";
 import { GOIReservationCard } from "../_components/GOIReservationCard";
-import { ConfirmDialog, ErrorState, useConfirmAction } from "../../../../_components/ds";
+import { InterviewCard } from "../_components/InterviewCard";
+import { ConfirmDialog, ErrorState, useConfirmAction, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
+
+/** Shared Tailwind classes for the two new custom dialogs below (Schedule
+ *  Interview / Send Offer), matching this page's own input styling
+ *  conventions (e.g. the applicant search box further down). */
+const dialogInputClass = "w-full rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-gray-900 px-3 py-2 text-sm text-slate-800 dark:text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500";
+const dialogLabelClass = "block text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1";
 
 type JobOpening = {
   id: string;
@@ -76,20 +83,291 @@ type ActionDef = {
   disabledReason?: string;
   /** Present for actions that must be gated behind a ConfirmDialog (L4 — irreversible action). */
   confirm?: ConfirmConfig;
+  /** Present for actions that need a real multi-field form (a single reason
+   *  string, which is all ConfirmDialog collects, isn't enough) — opens one
+   *  of the custom dialogs below instead of calling onAction directly. */
+  dialog?: "interview" | "offer";
 };
+
+const INTERVIEW_MODES = ["video", "in_person", "phone"] as const;
+const INTERVIEW_ROUND_TYPES = [
+  "technical", "screening", "hr", "panel", "final",
+  "group_discussion", "domain", "behavioural", "presentation", "final_selection",
+] as const;
+
+export type ScheduleInterviewPayload = {
+  interviewerIds: string[];
+  scheduledAt: string;
+  durationMinutes: number;
+  mode: typeof INTERVIEW_MODES[number];
+  roundType: typeof INTERVIEW_ROUND_TYPES[number];
+  roundNumber: number;
+  notes?: string;
+};
+
+/**
+ * CRITICAL fix (Bug 2): real form for the previously-disabled "Schedule
+ * Interview" action, calling the already-fully-built POST /v1/hrms/interviews
+ * (interview-routes.ts) via the parent's onAction dispatcher. On success it
+ * renders the already-built-but-previously-imported-nowhere InterviewCard
+ * with the interview just scheduled, so this component finally gets a real
+ * caller instead of sitting unused.
+ */
+function ScheduleInterviewDialog({
+  applicantName,
+  jobTitle,
+  onSubmit,
+  onClose,
+}: {
+  applicantName: string;
+  jobTitle: string;
+  onSubmit: (payload: ScheduleInterviewPayload) => Promise<void>;
+  onClose: () => void;
+}) {
+  const t = useTranslations("recruitmentDetail");
+  const [interviewerIds, setInterviewerIds] = useState("");
+  const [scheduledAt, setScheduledAt] = useState("");
+  const [durationMinutes, setDurationMinutes] = useState(60);
+  const [mode, setMode] = useState<typeof INTERVIEW_MODES[number]>("video");
+  const [roundType, setRoundType] = useState<typeof INTERVIEW_ROUND_TYPES[number]>("technical");
+  const [roundNumber, setRoundNumber] = useState(1);
+  const [notes, setNotes] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const fieldId = useId();
+
+  const parsedInterviewerIds = interviewerIds.split(",").map((s) => s.trim()).filter(Boolean);
+  const submittedPayload = useRef<ScheduleInterviewPayload | null>(null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (parsedInterviewerIds.length === 0 || !scheduledAt) {
+      setStatus("error");
+      setMessage(t("scheduleInterviewFieldsRequired"));
+      return;
+    }
+    const payload: ScheduleInterviewPayload = {
+      interviewerIds: parsedInterviewerIds,
+      scheduledAt: new Date(scheduledAt).toISOString(),
+      durationMinutes,
+      mode,
+      roundType,
+      roundNumber,
+      notes: notes.trim() || undefined,
+    };
+    setStatus("submitting");
+    setMessage("");
+    try {
+      await onSubmit(payload);
+      submittedPayload.current = payload;
+      setStatus("success");
+    } catch (err) {
+      setStatus("error");
+      setMessage(err instanceof Error ? err.message : t("actionFailed"));
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
+      role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`}
+    >
+      <div className="w-full max-w-md mx-4 rounded-xl bg-white dark:bg-gray-900 p-6 shadow-2xl">
+        <h2 id={`${fieldId}-title`} className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
+          {t("scheduleInterviewDialogTitle", { name: applicantName })}
+        </h2>
+
+        {status === "success" && submittedPayload.current ? (
+          <div className="mt-3 flex flex-col gap-3">
+            <p className="text-sm text-emerald-600 dark:text-emerald-400">{t("interviewScheduledMessage")}</p>
+            <InterviewCard
+              candidateName={applicantName}
+              roleApplied={jobTitle}
+              slotISO={submittedPayload.current.scheduledAt}
+              interviewerName={submittedPayload.current.interviewerIds.join(", ")}
+            />
+            <Button onClick={onClose} style={{ alignSelf: "flex-end" }}>{t("dialogDone")}</Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-3">
+            <div>
+              <label htmlFor={`${fieldId}-interviewers`} className={dialogLabelClass}>{t("interviewerIds")}</label>
+              <input
+                id={`${fieldId}-interviewers`} type="text" className={dialogInputClass}
+                placeholder={t("interviewerIdsPlaceholder")}
+                value={interviewerIds} onChange={(e) => setInterviewerIds(e.target.value)}
+                required
+              />
+              <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">{t("interviewerIdsHelp")}</p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor={`${fieldId}-when`} className={dialogLabelClass}>{t("scheduledAt")}</label>
+                <input
+                  id={`${fieldId}-when`} type="datetime-local" className={dialogInputClass}
+                  value={scheduledAt} onChange={(e) => setScheduledAt(e.target.value)} required
+                />
+              </div>
+              <div>
+                <label htmlFor={`${fieldId}-duration`} className={dialogLabelClass}>{t("durationMinutes")}</label>
+                <input
+                  id={`${fieldId}-duration`} type="number" min={15} max={480} className={dialogInputClass}
+                  value={durationMinutes} onChange={(e) => setDurationMinutes(Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <label htmlFor={`${fieldId}-mode`} className={dialogLabelClass}>{t("interviewMode")}</label>
+                <select id={`${fieldId}-mode`} className={dialogInputClass} value={mode} onChange={(e) => setMode(e.target.value as typeof mode)}>
+                  {INTERVIEW_MODES.map((m) => <option key={m} value={m}>{t(`interviewMode_${m}`)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor={`${fieldId}-round-type`} className={dialogLabelClass}>{t("roundType")}</label>
+                <select id={`${fieldId}-round-type`} className={dialogInputClass} value={roundType} onChange={(e) => setRoundType(e.target.value as typeof roundType)}>
+                  {INTERVIEW_ROUND_TYPES.map((r) => <option key={r} value={r}>{t(`roundType_${r}`)}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor={`${fieldId}-round-number`} className={dialogLabelClass}>{t("roundNumber")}</label>
+                <input
+                  id={`${fieldId}-round-number`} type="number" min={1} className={dialogInputClass}
+                  value={roundNumber} onChange={(e) => setRoundNumber(Number(e.target.value))}
+                />
+              </div>
+            </div>
+            <div>
+              <label htmlFor={`${fieldId}-notes`} className={dialogLabelClass}>{t("notesOptional")}</label>
+              <textarea id={`${fieldId}-notes`} rows={2} className={dialogInputClass} value={notes} onChange={(e) => setNotes(e.target.value)} />
+            </div>
+
+            {status === "error" && message && (
+              <p role="alert" className="text-xs text-red-600 dark:text-red-400">{message}</p>
+            )}
+
+            <div className="flex justify-end gap-2 mt-1">
+              <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                {t("dialogCancel")}
+              </button>
+              <button type="submit" disabled={status === "submitting"} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
+                {status === "submitting" ? t("scheduling") : t("actionScheduleInterview")}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export type SendOfferPayload = { ctcMinor: number; currency: string; joiningDate?: string };
+
+/**
+ * CRITICAL fix (Bug 2): real form for "Send Offer" — the missing link that
+ * previously left every shortlisted application dead-ended (no UI path ever
+ * moved stage away from "shortlisted", so the Hire dialog on the application
+ * detail page — already fully built — could never become reachable). Calls
+ * the already-hardened PATCH /v1/hrms/applications/:id/offer (PR #1542).
+ */
+function SendOfferDialog({
+  applicantName,
+  onSubmit,
+  onClose,
+}: {
+  applicantName: string;
+  onSubmit: (payload: SendOfferPayload) => Promise<void>;
+  onClose: () => void;
+}) {
+  const t = useTranslations("recruitmentDetail");
+  const [ctcRupees, setCtcRupees] = useState("");
+  const [joiningDate, setJoiningDate] = useState("");
+  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const fieldId = useId();
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const ctcMinor = Math.round(Number(ctcRupees) * 100);
+    if (!ctcRupees || !Number.isFinite(ctcMinor) || ctcMinor <= 0) {
+      setStatus("error");
+      setMessage(t("sendOfferFieldsRequired"));
+      return;
+    }
+    setStatus("submitting");
+    setMessage("");
+    try {
+      await onSubmit({ ctcMinor, currency: "INR", joiningDate: joiningDate || undefined });
+      setStatus("success");
+    } catch (err) {
+      setStatus("error");
+      setMessage(err instanceof Error ? err.message : t("actionFailed"));
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`}>
+      <div className="w-full max-w-sm mx-4 rounded-xl bg-white dark:bg-gray-900 p-6 shadow-2xl">
+        <h2 id={`${fieldId}-title`} className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
+          {t("sendOfferDialogTitle", { name: applicantName })}
+        </h2>
+
+        {status === "success" ? (
+          <div className="mt-3 flex flex-col gap-3">
+            <p className="text-sm text-emerald-600 dark:text-emerald-400">{t("offerSentMessage")}</p>
+            <Button onClick={onClose} style={{ alignSelf: "flex-end" }}>{t("dialogDone")}</Button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-3">
+            <div>
+              <label htmlFor={`${fieldId}-ctc`} className={dialogLabelClass}>{t("ctc")}</label>
+              <input
+                id={`${fieldId}-ctc`} type="number" min={1} step="0.01" className={dialogInputClass}
+                placeholder={t("ctcPlaceholder")} value={ctcRupees} onChange={(e) => setCtcRupees(e.target.value)} required
+              />
+            </div>
+            <div>
+              <label htmlFor={`${fieldId}-joining`} className={dialogLabelClass}>{t("joiningDateOptional")}</label>
+              <input
+                id={`${fieldId}-joining`} type="date" className={dialogInputClass}
+                value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)}
+              />
+            </div>
+
+            {status === "error" && message && (
+              <p role="alert" className="text-xs text-red-600 dark:text-red-400">{message}</p>
+            )}
+
+            <div className="flex justify-end gap-2 mt-1">
+              <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
+                {t("dialogCancel")}
+              </button>
+              <button type="submit" disabled={status === "submitting"} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
+                {status === "submitting" ? t("sendingOffer") : t("actionSendOffer")}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function ContextMenu({
   app,
+  jobTitle,
   onAction,
   actionState,
 }: {
   app: Application;
-  onAction: (appId: string, key: string, reason?: string) => Promise<void>;
+  jobTitle: string;
+  onAction: (appId: string, key: string, payload?: unknown) => Promise<void>;
   actionState: "idle" | "submitting" | "done" | "error";
 }) {
   const t = useTranslations("recruitmentDetail");
   const [open, setOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<ActionDef | null>(null);
+  const [activeDialog, setActiveDialog] = useState<"interview" | "offer" | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
   const REJECT_CONFIRM: ConfirmConfig = {
@@ -114,7 +392,14 @@ function ContextMenu({
       { label: t("actionReject"),    key: "reject",    variant: "danger", confirm: REJECT_CONFIRM },
     ],
     shortlisted: [
-      { label: t("actionScheduleInterview"), key: "schedule_interview", variant: "primary", disabled: true, disabledReason: t("actionScheduleInterviewDisabledReason") },
+      // CRITICAL fix (Bug 2): these two were the dead end -- Schedule
+      // Interview was permanently disabled and nothing else in this bucket
+      // could move an application off "shortlisted", so the Hire dialog on
+      // the application detail page (canHire = stage selected|offered) could
+      // never become reachable through the UI. Both now open a real dialog
+      // (below) backed by already-built, already-hardened endpoints.
+      { label: t("actionScheduleInterview"), key: "schedule_interview", variant: "primary", dialog: "interview" },
+      { label: t("actionSendOffer"),         key: "send_offer",         variant: "primary", dialog: "offer" },
       { label: t("actionReject"),            key: "reject",             variant: "danger", confirm: REJECT_CONFIRM },
     ],
     interviewing: [
@@ -193,6 +478,11 @@ function ContextMenu({
                 role="menuitem"
                 disabled={act.disabled || actionState === "submitting"}
                 onClick={async () => {
+                  if (act.dialog) {
+                    setOpen(false);
+                    setActiveDialog(act.dialog);
+                    return;
+                  }
                   if (act.confirm) {
                     setOpen(false);
                     setPendingAction(act);
@@ -254,6 +544,22 @@ function ContextMenu({
           }}
         />
       )}
+
+      {activeDialog === "interview" && (
+        <ScheduleInterviewDialog
+          applicantName={app.applicantName}
+          jobTitle={jobTitle}
+          onSubmit={(payload) => onAction(app.id, "schedule_interview", payload)}
+          onClose={() => setActiveDialog(null)}
+        />
+      )}
+      {activeDialog === "offer" && (
+        <SendOfferDialog
+          applicantName={app.applicantName}
+          onSubmit={(payload) => onAction(app.id, "send_offer", payload)}
+          onClose={() => setActiveDialog(null)}
+        />
+      )}
     </div>
   );
 }
@@ -279,6 +585,10 @@ export default function JobOpeningDetailPage() {
   // codebase's standard double-submit guard, e.g. IntegrationDrawer.tsx,
   // EndConversationButton.tsx).
   const [shortlistAllBusy, setShortlistAllBusy] = useState(false);
+  // CRITICAL fix (Bug 1): no UI control anywhere could ever flip is_published,
+  // so nothing created through the app could reach the public /careers page.
+  const [publishBusy, setPublishBusy] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
 
   const searchId = useId();
   const formError = useFormError("vacancy");
@@ -321,7 +631,12 @@ export default function JobOpeningDetailPage() {
     return () => controller.abort();
   }, [loadOpening, loadApplications]);
 
-  const handleAction = useCallback(async (appId: string, actionKey: string, reason?: string) => {
+  const handleAction = useCallback(async (appId: string, actionKey: string, payload?: unknown) => {
+    // withdraw's only ever payload is an optional reason string; schedule_interview
+    // / send_offer pass a structured object instead (see ScheduleInterviewPayload /
+    // SendOfferPayload above) — narrow per-branch below rather than widening every
+    // call site to the union.
+    const reason = typeof payload === "string" ? payload : undefined;
     setDecisionStates((s) => ({ ...s, [appId]: "submitting" }));
     try {
       let res: Response;
@@ -357,6 +672,39 @@ export default function JobOpeningDetailPage() {
         if (res.ok) {
           setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, stage: "withdrawn" } : a));
         }
+      } else if (actionKey === "schedule_interview") {
+        // CRITICAL fix (Bug 2): real caller for interview-routes.ts's
+        // already-fully-built, already-hardened POST /v1/hrms/interviews
+        // (double-booking pre-check, dept-scope, atomic re-check consumer
+        // side). Scheduling an interview is its own real, valuable action —
+        // the backend does not gate "Send Offer" on it (application.stage
+        // has no "interviewing" writer anywhere in this codebase; confirmed
+        // by grep), so it does not change this application's stage/status.
+        const p = payload as ScheduleInterviewPayload;
+        res = await fetch(`/api/proxy/v1/hrms/interviews`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ jobOpeningId: id, applicationId: appId, ...p }),
+        });
+      } else if (actionKey === "send_offer") {
+        // CRITICAL fix (Bug 2): real caller for the already-hardened PATCH
+        // .../offer (PR #1542) — this is the actual missing link. Nothing in
+        // the UI previously called this endpoint from "shortlisted", so no
+        // application could ever reach "offered"/"selected" (the only stages
+        // the Hire endpoint — and the already-built Hire dialog on the
+        // application detail page — accept). Optimistic stage update below
+        // mirrors this same function's existing shortlist/reject/withdraw
+        // convention for this endpoint family, which is async (202 Accepted,
+        // queued through commands.offerApplication -> consumer.ts).
+        const p = payload as SendOfferPayload;
+        res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/offer`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(p),
+        });
+        if (res.ok) {
+          setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, stage: "offered" } : a));
+        }
       } else {
         // Unimplemented action — no-op
         setDecisionStates((s) => ({ ...s, [appId]: "idle" }));
@@ -375,6 +723,36 @@ export default function JobOpeningDetailPage() {
     // formError.fromResponse/fromException are stable across renders (see
     // useFormError) even though the wrapping object literal isn't.
   }, []);
+
+  // CRITICAL fix (Bug 1): the actual publish control. Calls the new PATCH
+  // .../publish route (publication-routes.ts), which is async (202 Accepted,
+  // queued through the same publishF3Write path this file's sibling
+  // advertisement/extend/cancel actions already use) — optimistic update
+  // here matches this page's own existing convention for that same class of
+  // endpoint (see handleAction's shortlist/send_offer branches above).
+  const handleTogglePublish = useCallback(async () => {
+    if (!opening) return;
+    const nextIsPublished = !(opening.isPublished === true || opening.isPublished === "true");
+    setPublishBusy(true);
+    setPublishError(null);
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/publish`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ isPublished: nextIsPublished }),
+      });
+      if (!res.ok) {
+        setPublishError((await formError.fromResponse(res, "save")).message);
+        return;
+      }
+      setOpening((prev) => prev ? { ...prev, isPublished: nextIsPublished } : prev);
+    } catch {
+      setPublishError(formError.fromException("save").message);
+    } finally {
+      setPublishBusy(false);
+    }
+    // formError.fromResponse/fromException are stable across renders (see useFormError).
+  }, [id, opening]);
 
   const filtered = applications.filter((a) => {
     const q = search.toLowerCase();
@@ -423,13 +801,31 @@ export default function JobOpeningDetailPage() {
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{opening.refNo} · {opening.department ?? "—"}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
-            {published ? t("published") : t("notPublished")}
-          </span>
-          <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STAGE_COLOR[opening.status] ?? "bg-slate-100 text-slate-700"}`}>
-            {opening.status}
-          </span>
+        <div className="flex flex-col items-end gap-1.5">
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
+              {published ? t("published") : t("notPublished")}
+            </span>
+            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STAGE_COLOR[opening.status] ?? "bg-slate-100 text-slate-700"}`}>
+              {opening.status}
+            </span>
+            <button
+              type="button"
+              onClick={() => void handleTogglePublish()}
+              disabled={publishBusy}
+              className={[
+                "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
+                published
+                  ? "border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  : "bg-indigo-600 text-white hover:bg-indigo-500",
+              ].join(" ")}
+            >
+              {publishBusy ? t("publishing") : published ? t("unpublish") : t("publish")}
+            </button>
+          </div>
+          {publishError && (
+            <p role="alert" className="text-xs text-red-600 dark:text-red-400 max-w-xs text-end">{publishError}</p>
+          )}
         </div>
       </div>
 
@@ -566,6 +962,7 @@ export default function JobOpeningDetailPage() {
                       {/* Context-aware action menu */}
                       <ContextMenu
                         app={app}
+                        jobTitle={opening.jobTitle}
                         onAction={handleAction}
                         actionState={ds}
                       />
