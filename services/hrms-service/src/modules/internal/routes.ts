@@ -80,9 +80,29 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       const rangeTo = lopEligibleLeaves.map((l) => l.toDate).reduce((a, b) => (a > b ? a : b));
       holidaySet = new Set(await getHolidaysInRange(ctx.tenantId, rangeFrom, rangeTo));
     }
+    // HIGH fix (LOP-ignores-leave-type bug): this used to count every
+    // approved leave day toward LOP regardless of leave type. Fetched once
+    // for the whole tenant (typically a handful of types) rather than once
+    // per leave record, same batching posture as the PERF-005 fix just
+    // below. Same lopFractionBps this route's sibling
+    // (.../leave-types/:id/lop-fraction-bps, which payroll-service calls for
+    // its own event-driven ledger) reads from -- both paths share the exact
+    // same source column, so they can never disagree.
+    const lopFractionByTypeId = new Map(
+      (await leaveRepo.listLeaveTypesByTenant(ctx.tenantId)).map((lt) => [lt.id, lt.lopFractionBps]),
+    );
     for (const leave of lopEligibleLeaves) {
       const days = countWorkingDaysExcludingHolidays(leave.fromDate, leave.toDate, holidaySet);
-      lopByEmployee.set(leave.employeeId, (lopByEmployee.get(leave.employeeId) ?? 0) + days);
+      // Unknown leave type (shouldn't happen -- every leave app's
+      // leaveTypeId is a real FK -- but fails toward "fully counts as LOP"
+      // rather than silently exempting it, same posture as this column's
+      // own DEFAULT 10000) mirrors attendanceLopApplies's own default-to-true
+      // convention just above.
+      const lopFractionBps = lopFractionByTypeId.get(leave.leaveTypeId) ?? 10000;
+      if (lopFractionBps === 0) continue; // fully-paid leave type: no LOP.
+      const lopDays = Math.round((days * lopFractionBps) / 10000);
+      if (lopDays <= 0) continue;
+      lopByEmployee.set(leave.employeeId, (lopByEmployee.get(leave.employeeId) ?? 0) + lopDays);
     }
 
     // PERF-005: was one findByEmpAndMonth query per active, LOP-eligible
@@ -290,6 +310,32 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     if (!emp) return reply.code(404).send({ code: "NOT_FOUND", message: `employee ${id} not found` });
     const resolveType = await loadTypeResolver(ctx.tenantId);
     return reply.send({ attendanceLopApplies: attendanceLopApplies(resolveType(emp.employeeType)) });
+  });
+
+  // HIGH fix (LOP-ignores-leave-type bug): single-leave-type paid/unpaid
+  // classification lookup, same shape and same rationale as
+  // attendance-lop-applies just above -- payroll-service's integration/
+  // consumer.ts writes to the LOP ledger whenever hrms-service publishes
+  // hrms.leave.approved, but that event only carries daysApplied +
+  // leaveTypeId, not the leave type's own classification (a different
+  // service/database, no direct access to leave/schema.ts's hrmsLeaveTypes).
+  // This route and the payroll-input route above's lopFractionByTypeId both
+  // read the exact same hrmsLeaveTypes.lopFractionBps column, so the two can
+  // never disagree.
+  app.get("/v1/hrms/internal/leave-types/:id/lop-fraction-bps", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const lt = await leaveRepo.findLeaveTypeById(id, ctx.tenantId);
+    // Not found: 404, same contract as attendance-lop-applies above. The
+    // caller (fetchLeaveLopFractionBps) must treat this status -- not a body
+    // field -- as "default to 10000 (fully counts as LOP)", the same
+    // fail-safe this column's own DEFAULT resolves to, so a lookup miss/race
+    // never silently exempts a leave type it shouldn't. Distinct from
+    // unreachability, which the caller must fail closed on instead of
+    // guessing.
+    if (!lt) return reply.code(404).send({ code: "NOT_FOUND", message: `leave type ${id} not found` });
+    return reply.send({ lopFractionBps: lt.lopFractionBps });
   });
 
   // payroll-service cross-database gap fix: payroll.payroll_slip_templates

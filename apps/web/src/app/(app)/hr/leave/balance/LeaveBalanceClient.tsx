@@ -14,6 +14,13 @@ type Allocation = {
   leaveTypeCode: string;
   leaveTypeName: string;
   fy: string;
+  /**
+   * HIGH fix (negative-balance bug): this EMPLOYEE's actual granted
+   * allocation for the year (pro-rated for new joiners, carried-forward, or
+   * HR-adjusted) -- NOT the leave type's generic policy cap. See
+   * context-routes.ts, which used to omit this field entirely.
+   */
+  totalDays: number;
   balanceDays: number;
 };
 type LeaveContext = {
@@ -79,9 +86,18 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
     return () => controller.abort()
   }, [empId, t, reloadTick]);
 
+  // HIGH fix (leave-balance negative-number bug, e.g. "Total Used: -4d"
+  // observed live): this used to fall back to the leave TYPE's generic
+  // policy cap (ctx.leaveTypes[].maxDays -- a per-tenant constant such as
+  // "EL: 30 days/year") as the denominator for "days used". That is not
+  // this employee's actual allocation for the year: hrmsLeaveAllocs.totalDays
+  // is (pro-rated for new joiners, carried forward, or HR-adjusted, so it
+  // can legitimately be HIGHER than the generic maxDays). Whenever it was,
+  // "used = maxDays - balanceDays" went negative. alloc.totalDays is this
+  // specific employee's real granted total for this allocation row -- use
+  // that as the denominator instead.
   const usedByTypeId = (alloc: Allocation) => {
-    const lt = ctx?.leaveTypes.find((leaveType) => leaveType.id === alloc.leaveTypeId);
-    const total = lt?.maxDays ?? alloc.balanceDays;
+    const total = alloc.totalDays;
     const used  = total - alloc.balanceDays;
     return { total, used, balance: alloc.balanceDays };
   };
@@ -90,10 +106,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
     total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
 
   const totalTypes       = ctx?.allocations.length ?? 0;
-  const totalEntitlement = ctx?.allocations.reduce((s, a) => {
-    const lt = ctx?.leaveTypes.find((leaveType) => leaveType.id === a.leaveTypeId);
-    return s + (lt?.maxDays ?? a.balanceDays);
-  }, 0) ?? 0;
+  const totalEntitlement = ctx?.allocations.reduce((s, a) => s + a.totalDays, 0) ?? 0;
   const totalBalance  = ctx?.allocations.reduce((s, a) => s + a.balanceDays, 0) ?? 0;
   const totalUsed     = totalEntitlement - totalBalance;
 

@@ -12,6 +12,21 @@
  *     mobile/email/bank-account/IFSC could still be edited by any HR-role
  *     actor. Now hard-blocked for any exited status.
  *
+ *   PATCH /v1/hrms/employees/:id/separate  — PR #1572 fix-up round: an
+ *     independent review found this route had NO status check either
+ *     (unlike its /confirm sibling above), and live-reproduced a
+ *     PATCH .../separate on an already-separated employee returning 202
+ *     (accepted) twice, instead of 409 like /confirm. The frontend-only
+ *     gating InitiateSeparationAction.tsx originally shipped with (an
+ *     EXITED_STATUSES picker-list filter) never covered this route, and its
+ *     own "cannot, by construction" claim about the ?empId= prefill path was
+ *     also false (see that component's doc comment) — this route-level
+ *     guard is the real fix. Uses isExitedStatus/EMPLOYEE_EXITED, same as
+ *     the generic PATCH /:id block above, not confirm's narrower
+ *     probation-only check — separation is legitimately initiated from
+ *     'confirmed'/'probation'/etc, so a positive allowlist would wrongly
+ *     reject the real non-exited flow this route exists for.
+ *
  * Exercised against a real Postgres (not mocked) via app.inject + the real
  * async command→consumer path (registerEmployeeConsumers + drain), mirroring
  * tests/basicminor-concurrency.test.ts's pattern — this table has FORCE ROW
@@ -165,6 +180,48 @@ describe("PATCH /v1/hrms/employees/:id — generic update status precondition", 
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/employees/${randomUUID()}`,
       headers: auth(), payload: { mobile: "9876543210" },
+    });
+    expect(r.statusCode).toBe(404);
+  });
+});
+
+describe("PATCH /v1/hrms/employees/:id/separate — status precondition", () => {
+  const payload = { separationType: "resignation", effectiveDate: "2026-06-30", encashmentDays: 0 };
+
+  it("separates a valid non-exited (e.g. confirmed) employee normally", async () => {
+    const id = await seedEmployee("confirmed");
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/employees/${id}/separate`,
+      headers: auth(), payload,
+    });
+    expect(r.statusCode).toBe(202);
+    await drain();
+    const after = await readEmployee(id);
+    // employee/consumer.ts's employeeSeparate handler always writes the
+    // literal status "separated", regardless of separationType.
+    expect(after?.status).toBe("separated");
+  });
+
+  it.each(["terminated", "separated", "retired"])(
+    "rejects separating an employee whose status is '%s' — 409, row unchanged (was: 202, twice)",
+    async (status) => {
+      const id = await seedEmployee(status);
+      const r = await app.inject({
+        method: "PATCH", url: `/v1/hrms/employees/${id}/separate`,
+        headers: auth(), payload,
+      });
+      expect(r.statusCode).toBe(409);
+      expect(r.json().code).toBe("EMPLOYEE_EXITED");
+      await drain();
+      const after = await readEmployee(id);
+      expect(after?.status).toBe(status); // unchanged
+    },
+  );
+
+  it("returns 404 for an unknown employee id", async () => {
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/employees/${randomUUID()}/separate`,
+      headers: auth(), payload,
     });
     expect(r.statusCode).toBe(404);
   });

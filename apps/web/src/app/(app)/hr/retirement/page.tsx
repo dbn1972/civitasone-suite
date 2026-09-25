@@ -7,8 +7,10 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getEmployeeById } from "../../../_data/loaders";
 import type { RetirementRow } from "./_components/RetirementDashboard";
 import { RetirementCaseWorkspace } from "./_components/RetirementCaseWorkspace";
+import { InitiateSeparationAction } from "./_components/InitiateSeparationAction";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
@@ -22,8 +24,31 @@ async function getData(): Promise<LoaderResult<RetirementRow[]>> {
   });
 }
 
-export default async function RetirementPage() {
+export default async function RetirementPage({
+  searchParams,
+}: {
+  searchParams?: { empId?: string };
+}) {
   const t = await getTranslations("retirement");
+  // HIGH fix: separation had no reachable "initiate" UI anywhere -- this
+  // page already listed every separation but had no create action. ?empId=
+  // arrives from the employee detail page's new "Initiate Separation" Quick
+  // Action; resolved here (server-side, same loader the employee detail page
+  // itself uses) so the form opens pre-filled with a real name instead of a
+  // bare id. Unlike this page's sibling Transfer/Promotion Quick Actions,
+  // which also pass ?empId= but never actually consume it (checked: neither
+  // transfer/page.tsx nor TransferWithApproval.tsx reads searchParams at
+  // all -- a pre-existing gap, not fixed here since it's outside this
+  // change's scope), this one genuinely prefills.
+  const prefillEmployeeId = searchParams?.empId;
+  const prefillEmployee = prefillEmployeeId ? await getEmployeeById(prefillEmployeeId) : null;
+  const prefillEmployeeName = prefillEmployee?.data?.name;
+  // SEC CRITICAL (status-integrity fix): threaded through to
+  // InitiateSeparationAction so a direct ?empId=<already-exited-id>
+  // navigation can be guarded against an already-exited employee -- this
+  // page already fetches the full employee record above for the name, so
+  // no extra request is needed for the status too.
+  const prefillEmployeeStatus = prefillEmployee?.data?.status;
   const COLUMNS: { key: keyof RetirementRow & string; label: string; cellType?: "status" }[] = [
     { key: "employee",          label: t("colEmployee") },
     { key: "department",        label: t("colDepartment") },
@@ -51,6 +76,7 @@ export default async function RetirementPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
+        actions={<InitiateSeparationAction prefillEmployeeId={prefillEmployeeId} prefillEmployeeName={prefillEmployeeName} prefillEmployeeStatus={prefillEmployeeStatus} />}
       />
       <DataSourceBadge source={source} message="Couldn't load retirement records — showing nothing" />
 

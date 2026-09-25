@@ -6,6 +6,13 @@ export const createLeaveTypeBody = z.object({
   maxDays:      z.number().int().nonnegative().default(0),
   isEncashable: z.boolean().default(false),
   carryForward: z.boolean().default(false),
+  // HIGH fix (LOP-ignores-leave-type bug): basis points (0-10000) of each
+  // approved day of this type that counts toward payroll Loss-of-Pay -- see
+  // schema.ts's hrmsLeaveTypes.lopFractionBps doc comment. Defaults to
+  // 10000 (fully counts as LOP) when the caller doesn't specify it, the
+  // same fail-safe as the column default, so a type created without an
+  // explicit classification is never silently treated as paid.
+  lopFractionBps: z.number().int().min(0).max(10000).default(10000),
 });
 export type CreateLeaveTypeBody = z.infer<typeof createLeaveTypeBody>;
 

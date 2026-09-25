@@ -64,6 +64,20 @@ export async function listLeaveTypesByTenant(tenantId: string, limit = 100): Pro
   return scopedRead((tx) => tx.select().from(hrmsLeaveTypes).where(eq(hrmsLeaveTypes.tenantId, tenantId)).limit(limit));
 }
 
+/**
+ * HIGH fix (LOP-ignores-leave-type bug): single-leave-type lookup backing
+ * internal/routes.ts's new GET .../leave-types/:id/lop-fraction-bps, which
+ * payroll-service's hrms-client.ts calls (mirroring the existing
+ * attendance-lop-applies internal lookup) to resolve a leave type's paid/
+ * unpaid classification at LOP-ledger-write time.
+ */
+export async function findLeaveTypeById(id: string, tenantId: string): Promise<typeof hrmsLeaveTypes.$inferSelect | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveTypes)
+    .where(and(eq(hrmsLeaveTypes.id, id), eq(hrmsLeaveTypes.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function listAllocsForEmployee(tenantId: string, employeeId: string, limit = 200): Promise<LeaveAllocRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsLeaveAllocs)
     .where(and(eq(hrmsLeaveAllocs.tenantId, tenantId), eq(hrmsLeaveAllocs.employeeId, employeeId)))
