@@ -4,6 +4,15 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErr
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+// HRMS peripheral medium findings, item 5: both "New Vacancy" and "Post
+// First Job" rendered for every viewer regardless of role, even though the
+// destination page (/hr/recruitment/new) gates on RECRUITMENT_ADMIN_ROLES
+// and 403s everyone else. Aligned to the dominant pattern (departments,
+// designations, training, locations, pensioners): same role list as
+// recruitment/new/page.tsx, checked before rendering either button.
+const RECRUITMENT_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type DashboardStats = {
   totalOpenings: number;
@@ -46,6 +55,8 @@ async function getOpenings(): Promise<LoaderResult<Opening[]>> {
 
 export default async function RecruitmentPage() {
   const t = await getTranslations("recruitment");
+  const roles = getSessionRoles();
+  const canCreate = roles.some((r) => RECRUITMENT_ADMIN_ROLES.includes(r));
   const [{ data: stats, source: statsSource }, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
   const totalApps = stats.applicationsInternal + stats.applicationsPublic;
   // Either fetch failing is worth telling the clerk about -- the stat cards
@@ -80,7 +91,7 @@ export default async function RecruitmentPage() {
         actions={
           <>
             <Link href="/hr/recruitment/talent-pool" className="btn ghost">{t("talentPool")}</Link>
-            <Link href="/hr/recruitment/new" className="btn primary">{t("newVacancy")}</Link>
+            {canCreate && <Link href="/hr/recruitment/new" className="btn primary">{t("newVacancy")}</Link>}
           </>
         }
       />
@@ -101,7 +112,7 @@ export default async function RecruitmentPage() {
             icon="💼"
             title={t("emptyTitle")}
             message={t("emptyMessage")}
-            action={<Link href="/hr/recruitment/new" className="btn primary">{t("postFirstJob")}</Link>}
+            action={canCreate ? <Link href="/hr/recruitment/new" className="btn primary">{t("postFirstJob")}</Link> : undefined}
           />
         ) : (
           <DataTable<Opening>

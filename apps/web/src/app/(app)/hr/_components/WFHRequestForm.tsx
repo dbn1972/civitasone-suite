@@ -31,14 +31,16 @@ interface WFHRequestFormProps {
   weeklyWfhCount?: number;
   /**
    * Where to send the user after a successful submit (and where Cancel
-   * goes). Defaults to /hr/workforce/wfh — this form's original, and still
-   * valid, home for the HR/manager "file on behalf of" admin flow. Pass
-   * "/hr/wfh" when embedding on the all-roles WFH page instead, so a plain
-   * `employee` submitting their own request lands back on a page they can
-   * actually reach, rather than the role-gated admin one (CRITICAL fix —
-   * this was previously hardcoded, so embedding this form anywhere other
-   * than /hr/workforce/wfh silently sent every submitter into a permission
-   * wall of its own).
+   * goes). Defaults to "/hr/wfh" — the canonical, all-roles WFH page.
+   * /hr/workforce/wfh (this form's original home) is now a redirect stub to
+   * /hr/wfh (HRMS peripheral medium findings, item 1: orphaned duplicate
+   * page, zero inbound links); a default pointing there would still resolve
+   * correctly via that redirect, but pointing straight at the canonical
+   * route avoids the pointless extra hop and matches what /hr/wfh/page.tsx
+   * already passes explicitly. Pass a different value only if some future
+   * caller genuinely needs to land elsewhere post-submit (CRITICAL fix,
+   * still applies — this was previously hardcoded to the role-gated admin
+   * page, which 403'd a plain `employee` submitting their own request).
    */
   redirectHref?: string;
 }
@@ -49,7 +51,7 @@ export function WFHRequestForm({
   employeeId: prefillId = "",
   payLevel,
   weeklyWfhCount,
-  redirectHref = "/hr/workforce/wfh",
+  redirectHref = "/hr/wfh",
 }: WFHRequestFormProps) {
   const router = useRouter();
   const t = useTranslations("wfhForm");

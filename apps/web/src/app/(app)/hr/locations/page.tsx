@@ -4,6 +4,17 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+// HRMS peripheral medium findings, item 5: this list page rendered "Add
+// Location" for every viewer regardless of role -- unlike every sibling
+// admin-create screen in this module (departments, designations,
+// jd-templates, training, pensioners), which only show their own create
+// button to roles that can actually complete it. A non-admin clicking
+// through landed on /hr/locations/new only to be turned away by that page's
+// own LOCATION_ADMIN_ROLES gate. Aligned to the dominant pattern: same
+// role list as locations/new/page.tsx, checked before rendering the button.
+const LOCATION_ADMIN_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 type Location = {
   id: string;
@@ -67,6 +78,8 @@ function MapPin({ size = 14, color = "currentColor" }: { size?: number; color?: 
 
 export default async function LocationsPage() {
   const t = await getTranslations("locations");
+  const roles = getSessionRoles();
+  const canAdminister = roles.some((r) => LOCATION_ADMIN_ROLES.includes(r));
   const { data: locations, source } = await getLocations();
 
   const errored = source === "error";
@@ -83,9 +96,11 @@ export default async function LocationsPage() {
         backLabel={t("backLabel")}
         help="hr"
         actions={
-          <Link href="/hr/locations/new" style={newBtnStyle}>
-            {t("newBtn")}
-          </Link>
+          canAdminister ? (
+            <Link href="/hr/locations/new" style={newBtnStyle}>
+              {t("newBtn")}
+            </Link>
+          ) : undefined
         }
       />
       <DataSourceBadge source={source} />

@@ -1,49 +1,19 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { describe, it, expect, vi } from "vitest";
 
-const fetchJsonMock = vi.fn();
-vi.mock("@/app/_data/apiClient", () => ({
-  fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
+const redirectMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  redirect: (path: string) => redirectMock(path),
 }));
 
-import ContractualPage from "./page";
+import WorkforceContractualPageRedirect from "./page";
 
-const MOCK_EMPLOYEES = [
-  { id: "c1", name: "Suresh Pillai", department: "Admin", agency: "TeamLease", designation: "DEO", contractFrom: "2026-04-01", contractTo: "2027-03-31", employmentType: "contract", status: "active" },
-  { id: "c2", name: "Meena Singh", department: "Finance", agency: "Quess Corp", designation: "Accountant", contractFrom: "2026-01-01", contractTo: "2026-12-31", employmentType: "contractual", status: "active" },
-];
-
-describe("ContractualPage", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
-
-  it("renders contractual staff from API", async () => {
-    fetchJsonMock.mockResolvedValue({ data: MOCK_EMPLOYEES, source: "api" });
-    render(await ContractualPage());
-    expect(screen.getByText("Suresh Pillai")).toBeInTheDocument();
-    expect(screen.getByText("Meena Singh")).toBeInTheDocument();
-  });
-
-  it("shows GFR 2017 reference in subtitle", async () => {
-    fetchJsonMock.mockResolvedValue({ data: MOCK_EMPLOYEES, source: "api" });
-    render(await ContractualPage());
-    expect(screen.getByText(/GFR 2017/i)).toBeInTheDocument();
-  });
-
-  it("renders agency names", async () => {
-    fetchJsonMock.mockResolvedValue({ data: MOCK_EMPLOYEES, source: "api" });
-    render(await ContractualPage());
-    expect(screen.getByText("TeamLease")).toBeInTheDocument();
-  });
-
-  it("shows Agencies stat card", async () => {
-    fetchJsonMock.mockResolvedValue({ data: MOCK_EMPLOYEES, source: "api" });
-    render(await ContractualPage());
-    expect(screen.getByText("Agencies")).toBeInTheDocument();
-  });
-
-  it("renders empty state when no contractual staff", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
-    render(await ContractualPage());
-    expect(screen.getByText(/No contractual staff/i)).toBeInTheDocument();
+// /hr/workforce/contractual was an orphaned duplicate of /hr/contractual
+// (zero inbound links anywhere in the repo) -- HRMS peripheral medium
+// findings, item 1. Redirected rather than deleted, mirroring the
+// /hr/appraisals -> /hr/apar precedent (PR #1571).
+describe("WorkforceContractualPageRedirect", () => {
+  it("redirects to the canonical /hr/contractual page", () => {
+    WorkforceContractualPageRedirect();
+    expect(redirectMock).toHaveBeenCalledWith("/hr/contractual");
   });
 });

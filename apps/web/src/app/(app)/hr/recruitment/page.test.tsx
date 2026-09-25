@@ -9,6 +9,16 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+// HRMS peripheral medium findings, item 5: RecruitmentPage now gates its
+// "New Vacancy"/"Post First Job" buttons on RECRUITMENT_ADMIN_ROLES (they
+// used to render unconditionally). Default to an admin role so every
+// pre-existing test below, which doesn't care about button visibility,
+// keeps seeing the same page it always did.
+let mockRoles: string[] = ["hr_admin"];
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => mockRoles,
+}));
+
 import RecruitmentPage from "./page";
 
 const STATS = {
@@ -41,6 +51,7 @@ const OPENING = {
 
 describe("RecruitmentPage (HR-A deep-verify)", () => {
   beforeEach(() => {
+    mockRoles = ["hr_admin"];
     fetchJsonMock.mockReset();
   });
 
@@ -105,5 +116,35 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     render(ui);
 
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+  });
+
+  // HRMS peripheral medium findings, item 5: create-button role gating.
+  it("shows New Vacancy / Post First Job for an hr_admin", async () => {
+    mockRoles = ["hr_admin"];
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: STATS, source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" });
+
+    const ui = await RecruitmentPage();
+    render(ui);
+
+    expect(screen.getByText("+ New Vacancy")).toBeInTheDocument();
+    expect(screen.getByText("Post First Job")).toBeInTheDocument();
+  });
+
+  it("hides New Vacancy / Post First Job for a plain employee", async () => {
+    mockRoles = ["employee"];
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: STATS, source: "api" })
+      .mockResolvedValueOnce({ data: [OPENING], source: "api" });
+
+    const ui = await RecruitmentPage();
+    render(ui);
+
+    // The list still renders in full for a non-admin viewer -- only the
+    // create action is gated.
+    expect(screen.getByText("Junior Engineer")).toBeInTheDocument();
+    expect(screen.queryByText("+ New Vacancy")).not.toBeInTheDocument();
+    expect(screen.queryByText("Post First Job")).not.toBeInTheDocument();
   });
 });

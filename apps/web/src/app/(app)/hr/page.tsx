@@ -1,7 +1,7 @@
 import { getTranslations } from "next-intl/server";
 import type { NavTile } from "@civitasone/types";
-import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
+import { HRHubNavigation } from "./_components/HRHubNavigation";
 
 export default async function Page() {
 	const t = await getTranslations("hr");
@@ -192,27 +192,20 @@ export default async function Page() {
 				subtitle={t("subtitle")}
 				help="hr"
 			/>
-			{hrCategories.map((cat) => (
-				<section key={cat.title} style={{ marginBottom: 32 }}>
-					<h2
-						style={{
-							fontSize: 13,
-							fontWeight: 600,
-							color: "var(--ink2)",
-							textTransform: "uppercase",
-							letterSpacing: "0.07em",
-							marginBottom: 12,
-							display: "flex",
-							alignItems: "center",
-							gap: 7,
-						}}
-					>
-						<span aria-hidden="true">{cat.icon}</span>
-						{cat.title}
-					</h2>
-					<LinkTiles tiles={cat.tiles} columns="four" />
-				</section>
-			))}
+			{/*
+			 * HRHubNavigation (HRMS peripheral medium findings, item 2): built in
+			 * #cd1c20892 ("HR Hub redesigned with categories + search... 72 flat
+			 * tiles replaced with 10 collapsible category sections") for exactly
+			 * this `{ title, icon, tiles: NavTile[] }[]` shape, but never wired
+			 * in -- this page kept rendering every category as an always-open
+			 * LinkTiles wall. Wired in now: the category count (13) and tile
+			 * count have only grown since that PR, so search + collapse/expand
+			 * + a Quick Access shortlist is more valuable today, not less, and
+			 * every existing href/title/description is preserved unchanged
+			 * (same hrCategories data, just handed to the searchable component
+			 * instead of mapped inline) -- no tile becomes unreachable.
+			 */}
+			<HRHubNavigation categories={hrCategories} />
 		</div>
 	);
 }

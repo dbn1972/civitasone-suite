@@ -1,44 +1,20 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
 
+const redirectMock = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
+  redirect: (path: string) => redirectMock(path),
 }));
 
-import OvertimeNewPage from "./page";
+import WorkforceOvertimeNewPageRedirect from "./page";
 
-// UX-017 (tranche 6): OvertimeNewPage now reads its heading copy through
-// next-intl's getTranslations(), which is async -- the component itself is
-// now an async Server Component, so every render() call below must await it
-// first, same as every other workforce/* page test (e.g.
-// ../page.test.tsx's `render(await OvertimePage())`). This file used to call
-// `render(<OvertimeNewPage />)` synchronously because the component had no
-// data/translation dependency; that no longer works once the component
-// returns a Promise instead of a React element.
-describe("OvertimeNewPage", () => {
-  it("renders page heading", async () => {
-    render(await OvertimeNewPage());
-    expect(screen.getByRole("heading", { name: /new overtime claim/i })).toBeInTheDocument();
-  });
-
-  it("renders CCS Rules reference in subtitle", async () => {
-    render(await OvertimeNewPage());
-    expect(screen.getByText(/CCS Rules apply/i)).toBeInTheDocument();
-  });
-
-  it("embeds the OvertimeClaimForm", async () => {
-    render(await OvertimeNewPage());
-    expect(screen.getByRole("form", { name: /overtime claim form/i })).toBeInTheDocument();
-  });
-
-  it("shows policy note inside form", async () => {
-    render(await OvertimeNewPage());
-    expect(screen.getByRole("note")).toBeInTheDocument();
-  });
-
-  it("shows submit and cancel buttons", async () => {
-    render(await OvertimeNewPage());
-    expect(screen.getByRole("button", { name: /submit claim/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /cancel/i })).toBeInTheDocument();
+// /hr/workforce/overtime/new rendered OvertimeClaimForm, whose extra
+// duty-officer/comp-mode fields are silently dropped by the backend (no
+// matching column or schema field) -- a genuine duplicate of the canonical
+// /hr/overtime/new form, not lost functionality. HRMS peripheral medium
+// findings, item 1.
+describe("WorkforceOvertimeNewPageRedirect", () => {
+  it("redirects to the canonical /hr/overtime/new page", () => {
+    WorkforceOvertimeNewPageRedirect();
+    expect(redirectMock).toHaveBeenCalledWith("/hr/overtime/new");
   });
 });
