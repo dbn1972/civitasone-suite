@@ -8,7 +8,7 @@ import { useTranslations } from "next-intl";
 
 export type EmpRow = { id: string; employeeNo?: string; name: string; department: string; status: string } & Record<string, unknown>;
 
-export function EmployeesTable({ employees, source = "api" }: { employees: EmpRow[]; source?: "api" | "error" }) {
+export function EmployeesTable({ employees, source = "api", canCreate = false }: { employees: EmpRow[]; source?: "api" | "error"; canCreate?: boolean }) {
   const t = useTranslations("employeesTable");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<EmpRow[]>(
     "hr.employees",
@@ -48,9 +48,11 @@ export function EmployeesTable({ employees, source = "api" }: { employees: EmpRo
         emptyTitle={t("emptyTitle")}
         emptyMessage={t("emptyMessage")}
         emptyAction={
-          <Link href="/hr/employees/new" className="btn primary" style={{ marginTop: 10 }}>
-            {t("addFirstEmployee")}
-          </Link>
+          canCreate ? (
+            <Link href="/hr/employees/new" className="btn primary" style={{ marginTop: 10 }}>
+              {t("addFirstEmployee")}
+            </Link>
+          ) : undefined
         }
       />
     </>

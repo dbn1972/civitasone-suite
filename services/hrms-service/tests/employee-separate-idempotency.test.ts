@@ -88,10 +88,18 @@ describe("HIGH: separateEmployee derives a deterministic messageId", () => {
     expect(first.messageId).not.toBe(second.messageId);
   });
 
-  it("the derived messageId is a syntactically valid v5 UUID (outbox messageId column is typed uuid)", async () => {
+  it("the derived messageId is a syntactically valid UUID (outbox messageId column is typed uuid)", async () => {
+    // MEDIUM finding follow-up: separateEmployee now derives this via
+    // idempotentId() (@civitasone/auth, tenant-scoped since PR #1565)
+    // instead of the ad hoc uuidV5() helper -- see employee/commands.ts's
+    // doc comment. idempotentId() slices a SHA-256 digest directly into
+    // UUID-shaped groups without forcing an RFC 4122 version/variant
+    // nibble, so this no longer asserts specifically "version 5" (it isn't
+    // one any more) -- only what actually matters for a `uuid`-typed
+    // column: the hex-and-hyphen shape.
     await separateEmployee(ctx(), randomUUID(), body());
     const { messageId } = publishMock.mock.calls[0]![1] as { messageId: string };
-    expect(messageId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i);
+    expect(messageId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
   });
 });
 

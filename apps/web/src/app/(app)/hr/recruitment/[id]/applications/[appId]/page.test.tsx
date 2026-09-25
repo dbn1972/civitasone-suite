@@ -97,6 +97,11 @@ describe("ApplicationDetailPage", () => {
 
     fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
     fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
+    // MEDIUM finding: Basic Pay now defaults to empty and the backend rejects
+    // 0 (hireApplicationBody.basicMinor is z.number().int().positive()) — a
+    // real positive value is required to get past the form's own
+    // client-side validation to the hire submission this test is about.
+    fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "50000" } });
     fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
     fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
     fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
@@ -148,6 +153,9 @@ describe("ApplicationDetailPage", () => {
       await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
       fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
       fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
+      // MEDIUM finding: a real positive Basic Pay is now required client-side
+      // before submit is even attempted — see the sibling test above.
+      fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "50000" } });
       fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
       fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
       fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));

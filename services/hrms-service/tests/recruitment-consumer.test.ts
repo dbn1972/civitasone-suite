@@ -11,7 +11,7 @@ const {
   insertJobOpeningMock, insertApplicationMock, updateApplicationMock,
   insertOfferMock, findApplicationByIdMock, insertEmployeeMock,
   claimApplicationForHireMock, claimApplicationForOfferMock, claimVacancyMock,
-  departmentExistsTxMock, designationExistsTxMock,
+  departmentExistsTxMock, designationExistsTxMock, maxOfferVersionTxMock,
 } = vi.hoisted(() => {
   const _mockTx = {
     insert: vi.fn().mockReturnValue({ values: vi.fn().mockResolvedValue(undefined) }),
@@ -49,6 +49,11 @@ const {
     // `true` (exists) so the happy-path test keeps its original behavior.
     departmentExistsTxMock: vi.fn(async () => true),
     designationExistsTxMock: vi.fn(async () => true),
+    // MEDIUM finding (offer write-path consistency): the applicationOffer
+    // handler now calls offer-repo.ts's insertOffer/maxOfferVersionTx
+    // directly (matching the compliance chain's own module) instead of
+    // repo.ts's byte-identical duplicate -- see consumer.ts's doc comment.
+    maxOfferVersionTxMock: vi.fn(async () => 0),
   };
 });
 
@@ -85,6 +90,16 @@ vi.mock("../src/modules/employee/repo.js", () => ({
   // Recruitment hardening (minor item): FK existence checks.
   departmentExistsTx: (...a: any[]) => departmentExistsTxMock(...a),
   designationExistsTx: (...a: any[]) => designationExistsTxMock(...a),
+}));
+// MEDIUM finding (offer write-path consistency): the applicationOffer
+// handler now calls offer-repo.ts directly (the SAME module the compliance
+// approval-chain flow uses) rather than repo.ts's byte-identical duplicate
+// insertOffer -- see consumer.ts's doc comment on the fix. Routed to the
+// SAME insertOfferMock spy above so this file's existing assertions keep
+// working unchanged.
+vi.mock("../src/modules/recruitment/offer-repo.js", () => ({
+  insertOffer: (...a: any[]) => insertOfferMock(...a),
+  maxOfferVersionTx: (...a: any[]) => maxOfferVersionTxMock(...a),
 }));
 
 import { registerRecruitmentConsumers } from "../src/modules/recruitment/consumer.js";
@@ -174,7 +189,29 @@ describe("applicationOffer command", () => {
 
     expect(insertOfferMock).toHaveBeenCalledOnce();
     const offer = insertOfferMock.mock.calls[0]![1] as Record<string, unknown>;
-    expect(offer.status).toBe("sent");
+    // MEDIUM finding: "sent" was never a value offer-domain.ts's vocabulary
+    // (draft/pending_approval/approved/returned/released/accepted/declined/
+    // withdrawn/expired/revised) defines -- canRelease/isTerminal/
+    // isOfferEditable all returned false for it, and POST .../accept,
+    // .../decline and .../expire all require status === "released" exactly,
+    // so a legacy-flow offer could never legitimately be actioned through
+    // those routes. The legacy shortcut has no approval chain, so the
+    // honest equivalent is the state the compliance chain reaches right
+    // after its own /release step -- with releasedAt genuinely set, and
+    // approvedAt correctly left null since no approval actually ran.
+    expect(offer.status).toBe("released");
+    expect(offer.releasedAt).toBeInstanceOf(Date);
+    expect(offer.approvedAt ?? null).toBeNull();
+    // Same columns the compliance flow (f3-consumer.ts's
+    // "recruitment_offer_routes__0") populates, instead of silently staying
+    // at their schema defaults (0 / null) for a legacy-flow offer.
+    expect(offer.offerNo).toMatch(/^OFR-/);
+    expect(offer.offerVersion).toBe(1);
+    expect(offer.basicMinor).toBe(6000000n);
+    expect(offer.grossCtcMinor).toBe(6000000n);
+    expect(offer.joiningBonusMinor).toBe(0n);
+    expect(offer.relocationMinor).toBe(0n);
+    expect(offer.variablePayMinor).toBe(0n);
     await q.stop();
   });
 

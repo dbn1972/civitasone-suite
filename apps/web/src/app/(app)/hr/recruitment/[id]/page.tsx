@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useId, useState, useCallback, useRef } from "react";
+import { useEffect, useId, useState, useCallback, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ApplicationPipeline } from "../_components/ApplicationPipeline";
-import { GOIReservationCard } from "../_components/GOIReservationCard";
+import { GOIReservationCard, GOI_RESERVATION_QUOTA_PCT, type GoiReservationCategory } from "../_components/GOIReservationCard";
 import { InterviewCard } from "../_components/InterviewCard";
 import { ConfirmDialog, ErrorState, useConfirmAction, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -43,6 +43,11 @@ type Application = {
   stage: string;
   screeningDecision: string;
   appliedAt?: string;
+  /** GOI reservation category (SC/ST/OBC/PH/EWS/…), case as recorded on the
+   * application. Optional: not every intake path collects it yet -- see
+   * reservationFill below, which treats "no application has this set" as
+   * an honest no-data state rather than a fabricated 0%. */
+  category?: string;
 };
 
 type DecisionState = Record<string, "idle" | "submitting" | "done" | "error">;
@@ -571,6 +576,33 @@ export default function JobOpeningDetailPage() {
 
   const [opening, setOpening] = useState<JobOpening | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
+
+  // MEDIUM finding: GOIReservationCard used to render with no `fill` prop
+  // passed at all, so it always showed a hardcoded 0% -- a fabricated
+  // figure, not a real one. Real source of truth: each application's own
+  // `category` field (SC/ST/OBC/PH-style GOI reservation category) plus its
+  // `stage` -- a post reserved for a category counts as "filled" once an
+  // application in that category has actually been hired. `posts` per
+  // category is derived from GOI_RESERVATION_QUOTA_PCT, the SAME constant
+  // the card itself uses, so the two can never drift apart. When there are
+  // applications but none of them carry a category yet, that's a genuine
+  // data gap (not every intake path collects it) -- surfaced honestly via
+  // categoryDataAvailable=false instead of a misleading 0%.
+  const reservation = useMemo(() => {
+    const totalVacancies = opening?.vacancies ?? 0;
+    const categoryDataAvailable = applications.length === 0 || applications.some((a) => !!a.category?.trim());
+    const fill: Partial<Record<GoiReservationCategory, number>> = {};
+    if (categoryDataAvailable) {
+      for (const key of Object.keys(GOI_RESERVATION_QUOTA_PCT) as GoiReservationCategory[]) {
+        const posts = Math.max(1, Math.round((GOI_RESERVATION_QUOTA_PCT[key] / 100) * totalVacancies));
+        const hiredInCategory = applications.filter(
+          (a) => (a.category ?? "").trim().toLowerCase() === key && a.stage === "hired"
+        ).length;
+        fill[key] = Math.min(100, (hiredInCategory / posts) * 100);
+      }
+    }
+    return { fill, categoryDataAvailable };
+  }, [applications, opening?.vacancies]);
   const [loadingOpening, setLoadingOpening] = useState(true);
   const [loadingApps, setLoadingApps] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -866,7 +898,11 @@ export default function JobOpeningDetailPage() {
       </div>
 
       {/* ── GOI Reservation Status (GFR 2017) ── */}
-      <GOIReservationCard totalVacancies={opening.vacancies} />
+      <GOIReservationCard
+        totalVacancies={opening.vacancies}
+        fill={reservation.fill}
+        categoryDataAvailable={reservation.categoryDataAvailable}
+      />
 
       {/* ── Application Pipeline tracker ── */}
       {!loadingApps && (
