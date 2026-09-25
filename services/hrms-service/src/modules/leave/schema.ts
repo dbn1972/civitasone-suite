@@ -27,7 +27,7 @@ export const hrmsLeaveTypes = leaveSchema.table("hrms_leave_types", {
   // precedent (silently treating an unclassified type as paid risks a silent
   // overpayment that's hard to audit after the fact; docking it as unpaid by
   // default is at least immediately visible on the employee's payslip).
-  // See migrations/0150_leave_type_lop_fraction.sql for the backfill of
+  // See migrations/0151_leave_type_lop_fraction.sql for the backfill of
   // existing types and the evidence behind each one.
   lopFractionBps: integer("lop_fraction_bps").notNull().default(10000),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

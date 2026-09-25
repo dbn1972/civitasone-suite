@@ -56,7 +56,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
     // final deduction formula in payroll/consumer.ts, which converts it via
     // BigInt(lopDays)) are integer-day-count today. For the two
     // classifications currently in use (0 and 10000 bps -- see migration
-    // 0150_leave_type_lop_fraction.sql) this is always exact, since either
+    // 0151_leave_type_lop_fraction.sql) this is always exact, since either
     // branch above already short-circuits or multiplies by 1. Only a
     // genuinely partial type (currently just HPL at 5000 bps / half pay)
     // rounds -- e.g. 3 days -> 1.5 -> 2. Exact fractional-day precision would

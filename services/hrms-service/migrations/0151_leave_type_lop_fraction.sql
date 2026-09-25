@@ -1,4 +1,4 @@
--- 0150_leave_type_lop_fraction.sql
+-- 0151_leave_type_lop_fraction.sql
 -- HIGH fix: payroll's Loss-of-Pay calculation summed ALL approved leave days
 -- with no regard for whether the leave type was paid or unpaid
 -- (payroll-service's integration/consumer.ts unconditionally added every
@@ -120,24 +120,49 @@ ALTER TABLE leave.hrms_leave_types
 -- (tenant_isolation_policy: tenant_id = current_tenant_id()); civitas_admin
 -- (the role this and every migration actually runs as) is deliberately
 -- NOSUPERUSER NOBYPASSRLS and nothing here ever set app.tenant_id, so the
--- WHERE clause matched no visible rows at all -- same root cause, and same
--- fix, as migration 0145's holiday backfill: never write cross-tenant
--- directly; loop one tenant at a time and re-enter that row's own tenant
--- context (set_config('app.tenant_id', ...)) before each UPDATE, so every
--- write is an ordinary, fully tenant-scoped, RLS-satisfying single-tenant
--- update -- no bypass needed or used for any write here. app.platform_bypass
--- is set only to discover the distinct tenant_id set via
--- employee.hrms_employees (migration 0133's platform_bypass SELECT policy),
--- exactly as 0145 already established -- it does not touch
--- hrms_leave_types's own policy at all.
-SET app.platform_bypass = 'true';
-
+-- WHERE clause matched no visible rows at all -- same root cause as migration
+-- 0145's holiday backfill: never write cross-tenant directly; loop one
+-- tenant at a time and re-enter that row's own tenant context before each
+-- UPDATE, so every write is an ordinary, fully tenant-scoped,
+-- RLS-satisfying single-tenant update -- no bypass needed or used for any
+-- write here. app.platform_bypass is set only to discover the distinct
+-- tenant_id set via employee.hrms_employees (migration 0133's
+-- platform_bypass SELECT policy) -- it does not touch hrms_leave_types's
+-- own policy at all.
+--
+-- Raw Session GUC Guard (scripts/ci/raw-session-guc-guard.mjs, PERF-001)
+-- fix: 0145 sets both of these GUCs session-scoped (bare `SET app.foo =
+-- ...` / `set_config(..., false)`) -- exactly the PgBouncer
+-- transaction-pool leak this guard exists to catch. Unlike 0145 (a
+-- pre-existing, separately-tracked violation on unmodified main, not
+-- touched here), this migration does not get a pass on that: both GUCs
+-- below are set transaction-local (`set_config(..., true)`), matching the
+-- established pattern (packages/db/src/raw-tenant-guc.ts's
+-- withRawTenantGuc, migration 0025's PERFORM set_config(..., true)).
+--
+-- app.platform_bypass is set *inside* the DO block below rather than as a
+-- standalone top-level statement before it, which matters beyond just
+-- satisfying the guard: a bare top-level `SET LOCAL` has no enclosing
+-- transaction block to be local TO -- psql runs each top-level statement in
+-- this migration as its own implicitly-committed transaction (empirically
+-- confirmed: a standalone `SET LOCAL` statement here just emits "SET LOCAL
+-- can only be used in transaction blocks" and sets nothing), so hoisting it
+-- outside the DO block would silently zero out this entire backfill (the
+-- FOR loop's own `SELECT DISTINCT tenant_id FROM employee.hrms_employees`
+-- would see no tenants at all under RLS). The DO block itself is a single
+-- top-level statement, so anything set_config()'d inside it is
+-- transaction-local to that one statement's own implicit transaction --
+-- covering the FOR loop's tenant discovery below and auto-clearing the
+-- instant this DO block finishes, so it never leaks onto a pooled
+-- connection's next client.
 DO $$
 DECLARE
   t uuid;
 BEGIN
+  PERFORM set_config('app.platform_bypass', 'true', true);
+
   FOR t IN SELECT DISTINCT tenant_id FROM employee.hrms_employees LOOP
-    PERFORM set_config('app.tenant_id', t::text, false);
+    PERFORM set_config('app.tenant_id', t::text, true);
 
     UPDATE leave.hrms_leave_types SET lop_fraction_bps = 0     WHERE tenant_id = t AND code = 'CL';
     UPDATE leave.hrms_leave_types SET lop_fraction_bps = 0     WHERE tenant_id = t AND code = 'EL';
