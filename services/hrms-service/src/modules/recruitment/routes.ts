@@ -12,6 +12,8 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as screeningRepo from "./screening-repo.js";
+import { countApplicationsForEmail } from "./eligibility-repo.js";
+import { resolveDeptScope } from "./dept-scope.js";
 import { tenantStorage } from "@civitasone/db";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
@@ -22,7 +24,20 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, JobOpeningSummaryListSchema, await queries.listJobOpenings(ctx.tenantId, q.limit));
+    // HIGH finding: department scoping. A "manager" caller (ALL_ROLES includes
+    // it, but it is not in HR_ROLES / TENANT_WIDE_ROLES) previously saw every
+    // department's job openings tenant-wide -- the same resolveDeptScope
+    // pattern this module already applies to requisitions/interviews
+    // (dept-scope.ts), now applied here too. Fails closed (empty list, not an
+    // error) when scoping applies but no department could be resolved for the
+    // caller, matching interview-routes.ts's own convention for that case.
+    const deptScope = await resolveDeptScope(req, ctx);
+    const rows = deptScope.tenantWide
+      ? await queries.listJobOpenings(ctx.tenantId, q.limit)
+      : deptScope.departmentId
+        ? await queries.listJobOpenings(ctx.tenantId, q.limit, deptScope.departmentId)
+        : [];
+    sendValidated(reply, JobOpeningSummaryListSchema, rows);
   });
 
   app.post("/v1/hrms/job-openings", async (req, reply) => {
@@ -220,6 +235,24 @@ export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<voi
       throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
     }
     const dedupKey = deriveDedupKey(vacancy, body.email);
+    // HIGH fix: this id/reference-number used to be generated and returned as
+    // a convincing "success" screen BEFORE any dedup check ran. The actual
+    // insert happens later, asynchronously, in consumer.ts's applicationCreate
+    // handler; a genuine repeat submission was silently dropped there (a
+    // caught 23505 against hrms_applications_dedup_uq, logged and returned —
+    // see that handler's catch block) with NO row ever created for the id the
+    // candidate was already shown as their reference number. Mirrors the
+    // synchronous pre-check + consumer-side-atomic-recheck defense-in-depth
+    // pattern this file already uses for offer/hire (repo.NOT_OFFERABLE_*
+    // above) and eligibility-routes.ts's own apply path (which this same
+    // countApplicationsForEmail call is borrowed from) — a real duplicate now
+    // gets a clear, immediate 409 instead of a fabricated reference number.
+    if (dedupKey && body.email) {
+      const existing = await countApplicationsForEmail(vacancy.tenantId, body.jobOpeningId, body.email);
+      if (existing > 0) {
+        throw new HttpError(409, "DUPLICATE_APPLICATION", "an application for this vacancy already exists for this email");
+      }
+    }
     const result = await commands.createPublicApplication(vacancy.tenantId, body, dedupKey);
     return reply.code(202).send(result);
   });

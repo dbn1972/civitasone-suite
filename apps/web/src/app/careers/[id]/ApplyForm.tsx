@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpeningId: string; vacancyType?: string }) {
   const [name, setName] = useState("");
@@ -20,6 +21,12 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [applicationId, setApplicationId] = useState("");
+  // HIGH fix: this form used to read the raw error envelope's `.message`
+  // directly (JSON.parse(text)?.message), so a failed Zod validation showed
+  // the backend's generic "invalid request" instead of anything actionable —
+  // every other form in this codebase goes through useFormError specifically
+  // to prevent that. Matching that established pattern here too.
+  const formError = useFormError("application");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,11 +71,9 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        const text = await res.text();
-        let msg = "Something went wrong. Please try again.";
-        try { msg = JSON.parse(text)?.message || msg; } catch { /* use default */ }
+        const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(msg);
+        setMessage(resolved.message);
         return;
       }
       const data = await res.json() as { id?: string };
@@ -77,7 +82,7 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
       setMessage("Your application has been received! We'll be in touch at the email you provided.");
     } catch {
       setStatus("error");
-      setMessage("We couldn't submit your application. Please check your connection and try again.");
+      setMessage(formError.fromException("save").message);
     }
   }
 

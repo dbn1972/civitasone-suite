@@ -133,9 +133,20 @@ export async function insertOffer(tx: Writer, row: typeof hrmsOffers.$inferInser
   await tx.insert(hrmsOffers).values(row);
 }
 
-export async function listJobOpeningsByTenant(tenantId: string, limit = 100): Promise<JobOpeningRow[]> {
+/**
+ * HIGH finding: department scoping. `departmentId` is optional and additive
+ * only -- omitted (undefined), this is unchanged tenant-wide behaviour for
+ * HR/admin callers; a department-scoped (non-HR) caller now passes their own
+ * department so a "manager" role can no longer see every OTHER department's
+ * job openings tenant-wide. Mirrors the resolveDeptScope pattern already
+ * applied to requisitions/interviews (dept-scope.ts) -- see routes.ts's
+ * GET /v1/hrms/job-openings handler.
+ */
+export async function listJobOpeningsByTenant(tenantId: string, limit = 100, departmentId?: string): Promise<JobOpeningRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsJobOpenings)
-    .where(eq(hrmsJobOpenings.tenantId, tenantId))
+    .where(departmentId
+      ? and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.departmentId, departmentId))
+      : eq(hrmsJobOpenings.tenantId, tenantId))
     .limit(limit));
 }
 

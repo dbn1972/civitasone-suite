@@ -104,6 +104,24 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     return reply.send({ id, status: "cancelled" }) as any;
   });
 
+  // CRITICAL fix: no route existed anywhere that could set is_published.
+  // createJobOpeningBody accepts isPublished on CREATE (defaults false), but
+  // nothing in this file (or routes.ts) ever let it be flipped afterwards —
+  // NewJobOpeningForm.tsx never sends it and no publish control existed on
+  // the detail page either, so a job opening created through the app could
+  // never reach the public /careers listing (queries.listPublishedVacancies
+  // requires is_published = true). Mirrors this file's other single-purpose
+  // job-opening sub-actions (advertisement/corrigendum/extend/cancel).
+  app.patch("/v1/hrms/job-openings/:id/publish", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = z.object({ isPublished: z.boolean() }).parse(req.body);
+    await mustVac(ctx.tenantId, id);
+    await publishF3Write(ctx, "recruitment_publication_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    return reply.send({ id, isPublished: body.isPublished, status: "accepted", correlationId: ctx.correlationId }) as any;
+  });
+
   app.get("/v1/hrms/job-openings/:id/corrigenda", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);

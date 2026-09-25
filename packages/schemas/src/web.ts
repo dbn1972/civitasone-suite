@@ -814,6 +814,12 @@ export const JobOpeningSummarySchema = z.object({
   status: z.enum(["open", "closed", "on_hold"]),
   applicationsReceived: z.number().default(0),
   postedDate: z.string(),
+  // CRITICAL fix: this field was entirely absent, so the job-opening detail
+  // page's Published/Not Published badge always read `undefined` (-> always
+  // "Not published") regardless of the real hrms_job_openings.is_published
+  // value, and there was no way for the frontend to know a publish action
+  // had taken effect. queries.ts's listJobOpenings now includes it.
+  isPublished: z.boolean().default(false),
 });
 export const JobOpeningSummaryListSchema = z.array(JobOpeningSummarySchema);
 
