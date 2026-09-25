@@ -57,6 +57,21 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const formError = useFormError("journal entry");
+  // EVT-4 (accounting-high-findings): one idempotency key per logical
+  // submission attempt. The backend mechanism (idempotentId() in
+  // @civitasone/auth, tenant-scoped as of PR #1565) and the full header path
+  // (this form -> /api/proxy -> gateway -> finance-service, all already
+  // forward x-idempotency-key) were already correct and already wired end to
+  // end -- no frontend caller ever generated or sent the header, so a
+  // double-click or a retried request always produced two distinct
+  // journal.create commands and, per PR #1565's finding #4 writeup, silent
+  // duplicate/lost-write risk. Held in state (not regenerated on every
+  // render or every open-confirm) so a retry of the *same* attempt --
+  // ConfirmDialog re-firing onConfirm, or a caller re-invoking doPost after
+  // a transient failure -- reuses the same key and dedupes at the consumer's
+  // inbox; rotated only once an attempt actually succeeds (below), so the
+  // next, genuinely different entry is never mistaken for a repeat of this one.
+  const [idempotencyKey, setIdempotencyKey] = useState<string>(() => crypto.randomUUID());
 
   /* ── line helpers ───────────────────────────────────────────── */
   function updateLine(id: number, field: keyof Omit<JournalLine, "id">, value: string) {
@@ -141,7 +156,7 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
 
     const res = await fetch("/api/proxy/v1/finance/journals", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", "x-idempotency-key": idempotencyKey },
       body: JSON.stringify(body),
     });
 
@@ -155,6 +170,9 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
           ? "Journal entry accepted for processing (202)."
           : "Journal entry posted successfully."
       );
+      // EVT-4: this attempt succeeded -- rotate to a fresh key so the next,
+      // distinct entry can't be deduped against this one's messageId.
+      setIdempotencyKey(crypto.randomUUID());
       if (redirectTo) {
         window.location.assign(redirectTo);
         return;
