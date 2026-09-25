@@ -245,7 +245,7 @@ describe("Bug 2 — duplicate-application hardening (dedup_key + hrms_applicatio
     const first = await applyPublic(jobId, email);
     expect(first.statusCode).toBe(202);
     const second = await applyPublic(jobId, email);
-    expect(second.statusCode).toBe(202);
+    expect(second.statusCode).toBe(409);
 
     expect(await countApplications(jobId, email)).toBe(1);
   });
