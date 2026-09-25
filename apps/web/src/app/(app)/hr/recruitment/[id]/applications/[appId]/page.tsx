@@ -43,7 +43,13 @@ export default function ApplicationDetailPage() {
   const [showHireDialog, setShowHireDialog] = useState(false);
   const [employeeNo, setEmployeeNo] = useState("");
   const [dateOfJoining, setDateOfJoining] = useState("");
-  const [basicMinor, setBasicMinor] = useState(0);
+  // MEDIUM finding: defaulted to 0, which the backend now rejects outright
+  // (hireApplicationBody.basicMinor is z.number().int().positive() -- see
+  // recruitment/validators.ts -- "a genuinely positive basic pay is
+  // required for a real hire" per PR #1550). Default to empty so a user who
+  // never touches the field gets a clear client-side validation message
+  // instead of a raw 400 from the server.
+  const [basicMinor, setBasicMinor] = useState<number | "">("");
   const [departmentId, setDepartmentId] = useState("");
   const [designationId, setDesignationId] = useState("");
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -168,6 +174,16 @@ export default function ApplicationDetailPage() {
       setHireMessage(t("allFieldsRequired"));
       return;
     }
+    // MEDIUM finding: re-derived exactly from the backend's own rule
+    // (hireApplicationBody.basicMinor = z.number().int().positive(), see
+    // recruitment/validators.ts) rather than guessed -- must be a positive
+    // integer, so empty/0/negative/fractional all fail here instead of
+    // surfacing only as a server 400 after a round trip.
+    if (basicMinor === "" || !Number.isInteger(basicMinor) || basicMinor <= 0) {
+      setHireStatus("error");
+      setHireMessage(t("basicPayRequired"));
+      return;
+    }
     setHireStatus("submitting");
     setHireMessage("");
     try {
@@ -272,8 +288,21 @@ export default function ApplicationDetailPage() {
                   <input id={dojId} type="date" value={dateOfJoining} onChange={(e) => setDateOfJoining(e.target.value)} style={inputStyle} required />
                 </div>
                 <div>
-                  <label htmlFor={basicId} style={{ fontSize: 13, fontWeight: 500 }}>{t("basicPay")}</label>
-                  <input id={basicId} type="number" min={0} value={basicMinor} onChange={(e) => setBasicMinor(Number(e.target.value))} placeholder={t("basicPayPlaceholder")} style={inputStyle} />
+                  <label htmlFor={basicId} style={{ fontSize: 13, fontWeight: 500 }}>{t("basicPay")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
+                  <input
+                    id={basicId}
+                    type="number"
+                    min={1}
+                    step={1}
+                    value={basicMinor}
+                    onChange={(e) => setBasicMinor(e.target.value === "" ? "" : Number(e.target.value))}
+                    placeholder={t("basicPayPlaceholder")}
+                    style={inputStyle}
+                    required
+                    aria-required="true"
+                    aria-describedby={`${basicId}-hint`}
+                  />
+                  <p id={`${basicId}-hint`} style={{ fontSize: 11, color: "var(--mut)", marginTop: 4 }}>{t("basicPayRequired")}</p>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>

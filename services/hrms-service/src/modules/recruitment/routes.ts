@@ -124,6 +124,13 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
         stage: r.stage,
         screeningDecision: r.screeningDecision,
         appliedAt: r.appliedAt,
+        // MEDIUM finding: the GOI Reservation Status card needs each
+        // application's real reservation category to compute real fill
+        // percentages (was previously hardcoded to a decorative 0% -- see
+        // apps/web's recruitment/[id]/page.tsx). The column already exists
+        // and is already selected (screeningRepo does a plain `.select()`);
+        // it just wasn't in this response's field whitelist.
+        category: r.category,
       })),
       total: rows.length,
     });

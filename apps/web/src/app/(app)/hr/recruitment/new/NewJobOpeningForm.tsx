@@ -9,6 +9,8 @@ import { Button } from "@/app/_components/ds";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+type Department = { id: string; name: string };
+
 const labelStyle: React.CSSProperties = {
   display: "block",
   fontSize: 13,
@@ -63,6 +65,24 @@ export function NewJobOpeningForm() {
   const [selectionProcess, setSelectionProcess] = useState("");
   const [requiredDocuments, setRequiredDocuments] = useState<string[] | undefined>(undefined);
   const [eligibility, setEligibility] = useState<Record<string, unknown> | undefined>(undefined);
+
+  // MEDIUM finding: this form used to be the only place in recruitment that
+  // asked HR to paste a raw department UUID -- every other form (the Hire
+  // dialog in applications/[appId]/page.tsx, TransferWithApproval.tsx) uses
+  // this same name-based dropdown against this same endpoint. Falls back to
+  // the raw UUID text box below if the list fails to load, exactly like
+  // those other callers.
+  const [departments, setDepartments] = useState<Department[]>([]);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/hrms/departments?limit=200");
+        if (!res.ok) return;
+        const body = (await res.json()) as { data?: Department[] } | Department[];
+        setDepartments(Array.isArray(body) ? body : (body.data ?? []));
+      } catch { /* graceful fallback to the raw-UUID input below */ }
+    })();
+  }, []);
 
   useEffect(() => {
     if (!templateId) return;
@@ -237,19 +257,36 @@ export function NewJobOpeningForm() {
 
       <div>
         <label htmlFor={deptId} style={labelStyle}>
-          {t("departmentIdUuid")} <span aria-hidden="true">*</span>
+          {t("department")} <span aria-hidden="true">*</span>
         </label>
-        <input
-          id={deptId}
-          type="text"
-          value={departmentId}
-          onChange={(e) => setDepartmentId(e.target.value)}
-          placeholder={t("departmentIdPlaceholder")}
-          style={invalidField === "departmentId" ? inputInvalidStyle : inputStyle}
-          required
-          aria-required="true"
-          aria-invalid={invalidField === "departmentId"}
-        />
+        {departments.length > 0 ? (
+          <select
+            id={deptId}
+            value={departmentId}
+            onChange={(e) => setDepartmentId(e.target.value)}
+            style={invalidField === "departmentId" ? inputInvalidStyle : inputStyle}
+            required
+            aria-required="true"
+            aria-invalid={invalidField === "departmentId"}
+          >
+            <option value="">Select department…</option>
+            {departments.map((d) => (
+              <option key={d.id} value={d.id}>{d.name}</option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id={deptId}
+            type="text"
+            value={departmentId}
+            onChange={(e) => setDepartmentId(e.target.value)}
+            placeholder={t("departmentIdPlaceholder")}
+            style={invalidField === "departmentId" ? inputInvalidStyle : inputStyle}
+            required
+            aria-required="true"
+            aria-invalid={invalidField === "departmentId"}
+          />
+        )}
       </div>
 
       <div>

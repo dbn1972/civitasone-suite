@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
@@ -227,9 +228,35 @@ export async function createReimbursement(ctx: RequestContext, body: CreateReimb
  * path (marked "// ─── Gap:" — added after the rest of this file's F3
  * conversion and missed it). Same shape as createArrear/createReimbursement
  * above: publish + let the consumer persist idempotently.
+ *
+ * MEDIUM finding: `id` (both the new revision row's own primary key AND the
+ * queue messageId -- the same double-duty id<->messageId pattern
+ * hrms-service's hireApplication uses) used to be a fresh randomUUID() per
+ * call, so a retried/double-clicked create-revision request published a
+ * second, unrelated messageId that sailed straight past markProcessed's
+ * dedup and would let the consumer insert a second revision row for the
+ * same underlying change. Salary revision is one of the Recruitment ->
+ * HRMS -> Payroll integration-seam publishes this fix scopes to (hire/
+ * transfer/separation/salary-revision), so it's now derived via
+ * idempotentId() (@civitasone/auth, tenant-scoped since PR #1565) -- the
+ * same mechanism hrms-service's hireApplication/separateEmployee/
+ * transferEmployee use, instead of a fresh random id.
+ *
+ * Keyed on employeeId + effectiveDate + revisionType, NOT employeeId alone:
+ * a revision is not one-time-use (annual increments recur yearly, and a
+ * correction can follow a promotion on a different date), so those three
+ * fields identify THIS specific revision request without colliding with a
+ * later, genuinely different one for the same employee.
  */
 export async function createSalaryRevision(ctx: RequestContext, body: CreateSalaryRevisionBody): Promise<Accepted> {
-  const id = randomUUID();
+  // Prefers a genuine client-supplied key (ctx.idempotencyKey, from the
+  // x-idempotency-key header) when sent; falls back to this deterministic
+  // domain key otherwise -- see hrms-service's hireApplication for the
+  // identical rationale.
+  const id = idempotentId({
+    idempotencyKey: ctx.idempotencyKey ?? `payroll.salary-revision:${body.employeeId}:${body.effectiveDate}:${body.revisionType}`,
+    tenantId: ctx.tenantId,
+  });
   await queue.publish(COMMANDS.salaryRevisionCreate, {
     messageId: id, type: COMMANDS.salaryRevisionCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

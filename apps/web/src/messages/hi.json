@@ -4590,6 +4590,7 @@
     "dateOfJoining": "नियुक्ति तिथि",
     "basicPay": "मूल वेतन (₹)",
     "basicPayPlaceholder": "पैसे में",
+    "basicPayRequired": "मूल वेतन आवश्यक है और 0 से अधिक होना चाहिए (राशि पैसे में)।",
     "departmentId": "विभाग आईडी",
     "designationId": "पदनाम आईडी",
     "uuidPlaceholder": "UUID",
@@ -4703,7 +4704,8 @@
     "postsCount": "{count, plural, one {# पद} other {# पद}}",
     "filledCount": "{count} भरा",
     "prescribedPercentOfTotal": "निर्धारित: कुल पदों का {pct}%",
-    "footnote": "* आरक्षण प्रतिशत DoPT नीति के अनुसार हैं। वास्तविक आवंटन रोस्टर रखरखाव और क्षैतिज/लंबवत आरक्षण नियमों के अधीन हैं।"
+    "footnote": "* आरक्षण प्रतिशत DoPT नीति के अनुसार हैं। वास्तविक आवंटन रोस्टर रखरखाव और क्षैतिज/लंबवत आरक्षण नियमों के अधीन हैं।",
+    "noCategoryData": "इस रिक्ति के विरुद्ध किसी भी आवेदन के लिए आरक्षण श्रेणी अभी तक दर्ज नहीं की गई है, इसलिए भरण प्रतिशत नहीं दिखाया जा सकता।"
   },
   "recruitmentInterviewCard": {
     "interview": "साक्षात्कार",
@@ -4728,6 +4730,7 @@
     "titlePlaceholder": "उदा. वरिष्ठ सॉफ्टवेयर इंजीनियर",
     "departmentIdUuid": "विभाग आईडी (UUID)",
     "departmentIdPlaceholder": "उदा. 3f2504e0-4f89-41d3-9a0c-0305e82c3301",
+    "department": "विभाग",
     "vacancies": "रिक्तियां",
     "description": "विवरण",
     "descriptionPlaceholder": "नौकरी की जिम्मेदारियां, आवश्यकताएं, और योग्यताएं",

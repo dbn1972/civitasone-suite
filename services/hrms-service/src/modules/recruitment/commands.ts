@@ -1,8 +1,8 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { uuidV5 } from "../../shared/ids.js";
 import type { CreateJobOpeningBody, CreateApplicationBody, OfferApplicationBody, HireApplicationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -47,18 +47,29 @@ export async function offerApplication(ctx: RequestContext, id: string, body: Of
 }
 
 export async function hireApplication(ctx: RequestContext, applicationId: string, body: HireApplicationBody): Promise<Accepted> {
-  // BUG-3 fix: derive a STABLE employeeId/messageId from the applicationId
-  // instead of a fresh randomUUID() on every call. An application can only
-  // legitimately be hired once, so a retried or double-clicked Hire action
-  // for the SAME application must always produce the SAME messageId --
-  // that's what lets the queue's own idempotency guard (packages/outbox's
-  // markProcessed, an atomic `INSERT ... ON CONFLICT DO NOTHING RETURNING`,
-  // see bus.ts) dedupe it, instead of minting a second, unrelated messageId
-  // that sails straight past dedup and lets the consumer insert a second
-  // employee row for one application. uuidV5 is the established pattern for
-  // exactly this (see shared/ids.ts's own doc comment); the "recruitment.hire:"
-  // prefix namespaces this derivation from any other uuidV5(applicationId, ...)
-  // use elsewhere.
+  // BUG-3 fix (PR #1539): derive a STABLE employeeId/messageId from the
+  // applicationId instead of a fresh randomUUID() on every call. An
+  // application can only legitimately be hired once, so a retried or
+  // double-clicked Hire action for the SAME application must always
+  // produce the SAME messageId -- that's what lets the queue's own
+  // idempotency guard (packages/outbox's markProcessed, an atomic
+  // `INSERT ... ON CONFLICT DO NOTHING RETURNING`, see bus.ts) dedupe it,
+  // instead of minting a second, unrelated messageId that sails straight
+  // past dedup and lets the consumer insert a second employee row for one
+  // application.
+  //
+  // MEDIUM finding: this used to call the ad hoc uuidV5() helper directly.
+  // Recruitment-hire is one of the Recruitment -> HRMS -> Payroll
+  // integration-seam publishes, so it's now derived through idempotentId()
+  // (@civitasone/auth, tenant-scoped since PR #1565) -- the same mechanism
+  // every other cross-service command in this codebase uses (finance's
+  // gl/commands.ts reverseJournal, treasury/commands.ts publishDisposition,
+  // etc.), rather than a bespoke one-off. Same determinism guarantee as
+  // before (the "recruitment.hire:" key namespaces this from any other
+  // idempotentId use), now via the shared, tenant-scoped mechanism. If
+  // idempotencyKey were ever omitted, idempotentId() falls back to a fresh
+  // random UUID per its own documented behaviour -- i.e. duplicates would
+  // reappear, which is exactly what a retried hire must NOT do.
   //
   // This closes the common path (retry / redelivery / double-click all now
   // collide on one messageId, caught cheaply before any DB write). The hire
@@ -67,7 +78,11 @@ export async function hireApplication(ctx: RequestContext, applicationId: string
   // for the same reason leave/repo.ts guards approveLeaveApp with a
   // WHERE-status UPDATE: defense in depth against two hire attempts that,
   // for whatever reason, still reach the consumer under different messageIds.
-  const employeeId = uuidV5(`recruitment.hire:${applicationId}`);
+  // Prefers a genuine client-supplied key (ctx.idempotencyKey, populated by
+  // resolveServiceContext from the x-idempotency-key header -- see
+  // @civitasone/auth/context) when the caller sent one; falls back to this
+  // deterministic domain key otherwise so the guarantee holds unconditionally.
+  const employeeId = idempotentId({ idempotencyKey: ctx.idempotencyKey ?? `recruitment.hire:${applicationId}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.applicationHire, {
     messageId: employeeId, type: COMMANDS.applicationHire,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

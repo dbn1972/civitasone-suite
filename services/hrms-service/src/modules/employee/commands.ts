@@ -9,7 +9,7 @@ import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody } from
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "./schema.js";
-import { uuidV5 } from "../../shared/ids.js";
+import { idempotentId } from "@civitasone/auth";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -86,9 +86,37 @@ export async function confirmEmployee(ctx: RequestContext, id: string, body: Con
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * MEDIUM finding: this used to publish via bare queue.publish() with no
+ * explicit messageId -- exactly the same "queue auto-mints a fresh random
+ * one per call" gap separateEmployee below had (see its own doc comment)
+ * before PR #1539, except this one was never fixed. A retried or
+ * double-clicked Transfer for the SAME employee produced a second,
+ * unrelated messageId that sailed straight past markProcessed's dedup, so
+ * the consumer (employee/consumer.ts) re-ran the whole transfer a second
+ * time and republished EVENTS.employeeTransferred -- consumed downstream
+ * for posting/allowance changes (see topics.ts) -- twice, for one HR
+ * action. Transfer is one of the Recruitment -> HRMS -> Payroll
+ * integration-seam publishes this fix scopes to (hire/transfer/separation/
+ * salary-revision), so it's keyed via idempotentId() (@civitasone/auth,
+ * tenant-scoped since PR #1565) -- same mechanism as hireApplication and
+ * separateEmployee.
+ *
+ * Keyed on employeeId + effectiveDate, NOT employeeId alone, mirroring
+ * separateEmployee's own precedent immediately below: a transfer is not a
+ * one-time-use action (an employee can legitimately be transferred many
+ * times over a career), so keying on employeeId alone would make a second,
+ * genuine later transfer collide with -- and be silently dropped by -- the
+ * dedup guard for an earlier one. Two really-retried requests for the SAME
+ * transfer always carry the same effectiveDate.
+ */
 export async function transferEmployee(ctx: RequestContext, id: string, body: TransferBody): Promise<Accepted> {
+  // Prefers a genuine client-supplied key (ctx.idempotencyKey, from the
+  // x-idempotency-key header) when sent; falls back to this deterministic
+  // domain key otherwise -- see hireApplication's identical comment.
+  const messageId = idempotentId({ idempotencyKey: ctx.idempotencyKey ?? `employee.transfer:${id}:${body.effectiveDate}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.employeeTransfer, {
-    type: COMMANDS.employeeTransfer,
+    messageId, type: COMMANDS.employeeTransfer,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...body, employeeId: id, tenantId: ctx.tenantId },
   });
@@ -147,8 +175,14 @@ export async function submitPromotionForApproval(ctx: RequestContext, id: string
  * command risked a duplicate Full & Final settlement for one exit.
  *
  * Fix mirrors the now-merged pattern in recruitment/commands.ts's
- * hireApplication() (PR #1542): derive a STABLE messageId via uuidV5 instead
- * of a fresh randomUUID() per call.
+ * hireApplication() (PR #1542): derive a STABLE messageId instead of a
+ * fresh randomUUID() per call. MEDIUM finding follow-up: that derivation
+ * used the ad hoc uuidV5() helper directly; separation is one of the
+ * Recruitment -> HRMS -> Payroll integration-seam publishes this fix scopes
+ * to, so it's now derived through idempotentId() (@civitasone/auth,
+ * tenant-scoped since PR #1565) instead -- same determinism guarantee, via
+ * the shared mechanism the rest of the codebase's cross-service commands
+ * already use.
  *
  * Deliberately keyed on employeeId + effectiveDate, NOT employeeId alone --
  * unlike hireApplication's applicationId (which can only ever be hired
@@ -169,7 +203,7 @@ export async function submitPromotionForApproval(ctx: RequestContext, id: string
  * and fnf/consumer.ts's onConflictDoNothing.
  */
 export async function separateEmployee(ctx: RequestContext, id: string, body: SeparateBody): Promise<Accepted> {
-  const messageId = uuidV5(`employee.separate:${id}:${body.effectiveDate}`);
+  const messageId = idempotentId({ idempotencyKey: ctx.idempotencyKey ?? `employee.separate:${id}:${body.effectiveDate}`, tenantId: ctx.tenantId });
   await queue.publish(COMMANDS.employeeSeparate, {
     messageId, type: COMMANDS.employeeSeparate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
