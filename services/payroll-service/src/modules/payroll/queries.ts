@@ -70,40 +70,63 @@ export async function getRun(id: string, tenantId: string): Promise<PayrollRunRo
  * PERF-005: was Promise.all(rows.map(...)) calling listSlipsByRun per run —
  * classic N+1-via-Promise.all (concurrent, but still N round trips, and each
  * one fetched full slip rows just to read `.length`). Now: the run list plus
- * exactly one grouped-count query across all run ids, regardless of N.
+ * exactly one grouped aggregate query across all run ids, regardless of N.
+ *
+ * runs-list totals-vs-headcount fix: grossAmount/netAmount/deductions used
+ * to read straight off the run's stored total_gross_minor/total_net_minor
+ * columns — a denormalized aggregate written at specific lifecycle events
+ * (run creation, approval) and never revalidated afterward, unlike
+ * employeeCount above (already live via this same batched query, PERF-005).
+ * If a run's slip rows are ever reduced relative to what was last stored,
+ * the two drift apart: employeeCount correctly shows 0 while gross/net kept
+ * showing the last-stored, now-stale figure — a run with no payslips could
+ * display a plausible-looking non-zero total. All three money fields below
+ * now come from the same live, batched slip aggregate as employeeCount, so
+ * they can never disagree with the actual payslip count: zero slips is
+ * always Rs.0, and a healthy run's total is always the true sum of its own
+ * slip rows, not a possibly-stale column.
  */
 export async function listRuns(tenantId: string, limit: number, month?: string) {
   const rows = await repo.listRunsByTenant(tenantId, limit, month);
   const runIds = rows.map((r) => r.id);
-  const employeeCountByRun = await repo.countSlipsByRunIds(runIds, tenantId);
-  return rows.map((r) => ({
-    id: r.id,
-    runDate: new Date(r.createdAt as unknown as string).toISOString().slice(0, 10),
-    payPeriod: r.month,
-    employeeCount: employeeCountByRun.get(r.id) ?? 0,
-    grossAmount: Number(r.totalGrossMinor) / 100,
-    netAmount: Number(r.totalNetMinor) / 100,
-    deductions: Math.max(0, Number(r.totalGrossMinor - r.totalNetMinor) / 100),
-    status: mapRunStatus(r.status),
-    // payroll-critical fix: surface why, for a failed run, alongside the
-    // now-distinct 'failed' status above (migration 0046). null for every
-    // other status and for a failed run that predates this column.
-    failureReason: r.status === "failed" ? (r.lastError ?? null) : null,
-  }));
+  const aggByRun = await repo.aggregateSlipsByRunIds(runIds, tenantId);
+  return rows.map((r) => {
+    const agg = aggByRun.get(r.id) ?? { employeeCount: 0, grossMinor: 0n, netMinor: 0n };
+    return {
+      id: r.id,
+      runDate: new Date(r.createdAt as unknown as string).toISOString().slice(0, 10),
+      payPeriod: r.month,
+      employeeCount: agg.employeeCount,
+      grossAmount: Number(agg.grossMinor) / 100,
+      netAmount: Number(agg.netMinor) / 100,
+      deductions: Math.max(0, Number(agg.grossMinor - agg.netMinor) / 100),
+      status: mapRunStatus(r.status),
+      // payroll-critical fix: surface why, for a failed run, alongside the
+      // now-distinct 'failed' status above (migration 0046). null for every
+      // other status and for a failed run that predates this column.
+      failureReason: r.status === "failed" ? (r.lastError ?? null) : null,
+    };
+  });
 }
 
 export async function getRunDetail(id: string, tenantId: string) {
   const run = await getRun(id, tenantId);
   if (!run) return null;
   const runSlips = await repo.listSlipsByRun(id, tenantId);
+  // runs-list totals-vs-headcount fix: sum the same runSlips rows
+  // employeeCount already counts, instead of trusting run.totalGrossMinor/
+  // totalNetMinor (a possibly-stale stored aggregate) — see the matching
+  // listRuns fix above for why. No extra query: runSlips is already in hand.
+  const grossMinor = runSlips.reduce((sum, s) => sum + s.grossMinor, 0n);
+  const netMinor = runSlips.reduce((sum, s) => sum + s.netPayMinor, 0n);
   return {
     id: run.id,
     runDate: new Date(run.createdAt as unknown as string).toISOString().slice(0, 10),
     payPeriod: run.month,
     employeeCount: runSlips.length,
-    grossAmount: Number(run.totalGrossMinor) / 100,
-    netAmount: Number(run.totalNetMinor) / 100,
-    deductions: Math.max(0, Number(run.totalGrossMinor - run.totalNetMinor) / 100),
+    grossAmount: Number(grossMinor) / 100,
+    netAmount: Number(netMinor) / 100,
+    deductions: Math.max(0, Number(grossMinor - netMinor) / 100),
     status: mapRunStatus(run.status),
     // payroll-critical fix: see the matching field in listRuns above.
     failureReason: run.status === "failed" ? (run.lastError ?? null) : null,

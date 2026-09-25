@@ -121,20 +121,39 @@ export async function listSlipsByRun(runId: string, tenantId: string): Promise<P
 }
 
 /**
- * PERF-005 batch loader: employee-count-per-run computed via SQL COUNT/GROUP
- * BY across ALL given run ids in one query, instead of fetching every slip
- * row for every run (listSlipsByRun in a per-run loop) just to read
- * `.length`. Runs with zero slips are simply absent from the returned Map —
- * callers should default to 0 on a miss.
+ * PERF-005 batch loader, extended for the runs-list totals-vs-headcount
+ * finding: employee-count AND live gross/net totals per run, computed via
+ * one SQL COUNT+SUM/GROUP BY across ALL given run ids in one query, instead
+ * of fetching every slip row for every run (listSlipsByRun in a per-run
+ * loop) just to read `.length`/sum it -- same "one query regardless of N"
+ * shape as the original PERF-005 fix, just with two more aggregates riding
+ * the same GROUP BY. Runs with zero slips are simply absent from the
+ * returned Map -- callers should default to
+ * {employeeCount: 0, grossMinor: 0n, netMinor: 0n} on a miss, which is
+ * exactly the state a zero-payslip run must display (Rs.0, never a
+ * possibly-stale payroll_runs.total_gross_minor/total_net_minor column
+ * value -- see the matching listRuns fix in queries.ts).
  */
-export async function countSlipsByRunIds(runIds: string[], tenantId: string): Promise<Map<string, number>> {
+export async function aggregateSlipsByRunIds(
+  runIds: string[],
+  tenantId: string,
+): Promise<Map<string, { employeeCount: number; grossMinor: bigint; netMinor: bigint }>> {
   if (runIds.length === 0) return new Map();
   const rows = await scopedRead((tx) => tx
-    .select({ runId: payrollSlips.runId, employeeCount: count() })
+    .select({
+      runId: payrollSlips.runId,
+      employeeCount: count(),
+      grossMinor: sql<string>`coalesce(sum(${payrollSlips.grossMinor}), 0)::bigint`,
+      netMinor: sql<string>`coalesce(sum(${payrollSlips.netPayMinor}), 0)::bigint`,
+    })
     .from(payrollSlips)
     .where(and(inArray(payrollSlips.runId, runIds), eq(payrollSlips.tenantId, tenantId)))
     .groupBy(payrollSlips.runId));
-  return new Map(rows.map((r) => [r.runId, Number(r.employeeCount)]));
+  return new Map(rows.map((r) => [r.runId, {
+    employeeCount: Number(r.employeeCount),
+    grossMinor: BigInt(r.grossMinor),
+    netMinor: BigInt(r.netMinor),
+  }]));
 }
 
 /** M1: transaction-scoped slip read (for computing authoritative run totals). */
