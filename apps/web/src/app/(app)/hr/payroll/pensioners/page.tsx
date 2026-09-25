@@ -21,12 +21,24 @@ type DisplayRow = Row & { basicPensionDisplay: string };
 // not a real (if merely read-only) HR/payroll dataset.
 const PENSIONER_VIEW_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
 
+// HRMS peripheral medium findings, item 5: PENSIONER_CREATE_ROLES is a
+// strict subset of PENSIONER_VIEW_ROLES above (hr_admin and finance_officer
+// can view but not create -- see payroll/pensioners/new/page.tsx's own
+// gate). This list page's "Add Pensioner" button was keyed off the broader
+// VIEW check, so an hr_admin/finance_officer viewer saw and could click a
+// button that always 403'd on arrival at /new. Aligned to the dominant
+// pattern used by departments/designations/training/locations: the button
+// is now gated on the same, narrower role list the destination page
+// actually enforces.
+const PENSIONER_CREATE_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+
 export default async function PensionersPage() {
   const t = await getTranslations("pensioners");
   const roles = getSessionRoles();
   if (!roles.some((r) => PENSIONER_VIEW_ROLES.includes(r))) {
     return <PermissionDenied module="pensioners" requiredRoles={PENSIONER_VIEW_ROLES} />;
   }
+  const canCreate = roles.some((r) => PENSIONER_CREATE_ROLES.includes(r));
   const { data: pensioners, source } = await getPensioners();
 
   const total = pensioners.length;
@@ -56,7 +68,9 @@ export default async function PensionersPage() {
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
         actions={
-          <Link href="/hr/payroll/pensioners/new" className="btn primary">{t("addPensionerLink")}</Link>
+          canCreate ? (
+            <Link href="/hr/payroll/pensioners/new" className="btn primary">{t("addPensionerLink")}</Link>
+          ) : undefined
         }
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />

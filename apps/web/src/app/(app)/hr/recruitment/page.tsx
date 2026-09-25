@@ -6,13 +6,14 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
-/**
- * Mirrors hr/recruitment/new/page.tsx's RECRUITMENT_ADMIN_ROLES exactly
- * (that page's own POST /v1/hrms/job-openings gate). GET is broader (that
- * page's own comment: ALL_ROLES additionally includes "manager"), so this
- * page itself stays visible to more roles than may create a vacancy --
- * only the New Vacancy / Post First Job affordances are restricted here.
- */
+// Both "New Vacancy" and "Post First Job" used to render for every viewer
+// regardless of role, even though the destination page
+// (/hr/recruitment/new) gates on RECRUITMENT_ADMIN_ROLES (its own POST
+// /v1/hrms/job-openings guard) and 403s everyone else. Mirrors that list
+// exactly, checked here before rendering either button. GET stays broader
+// (that page's own comment: ALL_ROLES additionally includes "manager"), so
+// this page itself stays visible to more roles than may actually create a
+// vacancy -- only the two create affordances are restricted here.
 const RECRUITMENT_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type DashboardStats = {

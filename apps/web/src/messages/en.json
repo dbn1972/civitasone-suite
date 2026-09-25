@@ -4760,6 +4760,8 @@
     "statBehavioural": "Behavioural",
     "radarCardTitle": "Core Government Competencies — Radar View",
     "radarIllustrativeNote": "Illustrative sample data — not yet linked to individual employee assessments.",
+    "radarEmptyTitle": "No competency data yet",
+    "radarEmptyMessage": "Define at least one framework or competency to see an illustrative radar example here.",
     "frameworksCardTitle": "Competency Frameworks",
     "catalogueCardTitle": "Competency Catalogue",
     "colFrameworkName": "Framework Name",

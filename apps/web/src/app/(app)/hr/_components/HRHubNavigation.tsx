@@ -25,6 +25,28 @@ const QUICK_ACCESS_HREFS = [
   "/hr/recruitment",
 ];
 
+/**
+ * Turns a (possibly translated) category title into a DOM-id-safe slug:
+ * lowercase, any run of non-alphanumeric characters (spaces, "&", etc.)
+ * becomes a single "-", and leading/trailing dashes are trimmed. Titles come
+ * from per-locale message files, so two categories could in principle
+ * collide once slugified (e.g. differing only by punctuation) — callers
+ * must still combine this with a positional suffix (see `categoryPanelId`)
+ * rather than relying on the slug alone to be unique.
+ */
+function slugifyCategoryTitle(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Deterministic, DOM-id-safe id for a category's collapsible panel. */
+function categoryPanelId(title: string, index: number): string {
+  return `cat-${slugifyCategoryTitle(title)}-${index}`;
+}
+
 export function HRHubNavigation({ categories }: { categories: Category[] }) {
   const [search, setSearch] = useState("");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -165,15 +187,16 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
         </section>
       ) : (
         <div style={{ display: "grid", gap: 8 }}>
-          {categories.map((cat) => {
+          {categories.map((cat, catIndex) => {
             const isOpen = !collapsed.has(cat.title);
+            const panelId = categoryPanelId(cat.title, catIndex);
             return (
               <section key={cat.title} style={{ borderRadius: 10, border: "1px solid var(--line)", overflow: "hidden" }}>
                 <button
                   type="button"
                   onClick={() => toggleCategory(cat.title)}
                   aria-expanded={isOpen}
-                  aria-controls={`cat-${cat.title}`}
+                  aria-controls={panelId}
                   style={{
                     width: "100%",
                     display: "flex",
@@ -196,7 +219,7 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
                 </button>
                 {isOpen && (
                   <div
-                    id={`cat-${cat.title}`}
+                    id={panelId}
                     className="grid g-4"
                     style={{ padding: "8px 12px 12px", gap: 8 }}
                   >

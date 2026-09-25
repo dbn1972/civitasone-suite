@@ -6,13 +6,14 @@ import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
-/**
- * Mirrors hr/locations/new/page.tsx's LOCATION_ADMIN_ROLES exactly (that
- * page's own POST /v1/locations gate, owned by location-service). Without
- * this, a role that can view this list but isn't in the set saw a fully
- * working "Add Location" button that led straight to that page's
- * PermissionDenied wall.
- */
+// This list page used to render "Add Location" for every viewer regardless
+// of role -- unlike every sibling admin-create screen in this module
+// (departments, designations, jd-templates, training, pensioners), which
+// only show their own create button to roles that can actually complete it.
+// A non-admin clicking through landed on /hr/locations/new only to be
+// turned away by that page's own LOCATION_ADMIN_ROLES gate (its POST
+// /v1/locations guard, owned by location-service). Mirrors that list
+// exactly, checked here before rendering the button.
 const LOCATION_ADMIN_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
 type Location = {
@@ -77,9 +78,9 @@ function MapPin({ size = 14, color = "currentColor" }: { size?: number; color?: 
 
 export default async function LocationsPage() {
   const t = await getTranslations("locations");
-  const { data: locations, source } = await getLocations();
   const roles = getSessionRoles();
   const canCreate = roles.some((r) => LOCATION_ADMIN_ROLES.includes(r));
+  const { data: locations, source } = await getLocations();
 
   const errored = source === "error";
   const stateCount    = locations.filter((l) => l.type === "state").length;

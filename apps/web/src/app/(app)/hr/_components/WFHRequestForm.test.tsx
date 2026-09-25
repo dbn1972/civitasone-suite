@@ -115,10 +115,15 @@ describe("WFHRequestForm", () => {
   // all-roles /hr/wfh page sent every submitter -- including the plain
   // employees that page is for -- straight into a permission wall on
   // Cancel or after a successful submit.
-  it("Cancel navigates to the default redirectHref (/hr/workforce/wfh) when not overridden", () => {
+  //
+  // HRMS peripheral medium findings, item 1: /hr/workforce/wfh is now
+  // itself a redirect stub to /hr/wfh (it was an orphaned duplicate page
+  // with zero inbound links), so the default was repointed straight at the
+  // canonical route to avoid a pointless extra redirect hop.
+  it("Cancel navigates to the default redirectHref (/hr/wfh) when not overridden", () => {
     render(<WFHRequestForm />);
     fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
-    expect(pushMock).toHaveBeenCalledWith("/hr/workforce/wfh");
+    expect(pushMock).toHaveBeenCalledWith("/hr/wfh");
   });
 
   it("Cancel navigates to a custom redirectHref when provided", () => {

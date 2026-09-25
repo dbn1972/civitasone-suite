@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState, EmptyState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CompetencyRadarChart, type CompetencyScore } from "./_components/CompetencyRadarChart";
@@ -75,6 +75,16 @@ export default async function CompetencyPage() {
   const behavioural = competencies.filter((c) => ["behavioural","behavioral"].includes(c.category)).length;
 
   const radarScores = buildIllustrativeRadarScores();
+  // HRMS peripheral medium findings, item 3: the stat cards above are
+  // already honest (real 0s when there's genuinely no data, "—" on fetch
+  // error). The radar chart must be too: it's illustrative sample data, not
+  // derived from frameworks/competencies at all, so a brand-new tenant with
+  // zero of either would otherwise show confident-looking fake proficiency
+  // numbers directly beside those honest real zeros -- the exact
+  // fabricated-data-next-to-real-zero-counts pattern this audit flags.
+  // Gate it on there being *something* real configured to illustrate
+  // against; show an honest empty state instead when there isn't.
+  const hasCompetencyData = frameworks.length > 0 || competencies.length > 0;
 
   const fwCols: { key: keyof Framework & string; label: string; cellType?: "status" }[] = [
     { key: "name",        label: t("colFrameworkName") },
@@ -113,17 +123,30 @@ export default async function CompetencyPage() {
         <>
           {/* Radar chart — core 6 government competencies. Illustrative sample
               data (see buildIllustrativeRadarScores above): not yet wired to
-              any individual employee's real assessment. */}
+              any individual employee's real assessment. Only rendered when
+              there's real framework/competency data to illustrate against
+              (see hasCompetencyData above) — otherwise an honest empty state
+              is shown so no fabricated figures appear beside real zeros. */}
           <Card title={t("radarCardTitle")}>
-            <div style={{ padding: "12px 16px 20px", display: "flex", justifyContent: "center" }}>
-              <CompetencyRadarChart
-                scores={radarScores}
-                title="Illustrative Proficiency Comparison (sample data, scale 0–5)"
+            {hasCompetencyData ? (
+              <>
+                <div style={{ padding: "12px 16px 20px", display: "flex", justifyContent: "center" }}>
+                  <CompetencyRadarChart
+                    scores={radarScores}
+                    title="Illustrative Proficiency Comparison (sample data, scale 0–5)"
+                  />
+                </div>
+                <p style={{ margin: "0 16px 16px", fontSize: 12, color: "var(--ink2, #475569)" }}>
+                  {t("radarIllustrativeNote")}
+                </p>
+              </>
+            ) : (
+              <EmptyState
+                icon="🏗️"
+                title={t("radarEmptyTitle")}
+                message={t("radarEmptyMessage")}
               />
-            </div>
-            <p style={{ margin: "0 16px 16px", fontSize: 12, color: "var(--ink2, #475569)" }}>
-              {t("radarIllustrativeNote")}
-            </p>
+            )}
           </Card>
 
           <Card title={t("frameworksCardTitle")}>
