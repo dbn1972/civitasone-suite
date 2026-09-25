@@ -42,6 +42,17 @@ const ACTIONS: QuickAction[] = [
   },
 ];
 
+// Manager-role counterpart: "manager" is isHRStaff (HR_DASHBOARD_READER_ROLES
+// in hr/dashboard/page.tsx includes it, so a manager reaches this branch of
+// the dashboard, not the plain-employee one below) but is NOT in
+// EMPLOYEE_ADMIN_ROLES (hr/employees/new/page.tsx's own POST gate) -- "Add
+// Employee" 403s for that role same as for a plain employee. Run
+// Payroll/Approve Leaves/Download Report all lead to pages that render
+// successfully for a manager (hr/payroll's own canAdminister flag just hides
+// the run-payroll form inside the page; hr/leave/approvals is manager
+// territory), so only the one blocked action is dropped, not the whole set.
+const MANAGER_ACTIONS: QuickAction[] = ACTIONS.filter((a) => a.label !== "Add Employee");
+
 // Employee-role counterpart: none of ACTIONS above apply to a plain
 // employee (add-employee/run-payroll/approve-leaves/download-org-report
 // are all HR-admin-only, and the backend 403s them for that role) -- see
@@ -71,7 +82,7 @@ const EMPLOYEE_ACTIONS: QuickAction[] = [
 ];
 
 interface Props {
-  variant?: "admin" | "employee";
+  variant?: "admin" | "employee" | "manager";
   /** Only used when variant="employee", to build the "My Profile" link. Omitted (no linked employee record yet) simply drops that one action. */
   myEmployeeId?: string | null;
 }
@@ -88,6 +99,8 @@ export function QuickActionsPanel({ variant = "admin", myEmployeeId }: Props = {
           icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--mut, #64748b)" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21v-1a7 7 0 0 1 14 0v1"/></svg>,
         }] : []),
       ]
+    : variant === "manager"
+    ? MANAGER_ACTIONS
     : ACTIONS;
 
   return (

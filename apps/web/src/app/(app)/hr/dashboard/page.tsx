@@ -40,6 +40,19 @@ import { PayrollBanner } from "./_components/PayrollBanner";
  */
 const HR_DASHBOARD_READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
 
+/**
+ * Mirrors hr/employees/new/page.tsx's EMPLOYEE_ADMIN_ROLES exactly (that
+ * page's own POST /v1/hrms/employees gate). Deliberately narrower than
+ * HR_DASHBOARD_READER_ROLES above: "manager" can read this dashboard (and
+ * so reaches the isHRStaff branch below, not the plain-employee one) but
+ * cannot create an employee -- the branch below used to hand every
+ * isHRStaff viewer the same admin-shaped GreetingHeader/QuickActionsPanel
+ * regardless, so a manager saw a fully working "+ Add Employee" action
+ * that led straight to that page's PermissionDenied wall. Same bug class
+ * the employee branch just below already avoids for plain "employee".
+ */
+const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 type EmpRow = {
   id: string;
   name: string;
@@ -228,6 +241,7 @@ export default async function HRDashboardPage() {
     : 0;
 
   const userName = sessionName ? sessionName.split(" ")[0] : (profile ? profile.name.split(" ")[0] : "there");
+  const canManageEmployees = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
 
   const recentEmployees = employees;
 
@@ -246,6 +260,14 @@ export default async function HRDashboardPage() {
         payrollDaysLeft={daysLeft}
         today={today}
         dayName={dayName}
+        actions={
+          canManageEmployees
+            ? undefined
+            : [
+                { label: "Export Report", href: "/hr/payroll" },
+                { label: "View Employees", href: "/hr/employees" },
+              ]
+        }
       />
 
       <HRKPIStrip
@@ -287,7 +309,7 @@ export default async function HRDashboardPage() {
 
         {/* Right: quick actions */}
         <div className="dash-col-right">
-          <QuickActionsPanel />
+          <QuickActionsPanel variant={canManageEmployees ? "admin" : "manager"} />
         </div>
       </div>
 
