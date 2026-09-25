@@ -1,14 +1,14 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getMfaUsers } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { MfaTable } from "./MfaTable";
 
 export default async function MfaManagementPage() {
   const result = await getMfaUsers();
   const { data: users, source } = result;
-  const errored = useResource(result).status === "error";
+  const errored = toResourceState(result).status === "error";
   const totalUsers = users.length;
   const enrolled = users.filter((u) => u.mfaStatus === "active").length;
   const pending = users.filter((u) => u.mfaStatus === "pending").length;

@@ -2,7 +2,7 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getCatalogueServices } from "../../../_data/citizenPartials";
-import { useResource } from "../../../_data/useResource";
+import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 /** SVC-081 — Government service catalogue (versioned, published services). */
@@ -10,7 +10,7 @@ export default async function CataloguePage() {
   const t = await getTranslations("citizenCatalogue");
   const result = await getCatalogueServices();
   const { data: services } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   const totalAvailable = errored ? null : services.length;
 

@@ -68,6 +68,7 @@ export function AddressesEditor({ ownerType, ownerId }: Props) {
     return () => {
       live = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load is redefined each render but only closes over values already listed in this array; nothing else it reads can change independently.
   }, [ownerType, ownerId]);
 
   function update(key: string, patch: Partial<Row>) {

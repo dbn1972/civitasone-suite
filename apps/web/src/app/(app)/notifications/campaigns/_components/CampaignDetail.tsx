@@ -73,6 +73,7 @@ export function CampaignDetail({ campaignId }: { campaignId: string }) {
     return () => {
       live = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- loadCampaign/loadMetrics are redefined each render but only close over campaignId, already listed here.
   }, [campaignId]);
 
   async function runAction(action: Action) {

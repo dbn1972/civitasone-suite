@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getInspectionAssignments } from "../_data/loaders";
 import { AssignmentActions } from "./AssignmentActions";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function Page() {
   const result = await getInspectionAssignments();
   const { data } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   return (
     <div className="wrap">

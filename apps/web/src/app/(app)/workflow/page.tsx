@@ -1,13 +1,13 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "../../_components/ds";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { getAnalyticsSummary, formatDuration, titleCase } from "./_data/workflowData";
-import { useResource } from "../../_data/useResource";
+import { toResourceState } from "../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 export default async function WorkflowHubPage() {
   const result = await getAnalyticsSummary();
   const { data: a } = result;
-  const resource = useResource(result, (data) => Object.keys(data.instancesByStatus).length === 0 && data.totalInstances === 0);
+  const resource = toResourceState(result, (data) => Object.keys(data.instancesByStatus).length === 0 && data.totalInstances === 0);
   const errored = resource.status === "error";
 
   const pendingInstances =

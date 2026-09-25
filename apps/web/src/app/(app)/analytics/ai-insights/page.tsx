@@ -1,13 +1,13 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getAnalyticsAiInsights } from "@/app/_data/loaders";
 import { AiInsightsTable } from "./AiInsightsTable";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 export default async function AiInsightsPage() {
   const result = await getAnalyticsAiInsights();
   const { data: rows, source } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const total = errored ? null : rows.length;

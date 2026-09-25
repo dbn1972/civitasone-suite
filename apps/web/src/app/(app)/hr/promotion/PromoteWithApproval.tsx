@@ -160,6 +160,7 @@ export function PromoteWithApproval() {
     } finally {
       setSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- validateStep2 is redefined each render but only closes over values already listed in this array (initiatedBy, currentWith, note[, t]).
   }, [employeeId, fromDesigId, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note, selectedEmployee, submittedPromotionId, toast, t]);
 
   return (

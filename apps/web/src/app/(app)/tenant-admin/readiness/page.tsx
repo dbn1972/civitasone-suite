@@ -2,7 +2,7 @@ import { PageHeader, StatCard, StatGrid, Card, ProgressBar, StatusPill, EmptySta
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getTenantAdminDashboard } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 type ReadinessItem = {
@@ -32,7 +32,7 @@ function statusIcon(status: string): string {
 export default async function ReadinessPage() {
   const result = await getTenantAdminDashboard();
   const { data: dashboard, source } = result;
-  const errored = useResource(result).status === "error";
+  const errored = toResourceState(result).status === "error";
   const readiness = dashboard.readiness;
 
   const passed = readiness

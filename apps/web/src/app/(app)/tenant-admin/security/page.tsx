@@ -1,14 +1,14 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getSecurityOverview } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { SecurityTable } from "./SecurityTable";
 
 export default async function SecurityCenterPage() {
   const result = await getSecurityOverview();
   const { data: overview, source } = result;
-  const errored = useResource(result).status === "error";
+  const errored = toResourceState(result).status === "error";
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">

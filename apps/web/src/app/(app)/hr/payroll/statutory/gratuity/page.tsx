@@ -3,7 +3,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErr
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { GratuityCalculator } from "./GratuityCalculator";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 type GratuityRow = {
@@ -28,7 +28,7 @@ export default async function GratuityPage() {
   const t = await getTranslations("gratuity");
   const result = await getData();
   const { data: rows } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   const totalGratuityMinor = rows.reduce((s, r) => s + Number(r.gratuityMinor ?? 0), 0);
   const settledRecords = errored ? null : rows.filter((r) => r.status === "settled" || r.status === "paid").length;

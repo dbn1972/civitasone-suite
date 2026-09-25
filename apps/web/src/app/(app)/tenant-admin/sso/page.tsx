@@ -2,13 +2,13 @@ import { PageHeader, StatCard, StatGrid, Card, DataTable, StatusPill, EmptyState
 import { Breadcrumb } from "../Breadcrumb";
 import { getSsoProviders, type SsoProvider } from "@/app/_data/loaders";
 import { SsoTable } from "./SsoTable";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 export default async function SSOPage() {
   const result = await getSsoProviders();
   const { data: providers, source } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   const activeProviders = errored ? null : providers.filter((p) => p.status === "active").length;
   const totalUsers = providers.reduce((sum, p) => sum + (p.status === "active" ? 1 : 0), 0);

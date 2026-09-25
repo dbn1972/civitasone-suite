@@ -81,6 +81,7 @@ export default function DeliveryDetailPage() {
     })();
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   useEffect(load, [id]);
 
   if (loading) {

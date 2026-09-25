@@ -131,6 +131,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     } finally {
       setSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- notifyPath is always a pure function of refId/the entity id (see call sites), which is already listed here; it cannot change independently.
   }, [initiatedBy, currentWith, note, refType, refId, subject, dept, classification, priority, defaultApprovalChain, amountMinor, loadStatus]);
 
   return (

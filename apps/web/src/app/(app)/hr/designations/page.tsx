@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader, Card, StatGrid, StatCard, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -44,7 +44,7 @@ export default async function DesignationsPage() {
   const t = await getTranslations("designations");
   const result = await getDesignations();
   const { data: items } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const roles = getSessionRoles();
   const canEdit = roles.some((r) => DESIGNATION_ADMIN_ROLES.includes(r));
   const errored = resource.status === "error";

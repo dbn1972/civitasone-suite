@@ -1,13 +1,13 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getInvestigations } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { InvestigationTable } from "./InvestigationTable";
 
 export default async function InvestigationPage() {
   const result = await getInvestigations();
   const { data: investigations, source } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const active = errored ? null : investigations.filter((i) => i.status === "in_progress").length;

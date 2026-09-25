@@ -1,6 +1,6 @@
 import { PageHeader, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 type Channel = {
@@ -30,7 +30,7 @@ async function getChannels(): Promise<LoaderResult<Channel[]>> {
 export default async function NotificationChannelsPage() {
   const result = await getChannels();
   const { data: channels } = result;
-  const errored = useResource(result).status === "error";
+  const errored = toResourceState(result).status === "error";
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">

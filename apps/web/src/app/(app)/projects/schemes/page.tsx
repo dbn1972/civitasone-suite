@@ -2,13 +2,13 @@ import { getSchemes } from "../../../_data/loaders";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { formatRupees } from "@/lib/formatters";
 import { SchemesTable, type SchemeRow } from "./SchemesTable";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 export default async function SchemesPage() {
   const result = await getSchemes();
   const { data: schemes } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const active = errored ? null : schemes.filter((s) => s.status === "active").length;

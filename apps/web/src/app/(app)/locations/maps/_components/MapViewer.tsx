@@ -125,6 +125,7 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
     } finally {
       setSaving(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, [draft, load]);
 
   const deleteLayer = useCallback(
@@ -141,6 +142,7 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
         setError(formError.fromException("save").message);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
     [load],
   );
 

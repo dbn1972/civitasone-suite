@@ -1,14 +1,14 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getIdpProviders } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { IdpTable } from "./IdpTable";
 
 export default async function IdpListPage() {
   const result = await getIdpProviders();
   const { data: providers, source } = result;
-  const errored = useResource(result).status === "error";
+  const errored = toResourceState(result).status === "error";
   const activeProviders = errored ? 0 : providers.filter((p) => p.status === "active").length;
   const totalSynced = errored ? 0 : providers.reduce((sum, p) => sum + p.usersSynced, 0);
 

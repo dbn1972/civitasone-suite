@@ -1,37 +1,37 @@
 import { describe, it, expect } from "vitest";
-import { useResource, combineResourceState } from "./useResource";
+import { toResourceState, combineResourceState } from "./useResource";
 import type { LoaderResult } from "./apiClient";
 
-describe("useResource", () => {
+describe("toResourceState", () => {
   it("returns status=error when the loader reports source: error, regardless of the empty payload's shape", () => {
     const result: LoaderResult<string[]> = { data: [], source: "error" };
-    expect(useResource(result)).toEqual({ status: "error", data: [], source: "error" });
+    expect(toResourceState(result)).toEqual({ status: "error", data: [], source: "error" });
   });
 
   it("returns status=error even when the error fallback data is non-empty (never trust error-path data)", () => {
     const result: LoaderResult<string[]> = { data: ["stale"], source: "error" };
-    expect(useResource(result).status).toBe("error");
+    expect(toResourceState(result).status).toBe("error");
   });
 
   it("returns status=empty for a genuinely empty successful fetch", () => {
     const result: LoaderResult<string[]> = { data: [], source: "api" };
-    expect(useResource(result)).toEqual({ status: "empty", data: [], source: "api" });
+    expect(toResourceState(result)).toEqual({ status: "empty", data: [], source: "api" });
   });
 
   it("returns status=ready for a successful fetch with data", () => {
     const result: LoaderResult<string[]> = { data: ["a"], source: "api" };
-    expect(useResource(result)).toEqual({ status: "ready", data: ["a"], source: "api" });
+    expect(toResourceState(result)).toEqual({ status: "ready", data: ["a"], source: "api" });
   });
 
   it("uses a custom isEmpty predicate instead of the array-length default", () => {
     const result: LoaderResult<{ count: number }> = { data: { count: 0 }, source: "api" };
-    const state = useResource(result, (d) => d.count === 0);
+    const state = toResourceState(result, (d) => d.count === 0);
     expect(state.status).toBe("empty");
   });
 
   it("custom isEmpty is not consulted on the error branch", () => {
     const result: LoaderResult<{ count: number }> = { data: { count: 5 }, source: "error" };
-    const state = useResource(result, () => {
+    const state = toResourceState(result, () => {
       throw new Error("should not be called on the error branch");
     });
     expect(state.status).toBe("error");

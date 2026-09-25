@@ -266,6 +266,7 @@ export function GlobalSearch() {
         navigate(results[activeIndex]);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate only closes over router (stable per Next.js) and stable setters, so it cannot go stale.
     [results, activeIndex],
   );
 

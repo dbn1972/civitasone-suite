@@ -1,6 +1,6 @@
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
 import { getFinanceBudgets } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { minorToRupeesOrNull } from "@/lib/formatters";
 import { RevisedEstimatesTable, type RevisedEstimateRow } from "./RevisedEstimatesTable";
@@ -33,7 +33,7 @@ function toRow(b: Awaited<ReturnType<typeof getFinanceBudgets>>["data"][number])
 export default async function RevisedEstimatesPage() {
   const result = await getFinanceBudgets();
   const { data: budgets, source } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   const estimates = budgets.map(toRow);
   const increased = errored ? null : estimates.filter((e) => e.status === "increased").length;

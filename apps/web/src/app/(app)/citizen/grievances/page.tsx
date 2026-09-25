@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader, StatCard, StatGrid, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getGrievances } from "../_data";
 import type { GrievanceSummary } from "../_data";
-import { useResource } from "../../../_data/useResource";
+import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { GrievancesTable, type GrievanceRow } from "./GrievancesTable";
 import { getTranslations } from "next-intl/server";
@@ -24,7 +24,7 @@ export default async function GrievancesPage() {
   const t = await getTranslations("grievances");
   const result = await getGrievances();
   const { data: grievances } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const total = errored ? null : grievances.length;

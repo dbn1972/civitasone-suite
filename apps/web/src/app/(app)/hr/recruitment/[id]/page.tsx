@@ -608,6 +608,7 @@ export default function JobOpeningDetailPage() {
     }
     // formError.fromResponse/fromException are stable across renders (see
     // useFormError) even though the wrapping object literal isn't.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, [id]);
 
   const loadApplications = useCallback(async (signal?: AbortSignal) => {
@@ -721,8 +722,28 @@ export default function JobOpeningDetailPage() {
       throw e instanceof Error ? e : new Error(formError.fromException("save").message);
     }
     // formError.fromResponse/fromException are stable across renders (see
-    // useFormError) even though the wrapping object literal isn't.
-  }, []);
+    // useFormError) even though the wrapping object literal isn't — safe to
+    // omit `formError` itself. `t` is a real dependency, though: the
+    // withdraw-reason fallback below calls t("withdrawnByHrDefaultReason"),
+    // and this callback previously had an empty array, so it would have
+    // frozen at whatever locale was active on mount forever (same
+    // stale-closure class already fixed in CreateLeavePolicyForm.tsx, worse
+    // here since it never self-heals via a dep change).
+    // formError.fromResponse/fromException are stable across renders (see
+    // useFormError) even though the wrapping object literal isn't — safe to
+    // omit `formError` itself. `t` is a real dependency, though: the
+    // withdraw-reason fallback below calls t("withdrawnByHrDefaultReason"),
+    // and this callback previously had an empty array, so it would have
+    // frozen at whatever locale was active on mount forever (same
+    // stale-closure class already fixed in CreateLeavePolicyForm.tsx, worse
+    // here since it never self-heals via a dep change). That fallback branch
+    // is unreachable through the current UI (the withdraw ConfirmDialog
+    // enforces requireReason and trims before calling onConfirm, so `reason`
+    // here can never be empty) — fixed for correctness and as a guard
+    // against a future caller bypassing that dialog, not because it has an
+    // observable symptom today.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
+  }, [t]);
 
   // CRITICAL fix (Bug 1): the actual publish control. Calls the new PATCH
   // .../publish route (publication-routes.ts), which is async (202 Accepted,

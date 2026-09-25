@@ -1,13 +1,13 @@
 import { getMilestones } from "../../../_data/loaders";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { MilestonesTable, type MilestoneRow } from "./MilestonesTable";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 export default async function MilestonesPage() {
   const result = await getMilestones();
   const { data: milestones } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const pending = errored ? null : milestones.filter((m) => m.status === "pending").length;

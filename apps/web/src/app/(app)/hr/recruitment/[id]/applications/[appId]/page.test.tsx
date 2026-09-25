@@ -2,6 +2,7 @@ import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+import hiMessages from "@/messages/hi.json";
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "job-1", appId: "app-2" }),
@@ -155,6 +156,40 @@ describe("ApplicationDetailPage", () => {
       await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
       expect(alert.textContent).not.toMatch(/hrms-service/);
       expect(alert.textContent).not.toMatch(/\b500\b/);
+    });
+  });
+
+  /**
+   * Stale i18n closure regression (react-hooks/exhaustive-deps follow-up):
+   * the load effect's not-found branch calls t("notFoundMessage"), but `t`
+   * was missing from the effect's dependency array (only
+   * [appId, jobOpeningId]) -- so it kept using whatever `t` was in scope
+   * when the effect last actually ran, regardless of a later locale switch,
+   * until appId/jobOpeningId changed again. Same bug class already fixed in
+   * CreateLeavePolicyForm.tsx (see that file's own test of the same name).
+   */
+  describe("locale-safe not-found message", () => {
+    it("shows the not-found message in the new language after a locale switch, not the one active when the effect last ran", async () => {
+      vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [] }) } as Response)));
+
+      const { rerender } = render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <ApplicationDetailPage />
+        </NextIntlClientProvider>,
+      );
+      expect(await screen.findByText("Application not found.")).toBeInTheDocument();
+
+      // appId/jobOpeningId are unchanged (mocked as constant via useParams) --
+      // only `t` itself changes here, exactly the case the missing
+      // dependency mishandled.
+      rerender(
+        <NextIntlClientProvider locale="hi" messages={hiMessages}>
+          <ApplicationDetailPage />
+        </NextIntlClientProvider>,
+      );
+
+      await waitFor(() => expect(screen.getByText("आवेदन नहीं मिला।")).toBeInTheDocument());
+      expect(screen.queryByText("Application not found.")).not.toBeInTheDocument();
     });
   });
 });

@@ -2,7 +2,7 @@ import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } f
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getComplianceOverview } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 function resultColor(result: string): string {
@@ -20,7 +20,7 @@ function resultIcon(result: string): string {
 export default async function ComplianceDashboardPage() {
   const result = await getComplianceOverview();
   const { data: overview } = result;
-  const resource = useResource(result, (data) => data.checks.length === 0);
+  const resource = toResourceState(result, (data) => data.checks.length === 0);
   const errored = resource.status === "error";
 
   return (

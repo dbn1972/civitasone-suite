@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getCertificates } from "../../../_data/citizenGaps";
 import { CertificateVerify } from "./CertificateVerify";
-import { useResource } from "../../../_data/useResource";
+import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 /** SVC-086 — Certificate, licence & permit issuance + public QR verify. */
@@ -10,7 +10,7 @@ export default async function CertificatesPage() {
   const t = await getTranslations("citizenCertificates");
   const result = await getCertificates();
   const { data: certs } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   const active = errored
     ? null
