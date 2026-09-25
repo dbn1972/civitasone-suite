@@ -3,7 +3,6 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RequestAdvanceForm } from "./RequestAdvanceForm";
 import { mapAdvances, type ApiAdvance, type Row } from "./mapAdvances";
-import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
@@ -43,12 +42,25 @@ export default async function AdvancesPage() {
   const approved = items.filter((i) => i.status === "approved").length;
   const rejected = items.filter((i) => i.status === "rejected").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status"; render?: (r: Row) => string }[] = [
+  // Audit: AdvancesPage is a Server Component. `amount`/`recovered` used to
+  // carry a `render: (r) => formatMoney(r.amount)` closure -- DataTable is a
+  // "use client" component, and React cannot serialize a function across
+  // that Server->Client boundary ("Functions cannot be passed directly to
+  // Client Components..."), so the whole page failed to render for every
+  // role, every time, with only a generic digest-coded error reaching the
+  // browser console (the real cause only appears in the server's own log).
+  // DataTable's `cellType: "amount"` exists exactly for this: it formats
+  // row[key] with formatMoney() *inside* the client component, so only the
+  // raw number crosses the boundary -- also correct where `render` was not,
+  // since it keeps `amount`/`recovered` numeric for the sortable column
+  // (compareValues sorts numbers numerically; a pre-formatted "₹10,000"
+  // string would have sorted lexicographically instead).
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" }[] = [
     { key: "employee", label: t("colEmployee") },
-    { key: "amount", label: t("colAmount"), render: (r) => formatMoney(r.amount) },
+    { key: "amount", label: t("colAmount"), cellType: "amount" },
     { key: "purpose", label: t("colPurpose") },
     { key: "recoveryMonths", label: t("colRecovery") },
-    { key: "recovered", label: t("colRecovered"), render: (r) => formatMoney(r.recovered) },
+    { key: "recovered", label: t("colRecovered"), cellType: "amount" },
     { key: "requestDate", label: t("colDate") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];

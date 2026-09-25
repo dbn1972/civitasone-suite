@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
@@ -85,11 +85,20 @@ function inferCascade(item: GoalRow): CascadeLevel {
 
 export default async function GoalsPage() {
   const t = await getTranslations("goals");
-  const [{ data: items, source }, { data: devPlans }] = await Promise.all([
+  const [{ data: items, source }, devPlansResult] = await Promise.all([
     getGoals(),
     getDevPlans(),
   ]);
+  const { data: devPlans, source: devPlansSource } = devPlansResult;
   const errored = source === "error";
+  // Audit: this page destructured only the goals loader's `source` and threw
+  // away getDevPlans()'s own -- so a real backend failure on the dev-plans
+  // fetch (the table backing it was never migrated; see the migration added
+  // alongside this fix) rendered DevelopmentPlanTimeline with an empty
+  // `activities` array, identical to a tenant that genuinely has none
+  // planned. Tracked separately so the two sections can each show their own
+  // honest state.
+  const devPlansErrored = devPlansSource === "error";
 
   const onTrack   = items.filter((i) => ["on_track","on track","active"].includes((i.status ?? "").toLowerCase())).length;
   const atRisk    = items.filter((i) => ["at_risk","behind","at risk"].includes((i.status ?? "").toLowerCase())).length;
@@ -178,9 +187,15 @@ export default async function GoalsPage() {
 
       {/* Development Plan Timeline */}
       <Card title={t("devPlanCardTitle")}>
-        <div style={{ padding: "8px 16px 16px" }}>
-          <DevelopmentPlanTimeline activities={activities} />
-        </div>
+        {devPlansErrored ? (
+          <div className="pad">
+            <LoadErrorState result={devPlansResult} area="development plans" />
+          </div>
+        ) : (
+          <div style={{ padding: "8px 16px 16px" }}>
+            <DevelopmentPlanTimeline activities={activities} />
+          </div>
+        )}
       </Card>
     </div>
   );
