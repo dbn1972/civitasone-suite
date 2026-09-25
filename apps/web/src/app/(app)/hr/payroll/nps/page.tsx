@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../../_components/ds";
 import { getNpsStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
-import { useResource } from "../../../../_data/useResource";
+import { toResourceState } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
 
@@ -28,7 +28,7 @@ export default async function NpsStatementsPage() {
   const t = await getTranslations("npsStatements");
   const result = await getNpsStatements();
   const { data: rows } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const tableRows: NpsRow[] = rows.map((r) => {

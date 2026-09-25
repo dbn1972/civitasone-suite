@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getEligibilityRuleSets } from "../../../_data/citizenGaps";
 import { EligibilityCheck } from "./EligibilityCheck";
-import { useResource } from "../../../_data/useResource";
+import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 /** SVC-083 — Eligibility & entitlement determination. */
@@ -10,7 +10,7 @@ export default async function EligibilityPage() {
   const t = await getTranslations("citizenEligibility");
   const result = await getEligibilityRuleSets();
   const { data: ruleSets } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   const published = errored ? null : ruleSets.filter((r) => r.status === "published").length;
 

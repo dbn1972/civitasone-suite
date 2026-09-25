@@ -1,6 +1,6 @@
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
@@ -37,7 +37,7 @@ export default async function EmployeeTypesPage() {
 
   const result = await getTypes();
   const { data: types } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const active = errored ? null : types.filter((et) => et.isActive).length;

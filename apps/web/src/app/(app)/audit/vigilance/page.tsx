@@ -1,13 +1,13 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getVigilanceCases } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { VigilanceTable } from "./VigilanceTable";
 
 export default async function VigilancePage() {
   const result = await getVigilanceCases();
   const { data: cases, source } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const totalCases = errored ? null : cases.length;

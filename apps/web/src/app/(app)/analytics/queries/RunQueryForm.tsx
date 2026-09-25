@@ -105,6 +105,7 @@ export function RunQueryForm() {
 
     void loadCatalog();
     return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- catalogFormError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, []);
 
   // Focus success banner when it appears
@@ -204,6 +205,7 @@ export function RunQueryForm() {
         setSubmitting(false);
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- queryFormError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
     [queryName, metric, dimensions, filterRows, dateFrom, dateTo, limit, resetForm],
   );
 

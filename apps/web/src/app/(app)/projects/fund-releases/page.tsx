@@ -2,13 +2,13 @@ import { getProjectFundReleases } from "../../../_data/loaders";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { formatMoney } from "@/lib/formatters";
 import { FundReleasesTable, type FundReleaseRow } from "./FundReleasesTable";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 export default async function FundReleasesPage() {
   const result = await getProjectFundReleases();
   const { data: releases } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const totalReleased = errored ? null : releases.filter((r) => r.status === "released").reduce((s, r) => s + r.amount, 0);

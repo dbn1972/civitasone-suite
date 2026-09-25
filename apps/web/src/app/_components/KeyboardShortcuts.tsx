@@ -92,6 +92,7 @@ export function KeyboardShortcuts() {
       window.removeEventListener("keydown", handleKeyDown);
       if (timerRef.current) clearTimeout(timerRef.current);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- shortcuts only closes over router (stable per Next.js) and stable setters, so it cannot go stale.
   }, [isInputFocused, router]);
 
   return (

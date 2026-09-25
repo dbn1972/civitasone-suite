@@ -90,7 +90,13 @@ export default function ApplicationDetailPage() {
       }
     }
     if (appId && jobOpeningId) load();
-  }, [appId, jobOpeningId]);
+    // `t` is a real dependency (not the safe formError-object-identity
+    // omission documented elsewhere): the not-found branch below calls
+    // t("notFoundMessage"), so a locale switch while this effect's closure is
+    // still the active one would freeze that message in the old language —
+    // the same stale-closure class already fixed in CreateLeavePolicyForm.tsx.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
+  }, [appId, jobOpeningId, t]);
 
   // UX: replaces the raw departmentId/designationId UUID text boxes in the
   // hire dialog below with searchable name-based dropdowns, matching the

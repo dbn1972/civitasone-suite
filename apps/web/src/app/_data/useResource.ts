@@ -12,7 +12,7 @@ import type { LoaderResult, LoaderSource } from "./apiClient";
  * looked at `source`. A real outage and a tenant with zero rows rendered
  * pixel-identical: zero stat cards, a cheerful "create your first…" prompt.
  *
- * `useResource` turns a `LoaderResult<T>` into exactly one of three states.
+ * `toResourceState` turns a `LoaderResult<T>` into exactly one of three states.
  * It is a plain function, not a React hook — these run inside async Server
  * Component `page.tsx` files, which cannot call hooks. Pair it with
  * `<Resource>` (../_components/ds/Resource.tsx), whose `error` and `empty`
@@ -30,7 +30,7 @@ function defaultIsEmpty<T>(data: T): boolean {
   return Array.isArray(data) ? data.length === 0 : false;
 }
 
-export function useResource<T>(
+export function toResourceState<T>(
   result: LoaderResult<T>,
   isEmpty: (data: T) => boolean = defaultIsEmpty,
 ): ResourceState<T> {

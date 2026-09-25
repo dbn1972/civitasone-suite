@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader, StatusPill, RefreshErrorState } from "../../../../_components/ds";
 import { getPayrollRunDetails } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatRupees } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
@@ -21,7 +21,7 @@ export default async function PayrollRunsPage() {
   const t = await getTranslations("payrollRuns");
   const result = await getPayrollRunDetails();
   const { data: runs } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   return (

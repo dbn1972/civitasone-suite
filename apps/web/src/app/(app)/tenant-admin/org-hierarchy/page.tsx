@@ -2,7 +2,7 @@ import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } f
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getOrgHierarchy, type OrgHierarchyNode } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 function countAll(nodes: OrgHierarchyNode[]): number {
@@ -56,7 +56,7 @@ function TreeNode({ node, depth }: { node: OrgHierarchyNode; depth: number }) {
 export default async function OrgHierarchyPage() {
   const result = await getOrgHierarchy();
   const { data: orgTree, source } = result;
-  const errored = useResource(result).status === "error";
+  const errored = toResourceState(result).status === "error";
   const totalDepts = errored ? 0 : countDepts(orgTree);
   const totalStaff = errored ? 0 : countAll(orgTree);
   const levels = errored ? 0 : maxDepth(orgTree);

@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getAppeals } from "../../../_data/citizenPartials";
 import { AppealPanel } from "./AppealPanel";
-import { useResource } from "../../../_data/useResource";
+import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 /** SVC-089 — Appeal, review & revision. */
@@ -10,7 +10,7 @@ export default async function AppealsPage() {
   const t = await getTranslations("citizenAppeals");
   const result = await getAppeals();
   const { data: appeals } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   const totalFiled = errored ? null : appeals.length;
 

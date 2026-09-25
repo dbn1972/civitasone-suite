@@ -97,6 +97,7 @@ export function LeaveApprovalsPanel() {
     // a fixed `area` string inside useFormError) even though the wrapping
     // `formError` object literal isn't, so omitting it here is safe and
     // avoids re-creating loadTasks (and re-running its effect) every render.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, []);
 
   useEffect(() => {

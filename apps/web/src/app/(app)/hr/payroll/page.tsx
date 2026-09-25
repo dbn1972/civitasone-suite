@@ -1,6 +1,6 @@
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { getPayrollRunDetails, getPayrollStructures } from "../../../_data/loaders";
-import { useResource } from "../../../_data/useResource";
+import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatRupees } from "@/lib/formatters";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
@@ -21,7 +21,7 @@ export default async function PayrollPage() {
     getPayrollStructures(),
   ]);
   const { data: runs, source } = runsResult;
-  const runsResource = useResource(runsResult);
+  const runsResource = toResourceState(runsResult);
   const errored = runsResource.status === "error";
 
   const totalRuns = errored ? null : runs.length;

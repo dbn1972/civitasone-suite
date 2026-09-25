@@ -81,6 +81,7 @@ export default function TenderDocumentsPage({
 
   useEffect(() => {
     void load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load is redefined each render but only closes over values already listed in this array; nothing else it reads can change independently.
   }, [params.id]);
 
   // L2 fix: storageRef is now a real S3 object key (see handleSave below),

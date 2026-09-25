@@ -95,6 +95,7 @@ export default function LeavePoliciesClient() {
     const controller = new AbortController()
     void fetchPolicies(controller.signal)
     return () => controller.abort()
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchPolicies is redefined each render but only closes over values already listed in this array; nothing else it reads can change independently.
   }, [filter]);
 
   function startEdit(p: Policy) {

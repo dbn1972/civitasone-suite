@@ -65,6 +65,7 @@ export function AccountRelationshipsEditor({ accountId, accountOptions = [] }: P
     return () => {
       live = false;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- load is redefined each render but only closes over values already listed in this array; nothing else it reads can change independently.
   }, [accountId]);
 
   async function add(e: React.FormEvent) {

@@ -2,7 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } f
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreatePayGroupForm } from "./CreatePayGroupForm";
 import { PayGroupCard } from "./PayGroupCard";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
@@ -32,7 +32,7 @@ export default async function PayGroupsPage() {
   const t = await getTranslations("payrollPayGroups");
   const result = await getData();
   const { data: groups } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const activeCount = errored ? null : groups.filter((g) => g.status === "active").length;

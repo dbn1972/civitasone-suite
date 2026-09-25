@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState, Term } from "../../../../_components/ds";
 import { getGpfStatements } from "../../../../_data/loaders";
 import { Chart } from "../../../../_components/Chart";
-import { useResource } from "../../../../_data/useResource";
+import { toResourceState } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
 
@@ -26,7 +26,7 @@ export default async function GpfStatementsPage() {
   const t = await getTranslations("gpfStatements");
   const result = await getGpfStatements();
   const { data: rows } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const tableRows: GpfRow[] = rows.map((r) => {

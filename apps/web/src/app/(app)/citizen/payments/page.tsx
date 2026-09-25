@@ -2,7 +2,7 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, RefreshErrorState } from "../../../_components/ds";
 import { getFeeSchedules } from "../../../_data/citizenGaps";
 import { PaymentPanel } from "./PaymentPanel";
-import { useResource } from "../../../_data/useResource";
+import { toResourceState } from "../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 /** SVC-085 — Service fee & payment handling. */
@@ -10,7 +10,7 @@ export default async function PaymentsPage() {
   const t = await getTranslations("citizenPayments");
   const result = await getFeeSchedules();
   const { data: schedules } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   return (

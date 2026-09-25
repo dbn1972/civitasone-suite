@@ -2,7 +2,7 @@ import { PageHeader, StatCard, StatGrid, Card, ProgressBar, StatusPill, EmptySta
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { Breadcrumb } from "../Breadcrumb";
 import { getInstallSteps } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 
 function stepIcon(status: string): string {
@@ -14,7 +14,7 @@ function stepIcon(status: string): string {
 export default async function InstallStatusPage() {
   const result = await getInstallSteps();
   const { data: installSteps, source } = result;
-  const errored = useResource(result).status === "error";
+  const errored = toResourceState(result).status === "error";
   const completed = installSteps.filter((s) => s.status === "completed").length;
   const total = installSteps.length;
   const progressPct = total > 0 ? Math.round((completed / total) * 100) : 0;

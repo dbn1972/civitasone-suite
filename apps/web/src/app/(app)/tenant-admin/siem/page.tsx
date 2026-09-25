@@ -1,14 +1,14 @@
 import { PageHeader, StatCard, StatGrid, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { Breadcrumb } from "../Breadcrumb";
 import { getSiemAlerts } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { SiemTable } from "./SiemTable";
 
 export default async function SiemPage() {
   const result = await getSiemAlerts();
   const { data: alerts, source } = result;
-  const errored = useResource(result).status === "error";
+  const errored = toResourceState(result).status === "error";
   const criticalAlerts = alerts.filter((a) => a.severity === "critical").length;
   const highAlerts = alerts.filter((a) => a.severity === "high").length;
   const activeAlerts = alerts.filter((a) => a.status === "active" || a.status === "investigating").length;

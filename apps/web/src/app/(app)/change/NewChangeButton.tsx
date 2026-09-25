@@ -65,6 +65,7 @@ export function NewChangeButton() {
     } finally {
       setBusy(false);
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, [title, type, risk, services, description, rollbackPlan, router]);
 
   return (

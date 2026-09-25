@@ -1,13 +1,13 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { getCagParas } from "@/app/_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { CagTable } from "./CagTable";
 
 export default async function CagPage() {
   const result = await getCagParas();
   const { data: paras, source } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
 
   const totalParas = errored ? null : paras.reduce((sum, p) => sum + p.totalParas, 0);

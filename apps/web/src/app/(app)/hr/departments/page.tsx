@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { PageHeader, Card, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -56,7 +56,7 @@ export default async function DepartmentsPage() {
   const t = await getTranslations("departments");
   const result = await getDepartments();
   const { data: depts } = result;
-  const resource = useResource(result);
+  const resource = toResourceState(result);
   const errored = resource.status === "error";
   const roles = getSessionRoles();
   const canEdit = roles.some((r) => DEPARTMENT_ADMIN_ROLES.includes(r));

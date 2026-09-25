@@ -165,6 +165,7 @@ export function KanbanBoard({ pipeline, deals: serverDeals, source }: Props) {
     // object literal isn't, so omitting it here is safe and avoids
     // re-creating moveDealToStage every render (see hr/leave/approvals/
     // LeaveApprovalsPanel.tsx for the same, first-established pattern).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, [localDeals, stages, hasRealPipeline, announce]);
 
   const handleDrop = useCallback(async (targetStageId: string) => {

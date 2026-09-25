@@ -2,7 +2,7 @@ import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, StatusPill, EmptyState, RefreshErrorState } from "@/app/_components/ds";
 import { SchemeProjectsTable, type SchemeProjectRow } from "./SchemeProjectsTable";
 import { getSchemeDetail } from "../../../../_data/loaders";
-import { useResource } from "@/app/_data/useResource";
+import { toResourceState } from "@/app/_data/useResource";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
@@ -24,7 +24,7 @@ import { toHumanError } from "@/lib/messages";
 export default async function SchemeDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const result = await getSchemeDetail(id);
-  const resource = useResource(result, (data) => data === null);
+  const resource = toResourceState(result, (data) => data === null);
 
   if (resource.status === "error") {
     return (
