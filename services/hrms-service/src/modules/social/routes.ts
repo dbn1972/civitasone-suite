@@ -112,24 +112,27 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const now = new Date().toISOString();
 
     const { receiverName, giverName } = await withTenantGuc(ctx.tenantId, async (pool) => {
-      // Get receiver name for feed display
+      // Get receiver name for feed display.
+      // Audit: employee.hrms_employees has no first_name/last_name (only
+      // full_name) and no user_id (only user_ref) -- this and every other
+      // employee-name lookup in this file 500'd or silently no-op'd on the
+      // real schema. See the social/feed handler below for the confirmed
+      // live-verified root cause of the /hr/social-feed 500.
       const receiverRow = await pool.query(
-        `SELECT first_name, last_name, employee_code FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
+        `SELECT full_name FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
         [body.receiverId, ctx.tenantId],
       );
       const receiver = receiverRow.rows[0];
       if (!receiver) throw new HttpError(404, "RECEIVER_NOT_FOUND", "Employee not found");
 
-      const receiverName = `${receiver.first_name} ${receiver.last_name}`.trim();
+      const receiverName = receiver.full_name;
 
       // Get giver name
       const giverRow = await pool.query(
-        `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+        `SELECT full_name FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
         [ctx.actorId, ctx.tenantId],
       );
-      const giverName = giverRow.rows[0]
-        ? `${giverRow.rows[0].first_name} ${giverRow.rows[0].last_name}`.trim()
-        : "Unknown";
+      const giverName = giverRow.rows[0]?.full_name ?? "Unknown";
 
       await pool.query(
         `INSERT INTO employee.hrms_social_kudos (id, tenant_id, giver_id, receiver_id, giver_name, receiver_name, badge, message, created_at)
@@ -226,26 +229,40 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         [ctx.tenantId],
       );
 
-      // 2. Today's birthdays
+      // 2. Today's birthdays.
+      // Audit: this is the confirmed, live-verified root cause of
+      // /hr/social-feed 500ing for every role/tenant -- first_name/
+      // last_name/department/designation/photo_url don't exist on
+      // employee.hrms_employees (only full_name + department_id/
+      // designation_id FKs; there is no per-employee photo column at all),
+      // status='active' was never a legal value (see
+      // migrations/0025_employee_status_contract.sql), and joining_date
+      // isn't a column either -- the real one is date_of_joining. Any one of
+      // these threw inside this handler's withTenantGuc call, uncaught,
+      // 500ing the whole combined feed (kudos/announcements included).
       const today = new Date();
       const mm = String(today.getMonth() + 1).padStart(2, "0");
       const dd = String(today.getDate()).padStart(2, "0");
       const birthdays = await pool.query(
-        `SELECT id, first_name, last_name, department, designation, photo_url
-         FROM employee.hrms_employees
-         WHERE tenant_id = $1 AND status = 'active'
-           AND EXTRACT(MONTH FROM date_of_birth) = $2
-           AND EXTRACT(DAY FROM date_of_birth) = $3`,
+        `SELECT e.id, e.full_name, d.name AS department, ds.name AS designation
+         FROM employee.hrms_employees e
+         LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
+         LEFT JOIN employee.hrms_designations ds ON ds.id = e.designation_id AND ds.tenant_id = e.tenant_id
+         WHERE e.tenant_id = $1 AND e.status = 'confirmed'
+           AND EXTRACT(MONTH FROM e.date_of_birth) = $2
+           AND EXTRACT(DAY FROM e.date_of_birth) = $3`,
         [ctx.tenantId, Number(mm), Number(dd)],
       );
 
       // 3. New joinees (last 30 days)
       const newJoinees = await pool.query(
-        `SELECT id, first_name, last_name, department, designation, joining_date, photo_url
-         FROM employee.hrms_employees
-         WHERE tenant_id = $1 AND status = 'active'
-           AND joining_date > NOW() - INTERVAL '30 days'
-         ORDER BY joining_date DESC LIMIT 5`,
+        `SELECT e.id, e.full_name, d.name AS department, ds.name AS designation, e.date_of_joining
+         FROM employee.hrms_employees e
+         LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
+         LEFT JOIN employee.hrms_designations ds ON ds.id = e.designation_id AND ds.tenant_id = e.tenant_id
+         WHERE e.tenant_id = $1 AND e.status = 'confirmed'
+           AND e.date_of_joining > CURRENT_DATE - INTERVAL '30 days'
+         ORDER BY e.date_of_joining DESC LIMIT 5`,
         [ctx.tenantId],
       );
 
@@ -270,10 +287,9 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       feed.push({
         type: "birthday",
         id: b.id,
-        name: `${b.first_name} ${b.last_name}`.trim(),
+        name: b.full_name,
         department: b.department,
         designation: b.designation,
-        photoUrl: b.photo_url,
         createdAt: today.toISOString(),
       });
     }
@@ -282,12 +298,11 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       feed.push({
         type: "new_joinee",
         id: j.id,
-        name: `${j.first_name} ${j.last_name}`.trim(),
+        name: j.full_name,
         department: j.department,
         designation: j.designation,
-        joiningDate: j.joining_date,
-        photoUrl: j.photo_url,
-        createdAt: j.joining_date,
+        joiningDate: j.date_of_joining,
+        createdAt: j.date_of_joining,
       });
     }
 
@@ -321,23 +336,21 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const now = new Date().toISOString();
 
     // Author-name lookup is best-effort and deliberately kept OUTSIDE the
-    // write below (its own withTenantGuc call) and fault-tolerant: this
-    // already had a not-found fallback to "Admin", now extended to also
-    // cover a thrown lookup error, since this environment's
-    // employee.hrms_employees has drifted from the column names this lookup
-    // was written against (see PR notes — a separate, pre-existing bug, out
-    // of scope here). The announcement itself must still be creatable
-    // either way.
+    // write below (its own withTenantGuc call) and fault-tolerant: it had a
+    // not-found fallback to "Admin" already, and the column-name drift that
+    // used to make this throw on every call (employee.hrms_employees has no
+    // first_name/last_name/user_id -- see the social/feed handler above for
+    // the full story) is now fixed. The try/catch stays as generic
+    // resilience -- a failed name lookup for any other reason (a DB blip)
+    // should still never block creating the announcement itself.
     let authorName = "Admin";
     try {
       authorName = await withTenantGuc(ctx.tenantId, async (pool) => {
         const authorRow = await pool.query(
-          `SELECT first_name, last_name FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+          `SELECT full_name FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
           [ctx.actorId, ctx.tenantId],
         );
-        return authorRow.rows[0]
-          ? `${authorRow.rows[0].first_name} ${authorRow.rows[0].last_name}`.trim()
-          : "Admin";
+        return authorRow.rows[0]?.full_name ?? "Admin";
       });
     } catch (err) {
       req.log.warn({ err }, "announcement author lookup failed; falling back to 'Admin'");
@@ -377,21 +390,22 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const dd = today.getDate();
 
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT id, first_name, last_name, department, designation, photo_url
-       FROM employee.hrms_employees
-       WHERE tenant_id = $1 AND status = 'active'
-         AND EXTRACT(MONTH FROM date_of_birth) = $2
-         AND EXTRACT(DAY FROM date_of_birth) = $3`,
+      `SELECT e.id, e.full_name, d.name AS department, ds.name AS designation
+       FROM employee.hrms_employees e
+       LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
+       LEFT JOIN employee.hrms_designations ds ON ds.id = e.designation_id AND ds.tenant_id = e.tenant_id
+       WHERE e.tenant_id = $1 AND e.status = 'confirmed'
+         AND EXTRACT(MONTH FROM e.date_of_birth) = $2
+         AND EXTRACT(DAY FROM e.date_of_birth) = $3`,
       [ctx.tenantId, mm, dd],
     ));
 
     return reply.send({
       data: rows.rows.map((r: any) => ({
         id: r.id,
-        name: `${r.first_name} ${r.last_name}`.trim(),
+        name: r.full_name,
         department: r.department,
         designation: r.designation,
-        photoUrl: r.photo_url,
       })),
     });
   });
@@ -441,20 +455,20 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
 
     // Reporting-manager lookup for the approval notification is best-effort
     // and deliberately kept OUTSIDE the write above (its own withTenantGuc
-    // call, not the same transaction) and fault-tolerant: this environment's
-    // employee.hrms_employees has drifted from the column names this lookup
-    // was written against (see PR notes — a separate, pre-existing bug, out
-    // of scope here), so it currently cannot succeed. The travel request
-    // itself must still be created either way; only the notification is
-    // allowed to silently no-op.
+    // call, not the same transaction) and fault-tolerant: the column-name
+    // drift that used to make this always fail (no reporting_to or user_id
+    // column -- the real ones are manager_id and user_ref) is now fixed. The
+    // try/catch stays as generic resilience; the travel request itself must
+    // still be created either way and only the notification may silently
+    // no-op.
     let reportingTo: string | undefined;
     try {
       reportingTo = await withTenantGuc(ctx.tenantId, async (pool) => {
         const manager = await pool.query(
-          `SELECT reporting_to FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+          `SELECT manager_id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
           [ctx.actorId, ctx.tenantId],
         );
-        return manager.rows[0]?.reporting_to as string | undefined;
+        return manager.rows[0]?.manager_id as string | undefined;
       });
     } catch (err) {
       req.log.warn({ err }, "travel-request manager lookup failed; skipping approval notification");
@@ -655,23 +669,31 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const rootId = (req.query as any)?.rootId;
 
+    // Audit: same column-name drift as the rest of this file (full_name not
+    // first_name/last_name, status='confirmed' not 'active', department/
+    // designation via their lookup tables, manager_id not reporting_to,
+    // employee_no not employee_code, no per-employee photo column) --
+    // ORDER BY now sorts by the resolved designation name, matching intent
+    // (the raw designation_id ordering this had before was meaningless to a
+    // viewer anyway).
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT id, first_name, last_name, designation, department, reporting_to, photo_url, employee_code
-       FROM employee.hrms_employees
-       WHERE tenant_id = $1 AND status = 'active'
-       ORDER BY designation`,
+      `SELECT e.id, e.full_name, ds.name AS designation, d.name AS department, e.manager_id, e.employee_no
+       FROM employee.hrms_employees e
+       LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
+       LEFT JOIN employee.hrms_designations ds ON ds.id = e.designation_id AND ds.tenant_id = e.tenant_id
+       WHERE e.tenant_id = $1 AND e.status = 'confirmed'
+       ORDER BY ds.name`,
       [ctx.tenantId],
     ));
 
     // Build tree
     const employees = rows.rows.map((r: any) => ({
       id: r.id,
-      name: `${r.first_name} ${r.last_name}`.trim(),
+      name: r.full_name,
       designation: r.designation,
       department: r.department,
-      reportingTo: r.reporting_to,
-      photoUrl: r.photo_url,
-      employeeCode: r.employee_code,
+      reportingTo: r.manager_id,
+      employeeCode: r.employee_no,
       children: [] as any[],
     }));
 

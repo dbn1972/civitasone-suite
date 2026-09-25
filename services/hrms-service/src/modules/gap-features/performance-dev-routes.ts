@@ -8,7 +8,8 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool } from "../../shared/db.js";
+import { sqlPool, sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
 
 const HR_ROLES   = ["hr_admin", "super_admin", "hr_officer"];
 const MGR_ROLES  = [...HR_ROLES, "manager", "dept_head"];
@@ -17,6 +18,38 @@ const idParam    = z.object({ id: z.string().uuid() });
 
 function isHr(ctx: { roles: string[] }): boolean {
   return ctx.roles.some((r) => HR_ROLES.includes(r));
+}
+
+/**
+ * Audit: hrms.development_plans is FORCE ROW LEVEL SECURITY (tenant_isolation_policy,
+ * matching every other tenant-scoped table in this schema). Plain sqlPool.query()
+ * runs on a pooled connection with no app.tenant_id GUC set, so under hrms_svc
+ * (NOBYPASSRLS) the policy fails CLOSED -- confirmed live, empty results with no
+ * error, for a request whose own JWT actorId matched a real seeded row exactly.
+ * Same bug, same fix as social/routes.ts's identical withTenantGuc (see that
+ * file's header for the full story) -- this module never received it. Scoped to
+ * just the development-plans handlers this change's frontend fix depends on
+ * actually returning real rows; the goals/learning-paths handlers below share
+ * the same underlying gap and are flagged separately as a follow-up, not fixed
+ * here, to keep this change to what hr/goals's dev-plans section needs.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (pool: {
+    query<R = any>(text: string, params?: readonly unknown[]): Promise<{ rows: R[]; rowCount: number }>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, async (tx) => {
+    const pool = {
+      async query<R = any>(text: string, params: readonly unknown[] = []): Promise<{ rows: R[]; rowCount: number }> {
+        const result = await tx.unsafe(text, params as unknown as never[]);
+        const rows = result as unknown as R[];
+        const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+        return { rows, rowCount };
+      },
+    };
+    return fn(pool);
+  });
 }
 
 export async function performanceDevRoutes(app: FastifyInstance): Promise<void> {
@@ -92,7 +125,7 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
     }).parse(req.body);
 
     const id = randomUUID();
-    await sqlPool.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.development_plans
          (id, tenant_id, employee_id, title, description, type,
           planned_date, duration_days, skill_targeted, priority, status, created_by, created_at)
@@ -100,7 +133,7 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
       [id, ctx.tenantId, body.employeeId, body.title, body.description ?? null,
        body.type, body.plannedDate, body.durationDays ?? null,
        body.skillTargeted ?? null, body.priority, ctx.actorId],
-    );
+    ));
     return reply.code(201).send({ data: { id, status: "planned" } });
   });
 
@@ -110,7 +143,7 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, ALL_ROLES);
     const { employeeId } = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const targetId = isHr(ctx) ? (employeeId ?? null) : ctx.actorId;
-    const { rows } = await sqlPool.query(
+    const { rows } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT dp.id, e.full_name AS employee, dp.title, dp.description, dp.type,
               dp.planned_date AS "plannedDate", dp.duration_days AS "durationDays",
               dp.skill_targeted AS "skillTargeted", dp.priority, dp.status, dp.created_at AS "createdAt"
@@ -119,7 +152,7 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
        WHERE dp.tenant_id = $1 ${targetId ? "AND dp.employee_id = $2" : ""}
        ORDER BY dp.planned_date ASC LIMIT 200`,
       targetId ? [ctx.tenantId, targetId] : [ctx.tenantId],
-    );
+    ));
     return reply.send({ data: rows });
   });
 
@@ -141,10 +174,10 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
     if (body.completedAt !== undefined) { sets.push(`completed_at = $${i++}`); vals.push(body.completedAt); }
     if (body.notes       != null)      { sets.push(`notes = $${i++}`);        vals.push(body.notes); }
     vals.push(id, ctx.tenantId);
-    const { rowCount } = await sqlPool.query(
+    const { rowCount } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `UPDATE hrms.development_plans SET ${sets.join(", ")} WHERE id = $${i} AND tenant_id = $${i + 1}`,
       vals,
-    );
+    ));
     if (!rowCount) throw new HttpError(404, "NOT_FOUND", "Development plan not found");
     return reply.send({ updated: true });
   });

@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool as sqlClient } from "../../shared/db.js";
+import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
 
 /**
  * Pulse Surveys — quick anonymous engagement check-ins.
@@ -18,6 +19,37 @@ import { sqlPool as sqlClient } from "../../shared/db.js";
 // unchanged and out of scope for this fix.
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
+
+/**
+ * Audit: hrms.leaderboard_points is FORCE ROW LEVEL SECURITY (tenant_isolation_policy).
+ * Plain sqlClient.query() (== sqlPool, see shared/db.ts) runs on a pooled
+ * connection with no app.tenant_id GUC set, so under hrms_svc (NOBYPASSRLS) the
+ * policy fails CLOSED -- confirmed live: a real seeded points row for the
+ * requesting actor came back empty with a 200, no error. Same bug, same fix as
+ * social/routes.ts's identical withTenantGuc (see that file's header for the
+ * full story); this module never received it. Scoped to the two leaderboard
+ * handlers this change's fix depends on actually returning real rows -- the
+ * pulse-survey/goals/assistant handlers below share the same gap and are
+ * flagged separately as a follow-up, not fixed here.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (pool: {
+    query<R = any>(text: string, params?: readonly unknown[]): Promise<{ rows: R[]; rowCount: number }>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(rawSqlClient, tenantId, async (tx) => {
+    const pool = {
+      async query<R = any>(text: string, params: readonly unknown[] = []): Promise<{ rows: R[]; rowCount: number }> {
+        const result = await tx.unsafe(text, params as unknown as never[]);
+        const rows = result as unknown as R[];
+        const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+        return { rows, rowCount };
+      },
+    };
+    return fn(pool);
+  });
+}
 
 const pulseCreateSchema = z.object({
   question: z.string().min(5).max(300),
@@ -287,36 +319,53 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     else if (period === "quarter") dateFilter = "AND lp.awarded_at > NOW() - INTERVAL '90 days'";
     else if (period === "year") dateFilter = "AND lp.awarded_at > NOW() - INTERVAL '365 days'";
 
-    const rows = await sqlClient.query(
-      `SELECT e.id, e.first_name, e.last_name, e.department, e.designation, e.photo_url,
+    // Audit: this query 500'd for every role/tenant -- it selected
+    // e.first_name/e.last_name (employee.hrms_employees only has full_name)
+    // and filtered on status = 'active', which was never a legal value (see
+    // migrations/0025_employee_status_contract.sql: the legacy synthetic
+    // "active" was normalised to the real serving status "confirmed" cluster-
+    // wide). department/designation are FK columns (department_id/
+    // designation_id) on hrms_employees, not text, so those need a join to
+    // their lookup tables; there is no per-employee photo column at all
+    // (confirmed against the live schema), so it is dropped rather than
+    // guessed at.
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `SELECT e.id, e.full_name, d.name AS department, ds.name AS designation,
               COALESCE(SUM(lp.points), 0)::int AS total_points
        FROM employee.hrms_employees e
+       LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
+       LEFT JOIN employee.hrms_designations ds ON ds.id = e.designation_id AND ds.tenant_id = e.tenant_id
        LEFT JOIN hrms.leaderboard_points lp ON lp.employee_id = e.id AND lp.tenant_id = e.tenant_id ${dateFilter}
-       WHERE e.tenant_id = $1 AND e.status = 'active'
-       GROUP BY e.id, e.first_name, e.last_name, e.department, e.designation, e.photo_url
+       WHERE e.tenant_id = $1 AND e.status = 'confirmed'
+       GROUP BY e.id, e.full_name, d.name, ds.name
        HAVING COALESCE(SUM(lp.points), 0) > 0
        ORDER BY total_points DESC
        LIMIT 50`,
       [ctx.tenantId],
-    );
+    ));
 
     const leaderboard = rows.rows.map((r: any, idx: number) => ({
       rank: idx + 1,
       id: r.id,
-      name: `${r.first_name} ${r.last_name}`.trim(),
+      name: r.full_name,
       department: r.department,
       designation: r.designation,
-      photoUrl: r.photo_url,
       totalPoints: r.total_points,
       badge: getBadge(r.total_points),
     }));
 
     // Get my rank
-    const myPoints = await sqlClient.query(
-      `SELECT COALESCE(SUM(points), 0)::int AS total FROM hrms.leaderboard_points
-       WHERE tenant_id = $1 AND employee_id = $2 ${dateFilter}`,
+    // Audit: pre-existing bug, unmasked by the column fix above -- dateFilter
+    // is shared with the first query and references the "lp" alias that
+    // query's JOIN gives hrms.leaderboard_points, but this query never
+    // aliased the table at all ("missing FROM-clause entry for table lp").
+    // Previously invisible: the first query 500'd before execution ever
+    // reached this one.
+    const myPoints = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `SELECT COALESCE(SUM(points), 0)::int AS total FROM hrms.leaderboard_points lp
+       WHERE lp.tenant_id = $1 AND lp.employee_id = $2 ${dateFilter}`,
       [ctx.tenantId, ctx.actorId],
-    );
+    ));
 
     return reply.send({
       data: leaderboard,
@@ -329,19 +378,19 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/leaderboard/my-points", async (req, reply) => {
     const ctx = resolveContext(req);
 
-    const breakdown = await sqlClient.query(
+    const breakdown = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT reason, SUM(points)::int AS total, COUNT(*)::int AS count
        FROM hrms.leaderboard_points
        WHERE tenant_id = $1 AND employee_id = $2
        GROUP BY reason ORDER BY total DESC`,
       [ctx.tenantId, ctx.actorId],
-    );
+    ));
 
-    const total = await sqlClient.query(
+    const total = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT COALESCE(SUM(points), 0)::int AS total FROM hrms.leaderboard_points
        WHERE tenant_id = $1 AND employee_id = $2`,
       [ctx.tenantId, ctx.actorId],
-    );
+    ));
 
     return reply.send({
       totalPoints: total.rows[0]?.total ?? 0,
