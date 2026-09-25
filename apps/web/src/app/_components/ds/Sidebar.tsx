@@ -16,6 +16,7 @@ import {
   Diamond, ChevronDown,
   LucideIcon,
 } from "lucide-react";
+import { FINANCE_ROLES } from "@/lib/auth/workRoles";
 
 const COLLAPSED_KEY = "civitas-sidebar-collapsed";
 
@@ -24,6 +25,15 @@ type NavItem = {
   label: string;
   href: string;
   moduleKey: string | null;
+  /**
+   * Optional role allow-list for a nav entry, on top of the tenant-level
+   * moduleKey gate above. Undefined (every item but Finance today) means no
+   * role restriction — fully backward compatible. See FINANCE_ROLES's own
+   * doc comment (lib/auth/workRoles.ts): a role with zero finance
+   * permission gets this entry hidden entirely rather than a dead link to
+   * finance/layout.tsx's PermissionDenied fallback.
+   */
+  rolesAllowed?: readonly string[];
 };
 
 type NavGroup = {
@@ -43,7 +53,7 @@ const NAV: NavGroup[] = [
   {
     group: "FINANCE",
     items: [
-      { icon: Banknote, label: "Finance", href: "/finance", moduleKey: "finance" },
+      { icon: Banknote, label: "Finance", href: "/finance", moduleKey: "finance", rolesAllowed: FINANCE_ROLES },
       { icon: Receipt, label: "Revenue", href: "/revenue", moduleKey: "revenue" },
       { icon: FileText, label: "Billing", href: "/billing", moduleKey: "billing" },
     ],
@@ -139,9 +149,11 @@ export type SidebarProps = {
   enabledModules?: string[] | null;
   userName?: string;
   userRole?: string;
+  /** Real JWT roles claim (not the single display label `userRole` is) — used only to hide role-gated nav entries like Finance's. */
+  roles?: string[] | null;
 };
 
-export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {}) {
+export function Sidebar({ enabledModules, userName, userRole, roles }: SidebarProps = {}) {
   const pathname = usePathname();
   const enabledSet = enabledModules ? new Set(enabledModules) : null;
 
@@ -178,6 +190,15 @@ export function Sidebar({ enabledModules, userName, userRole }: SidebarProps = {
   }
 
   function isVisible(item: NavItem): boolean {
+    // Unknown roles (null/undefined/empty) -> show all, same "unknown -> show
+    // all" convention as the moduleKey check below: this nav hide is
+    // advisory UX only (finance/layout.tsx's PermissionDenied + the
+    // backend's own per-route 403 are the real boundary), never the sole
+    // gate, so an inability to read roles must never hide a legitimate
+    // entry.
+    if (item.rolesAllowed && roles && roles.length > 0) {
+      if (!roles.some((r) => item.rolesAllowed!.includes(r))) return false;
+    }
     if (!enabledSet) return true;
     if (item.moduleKey === null) return true;
     return enabledSet.has(item.moduleKey);

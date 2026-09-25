@@ -921,6 +921,7 @@
     "of": "of",
     "page": "Page",
     "rows": "rows",
+    "records": "records",
     "showing": "Showing",
     "total": "Total",
     "actions": "Actions",
@@ -3327,7 +3328,15 @@
     "filterPlaceholder": "Filter by period or status…",
     "emptyTitle": "No payroll runs yet",
     "emptyMessage": "Payroll runs process and disburse monthly salaries. Create your first run to get started.",
-    "emptyActionHint": "Use the \"New Payroll Run\" form above to create your first run."
+    "emptyActionHint": "Use the \"New Payroll Run\" form above to create your first run.",
+    "status": {
+      "draft": "Draft",
+      "processing": "Processing",
+      "completed": "Completed",
+      "paid": "Paid",
+      "disbursed": "Disbursed",
+      "failed": "Failed"
+    }
   },
   "payrollLoans": {
     "loadingAriaLabel": "Loading…",
@@ -5089,7 +5098,13 @@
     "goToPayrollRunsLink": "Go to payroll runs",
     "filterPlaceholder": "Filter by employee, department or period…",
     "noMatchTitle": "No slips match your filter",
-    "noMatchMessage": "Try a different employee name, department or pay period."
+    "noMatchMessage": "Try a different employee name, department or pay period.",
+    "status": {
+      "draft": "Draft",
+      "finalized": "Finalized",
+      "paid": "Paid",
+      "computed": "Computed"
+    }
   },
   "printButton": {
     "printSavePdfBtn": "🖨️ Print / Save PDF"

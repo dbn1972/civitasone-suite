@@ -14,7 +14,20 @@ import { COMMANDS } from "../../topics.js";
 import { assertOpeningBalancesBalanced, DomainError } from "./domain.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
-const FINANCE_ROLES = ["finance_admin", "super_admin"];
+// UX-medium finding: this used to be a single FINANCE_ROLES = ["finance_admin",
+// "super_admin"] gating BOTH reads and writes here -- unlike every sibling
+// finance-service module (gl/routes.ts, budget/*, payments, treasury, pfms,
+// ...), which all split a broader READER_ROLES (includes finance_officer,
+// audit_officer) from a narrower WRITER_ROLES for the actual mutation. That
+// meant a plain finance_officer/accountant got a 403 even just VIEWING
+// fiscal years or opening balances -- the read-only case this file's own
+// sibling in the same module, masters/routes.ts, already gets right
+// (READER_ROLES = [...FINANCE_ROLES, "audit_officer"] there). Split the same
+// way here; opening-balance ENTRY stays WRITER_ROLES-only (finance_admin/
+// super_admin) since it's an irreversible starting position for the books,
+// same tier as masters/bank-routes.ts's bank-account writes.
+const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
+const WRITER_ROLES = ["finance_admin", "super_admin"];
 
 const glSchema = pgSchema("gl");
 
@@ -64,14 +77,14 @@ const openingBalanceBody = z.object({
 export async function fyRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/fiscal-years", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, READER_ROLES);
     const rows = await scopedRead((tx) => tx.select().from(fiscalYears).where(eq(fiscalYears.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });
 
   app.post("/v1/finance/fiscal-years", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, WRITER_ROLES);
     const body = createFYBody.parse(req.body);
     const id = randomUUID();
     await queue.publish(COMMANDS.fiscalYearCreate, {
@@ -88,7 +101,7 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
 
   app.patch("/v1/finance/fiscal-years/:code/activate", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, WRITER_ROLES);
     const code = (req.params as { code: string }).code;
     const id = randomUUID();
     await queue.publish(COMMANDS.fiscalYearActivate, {
@@ -105,7 +118,7 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/finance/opening-balances/:fyCode", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, READER_ROLES);
     const fyCode = (req.params as { fyCode: string }).fyCode;
     const rows = await scopedRead((tx) => tx.select().from(openingBalances)
       .where(and(eq(openingBalances.tenantId, ctx.tenantId), eq(openingBalances.fyCode, fyCode))));
@@ -114,7 +127,7 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/finance/opening-balances", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FINANCE_ROLES);
+    requireRole(ctx, WRITER_ROLES);
     const body = openingBalanceBody.parse(req.body);
     // Server-side balanced-entry enforcement: the client's own "fail closed"
     // balance check is trivially bypassable by a direct API call, which

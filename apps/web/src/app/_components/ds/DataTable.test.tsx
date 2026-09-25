@@ -157,7 +157,12 @@ describe("DataTable", () => {
 
   it("disables prev on first page", () => {
     render(<DataTable columns={columns} rows={rows} pageSize={2} />);
-    expect(screen.getByText("← Prev")).toBeDisabled();
+    // Hindi-locale finding: this button's label now goes through the shared
+    // "action.previous" translation ("Previous") instead of a hardcoded,
+    // untranslatable "Prev" abbreviation -- see DataTable.tsx's pagination
+    // section and useSafeTranslations' fallback map (kept in sync here: the
+    // no-provider fallback in a plain render() like this one *is* "Previous").
+    expect(screen.getByText("← Previous")).toBeDisabled();
   });
 
   it("disables next on last page", () => {

@@ -1,10 +1,41 @@
 "use client";
 import { useMemo, useState, type ReactNode, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
 import { formatMoney, formatRupees } from "@/lib/formatters";
+
+/**
+ * DataTable is a "use client" component rendered from ~80+ call sites across
+ * the app, most of whose own component tests render it directly (no
+ * `<NextIntlClientProvider>` wrapper) -- next-intl's OWN convention here
+ * (vitest.setup.ts's next-intl/server mock comment) is that only pages
+ * translated via a SERVER-side getTranslations() get a free pass; a
+ * client-side useTranslations() call is expected to be wrapped per-test.
+ * useTranslations() throws synchronously ("...NextIntlClientProvider was not
+ * found") when that provider is missing, so calling it unguarded here for
+ * the new pagination labels would break every one of those existing tests
+ * across every OTHER module, not just this Hindi-locale fix's own tests.
+ * This falls back to the plain-English literal (no `<NextIntlClientProvider>`
+ * -> no i18n coverage needed anyway -- these are the same defaults the
+ * pagination labels had before this fix) instead of throwing, so a caller
+ * that hasn't wrapped its test keeps working exactly as it always did; a
+ * real page (always wrapped by the root layout) or a test that DOES wrap
+ * with a provider gets the real, translated string.
+ */
+function useSafeTranslations(namespace: string, fallback: Record<string, string>): (key: string) => string {
+  try {
+    // eslint-disable-next-line react-hooks/rules-of-hooks -- see comment above: the
+    // missing-provider condition is constant for a given render tree, so this
+    // still calls the same hooks in the same order on every render of a given
+    // mounted instance; it never conditionally skips a hook based on state.
+    return useTranslations(namespace);
+  } catch {
+    return (key: string) => fallback[key] ?? key;
+  }
+}
 
 interface Column<T> {
   key: keyof T & string;
@@ -159,6 +190,17 @@ export function DataTable<T extends Record<string, unknown>>({
   rowKey,
 }: DataTableProps<T>) {
   const router = useRouter();
+  // Hindi-locale finding: this shared pager's own labels ("Page X of Y",
+  // "← Prev"/"Next →") were hardcoded English, unlike every column label a
+  // caller passes in -- ~80+ DataTable call sites across the app all
+  // inherit this fix at once. Reuses the app's existing generic
+  // "action"/"common" namespaces (next/previous already exist there — see
+  // apps/web/src/messages/en.json — precisely because they're meant for
+  // reuse like this) rather than adding a third, DataTable-specific
+  // namespace; only "records" is new (added to "common" alongside its
+  // existing page/of/rows/total pagination vocabulary).
+  const tAction = useSafeTranslations("action", { previous: "Previous", next: "Next" });
+  const tCommon = useSafeTranslations("common", { page: "Page", of: "of", records: "records" });
 
   const [sortKey, setSortKey] = useState<(keyof T & string) | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -371,11 +413,11 @@ export function DataTable<T extends Record<string, unknown>>({
             disabled={safePage === 0}
             onClick={() => setPage((p) => Math.max(0, p - 1))}
           >
-            ← Prev
+            ← {tAction("previous")}
           </Button>
           <span aria-live="polite">
-            Page {safePage + 1} of {pageCount}
-            <span className="sr-only"> ({sorted.length} records)</span>
+            {tCommon("page")} {safePage + 1} {tCommon("of")} {pageCount}
+            <span className="sr-only"> ({sorted.length} {tCommon("records")})</span>
           </span>
           <Button
             variant="ghost"
@@ -383,7 +425,7 @@ export function DataTable<T extends Record<string, unknown>>({
             disabled={safePage >= pageCount - 1}
             onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
           >
-            Next →
+            {tAction("next")} →
           </Button>
         </div>
       )}

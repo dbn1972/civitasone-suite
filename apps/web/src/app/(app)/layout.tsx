@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { COOKIE } from "@/lib/auth/config";
 import { SyncProvider } from "@/lib/sync/SyncProvider";
 import { getEnabledModules } from "@/lib/moduleVisibility";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { AppShell, ToastProvider } from "../_components/ds";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -58,11 +59,17 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const enabledModules = await getEnabledModules();
   const userName = decodeJwtName(token);
   const userRole = decodeJwtRole(token);
+  // Real roles claim (roleGuard.ts reads the flat top-level `roles` array
+  // this app's own JWTs actually carry — see packages/auth/signToken —
+  // unlike decodeJwtRole above, which reads Keycloak's nested
+  // realm_access/resource_access shape and keeps only one label for
+  // display). Used only to hide role-gated nav entries (Finance today).
+  const roles = getSessionRoles();
 
   return (
     <ToastProvider>
       <SyncProvider />
-      <AppShell enabledModules={enabledModules} userName={userName} userRole={userRole}>{children}</AppShell>
+      <AppShell enabledModules={enabledModules} userName={userName} userRole={userRole} roles={roles}>{children}</AppShell>
     </ToastProvider>
   );
 }

@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { Card, DataTable, EmptyState } from "../../../../_components/ds";
+import { Card, DataTable, EmptyState, StatusPill } from "../../../../_components/ds";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import type { SalarySlipSummary } from "@civitasone/types";
+import { salarySlipStatusLabel } from "@/lib/payroll/statusLabels";
 
 type Row = SalarySlipSummary & { printHref: string } & Record<string, unknown>;
 
@@ -32,7 +33,12 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
     { key: "gross", label: t("colGross"), align: "right", cellType: "amount" },
     { key: "deductions", label: t("colDeductions"), align: "right", cellType: "amount" },
     { key: "net", label: t("colNet"), align: "right", cellType: "amount" },
-    { key: "status", label: t("colStatus"), cellType: "status" },
+    // Hindi-locale finding: cellType:"status" rendered the raw backend enum
+    // (draft/finalized/paid/computed) verbatim -- no i18n. `render` (checked
+    // before cellType by DataTable's cellValue()) keeps the pill's color
+    // keyed off the real `status` while giving it a translated `label`
+    // explicitly, via this table's own i18n status map.
+    { key: "status", label: t("colStatus"), render: (r) => <StatusPill status={r.status} label={salarySlipStatusLabel(r.status, t)} /> },
     {
       key: "printHref",
       label: t("colSlip"),

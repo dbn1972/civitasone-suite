@@ -17,13 +17,15 @@ interface AppShellProps {
   userName?: string;
   /** Logged-in user role label from JWT claims. */
   userRole?: string;
+  /** Full JWT roles claim — passed through to Sidebar for role-gated nav entries (e.g. Finance). */
+  roles?: string[] | null;
 }
 
-export function AppShell({ children, crumb, enabledModules, userName, userRole }: AppShellProps) {
+export function AppShell({ children, crumb, enabledModules, userName, userRole, roles }: AppShellProps) {
   return (
     <div className="app">
       <RouteProgress />
-      <Sidebar enabledModules={enabledModules} userName={userName} userRole={userRole} />
+      <Sidebar enabledModules={enabledModules} userName={userName} userRole={userRole} roles={roles} />
       <div className="main">
         <TopBar crumb={crumb ?? <AutoBreadcrumb />} userName={userName} />
         <WhatsNewBanner />

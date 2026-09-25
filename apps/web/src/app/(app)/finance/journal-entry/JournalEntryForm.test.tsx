@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import type { AccountSummary } from "@civitasone/types";
+import { formatMoney } from "@/lib/formatters";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
@@ -78,6 +79,36 @@ describe("JournalEntryForm", () => {
     await waitFor(() => {
       expect(screen.getByText(/Journal entry accepted for processing \(202\)\./)).toBeInTheDocument();
     });
+  });
+
+  // Medium finding: the running Debit/Credit totals indicator was reported
+  // as never updating as the clerk typed. Guards the derived state
+  // (totalDebitPaise/totalCreditPaise in JournalEntryForm.tsx) actually
+  // tracking `lines` on every keystroke, not just at submit/validate time --
+  // exactly the gap a fetch-mock test like the ones above can't catch, since
+  // it only asserts on the request body built from state at submit, never on
+  // what the totals row displays while a clerk is still typing.
+  it("updates the running debit/credit totals live as amounts are typed", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+
+    // Both sides start at zero.
+    expect(screen.getAllByText(formatMoney(0)).length).toBeGreaterThanOrEqual(2);
+
+    fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "1250.50" } });
+    expect(screen.getByText(formatMoney(125050))).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText("Credit amount, line 2"), { target: { value: "999.25" } });
+    expect(screen.getByText(formatMoney(99925))).toBeInTheDocument();
+    // The earlier debit keystroke's total is still showing too -- this is
+    // the exact regression this test guards against: a stale derived total
+    // would freeze at whatever it first rendered instead of tracking every
+    // keystroke on every line.
+    expect(screen.getByText(formatMoney(125050))).toBeInTheDocument();
+
+    // Typing again on the SAME field updates it again, not just the first keystroke.
+    fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "2000" } });
+    expect(screen.getByText(formatMoney(200000))).toBeInTheDocument();
+    expect(screen.queryByText(formatMoney(125050))).not.toBeInTheDocument();
   });
 
   it("rejects submission with an out-of-balance error before ever calling fetch", () => {
