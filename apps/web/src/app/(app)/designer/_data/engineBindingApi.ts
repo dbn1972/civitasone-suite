@@ -76,17 +76,21 @@ export async function fetchEngineRegistry(block?: EngineBlockUi): Promise<Engine
   })) : [];
 }
 
-export async function previewEngineBinding(input: {
-  binding: EngineBindingUi;
-  basePrincipalMinor: number;
-  selectedExemptions: string[];
-  applyRebate: boolean;
-  applyPenalty: boolean;
-}): Promise<EnginePreviewResultUi> {
+export async function previewEngineBinding(
+  input: {
+    binding: EngineBindingUi;
+    basePrincipalMinor: number;
+    selectedExemptions: string[];
+    applyRebate: boolean;
+    applyPenalty: boolean;
+  },
+  signal?: AbortSignal,
+): Promise<EnginePreviewResultUi> {
   const res = await fetch("/api/proxy/v1/citizen/engines/preview", {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(input),
+    signal,
   });
   if (!res.ok) {
     const human = toHumanError("save", { area: "engine preview" });

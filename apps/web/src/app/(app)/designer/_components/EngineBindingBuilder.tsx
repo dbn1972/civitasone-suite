@@ -114,12 +114,22 @@ export function EngineBindingBuilder({
   }, []);
 
   // Live sample preview via engine API (Studio parameters only).
+  //
+  // UX-fetch-cancellation follow-up: the debounce timer above is only half of
+  // cancellation. Once it fires and the preview fetch is in flight, neither
+  // unmounting nor switching to a different binding stopped it -- the
+  // now-stale response would still call setPreview/setPreviewError for
+  // whatever binding happens to be selected when it finally resolves. An
+  // AbortController closes that gap the same way GlobalSearch.tsx's debounced
+  // search fetch does: aborted on cleanup (dependency change or unmount), and
+  // an AbortError is treated as "superseded", not a real failure.
   useEffect(() => {
     if (!selected) {
       setPreview(null);
       return;
     }
     if (previewTimer.current) clearTimeout(previewTimer.current);
+    const controller = new AbortController();
     previewTimer.current = setTimeout(async () => {
       const rupees = Number(sampleBaseRupees);
       const basePrincipalMinor = Number.isFinite(rupees) ? Math.round(rupees * 100) : 0;
@@ -130,14 +140,16 @@ export function EngineBindingBuilder({
           selectedExemptions,
           applyRebate,
           applyPenalty,
-        });
+        }, controller.signal);
         setPreview(result);
         setPreviewError(null);
       } catch (e) {
+        if (e instanceof Error && e.name === "AbortError") return;
         setPreview(null);
         setPreviewError(e instanceof Error ? e.message : "Preview failed.");
       }
     }, 300);
+    return () => controller.abort();
   }, [selected, sampleBaseRupees, selectedExemptions, applyRebate, applyPenalty]);
 
   const bindEngine = (eng: EngineDescriptorUi) => {
