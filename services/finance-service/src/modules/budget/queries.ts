@@ -1,5 +1,6 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import * as glRepo from "../gl/repo.js";
 import { sanctionAvailable } from "./domain.js";
 import type { BudgetRow, SanctionRow } from "./schema.js";
 
@@ -48,21 +49,72 @@ function mapAccountType(classification: string | null, level: number): AccountLi
   return level === 0 ? "asset" : "expense";
 }
 
+/**
+ * BUG FIX (Medium finding, Chart of Accounts stale/zero figures): balances
+ * were unconditionally hardcoded to "0" here regardless of real posted
+ * ledger activity -- not a cache-staleness issue, the query never read
+ * gl.finance_ledger at all. Standard double-entry sign convention: asset/
+ * expense heads carry a normal DEBIT balance (debit increases them), so
+ * their displayed balance is debit minus credit; liability/equity/income
+ * heads carry a normal CREDIT balance, so theirs is credit minus debit. A
+ * head with zero ledger rows (no `bal` entry) is a genuine zero balance,
+ * not a data gap, so `0n` defaults are correct here (unlike the dashboard's
+ * own budgetUtilisationPct null-vs-zero distinction, which is about an
+ * entirely absent BUDGET record, not an absent transaction).
+ */
+function computeBalanceMinor(
+  type: AccountListItem["type"],
+  totalDebit: bigint,
+  totalCredit: bigint,
+): bigint {
+  return type === "asset" || type === "expense" ? totalDebit - totalCredit : totalCredit - totalDebit;
+}
+
+/**
+ * Bigint-safe rupee/paise split + Indian lakh/crore digit grouping, without
+ * a currency symbol. AccountsTable.tsx (Chart of Accounts) already prepends
+ * its own "₹" (`render: (a) => <>₹{a.balanceDisplay}</>`), so balanceDisplay
+ * itself must stay symbol-free, matching the plain-digit contract its
+ * previous hardcoded "0" already had. Same algorithm as payments/queries.ts's
+ * formatMinor, kept local (one character of difference -- no "₹") rather
+ * than exported across modules for reuse.
+ */
+function formatBalanceMinor(minor: bigint): string {
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const rupees = abs / 100n;
+  const paise = abs % 100n;
+  const rupeesStr = rupees.toString();
+  const grouped = rupeesStr.length <= 3
+    ? rupeesStr
+    : rupeesStr.slice(0, rupeesStr.length - 3).replace(/\B(?=(\d{2})+(?!\d))/g, ",") + "," + rupeesStr.slice(-3);
+  return `${negative ? "-" : ""}${grouped}.${paise.toString().padStart(2, "0")}`;
+}
+
 export async function listAccounts(tenantId: string, limit: number): Promise<AccountListItem[]> {
   const rows = await cache.getOrLoad(
     cache.makeKey(tenantId, "accounts", `list:${limit}`),
     async () => {
-      const heads = await repo.listHeads(tenantId, limit);
-      return heads.map((h) => ({
-        id: h.id,
-        code: h.code,
-        hoaCode: h.hoaCode ?? null,
-        name: h.name,
-        type: mapAccountType(h.classification, h.level),
-        currency: "INR",
-        balanceDisplay: "0",
-        status: "active" as const,
-      }));
+      const [heads, balanceRows] = await Promise.all([
+        repo.listHeads(tenantId, limit),
+        glRepo.getTrialBalance(tenantId),
+      ]);
+      const balanceByHead = new Map(balanceRows.map((b) => [b.headId, b]));
+      return heads.map((h) => {
+        const type = mapAccountType(h.classification, h.level);
+        const bal = balanceByHead.get(h.id);
+        const balanceMinor = computeBalanceMinor(type, bal?.totalDebit ?? 0n, bal?.totalCredit ?? 0n);
+        return {
+          id: h.id,
+          code: h.code,
+          hoaCode: h.hoaCode ?? null,
+          name: h.name,
+          type,
+          currency: "INR",
+          balanceDisplay: formatBalanceMinor(balanceMinor),
+          status: "active" as const,
+        };
+      });
     },
     60
   );

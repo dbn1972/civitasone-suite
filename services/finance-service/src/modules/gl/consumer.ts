@@ -344,6 +344,18 @@ export function registerGlConsumers(queue: Queue): void {
       // gl_trial_balance already is, since both derive from the same
       // gl.finance_ledger rows this posting just changed.
       await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
+      // BUG FIX (Medium finding, GL dashboard + Chart of Accounts stale
+      // figures): the finance dashboard's KPI cards (getDashboard,
+      // dashboard/queries.ts, "dashboard:summary", 30s TTL) and Chart of
+      // Accounts' per-account balances (listAccounts, budget/queries.ts,
+      // "accounts:list:*", 60s TTL) both derive from these same
+      // gl.finance_ledger rows -- neither was ever invalidated anywhere in
+      // this consumer, the same cache-invalidation-gap class PR #1565's
+      // review found (and this file already fixed for gl_financial_statements
+      // above). Invalidated at every point gl_trial_balance already is, same
+      // as that fix.
+      await cache.invalidateResource(msg.tenantId, "dashboard");
+      await cache.invalidateResource(msg.tenantId, "accounts");
       return;
     }
 
@@ -389,6 +401,11 @@ export function registerGlConsumers(queue: Queue): void {
       // (depreciation branch) -- gl_financial_statements needs invalidating
       // at every point gl_trial_balance already is.
       await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
+      // BUG FIX (Medium finding): see the matching comment above
+      // (depreciation branch) -- dashboard/accounts need invalidating at
+      // every point gl_trial_balance already is.
+      await cache.invalidateResource(msg.tenantId, "dashboard");
+      await cache.invalidateResource(msg.tenantId, "accounts");
       return;
     }
 
@@ -402,6 +419,11 @@ export function registerGlConsumers(queue: Queue): void {
     // (depreciation branch) -- gl_financial_statements needs invalidating at
     // every point gl_trial_balance already is.
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
+    // BUG FIX (Medium finding): see the matching comment above
+    // (depreciation branch) -- dashboard/accounts need invalidating at every
+    // point gl_trial_balance already is.
+    await cache.invalidateResource(msg.tenantId, "dashboard");
+    await cache.invalidateResource(msg.tenantId, "accounts");
   });
 
   // DOM-024 R11 (maker-checker) — a MANUAL journal entry (POST
@@ -493,6 +515,14 @@ export function registerGlConsumers(queue: Queue): void {
     // (depreciation branch) -- gl_financial_statements needs invalidating at
     // every point gl_trial_balance already is.
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
+    // BUG FIX (Medium finding): see the matching comment above
+    // (depreciation branch) -- dashboard/accounts need invalidating at every
+    // point gl_trial_balance already is. This is the journal-APPROVE path
+    // (the actual posting moment for a manual maker-checker entry) --
+    // exactly the "post and approve a journal" scenario the live
+    // sabotage-then-restore verification for this finding exercises.
+    await cache.invalidateResource(msg.tenantId, "dashboard");
+    await cache.invalidateResource(msg.tenantId, "accounts");
     await cache.invalidateResource(msg.tenantId, "journals");
   });
 
@@ -620,5 +650,10 @@ export function registerGlConsumers(queue: Queue): void {
     // (depreciation branch) -- gl_financial_statements needs invalidating at
     // every point gl_trial_balance already is.
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_financial_statements", msg.tenantId));
+    // BUG FIX (Medium finding): see the matching comment above
+    // (depreciation branch) -- dashboard/accounts need invalidating at every
+    // point gl_trial_balance already is.
+    await cache.invalidateResource(msg.tenantId, "dashboard");
+    await cache.invalidateResource(msg.tenantId, "accounts");
   });
 }

@@ -2,11 +2,12 @@
 
 import type { ReactNode } from "react";
 import { useTranslations } from "next-intl";
-import { DataTable } from "../../../_components/ds";
+import { DataTable, StatusPill } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import type { PayrollRunDetail } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatRupees } from "@/lib/formatters";
+import { payrollRunStatusLabel } from "@/lib/payroll/statusLabels";
 
 export function PayrollRunsTable({ runs, source = "api", canAdminister = false }: { runs: PayrollRunDetail[]; source?: "api" | "error"; canAdminister?: boolean }) {
   const t = useTranslations("payrollRunsTable");
@@ -24,7 +25,12 @@ export function PayrollRunsTable({ runs, source = "api", canAdminister = false }
     { key: "employeeCount", label: t("colEmployees"), align: "right" },
     { key: "grossAmount", label: t("colGross"), align: "right", render: (r) => formatRupees(r.grossAmount) },
     { key: "netAmount", label: t("colNet"), align: "right", render: (r) => formatRupees(r.netAmount) },
-    { key: "status", label: t("colStatus"), cellType: "status" },
+    // Hindi-locale finding: cellType:"status" rendered the raw backend enum
+    // (draft/processing/completed/paid/disbursed/failed) verbatim -- no
+    // i18n. `render` (checked before cellType by DataTable's cellValue())
+    // keeps the pill's color keyed off the real `status` while giving it a
+    // translated `label` explicitly, via this table's own i18n status map.
+    { key: "status", label: t("colStatus"), render: (r) => <StatusPill status={r.status} label={payrollRunStatusLabel(r.status, t)} /> },
   ];
 
   return (
