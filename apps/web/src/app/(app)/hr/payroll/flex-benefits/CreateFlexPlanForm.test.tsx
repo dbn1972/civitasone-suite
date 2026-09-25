@@ -77,4 +77,28 @@ describe("CreateFlexPlanForm", () => {
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });
+
+  // Row identity: plan components were keyed by array position, so removing
+  // an earlier component shifted later ones up into a different key --
+  // React patched the focused component's DOM node in place with a
+  // different component's data instead of removing the right node and
+  // leaving the rest (and focus) alone. Same fix as
+  // ElectFlexBenefitForm.tsx (same directory).
+  it("keeps a component's own value and focus attached to it after an earlier component is removed", () => {
+    renderForm();
+    fireEvent.click(screen.getByRole("button", { name: /add component/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add component/i }));
+    // Three components now. Fill and focus the third one's Component Name field.
+    const thirdName = screen.getAllByLabelText("Component Name")[2]!;
+    fireEvent.change(thirdName, { target: { value: "Meal Vouchers" } });
+    thirdName.focus();
+    expect(document.activeElement).toBe(thirdName);
+
+    // Remove the first component -- components 2-3 shift up to become 1-2.
+    fireEvent.click(screen.getByRole("button", { name: "Remove component 1" }));
+
+    const survivingThirdName = screen.getAllByLabelText("Component Name")[1]!;
+    expect(survivingThirdName).toHaveValue("Meal Vouchers");
+    expect(document.activeElement).toBe(survivingThirdName);
+  });
 });

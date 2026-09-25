@@ -5,7 +5,7 @@
  * PUT on save; a row needs a code before it can be persisted. On a failed load
  * we show the saved-info badge and never fabricate an empty list as fact.
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { EmptyState, Button } from "../ds";
 import {
@@ -28,11 +28,21 @@ export function ReasonCodesEditor() {
   const [error, setError] = useState("");
   const headingId = useId();
 
+  // Stable per-row React key, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
+  // for the full rationale. LeadReasonCode carries no id, so a parallel id
+  // list (regenerated whenever load() replaces the whole array, and kept in
+  // step by addCode/removeCode below) stands in for one.
+  const nextCodeRowId = useRef(0);
+  const [codeRowIds, setCodeRowIds] = useState<number[]>([]);
+  const codeKeyFor = (idx: number) => codeRowIds[idx] ?? idx;
+
   async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getReasonCodes();
     if (!isLive()) return;
     setCodes(data);
+    setCodeRowIds(data.map(() => nextCodeRowId.current++));
     setSource(s);
   }
 
@@ -48,10 +58,12 @@ export function ReasonCodesEditor() {
 
   function addCode() {
     setCodes((prev) => [...prev, { code: "", label: "", appliesToStatus: "", active: true }]);
+    setCodeRowIds((ids) => [...ids, nextCodeRowId.current++]);
   }
 
   function removeCode(idx: number) {
     setCodes((prev) => prev.filter((_, i) => i !== idx));
+    setCodeRowIds((ids) => ids.filter((_, i) => i !== idx));
   }
 
   async function save() {
@@ -108,7 +120,7 @@ export function ReasonCodesEditor() {
           </thead>
           <tbody>
             {codes.map((c, idx) => (
-              <tr key={idx}>
+              <tr key={codeKeyFor(idx)}>
                 <td>
                   <label className="sr-only" htmlFor={`${headingId}-code-${idx}`}>Code for reason {idx + 1}</label>
                   <input

@@ -23,17 +23,22 @@ export function CreateContractForm() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
+    const controller = new AbortController();
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/procurement/vendors?limit=100");
+        const res = await fetch("/api/proxy/v1/procurement/vendors?limit=100", { signal: controller.signal });
         if (!res.ok) return;
         const body = await res.json() as { data?: VendorOption[] } | VendorOption[];
         const rows = Array.isArray(body) ? body : (body.data ?? []);
         const clean = rows.filter((v) => v.id && v.name);
         setVendors(clean);
         if (clean[0]?.id) setVendorId(clean[0].id);
-      } catch { /* optional */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* optional */
+      }
     })();
+    return () => controller.abort();
   }, []);
 
   async function handleSubmit(e: React.FormEvent) {

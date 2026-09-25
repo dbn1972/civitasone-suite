@@ -61,10 +61,10 @@ export function ApprovalMatrixPanel() {
   const [saving, setSaving] = useState(false);
   const { fromResponse, fromException, clear } = useFormError("approval rule");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/proxy/v1/estab/approval-rules");
+      const res = await fetch("/api/proxy/v1/estab/approval-rules", { signal });
       if (!res.ok) {
         setError((await fromResponse(res, "load")).message);
         return;
@@ -72,14 +72,19 @@ export function ApprovalMatrixPanel() {
       const body = (await res.json()) as { data?: Rule[] };
       setRules(body.data ?? []);
       setError("");
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(fromException("load").message);
     } finally {
       setLoading(false);
     }
   }, [fromResponse, fromException]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, Rule[]>();

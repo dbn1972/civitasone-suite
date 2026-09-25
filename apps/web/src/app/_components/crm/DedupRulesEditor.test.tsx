@@ -125,6 +125,32 @@ describe("DedupRulesEditor (DQ-001 admin)", () => {
     const saved = vi.mocked(dq.saveDedupRules).mock.calls[0][0];
     expect(saved[0].threshold).toBe(72);
   });
+
+  // Row identity: rules were keyed by array position, so removing an
+  // earlier rule shifted later ones up into a different key -- React
+  // patched the focused rule's DOM node in place with a different rule's
+  // data instead of removing the right node and leaving the rest (and
+  // focus) alone.
+  it("keeps a rule's own value and focus attached to it after an earlier rule is removed", async () => {
+    vi.mocked(dq.getDedupRules).mockResolvedValue({ data: [], source: "api" });
+    render(<DedupRulesEditor />);
+    await waitFor(() => expect(screen.getByText(/no matching rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+
+    const thirdThreshold = screen.getAllByLabelText(/threshold for rule/i)[2]!;
+    fireEvent.change(thirdThreshold, { target: { value: "77" } });
+    thirdThreshold.focus();
+    expect(document.activeElement).toBe(thirdThreshold);
+
+    // Remove the first rule -- rules 2-3 shift up to become rules 1-2.
+    fireEvent.click(screen.getAllByRole("button", { name: /remove rule/i })[0]!);
+
+    const survivingThirdThreshold = screen.getAllByLabelText(/threshold for rule/i)[1]!;
+    expect(survivingThirdThreshold).toHaveValue(77);
+    expect(document.activeElement).toBe(survivingThirdThreshold);
+  });
 });
 
 

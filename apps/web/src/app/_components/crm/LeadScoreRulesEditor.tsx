@@ -6,7 +6,7 @@
  * (never PUT a NaN weight or malformed params). On a failed load we show the
  * saved-info badge and never fabricate an empty rule set as fact.
  */
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { DataSourceBadge } from "../DataSourceBadge";
 import { EmptyState, Button } from "../ds";
 import {
@@ -71,11 +71,22 @@ export function LeadScoreRulesEditor() {
   const [error, setError] = useState("");
   const headingId = useId();
 
+  // Stable per-row React key, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
+  // for the full rationale. RuleRow carries no id, so a parallel id list
+  // (regenerated whenever load() replaces the whole array, and kept in step
+  // by addRule/removeRule below) stands in for one.
+  const nextRuleRowId = useRef(0);
+  const [ruleRowIds, setRuleRowIds] = useState<number[]>([]);
+  const ruleKeyFor = (idx: number) => ruleRowIds[idx] ?? idx;
+
   async function load(isLive: () => boolean = () => true) {
     setSource("loading");
     const { data, source: s } = await getScoreRules();
     if (!isLive()) return;
-    setRows(data.map(toRow));
+    const nextRows = data.map(toRow);
+    setRows(nextRows);
+    setRuleRowIds(nextRows.map(() => nextRuleRowId.current++));
     setSource(s);
   }
 
@@ -91,10 +102,12 @@ export function LeadScoreRulesEditor() {
 
   function addRule() {
     setRows((prev) => [...prev, { attribute: "", weight: 1, scoreFnType: "linear", enabled: true, paramsText: "" }]);
+    setRuleRowIds((ids) => [...ids, nextRuleRowId.current++]);
   }
 
   function removeRule(idx: number) {
     setRows((prev) => prev.filter((_, i) => i !== idx));
+    setRuleRowIds((ids) => ids.filter((_, i) => i !== idx));
   }
 
   async function save() {
@@ -158,7 +171,7 @@ export function LeadScoreRulesEditor() {
             {rows.map((row, idx) => {
               const paramsOk = parseParams(row.paramsText) !== null;
               return (
-                <tr key={idx}>
+                <tr key={ruleKeyFor(idx)}>
                   <td>
                     <label className="sr-only" htmlFor={`${headingId}-attr-${idx}`}>Attribute for rule {idx + 1}</label>
                     <input

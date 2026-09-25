@@ -37,6 +37,29 @@ export function CreateFlexPlanForm() {
   const budgetRef = useRef<HTMLInputElement>(null);
   const componentNameRefs = useRef<Array<HTMLInputElement | null>>([]);
 
+  // Stable per-row React key, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (same directory) for the full rationale:
+  // keying by index let removing an earlier component shift a later,
+  // focused one up into a different key, so React patched the focused DOM
+  // node in place with the wrong component's data instead of removing the
+  // right node and leaving the rest (and focus) alone.
+  const nextComponentRowId = useRef(0);
+  const [componentRowIds, setComponentRowIds] = useState<number[]>(() => [nextComponentRowId.current++]);
+  const componentKeyFor = (idx: number) => componentRowIds[idx] ?? idx;
+
+  function addComponent() {
+    setComponents((prev) => [...prev, emptyComponent()]);
+    setComponentRowIds((ids) => [...ids, nextComponentRowId.current++]);
+  }
+  function removeComponent(idx: number) {
+    setComponents((prev) => prev.filter((_, i) => i !== idx));
+    setComponentRowIds((ids) => ids.filter((_, i) => i !== idx));
+  }
+  function resetComponents() {
+    setComponents([emptyComponent()]);
+    setComponentRowIds([nextComponentRowId.current++]);
+  }
+
   const [invalidField, setInvalidField] = useState<"name" | "fy" | "budget" | "components" | null>(null);
   const nameInvalid = tone === "bad" && invalidField === "name";
   const fyInvalid = tone === "bad" && invalidField === "fy";
@@ -112,7 +135,7 @@ export function CreateFlexPlanForm() {
       setMessage(t("createdMessage", { name: res.data.name }));
       setName("");
       setTotalBudget("");
-      setComponents([emptyComponent()]);
+      resetComponents();
       router.refresh();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
@@ -189,7 +212,7 @@ export function CreateFlexPlanForm() {
                 const compExemptId = `${nameId}-comp-${idx}-exempt`;
                 const rowInvalid = isComponentInvalid(c);
                 return (
-                  <div key={idx} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto auto", alignItems: "end" }}>
+                  <div key={componentKeyFor(idx)} style={{ display: "grid", gap: 10, gridTemplateColumns: "2fr 1fr auto auto", alignItems: "end" }}>
                     <div style={{ display: "grid", gap: 4 }}>
                       <label htmlFor={compNameId} style={{ fontSize: 12 }}>{t("componentNameLabel")}</label>
                       <input
@@ -229,7 +252,7 @@ export function CreateFlexPlanForm() {
                       variant="ghost"
                       style={{ minHeight: 40 }}
                       aria-label={c.name ? t("removeComponentNamedAriaLabel", { index: idx + 1, name: c.name }) : t("removeComponentAriaLabel", { index: idx + 1 })}
-                      onClick={() => setComponents((prev) => prev.filter((_, i) => i !== idx))}
+                      onClick={() => removeComponent(idx)}
                       disabled={components.length === 1}
                     >
                       {t("removeBtn")}
@@ -241,7 +264,7 @@ export function CreateFlexPlanForm() {
                 <Button
                   variant="ghost"
                   style={{ minHeight: 40 }}
-                  onClick={() => setComponents((prev) => [...prev, emptyComponent()])}
+                  onClick={addComponent}
                 >
                   {t("addComponentBtn")}
                 </Button>

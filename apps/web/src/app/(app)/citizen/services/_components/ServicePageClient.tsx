@@ -27,9 +27,11 @@ export function ServicePageClient({ service, counterMode = false }: Props) {
 
   useEffect(() => {
     if (!channelOk) return;
+    let live = true;
     void listDraftsForService(service.id).then((drafts) => {
-      if (drafts[0]) setDraftBanner(drafts[0].id);
+      if (live && drafts[0]) setDraftBanner(drafts[0].id);
     });
+    return () => { live = false; };
   }, [service.id, channelOk]);
 
   const applyHref = `/citizen/services/${service.serviceKey}/apply${counterMode ? "?counter=1" : ""}`;

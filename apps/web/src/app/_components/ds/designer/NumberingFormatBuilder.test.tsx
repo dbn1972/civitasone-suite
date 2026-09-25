@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
+import { useState } from "react";
 import { fireEvent, render, screen } from "@testing-library/react";
-import { formatNumberingPreview } from "./issuanceTypes";
+import { formatNumberingPreview, type NumberingToken } from "./issuanceTypes";
 import { NumberingFormatBuilder } from "./NumberingFormatBuilder";
 
 describe("formatNumberingPreview", () => {
@@ -45,5 +46,33 @@ describe("NumberingFormatBuilder", () => {
       { kind: "year" },
       { kind: "prefix", value: "TL" },
     ]);
+  });
+
+  // Row identity: token rows were keyed by `${kind}-${idx}`, which
+  // degenerates to plain index-keying whenever two tokens share a kind
+  // (nothing stops adding e.g. two Office tokens) -- removing an earlier
+  // same-kind token then shifted a later, focused one into the removed
+  // token's key.
+  it("keeps a token's own value and focus attached to it after an earlier same-kind token is removed", () => {
+    function StatefulBuilder() {
+      const [tokens, setTokens] = useState<NumberingToken[]>([
+        { kind: "office", value: "HO" },
+        { kind: "office", value: "FD" },
+      ]);
+      return <NumberingFormatBuilder tokens={tokens} onChange={setTokens} />;
+    }
+    render(<StatefulBuilder />);
+
+    const secondOfficeValue = screen.getAllByLabelText("Office code")[1]!;
+    secondOfficeValue.focus();
+    expect(secondOfficeValue).toHaveValue("FD");
+    expect(document.activeElement).toBe(secondOfficeValue);
+
+    // Remove the first office token -- the second shifts up to index 0.
+    fireEvent.click(screen.getAllByRole("button", { name: "Remove token" })[0]!);
+
+    const survivingOfficeValue = screen.getAllByLabelText("Office code")[0]!;
+    expect(survivingOfficeValue).toHaveValue("FD");
+    expect(document.activeElement).toBe(survivingOfficeValue);
   });
 });

@@ -57,14 +57,15 @@ export function TransferWithApproval() {
   // Load employees, departments, and officers when form opens
   useEffect(() => {
     if (!open) return;
+    const controller = new AbortController();
     void (async () => {
       try {
         const [empRes, deptRes, offRes, psRes] = await Promise.all([
-          fetch("/api/proxy/v1/hrms/employees?limit=200"),
-          fetch("/api/proxy/v1/hrms/departments?limit=200"),
-          fetch("/api/proxy/v1/identity/users?limit=200"),
+          fetch("/api/proxy/v1/hrms/employees?limit=200", { signal: controller.signal }),
+          fetch("/api/proxy/v1/hrms/departments?limit=200", { signal: controller.signal }),
+          fetch("/api/proxy/v1/identity/users?limit=200", { signal: controller.signal }),
           // Same endpoint/pattern as EditEmployeeForm.tsx's pay-structure picker.
-          fetch("/api/proxy/v1/payroll/structures?limit=200"),
+          fetch("/api/proxy/v1/payroll/structures?limit=200", { signal: controller.signal }),
         ]);
         if (empRes.ok) {
           const body = (await empRes.json()) as { data?: Employee[] } | Employee[];
@@ -82,8 +83,12 @@ export function TransferWithApproval() {
           const body = (await psRes.json()) as { data?: PayStructureOption[] } | PayStructureOption[];
           setPayStructures(Array.isArray(body) ? body : (body.data ?? []));
         }
-      } catch { /* graceful fallback to text inputs */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* graceful fallback to text inputs */
+      }
     })();
+    return () => controller.abort();
   }, [open]);
 
   const reset = () => {

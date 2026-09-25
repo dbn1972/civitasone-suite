@@ -50,9 +50,10 @@ export function TaxDeclarationForm() {
 
   // Fetch existing declaration on load
   useEffect(() => {
+    const controller = new AbortController();
     async function load() {
       try {
-        const res = await fetch(`/api/proxy/v1/payroll/tax-declarations?fy=${fy}`);
+        const res = await fetch(`/api/proxy/v1/payroll/tax-declarations?fy=${fy}`, { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
           if (data) {
@@ -68,13 +69,15 @@ export function TaxDeclarationForm() {
         } else {
           setLoadFailed(true);
         }
-      } catch {
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
         setLoadFailed(true);
       } finally {
         setLoading(false);
       }
     }
     void load();
+    return () => controller.abort();
   }, [fy]);
 
   async function handleSubmit(e: React.FormEvent) {

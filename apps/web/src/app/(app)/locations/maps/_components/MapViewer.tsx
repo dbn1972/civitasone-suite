@@ -69,18 +69,19 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
   const [formOpen, setFormOpen] = useState(false);
   const formError = useFormError("map layer");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch(API);
+      const res = await fetch(API, { signal });
       if (!res.ok) {
         setError((await formError.fromResponse(res, "load")).message);
         return;
       }
       const body = await res.json();
       setLayers(normalizeLayers(body));
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(formError.fromException("load").message);
     } finally {
       setLoading(false);
@@ -92,7 +93,9 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
   }, []);
 
   useEffect(() => {
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   const visibleLayers = useMemo(() => layers.filter((l) => l.visible), [layers]);

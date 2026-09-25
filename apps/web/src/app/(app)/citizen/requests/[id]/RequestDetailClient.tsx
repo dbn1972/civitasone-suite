@@ -43,15 +43,16 @@ export function RequestDetailClient({
   // before (unconditional fetch).
   const skipFirstFetch = useRef(initialSource === "api");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError("");
     try {
-      const res = await fetch(`/api/proxy/v1/citizen/grievances/${id}`, { cache: "no-store" });
+      const res = await fetch(`/api/proxy/v1/citizen/grievances/${id}`, { cache: "no-store", signal });
       if (res.status === 404) { setGrievance(null); return; }
       if (!res.ok) throw new Error((await res.text()) || "Failed to load request.");
       setGrievance((await res.json()) as Grievance);
     } catch (e) {
+      if (e instanceof Error && e.name === "AbortError") return;
       setLoadError(e instanceof Error ? e.message : "Failed to load request.");
     } finally {
       setLoading(false);
@@ -63,7 +64,9 @@ export function RequestDetailClient({
       skipFirstFetch.current = false;
       return;
     }
-    void load();
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
   }, [load]);
 
   // Endpoints accept asynchronously (202). Surface that honestly.

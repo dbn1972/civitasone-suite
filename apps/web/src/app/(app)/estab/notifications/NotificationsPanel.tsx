@@ -26,21 +26,29 @@ export function NotificationsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     try {
-      const res = await fetch("/api/proxy/v1/estab/notifications?limit=80");
+      const res = await fetch("/api/proxy/v1/estab/notifications?limit=80", { signal });
       if (!res.ok) throw new Error(await res.text());
       setItems(((await res.json()) as { data?: Notification[] }).data ?? []);
       setError("");
     } catch (err) {
+      // An abort means the panel unmounted (or a newer mount-time load
+      // superseded this one) while the request was in flight -- painting
+      // this stale attempt's error state would be wrong.
+      if (err instanceof Error && err.name === "AbortError") return;
       setError(err instanceof Error ? err.message : "Failed to load notifications");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
 
   return (
     <div style={{ marginTop: 18 }}>

@@ -35,13 +35,18 @@ export function RequestAdvanceForm() {
   const formError = useFormError("advance request");
 
   useEffect(() => {
-    fetch("/api/proxy/v1/hrms/employees?limit=500")
+    const controller = new AbortController();
+    fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
       .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json(); })
       .then((body) => {
         const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
         setEmployees(rows);
       })
-      .catch(() => { setEmployeeFetchError(true); });
+      .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setEmployeeFetchError(true);
+      });
+    return () => controller.abort();
   }, []);
 
   function clearErr(field: string) {

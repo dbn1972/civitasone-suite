@@ -56,30 +56,38 @@ export function CreateGRNForm() {
   const lineKeyFor = (idx: number) => lineRowIds[idx] ?? idx;
 
   useEffect(() => {
+    const controller = new AbortController();
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/procurement/vendors?limit=100");
+        const res = await fetch("/api/proxy/v1/procurement/vendors?limit=100", { signal: controller.signal });
         if (!res.ok) return;
         const body = await res.json() as { data?: VendorOption[] } | VendorOption[];
         const rows = Array.isArray(body) ? body : (body.data ?? []);
         const clean = rows.filter((v) => v.id && v.name);
         setVendors(clean);
         if (clean[0]?.id) setVendorId(clean[0].id);
-      } catch { /* optional */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* optional */
+      }
     })();
     void (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/procurement/pos?limit=100");
+        const res = await fetch("/api/proxy/v1/procurement/pos?limit=100", { signal: controller.signal });
         if (!res.ok) return;
         const body = await res.json() as { data?: POOption[] } | POOption[];
         const rows = Array.isArray(body) ? body : (body.data ?? []);
         const clean = rows.filter((p) => p.id && p.poNo);
         setPos(clean);
         if (clean[0]) selectPo(clean[0]);
-      } catch { /* optional */ }
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+        /* optional */
+      }
     })();
     // (No react-hooks/exhaustive-deps suppression needed here: now that the
     // rule actually runs, it reports nothing missing at this effect.)
+    return () => controller.abort();
   }, []);
 
   async function selectPo(po: POOption) {

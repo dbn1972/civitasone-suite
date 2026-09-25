@@ -70,6 +70,18 @@ export function CustomFieldsManager() {
     };
   }, []);
 
+  // Stable per-option React key, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
+  // for the full rationale. An option is a plain string (no room for its own
+  // id), so a parallel id list *per row* (keyed by the row's own already-
+  // stable `.key`, a Record since rows themselves come and go) stands in for
+  // one -- seeded whenever a row's options first appear (on load() and
+  // addRow(), in lockstep with rows itself) and kept in step by
+  // addOption/removeOption below.
+  const nextOptionRowId = useRef(0);
+  const [optionRowIds, setOptionRowIds] = useState<Record<string, number[]>>({});
+  const optionKeyFor = (rowKey: string, idx: number) => optionRowIds[rowKey]?.[idx] ?? idx;
+
   async function load(entityType: CfEntityType, gen: number) {
     setSource("loading");
     const { data, source: s } = await listCustomFields(entityType);
@@ -77,7 +89,11 @@ export function CustomFieldsManager() {
     // this load began — otherwise a stale reload would present one entity's
     // catalogue as live fact while a different one is selected.
     if (!mountedRef.current || gen !== genRef.current) return;
-    setRows(data.map((f) => toRow(toDraft(f))));
+    const nextRows = data.map((f) => toRow(toDraft(f)));
+    setRows(nextRows);
+    setOptionRowIds(
+      Object.fromEntries(nextRows.map((r) => [r.key, r.options.map(() => nextOptionRowId.current++)])),
+    );
     setSource(s);
   }
   useEffect(() => {
@@ -91,7 +107,9 @@ export function CustomFieldsManager() {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, ...patch } : r)));
   }
   function addRow() {
-    setRows((prev) => [...prev, toRow(blankDraft(entity, prev.length))]);
+    const row = toRow(blankDraft(entity, rows.length));
+    setRows((prev) => [...prev, row]);
+    setOptionRowIds((ids) => ({ ...ids, [row.key]: row.options.map(() => nextOptionRowId.current++) }));
   }
   function setOption(key: string, idx: number, value: string) {
     setRows((prev) =>
@@ -105,11 +123,13 @@ export function CustomFieldsManager() {
   }
   function addOption(key: string) {
     setRows((prev) => prev.map((r) => (r.key === key ? { ...r, options: [...r.options, ""] } : r)));
+    setOptionRowIds((ids) => ({ ...ids, [key]: [...(ids[key] ?? []), nextOptionRowId.current++] }));
   }
   function removeOption(key: string, idx: number) {
     setRows((prev) =>
       prev.map((r) => (r.key === key ? { ...r, options: r.options.filter((_, i) => i !== idx) } : r)),
     );
+    setOptionRowIds((ids) => ({ ...ids, [key]: (ids[key] ?? []).filter((_, i) => i !== idx) }));
   }
 
   async function save(row: Row) {
@@ -244,7 +264,7 @@ export function CustomFieldsManager() {
                           <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>No options yet — add at least one.</p>
                         ) : (
                           row.options.map((opt, idx) => (
-                            <div key={idx} style={{ display: "flex", gap: 8 }}>
+                            <div key={optionKeyFor(row.key, idx)} style={{ display: "flex", gap: 8 }}>
                               <input
                                 value={opt}
                                 onChange={(e) => setOption(row.key, idx, e.target.value)}

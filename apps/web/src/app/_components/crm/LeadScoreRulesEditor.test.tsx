@@ -74,4 +74,30 @@ describe("LeadScoreRulesEditor (LQ-002 admin)", () => {
     fireEvent.click(screen.getByRole("button", { name: /save rules/i }));
     expect(await screen.findByText(/BAD: nope/)).toBeInTheDocument();
   });
+
+  // Row identity: rules were keyed by array position, so removing an
+  // earlier rule shifted later ones up into a different key -- React
+  // patched the focused rule's DOM node in place with a different rule's
+  // data instead of removing the right node and leaving the rest (and
+  // focus) alone.
+  it("keeps a rule's own value and focus attached to it after an earlier rule is removed", async () => {
+    vi.mocked(lq.getScoreRules).mockResolvedValue({ data: [], source: "api" });
+    render(<LeadScoreRulesEditor />);
+    await waitFor(() => expect(screen.getByText(/no scoring rules yet/i)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+    fireEvent.click(screen.getByRole("button", { name: /add rule/i }));
+
+    const thirdAttribute = screen.getAllByLabelText(/attribute for rule/i)[2]!;
+    fireEvent.change(thirdAttribute, { target: { value: "budget" } });
+    thirdAttribute.focus();
+    expect(document.activeElement).toBe(thirdAttribute);
+
+    // Remove the first rule -- rules 2-3 shift up to become rules 1-2.
+    fireEvent.click(screen.getAllByRole("button", { name: /remove rule/i })[0]!);
+
+    const survivingThirdAttribute = screen.getAllByLabelText(/attribute for rule/i)[1]!;
+    expect(survivingThirdAttribute).toHaveValue("budget");
+    expect(document.activeElement).toBe(survivingThirdAttribute);
+  });
 });

@@ -37,7 +37,9 @@ describe("MapViewer (SVC-112)", () => {
   it("loads layers from the map-layers proxy endpoint", async () => {
     render(<MapViewer />);
     await waitFor(() => expect(screen.getByText("Ward Boundaries")).toBeInTheDocument());
-    expect(fetch).toHaveBeenCalledWith("/api/proxy/v1/locations/map-layers");
+    // UX-fetch-cancellation: the mount-time fetch is now threaded an
+    // AbortSignal (cleaned up on unmount) -- see load()'s AbortController.
+    expect(fetch).toHaveBeenCalledWith("/api/proxy/v1/locations/map-layers", { signal: expect.any(AbortSignal) });
     expect(screen.getByText("Satellite Base")).toBeInTheDocument();
   });
 

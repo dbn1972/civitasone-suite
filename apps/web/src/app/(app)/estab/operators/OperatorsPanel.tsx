@@ -45,11 +45,11 @@ export function OperatorsPanel() {
   const [saving, setSaving] = useState(false);
   const { fromResponse, fromException, clear } = useFormError("operator");
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError(false);
     try {
-      const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500");
+      const res = await fetch("/api/proxy/v1/estab/operators?activeOnly=false&limit=500", { signal });
       // Never shown verbatim — a failed load only ever flips loadError below,
       // which renders the catalogued ErrorState — but still routed through a
       // safe, static message rather than the raw response body, for the same
@@ -57,7 +57,8 @@ export function OperatorsPanel() {
       if (!res.ok) throw new Error("Could not load operators.");
       const body = (await res.json()) as { data?: Operator[] };
       setOperators(body.data ?? []);
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       // A failed load must not read as "No operators enrolled yet".
       setLoadError(true);
     } finally {
@@ -66,18 +67,24 @@ export function OperatorsPanel() {
   }, []);
 
   // Federate the employee directory from HRMS — no local duplication.
-  const loadEmployees = useCallback(async () => {
+  const loadEmployees = useCallback(async (signal?: AbortSignal) => {
     try {
-      const res = await fetch("/api/proxy/v1/hrms/employees?limit=200");
+      const res = await fetch("/api/proxy/v1/hrms/employees?limit=200", { signal });
       if (!res.ok) return;
       const body = (await res.json()) as { data?: Employee[] } | Employee[];
       setEmployees(Array.isArray(body) ? body : (body.data ?? []));
-    } catch {
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") return;
       /* picker is optional; manual UUID entry still works */
     }
   }, []);
 
-  useEffect(() => { void load(); void loadEmployees(); }, [load, loadEmployees]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    void loadEmployees(controller.signal);
+    return () => controller.abort();
+  }, [load, loadEmployees]);
 
   const empLabel = useCallback((id: string) => {
     const e = employees.find((x) => x.id === id);

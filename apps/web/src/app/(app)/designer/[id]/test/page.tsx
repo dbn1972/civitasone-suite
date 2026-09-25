@@ -26,12 +26,16 @@ export default function DesignerTestPage() {
   const [history, setHistory] = useState<SandboxRunHistoryRow[]>([]);
   const [running, setRunning] = useState(false);
 
-  const loadHistory = useCallback(async () => {
-    setHistory(await fetchSandboxTestHistory(params.id));
+  const loadHistory = useCallback(async (isLive: () => boolean = () => true) => {
+    const data = await fetchSandboxTestHistory(params.id);
+    if (!isLive()) return;
+    setHistory(data);
   }, [params.id]);
 
   useEffect(() => {
-    void loadHistory();
+    let live = true;
+    void loadHistory(() => live);
+    return () => { live = false; };
   }, [loadHistory]);
 
   const runTest = async () => {

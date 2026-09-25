@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { Button } from "../Button";
 import { Segmented } from "../Segmented";
 import {
@@ -48,6 +49,19 @@ function labelFromKind(kind: NumberingToken["kind"]): string {
 export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingFormatBuilderProps) {
   const preview = formatNumberingPreview(tokens);
 
+  // Stable per-row React key, independent of array position -- see
+  // ElectFlexBenefitForm.tsx (apps/web/src/app/(app)/hr/payroll/flex-benefits)
+  // for the full rationale. The previous key (`${token.kind}-${idx}`)
+  // degenerated to plain index-keying whenever two tokens shared a kind
+  // (nothing stops adding e.g. two Ward tokens), letting removal of an
+  // earlier same-kind token shift a later, focused one into the removed
+  // token's key. NumberingToken carries no id, so a parallel id list stands
+  // in for one; moveToken swaps two ids in lockstep with the two tokens it
+  // swaps, so a reorder keeps each token's own key attached to its own data.
+  const nextTokenRowId = useRef(0);
+  const [tokenRowIds, setTokenRowIds] = useState<number[]>(() => tokens.map(() => nextTokenRowId.current++));
+  const tokenKeyFor = (idx: number) => tokenRowIds[idx] ?? idx;
+
   const addToken = (label: string) => {
     const kind = tokenKindFromLabel(label);
     const next: NumberingToken =
@@ -59,10 +73,12 @@ export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingF
             ? { kind, seqWidth: 5 }
             : { kind };
     onChange([...tokens, next]);
+    setTokenRowIds((ids) => [...ids, nextTokenRowId.current++]);
   };
 
   const removeToken = (idx: number) => {
     onChange(tokens.filter((_, i) => i !== idx));
+    setTokenRowIds((ids) => ids.filter((_, i) => i !== idx));
   };
 
   const moveToken = (idx: number, dir: -1 | 1) => {
@@ -73,6 +89,13 @@ export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingF
     next[idx] = next[target]!;
     next[target] = tmp;
     onChange(next);
+    setTokenRowIds((ids) => {
+      const swapped = [...ids];
+      const tmpId = swapped[idx]!;
+      swapped[idx] = swapped[target]!;
+      swapped[target] = tmpId;
+      return swapped;
+    });
   };
 
   const updateToken = (idx: number, patch: Partial<NumberingToken>) => {
@@ -94,7 +117,7 @@ export function NumberingFormatBuilder({ tokens, onChange, warning }: NumberingF
       <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 8 }}>
         {tokens.map((token, idx) => (
           <li
-            key={`${token.kind}-${idx}`}
+            key={tokenKeyFor(idx)}
             data-testid={`numbering-token-${idx}`}
             style={{
               display: "flex",
