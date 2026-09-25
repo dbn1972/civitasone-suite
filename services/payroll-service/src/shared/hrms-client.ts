@@ -235,6 +235,51 @@ export async function fetchAttendanceLopApplies(tenantId: string, employeeId: st
   return body.attendanceLopApplies;
 }
 
+/**
+ * HIGH fix (LOP-ignores-leave-type bug): leave-type paid/unpaid
+ * classification lookup, same shape and rationale as
+ * fetchAttendanceLopApplies just above -- used by integration/consumer.ts's
+ * leaveApproved handler to resolve how much of an approved leave
+ * application's daysApplied counts toward Loss-of-Pay (0 = fully paid,
+ * 10000 = fully unpaid, a value between for a partially-paid type such as
+ * CCS Half Pay Leave). Mirrors hrms-service's hrmsLeaveTypes.lopFractionBps
+ * exactly via a dedicated internal lookup (this service has no direct
+ * access to leave/schema.ts or its database), so the ledger-write gate and
+ * the payroll-input live-pull route's own lopFractionByTypeId (internal/
+ * routes.ts) can never disagree.
+ *
+ * Fails CLOSED (throws HrmsUnavailableError) on an unreachable/erroring
+ * HRMS, same posture as fetchAttendanceLopApplies -- LOP correctness is
+ * financial, so this must never silently guess when HRMS cannot be reached;
+ * the caller lets the queue's own redelivery retry later.
+ *
+ * A 404 (leave type not found in HRMS -- shouldn't happen for a real
+ * approved leave application, but defensive) is NOT unreachability --
+ * returns 10000 (fully counts as LOP), the same fail-safe this column's own
+ * DEFAULT resolves to, so a lookup race never silently exempts a leave type
+ * it shouldn't.
+ */
+export async function fetchLeaveLopFractionBps(tenantId: string, leaveTypeId: string): Promise<number> {
+  const url = `${HRMS_URL}/v1/hrms/internal/leave-types/${encodeURIComponent(leaveTypeId)}/lop-fraction-bps`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: {
+        "x-internal": "1",
+        "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "",
+        "x-tenant-id": tenantId,
+      },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    throw new HrmsUnavailableError(`hrms leave-type lop-fraction check unreachable: ${(err as Error).message}`);
+  }
+  if (res.status === 404) return 10000;
+  if (!res.ok) throw new HrmsUnavailableError(`hrms leave-type lop-fraction check failed: ${res.status}`);
+  const body = await res.json() as { lopFractionBps: number };
+  return body.lopFractionBps;
+}
+
 export type PayrollSlipTemplate = {
   templateHtml: string;
   isDefault: boolean;

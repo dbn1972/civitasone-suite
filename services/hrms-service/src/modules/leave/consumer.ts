@@ -28,12 +28,20 @@ const LEAVE_WORKFLOW_NAME = "Leave Approval Workflow";
 export function registerLeaveConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.leaveTypeCreate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; code: string; name: string; maxDays: number; isEncashable: boolean; carryForward: boolean };
+    const p = msg.payload as {
+      id: string; tenantId: string; code: string; name: string; maxDays: number;
+      isEncashable: boolean; carryForward: boolean; lopFractionBps: number;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await repo.insertLeaveType(tx, {
         id: p.id, tenantId: p.tenantId, code: p.code, name: p.name,
         maxDays: p.maxDays, isEncashable: p.isEncashable, carryForward: p.carryForward,
+        // HIGH fix (LOP-ignores-leave-type bug): persist the classification
+        // validators.ts's createLeaveTypeBody now requires (defaulted to
+        // 10000/fully-unpaid when the caller omits it) -- see schema.ts's
+        // doc comment on this column.
+        lopFractionBps: p.lopFractionBps,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await audit(tx, msg, "create", "leave_type", p.id);
@@ -216,7 +224,13 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
         await enqueue(tx, {
           topic: EVENTS.leaveApproved, eventType: EVENTS.leaveApproved,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-          payload: { leaveAppId: p.id, employeeId: app.employeeId, daysApplied: app.daysApplied, fromDate: app.fromDate, toDate: app.toDate },
+          // HIGH fix (LOP-ignores-leave-type bug): leaveTypeId added so
+          // payroll-service's integration/consumer.ts can resolve this
+          // leave type's paid/unpaid classification (via the new internal
+          // .../leave-types/:id/lop-fraction-bps lookup) before deciding how
+          // much of daysApplied counts toward Loss-of-Pay -- previously
+          // every approved day counted in full, regardless of leave type.
+          payload: { leaveAppId: p.id, employeeId: app.employeeId, leaveTypeId: app.leaveTypeId, daysApplied: app.daysApplied, fromDate: app.fromDate, toDate: app.toDate },
         });
         await enqueue(tx, {
           topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,

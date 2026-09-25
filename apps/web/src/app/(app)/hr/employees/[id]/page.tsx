@@ -179,6 +179,24 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
             <Link href={`/hr/service-book?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
               {t("actionServiceBook")}
             </Link>
+            {/*
+              HIGH fix: separation (resignation/termination/VRS/death) had no
+              reachable UI anywhere, despite PATCH /v1/hrms/employees/:id/separate
+              already working (HR_ROLES-gated). Same shape as Initiate Transfer/
+              Initiate Promotion above -- an HR-initiated action on this specific
+              employee, landing on the existing /hr/retirement page (which already
+              lists every separation but had no create action either) via ?empId=,
+              the same convention TransferPage/PromotionPage already use.
+              isActive already gates this whole card to non-exited employees, so
+              an already-separated/terminated/retired employee never sees this
+              link -- separate/routes.ts has no server-side guard against
+              re-separating an already-exited employee (unlike its sibling routes),
+              so this client-side gate is the one thing standing between a normal
+              user and that gap; see this change's PR description.
+            */}
+            <Link href={`/hr/retirement?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
+              {t("actionInitiateSeparation")}
+            </Link>
           </div>
         </Card>
       )}

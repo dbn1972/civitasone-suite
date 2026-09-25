@@ -1,11 +1,20 @@
 import { PageHeader, StatGrid, StatCard, Card } from "../../../_components/ds";
-import { getAttendanceList } from "../../../_data/loaders";
+import { getAttendanceList, getMyProfile } from "../../../_data/loaders";
 import { AttendanceTable } from "./AttendanceTable";
+import { GeoCheckInCard } from "./_components/GeoCheckInCard";
 import { getTranslations } from "next-intl/server";
 
 export default async function AttendancePage() {
   const t = await getTranslations("attendance");
+  const tCheckIn = await getTranslations("geoCheckIn");
   const { data: attendance, source } = await getAttendanceList();
+  // HIGH fix: geo-fenced check-in/out had a complete backend
+  // (geo-attendance/routes.ts) but zero reachable UI -- see
+  // GeoCheckInCard's own doc comment. Self-service resolution mirrors
+  // leave/apply and hr/wfh exactly (getMyProfile server-side, passed down
+  // as a prop -- the client component never resolves or receives any other
+  // employee's id).
+  const { data: myProfile } = await getMyProfile();
 
   const total = attendance.length;
   const present = attendance.filter((r) => r.status === "present").length;
@@ -29,9 +38,14 @@ export default async function AttendancePage() {
         <StatCard icon="❌" iconBg="var(--badbg)" label={t("absent")} value={absent} />
         <StatCard icon="🌴" iconBg="var(--warnbg)" label={t("onLeave")} value={onLeave} />
       </StatGrid>
-      <Card title={t("recordsCardTitle")}>
-        <AttendanceTable attendance={attendance} source={source} />
+      <Card title={tCheckIn("cardTitle")}>
+        <GeoCheckInCard employeeId={myProfile?.id ?? null} employeeStatus={myProfile?.status} />
       </Card>
+      <div style={{ marginTop: 16 }}>
+        <Card title={t("recordsCardTitle")}>
+          <AttendanceTable attendance={attendance} source={source} />
+        </Card>
+      </div>
     </div>
   );
 }

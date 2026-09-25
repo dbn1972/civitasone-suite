@@ -4,7 +4,7 @@ import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS, COMMANDS } from "../../topics.js";
 import * as lopRepo from "./lop-repo.js";
-import { fetchAttendanceLopApplies } from "../../shared/hrms-client.js";
+import { fetchAttendanceLopApplies, fetchLeaveLopFractionBps } from "../../shared/hrms-client.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { computeGratuity } from "../payroll/domain.js";
 import { computeLtcExemption } from "../tax/ltc-exemption.js";
@@ -26,7 +26,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
   });
 
   queue.subscribe(CONSUMED_EVENTS.leaveApproved, async (msg) => {
-    const p = msg.payload as { employeeId: string; daysApplied: number; fromDate: string };
+    const p = msg.payload as { employeeId: string; leaveTypeId?: string; daysApplied: number; fromDate: string };
     const month = p.fromDate.slice(0, 7);
     // BUG-2 fix: gate the ledger write itself on the same DIC engagement
     // exemption the live-pull payroll-input feed applies (consultant/
@@ -40,9 +40,36 @@ export function registerIntegrationConsumers(queue: Queue): void {
     // legitimately-skipped message is simply never claimed, so a redelivery
     // just re-evaluates the same (idempotent) skip decision.
     if (!(await fetchAttendanceLopApplies(msg.tenantId, p.employeeId))) return;
+    // HIGH fix (LOP-ignores-leave-type bug): every approved leave day used
+    // to count fully toward LOP with no regard for whether the leave type
+    // is paid or unpaid. leaveTypeId is only absent on a message published
+    // by pre-fix hrms-service code still in flight at deploy time; treating
+    // that (rare, transient) case as "fully counts as LOP" preserves this
+    // handler's exact prior behaviour for it rather than silently exempting
+    // it. Same before-markProcessed placement as the exemption check above,
+    // for the same idempotent-redelivery reason.
+    const lopFractionBps = p.leaveTypeId
+      ? await fetchLeaveLopFractionBps(msg.tenantId, p.leaveTypeId)
+      : 10000;
+    if (lopFractionBps === 0) return; // fully-paid leave type: nothing to ledger.
+    // Rounded to the nearest whole day: payrollLopLedger.lopDays (and the
+    // final deduction formula in payroll/consumer.ts, which converts it via
+    // BigInt(lopDays)) are integer-day-count today. For the two
+    // classifications currently in use (0 and 10000 bps -- see migration
+    // 0150_leave_type_lop_fraction.sql) this is always exact, since either
+    // branch above already short-circuits or multiplies by 1. Only a
+    // genuinely partial type (currently just HPL at 5000 bps / half pay)
+    // rounds -- e.g. 3 days -> 1.5 -> 2. Exact fractional-day precision would
+    // additionally require widening payroll_lop_ledger.lop_days to a decimal
+    // type and reworking that BigInt conversion; deliberately not done here
+    // to avoid a wide change to the live payroll deduction formula for a
+    // capability only one real leave type currently uses -- see this
+    // change's PR description.
+    const lopDays = Math.round((p.daysApplied * lopFractionBps) / 10000);
+    if (lopDays <= 0) return;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await lopRepo.upsertLopDays(tx, msg.tenantId, p.employeeId, month, "leave", p.daysApplied);
+      await lopRepo.upsertLopDays(tx, msg.tenantId, p.employeeId, month, "leave", lopDays);
     });
   });
 

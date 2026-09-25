@@ -25,12 +25,26 @@ export async function leaveContextRoutes(app: FastifyInstance): Promise<void> {
         name: employee.fullName,
       },
       leaveTypes: types.map((t) => ({ id: t.id, code: t.code, name: t.name, maxDays: t.maxDays })),
+      // HIGH fix (leave-balance negative-number bug): this used to omit
+      // totalDays entirely, forcing the frontend (LeaveBalanceClient.tsx) to
+      // fall back to the leave TYPE's generic policy cap (maxDays, e.g. "EL:
+      // 30 days/year for this tenant") as the denominator for "days used".
+      // maxDays is not this employee's actual granted allocation for the
+      // year -- hrmsLeaveAllocs.totalDays is (set explicitly per employee
+      // per fy at allocation time, see commands.ts's allocateLeave; pro-rated
+      // for new joiners, carried-forward, or HR-adjusted, so it can be
+      // higher OR lower than the generic maxDays). Whenever an employee's
+      // real totalDays exceeded the type's maxDays, "used = maxDays -
+      // balanceDays" went negative (observed live as "Total Used: -4d").
+      // totalDays already exists on hrmsLeaveAllocs and repo.listAllocsForEmployee
+      // already selects the full row -- it was simply never sent.
       allocations: allocs.map((a) => ({
         id: a.id,
         leaveTypeId: a.leaveTypeId,
         leaveTypeCode: typeMap.get(a.leaveTypeId)?.code ?? "",
         leaveTypeName: typeMap.get(a.leaveTypeId)?.name ?? "",
         fy: a.fy,
+        totalDays: a.totalDays,
         balanceDays: a.balanceDays,
       })),
     });

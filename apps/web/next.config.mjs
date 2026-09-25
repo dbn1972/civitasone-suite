@@ -26,7 +26,21 @@ const nextConfig = {
           { key: 'X-Frame-Options', value: 'DENY' },
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
-          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=()' },
+          // HIGH fix (geo-attendance check-in/out): this blanket policy
+          // denied geolocation to every page, including this app's own
+          // origin -- predating any in-app use of navigator.geolocation
+          // (checked: nothing in apps/web called it before GeoCheckInCard,
+          // the new self-service check-in/out UI this fix adds for the
+          // existing geo-attendance backend). Without this, the browser
+          // silently refuses the geolocation request on every page load
+          // regardless of the calling code's own correctness ("Permissions
+          // policy violation: Geolocation access has been blocked"),
+          // making that whole feature non-functional for every user, not
+          // just a test environment. Narrowed to this app's own origin only
+          // (self) -- never opened to third-party/cross-origin content, and
+          // camera/microphone stay fully denied (no feature in this app
+          // uses either).
+          { key: 'Permissions-Policy', value: 'camera=(), microphone=(), geolocation=(self)' },
         ],
       },
     ];
