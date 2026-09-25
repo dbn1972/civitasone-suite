@@ -43,6 +43,12 @@ export default async function RetirementPage({
   const prefillEmployeeId = searchParams?.empId;
   const prefillEmployee = prefillEmployeeId ? await getEmployeeById(prefillEmployeeId) : null;
   const prefillEmployeeName = prefillEmployee?.data?.name;
+  // SEC CRITICAL (status-integrity fix): threaded through to
+  // InitiateSeparationAction so a direct ?empId=<already-exited-id>
+  // navigation can be guarded against an already-exited employee -- this
+  // page already fetches the full employee record above for the name, so
+  // no extra request is needed for the status too.
+  const prefillEmployeeStatus = prefillEmployee?.data?.status;
   const COLUMNS: { key: keyof RetirementRow & string; label: string; cellType?: "status" }[] = [
     { key: "employee",          label: t("colEmployee") },
     { key: "department",        label: t("colDepartment") },
@@ -70,7 +76,7 @@ export default async function RetirementPage({
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
-        actions={<InitiateSeparationAction prefillEmployeeId={prefillEmployeeId} prefillEmployeeName={prefillEmployeeName} />}
+        actions={<InitiateSeparationAction prefillEmployeeId={prefillEmployeeId} prefillEmployeeName={prefillEmployeeName} prefillEmployeeStatus={prefillEmployeeStatus} />}
       />
       <DataSourceBadge source={source} message="Couldn't load retirement records — showing nothing" />
 

@@ -155,6 +155,25 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = separateBody.parse(req.body);
+    // SEC CRITICAL (status-integrity fix): synchronous pre-check, same
+    // rationale as confirm's and the generic PATCH /:id route's above --
+    // separateEmployee only PUBLISHES a command and answers 202
+    // immediately; without this check here, PATCH /separate on an
+    // already-exited employee was silently accepted (live-reproduced: 202
+    // twice on an already-separated employee), unlike its sibling
+    // /confirm above, which already rejects an exited employee via its own
+    // probation-only check. isExitedStatus/EXITED_STATUSES (status.ts) is
+    // the right check here rather than confirm's narrower "must be exactly
+    // 'probation'" one -- separation is legitimately initiated from
+    // 'active'/'confirmed' etc., so a positive allowlist would reject the
+    // real, non-exited flow this route exists for. A fresh, uncached read
+    // (repo.findById, not the cached queries.getEmployee) so a very recent
+    // status change is never masked by a stale cache entry.
+    const emp = await repo.findById(id, ctx.tenantId);
+    if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    if (isExitedStatus(emp.status)) {
+      throw new HttpError(409, "EMPLOYEE_EXITED", `employee has status '${emp.status}' and can no longer be updated via this endpoint`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.separateEmployee(ctx, id, body));
   });
 

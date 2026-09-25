@@ -64,4 +64,42 @@ describe("RetirementPage", () => {
     // Appears both in the register table and the upcoming-retirements card.
     expect(screen.getAllByText("Meena Iyer").length).toBeGreaterThan(0);
   });
+
+  // SEC CRITICAL regression (PR #1572 fix-up round): a direct navigation to
+  // /hr/retirement?empId=<already-exited-id> used to reach a fully
+  // pre-filled, submittable separation form -- this page fetches the full
+  // employee record for the name already (getEmployeeById), and now also
+  // threads its status through to InitiateSeparationAction so the guarded
+  // "already exited" state renders instead. See that component's own tests
+  // for the guard logic itself; this test proves the wiring through THIS
+  // page actually reaches it.
+  it("?empId= for an already-exited employee renders the guarded notice, not a submittable form", async () => {
+    fetchJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/employees/")) {
+        return Promise.resolve({ data: { id: "emp-exited", name: "Already Gone", status: "retired" }, source: "api" });
+      }
+      return Promise.resolve({ data: [], source: "api" });
+    });
+
+    const ui = await RetirementPage({ searchParams: { empId: "emp-exited" } });
+    renderPage(ui);
+
+    expect(screen.getByText("Already Gone has already exited (status: retired) and cannot be separated again.")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "+ Initiate Separation" })).not.toBeInTheDocument();
+  });
+
+  it("?empId= for a non-exited employee still prefills the normal submittable form", async () => {
+    fetchJsonMock.mockImplementation((url: string) => {
+      if (url.includes("/employees/")) {
+        return Promise.resolve({ data: { id: "emp-active", name: "Still Serving", status: "confirmed" }, source: "api" });
+      }
+      return Promise.resolve({ data: [], source: "api" });
+    });
+
+    const ui = await RetirementPage({ searchParams: { empId: "emp-active" } });
+    renderPage(ui);
+
+    expect(screen.getByRole("button", { name: "+ Initiate Separation" })).toBeInTheDocument();
+    expect(screen.queryByText(/has already exited/)).not.toBeInTheDocument();
+  });
 });

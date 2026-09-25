@@ -22,20 +22,28 @@
  * per Button.tsx's doc comment: "irreversible confirm-gated actions... use
  * ActionButton") gates the actual submit.
  *
- * Safety note (see this change's PR description for the full writeup):
- * employee/routes.ts's PATCH .../separate has a real permission check
- * (HR_ROLES) and its separationType enum matches real CCS separation
- * causes with correct gratuity-eligibility handling -- but neither the
- * route nor its consumer guards against re-separating an employee who is
- * already separated/terminated/retired (unlike the sibling /confirm,
- * transfer /relieve, /join, and generic PATCH routes, which all have this
- * exact defensive check). This component closes that gap at the UI layer
- * the only way a frontend-only fix can: `EXITED_STATUSES` below means an
- * already-exited employee is never offered in the picker, and the
- * prefilled (?empId=) path only ever reaches this component via the
- * employee detail page's Quick Actions card, which is itself hidden for
- * any non-serving employee. A determined direct API call could still hit
- * the gap; this UI cannot, by construction.
+ * Safety note (updated -- see this change's PR description for the full
+ * writeup): employee/routes.ts's PATCH .../separate has a real permission
+ * check (HR_ROLES) and its separationType enum matches real CCS separation
+ * causes with correct gratuity-eligibility handling. The original version of
+ * this comment claimed the prefilled (?empId=) path "cannot, by
+ * construction" reach an already-exited employee, because it only ever
+ * arrives via the employee detail page's Quick Actions card, itself hidden
+ * for any non-serving employee -- that claim was FALSE and has been
+ * corrected: middleware.ts only checks session validity (no per-employee
+ * gating), GET /employees/:id has no status filter, and `EXITED_STATUSES`
+ * below only ever filtered the fetched *picker list*, never the prefill
+ * branch -- so a direct navigation to /hr/retirement?empId=<exited-id>
+ * reached a fully pre-filled, submittable form. Two real fixes now close
+ * this: the backend PATCH .../separate route itself now has the same
+ * exited-status guard its sibling /confirm route already had
+ * (employee/routes.ts -- the actual fix, not just this UI), and
+ * `prefillIsExited` below additionally blocks the prefilled form itself
+ * from ever rendering for an already-exited employee, showing a clear
+ * "already separated" state instead -- using the SAME status the caller
+ * (retirement/page.tsx) already fetched server-side, so this needs no
+ * extra request. `EXITED_STATUSES` still keeps an already-exited employee
+ * out of the picker list too.
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -57,9 +65,11 @@ const EXITED_STATUSES = new Set(["terminated", "separated", "retired"]);
 export function InitiateSeparationAction({
   prefillEmployeeId,
   prefillEmployeeName,
+  prefillEmployeeStatus,
 }: {
   prefillEmployeeId?: string;
   prefillEmployeeName?: string;
+  prefillEmployeeStatus?: string;
 }) {
   const t = useTranslations("initiateSeparation");
   const router = useRouter();
@@ -93,6 +103,22 @@ export function InitiateSeparationAction({
       .catch((e) => { if (e.name !== "AbortError") setEmployeesLoaded(true); });
     return () => controller.abort();
   }, [open, prefillEmployeeId]);
+
+  // SEC CRITICAL (status-integrity fix): see the module doc comment above.
+  // Must come after every hook above (rules-of-hooks -- this repo now lints
+  // that, see PR #1570) but before anything below reads prefillEmployeeId
+  // assuming it is still separable.
+  const prefillIsExited = !!prefillEmployeeId && EXITED_STATUSES.has((prefillEmployeeStatus ?? "").toLowerCase());
+  if (prefillIsExited) {
+    return (
+      <span
+        role="status"
+        style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: "0.8125rem", fontWeight: 600, color: "var(--mut)" }}
+      >
+        {t("alreadyExitedNotice", { name: prefillEmployeeName ?? prefillEmployeeId ?? "", status: prefillEmployeeStatus ?? "" })}
+      </span>
+    );
+  }
 
   const reset = () => {
     setEmployeeId(prefillEmployeeId ?? "");

@@ -4905,7 +4905,8 @@
     "errSelectEmployee": "Select an employee.",
     "errEffectiveDate": "Effective date is required.",
     "errEncashmentDays": "Leave encashment days must be zero or more.",
-    "toastSuccess": "Separation recorded for {name}."
+    "toastSuccess": "Separation recorded for {name}.",
+    "alreadyExitedNotice": "{name} has already exited (status: {status}) and cannot be separated again."
   },
   "workSummary": {
     "title": "Work Summaries",

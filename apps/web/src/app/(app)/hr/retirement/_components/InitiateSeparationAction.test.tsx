@@ -69,12 +69,35 @@ describe("InitiateSeparationAction", () => {
   });
 
   it("prefilled from ?empId= shows a locked, read-only employee field and never fetches the picker", async () => {
-    renderAction({ prefillEmployeeId: "emp-1", prefillEmployeeName: "Asha Verma" });
+    renderAction({ prefillEmployeeId: "emp-1", prefillEmployeeName: "Asha Verma", prefillEmployeeStatus: "confirmed" });
     fireEvent.click(screen.getByRole("button", { name: "+ Initiate Separation" }));
 
     const input = await screen.findByDisplayValue("Asha Verma");
     expect(input).toBeDisabled();
     expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/hrms/employees?limit=500", expect.anything());
+  });
+
+  // SEC CRITICAL regression (PR #1572 fix-up round): a direct navigation to
+  // /hr/retirement?empId=<already-exited-id> used to reach this exact same
+  // locked-but-submittable form (previous test) unconditionally -- nothing
+  // here re-checked the employee's actual current status. See this
+  // component's module doc comment for the full writeup; the backend
+  // PATCH .../separate route now also independently guards this (the real
+  // fix), this is the UI-layer half.
+  it.each(["terminated", "separated", "retired"])(
+    "prefilled from ?empId= for an already-exited employee (status '%s') shows a guarded notice, never the form",
+    async (status) => {
+      renderAction({ prefillEmployeeId: "emp-3", prefillEmployeeName: "Already Gone", prefillEmployeeStatus: status });
+
+      expect(screen.getByText(`Already Gone has already exited (status: ${status}) and cannot be separated again.`)).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "+ Initiate Separation" })).not.toBeInTheDocument();
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("an exited status is matched case-insensitively (mirrors EXITED_STATUSES.has elsewhere)", async () => {
+    renderAction({ prefillEmployeeId: "emp-3", prefillEmployeeName: "Already Gone", prefillEmployeeStatus: "SEPARATED" });
+    expect(screen.getByText(/has already exited/)).toBeInTheDocument();
   });
 
   it("disables submit until an employee and effective date are set, with a visible reason", async () => {
