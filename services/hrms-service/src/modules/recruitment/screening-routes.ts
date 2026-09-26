@@ -20,7 +20,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db } from "../../shared/db.js";
 import {
   SCREENING_DECISIONS, REJECTION_REASON_CODES, requiresRejectionReason,
-  autoScreenDecision, redactApplicant, type ScreeningDecision,
+  autoScreenDecision, redactApplicant, stageForScreeningDecision, type ScreeningDecision,
 } from "./screening.js";
 import * as repo from "./screening-repo.js";
 
@@ -94,6 +94,28 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "REASON_REQUIRED", "a structured rejection reason is required to mark an application ineligible");
     }
 
+    // Leaves an audit trail (R-RA-0119) for a denied re-decision, then rejects
+    // it towards the real maker-checker override flow (R-RA-0111): a second
+    // decision on an already-decided application must never be silently
+    // applied -- and must never vanish without a trace either.
+    async function denyAsOverride(jobOpeningId: string, currentDecision: string): Promise<never> {
+      await db.transaction((tx) => repo.insertEvent(tx, {
+        tenantId: ctx.tenantId, applicationId: id, jobOpeningId,
+        action: "override_denied", decision: body.decision,
+        reasonCode: body.reasonCode ?? null, remarks: body.remarks ?? null,
+        isOverride: false, actorId: ctx.actorId,
+      }));
+      throw new HttpError(409, "OVERRIDE_VIA_MAKER_CHECKER",
+        `application is already '${currentDecision}'; raise a maker-checker override at POST /v1/hrms/applications/${id}/screening-overrides`);
+    }
+
+    // Fast path only, NOT the concurrency guard -- a slow/sequential second
+    // request that reads here after the first has already committed is caught
+    // right now, without paying for a write transaction. But two requests
+    // racing Promise.all-style both pass this check having each read 'pending'
+    // before either write lands; the real guard is the atomic conditional
+    // UPDATE below, keyed on the DB row still being 'pending' at write time,
+    // not on this read (R-RA-0111).
     const alreadyDecided = a.screeningDecision !== "pending";
     // Idempotent re-affirmation of the same decision: a no-op. Crucially we do
     // NOT rewrite screened_by, so the original author (the SoD "content author")
@@ -105,18 +127,60 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     // maker-checker flow (R-RA-0111) so one admin cannot both change and approve.
     // The former single-admin direct override is deliberately closed.
     if (alreadyDecided) {
-      throw new HttpError(409, "OVERRIDE_VIA_MAKER_CHECKER",
-        `application is already '${a.screeningDecision}'; raise a maker-checker override at POST /v1/hrms/applications/${id}/screening-overrides`);
+      return denyAsOverride(a.jobOpeningId, a.screeningDecision);
     }
 
-    // First-time decision on a still-pending application.
-    try {
-      await publishF3Write(ctx, "recruitment_screening_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "application changed; reload and retry");
-      throw err;
+    // First-time decision on a still-pending application (R-RA-0111). Recorded
+    // SYNCHRONOUSLY -- not via the fire-and-forget F3 queue (see
+    // f3-consumer.ts's now-superseded "recruitment_screening_routes__1" case)
+    // -- because the maker-checker guarantee is an HTTP-visible contract: the
+    // caller must learn RIGHT NOW whether theirs was the first decision, not
+    // from a later log line. The write is a single UPDATE conditioned on the
+    // row STILL being 'pending' (in the same statement that records the
+    // decision), so two genuinely concurrent requests race the SQL statement
+    // itself: Postgres's row lock serialises them, and whichever commits
+    // second re-evaluates its WHERE clause against the now-changed row and
+    // affects zero rows -- closing the TOCTOU window a plain read-then-write
+    // (or a version-only guard, which never inspects screening_decision)
+    // leaves open.
+    const stagePatch = stageForScreeningDecision(body.decision as ScreeningDecision);
+    const patch = {
+      screeningDecision: body.decision,
+      screeningReasonCode: body.reasonCode ?? null,
+      screeningRemarks: body.remarks ?? null,
+      screenedBy: ctx.actorId, screenedAt: new Date(),
+      ...(stagePatch ? { stage: stagePatch } : {}),
+    };
+    const won = await db.transaction(async (tx) => {
+      const applied = await repo.setScreeningIfPending(tx, ctx.tenantId, id, patch, a.version);
+      if (applied) {
+        await repo.insertEvent(tx, {
+          tenantId: ctx.tenantId, applicationId: id, jobOpeningId: a.jobOpeningId,
+          action: "decision", decision: body.decision,
+          reasonCode: body.reasonCode ?? null, remarks: body.remarks ?? null,
+          isOverride: false, actorId: ctx.actorId,
+        });
+      }
+      return applied;
+    });
+    if (won) {
+      return reply.send({ id, screeningDecision: body.decision, isOverride: false });
     }
-    return reply.send({ id, screeningDecision: body.decision, isOverride: false });
+
+    // Lost the race: another request's decision landed first, between our
+    // read above and our UPDATE. Re-read to classify exactly like the fast
+    // path above would have, and handle it exactly the same way.
+    const fresh = await mustApp(ctx.tenantId, id);
+    if (fresh.screeningDecision === body.decision) {
+      return reply.send({ id, screeningDecision: body.decision, isOverride: false, unchanged: true });
+    }
+    if (fresh.screeningDecision !== "pending") {
+      return denyAsOverride(fresh.jobOpeningId, fresh.screeningDecision);
+    }
+    // Still 'pending': the lost race was a version bump from something else
+    // entirely (e.g. a concurrent edit to another field on the application),
+    // not a screening decision -- the pre-existing, unrelated conflict case.
+    throw new HttpError(409, "VERSION_CONFLICT", "application changed; reload and retry");
   });
 
   // ── bulk shortlist (R-RA-0114) ──

@@ -17,6 +17,7 @@ const H = vi.hoisted(() => ({
   listForVacMock: vi.fn(),
   findByIdsMock: vi.fn(),
   setScreeningMock: vi.fn(),
+  setScreeningIfPendingMock: vi.fn(),
   setByIdMock: vi.fn(),
   insertEventMock: vi.fn(),
   listEventsMock: vi.fn(),
@@ -41,6 +42,7 @@ vi.mock("../src/modules/recruitment/screening-repo.js", async (io) => ({
   findApplicationsByIds: (...a: unknown[]) => H.findByIdsMock(...a),
   findApplicationsByIdsTx: (_tx: unknown, ...a: unknown[]) => H.findByIdsMock(...a),
   setScreening: (...a: unknown[]) => H.setScreeningMock(...a),
+  setScreeningIfPending: (...a: unknown[]) => H.setScreeningIfPendingMock(...a),
   setScreeningById: (...a: unknown[]) => H.setByIdMock(...a),
   insertEvent: (...a: unknown[]) => H.insertEventMock(...a),
   listEvents: (...a: unknown[]) => H.listEventsMock(...a),
@@ -75,6 +77,7 @@ const appRow = (over = {}) => ({ id: APP, tenantId: TENANT, jobOpeningId: VAC, a
 beforeEach(() => {
   vi.clearAllMocks();
   H.setScreeningMock.mockResolvedValue(undefined);
+  H.setScreeningIfPendingMock.mockResolvedValue(true);
   H.setByIdMock.mockResolvedValue(undefined);
   H.insertEventMock.mockResolvedValue(undefined);
   H.listEventsMock.mockResolvedValue([]);
@@ -110,6 +113,7 @@ describe("screening routes", () => {
     const app = await buildApp();
     const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "ineligible", reasonCode: "experience", remarks: "short" } });
     expect(r.statusCode).toBe(200);
+    expect(H.setScreeningIfPendingMock).toHaveBeenCalled();
     expect(H.insertEventMock.mock.calls[0][1].action).toBe("decision");
     await app.close();
   });
@@ -121,6 +125,56 @@ describe("screening routes", () => {
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("OVERRIDE_VIA_MAKER_CHECKER");
     expect(H.setScreeningMock).not.toHaveBeenCalled();
+    expect(H.setScreeningIfPendingMock).not.toHaveBeenCalled();
+    // The denial itself is now audited (R-RA-0119) instead of vanishing without a trace.
+    expect(H.insertEventMock).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "override_denied", isOverride: false }));
+    await app.close();
+  });
+
+  // R-RA-0111 concurrency (the proven bug): two genuinely simultaneous
+  // decisions on the same pending application both read 'pending' in the
+  // route's own pre-check above, so that check alone cannot stop a race --
+  // only the atomic conditional UPDATE (setScreeningIfPending) can. These
+  // tests drive the SAME code the route runs after that point, forcing the
+  // "lost the race" branch the way a real concurrent loser would hit it.
+  it("closes the concurrency race: a losing decision is rejected via maker-checker, not silently applied (409)", async () => {
+    H.findAppMock
+      .mockResolvedValueOnce(appRow({ screeningDecision: "pending" }))      // this request's own read: still pending
+      .mockResolvedValueOnce(appRow({ screeningDecision: "shortlisted" })); // re-read after losing: the winner already landed
+    H.setScreeningIfPendingMock.mockResolvedValueOnce(false); // the atomic UPDATE affected zero rows -- lost the race
+    const app = await buildApp();
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "ineligible", reasonCode: "experience" } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("OVERRIDE_VIA_MAKER_CHECKER");
+    // Not zero-trace: the denied attempt is recorded.
+    const denied = H.insertEventMock.mock.calls.find((c) => (c[1] as { action?: string }).action === "override_denied");
+    expect(denied).toBeTruthy();
+    expect((denied as unknown[])[1]).toMatchObject({ isOverride: false, decision: "ineligible" });
+    await app.close();
+  });
+
+  it("closes the concurrency race: two requests for the SAME decision resolve as idempotent, not a double write", async () => {
+    H.findAppMock
+      .mockResolvedValueOnce(appRow({ screeningDecision: "pending" }))
+      .mockResolvedValueOnce(appRow({ screeningDecision: "eligible" })); // the other request's IDENTICAL decision won first
+    H.setScreeningIfPendingMock.mockResolvedValueOnce(false);
+    const app = await buildApp();
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "eligible" } });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().unchanged).toBe(true);
+    expect(H.insertEventMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("closes the concurrency race: a lost race from an unrelated concurrent edit (still pending) is a plain version conflict (409)", async () => {
+    H.findAppMock
+      .mockResolvedValueOnce(appRow({ screeningDecision: "pending", version: 1 }))
+      .mockResolvedValueOnce(appRow({ screeningDecision: "pending", version: 2 })); // still pending -- some other field changed underneath us
+    H.setScreeningIfPendingMock.mockResolvedValueOnce(false);
+    const app = await buildApp();
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/applications/${APP}/screening-decision`, headers: auth(["hr_officer"]), payload: { decision: "eligible" } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("VERSION_CONFLICT");
     await app.close();
   });
 
