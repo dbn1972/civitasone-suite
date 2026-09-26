@@ -253,13 +253,25 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const budget = await repo.findBudgetById(id);
     if (!budget || budget.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "budget not found");
+    // FIX: balanceMinor previously read `allocatedMinor - utilisedMinor`, but
+    // allocatedMinor is a dead column — hard-coded 0n at creation and never
+    // written anywhere else (see queries.ts's listBudgetSummaries for the
+    // full writeup) — so for any budget with non-zero utilisation this
+    // returned a NEGATIVE balance (0 - utilised) rather than the real
+    // figure. re_minor is the real authoritative "currently sanctioned"
+    // amount (already what repo.ts's incrementBudgetUtilisedGuarded gates
+    // real spending on), so "allocated" is derived from it here too, same as
+    // the list and /balance endpoints below. allocatedMinor is still
+    // returned as its own raw field, unchanged — only the derived
+    // balanceMinor is fixed.
+    const allocated = budget.reMinor ?? budget.beMinor ?? 0n;
     return reply.send({
       id: budget.id, headId: budget.headId, fy: budget.fy,
       beMinor: budget.beMinor.toString(),
       reMinor: budget.reMinor.toString(),
       allocatedMinor: budget.allocatedMinor.toString(),
       utilisedMinor: budget.utilisedMinor.toString(),
-      balanceMinor: (budget.allocatedMinor - budget.utilisedMinor).toString(),
+      balanceMinor: (allocated - budget.utilisedMinor).toString(),
       currency: budget.currency,
     });
   });
@@ -275,7 +287,13 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
     const budget = await queries.getBudget(ctx.tenantId, q.headId, q.fy);
     if (!budget) throw new HttpError(404, "NOT_FOUND", "no budget for this head/FY");
-    const allocated = budget.allocatedMinor ?? 0n;
+    // FIX: see queries.ts's listBudgetSummaries — allocatedMinor is a dead
+    // column (hard-coded 0n at creation, never written elsewhere), so this
+    // previously reported allocatedMinor/balanceMinor as 0 (or negative once
+    // utilisedMinor > 0) and balancePct as 0 for every budget. re_minor is
+    // the real authoritative "currently sanctioned" figure, so "allocated"
+    // is derived from it here too.
+    const allocated = budget.reMinor ?? budget.beMinor ?? 0n;
     const utilised  = budget.utilisedMinor  ?? 0n;
     return reply.send({
       headId: q.headId, fy: q.fy,
