@@ -90,7 +90,7 @@ export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string,
  * from inside generateRetroArrears's loop, not just once for the run month —
  * see that function's own comment for why.
  */
-async function resolveDaRateBps(tx: typeof db, tenantId: string, month: string): Promise<bigint> {
+export async function resolveDaRateBps(tx: typeof db, tenantId: string, month: string): Promise<bigint> {
   const rows = (await tx.execute(sql`
     SELECT rate_bps FROM payroll.dearness_allowance_rates
     WHERE tenant_id = ${tenantId}::uuid AND effective_from <= ${month + "-01"}::date
