@@ -130,7 +130,7 @@ export default function GatewayConfigPage() {
         <StatCard icon="🛡️" iconBg="#eef2ff" label="JWT Verification" value={config?.jwtEdgeVerify === "true" ? "Enforcing" : config?.jwtEdgeVerify === "audit" ? "Audit" : "Off"} />
         <StatCard icon="⚡" iconBg="#ecfdf3" label="Upstream Timeout" value={`${(config?.upstreamTimeoutMs ?? 15000) / 1000}s`} />
         <StatCard icon="🔌" iconBg={breakersError ? "#f2f4f7" : openBreakers > 0 ? "#fef2f2" : "#ecfdf3"} label="Circuit Breakers" value={breakersError ? "—" : openBreakers > 0 ? `${openBreakers} open` : "All closed"} />
-        <StatCard icon="📊" iconBg="#fffaeb" label="Rate Limit" value={`${config?.rateLimitMax ?? 1000}/min`} />
+        <StatCard icon="📊" iconBg="#fffaeb" label="Rate Limit" value={config?.rateLimitMax != null ? `${config.rateLimitMax}/min` : "—"} />
       </StatGrid>
 
       {error && (
