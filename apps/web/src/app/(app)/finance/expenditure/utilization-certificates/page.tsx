@@ -10,7 +10,10 @@ export default async function UCsPage() {
 
   const submitted = ucs.filter((u) => u.status === "submitted" || u.status === "verified").length;
   const pending = ucs.filter((u) => u.status === "pending" || u.status === "rejected").length;
-  const totalAmount = ucs.reduce((s, u) => s + u.amount, 0);
+  // uc.amount is a bigint-safe minor-unit STRING (see packages/types'
+  // UCSummary) -- summing with `+` would string-concatenate instead of
+  // adding, so accumulate in BigInt (formatMoney already accepts bigint).
+  const totalAmount = ucs.reduce((s, u) => s + BigInt(u.amount), 0n);
 
   return (
     <>
