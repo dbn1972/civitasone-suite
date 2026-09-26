@@ -69,7 +69,22 @@ describe("Keycloak module — disabled/degraded mode", () => {
     expect(result.ok).toBe(true);
     expect(result.skipped).toBe(true);
   });
+
+  it("assignRealmRoles returns skipped when keycloak not configured", async () => {
+    const { assignRealmRoles } = await import("../src/shared/keycloak.js");
+    const result = await assignRealmRoles({ tenantId: TENANT, email: "test@test.gov.in" }, ["tenant_admin"]);
+    expect(result.ok).toBe(true);
+    expect(result.skipped).toBe(true);
+    expect(result.reason).toContain("not configured");
+  });
 });
+
+// NOTE: further assignRealmRoles coverage (enabled path, mocked Keycloak HTTP
+// API — role resolution, catalog-gap skipping, POST payload shape) lives in
+// keycloak-assign-realm-roles.test.ts, deliberately NOT in this file: that
+// coverage needs no Fastify app / DB at all (pure fetch-mocked unit tests),
+// so it doesn't need to pay for, or wait on, this file's shared
+// beforeAll(buildApp()).
 
 // ── MFA crypto — encrypt/decrypt roundtrip ──────────────────────────────────
 describe("MFA crypto — encrypt/decrypt coverage", () => {

@@ -228,7 +228,7 @@ describe("Tenant onboard consumer — integration", () => {
     }));
   });
 
-  it("processes tenant.tenant.onboarded → emits user.create + rbac.role.assign + audit", async () => {
+  it("processes tenant.tenant.onboarded → emits user.create (with a working initialRealmRoles set) + audit, and NOT the dead rbac.role.assign publish", async () => {
     const q = wireTenantAwareQueue(new MemoryQueue());
 
     // Register the consumer dynamically
@@ -261,23 +261,39 @@ describe("Tenant onboard consumer — integration", () => {
 
     const topics = outbox.map((r) => r.eventType);
     expect(topics).toContain("identity.user.create");
-    expect(topics).toContain("identity.rbac.role.assign");
     expect(topics).toContain("audit.event.record");
+    // REGRESSION GUARD: the old publish never actually granted anything (its
+    // consumer expects `roleId`, this sent `roleName`, so it always hit the
+    // "role no longer exists" rejection branch) — it should be gone entirely,
+    // not just unused. If this ever reappears, the bug it caused (a bootstrap
+    // admin whose only "role grant" was a silent, high-severity audit
+    // rejection) is back too.
+    expect(topics).not.toContain("identity.rbac.role.assign");
 
-    // Verify the user.create payload
+    // Verify the user.create payload carries a working, live-catalog role set.
     const userCreate = outbox.find((r) => r.eventType === "identity.user.create");
     expect(userCreate).toBeDefined();
     const payload = userCreate!.payload as Record<string, unknown>;
     expect(payload.email).toBe("admin@new-tenant.gov.in");
     expect(payload.name).toBe("First Admin");
     expect(payload.tenantId).toBe(ONBOARD_TENANT);
+    expect(payload.initialRealmRoles).toEqual([
+      "tenant_admin",
+      "finance_admin",
+      "hr_admin",
+      "payroll_admin",
+      "procurement_admin",
+    ]);
+    // The security-sensitive negative: never the platform-wide roles.
+    expect(payload.initialRealmRoles).not.toContain("super_admin");
+    expect(payload.initialRealmRoles).not.toContain("platform_admin");
 
-    // Verify the role assign payload
-    const roleAssign = outbox.find((r) => r.eventType === "identity.rbac.role.assign");
-    expect(roleAssign).toBeDefined();
-    const rolePayload = roleAssign!.payload as Record<string, unknown>;
-    expect(rolePayload.roleName).toBe("tenant_admin");
-    expect(rolePayload.tenantId).toBe(ONBOARD_TENANT);
+    // Verify the audit payload also records what was granted (observability).
+    const audit = outbox.find((r) => r.eventType === "audit.event.record");
+    expect(audit).toBeDefined();
+    const auditPayload = audit!.payload as Record<string, unknown>;
+    expect(auditPayload.action).toBe("provision_first_admin");
+    expect(auditPayload.initialRealmRoles).toEqual(payload.initialRealmRoles);
   });
 
   it("is idempotent — duplicate message does not create additional outbox rows", async () => {
@@ -306,7 +322,7 @@ describe("Tenant onboard consumer — integration", () => {
     await new Promise((r) => setTimeout(r, 400));
     await q.stop();
 
-    // Count should remain the same (3 rows: user.create + rbac.assign + audit)
+    // Count should remain the same (2 rows: user.create + audit)
     const outbox = await runWithTenant(ONBOARD_TENANT, () => db.transaction(async (tx) =>
       tx.select().from(outboxMessages).where(eq(outboxMessages.tenantId, ONBOARD_TENANT))));
 
