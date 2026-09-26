@@ -122,6 +122,40 @@ const SYNC_WRITE = /\b(?:db|tx)\.(?:insert|update|delete|execute)\s*\(|\bdb\.tra
  *   screening-decision-race.test.ts proves closed (10/10 real Promise.all
  *   runs, no artificial gate needed — see that file's header for why). See
  *   the comment directly above this db.transaction call in screening-routes.ts.
+ * - recruitment/screening-override-routes.ts:143 (`db.transaction(...)` for
+ *   POST .../approve) and :216 (`db.transaction(...)` for POST .../reject) —
+ *   R-RA-0111 TOCTOU fix (fix/hrms-screening-override-toctou), the sibling gap
+ *   the same audit that produced screening-routes.ts's fix above flagged in
+ *   this file: the SoD/version checks ran synchronously, but the actual
+ *   transition (and, for approve, applying the decision to the application)
+ *   was still deferred to the fire-and-forget F3 queue via publishF3Write,
+ *   whose consumer (f3-consumer.ts's now-removed
+ *   "recruitment_screening_override_routes__1"/"__2" cases) re-fetched fresh
+ *   rows but never re-checked isActionable/SoD/staleness before writing —
+ *   identical shape to the screening-routes.ts gap. Two genuinely concurrent
+ *   checker decisions on the same request (two approvals, or an approve
+ *   racing a reject) both passed every pre-check before either write landed.
+ *   Both routes now perform their write synchronously via
+ *   screening-override-repo.ts's setRequestStatusIfPending — a conditional
+ *   `UPDATE ... WHERE status = 'pending'` — and approve additionally guards
+ *   the application side inside the SAME transaction via screening-repo.ts's
+ *   existing version-guarded setScreening, so both sides win together or not
+ *   at all. See the comment directly above each db.transaction call in
+ *   screening-override-routes.ts, and
+ *   screening-override-decision-race.test.ts (10/10 real Promise.all runs,
+ *   same no-artificial-gate reasoning as screening-decision-race.test.ts).
+ * - recruitment/screening-override-routes.ts:310 (`db.transaction(...)`
+ *   inside the shared `recordOverrideDecisionDenied` helper) — the same fix's
+ *   denial-audit write: a checker decision denied by losing the atomic race
+ *   above (or by the route's own sequential pre-check) must leave a trace in
+ *   the SAME step the 409 is decided in, for the identical reason as
+ *   screening-routes.ts's `denyAsOverride` above — otherwise a caller could
+ *   receive the 409 with no corresponding `override_denied` event yet on
+ *   record, reopening the exact "zero-trace override" gap PR #1585 closed.
+ *   Reuses hrms_screening_events' 'override_denied' action (already permitted
+ *   by PR #1585's migration 0152 — no new migration needed here) with
+ *   isOverride:true to distinguish it from that PR's own isOverride:false
+ *   usage.
  */
 const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "recruitment/otp-verify-routes.ts:96",
@@ -136,6 +170,9 @@ const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "recruitment/screening-routes.ts:110",
   "recruitment/screening-routes.ts:170",
   "recruitment/screening-routes.ts:173",
+  "recruitment/screening-override-routes.ts:143",
+  "recruitment/screening-override-routes.ts:216",
+  "recruitment/screening-override-routes.ts:310",
 ]);
 
 describe("F3 leftover hrms CQRS route boundary", () => {
