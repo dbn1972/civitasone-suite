@@ -18,8 +18,36 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
+
+/**
+ * Tenant GUC wrapper for this module's raw sqlClient template-literal
+ * queries. This module has no Drizzle schema attached (same situation as
+ * medical/routes.ts), so none of its queries ever set app.tenant_id: every
+ * table touched below (hrms_employees, hrms_departments, hrms_designations,
+ * appraisal.hrms_appraisals, leave.hrms_leave_apps) is under FORCE ROW LEVEL
+ * SECURITY, so unwrapped they fail CLOSED for the hrms_svc (NOBYPASSRLS)
+ * role and silently return zero rows -- never an error -- regardless of the
+ * WHERE tenant_id filter already present in each query. See @civitasone/db's
+ * withRawTenantGuc doc comment: this exact shape was already found and
+ * fixed elsewhere in hrms-service (medical/routes.ts, workforce-planning
+ * module) -- this module was missed by that sweep. Discovered while fixing
+ * the wrong-table-reference 500s below: fixing the table references alone
+ * left attrition-risk/succession/leave-prediction returning 200 with
+ * silently empty/zero data instead of crashing, which is arguably worse
+ * (see PR description). Applied only to the three endpoints touched by this
+ * fix (attrition-risk, succession, leave-prediction) -- workforce-insights
+ * below has the same gap but is untouched/unreported here; flagged
+ * separately rather than folded into this diff.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (tx: typeof sqlClient) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, fn);
+}
 
 export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
   // Rule-based scoring — replace with ML model when training data available
@@ -38,7 +66,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
     //   +40 if tenure < 2 years
     //   +30 if no promotion (designation change) in last 3 years
     //   +30 if latest APAR score < 60 (out of 100)
-    const rows = await sqlClient`
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       WITH risk_scores AS (
         SELECT
           e.id,
@@ -56,9 +84,20 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
                   AND hist.designation_id != e.designation_id
               ) THEN 30 ELSE 0 END
             + CASE WHEN COALESCE((
-                SELECT score FROM employee.apar_records ar
-                WHERE ar.employee_id = e.id AND ar.tenant_id = e.tenant_id
-                ORDER BY ar.appraisal_year DESC LIMIT 1
+                -- employee.apar_records never existed (wrong schema AND wrong
+                -- table name). The real per-appraisal grade is
+                -- appraisal.hrms_appraisals.overall_grade -- the weighted mean
+                -- of appraisal.hrms_apar_scores' per-attribute (1..10) scores,
+                -- computed and persisted by apar/engine.ts's computeOverallGrade
+                -- (see apar/routes.ts's disclose/finalise handlers). It lives on
+                -- a 1..10 scale, not 0..100, so it is projected ×10 here to keep
+                -- this endpoint's existing 0..100 scale/thresholds/comments
+                -- unchanged below. NULL (appraisal not yet graded) is excluded
+                -- so COALESCE's "no score on record" default still applies.
+                SELECT ap.overall_grade * 10 FROM appraisal.hrms_appraisals ap
+                WHERE ap.employee_id = e.id AND ap.tenant_id = e.tenant_id
+                  AND ap.overall_grade IS NOT NULL
+                ORDER BY ap.appraisal_period DESC LIMIT 1
               ), 70) < 60 THEN 30 ELSE 0 END
           ) AS risk_score
         FROM employee.hrms_employees e
@@ -70,7 +109,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
       WHERE risk_score >= ${query.minScore}
       ORDER BY risk_score DESC
       LIMIT ${query.limit}
-    `;
+    `);
 
     return reply.send({
       data: rows,
@@ -97,15 +136,15 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
     // Rule-based scoring — replace with ML model when training data available
     // Finds employees in same department at one grade level below
     // who have high APAR scores, sorted by suitability
-    const rows = await sqlClient`
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       WITH target_positions AS (
         SELECT DISTINCT e.department_id, dg.level AS target_level, dg.name AS position_name, e.id AS incumbent_id
         FROM employee.hrms_employees e
         JOIN employee.hrms_designations dg ON dg.id = e.designation_id AND dg.tenant_id = e.tenant_id
         WHERE e.tenant_id = ${ctx.tenantId}
           AND e.status NOT IN ('separated', 'retired')
-          ${query.departmentId ? sqlClient`AND e.department_id = ${query.departmentId}` : sqlClient``}
-          ${query.positionId ? sqlClient`AND e.id = ${query.positionId}` : sqlClient``}
+          ${query.departmentId ? tx`AND e.department_id = ${query.departmentId}` : tx``}
+          ${query.positionId ? tx`AND e.id = ${query.positionId}` : tx``}
           AND dg.level >= 5
       ),
       candidates AS (
@@ -119,10 +158,17 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
           cdg.name AS current_designation,
           cdg.level AS candidate_level,
           tp.target_level,
+          -- Same employee.apar_records fix as attrition-risk above: real data
+          -- comes from appraisal.hrms_appraisals.overall_grade (1..10 scale,
+          -- projected ×10 here for the same reason -- see that endpoint's
+          -- comment), averaged over the last 3 *graded* appraisals.
           COALESCE((
-            SELECT AVG(ar.score)::numeric(5,2) FROM employee.apar_records ar
-            WHERE ar.employee_id = e.id AND ar.tenant_id = e.tenant_id
-            ORDER BY ar.appraisal_year DESC LIMIT 3
+            SELECT AVG(latest.overall_grade * 10)::numeric(5,2) FROM (
+              SELECT overall_grade FROM appraisal.hrms_appraisals
+              WHERE employee_id = e.id AND tenant_id = e.tenant_id
+                AND overall_grade IS NOT NULL
+              ORDER BY appraisal_period DESC LIMIT 3
+            ) latest
           ), 0) AS avg_apar_score,
           EXTRACT(YEAR FROM AGE(CURRENT_DATE, e.date_of_joining::date)) AS tenure_years
         FROM employee.hrms_employees e
@@ -140,7 +186,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
       FROM candidates
       ORDER BY suitability_score DESC
       LIMIT ${query.limit}
-    `;
+    `);
 
     return reply.send({
       data: rows,
@@ -220,21 +266,24 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
 
     // Rule-based scoring — replace with ML model when training data available
     // Predict next month's leave based on same month in previous years
-    const rows = await sqlClient`
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       WITH historical AS (
         SELECT
           la.employee_id,
-          EXTRACT(MONTH FROM la.start_date::date) AS leave_month,
+          EXTRACT(MONTH FROM la.from_date::date) AS leave_month,
           COUNT(*)::int AS leave_count,
-          SUM(
-            EXTRACT(DAY FROM (la.end_date::date - la.start_date::date)) + 1
-          )::int AS total_days
-        FROM employee.hrms_leave_apps la
+          -- leave.hrms_leave_apps has no start_date/end_date columns either
+          -- (that was a second bug hiding behind the schema-prefix one): the
+          -- real columns are from_date/to_date, and days_applied is already
+          -- stored per-row, so summing it directly is both correct and
+          -- simpler than re-deriving day counts from date arithmetic.
+          SUM(la.days_applied)::int AS total_days
+        FROM leave.hrms_leave_apps la
         JOIN employee.hrms_employees e ON e.id = la.employee_id AND e.tenant_id = la.tenant_id
         WHERE la.tenant_id = ${ctx.tenantId}
           AND la.status = 'approved'
-          ${query.departmentId ? sqlClient`AND e.department_id = ${query.departmentId}` : sqlClient``}
-          AND la.start_date::date >= (CURRENT_DATE - INTERVAL '3 years')
+          ${query.departmentId ? tx`AND e.department_id = ${query.departmentId}` : tx``}
+          AND la.from_date::date >= (CURRENT_DATE - INTERVAL '3 years')
         GROUP BY la.employee_id, leave_month
       )
       SELECT
@@ -245,7 +294,7 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
       FROM historical
       WHERE leave_month = EXTRACT(MONTH FROM (CURRENT_DATE + INTERVAL '1 month'))
       GROUP BY leave_month
-    `;
+    `);
 
     const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
