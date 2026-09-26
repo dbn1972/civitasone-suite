@@ -42,6 +42,18 @@ export const postJournalBody = z.object({
   },
   { message: "journal lines must balance: sum(debit) must equal sum(credit)" }
 ).refine(
+  // A balanced 0/0 journal has nothing to post. Without this, a maker could
+  // create a zero-amount draft (the balance check above passes trivially at
+  // 0 === 0) and a checker's later approval of it would silently no-op deep
+  // inside gl/consumer.ts's postJournal() — 202 accepted, journal stuck in
+  // pending_approval forever, no visible failure anywhere. See
+  // assertJournalHasAmount()'s doc comment (gl/domain.ts).
+  (b) => b.lines.reduce((s, l) => s + l.debitMinor, 0n) > 0n,
+  {
+    message: "journal must have a nonzero amount: a balanced 0/0 entry has nothing to post",
+    path: ["lines"],
+  }
+).refine(
   (b) => !b.budgetOverride || (b.overrideReason && b.overrideReason.trim().length > 0),
   { message: "overrideReason is required when budgetOverride is true", path: ["overrideReason"] }
 );
