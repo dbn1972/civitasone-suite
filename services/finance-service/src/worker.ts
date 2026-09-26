@@ -1,7 +1,6 @@
 import { pino } from "pino";
 import { registerGracefulShutdown, signalReady } from "@civitasone/observability";
 import { sql } from "drizzle-orm";
-import { runWithTenant } from "@civitasone/db";
 import { db, sqlClient } from "./shared/db.js";
 import { scannerDb, scannerSqlClient } from "./shared/scanner-db.js";
 import { queue } from "./shared/infra.js";
@@ -56,18 +55,18 @@ function assertScannerConfigured(): void {
 
 assertScannerConfigured();
 
-
-
-// Ensure every consumer handler runs under the message tenant GUC (RLS).
-{
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const q = queue as any;
-  const rawSubscribe = q.subscribe.bind(q);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  q.subscribe = (topic: string, handler: (msg: any) => Promise<void>) =>
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    rawSubscribe(topic, (msg: any) => runWithTenant(msg.tenantId, () => handler(msg)));
-}
+// NOTE: consumer handlers already run under the message tenant GUC (RLS) --
+// createQueue() (services/queue-service/src/bus.ts) wraps every subscribe()
+// call in withTenantConsumer(), which itself runs the handler inside
+// runWithTenant(msg.tenantId, ...). This file used to ALSO monkey-patch
+// queue.subscribe with its own runWithTenant wrap on top of that, double-
+// nesting the same AsyncLocalStorage context on every message. On its own
+// that nesting was harmless (runWithTenant is a plain tenantStorage.run()
+// re-entry with no side effects -- confirmed by reading its implementation),
+// but it was redundant dead weight and made the consumer registration path
+// harder to follow while investigating the anomaly-consumer republish loop
+// fixed in this same change. createQueue()'s own wrap is the single source
+// of truth now.
 
 registerBudgetConsumers(queue);
 registerEOfficeDecisionConsumers(queue);

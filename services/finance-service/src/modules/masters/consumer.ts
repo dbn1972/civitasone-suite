@@ -1,6 +1,6 @@
 import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -9,6 +9,7 @@ import { COMMANDS } from "../../topics.js";
 import { encryptedText } from "../../shared/pii-crypto.js";
 import { HttpError } from "../../shared/context.js";
 import { assertOpeningBalancesBalanced, DomainError } from "./domain.js";
+import { financePao, financeDdo } from "./schema.js";
 
 const log = pino({ name: "finance.masters.consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -57,10 +58,66 @@ const openingBalances = glSchema.table("finance_opening_balances", {
 });
 
 export function registerMastersConsumers(queue: Queue): void {
+  // BUG FIX (CRITICAL — silent no-op sync): both ddo_sync and pao_sync used to
+  // only markProcessed + publish "finance.masters.synced" + write an audit
+  // "success" entry -- there was no INSERT/UPDATE anywhere in either handler
+  // (contrast COMMANDS.bankAccountCreate below, which does a real
+  // tx.insert(bankAccounts)...). A sync could run any number of times,
+  // report success every time, and GET /v1/finance/pao /ddo (routes.ts ->
+  // repo.listPao/listDdo) would stay `{"data":[]}` forever.
+  //
+  // No real producer of either topic exists anywhere in this repo (verified,
+  // not assumed): neither is in topics.ts's COMMANDS, no HTTP route or other
+  // service publishes them, and both are listed in
+  // tests/contract/{allowlist,known-defects}.json as
+  // "undeclaredDeadSubscriptions" -- the only two real call sites were this
+  // consumer's own queue.subscribe() and consumer-coverage-ext.test.ts, which
+  // only ever published `{tenantId, source}`. So the payload contract below
+  // is not a guess: paoCode/name/ministry and ddoCode/name/paoCode are
+  // exactly (and only) the columns payments.finance_pao/finance_ddo have had
+  // since migrations/0010_hoa_pao_voucher.sql (see that migration's own seed
+  // INSERT), already read back by GET /v1/finance/pao/ddo, and already
+  // exported as financePao/financeDdo from ./schema.js.
+  //
+  // A payload missing the required fields (paoCode+name, or ddoCode+name --
+  // i.e. exactly what every real caller in this repo sends today) can no
+  // longer silently "succeed": it throws a DomainError, which rolls back the
+  // whole transaction (including markProcessed) and surfaces via
+  // queue_consumer_error / DLQ, the same "fail loudly instead of lying"
+  // pattern COMMANDS.openingBalancesEnter below already established for an
+  // unbalanced entry set. See tests/masters-pao-ddo-sync.test.ts (real
+  // Postgres, no mocks) for the regression proof, including that a re-sync
+  // with the same paoCode/ddoCode updates the existing row instead of
+  // duplicating it. Wiring an actual upstream producer (a real PFMS/CGA
+  // master-data feed, or an internal admin form) is separate follow-up work
+  // this PR does not attempt.
   queue.subscribe("finance.masters.ddo_sync", async (msg) => {
-    const p = msg.payload as { tenantId: string; source?: string };
+    const p = msg.payload as {
+      tenantId: string; ddoCode: string; name: string;
+      paoCode?: string | null; isActive?: boolean; source?: string;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      if (!p.ddoCode || !p.name) {
+        throw new DomainError(
+          "DDO_SYNC_PAYLOAD_INCOMPLETE",
+          "ddo_sync payload is missing required fields (ddoCode, name) -- cannot sync DDO master data without them",
+        );
+      }
+      await tx.insert(financeDdo)
+        .values({
+          tenantId: p.tenantId, ddoCode: p.ddoCode, name: p.name,
+          paoCode: p.paoCode ?? null, isActive: p.isActive ?? true,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        })
+        .onConflictDoUpdate({
+          target: [financeDdo.tenantId, financeDdo.ddoCode],
+          set: {
+            name: p.name, paoCode: p.paoCode ?? null, isActive: p.isActive ?? true,
+            updatedBy: msg.actorId, updatedAt: new Date(),
+            version: sql`${financeDdo.version} + 1`,
+          },
+        });
       await enqueue(tx, {
         topic: "finance.masters.synced", eventType: "finance.masters.synced",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -73,9 +130,32 @@ export function registerMastersConsumers(queue: Queue): void {
   });
 
   queue.subscribe("finance.masters.pao_sync", async (msg) => {
-    const p = msg.payload as { tenantId: string; source?: string };
+    const p = msg.payload as {
+      tenantId: string; paoCode: string; name: string;
+      ministry?: string | null; isActive?: boolean; source?: string;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      if (!p.paoCode || !p.name) {
+        throw new DomainError(
+          "PAO_SYNC_PAYLOAD_INCOMPLETE",
+          "pao_sync payload is missing required fields (paoCode, name) -- cannot sync PAO master data without them",
+        );
+      }
+      await tx.insert(financePao)
+        .values({
+          tenantId: p.tenantId, paoCode: p.paoCode, name: p.name,
+          ministry: p.ministry ?? null, isActive: p.isActive ?? true,
+          createdBy: msg.actorId, updatedBy: msg.actorId,
+        })
+        .onConflictDoUpdate({
+          target: [financePao.tenantId, financePao.paoCode],
+          set: {
+            name: p.name, ministry: p.ministry ?? null, isActive: p.isActive ?? true,
+            updatedBy: msg.actorId, updatedAt: new Date(),
+            version: sql`${financePao.version} + 1`,
+          },
+        });
       await enqueue(tx, {
         topic: "finance.masters.synced", eventType: "finance.masters.synced",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
