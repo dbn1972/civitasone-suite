@@ -59,6 +59,40 @@ export async function setScreening(
   }
 }
 
+/**
+ * Atomically record a FIRST-TIME screening decision (R-RA-0111): the UPDATE
+ * only takes effect if the application is STILL 'pending' at the expected
+ * version, in the very statement that records the decision. Two genuinely
+ * concurrent decisions on the same pending application both read 'pending'
+ * and race this UPDATE; exactly one affects a row (this returns true for it)
+ * -- the other affects zero rows (returns false), because by the time its
+ * WHERE clause is evaluated under Postgres's row lock, the winner has already
+ * committed and screening_decision is no longer 'pending'. That closes the
+ * TOCTOU window a plain read-then-write, or a version-only guard (which never
+ * inspects screening_decision -- see setScreening above), leaves open.
+ *
+ * The caller MUST treat a `false` return as "someone else already decided
+ * this" and route it through the override flow -- never as a normal fresh
+ * decision.
+ */
+export async function setScreeningIfPending(
+  tx: Writer, tenantId: string, id: string,
+  patch: Partial<typeof hrmsApplications.$inferInsert>, expectedVersion: number,
+): Promise<boolean> {
+  const res = await tx.update(hrmsApplications)
+    .set({ ...patch, version: sql`${hrmsApplications.version} + 1`, updatedAt: new Date() })
+    .where(and(
+      eq(hrmsApplications.tenantId, tenantId),
+      eq(hrmsApplications.id, id),
+      eq(hrmsApplications.version, expectedVersion),
+      eq(hrmsApplications.screeningDecision, "pending"),
+    ));
+  // postgres-js reports affected rows as `.count` (drizzle's `.rowCount` is
+  // undefined on this driver) — same dual-check as setScreening above.
+  const changed = (res as { rowCount?: number; count?: number }).rowCount ?? (res as { count?: number }).count ?? 0;
+  return changed > 0;
+}
+
 /** Update screening decision without a version guard (bulk / idempotent auto-screen). */
 export async function setScreeningById(
   tx: Writer, tenantId: string, id: string, patch: Partial<typeof hrmsApplications.$inferInsert>,
