@@ -1,0 +1,53 @@
+-- Migration 0078: Widen gl.finance_vendor_tds.pan from varchar(10) to text.
+--
+-- PROVEN LIVE BUG: pan was declared varchar(10) in 0009_world_class_finance
+-- .sql -- the right width for a real plaintext PAN ("ABCPD1234E") -- but
+-- tds/consumer.ts's tdsDeductionRecord handler encrypts the PAN before
+-- insert via shared/pii-crypto.ts's encryptPii() (AES-256-GCM envelope:
+-- "enc:v2:<keyid>:" + base64(12B IV || 16B GCM tag || ciphertext)). Measured
+-- directly against this service's own encryptPii, default key id ("k1"), a
+-- real 10-char PAN: the envelope is 62 characters -- over 6x varchar(10)'s
+-- capacity. Every insert with a non-null pan failed inside the consumer's
+-- transaction with "value too long for type character varying(10)";
+-- POST /v1/finance/vendor-tds had already returned 202 by that point (the
+-- route only publishes to the queue and returns -- see routes.ts), so the
+-- caller never saw the failure and the row simply never existed.
+--
+-- Confirmed live (see tests/tds-pan-encryption.test.ts, which reproduces
+-- this failing against the pre-fix column and passing after): a
+-- mathematically-correct 194C@2% TDS deduction WITH a PAN got 202 but never
+-- appeared in GET /vendor-tds or /vendor-tds/form-26q; an otherwise
+-- -identical request with no PAN (nothing to encrypt, pan stays null)
+-- persisted fine. Because PAN is mandatory for a real Form 26Q/TRACES
+-- statutory filing, this silently dropped every real-world deduction and
+-- left the 26Q return permanently pan: null for every deductee -- a
+-- compliance-filing-integrity defect, not just a UX one.
+--
+-- FIX: widen to `text` (unbounded) -- the SAME convention this repo already
+-- uses for every other PAN column once it moved to encryptPii:
+--   - works-service/migrations/0020_contractor_pan_encryption.sql:
+--     "Widen works.contractors.pan from varchar(10) to text -- ciphertext
+--     ... runs to ~80+ chars and does not fit varchar(10)."
+--   - payroll-service/migrations/0019_pii_encryption.sql: "This migration
+--     widens deductee_pan from varchar(10) to text to accommodate
+--     ciphertext ... (was varchar(10), ciphertext is ~80+ chars)."
+-- Both widen to `text` rather than a fixed larger varchar(N), so a future
+-- key-id change or key-rotation-driven envelope-format change can't
+-- silently reopen this same bug class. Matched here rather than picking a
+-- new fixed width.
+--
+-- No plaintext-PAN backfill needed: every row written before this fix has
+-- pan IS NULL -- any row that would have carried a real pan value failed
+-- to insert at all (see bug description above) -- so unlike works-service's
+-- 0020/0021 pair there is no pre-existing plaintext data to migrate.
+--
+-- Rollback: ALTER TABLE gl.finance_vendor_tds ALTER COLUMN pan TYPE
+--   varchar(10); -- only safe if no ciphertext has been written yet
+--   (ciphertext will not fit back into varchar(10)).
+-- Affected services: finance-service
+-- Depends on: 0009_world_class_finance.sql
+
+SET lock_timeout = '5s';
+
+ALTER TABLE gl.finance_vendor_tds
+  ALTER COLUMN pan TYPE text;
