@@ -146,7 +146,7 @@ function ScheduleInterviewDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (parsedInterviewerIds.length === 0 || !scheduledAt) {
+    if (parsedInterviewerIds.length === 0 || !scheduledAt) { // ux-001-ok: client-side validation of locally-typed form input, no loader/fetch involved
       setStatus("error");
       setMessage(t("scheduleInterviewFieldsRequired"));
       return;
@@ -576,6 +576,10 @@ export default function JobOpeningDetailPage() {
 
   const [opening, setOpening] = useState<JobOpening | null>(null);
   const [applications, setApplications] = useState<Application[]>([]);
+  const [loadingOpening, setLoadingOpening] = useState(true);
+  const [loadingApps, setLoadingApps] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [appsLoadError, setAppsLoadError] = useState(false);
 
   // MEDIUM finding: GOIReservationCard used to render with no `fill` prop
   // passed at all, so it always showed a hardcoded 0% -- a fabricated
@@ -588,9 +592,17 @@ export default function JobOpeningDetailPage() {
   // applications but none of them carry a category yet, that's a genuine
   // data gap (not every intake path collects it) -- surfaced honestly via
   // categoryDataAvailable=false instead of a misleading 0%.
+  //
+  // UX-001 fix: an empty `applications` array is ambiguous between
+  // "genuinely no applications yet" (fine) and "the load failed"
+  // (categoryDataAvailable must NOT read as true then -- a network blip
+  // would otherwise render a fabricated "0% filled" across every reservation
+  // category instead of an honest unavailable state). appsLoadError (set by
+  // loadApplications below) disambiguates the two; state hooks were reordered
+  // above so this useMemo can reference it without a temporal-dead-zone error.
   const reservation = useMemo(() => {
     const totalVacancies = opening?.vacancies ?? 0;
-    const categoryDataAvailable = applications.length === 0 || applications.some((a) => !!a.category?.trim());
+    const categoryDataAvailable = !appsLoadError && (applications.length === 0 || applications.some((a) => !!a.category?.trim())); // ux-001-ok: appsLoadError IS the loader's error signal (set by loadApplications on failure below) -- already gated, just not textually "source === \"error\"" for the guard's regex to see
     const fill: Partial<Record<GoiReservationCategory, number>> = {};
     if (categoryDataAvailable) {
       for (const key of Object.keys(GOI_RESERVATION_QUOTA_PCT) as GoiReservationCategory[]) {
@@ -602,11 +614,7 @@ export default function JobOpeningDetailPage() {
       }
     }
     return { fill, categoryDataAvailable };
-  }, [applications, opening?.vacancies]);
-  const [loadingOpening, setLoadingOpening] = useState(true);
-  const [loadingApps, setLoadingApps] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [appsLoadError, setAppsLoadError] = useState(false);
+  }, [applications, opening?.vacancies, appsLoadError]);
   const [decisionStates, setDecisionStates] = useState<DecisionState>({});
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
@@ -805,6 +813,7 @@ export default function JobOpeningDetailPage() {
       setPublishBusy(false);
     }
     // formError.fromResponse/fromException are stable across renders (see useFormError).
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
   }, [id, opening]);
 
   const filtered = applications.filter((a) => {
