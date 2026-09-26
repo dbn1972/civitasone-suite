@@ -332,6 +332,169 @@ describe("PFMS Adapter — enabled (mocked fetch)", () => {
     });
   });
 
+  describe("cross-tenant isolation (SEC — PR #1591 follow-up)", () => {
+    // A second, independent tenant/actor. makeToken()'s ACTOR/TENANT
+    // constants are fixed to one tenant, so cross-tenant tests mint their
+    // own token directly with signToken.
+    const TENANT_B = "bbbbbbbb-2222-4000-8000-000000000099";
+    const ACTOR_B = "dddddddd-2222-4000-8000-000000000001";
+    function makeTokenForTenant(tenantId: string, actorId: string, roles: string[] = ["finance_officer"]) {
+      return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-002" }, SECRET);
+    }
+
+    const REF = "REF-XTENANT-001";
+
+    it("Tenant A submits a payment; Tenant B checking that exact reference gets 404, never Tenant A's real e-Kuber data", async () => {
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          referenceId: REF,
+          pfmsTransactionId: "PFMS-TXN-XTENANT-1",
+          status: "accepted",
+          timestamp: "2026-09-26T10:00:00Z",
+        }),
+      } as Response);
+
+      const tokenA = makeToken(["finance_officer"]);
+      const submitRes = await app.inject({
+        method: "POST",
+        url: "/v1/finance/pfms/payments",
+        headers: { authorization: `Bearer ${tokenA}` },
+        payload: {
+          referenceId: REF,
+          beneficiaryCode: "BEN-XTENANT",
+          amount: "500000",
+          purposeCode: "SALARY",
+        },
+      });
+      expect(submitRes.statusCode).toBe(201);
+
+      // Tenant A can immediately check their own reference's status normally.
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          referenceId: REF,
+          pfmsTransactionId: "PFMS-TXN-XTENANT-1",
+          status: "completed",
+          utrNumber: "UTR2026092600001",
+          processedAt: "2026-09-26T11:00:00Z",
+        }),
+      } as Response);
+      const ownStatusRes = await app.inject({
+        method: "GET",
+        url: `/v1/finance/pfms/payments/${REF}/status`,
+        headers: { authorization: `Bearer ${tokenA}` },
+      });
+      expect(ownStatusRes.statusCode).toBe(200);
+      expect(ownStatusRes.json().data.status).toBe("completed");
+
+      // Tenant B -- a completely different tenant -- tries the EXACT SAME
+      // referenceId. Before this fix this would hit the shared e-Kuber
+      // credential and return Tenant A's real payment data, then persist it
+      // into Tenant B's own ledger row. No fetch mock is queued for this
+      // call: if checkStatus() were reached despite the guard, the empty
+      // mock queue makes fetch() return undefined and the route would blow
+      // up with a 500, not silently succeed -- so this assertion is a real
+      // regression check, not just an assertion on the intended path.
+      const tokenB = makeTokenForTenant(TENANT_B, ACTOR_B);
+      const crossRes = await app.inject({
+        method: "GET",
+        url: `/v1/finance/pfms/payments/${REF}/status`,
+        headers: { authorization: `Bearer ${tokenB}` },
+      });
+      expect(crossRes.statusCode).toBe(404);
+      expect(crossRes.json().error.code).toBe("NOT_FOUND");
+      // Must never leak that the reference exists for someone else, or any
+      // of Tenant A's real e-Kuber data.
+      const crossBody = JSON.stringify(crossRes.json());
+      expect(crossBody).not.toContain("UTR2026092600001");
+      expect(crossBody).not.toContain("completed");
+
+      // The local ledger must not end up with a Tenant-B-attributed row for
+      // Tenant A's reference: Tenant B's own batch list has no trace of it,
+      // and Tenant A's own row is unaffected by Tenant B's rejected attempt.
+      const bBatches = await app.inject({
+        method: "GET",
+        url: "/v1/finance/pfms/batches",
+        headers: { authorization: `Bearer ${tokenB}` },
+      });
+      expect(bBatches.statusCode).toBe(200);
+      expect(bBatches.json().data.find((b: { pfmsId: string }) => b.pfmsId === REF)).toBeUndefined();
+
+      const aBatches = await app.inject({
+        method: "GET",
+        url: "/v1/finance/pfms/batches",
+        headers: { authorization: `Bearer ${tokenA}` },
+      });
+      const aRow = aBatches.json().data.find((b: { pfmsId: string }) => b.pfmsId === REF);
+      expect(aRow).toBeDefined();
+      expect(aRow.submissionStatus).toBe("completed");
+      expect(aRow.utrNumber).toBe("UTR2026092600001");
+    });
+
+    it("Tenant B cannot submit a NEW payment using a referenceId Tenant A already claimed", async () => {
+      // REF was claimed by Tenant A in the previous test. No fetch mock is
+      // queued: e-Kuber must never be called for a rejected submission.
+      const tokenB = makeTokenForTenant(TENANT_B, ACTOR_B);
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/finance/pfms/payments",
+        headers: { authorization: `Bearer ${tokenB}` },
+        payload: {
+          referenceId: REF,
+          beneficiaryCode: "BEN-B-ATTEMPT",
+          amount: "999999",
+          purposeCode: "SALARY",
+        },
+      });
+      expect(res.statusCode).toBe(409);
+      expect(res.json().error.code).toBe("REFERENCE_ALREADY_IN_USE");
+    });
+
+    it("Tenant A rechecking their OWN referenceId is unaffected by the cross-tenant guard", async () => {
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          referenceId: REF,
+          pfmsTransactionId: "PFMS-TXN-XTENANT-1",
+          status: "completed",
+          utrNumber: "UTR2026092600002",
+          processedAt: "2026-09-26T12:00:00Z",
+        }),
+      } as Response);
+      const tokenA = makeToken(["finance_officer"]);
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/finance/pfms/payments/${REF}/status`,
+        headers: { authorization: `Bearer ${tokenA}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json().data.utrNumber).toBe("UTR2026092600002");
+    });
+
+    it("a referenceId neither tenant has ever touched 404s for both (no existence oracle)", async () => {
+      const UNKNOWN_REF = "REF-NEVER-SUBMITTED-XYZ";
+      const tokenA = makeToken(["finance_officer"]);
+      const tokenB = makeTokenForTenant(TENANT_B, ACTOR_B);
+
+      const resA = await app.inject({
+        method: "GET",
+        url: `/v1/finance/pfms/payments/${UNKNOWN_REF}/status`,
+        headers: { authorization: `Bearer ${tokenA}` },
+      });
+      expect(resA.statusCode).toBe(404);
+      expect(resA.json().error.code).toBe("NOT_FOUND");
+
+      const resB = await app.inject({
+        method: "GET",
+        url: `/v1/finance/pfms/payments/${UNKNOWN_REF}/status`,
+        headers: { authorization: `Bearer ${tokenB}` },
+      });
+      expect(resB.statusCode).toBe(404);
+      expect(resB.json().error.code).toBe("NOT_FOUND");
+    });
+  });
+
   it("returns 502 on upstream API error", async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
       ok: false,

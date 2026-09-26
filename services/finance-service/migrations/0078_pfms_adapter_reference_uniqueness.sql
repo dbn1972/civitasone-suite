@@ -1,0 +1,45 @@
+-- PFMS/e-Kuber adapter: enforce cross-tenant referenceId uniqueness at the
+-- index level, because a SELECT-based check cannot do it under RLS.
+--
+-- payments.finance_pfms has FORCE ROW LEVEL SECURITY with a tenant_isolation
+-- policy USING (tenant_id = budget.current_tenant_id()) (migrations/
+-- 0020_rls_completion.sql). That policy applies to every SELECT against this
+-- table under the app's own finance_svc connection role -- INCLUDING a query
+-- that deliberately omits its own tenant filter to look across tenants.
+-- Postgres silently re-adds "tenant_id = current_tenant_id()" underneath any
+-- such SELECT regardless of what WHERE clause the caller wrote, so a
+-- cross-tenant existence check via SELECT is structurally a no-op: it can
+-- never see another tenant's row, only ever its own (0 rows cross-tenant,
+-- vs. 1 same-tenant, confirmed against the real NOBYPASSRLS finance_svc
+-- role -- not a test superuser, which would bypass RLS entirely and hide
+-- this).
+--
+-- A UNIQUE INDEX is not subject to that limitation: a uniqueness violation
+-- is raised at the index level when a conflicting row is inserted, which
+-- happens regardless of whether the inserting role could ever SELECT the
+-- conflicting row back out. This partial index enforces that pfms_id is
+-- globally unique (across every tenant) for channel = 'ekuber_adapter' --
+-- the caller-chosen e-Kuber referenceId namespace, which really is a single,
+-- deployment-wide namespace at the shared e-Kuber account even though this
+-- table itself is keyed per-tenant (see adapter.ts's file header: PFMS_
+-- BASE_URL/PFMS_API_KEY are one shared module-level credential for every
+-- tenant in this deployment).
+--
+-- Deliberately partial (WHERE channel = 'ekuber_adapter'), not a plain
+-- UNIQUE(pfms_id): the treasury batch channel's own pfmsId values are
+-- already covered by the existing (tenant_id, pfms_id) unique constraint
+-- (finance_pfms_tenant_id_pfms_id_key, per-tenant only, by design -- see
+-- migrations/0076_pfms_channel_reconciliation.sql), and that channel's
+-- pfmsIds are system-generated, not caller-chosen, so a global uniqueness
+-- requirement doesn't apply and must not be imposed on it.
+--
+-- Callers: repo.ts's reserveAdapterPfmsReference() INSERTs a placeholder row
+-- for a referenceId BEFORE calling e-Kuber's real submitPayment, catches the
+-- resulting 23505 unique-violation when another tenant already holds this
+-- referenceId, and adapter-routes.ts's POST /v1/finance/pfms/payments
+-- translates that into 409 REFERENCE_ALREADY_IN_USE -- before ever calling
+-- e-Kuber, so a detected collision never results in a duplicate/ambiguous
+-- real submission against the shared credential.
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_finance_pfms_ekuber_adapter_pfms_id_unique
+  ON payments.finance_pfms (pfms_id)
+  WHERE channel = 'ekuber_adapter';

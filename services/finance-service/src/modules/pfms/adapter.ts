@@ -85,7 +85,16 @@ const breaker = new CircuitBreaker({
 // ── Helpers ───────────────────────────────────────────────────────
 
 function assertEnabled(): void {
-  if (!ENABLED || !BASE_URL) {
+  // Reconciled with isEnabled() below: both now require ENABLED, BASE_URL,
+  // AND a non-empty API_KEY. Previously this only checked ENABLED &&
+  // BASE_URL, so ENABLED=true + BASE_URL set + API_KEY empty would let the
+  // real call proceed (with an empty Authorization header) while
+  // isEnabled() -- which adapter-routes.ts's tenant-ownership/reservation
+  // guards are gated on -- was already false, silently skipping those
+  // guards exactly when the real call was still live. An empty credential
+  // should fail closed like any other missing config, not attempt an
+  // unauthenticated call.
+  if (!ENABLED || !BASE_URL || !API_KEY) {
     throw new PfmsAdapterError(
       "PFMS integration is not available",
       "INTEGRATION_DISABLED",
