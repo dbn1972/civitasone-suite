@@ -16,6 +16,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { REJECTION_REASON_CODES, SCREENING_DECISIONS } from "./screening.js";
@@ -23,6 +24,7 @@ import { validateOverrideRequest, sodViolationForApprover, isActionable } from "
 import { emitAudit } from "./audit-emit.js";
 import * as repo from "./screening-override-repo.js";
 import * as screeningRepo from "./screening-repo.js";
+import type { ScreeningOverrideRow } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ADMIN_ROLES = ["hr_admin", "super_admin"];
@@ -86,15 +88,81 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
 
     // The decision AND the exact application version must match what the override
     // was raised against; an A→B→A cycle produces the same value but a new
-    // version, and is correctly caught here as stale.
+    // version, and is correctly caught here as stale. Fast path only, NOT the
+    // concurrency guard -- a slow/sequential second request that reads here
+    // after the first already committed is caught right now, without paying
+    // for a write transaction. But two requests racing Promise.all-style (two
+    // approvals, or an approve racing a reject) both pass every check above
+    // having each read the SAME pending/current state before either write
+    // lands; the real guard is the atomic conditional UPDATEs below, keyed on
+    // the DB rows still matching at write time, not on these reads (R-RA-0111).
     if (a.screeningDecision !== r.fromDecision || a.version !== r.applicationVersion) {
       throw new HttpError(409, "STALE_OVERRIDE", `the application changed since the override was raised (now '${a.screeningDecision}' v${a.version}, raised against '${r.fromDecision}' v${r.applicationVersion}); re-raise it`);
     }
 
+    // R-RA-0111: recorded SYNCHRONOUSLY and atomically -- not via the
+    // fire-and-forget F3 queue (see f3-consumer.ts's now-superseded
+    // "recruitment_screening_override_routes__1" case, which re-fetched fresh
+    // rows but never re-checked isActionable/SoD/staleness before writing,
+    // relying entirely on the checks above even though by the time it ran they
+    // could be long stale) -- because the maker-checker guarantee is an
+    // HTTP-visible contract: the caller must learn RIGHT NOW whether theirs
+    // was the winning decision, not from a later log line. Both writes below
+    // are single UPDATEs conditioned on the rows STILL matching (in the same
+    // transaction that records the decision), so two genuinely concurrent
+    // requests race the SQL statements themselves: Postgres's row locks
+    // serialise them, and whichever commits second re-evaluates its WHERE
+    // clause against the now-changed row and affects zero rows -- closing the
+    // TOCTOU window the checks above (a plain read-then-write) leave open.
+    //
+    // This db.transaction call (and the repo.insertEvent inside it) is pinned
+    // in the KNOWN_INTENTIONAL_SYNC_WRITES allowlist in
+    // tests/f3-leftover-hrms-cqrs.test.ts (fix/hrms-screening-override-toctou)
+    // -- a deliberate exception to that guard test's sync-write scan, not an
+    // accidental F3 leftover. Do not "fix" it back to an async
+    // publishF3Write: that would reopen the exact race
+    // screening-override-decision-race.test.ts proves closed.
+    const decidedAt = new Date();
     try {
-      await publishF3Write(ctx, "recruitment_screening_override_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+      await db.transaction(async (tx) => {
+        const reqWon = await repo.setRequestStatusIfPending(tx, ctx.tenantId, reqId, {
+          status: "approved", decidedBy: ctx.actorId, decidedAt, decisionNote: body.note ?? null,
+        }, r.version);
+        if (!reqWon) throw new Error("OVERRIDE_NOT_PENDING");
+
+        // Both sides win together or not at all: if the application moved on
+        // since the override was raised, this throws VERSION_CONFLICT and
+        // rolls back the request-status change above too -- never a request
+        // marked "approved" whose application was never actually changed.
+        try {
+          await screeningRepo.setScreening(tx, ctx.tenantId, r.applicationId, {
+            screeningDecision: r.toDecision,
+            screeningReasonCode: r.reasonCode ?? null,
+            screeningRemarks: r.reason,
+            screenedBy: ctx.actorId, screenedAt: decidedAt,
+          }, r.applicationVersion);
+        } catch (err) {
+          if ((err as Error).message === "VERSION_CONFLICT") throw new Error("OVERRIDE_STALE");
+          throw err;
+        }
+
+        await screeningRepo.insertEvent(tx, {
+          tenantId: ctx.tenantId, applicationId: r.applicationId, jobOpeningId: r.jobOpeningId,
+          action: "override", decision: r.toDecision, reasonCode: r.reasonCode ?? null,
+          remarks: r.reason, isOverride: true, actorId: ctx.actorId,
+        });
+        await emitAudit(tx, toAuditCtx(ctx), "screening_override_approved", "screening_override", reqId, {
+          applicationId: r.applicationId, fromDecision: r.fromDecision, toDecision: r.toDecision, requestedBy: r.requestedBy,
+        });
+      });
     } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the application or request changed; reload and retry");
+      const msg = (err as Error).message;
+      if (msg === "OVERRIDE_NOT_PENDING" || msg === "OVERRIDE_STALE") {
+        await recordOverrideDecisionDenied(ctx, r, "approve", msg === "OVERRIDE_STALE" ? "STALE_OVERRIDE" : "NOT_PENDING");
+        throw msg === "OVERRIDE_STALE"
+          ? new HttpError(409, "STALE_OVERRIDE", "the application changed since the override was raised; re-raise it")
+          : new HttpError(409, "NOT_PENDING", "override request is no longer pending");
+      }
       throw err;
     }
     return reply.send({ id: reqId, applicationId: r.applicationId, status: "approved", screeningDecision: r.toDecision });
@@ -112,11 +180,22 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     // A checker other than the requester must reject (no self-approval loop).
     if (ctx.actorId === r.requestedBy) throw new HttpError(403, "SOD_VIOLATION", "separation of duties: the requester cannot decide their own override");
 
-    try {
-      await publishF3Write(ctx, "recruitment_screening_override_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-    } catch (err) {
-      if ((err as Error).message === "VERSION_CONFLICT") throw new HttpError(409, "VERSION_CONFLICT", "the request changed; reload and retry");
-      throw err;
+    // R-RA-0111: synchronous + atomic for the identical reason as /approve
+    // above -- a checker decision racing another checker decision on the SAME
+    // request (e.g. one admin approves while another rejects, both reading
+    // 'pending' before either write lands) must not both silently "succeed".
+    // See the comment on /approve's db.transaction for the full write-up.
+    //
+    // This db.transaction call is pinned in the KNOWN_INTENTIONAL_SYNC_WRITES
+    // allowlist in tests/f3-leftover-hrms-cqrs.test.ts
+    // (fix/hrms-screening-override-toctou) -- do not "fix" it back to an async
+    // publishF3Write.
+    const won = await db.transaction((tx) => repo.setRequestStatusIfPending(tx, ctx.tenantId, reqId, {
+      status: "rejected", decidedBy: ctx.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
+    }, r.version));
+    if (!won) {
+      await recordOverrideDecisionDenied(ctx, r, "reject", "NOT_PENDING");
+      throw new HttpError(409, "NOT_PENDING", "override request is no longer pending");
     }
     return reply.send({ id: reqId, status: "rejected" });
   });
@@ -176,5 +255,44 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     const r = await repo.findRequest(tenantId, id);
     if (!r) throw new HttpError(404, "NOT_FOUND", "override request not found");
     return r;
+  }
+
+  function toAuditCtx(ctx: RequestContext) {
+    return { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId };
+  }
+
+  // Leaves a trace (R-RA-0111) that a checker decision on this override was
+  // denied -- either because someone else already decided the request, or the
+  // application it targets moved on since it was raised -- whether caught by
+  // the route's own sequential pre-check or by losing the atomic race above. A
+  // denied checker decision must never vanish without a trace any more than an
+  // applied one does (the exact "zero-trace override" gap PR #1585 closed for
+  // the screening-decision endpoint).
+  //
+  // Reuses hrms_screening_events' existing 'override_denied' action (added by
+  // PR #1585's migration 0152 -- no new migration needed) with isOverride:true
+  // to distinguish it from that PR's own usage (isOverride:false, a direct
+  // redecision redirected into the override flow): both represent "a change to
+  // this application's screening outcome was denied", just from different
+  // endpoints. Also emits the generic audit-event outbox record used elsewhere
+  // in this file, so a denied checker decision shows up on that stream too,
+  // not only on the application's own screening-events timeline.
+  //
+  // This db.transaction call (and the repo.insertEvent inside it) is pinned in
+  // the KNOWN_INTENTIONAL_SYNC_WRITES allowlist in
+  // tests/f3-leftover-hrms-cqrs.test.ts (fix/hrms-screening-override-toctou).
+  async function recordOverrideDecisionDenied(
+    ctx: RequestContext, r: ScreeningOverrideRow, attempted: "approve" | "reject", reason: "NOT_PENDING" | "STALE_OVERRIDE",
+  ): Promise<void> {
+    await db.transaction(async (tx) => {
+      await screeningRepo.insertEvent(tx, {
+        tenantId: ctx.tenantId, applicationId: r.applicationId, jobOpeningId: r.jobOpeningId,
+        action: "override_denied", decision: r.toDecision, reasonCode: r.reasonCode ?? null,
+        remarks: r.reason, isOverride: true, actorId: ctx.actorId,
+      });
+      await emitAudit(tx, toAuditCtx(ctx), "screening_override_decision_denied", "screening_override", r.id, {
+        applicationId: r.applicationId, attempted, reason,
+      });
+    });
   }
 }
