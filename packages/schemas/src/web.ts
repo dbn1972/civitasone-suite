@@ -823,6 +823,30 @@ export const JobOpeningSummarySchema = z.object({
 });
 export const JobOpeningSummaryListSchema = z.array(JobOpeningSummarySchema);
 
+// hrms_appraisals.status is written by TWO route modules sharing one column
+// (see services/hrms-service/src/modules/appraisals/routes.ts's header
+// comment): this module's own 5-stage APPRAISAL_STAGES (self_pending ->
+// reporting_officer -> reviewing_officer -> accepting_authority ->
+// completed) and apar/routes.ts's 7-stage APAR_STAGES, which continues on
+// to disclosed -> representation -> finalised. Historical rows can also
+// still carry the pre-workflow values (pending/in_review/completed).
+//
+// CRITICAL fix: this enum used to be just the 3 legacy values. sendValidated
+// (packages/schemas/src/validate.ts) runs schema.parse() on the WHOLE
+// array returned by GET /v1/hrms/appraisals, and Zod fails the entire parse
+// if even ONE row's status doesn't match -- so any tenant with a single
+// real in-progress or APAR row (e.g. status "accepting_authority") 400ed on
+// this endpoint for every caller, permanently. This list MUST stay the full
+// union of both modules' vocabularies (plus the legacy values) or that
+// regression comes back. Keep in sync with the DB CHECK constraint
+// (services/hrms-service/migrations -- currently 0111_apar_status_check.sql)
+// and with APPRAISAL_STAGES/APAR_STAGES in the two route files above.
+export const APPRAISAL_STATUS_VALUES = [
+  "pending", "in_review", "completed",
+  "self_pending", "reporting_officer", "reviewing_officer", "accepting_authority",
+  "disclosed", "representation", "finalised",
+] as const;
+
 export const AppraisalSummarySchema = z.object({
   id: z.string(),
   employeeId: z.string(),
@@ -830,7 +854,7 @@ export const AppraisalSummarySchema = z.object({
   department: z.string(),
   appraisalPeriod: z.string(),
   rating: z.number().optional(),
-  status: z.enum(["pending", "in_review", "completed"]),
+  status: z.enum(APPRAISAL_STATUS_VALUES),
   reviewerName: z.string().optional(),
 });
 export const AppraisalSummaryListSchema = z.array(AppraisalSummarySchema);

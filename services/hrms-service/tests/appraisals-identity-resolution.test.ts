@@ -516,3 +516,69 @@ describe("Appraisals — real-DB stage-ownership (SoD) regression, via the real 
     expect(row?.rating).toBeNull();
   });
 });
+
+// ─── GET response-schema status vocabulary (real DB, real HTTP) ────────────
+//
+// AppraisalSummaryListSchema (packages/schemas/src/web.ts) used to only
+// accept the legacy 3 values ("pending"|"in_review"|"completed"), a strict
+// subset of what hrms_appraisals.status can actually hold -- this module's
+// own APPRAISAL_STAGES and apar/routes.ts's APAR_STAGES both write the SAME
+// column (see routes.ts's header comment, and this file's own header re:
+// that "separate, pre-existing status-vocabulary mismatch" noted above).
+// sendValidated 400s the ENTIRE list if even one row's status doesn't
+// match, so any tenant with a single real in-progress or APAR row broke
+// this endpoint for every caller, permanently. These tests seed real,
+// DB-valid non-legacy statuses (no mocks) and prove the fix.
+describe("GET /v1/hrms/appraisals — response-schema status vocabulary (was 400ing on real APAR rows)", () => {
+  it("200s for a tenant whose only appraisal is a real in-progress APAR-stage row", async () => {
+    const tenant = randomUUID();
+    const hrActor = randomUUID();
+    const empId = await seedEmployee(tenant, { userRef: randomUUID(), fullName: "Priya In-Progress", createdBy: hrActor });
+    const id = await seedAppraisal(tenant, { employeeId: empId, status: "accepting_authority", createdBy: hrActor });
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, hrActor, ["hr_admin"]) });
+    expect(r.statusCode).toBe(200);
+    const body = r.json() as Array<{ id: string; status: string }>;
+    expect(body).toHaveLength(1);
+    expect(body[0].id).toBe(id);
+    expect(body[0].status).toBe("accepting_authority");
+  });
+
+  it("200s with a genuinely mixed-status tenant (legacy rows alongside every current in-progress stage)", async () => {
+    const tenant = randomUUID();
+    const hrActor = randomUUID();
+    const empId = await seedEmployee(tenant, { userRef: randomUUID(), fullName: "Mixed Employee", createdBy: hrActor });
+    // Every value the LIVE DB CHECK constraint currently allows
+    // (migrations/0111_apar_status_check.sql) in one tenant: legacy
+    // pre-workflow rows plus one row at each in-progress stage of the
+    // shared stage chain. disclosed/representation/finalised are
+    // deliberately NOT seeded here -- migration 0111 currently rejects them
+    // at the DB layer (a separate, pre-existing gap tracked and fixed on
+    // its own); AppraisalSummarySchema already accepts them so the response
+    // schema is forward-compatible with that fix landing (see the mocked
+    // equivalent in appraisals-routes.test.ts, which proves that without
+    // needing a live DB write those values can't yet satisfy).
+    const statuses = ["pending", "in_review", "self_pending", "reporting_officer", "reviewing_officer", "accepting_authority"] as const;
+    const ids: string[] = [];
+    for (const status of statuses) {
+      ids.push(await seedAppraisal(tenant, { employeeId: empId, status, createdBy: hrActor }));
+    }
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, hrActor, ["hr_admin"]) });
+    expect(r.statusCode).toBe(200);
+    const body = r.json() as Array<{ id: string; status: string }>;
+    expect(body).toHaveLength(statuses.length);
+    const byId = new Map(body.map((a) => [a.id, a.status]));
+    statuses.forEach((status, i) => expect(byId.get(ids[i])).toBe(status));
+  });
+
+  it("200s for a tenant with ONLY legacy/regular appraisals (no APAR usage) -- no regression", async () => {
+    const tenant = randomUUID();
+    const hrActor = randomUUID();
+    const empId = await seedEmployee(tenant, { userRef: randomUUID(), fullName: "Legacy Only", createdBy: hrActor });
+    await seedAppraisal(tenant, { employeeId: empId, status: "pending", createdBy: hrActor });
+    await seedAppraisal(tenant, { employeeId: empId, status: "in_review", createdBy: hrActor });
+    await seedAppraisal(tenant, { employeeId: empId, status: "completed", createdBy: hrActor });
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth(tenant, hrActor, ["hr_admin"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toHaveLength(3);
+  });
+});

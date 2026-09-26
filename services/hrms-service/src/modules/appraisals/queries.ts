@@ -1,3 +1,4 @@
+import type { APPRAISAL_STATUS_VALUES } from "@civitasone/schemas/web";
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
@@ -30,7 +31,12 @@ export async function listAppraisals(tenantId: string, limit: number, allowedEmp
       department: empMap.get(r.employeeId)?.departmentId.slice(0, 8) ?? "",
       appraisalPeriod: r.appraisalPeriod,
       rating: r.rating !== null ? Number(r.rating) : undefined,
-      status: r.status as "pending" | "in_review" | "completed",
+      // r.status is validated at the HTTP boundary by AppraisalSummaryListSchema
+      // (sendValidated in routes.ts) -- this cast just documents the real,
+      // full status vocabulary instead of the stale 3-value union it used to
+      // claim (see APPRAISAL_STATUS_VALUES's own comment in web.ts for why
+      // that mismatch was a live bug, not a cosmetic one).
+      status: r.status as (typeof APPRAISAL_STATUS_VALUES)[number],
       reviewerName: r.reviewerId ? r.reviewerId.slice(0, 8) : undefined,
     }));
   })) ?? [];
