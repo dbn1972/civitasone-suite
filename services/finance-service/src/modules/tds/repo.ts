@@ -15,7 +15,7 @@ export const financeVendorTds = glSchema.table("finance_vendor_tds", {
   tenantId:         uuid("tenant_id").notNull(),
   vendorId:         uuid("vendor_id").notNull(),
   vendorName:       varchar("vendor_name", { length: 256 }),
-  pan:              text("pan"), // migration 0078: widened from varchar(10) -- holds encryptPii() ciphertext, not plaintext
+  pan:              text("pan"), // migration 0080: widened from varchar(10) -- holds encryptPii() ciphertext, not plaintext
   billId:           uuid("bill_id"),
   paymentId:        uuid("payment_id"),
   section:          varchar("section", { length: 10 }).notNull().default("194C"),

@@ -1,4 +1,4 @@
--- Migration 0078: Widen gl.finance_vendor_tds.pan from varchar(10) to text.
+-- Migration 0080: Widen gl.finance_vendor_tds.pan from varchar(10) to text.
 --
 -- PROVEN LIVE BUG: pan was declared varchar(10) in 0009_world_class_finance
 -- .sql -- the right width for a real plaintext PAN ("ABCPD1234E") -- but

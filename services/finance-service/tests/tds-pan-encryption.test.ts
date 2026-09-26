@@ -6,7 +6,7 @@
  * tds/consumer.ts encrypts the PAN before insert (encryptPii, AES-256-GCM
  * envelope: "enc:v2:<keyid>:" + base64(IV||tag||ct)), which measures 62
  * chars for a real 10-char PAN against this service's own encryptPii (see
- * migration 0078's comment for the measurement). Postgres rejected every
+ * migration 0080's comment for the measurement). Postgres rejected every
  * such insert with "value too long for type character varying(10)" — AFTER
  * POST /v1/finance/vendor-tds had already returned 202, so the caller never
  * saw the failure. A request with no PAN (nothing to encrypt, pan stays
