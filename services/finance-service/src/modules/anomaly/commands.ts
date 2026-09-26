@@ -159,23 +159,30 @@ export async function createAnomalyFlagTx(
     createdBy: actorId,
     updatedBy: actorId,
   });
-  await enqueue(tx, {
-    topic: "ml.prediction.anomaly_detected",
-    eventType: "ml.prediction.anomaly_detected",
-    tenantId,
-    actorId,
-    correlationId,
-    payload: {
-      tenantId,
-      domain: "transactions",
-      entityId: anomaly.transactionId,
-      anomalyType: anomaly.anomalyType,
-      severity: anomaly.severity,
-      factors: anomaly.factors,
-      zScore: anomaly.zScore,
-      timestamp: new Date().toISOString(),
-      correlationId,
-    },
-  });
+  // INCIDENT (finance-service unbounded republish, 2026-09): this tx-scoped
+  // variant's ONLY caller is registerAnomalyConsumers' handler for
+  // CONSUMED_EVENTS.mlAnomalyDetected ("ml.prediction.anomaly_detected") --
+  // i.e. it runs *because* finance-service just consumed that exact event.
+  // It used to also enqueue() a brand-new message back onto that SAME topic
+  // here, "announcing" the flag it had just recorded. Since this function's
+  // only caller is itself subscribed to that topic, every processed message
+  // produced one new unpublished _outbox.messages row on it; the outbox
+  // relay's 500ms poll picked that row straight back up and republished it,
+  // which the same consumer then consumed again -- forever. Verified via a
+  // live repro (real worker + real outbox relay, QUEUE_DRIVER=memory): one
+  // seeded message grew to 223 messages / 222 finance_anomalies rows in
+  // 113s, ~2 new messages/sec (matching the relay's 500ms poll interval
+  // exactly), still climbing when stopped. The hardcoded `domain:
+  // "transactions"` here (regardless of the input's actual domain) is also
+  // why the drift was visible in production: the originally-seeded payload
+  // domain flips to "transactions" from the second generation on, while
+  // entityId (= anomaly.transactionId, carried over unchanged below) stays
+  // constant -- a symptom of this republish, not a separate bug.
+  //
+  // createAnomalyFlagTx only needs to PERSIST an already-announced detection
+  // locally -- it must not re-announce it. createAnomalyFlag (the non-tx
+  // sibling above, used by the local Z-score detection path in
+  // processTransactionForAnomalies) legitimately keeps its own publish:
+  // that path is a genuinely NEW detection nobody has announced yet.
   return id;
 }
