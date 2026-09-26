@@ -1,15 +1,13 @@
 {
   "_comment": "TRACKED DEBT, not an approved state. Each entry is a <file>:<line>:<tag> where a stat-tile-shaped component (StatCard/StatCardGrid/...) is passed a hardcoded numeric/percentage literal for its value prop instead of a data-bound expression (see #1472's sa-dashboard fix for the exemplar defect this guards against). The gate fails on NEW entries and on stale entries (fixed, or never real, but still listed). Burn these down; regenerate with --write-baseline after a real fix, same convention as raw-status-leak-baseline.json / jsx-a11y-baseline.json.",
-  "generatedAt": "2026-09-23",
-  "count": 14,
+  "generatedAt": "2026-09-26",
+  "count": 12,
   "entries": [
-    "apps/web/src/app/(app)/admin/gateway-config/page.tsx:132:StatCard",
     "apps/web/src/app/(app)/admin/roles/RolesPermissionsManager.tsx:130:StatCard",
     "apps/web/src/app/(app)/analytics/data-warehouse/page.tsx:25:StatCard",
     "apps/web/src/app/(app)/audit/observations/page.tsx:33:StatCard",
     "apps/web/src/app/(app)/audit/page.tsx:35:StatCard",
     "apps/web/src/app/(app)/cdp/profiles/page.tsx:58:StatCard",
-    "apps/web/src/app/(app)/hr/shifts/page.tsx:116:StatCard",
     "apps/web/src/app/(app)/legal/opinions/page.tsx:31:StatCard",
     "apps/web/src/app/(app)/platform-admin/page.tsx:31:StatCard",
     "apps/web/src/app/(app)/platform-admin/page.tsx:32:StatCard",

@@ -1,7 +1,7 @@
 {
   "$comment": "TRACKED DEBT, not an approved state. Each entry is a migration file that CREATEs a table with a tenant_id column but does not ENABLE + FORCE row-level security and CREATE a policy for it IN THE SAME FILE -- almost always because this fleet's convention has historically been 'create the table now, RLS it in a later isolation-sweep migration' (see e.g. hrms-service 0026/0034, admin-service 0005/0006, workflow-service 0013/0018). Fixing one of these tables always means a NEW migration (you do not edit an already-applied file), so a genuinely-fixed table's original CREATE TABLE migration stays in this list forever -- that is expected, not a bug in this guard. The gate is on NEW entries (a migration added after this guard existed) and on STALE entries (a listed file that was edited and no longer reproduces -- extremely rare, since migrations aren't normally edited after being applied, but possible pre-merge). See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-009/SEC-010. Regenerate with --write-baseline only after confirming any newly-absent entries are a real, reviewed fix, not an accidental file deletion/rename.",
-  "generatedAt": "2026-09-18",
-  "count": 1008,
+  "generatedAt": "2026-09-26",
+  "count": 1010,
   "entries": [
     "services/admin-service/migrations/0001_init.sql::_outbox.messages",
     "services/admin-service/migrations/0001_init.sql::backup.admin_backup_runs",
@@ -753,6 +753,7 @@
     "services/notification-service/migrations/0036_conversations.sql::notification.conversation_messages",
     "services/notification-service/migrations/0036_conversations.sql::notification.conversations",
     "services/notification-service/migrations/0038_contact_frequency.sql::notification.contact_frequency",
+    "services/notification-service/migrations/0048_command_results.sql::_inbox.command_results",
     "services/parking-service/migrations/0001_initial.sql::_outbox.messages",
     "services/parks-service/migrations/0001_initial.sql::_outbox.messages",
     "services/payroll-service/migrations/0001_init.sql::_outbox.messages",
@@ -836,6 +837,7 @@
     "services/procurement-service/migrations/0008_competitive_procurement.sql::security.procurement_emd",
     "services/procurement-service/migrations/0008_competitive_procurement.sql::security.procurement_pbg",
     "services/procurement-service/migrations/0008_competitive_procurement.sql::tender.procurement_tender_financial_bids",
+    "services/procurement-service/migrations/0039_command_results.sql::_inbox.command_results",
     "services/project-service/migrations/0001_init.sql::_outbox.messages",
     "services/project-service/migrations/0001_init.sql::geo.project_geo_tags",
     "services/project-service/migrations/0001_init.sql::geo.project_site_photos",

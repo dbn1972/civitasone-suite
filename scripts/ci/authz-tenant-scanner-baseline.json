@@ -1,7 +1,7 @@
 {
   "$comment": "TRACKED DEBT, not an approved state (SEC-014). Each entry is a mutating (POST/PUT/PATCH/DELETE) route handler in which this scanner found no call to a recognized authorization helper (see AUTHZ_HELPER_NAMES in authz-tenant-scanner.mjs) and no `config: { public: true }` marker. Some entries are genuine missing-authz gaps (the fleet's own manual 2,110-handler audit found real ones, e.g. historically services/hrms-service/src/modules/social/routes.ts's announcements handler until it was fixed); others are known scanner limitations, not real bugs -- a preHandler-gated route (e.g. visitor-service's deviceAuth), or a self-service-by-session action with no role/permission decision to find. The gate is on NEW entries (a handler added after this guard existed) and STALE entries (a listed handler that no longer reproduces -- confirm it's a real, reviewed fix before regenerating, not an accidental deletion/rename). See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md SEC-014 and .claude/skills/19-security-beyond-tenancy.md S1. Regenerate with --write-baseline only after confirming any newly-absent entries are a real, reviewed fix.",
-  "generatedAt": "2026-09-15",
-  "count": 65,
+  "generatedAt": "2026-09-26",
+  "count": 63,
   "entries": [
     "services/analytics-service/src/modules/activation/routes.ts::POST /v1/analytics/activation/events",
     "services/billing-service/src/modules/gateways/routes.ts::POST /v1/billing/webhooks/ccavenue",
@@ -23,11 +23,9 @@
     "services/hrms-service/src/modules/ai-ml/recruitment-ai.ts::POST /v1/hrms/ai/recruitment/parse-resume",
     "services/hrms-service/src/modules/ai-ml/recruitment-ai.ts::POST /v1/hrms/ai/recruitment/score-jd",
     "services/hrms-service/src/modules/device-trust/routes.ts::POST /v1/hrms/devices/heartbeat",
-    "services/hrms-service/src/modules/id-cards/routes.ts::POST /v1/hrms/id-cards/verify",
     "services/hrms-service/src/modules/social/pulse-routes.ts::POST /v1/hrms/assistant",
     "services/hrms-service/src/modules/social/pulse-routes.ts::POST /v1/hrms/goals",
     "services/hrms-service/src/modules/social/pulse-routes.ts::POST /v1/hrms/goals/:id/checkin",
-    "services/hrms-service/src/modules/social/pulse-routes.ts::POST /v1/hrms/pulse-surveys",
     "services/hrms-service/src/modules/social/pulse-routes.ts::POST /v1/hrms/pulse-surveys/:id/respond",
     "services/hrms-service/src/modules/social/routes.ts::POST /v1/hrms/birthdays/:id/wish",
     "services/hrms-service/src/modules/social/routes.ts::POST /v1/hrms/devices/register",
