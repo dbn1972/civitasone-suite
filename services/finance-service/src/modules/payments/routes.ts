@@ -10,10 +10,20 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
+import { DomainError, assertBillRejectable } from "./domain.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
 const READER_ROLES   = [...FINANCE_ROLES, "audit_officer", "procurement_officer"];
+
+// Mirrors budget/distribution-routes.ts's toDomain(): a DomainError from a
+// pure/domain assertion becomes a proper HttpError at the given status
+// (financeErrorHandler only special-cases HttpError, see shared/context.js —
+// an un-translated DomainError would otherwise fall through to a generic 500).
+function toDomain(err: unknown, status = 400): never {
+  if (err instanceof DomainError) throw new HttpError(status, err.code, err.message);
+  throw err;
+}
 
 export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/payments", async (req, reply) => {
@@ -142,6 +152,23 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = rejectBillBody.parse(req.body);
+    // BUG FIX (H2, missing synchronous pre-accept validation): this route
+    // used to publish COMMANDS.billReject unconditionally — a bill already
+    // 'passed' (GL posted) or 'paid' (cash disbursed, payment/cash-book
+    // records exist) still got a 202 and silently flipped to 'rejected' once
+    // the consumer ran, with no error ever surfaced to the caller. The
+    // consumer's billReject handler now enforces assertBillRejectable too
+    // (authoritative, inside its own transaction) — this mirrors the same
+    // synchronous pre-check pattern used in allocation-distributions above
+    // (read-only, no lock; narrows but cannot fully close the TOCTOU window
+    // for two genuinely concurrent requests — the consumer stays the source
+    // of truth for that) so the common case gets an immediate 409 instead of
+    // a silent 202.
+    const bill = await repo.findBillByIdAndTenant(id, ctx.tenantId);
+    if (!bill) throw new HttpError(404, "NOT_FOUND", "bill not found");
+    try {
+      assertBillRejectable(bill.status);
+    } catch (err) { toDomain(err, 409); }
     await queue.publish(COMMANDS.billReject, {
       type: COMMANDS.billReject,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
