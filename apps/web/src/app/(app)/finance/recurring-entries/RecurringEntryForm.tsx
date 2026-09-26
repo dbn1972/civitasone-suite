@@ -308,7 +308,6 @@ export function RecurringEntryForm({ accounts }: Props) {
             Create a {frequency} standing entry <strong>{name}</strong> debiting{" "}
             <strong>{debitAccount ? `${debitAccount.code} — ${debitAccount.name}` : debitAccountId}</strong> and
             crediting <strong>{creditAccount ? `${creditAccount.code} — ${creditAccount.name}` : creditAccountId}</strong>.
-            It will start posting automatically from the next run date.
           </>
         }
         onConfirm={() => void createEntry()}

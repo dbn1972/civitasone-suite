@@ -113,7 +113,7 @@ export default async function RecurringEntriesPage() {
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Recurring Entries"
-        subtitle="Standing journal instructions that post automatically on a schedule."
+        subtitle="Standing journal instructions for recurring transactions."
         back="/finance"
         actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
