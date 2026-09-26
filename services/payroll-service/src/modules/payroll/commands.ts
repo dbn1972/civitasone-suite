@@ -2,12 +2,14 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
-import { scopedRead } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
 import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import * as repo from "./repo.js";
+import { audit } from "./consumer.js";
 import type {
   CreateStructureBody, CreateRunBody, CreateDdoBody, CreatePensionerBody,
   CreateArrearBody, ComputeBonusBody, CreateReimbursementBody,
@@ -29,38 +31,70 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
 export async function createRun(ctx: RequestContext, body: CreateRunBody): Promise<Accepted> {
   const id = randomUUID();
   const runType = body.runType ?? "regular";
-  // BUG-3 fix: this fast-path pre-check must run through scopedRead (a
-  // properly RLS-scoped transaction), not a bare db.execute(). Per the doc
-  // comment on scopedRead in shared/db.ts, a plain db.execute()/db.select()
-  // has no app.tenant_id GUC set, so under the fail-closed RLS policy it
-  // always returned zero rows and this guard silently never fired — a
-  // second run for an already-`processing` month got 202 instead of 409.
-  // The async consumer's own duplicate check (consumer.ts COMMANDS.runCreate
-  // handler) is correctly scoped and already the real data-safety backstop;
-  // this only restores the synchronous fast-path contract.
+  const ddoCode = body.ddoCode ?? null;
+  // Concurrency fix (High, proven via a genuine `Promise.all` repro): BUG-3
+  // and round2 (see the history of this comment, and consumer.ts's own
+  // "round2 fix" note on COMMANDS.runCreate) made this guard correctly
+  // RLS-scoped and correctly WHERE-aligned with the DB's partial unique
+  // index, but it was still a bare, unlocked SELECT. Two genuinely
+  // concurrent requests for the same tenant+month+DDO both passed it before
+  // either had written anything, so BOTH got 202 with two different run
+  // ids — the real conflict only ever surfaced later, invisibly, inside the
+  // async consumer's own advisory-lock guard, by which point the HTTP
+  // response had already gone out to both callers with no way to take it
+  // back (the sequential case — a second attempt made AFTER the first's row
+  // already exists — always got a clean 409; only true concurrency slipped
+  // through).
   //
-  // Also aligned the WHERE clause + error code to that consumer check
-  // (run_type = 'regular' AND COALESCE(ddo_code,'__ALL__') = ...,
-  // DUPLICATE_RUN_FOR_PERIOD): fixing only the RLS scoping while leaving the
-  // old tenant+month-only clause here would have swapped "guard never fires"
-  // for "guard now wrongly blocks" — the consumer (and the DB's partial-
-  // unique index) intentionally allow off-cycle runs (supplementary/
-  // arrears/pensioner) and a second regular run for a different DDO
-  // alongside an existing regular run in the same month; this pre-check was
-  // about to start rejecting all of those the moment it actually started
-  // seeing rows.
+  // Fix, mirroring PR #1585 (hrms screening-decision override race): move
+  // the race-prone check-and-write out of the fire-and-forget queue path
+  // and into a synchronous transaction here, so the loser's HTTP response
+  // reflects the real, atomically-determined outcome instead of an
+  // optimistic guess. This takes the SAME transaction-scoped advisory lock
+  // (identical key) consumer.ts's runCreate handler used to take alone, and
+  // does the duplicate check AND the row insert (+ audit event) itself,
+  // before ever publishing anything — so by the time a concurrent caller's
+  // own lock-wait ends, the row it needs to see already exists, and it gets
+  // a real, immediate 409 instead of a later, invisible one. The queue
+  // publish below still happens for every run (regular or not); for a
+  // regular run it now only triggers the (unaffected, still fully async)
+  // per-employee processing — consumer.ts's handler recognizes the row
+  // already exists and skips re-creating it (see that handler's comment).
+  //
+  // Scoped to runType === "regular": the partial unique index (and so this
+  // whole race) only applies to that type. Off-cycle run creation
+  // (supplementary/arrears/pensioner) has no such uniqueness constraint and
+  // is untouched — still a plain publish, exactly as before.
   if (runType === "regular") {
-    const existing = await scopedRead((tx) => tx.execute(sql`
-      SELECT id FROM payroll.payroll_runs
-      WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month}
-        AND status <> 'failed' AND run_type = 'regular'
-        AND COALESCE(ddo_code, '__ALL__') = ${body.ddoCode ?? "__ALL__"}
-      LIMIT 1
-    `));
-    if (existing[0]) {
-      throw new HttpError(409, "DUPLICATE_RUN_FOR_PERIOD",
-        `a regular payroll run already exists for ${body.month}${body.ddoCode ? ` (DDO ${body.ddoCode})` : ""}: ${existing[0].id}`);
-    }
+    await db.transaction(async (tx) => {
+      const lockKey = `payroll_run:${ctx.tenantId}:${body.month}:${ddoCode ?? "__ALL__"}:regular`;
+      await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
+
+      const existing = await tx.execute(sql`
+        SELECT id FROM payroll.payroll_runs
+        WHERE tenant_id = ${ctx.tenantId}::uuid AND month = ${body.month}
+          AND status <> 'failed' AND run_type = 'regular'
+          AND COALESCE(ddo_code, '__ALL__') = ${ddoCode ?? "__ALL__"}
+        LIMIT 1
+      `);
+      if (existing[0]) {
+        throw new HttpError(409, "DUPLICATE_RUN_FOR_PERIOD",
+          `a regular payroll run already exists for ${body.month}${ddoCode ? ` (DDO ${ddoCode})` : ""}: ${existing[0].id}`);
+      }
+
+      // structureId is guaranteed present here by createRunBody's own
+      // .refine (required for every runType except "pensioner", and this
+      // branch is only ever "regular") — the `!` reflects that validated
+      // invariant, not an unchecked assumption.
+      await repo.insertRun(tx, {
+        id, tenantId: ctx.tenantId, runNo: body.runNo, month: body.month,
+        departmentId: body.departmentId ?? null, structureId: body.structureId!,
+        runType, ddoCode,
+        totalGrossMinor: 0n, totalNetMinor: 0n, currency: "INR", status: "processing",
+        createdBy: ctx.actorId, updatedBy: ctx.actorId,
+      });
+      await audit(tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId }, "create", "payroll_run", id);
+    });
   }
   await queue.publish(COMMANDS.runCreate, {
     messageId: id, type: COMMANDS.runCreate,
