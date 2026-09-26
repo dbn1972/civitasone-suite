@@ -7,7 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertJournalBalances } from "./domain.js";
+import { assertJournalBalances, assertJournalHasAmount } from "./domain.js";
 import { assertBudgetNotExceeded, availableBalance, DomainError } from "../budget/domain.js";
 import { assertDistinctMakerChecker } from "../payments/domain.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
@@ -442,6 +442,12 @@ export function registerGlConsumers(queue: Queue): void {
       // actual posting time): cheap, pure, and guards against a stored draft
       // being tampered with between create and approve.
       assertJournalBalances(p.lines);
+      // Same rationale, same defense-in-depth: reject a manually-created
+      // zero-amount draft here too, not just at the HTTP layer
+      // (validators.ts) — a checker must never be asked to approve a draft
+      // with nothing to post. See assertJournalHasAmount()'s doc comment
+      // (gl/domain.ts).
+      assertJournalHasAmount(p.lines);
       // finance_journals has UNIQUE(tenant_id, voucher_no). The real gapless
       // number is only allocated at actual-posting time (approval) — see
       // postJournal()'s voucher-numbering block — so a still-pending draft
@@ -499,6 +505,30 @@ export function registerGlConsumers(queue: Queue): void {
       // the unattended-posting gap DOM-024 closes.
       assertDistinctMakerChecker(existing.createdBy, msg.actorId);
       const lines = (existing.lines ?? []) as JournalLine[];
+      // CRITICAL fix (proven repro): a journal created with debitMinor:0 /
+      // creditMinor:0 on every line passes the balance check trivially at
+      // creation (0 === 0). Creation now rejects that up front —
+      // assertJournalHasAmount() in validators.ts / gl/commands.ts
+      // createJournal() / this file's finance.gl.create handler above — so
+      // this branch should be structurally unreachable. It exists as a
+      // defensive backstop: without it, a zero-total draft that somehow
+      // still reached pending_approval would hit postJournal()'s own M2
+      // zero-amount early-return (a deliberate silent no-op there, but only
+      // correct for AUTOMATED postings with a genuine zero net movement —
+      // see that function's comment) BEFORE postJournal() ever reaches the
+      // code that flips status to "posted". The checker's approval would
+      // then 202 and the journal would sit in pending_approval forever with
+      // no visible failure anywhere. Fail loudly and non-retryably instead
+      // — same pattern as the IDOR / INVALID_JOURNAL_STATE checks above —
+      // so it shows up in the DLQ for an admin to investigate, rather than
+      // silently doing nothing or minting a meaningless $0 voucher into an
+      // append-only ledger.
+      const totalDebit = lines.reduce((acc, l) => acc + BigInt(l.debitMinor), 0n);
+      if (totalDebit === 0n) {
+        throw new NonRetryableError(
+          `[finance/gl] JOURNAL_ZERO_AMOUNT: id=${p.id} has a zero net amount and cannot be approved — reject or correct the draft instead`,
+        );
+      }
       await postJournal(tx, msg, {
         id: existing.id, tenantId: existing.tenantId, voucherNo: existing.voucherNo,
         type: existing.type, postingDate: existing.postingDate, lines,
