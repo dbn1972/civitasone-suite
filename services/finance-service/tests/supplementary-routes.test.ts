@@ -77,12 +77,15 @@ describe("SVC-035 supplementary demand — full flow", () => {
       const pending = await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: officer() });
       expect(pending.json().data.status).toBe("pending_approval");
 
+      // maker cannot self-approve — assertSupplementaryApproverDistinct now
+      // runs synchronously in the route (see supplementary-routes.ts), so this
+      // is rejected before ever reaching the queue: no drain() needed here.
       const self = await app.inject({
         method: "PATCH", url: `/v1/finance/supplementary-demands/${id}/approve`,
         headers: { authorization: `Bearer ${token(TENANT_A, ["finance_admin"], MAKER)}` },
       });
-      expect(self.statusCode).toBe(202);
-      await drain();
+      expect(self.statusCode).toBe(409);
+      expect(self.json().code).toBe("MAKER_CHECKER_VIOLATION");
       expect((await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: officer() })).json().data.status)
         .toBe("pending_approval");
 
@@ -134,6 +137,43 @@ describe("SVC-035 supplementary demand — full flow", () => {
       await drain();
       const got = await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: admin() });
       expect(got.json().data.status).toBe("rejected");
+    } finally {
+      await app.close();
+    }
+  });
+
+  // Transition-guard regression: approve/reject on an already-decided demand
+  // (terminal state, TRANSITIONS["approved"] = []) used to still get a 202
+  // and then silently no-op once the consumer's assertSupplementaryTransition
+  // rejected it — assertSupplementaryTransition now runs synchronously in the
+  // route (see supplementary-routes.ts), so both are caught immediately.
+  it("blocks approve/reject on an already-approved demand (invalid transition)", async () => {
+    const app = await buildApp();
+    try {
+      const created = await app.inject({ method: "POST", url: "/v1/finance/supplementary-demands", headers: officer(), payload: body });
+      const id = created.json().data.id as string;
+      await drain();
+
+      const appr = await app.inject({ method: "PATCH", url: `/v1/finance/supplementary-demands/${id}/approve`, headers: admin() });
+      expect(appr.statusCode).toBe(202);
+      await drain();
+      expect((await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: admin() })).json().data.status)
+        .toBe("approved");
+
+      const reApprove = await app.inject({ method: "PATCH", url: `/v1/finance/supplementary-demands/${id}/approve`, headers: admin(TENANT_A, "00000000-aaaa-4000-8000-00000000d035") });
+      expect(reApprove.statusCode).toBe(409);
+      expect(reApprove.json().code).toBe("INVALID_TRANSITION");
+
+      const rejectApproved = await app.inject({
+        method: "PATCH", url: `/v1/finance/supplementary-demands/${id}/reject`, headers: admin(),
+        payload: { reason: "too late, already approved" },
+      });
+      expect(rejectApproved.statusCode).toBe(409);
+      expect(rejectApproved.json().code).toBe("INVALID_TRANSITION");
+
+      // state never moved off "approved"
+      expect((await app.inject({ method: "GET", url: `/v1/finance/supplementary-demands/${id}`, headers: admin() })).json().data.status)
+        .toBe("approved");
     } finally {
       await app.close();
     }

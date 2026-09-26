@@ -78,13 +78,16 @@ describe("SVC-040 outcome budgeting — full flow", () => {
       expect(ach.statusCode).toBe(202);
       await drain();
 
+      // maker cannot self-evaluate — assertEvaluatorDistinct now runs
+      // synchronously in the route (see outcome-routes.ts), so this is
+      // rejected before ever reaching the queue: no drain() needed here.
       const self = await app.inject({
         method: "PATCH", url: `/v1/finance/budget-outcomes/${id}/evaluate`,
         headers: { authorization: `Bearer ${token(TENANT_A, ["finance_admin"], MAKER)}` },
         payload: { note: "self evaluate blocked" },
       });
-      expect(self.statusCode).toBe(202);
-      await drain();
+      expect(self.statusCode).toBe(409);
+      expect(self.json().code).toBe("MAKER_CHECKER_VIOLATION");
       const stillActive = await app.inject({
         method: "GET", url: `/v1/finance/budget-outcomes/${id}`,
         headers: { authorization: `Bearer ${token(TENANT_A, ["finance_admin"], MAKER)}` },
@@ -142,12 +145,16 @@ describe("SVC-040 outcome budgeting — full flow", () => {
       });
       await drain();
 
-      await app.inject({
+      // achievement is locked once evaluated — assertAchievementEditable now
+      // runs synchronously in the route (see outcome-routes.ts), so this is
+      // rejected before ever reaching the queue: no drain() needed here.
+      const blocked = await app.inject({
         method: "PATCH", url: `/v1/finance/budget-outcomes/${id}/achievement`,
         headers: { authorization: `Bearer ${token(TENANT_A, ["finance_admin"], MAKER)}` },
         payload: { achievedValue: 900 },
       });
-      await drain();
+      expect(blocked.statusCode).toBe(409);
+      expect(blocked.json().code).toBe("OUTCOME_ALREADY_EVALUATED");
 
       const got = await app.inject({
         method: "GET", url: `/v1/finance/budget-outcomes/${id}`,

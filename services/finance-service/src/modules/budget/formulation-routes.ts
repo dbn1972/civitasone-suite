@@ -6,7 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./formulation-repo.js";
 import {
   assertProposalValid, consolidateProposals, ceilingBreachMinor,
-  assertProposalApproverDistinct,
+  assertProposalApproverDistinct, assertProposalTransition,
 } from "./formulation-domain.js";
 import { DomainError } from "./domain.js";
 import {
@@ -81,6 +81,19 @@ export async function budgetFormulationRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
+    // BUG FIX (missing synchronous pre-accept validation): the state-transition
+    // guard (assertProposalTransition) previously ran only inside the async
+    // consumer (sub(COMMANDS.budgetProposalSubmit, ...), consumer.ts), so
+    // submitting a proposal that isn't in 'draft' (e.g. already submitted)
+    // still got a 202 accept -- the rejection happened invisibly, after the
+    // response was already sent. Same bug class as the approve fix below.
+    // Read-only, no transaction, no lock: a plain status-field read, no
+    // amount/race dimension, so lifting it synchronously fully closes the gap.
+    const existing = await repo.findProposalById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "proposal not found");
+    try {
+      assertProposalTransition(existing.status as any, "submitted");
+    } catch (err) { toDomain(err, 409); }
     await queue.publish(COMMANDS.budgetProposalSubmit, {
       messageId: randomUUID(), type: COMMANDS.budgetProposalSubmit,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
@@ -94,6 +107,21 @@ export async function budgetFormulationRoutes(app: FastifyInstance): Promise<voi
     requireRole(ctx, APPROVER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = reviewProposalBody.parse(req.body);
+    // BUG FIX (missing synchronous pre-accept validation): the state-transition
+    // guard (assertProposalTransition) previously ran only inside the async
+    // consumer (sub(COMMANDS.budgetProposalReview, ...), consumer.ts), so
+    // reviewing a proposal that isn't 'submitted' (e.g. still draft, or already
+    // under_review/approved) still got a 202 accept -- the rejection happened
+    // invisibly, after the response was already sent. Mirrors the consumer's
+    // own decision -> target-status mapping exactly. Read-only, no
+    // transaction, no lock: a plain status-field read, no amount/race
+    // dimension, so lifting it synchronously fully closes the gap.
+    const to = body.decision === "accept" ? "under_review" : "returned";
+    const existing = await repo.findProposalById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "proposal not found");
+    try {
+      assertProposalTransition(existing.status as any, to as any);
+    } catch (err) { toDomain(err, 409); }
     await queue.publish(COMMANDS.budgetProposalReview, {
       messageId: randomUUID(), type: COMMANDS.budgetProposalReview,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
