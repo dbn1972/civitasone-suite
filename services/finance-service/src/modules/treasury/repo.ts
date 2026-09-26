@@ -105,7 +105,15 @@ export async function insertDepositEvent(tx: Writer, row: DepositEventInsert): P
  * guard. The balance is decremented in-SQL ONLY when it currently holds at least
  * `amount` (balance_minor >= amount), so two concurrent dispositions of the same
  * held money cannot both succeed — the loser updates 0 rows and we return false.
- * Status flips to 'closed' exactly when the new balance reaches 0. No read-then-set.
+ * Status flips to a terminal value exactly when the new balance reaches 0: a
+ * fully-drained refund lands on 'refunded', a fully-drained forfeit lands on
+ * 'forfeited' — the only two terminal values treasury.finance_deposits'
+ * status CHECK constraint (migration 0036) actually allows besides 'active'.
+ * 'adjust' (deposit applied against a bill/payable) has no legal terminal
+ * value in that constraint, so a fully-adjusted deposit stays 'active' —
+ * that under-represents a fully-resolved adjustment, but is the honest
+ * choice given the schema: mapping it onto 'refunded'/'forfeited' would
+ * misclassify it in any report keyed off status. No read-then-set.
  * Returns true when the row was updated, false when the guard rejected it.
  */
 export async function applyDepositDispositionGuarded(
@@ -119,19 +127,40 @@ export async function applyDepositDispositionGuarded(
     event === "refund" ? sql`refunded_minor` :
     event === "forfeit" ? sql`forfeited_minor` :
     sql`adjusted_minor`;
+  // Terminal status when this disposition drains the balance to exactly 0 —
+  // see the doc comment above for why 'adjust' has no dedicated value.
+  const drainedStatus =
+    event === "refund" ? "refunded" :
+    event === "forfeit" ? "forfeited" :
+    "active";
   const amt = amount.toString();
   const res = await (tx as unknown as Executor).execute(sql`
     UPDATE treasury.finance_deposits
        SET balance_minor = balance_minor - ${amt}::bigint,
            ${totalCol} = ${totalCol} + ${amt}::bigint,
-           status = CASE WHEN balance_minor - ${amt}::bigint = 0 THEN 'closed' ELSE 'active' END,
+           status = CASE WHEN balance_minor - ${amt}::bigint = 0 THEN ${drainedStatus} ELSE 'active' END,
            updated_by = ${actorId}::uuid,
            updated_at = now(),
            version = version + 1
      WHERE id = ${id}::uuid
        AND balance_minor >= ${amt}::bigint
   `);
-  const count = (res as { rowCount?: number }).rowCount
-    ?? ((res as { rows?: unknown[] }).rows?.length ?? 0);
+  // postgres-js (porsager) — the driver drizzle's postgres-js dialect wraps,
+  // and the only Postgres driver used here — reports the affected-row count
+  // as `.count`, NEVER `.rowCount` (that property belongs to node-postgres
+  // /`pg`, a different, unused driver). Verified directly against this
+  // driver's shipped types (ResultMeta.count) and runtime source
+  // (connection.js parses it from the CommandComplete tag). `.rowCount` is
+  // always undefined here, so the old bare `res.rowCount` read always fell
+  // through to a broken `res.rows?.length` fallback (this driver's result
+  // has no `.rows` sub-property either — it IS the row array) and evaluated
+  // to 0 every time: the guard always looked rejected and EVERY disposition,
+  // including fully legitimate ones, failed with DEPOSIT_OVERDRAW. Same
+  // defensive `.rowCount ?? .count` shape already used in hrms-service (see
+  // e.g. recruitment/offer-repo.ts — "PR #254"); kept here for consistency
+  // even though `.rowCount` will never actually be present on this driver.
+  const count = (res as { rowCount?: number; count?: number }).rowCount
+    ?? (res as { count?: number }).count
+    ?? 0;
   return count > 0;
 }
