@@ -62,6 +62,34 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(422, "APBS_NOT_ENABLED", "APBS is not enabled for this tenant");
       }
 
+      // APBS requires a validated Aadhaar number AND a destination-bank IIN
+      // for every beneficiary (see ApbsBeneficiary in apbs-writer.ts). Neither
+      // source of beneficiary data this route reads from can supply either
+      // field today:
+      //   - HRMS employee master: hrms_employees.aadhaar_ref exists but is an
+      //     optional, format-unvalidated column (unlike e.g. pan's regex, or
+      //     other services' strict `z.string().length(12)` Aadhaar fields) --
+      //     not confirmed equivalent to a disbursement-grade Aadhaar number,
+      //     and PayrollInputEmployee (shared/hrms-client.ts) does not expose
+      //     it to this service regardless.
+      //   - Pensioner master: payroll.payroll_pensioners has no Aadhaar
+      //     column at all.
+      //   - IIN (Issuer Identification Number): no source anywhere in the
+      //     system, for either beneficiary type.
+      // The previous code built beneficiaries in NachBeneficiary shape
+      // (ifsc/accountNo) regardless of format and cast them to
+      // ApbsBeneficiary[] in format-router.ts when format === "apbs". That
+      // cast always produced beneficiaries missing aadhaarNumber/iin, so
+      // apbs-writer.ts's own validation always threw -- and with no catch
+      // around generateBankFile below, that surfaced as an unhandled 500 on
+      // every single request, for every tenant. Fail clearly and immediately
+      // instead, until Aadhaar/IIN capture exists upstream (see PR
+      // description for the upstream data-capture gap this cannot close).
+      if (format === "apbs") {
+        throw new HttpError(422, "APBS_DATA_UNAVAILABLE",
+          "APBS requires an Aadhaar number and destination-bank IIN for every beneficiary, which this system does not currently capture for employees or pensioners. Use the nach or csv format instead.");
+      }
+
       // Fetch all slips for this run
       const slips = await scopedRead((tx) => tx.select().from(payrollSlips)
         .where(and(eq(payrollSlips.runId, id), eq(payrollSlips.tenantId, ctx.tenantId))));

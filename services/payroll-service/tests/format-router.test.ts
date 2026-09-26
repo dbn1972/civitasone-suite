@@ -286,4 +286,40 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=apbs", () => {
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("SPONSOR_CONFIG_MISSING");
   });
+
+  // Real, unmocked end-to-end regression test for the APBS bank-transfer bug:
+  // routes.ts used to build every beneficiary in NachBeneficiary shape
+  // (ifsc/accountNo) regardless of requested format, then format-router.ts
+  // cast that array to ApbsBeneficiary[] ("as ApbsBeneficiary[]") when
+  // format === "apbs". The cast lied about the runtime shape -- the objects
+  // never had aadhaarNumber/iin -- so apbs-writer.ts's own validation always
+  // threw, and with no catch around the generateBankFile call in routes.ts,
+  // that surfaced as an unhandled 500 for every tenant, every time (100% of
+  // APBS requests). Investigation found no source of Aadhaar data for
+  // pensioners (payroll.payroll_pensioners has no Aadhaar column) or of IIN
+  // for anyone (no such column/field exists anywhere in the system, for
+  // employees or pensioners) -- so a genuine APBS file cannot be generated
+  // today. routes.ts now fails fast with a clear 422 instead. This test uses
+  // the SAME seeded pensioner run the NACH tests above use (proving the
+  // beneficiary data itself is otherwise valid -- NACH succeeds against it)
+  // and the real, unmocked format-router/apbs-writer code path (only
+  // db/queue are the real ones a live server would use; nothing about
+  // format-router or apbs-writer is mocked), so it fails the same way a real
+  // client request would.
+  it("returns 422 APBS_DATA_UNAVAILABLE (not 500) when APBS is enabled but no Aadhaar/IIN data exists anywhere in the system", async () => {
+    await seedPensionerMaster();
+    await seedSponsorConfig({ apbsEnabled: true });
+
+    const token = makeToken();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=apbs`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("APBS_DATA_UNAVAILABLE");
+
+    await removeSponsorConfig();
+  });
 });

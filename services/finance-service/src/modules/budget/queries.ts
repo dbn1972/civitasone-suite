@@ -141,24 +141,48 @@ export async function listBudgetSummaries(tenantId: string, limit: number, offse
   for (const row of rows ?? []) {
     const head = headMap_b.get(row.headId);
     // H3: keep as bigint throughout to avoid 2^53 precision loss on large budgets.
-    const allocated = row.allocatedMinor ?? row.beMinor ?? 0n;
+    //
+    // FIX (HIGH: list always reported allocated/balance as 0 and status
+    // "exhausted"): financeBudgets.allocatedMinor is hard-coded to 0n at
+    // creation (consumer.ts's budgetCreate) and is never written by any
+    // other write path in this service — re-appropriation only ever touches
+    // re_minor (repo.transferBudgetReMinorGuarded) and supplementary-demand
+    // approval only ever touches be_minor/re_minor
+    // (supplementary-repo.applySupplementaryToBudget). Because 0n is not
+    // nullish, `row.allocatedMinor ?? row.beMinor` never fell through to
+    // beMinor, so "allocated" silently read 0 for every budget here,
+    // regardless of real utilisation.
+    //
+    // re_minor (Revised Estimate) is the domain's real authoritative
+    // "currently sanctioned" figure: it starts equal to be_minor at
+    // creation, is raised by supplementary-demand approval, and is
+    // debited/credited by re-appropriation transfers — and it's already
+    // what the real spend-gating logic trusts (repo.ts's
+    // incrementBudgetUtilisedGuarded and domain.ts's
+    // assertReappropriationValid both gate on `re_minor - utilised_minor`,
+    // never on allocatedMinor). So "allocated" is derived from re_minor here
+    // instead of the dead allocated_minor column.
+    const allocated = row.reMinor ?? row.beMinor ?? 0n;
     const utilised = row.utilisedMinor ?? 0n;
-    const reMinor = row.reMinor ?? allocated;
     summaries.push({
       id: row.id,
       majorHead: head?.code ?? row.headId,
       subHead: head?.name,
       // H3: return paise amounts as strings; frontend divides by 100 for display.
       sanctionedAmount: allocated.toString(),
-      releasedAmount: (reMinor < allocated ? reMinor : allocated).toString(),
+      // No separate "released/disbursed tranche" concept is tracked in this
+      // schema — releasedAmount previously faked one via min(reMinor,
+      // allocated) against the dead allocatedMinor column. Now that
+      // "allocated" IS re_minor, that min() would just compare re_minor to
+      // itself, so report the current sanctioned figure directly.
+      releasedAmount: allocated.toString(),
       expenditure: utilised.toString(),
       balance: (allocated > utilised ? allocated - utilised : 0n).toString(),
-      // Raw BE/RE (distinct from the capped releasedAmount above) so
-      // consumers needing genuine BE-vs-RE variance — where RE can
-      // legitimately exceed BE before a supplementary grant reconciles it —
-      // aren't stuck with releasedAmount's allocated-cap.
+      // Raw BE/RE so consumers needing genuine BE-vs-RE variance — where RE
+      // can legitimately exceed BE before a supplementary grant reconciles
+      // it — have it (reMinor here now equals "allocated" above).
       beMinor: (row.beMinor ?? 0n).toString(),
-      reMinor: reMinor.toString(),
+      reMinor: allocated.toString(),
       status: utilised >= allocated ? "exhausted" : "active",
       financialYear: row.fy,
     });

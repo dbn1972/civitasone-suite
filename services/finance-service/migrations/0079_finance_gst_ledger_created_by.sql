@@ -1,0 +1,25 @@
+-- Migration 0079: gl.finance_gst_ledger.created_by (missing column)
+--
+-- BUG FIX (schema drift): src/modules/gst/consumer.ts's registerGstConsumers
+-- INSERTs a created_by column into gl.finance_gst_ledger on every
+-- finance.gst.entry_record message (created_by = msg.actorId, the maker who
+-- recorded the GST line) -- matching the established finance-service
+-- ledger/master-table convention: gl.finance_journals (0073, maker-checker),
+-- gl.finance_recurring_entries / gl.finance_fiscal_years / gl.finance_period_close
+-- (all 0005/0009/0022, at-creation), payments.finance_bank_accounts (0066),
+-- payments.finance_pao (0068) and payments.finance_ddo (0043) all carry the
+-- same single created_by audit column. But 0009_world_class_finance.sql's
+-- CREATE TABLE for gl.finance_gst_ledger never included it -- every insert
+-- attempt has therefore always failed with "column \"created_by\" of relation
+-- \"finance_gst_ledger\" does not exist" (confirmed live against the
+-- long-running civitasone-postgres dev instance, and via 5 CGST/SGST/IGST
+-- reproduction inserts pre-fix, all of which failed with that exact error).
+-- Since every insert has always failed, this table has never held a row in
+-- any real environment -- safe to add the column directly, no backfill data
+-- exists.
+--
+-- Same idiom as 0068 (payments.finance_pao): additive, idempotent,
+-- forward-only, with the same sentinel created_by default (defensive only --
+-- no pre-existing row is expected, see above).
+ALTER TABLE gl.finance_gst_ledger
+  ADD COLUMN IF NOT EXISTS created_by uuid NOT NULL DEFAULT '00000000-0000-0000-0000-000000000000';
