@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { decryptPii } from "../../shared/pii-crypto.js";
 import { financePfms } from "../payments/schema.js";
 import { financePfmsConfig } from "./schema.js";
 
@@ -74,28 +75,65 @@ export async function getTenantConfigTx(tx: Writer, tenantId: string) {
  * payments.finance_payments rows (NOT a hardcoded stub):
  *   - amount        : the real payment amount_minor (PAISE bigint)
  *   - ref           : the real UTR / EFT ref (falls back to payment id)
- *   - beneficiary   : resolved vendor name via the bill's vendor_id
- *   - account       : the real bank account_no when bank_account_id is set
+ *   - beneficiary   : resolved vendor name, via bill_id -> finance_bills.vendor_id
+ *                     -> finance_vendors.name (both LEFT JOINs: bill_id is
+ *                     required but vendor_id carries no FK -- see
+ *                     0065_vendor_master.sql -- so an orphaned vendor_id must
+ *                     not turn the whole row into an error).
+ *   - account/ifsc  : the VENDOR's own payment-routing details --
+ *                     finance_vendors.bank_account_no / .ifsc (both `NOT NULL`
+ *                     per 0065_vendor_master.sql, so any row with a resolved
+ *                     vendor always has both). This matches what
+ *                     docs/user-manual/02-FINANCE.md documents for payment
+ *                     initiation: "Confirm the payee's bank details (account
+ *                     number, IFSC). These come from the vendor record." A
+ *                     signed NEFT file must pay the VENDOR.
+ *                     PRIOR BUG (fixed here, found on review of the initial
+ *                     500-error fix): this used to resolve "account" via
+ *                     p.bank_account_id -> treasury.finance_banks.id instead.
+ *                     That FK (fk_fpayments_bank) is real, but
+ *                     treasury.finance_banks holds the DEPARTMENT's own
+ *                     disbursing/treasury account -- see bank-recon/repo.ts:
+ *                     which of the office's OWN accounts a payment was
+ *                     disbursed FROM, for bank-statement reconciliation, not
+ *                     who it was paid TO. Joining it into "account" silently
+ *                     printed the department's own account into a government
+ *                     NEFT beneficiary file instead of the vendor's, with no
+ *                     error of any kind. bank_account_id / treasury.finance_banks
+ *                     are no longer joined here at all: nothing else in this
+ *                     function used them, and resolving the beneficiary's own
+ *                     bank details must never depend on whether a treasury
+ *                     disbursing account happens to be tagged on the payment.
  *   - ddoCode       : the real payment/bill DDO
- * IFSC is not captured in finance-service's schema (no beneficiary bank master),
- * so it is emitted blank rather than fabricated — see route documentation.
+ * account_no/ifsc are `encryptedText` at rest (DPDP PII encryption,
+ * pii-crypto.ts). This function reads them via a raw tx.execute(), which
+ * bypasses drizzle's customType fromDriver decrypt, so both are decrypted
+ * explicitly below via decryptPii() instead.
+ * account/ifsc are blank (never fabricated) only when the vendor itself can't
+ * be resolved at all -- an orphaned vendor_id (see beneficiary above). That's
+ * the only way finance_vendors' NOT NULL bank_account_no/ifsc can still come
+ * back NULL here: a LEFT JOIN finding no row, not a nullable column.
  * Only releasable payments are listed (status in initiated/released/completed).
  */
 export async function listRealBeneficiaries(tenantId: string, pfmsId: string, limit = 500): Promise<BeneficiaryRow[]> {
   // H1: scope strictly to the batch's own payment set (p.pfms_id = the batch's
-  // pfms_id) instead of every tenant payment. Also tenant-scope the bank/bill
-  // joins so a payment can never resolve another tenant's bank/bill row.
+  // pfms_id) instead of every tenant payment. Also tenant-scope the bill/
+  // vendor joins so a payment can never resolve another tenant's bill/vendor
+  // row.
   const rows = await scopedRead((tx) => tx.execute<{
-    beneficiary: string | null; account: string | null; amount_minor: string;
+    beneficiary: string | null; account: string | null; ifsc: string | null; amount_minor: string;
     ref: string; ddo_code: string | null;
   }>(sql`
     SELECT
-      COALESCE(p.vendor_ref, '') AS beneficiary,
-      p.bank_account_ref                   AS account,
+      COALESCE(v.name, '') AS beneficiary,
+      v.bank_account_no                    AS account,
+      v.ifsc                               AS ifsc,
       p.amount_minor::text                 AS amount_minor,
       COALESCE(p.utr, p.eft_ref, p.id::text) AS ref,
       COALESCE(p.ddo_code, p.ddo_code_denorm) AS ddo_code
     FROM payments.finance_payments p
+    LEFT JOIN payments.finance_bills b ON b.id = p.bill_id AND b.tenant_id = p.tenant_id
+    LEFT JOIN payments.finance_vendors v ON v.id = b.vendor_id AND v.tenant_id = b.tenant_id
     WHERE p.tenant_id = ${tenantId}::uuid
       AND p.pfms_id = ${pfmsId}
       AND p.status IN ('initiated','released','completed')
@@ -103,13 +141,13 @@ export async function listRealBeneficiaries(tenantId: string, pfmsId: string, li
     LIMIT ${limit}
   `));
   const arr = rows as unknown as Array<{
-    beneficiary: string | null; account: string | null; amount_minor: string;
+    beneficiary: string | null; account: string | null; ifsc: string | null; amount_minor: string;
     ref: string; ddo_code: string | null;
   }>;
   return arr.map((r) => ({
     beneficiary: r.beneficiary ?? "",
-    account: r.account ?? "",
-    ifsc: "",
+    account: r.account ? decryptPii(r.account) : "",
+    ifsc: r.ifsc ? decryptPii(r.ifsc) : "",
     amountMinor: BigInt(r.amount_minor),
     ref: r.ref,
     ddoCode: r.ddo_code,
