@@ -19,6 +19,9 @@ const {
         onConflictDoNothing: vi.fn().mockReturnValue({
           returning: vi.fn().mockResolvedValue([{ id: "gen-id-001" }]),
         }),
+        // masters/consumer.ts's pao_sync/ddo_sync upsert (BUG FIX: was a
+        // no-op stub, now a real tx.insert(...).onConflictDoUpdate(...)).
+        onConflictDoUpdate: vi.fn().mockResolvedValue(undefined),
         returning: vi.fn().mockResolvedValue([{ id: "gen-id-001" }]),
       }),
     }),
@@ -882,16 +885,21 @@ describe("Financial-statements consumers — coverage", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("Masters consumers — coverage", () => {
-  it("finance.masters.ddo_sync processes DDO sync", async () => {
+  it("finance.masters.ddo_sync processes a real, fully-specified DDO sync (real upsert, not a no-op)", async () => {
     const q = new MemoryQueue();
     registerMastersConsumers(q);
     await q.start();
 
     await q.publish("finance.masters.ddo_sync", makeMsg("finance.masters.ddo_sync", {
-      tenantId: TENANT, source: "pfms",
+      tenantId: TENANT, ddoCode: "DDO900001", name: "Test DDO", paoCode: "PAO9001", source: "pfms",
     }));
     await settle();
 
+    // BUG FIX regression: this handler used to only publish "synced" + audit
+    // with NO write at all (a no-op stub reporting false success). mockTx.insert
+    // must now actually be exercised -- see tests/masters-pao-ddo-sync.test.ts
+    // for the real-Postgres proof (row created, re-sync updates in place).
+    expect(mockTx.insert).toHaveBeenCalled();
     const domainEvts = enqueuedMessages.filter((m) => m.topic === "finance.masters.synced");
     expect(domainEvts).toHaveLength(1);
     expect((domainEvts[0]!.payload as any).masterType).toBe("ddo");
@@ -900,16 +908,17 @@ describe("Masters consumers — coverage", () => {
     await q.stop();
   });
 
-  it("finance.masters.pao_sync processes PAO sync", async () => {
+  it("finance.masters.pao_sync processes a real, fully-specified PAO sync (real upsert, not a no-op)", async () => {
     const q = new MemoryQueue();
     registerMastersConsumers(q);
     await q.start();
 
     await q.publish("finance.masters.pao_sync", makeMsg("finance.masters.pao_sync", {
-      tenantId: TENANT, source: "cga",
+      tenantId: TENANT, paoCode: "PAO900001", name: "Test PAO", ministry: "Ministry of Test", source: "cga",
     }));
     await settle();
 
+    expect(mockTx.insert).toHaveBeenCalled();
     const domainEvts = enqueuedMessages.filter((m) => m.topic === "finance.masters.synced");
     expect(domainEvts).toHaveLength(1);
     expect((domainEvts[0]!.payload as any).masterType).toBe("pao");
@@ -928,6 +937,34 @@ describe("Masters consumers — coverage", () => {
     await settle();
 
     expect(enqueuedMessages).toHaveLength(0);
+    await q.stop();
+  });
+
+  it("finance.masters.pao_sync / ddo_sync: a payload missing the required master-data fields fails loudly instead of silently reporting success", async () => {
+    const q = new MemoryQueue({ maxAttempts: 1 });
+    registerMastersConsumers(q);
+    await q.start();
+
+    // Exactly today's only real caller shape in this repo (no real producer
+    // exists -- see the comment block above registerMastersConsumers in
+    // consumer.ts). BUG FIX regression: before the fix this silently
+    // "succeeded" (audit + synced event enqueued, zero rows written,
+    // nothing anywhere to show why). Now NOTHING is enqueued -- the whole
+    // transaction, including markProcessed, rolls back on the thrown
+    // DomainError. See tests/masters-pao-ddo-sync.test.ts for the
+    // real-Postgres, DLQ-visible proof.
+    await q.publish("finance.masters.pao_sync", makeMsg("finance.masters.pao_sync", {
+      tenantId: TENANT, source: "pfms",
+    }));
+    await settle();
+    expect(enqueuedMessages).toHaveLength(0);
+
+    await q.publish("finance.masters.ddo_sync", makeMsg("finance.masters.ddo_sync", {
+      tenantId: TENANT, source: "pfms",
+    }));
+    await settle();
+    expect(enqueuedMessages).toHaveLength(0);
+
     await q.stop();
   });
 });
