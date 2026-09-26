@@ -1,5 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { decryptPii } from "../../shared/pii-crypto.js";
 import { financePfms } from "../payments/schema.js";
 import { financePfmsConfig } from "./schema.js";
 
@@ -74,11 +75,27 @@ export async function getTenantConfigTx(tx: Writer, tenantId: string) {
  * payments.finance_payments rows (NOT a hardcoded stub):
  *   - amount        : the real payment amount_minor (PAISE bigint)
  *   - ref           : the real UTR / EFT ref (falls back to payment id)
- *   - beneficiary   : resolved vendor name via the bill's vendor_id
- *   - account       : the real bank account_no when bank_account_id is set
+ *   - beneficiary   : resolved vendor name, via bill_id -> finance_bills.vendor_id
+ *                     -> finance_vendors.name (both LEFT JOINs: bill_id is
+ *                     required but vendor_id carries no FK -- see
+ *                     0065_vendor_master.sql -- so an orphaned vendor_id must
+ *                     not turn the whole row into an error).
+ *   - account       : the real (decrypted) bank account_no when bank_account_id
+ *                     is set, via bank_account_id -> treasury.finance_banks.id
+ *                     -- the FK this column actually carries (fk_fpayments_bank).
+ *                     payments.finance_bank_accounts, added later by
+ *                     0066_finance_bank_accounts.sql, is a different table (the
+ *                     office's own disbursing accounts) and is NOT what
+ *                     bank_account_id references.
  *   - ddoCode       : the real payment/bill DDO
- * IFSC is not captured in finance-service's schema (no beneficiary bank master),
- * so it is emitted blank rather than fabricated — see route documentation.
+ * account_no is `encryptedText` at rest (DPDP PII encryption, pii-crypto.ts).
+ * This function reads it via a raw tx.execute(), which bypasses drizzle's
+ * customType fromDriver decrypt, so it is decrypted explicitly below via
+ * decryptPii() instead.
+ * IFSC is left blank rather than fabricated: neither joined table is wired as
+ * an authoritative beneficiary-bank IFSC source for a signed treasury bank
+ * file (treasury.finance_banks holds the office's own account; finance_vendors
+ * holds vendor KYC data) -- see route documentation.
  * Only releasable payments are listed (status in initiated/released/completed).
  */
 export async function listRealBeneficiaries(tenantId: string, pfmsId: string, limit = 500): Promise<BeneficiaryRow[]> {
@@ -90,12 +107,15 @@ export async function listRealBeneficiaries(tenantId: string, pfmsId: string, li
     ref: string; ddo_code: string | null;
   }>(sql`
     SELECT
-      COALESCE(p.vendor_ref, '') AS beneficiary,
-      p.bank_account_ref                   AS account,
+      COALESCE(v.name, '') AS beneficiary,
+      bk.account_no                        AS account,
       p.amount_minor::text                 AS amount_minor,
       COALESCE(p.utr, p.eft_ref, p.id::text) AS ref,
       COALESCE(p.ddo_code, p.ddo_code_denorm) AS ddo_code
     FROM payments.finance_payments p
+    LEFT JOIN payments.finance_bills b ON b.id = p.bill_id AND b.tenant_id = p.tenant_id
+    LEFT JOIN payments.finance_vendors v ON v.id = b.vendor_id AND v.tenant_id = b.tenant_id
+    LEFT JOIN treasury.finance_banks bk ON bk.id = p.bank_account_id AND bk.tenant_id = p.tenant_id
     WHERE p.tenant_id = ${tenantId}::uuid
       AND p.pfms_id = ${pfmsId}
       AND p.status IN ('initiated','released','completed')
@@ -108,7 +128,7 @@ export async function listRealBeneficiaries(tenantId: string, pfmsId: string, li
   }>;
   return arr.map((r) => ({
     beneficiary: r.beneficiary ?? "",
-    account: r.account ?? "",
+    account: r.account ? decryptPii(r.account) : "",
     ifsc: "",
     amountMinor: BigInt(r.amount_minor),
     ref: r.ref,
