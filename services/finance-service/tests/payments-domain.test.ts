@@ -9,6 +9,7 @@ import {
   assertThreeWayMatch,
   assertValidPaymentMode,
   assertBillPassed,
+  assertBillRejectable,
   nextStage,
   DEFAULT_THREE_WAY_TOLERANCE_PCT,
 } from "../src/modules/payments/domain.js";
@@ -127,6 +128,39 @@ describe("payments/domain — assertBillPassed()", () => {
     try { assertBillPassed("draft"); } catch (e) {
       expect((e as DomainError).code).toBe("BILL_NOT_PASSED");
     }
+  });
+});
+
+describe("payments/domain — assertBillRejectable()", () => {
+  it("allows reject from 'pending' (created, or mid-approval)", () => {
+    expect(() => assertBillRejectable("pending")).not.toThrow();
+  });
+
+  it("allows reject from 'on_hold' (billCreate's 3-way-match-mismatch status)", () => {
+    expect(() => assertBillRejectable("on_hold")).not.toThrow();
+  });
+
+  it("allows reject from 'under_review' and 'draft'", () => {
+    expect(() => assertBillRejectable("under_review")).not.toThrow();
+    expect(() => assertBillRejectable("draft")).not.toThrow();
+  });
+
+  it("throws BILL_NOT_REJECTABLE for 'passed' (GL already posted)", () => {
+    expect(() => assertBillRejectable("passed")).toThrow(DomainError);
+    try { assertBillRejectable("passed"); } catch (e) {
+      expect((e as DomainError).code).toBe("BILL_NOT_REJECTABLE");
+    }
+  });
+
+  it("throws BILL_NOT_REJECTABLE for 'paid' (cash already disbursed)", () => {
+    expect(() => assertBillRejectable("paid")).toThrow(DomainError);
+    try { assertBillRejectable("paid"); } catch (e) {
+      expect((e as DomainError).code).toBe("BILL_NOT_REJECTABLE");
+    }
+  });
+
+  it("throws BILL_NOT_REJECTABLE for 'rejected' (no re-rejecting a terminal bill)", () => {
+    expect(() => assertBillRejectable("rejected")).toThrow(DomainError);
   });
 });
 

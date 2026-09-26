@@ -38,7 +38,8 @@ vi.mock("../src/shared/infra.js", () => ({
   },
 }));
 
-import { listBillSummaries, listAdvances, getBillDetail, toMinorBigInt } from "../src/modules/payments/queries.js";
+import { listBillSummaries, listAdvances, getBillDetail, listUCs, toMinorBigInt } from "../src/modules/payments/queries.js";
+import { UCSummaryListSchema } from "@civitasone/schemas/web";
 
 function setRow(v: unknown): void {
   mockCache.current = v;
@@ -149,5 +150,37 @@ describe("listAdvances — balance subtraction stays exact across the cache roun
     expect(result[0].amount).toBe("10000000000000000");
     expect(result[0].adjustedAmount).toBe("1");
     expect(result[0].balance).toBe("9999999999999999");
+  });
+});
+
+describe("listUCs — amount round-trips as a bigint-safe string through UCSummaryListSchema", () => {
+  it("returns amount as a string, and UCSummaryListSchema accepts it, even beyond 2^53", async () => {
+    setRow([
+      {
+        id: "uc-1",
+        ucNo: "UC-001",
+        grantRef: "NHM-2024",
+        grantee: "NHM-2024",
+        // Beyond Number.MAX_SAFE_INTEGER (9007199254740991) — the exact class
+        // of value the "H3" string-amount convention exists to protect, and
+        // the exact class of value UCSummarySchema's old `amount: z.number()`
+        // would 400 on as a string, or silently corrupt as a number.
+        amountMinor: "123456789012345",
+        periodFrom: "2025-04-01",
+        periodTo: "2026-03-31",
+        submittedDate: "2026-04-05",
+        status: "submitted",
+      },
+    ]);
+    const result = await listUCs("tenant-1", 10);
+    expect(result[0].amount).toBe("123456789012345");
+    // BUG FIX regression: UCSummarySchema.amount used to be z.number(), which
+    // rejects this string outright ("Expected number, received string") —
+    // the exact live failure GET /v1/finance/utilization-certificates 400'd
+    // on for every tenant with >=1 UC record. Must not throw, and must
+    // preserve full precision (no round-trip through Number, which would
+    // silently corrupt anything beyond 2^53 instead of throwing).
+    const parsed = UCSummaryListSchema.parse(result);
+    expect(parsed[0].amount).toBe("123456789012345");
   });
 });

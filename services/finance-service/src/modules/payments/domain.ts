@@ -164,6 +164,35 @@ export function assertBillPassed(status: string): void {
   }
 }
 
+/**
+ * BUG FIX: billReject had no status guard at all — it would flip ANY bill
+ * straight to 'rejected' regardless of its current status, including one
+ * already 'passed' (GL posted, see billApprove's enqueueSpineJournal) or
+ * 'paid' (cash disbursed, payment + cash-book records exist, see
+ * paymentInitiate). That left real GL postings and payment records on the
+ * books against a bill that now displays as rejected — a genuine
+ * audit/compliance inconsistency, not an ordinary reject.
+ *
+ * A reject is only a legitimate action from a pre-payment status: 'pending'
+ * (just created, or mid-approval before the final stage), 'on_hold' /
+ * 'under_review' (flagged for review — billCreate sets 'on_hold' on a
+ * 3-way-match mismatch), or 'draft'. It is blocked once the bill is
+ * 'passed' / 'paid' (see above), or already 'rejected' (no re-rejecting an
+ * already-terminal bill). This blocklist mirrors the full status set
+ * finance_bills_status_check allows (migrations/0036_check_constraints_
+ * status_columns.sql) minus exactly those three terminal/post-payment states.
+ */
+const BILL_REJECT_BLOCKED_STATUSES = new Set(["passed", "paid", "rejected"]);
+
+export function assertBillRejectable(status: string): void {
+  if (BILL_REJECT_BLOCKED_STATUSES.has(status)) {
+    throw new DomainError(
+      "BILL_NOT_REJECTABLE",
+      `bill cannot be rejected from status '${status}' (only a bill that has not yet been passed, paid, or already rejected may be rejected)`,
+    );
+  }
+}
+
 const STAGE_TRANSITIONS: Record<string, string> = {
   section: "accounts",
   accounts: "pay",

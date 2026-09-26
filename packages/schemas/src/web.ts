@@ -632,7 +632,12 @@ export const UCSummarySchema = z.object({
   ucNo: z.string(),
   grantRef: z.string().optional(),
   grantee: z.string(),
-  amount: z.number(),
+  // Bigint-safe string, not z.number(): payments/queries.ts's listUCs
+  // returns row.amountMinor.toString() (H3: paise can exceed 2^53), so a
+  // plain z.number() here 400s GET /v1/finance/utilization-certificates on
+  // any real UC data (it only passed before because the UC table was
+  // empty). Same convention as BillSummarySchema.amount / AdvanceSummarySchema.amount above.
+  amount: zMoneyMinorString,
   periodFrom: z.string(),
   periodTo: z.string(),
   submittedDate: z.string().optional(),

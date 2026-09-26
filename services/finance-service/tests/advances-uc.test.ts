@@ -231,3 +231,71 @@ describe("utilization-certificate consumer — CQRS wiring (integration)", () =>
     expect(outbox.map((r) => r.eventType)).toContain("audit.event.record");
   });
 });
+
+// ── GET /v1/finance/utilization-certificates — HTTP surface (bigint-safe amount) ──
+//
+// BUG FIX: UCSummarySchema.amount (packages/schemas/src/web.ts) was
+// z.number(), while listUCs() (payments/queries.ts) already returned
+// row.amountMinor.toString() (the same H3 bigint-safe-string convention as
+// BillSummarySchema/AdvanceSummarySchema) — a plain z.number() rejects a
+// string outright, so this endpoint 400'd for every tenant with >=1 UC
+// record. Confirmed live: {"fieldErrors":[{"field":"0.amount","message":
+// "Expected number, received string"}]}.
+
+const UC_LIST_ID   = "13131313-aaaa-4000-8000-000000000099";
+const UC_LIST_MSG  = "13131313-bbbb-4000-8000-000000000099";
+const UC_LIST_CORR = "corr-uc-list-99";
+// A string literal, not a number literal: 123456789012345678 exceeds
+// Number.MAX_SAFE_INTEGER (9007199254740991), so a JS *number* literal this
+// large would already be silently rounded by the source parser before the
+// test even runs. Genuinely rules out truncation/precision loss end to end
+// (BigInt(str) is exact; Number(str) is not) — not just the schema-
+// rejects-a-string failure a small test value would only half-prove.
+const UC_LARGE_AMOUNT_MINOR = "123456789012345678";
+
+async function wipeUcList() {
+  await scoped(TENANT, (tx) => tx.delete(outboxMessages).where(eq(outboxMessages.correlationId, UC_LIST_CORR)));
+  await scoped(TENANT, (tx) => tx.delete(financeUC).where(eq(financeUC.id, UC_LIST_ID)));
+  await db.delete(processed).where(eq(processed.messageId, UC_LIST_MSG));
+}
+
+describe("GET /v1/finance/utilization-certificates — HTTP surface (bigint-safe amount)", () => {
+  beforeAll(async () => { await wipeUcList(); });
+  afterAll(async () => { await wipeUcList(); });
+
+  it("succeeds with real seeded UC data and preserves a large amount exactly, as a string", async () => {
+    const q = new MemoryQueue();
+    registerPaymentsConsumers(q);
+    await q.start();
+    await q.publish("finance.uc.create", {
+      messageId: UC_LIST_MSG, type: "finance.uc.create",
+      tenantId: TENANT, actorId: ACTOR, correlationId: UC_LIST_CORR, schemaVersion: "1.0",
+      payload: {
+        id: UC_LIST_ID, tenantId: TENANT, ucNo: "UC-LIST-1",
+        purpose: "Large-value grant utilisation", scheme: "PMAY-G-LARGE",
+        amountMinor: UC_LARGE_AMOUNT_MINOR, currency: "INR",
+      },
+    });
+    await waitFor(async () =>
+      (await db.select().from(processed).where(eq(processed.messageId, UC_LIST_MSG))).length === 1);
+    await q.stop();
+
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET", url: "/v1/finance/utilization-certificates?limit=50",
+      headers: { authorization: `Bearer ${makeToken()}` },
+    });
+    await app.close();
+    // BUG FIX regression: pre-fix this was 400 (UCSummarySchema.amount was
+    // z.number(), rejecting listUCs()'s string amount) as soon as any UC row
+    // existed for the tenant — see the module-header comment above.
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as Array<{ id: string; amount: string }>;
+    const row = body.find((r) => r.id === UC_LIST_ID);
+    expect(row).toBeDefined();
+    expect(typeof row?.amount).toBe("string");
+    // Exact round-trip — not merely "didn't crash". A pre-fix z.number() pass
+    // (if it hadn't 400'd) would have silently truncated this value.
+    expect(row?.amount).toBe(UC_LARGE_AMOUNT_MINOR);
+  });
+});
