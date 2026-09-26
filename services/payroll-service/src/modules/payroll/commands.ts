@@ -29,6 +29,26 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
 export async function createRun(ctx: RequestContext, body: CreateRunBody): Promise<Accepted> {
   const id = randomUUID();
   const runType = body.runType ?? "regular";
+  // structureId is only validated as a well-formed UUID by createRunBody
+  // (validators.ts) -- nothing previously checked it actually names a row in
+  // payroll.payroll_structures. A well-formed but nonexistent id sailed
+  // through to a 202 identical to a real one, and the async consumer
+  // (processPayrollRun's repo.listComponentsByStructure) silently returned
+  // zero components: a payslip with no BASIC/HRA/etc line items and no error
+  // anywhere. Reject synchronously here, the same way DUPLICATE_RUN_FOR_PERIOD
+  // below is rejected, so the caller gets a clear 400 instead of a 202 that
+  // quietly produces an empty structure. (400, not 404/422, to match this
+  // route's other payload-validation failures -- see errorHandler below.)
+  if (body.structureId) {
+    const struct = await scopedRead((tx) => tx.execute(sql`
+      SELECT id FROM payroll.payroll_structures
+      WHERE id = ${body.structureId}::uuid AND tenant_id = ${ctx.tenantId}::uuid AND status = 'active'
+      LIMIT 1
+    `));
+    if (!struct[0]) {
+      throw new HttpError(400, "STRUCTURE_NOT_FOUND", `payroll structure ${body.structureId} does not exist for this tenant`);
+    }
+  }
   // BUG-3 fix: this fast-path pre-check must run through scopedRead (a
   // properly RLS-scoped transaction), not a bare db.execute(). Per the doc
   // comment on scopedRead in shared/db.ts, a plain db.execute()/db.select()

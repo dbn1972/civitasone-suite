@@ -1,7 +1,8 @@
 import type { Queue } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { randomUUID } from "node:crypto";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
@@ -80,8 +81,25 @@ async function resolveDaRateBps(tx: typeof db, tenantId: string, month: string):
     WHERE tenant_id = ${tenantId}::uuid AND effective_from <= ${month + "-01"}::date
     ORDER BY effective_from DESC LIMIT 1
   `)) as unknown as Array<{ rate_bps: number | string }>;
-  const v = rows[0]?.rate_bps;
-  return v != null ? BigInt(v) : 0n;
+  // bug-fix (silent-DA-gap): a tenant/period with NO row at all here is a
+  // configuration gap, not a legitimate zero rate -- a deliberate "no DA this
+  // period" decision should still be recorded as an explicit rate_bps=0 row
+  // (which returns exactly as before, no error). Silently defaulting to 0n
+  // for "no row" was indistinguishable from that deliberate case: domain.ts's
+  // computeSlip only adds a DA line item `if (daMinor > 0n)`, so a
+  // missing-config tenant/period produced a payslip with NO DA line at all --
+  // identical to "DA legitimately doesn't apply," with no error or warning
+  // anywhere a payroll officer could see before disbursing pay. Fail loudly
+  // instead: every caller of this function (processPayrollRun,
+  // processPensionRun's DR resolution, generateRetroArrears's per-period
+  // loop below) runs inside the runCreate consumer's own try/catch, which
+  // already marks the run 'failed' with the thrown message in last_error --
+  // the same mechanism every other run-processing failure already surfaces
+  // through, so this needs no new status value or schema change.
+  if (rows.length === 0) {
+    throw new NonRetryableError(`DA_RATE_NOT_CONFIGURED: no Dearness Allowance rate configured for tenant ${tenantId} covering ${month}; add a payroll.dearness_allowance_rates row (rate_bps=0 if DA genuinely does not apply) before running payroll for this period`);
+  }
+  return BigInt(rows[0]!.rate_bps);
 }
 
 /** Active Professional Tax slabs for the tenant + state (H14 fix). */
@@ -1164,7 +1182,7 @@ async function processPayrollRun(
   const structComps = await repo.listComponentsByStructure(p.structureId, p.tenantId);
   // Multi-DDO: the departments this DDO pays (null => whole tenant, legacy).
   const ddoDepartments = await resolveDdoDepartments(p.tenantId, p.ddoCode ?? null);
-  const daRateBps = await resolveDaRateBps(db, p.tenantId, p.month);
+  const daRateBps = await scopedRead((tx) => resolveDaRateBps(tx, p.tenantId, p.month));
   // H14 FIX: PT slabs are now resolved per-employee (by state_code) inside the loop.
   // A tenant-level fallback is kept for employees without a state_code.
   const ptSlabsFallback = await resolvePtSlabs(db, p.tenantId);
@@ -1494,7 +1512,7 @@ async function processPensionRun(
   msg: { tenantId: string; actorId: string; correlationId: string },
   p: { id: string; tenantId: string; month: string; ddoCode: string | null },
 ): Promise<void> {
-  const drRateBps = await resolveDaRateBps(db, p.tenantId, p.month); // DR shares the DA series
+  const drRateBps = await scopedRead((tx) => resolveDaRateBps(tx, p.tenantId, p.month)); // DR shares the DA series
   const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
   // MEDIUM (payroll-calc audit): Sec 192 true-up, same monthIdxInFy/
   // monthsRemaining formula processPayrollRun uses -- pension is taxable as
