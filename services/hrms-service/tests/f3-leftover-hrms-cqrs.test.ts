@@ -122,8 +122,8 @@ const SYNC_WRITE = /\b(?:db|tx)\.(?:insert|update|delete|execute)\s*\(|\bdb\.tra
  *   screening-decision-race.test.ts proves closed (10/10 real Promise.all
  *   runs, no artificial gate needed — see that file's header for why). See
  *   the comment directly above this db.transaction call in screening-routes.ts.
- * - recruitment/screening-override-routes.ts:127 (`db.transaction(...)` for
- *   POST .../approve) and :193 (`db.transaction(...)` for POST .../reject) —
+ * - recruitment/screening-override-routes.ts:143 (`db.transaction(...)` for
+ *   POST .../approve) and :216 (`db.transaction(...)` for POST .../reject) —
  *   R-RA-0111 TOCTOU fix (fix/hrms-screening-override-toctou), the sibling gap
  *   the same audit that produced screening-routes.ts's fix above flagged in
  *   this file: the SoD/version checks ran synchronously, but the actual
@@ -144,7 +144,7 @@ const SYNC_WRITE = /\b(?:db|tx)\.(?:insert|update|delete|execute)\s*\(|\bdb\.tra
  *   screening-override-routes.ts, and
  *   screening-override-decision-race.test.ts (10/10 real Promise.all runs,
  *   same no-artificial-gate reasoning as screening-decision-race.test.ts).
- * - recruitment/screening-override-routes.ts:287 (`db.transaction(...)`
+ * - recruitment/screening-override-routes.ts:310 (`db.transaction(...)`
  *   inside the shared `recordOverrideDecisionDenied` helper) — the same fix's
  *   denial-audit write: a checker decision denied by losing the atomic race
  *   above (or by the route's own sequential pre-check) must leave a trace in
@@ -170,9 +170,9 @@ const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "recruitment/screening-routes.ts:110",
   "recruitment/screening-routes.ts:170",
   "recruitment/screening-routes.ts:173",
-  "recruitment/screening-override-routes.ts:127",
-  "recruitment/screening-override-routes.ts:193",
-  "recruitment/screening-override-routes.ts:287",
+  "recruitment/screening-override-routes.ts:143",
+  "recruitment/screening-override-routes.ts:216",
+  "recruitment/screening-override-routes.ts:310",
 ]);
 
 describe("F3 leftover hrms CQRS route boundary", () => {

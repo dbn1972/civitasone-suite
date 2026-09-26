@@ -73,7 +73,19 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     const body = z.object({ note: z.string().max(2000).optional() }).parse(req.body ?? {});
 
     const r = await mustReq(ctx.tenantId, reqId);
-    if (!isActionable(r.status)) throw new HttpError(409, "NOT_PENDING", `override request is '${r.status}', not pending`);
+    // This fast-path denial is reached whenever THIS request's own read
+    // happens after the other racer's write already committed -- which, under
+    // genuine concurrency, is common (there is no guarantee both racers' reads
+    // land before either write does; that's only the WORST case, not the only
+    // one). It is exactly as much a "lost the race" outcome as the atomic
+    // conditional UPDATE losing below, so it must be audited identically --
+    // mirroring PR #1585's denyAsOverride, which routes its own analogous
+    // fast-path "alreadyDecided" check through the SAME audited helper as its
+    // atomic-race-loss path, for the same reason.
+    if (!isActionable(r.status)) {
+      await recordOverrideDecisionDenied(ctx, r, "approve", "NOT_PENDING");
+      throw new HttpError(409, "NOT_PENDING", `override request is '${r.status}', not pending`);
+    }
 
     const a = await screeningRepo.findApplication(ctx.tenantId, r.applicationId);
     if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
@@ -96,7 +108,11 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     // having each read the SAME pending/current state before either write
     // lands; the real guard is the atomic conditional UPDATEs below, keyed on
     // the DB rows still matching at write time, not on these reads (R-RA-0111).
+    // Same audit obligation as the isActionable check above: this fast path is
+    // reached just as often under real racing as the atomic path below, so it
+    // must leave the identical trace.
     if (a.screeningDecision !== r.fromDecision || a.version !== r.applicationVersion) {
+      await recordOverrideDecisionDenied(ctx, r, "approve", "STALE_OVERRIDE");
       throw new HttpError(409, "STALE_OVERRIDE", `the application changed since the override was raised (now '${a.screeningDecision}' v${a.version}, raised against '${r.fromDecision}' v${r.applicationVersion}); re-raise it`);
     }
 
@@ -176,7 +192,14 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     const body = z.object({ note: z.string().max(2000).optional() }).parse(req.body ?? {});
 
     const r = await mustReq(ctx.tenantId, reqId);
-    if (!isActionable(r.status)) throw new HttpError(409, "NOT_PENDING", `override request is '${r.status}', not pending`);
+    // Same audit obligation as /approve's identical fast-path check above: under
+    // genuine racing, this is reached just as often as the atomic path below
+    // (whenever this request's own read happens after the other racer's write
+    // already committed), so it must leave the identical trace.
+    if (!isActionable(r.status)) {
+      await recordOverrideDecisionDenied(ctx, r, "reject", "NOT_PENDING");
+      throw new HttpError(409, "NOT_PENDING", `override request is '${r.status}', not pending`);
+    }
     // A checker other than the requester must reject (no self-approval loop).
     if (ctx.actorId === r.requestedBy) throw new HttpError(403, "SOD_VIOLATION", "separation of duties: the requester cannot decide their own override");
 

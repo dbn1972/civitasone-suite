@@ -189,16 +189,20 @@ describe("screening override maker-checker (R-RA-0111)", () => {
     await app.close();
   });
 
-  it("rejects a stale override when the decision moved on (409 STALE_OVERRIDE)", async () => {
+  it("rejects a stale override when the decision moved on (409 STALE_OVERRIDE, audited)", async () => {
     H.findApplication.mockResolvedValue(appRow({ screeningDecision: "shortlisted" }));
     const app = await buildApp();
     const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("STALE_OVERRIDE");
+    // This is the FAST-PATH staleness check (not the atomic race-loss path
+    // above) -- under real racing this is reached just as often as the atomic
+    // path, so it must leave the identical audit trace, not a silent 409.
+    expect(H.insertEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "override_denied", isOverride: true }));
     await app.close();
   });
 
-  it("catches an A→B→A cycle as stale via the version pin (409 STALE_OVERRIDE)", async () => {
+  it("catches an A→B→A cycle as stale via the version pin (409 STALE_OVERRIDE, audited)", async () => {
     // Same decision value as raised against, but the version advanced.
     H.findApplication.mockResolvedValue(appRow({ screeningDecision: "ineligible", version: 5 }));
     const app = await buildApp();
@@ -206,6 +210,7 @@ describe("screening override maker-checker (R-RA-0111)", () => {
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("STALE_OVERRIDE");
     expect(H.setScreening).not.toHaveBeenCalled();
+    expect(H.insertEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "override_denied", isOverride: true }));
     await app.close();
   });
 
@@ -236,12 +241,17 @@ describe("screening override maker-checker (R-RA-0111)", () => {
     await app.close();
   });
 
-  it("rejects approving a non-pending request (409 NOT_PENDING)", async () => {
+  it("rejects approving a non-pending request via the fast path (409 NOT_PENDING, audited)", async () => {
     H.findRequest.mockResolvedValue(reqRow({ status: "approved" }));
     const app = await buildApp();
     const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/approve`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("NOT_PENDING");
+    // This is the FAST-PATH isActionable check (mustReq's status is already
+    // non-pending before the atomic transaction is ever attempted) -- under
+    // real racing this is reached just as often as the atomic race-loss path
+    // above, so it must leave the identical audit trace.
+    expect(H.insertEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "override_denied", isOverride: true }));
     await app.close();
   });
 
@@ -251,6 +261,16 @@ describe("screening override maker-checker (R-RA-0111)", () => {
     expect(r.statusCode).toBe(200);
     expect(r.json().status).toBe("rejected");
     expect(H.setRequestStatusIfPending).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
+  it("rejects rejecting a non-pending request via the fast path (409 NOT_PENDING, audited)", async () => {
+    H.findRequest.mockResolvedValue(reqRow({ status: "cancelled" }));
+    const app = await buildApp();
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/screening-overrides/${REQ}/reject`, headers: hdr(APPROVER, ["hr_admin"]), payload: {} });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("NOT_PENDING");
+    expect(H.insertEvent).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "override_denied", isOverride: true }));
     await app.close();
   });
 

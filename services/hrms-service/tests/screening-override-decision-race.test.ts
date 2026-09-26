@@ -35,6 +35,27 @@
  * own row lock serialises, so no artificial pause/gate is needed: firing two
  * real requests through Promise.all with no await between them reproduces the
  * race deterministically on every run.
+ *
+ * REVIEW FOLLOW-UP (audit-completeness gap): each route ALSO has an earlier,
+ * plain synchronous pre-check (isActionable's status check in both routes,
+ * plus approve's staleness check) that throws its 409 directly -- these are
+ * not the concurrency guard (the atomic UPDATEs above are), but under genuine
+ * racing a loser's own read frequently happens AFTER the winner's write has
+ * already committed, landing it on one of these fast paths instead of the
+ * atomic one. An independent review found the first version of this fix only
+ * wired the audit call into the atomic-loss path, leaving these fast paths
+ * silently unaudited -- exactly the "zero-trace" gap this fix exists to close,
+ * just relocated. Both TRUE CONCURRENCY tests below still don't reliably
+ * exercise the fast paths themselves (which path a given run lands on is a
+ * genuine timing accident, confirmed by temporary debug instrumentation during
+ * this fix: this environment's Promise.all ordering happens to always resolve
+ * into the atomic path, never the fast one -- the opposite bias from the
+ * review environment, which hit the fast path almost every time). The three
+ * "hits the fast path directly" tests below close that verification gap
+ * deterministically: each forces its scenario sequentially (no race at all),
+ * so it can only ever land on the fast-path check, and confirms it now audits
+ * identically to the atomic path -- real Postgres, not mocked, but immune to
+ * the timing accident that made the atomic-only bug look invisible here.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -207,6 +228,78 @@ describe("R-RA-0111 screening-override checker decision — TOCTOU race (determi
       expect(events.filter((e) => e.action === "override")).toHaveLength(0);
     }
     // Whichever lost, it left a trace -- never a silent no-op.
+    expect(events.filter((e) => e.action === "override_denied")).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it("a second approve that arrives after the request was ALREADY decided hits the fast isActionable path directly -- still audited (409 NOT_PENDING)", async () => {
+    const appId = randomUUID();
+    const reqId = randomUUID();
+    await seedDecidedApplication(appId);
+    await seedPendingOverride(reqId, appId, "eligible");
+    const app = await buildApp();
+
+    // Deliberately sequential, not a race: the first call's entire
+    // transaction commits before the second is even sent, so the second's
+    // own mustReq() read already sees status='approved' -- it can only ever
+    // hit the fast, synchronous isActionable check (screening-override-routes.ts's
+    // very first check in /approve), never the atomic setRequestStatusIfPending
+    // path below it.
+    const res1 = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${reqId}/approve`, headers: auth(APPROVER_1, ["hr_admin"]), payload: {} });
+    expect(res1.statusCode).toBe(200);
+
+    const res2 = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${reqId}/approve`, headers: auth(APPROVER_2, ["hr_admin"]), payload: {} });
+    expect(res2.statusCode).toBe(409);
+    expect(res2.json().code).toBe("NOT_PENDING");
+
+    const events = await readEvents(appId);
+    expect(events.filter((e) => e.action === "override")).toHaveLength(1);
+    expect(events.filter((e) => e.action === "override_denied")).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it("an approve whose application changed since the override was raised hits the fast staleness path directly -- still audited (409 STALE_OVERRIDE)", async () => {
+    const appId = randomUUID();
+    const reqId = randomUUID();
+    await seedDecidedApplication(appId);
+    await seedPendingOverride(reqId, appId, "eligible");
+    // Simulate an unrelated edit bumping the application's version BEFORE the
+    // approve call is ever made (not racing it) -- approve's own upfront read
+    // sees the mismatch immediately, so it can only hit the fast staleness
+    // check (screening-override-routes.ts:114), never the atomic path.
+    await runWithTenant(TENANT, () => db.transaction((tx) => tx.update(hrmsApplications)
+      .set({ version: 2, updatedAt: new Date() })
+      .where(and(eq(hrmsApplications.tenantId, TENANT), eq(hrmsApplications.id, appId)))));
+    const app = await buildApp();
+
+    const res = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${reqId}/approve`, headers: auth(APPROVER_1, ["hr_admin"]), payload: {} });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("STALE_OVERRIDE");
+
+    const events = await readEvents(appId);
+    expect(events.filter((e) => e.action === "override")).toHaveLength(0);
+    expect(events.filter((e) => e.action === "override_denied")).toHaveLength(1);
+
+    await app.close();
+  });
+
+  it("a second reject that arrives after the request was ALREADY decided hits the fast isActionable path directly -- still audited (409 NOT_PENDING)", async () => {
+    const appId = randomUUID();
+    const reqId = randomUUID();
+    await seedDecidedApplication(appId);
+    await seedPendingOverride(reqId, appId, "eligible");
+    const app = await buildApp();
+
+    const res1 = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${reqId}/reject`, headers: auth(APPROVER_1, ["hr_admin"]), payload: {} });
+    expect(res1.statusCode).toBe(200);
+
+    const res2 = await app.inject({ method: "POST", url: `/v1/hrms/screening-overrides/${reqId}/reject`, headers: auth(APPROVER_2, ["hr_admin"]), payload: {} });
+    expect(res2.statusCode).toBe(409);
+    expect(res2.json().code).toBe("NOT_PENDING");
+
+    const events = await readEvents(appId);
     expect(events.filter((e) => e.action === "override_denied")).toHaveLength(1);
 
     await app.close();
