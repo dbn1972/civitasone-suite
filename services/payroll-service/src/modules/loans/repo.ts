@@ -1,6 +1,14 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollLoans, payrollLoanRepayments, type LoanRow } from "./schema.js";
+// BUG-1 (payroll loans EMI cap): reads payroll's own gross-pay history to
+// evaluate the cap. Cross-module reads within this service are an
+// established pattern in the other direction already -- payroll/consumer.ts
+// imports this very file (`import * as loansRepo from "../loans/repo.js"`)
+// for its own per-employee loan lookups -- and both schemas are combined
+// into the one `db` in shared/db.ts regardless of which module directory
+// they live in.
+import { payrollSlips } from "../payroll/schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 
@@ -70,6 +78,30 @@ export async function findLoansByEmployeesTx(
     if (list.length < limit) list.push(row);
   }
   return result;
+}
+
+/**
+ * BUG-1 (payroll loans EMI cap): the employee's most recently computed
+ * payroll gross, used as the affordability base for the combined-EMI cap
+ * (see policy.ts). Returns null when the employee has no payroll_slips row
+ * yet (e.g. a brand-new hire's very first loan application) -- policy.ts
+ * documents how that case is handled.
+ */
+export async function findLatestGrossMinorForEmployee(tenantId: string, employeeId: string): Promise<bigint | null> {
+  const rows = await scopedRead((tx) => tx.select({ grossMinor: payrollSlips.grossMinor }).from(payrollSlips)
+    .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId)))
+    .orderBy(desc(payrollSlips.createdAt))
+    .limit(1));
+  return rows[0]?.grossMinor ?? null;
+}
+
+/** Tx-scoped variant of findLatestGrossMinorForEmployee -- see findLoansByEmployeeTx's doc comment above for why the consumer needs the tx-scoped form (reads through the caller's own open transaction rather than opening a competing one). */
+export async function findLatestGrossMinorForEmployeeTx(tx: Writer, tenantId: string, employeeId: string): Promise<bigint | null> {
+  const rows = await (tx as typeof db).select({ grossMinor: payrollSlips.grossMinor }).from(payrollSlips)
+    .where(and(eq(payrollSlips.tenantId, tenantId), eq(payrollSlips.employeeId, employeeId)))
+    .orderBy(desc(payrollSlips.createdAt))
+    .limit(1);
+  return rows[0]?.grossMinor ?? null;
 }
 
 export async function insertLoan(tx: Writer, row: typeof payrollLoans.$inferInsert): Promise<void> {

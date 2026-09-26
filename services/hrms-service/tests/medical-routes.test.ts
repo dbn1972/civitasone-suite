@@ -105,13 +105,6 @@ const claimRow = (over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const hospitalRow = (over: Record<string, unknown> = {}) => ({
-  id: HOSPITAL_ID, name: "AIIMS Delhi", city: "Delhi",
-  state: "Delhi", type: "government",
-  empanelment_expiry: "2027-12-31", specialities: "General",
-  ...over,
-});
-
 const insuranceRow = (over: Record<string, unknown> = {}) => ({
   employee_id: EMP, scheme_type: "CGHS", scheme_id: "CGHS-001",
   card_number: "CGHS-CARD-001", validity_from: "2025-01-01",
@@ -627,43 +620,23 @@ describe("PATCH /v1/hrms/medical/claims/:id/approve — HR approve/reject", () =
 });
 
 // =================== GET /v1/hrms/medical/hospitals ===================
-describe("GET /v1/hrms/medical/hospitals — empanelled hospital list", () => {
-  it("lists hospitals (200)", async () => {
-    H.sqlClientQuery.mockReturnValue([hospitalRow(), hospitalRow({ id: "dddddddd-0002-4000-8000-000000000002", name: "Safdarjung" })]);
+// Was: queried employee.empanelled_hospitals, a table that has never existed
+// (wrong name AND wrong schema, not fixable to a real table — see routes.ts's
+// comment on this handler). This suite used to mock sqlClient's return value
+// and assert 200, which is exactly why it never caught the 500: it never
+// exercised the real query at all. Now asserts the honest fail-closed 501
+// instead, and that the query layer is never even reached.
+describe("GET /v1/hrms/medical/hospitals — empanelled hospital list (NOT_IMPLEMENTED, no backing table)", () => {
+  it("returns 501 NOT_IMPLEMENTED for an authorized role, without touching the DB", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/hospitals", headers: auth() });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data).toHaveLength(2);
+    expect(r.statusCode).toBe(501);
+    expect(r.json().code).toBe("NOT_IMPLEMENTED");
+    expect(H.sqlClientQuery).not.toHaveBeenCalled();
     await app.close();
   });
 
-  it("filters by city (200)", async () => {
-    H.sqlClientQuery.mockReturnValue([hospitalRow()]);
-    const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/hospitals?city=Delhi", headers: auth() });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data).toHaveLength(1);
-    await app.close();
-  });
-
-  it("returns empty array when no hospitals (200)", async () => {
-    H.sqlClientQuery.mockReturnValue([]);
-    const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/hospitals", headers: auth() });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().data).toHaveLength(0);
-    await app.close();
-  });
-
-  it("respects custom limit param (200)", async () => {
-    H.sqlClientQuery.mockReturnValue([hospitalRow()]);
-    const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/hospitals?limit=10", headers: auth() });
-    expect(r.statusCode).toBe(200);
-    await app.close();
-  });
-
-  it("returns 400 on limit exceeding max (200+)", async () => {
+  it("still validates query params before reporting not-implemented (400)", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/hospitals?limit=300", headers: auth() });
     expect(r.statusCode).toBe(400);
@@ -685,11 +658,11 @@ describe("GET /v1/hrms/medical/hospitals — empanelled hospital list", () => {
     await app.close();
   });
 
-  it("employees can view hospitals (200)", async () => {
-    H.sqlClientQuery.mockReturnValue([hospitalRow()]);
+  it("employees are role-authorized but still get 501, not a crash", async () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/medical/hospitals", headers: auth(USER, ["employee"]) });
-    expect(r.statusCode).toBe(200);
+    expect(r.statusCode).toBe(501);
+    expect(r.json().code).toBe("NOT_IMPLEMENTED");
     await app.close();
   });
 });

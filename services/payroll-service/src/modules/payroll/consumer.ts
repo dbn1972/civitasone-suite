@@ -64,12 +64,27 @@ export async function resolveRunStatutoryConfig(tx: typeof db, tenantId: string,
 
 /**
  * Resolve the DA rate (basis points) effective on/before the given month.
- * `tx` first, matching resolvePtSlabs/resolveLatestRevision's convention
- * below: pass the module-level `db` for a pre-transaction call, or the
- * caller's own open `tx` when called from inside a `db.transaction()` (see
- * the "tenantTransaction re-audit" comment on resolvePtSlabs — a bare
- * db.execute() from inside an already-open outer transaction checks out a
- * SEPARATE pool connection and risks the same deadlock class).
+ *
+ * bug-fix (silent-DA-gap, gross-pay omission): `payroll.dearness_allowance_rates`
+ * has FORCE ROW LEVEL SECURITY (migration 0036_rls_completeness.sql). A query
+ * issued on the bare module-level `db` runs with no `app.tenant_id` GUC set,
+ * so the fail-closed RLS policy returns ZERO rows regardless of what is
+ * actually configured for the tenant (see shared/db.ts's `scopedRead` doc
+ * comment) — this silently resolved a REAL, configured DA rate to 0n, which
+ * made computeSlip() (domain.ts) skip the DA earning line entirely (it only
+ * adds one `if (daMinor > 0n)`) and, via hraSlabPct()'s own daRateBps
+ * threshold, also silently pinned HRA to the lowest city-class slab. This
+ * previously read "pass the module-level `db` for a pre-transaction call" —
+ * that convention predates (or was never reconciled with) RLS being
+ * force-enabled on this table, and is exactly backwards: a pre-transaction
+ * call MUST use `scopedRead((tx) => resolveDaRateBps(tx, ...))` (opens its
+ * own short-lived tenant-scoped transaction, setting the GUC) so RLS can
+ * actually see the tenant's rows. Only when already inside an open, correctly
+ * tenant-scoped `db.transaction()` should the caller's own `tx` be passed
+ * directly (e.g. generateRetroArrears's per-period call below) — a bare
+ * db.execute() nested inside an already-open outer transaction would instead
+ * risk checking out a second pool connection (the original, still-valid
+ * concern behind the old comment) and possibly deadlock.
  *
  * HIGH (payroll-calc audit): this is now also called PER HISTORICAL PERIOD
  * from inside generateRetroArrears's loop, not just once for the run month —
@@ -1194,6 +1209,10 @@ async function processPayrollRun(
   const structComps = await repo.listComponentsByStructure(p.structureId, p.tenantId);
   // Multi-DDO: the departments this DDO pays (null => whole tenant, legacy).
   const ddoDepartments = await resolveDdoDepartments(p.tenantId, p.ddoCode ?? null);
+  // bug-fix (silent-DA-gap): must be tenant-scoped (see resolveDaRateBps's
+  // doc comment) -- the bare `db` this used to call with is RLS-blind on
+  // payroll.dearness_allowance_rates and silently resolved every real,
+  // configured DA rate to 0n, dropping DA from gross entirely.
   const daRateBps = await scopedRead((tx) => resolveDaRateBps(tx, p.tenantId, p.month));
   // H14 FIX: PT slabs are now resolved per-employee (by state_code) inside the loop.
   // A tenant-level fallback is kept for employees without a state_code.
@@ -1524,6 +1543,10 @@ async function processPensionRun(
   msg: { tenantId: string; actorId: string; correlationId: string },
   p: { id: string; tenantId: string; month: string; ddoCode: string | null },
 ): Promise<void> {
+  // bug-fix (silent-DA-gap): same RLS-scoping fix as processPayrollRun's
+  // daRateBps above -- the bare `db` this used to call with is RLS-blind on
+  // payroll.dearness_allowance_rates and silently resolved every real,
+  // configured rate to 0n, dropping Dearness Relief from pension gross entirely.
   const drRateBps = await scopedRead((tx) => resolveDaRateBps(tx, p.tenantId, p.month)); // DR shares the DA series
   const fyStart = Number(p.month.slice(5, 7)) >= 4 ? Number(p.month.slice(0, 4)) : Number(p.month.slice(0, 4)) - 1;
   // MEDIUM (payroll-calc audit): Sec 192 true-up, same monthIdxInFy/

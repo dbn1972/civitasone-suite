@@ -259,6 +259,38 @@ export class MemoryQueue implements Queue {
     this.maxAttempts = opts.maxAttempts ?? 5;
   }
 
+  /**
+   * G-ASYNC-2 (payroll-loans campaign, BUG-2): a terminally-rejected/failed
+   * delivery used to be recorded ONLY in the in-memory `dlq` array below --
+   * invisible outside a test asserting on `queue.dlq` directly -- with zero
+   * stdout/stderr trace, unlike SqsQueue.logHandlerError, which every
+   * delivery through that (production) driver already goes through.
+   * QUEUE_DRIVER=memory is this fleet's own default for local/dev work (see
+   * every service's .env.example and vitest.config.ts), so this silence was
+   * the default developer experience, not a rare edge case -- and at least
+   * one other consumer's own comment (payroll/consumer.ts's
+   * DUPLICATE_RUN_FOR_PERIOD guard) already assumes "the queue consumer
+   * already logs (queue_consumer_error)" as a blanket truth, which was false
+   * for this driver. Mirrors SqsQueue's structured single-line shape and
+   * `event` name so one grep/log-shipper rule covers both drivers.
+   */
+  private logHandlerError(topic: string, msg: CommandEnvelope, err: unknown): void {
+    const stack = err instanceof Error ? err.stack : String(err);
+    // eslint-disable-next-line no-console -- structured operational error log
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "queue_consumer_error",
+        driver: "memory",
+        topic,
+        messageId: msg.messageId,
+        correlationId: msg.correlationId,
+        traceparent: msg.traceparent,
+        err: stack,
+      }),
+    );
+  }
+
   async publish<T>(topic: string, input: PublishInput<T>, _options?: PublishOptions): Promise<string> {
     const msg = envelope(input);
     const handlers = this.handlers.get(topic) ?? [];
@@ -363,6 +395,7 @@ export class MemoryQueue implements Queue {
     // is rejected straight to the DLQ and handlers are never invoked.
     const parsed = parseEnvelope(msg);
     if (!parsed.ok) {
+      this.logHandlerError(topic, msg, `invalid_envelope: ${parsed.error}`);
       this.dlq.push({ topic, msg, error: `invalid_envelope: ${parsed.error}` });
       if (msg.messageId && msg.tenantId) {
         await this.emitOutcome(onOutcome, { messageId: msg.messageId, tenantId: msg.tenantId, topic, status: "rejected", reason: `invalid_envelope: ${parsed.error}` });
@@ -378,6 +411,7 @@ export class MemoryQueue implements Queue {
       } catch (err) {
         if (err instanceof NonRetryableError || attempt === this.maxAttempts) {
           this.seen.delete(key);
+          this.logHandlerError(topic, msg, err);
           this.dlq.push({ topic, msg, error: err instanceof Error ? err.message : String(err) });
           await this.emitOutcome(onOutcome, {
             messageId: msg.messageId, tenantId: msg.tenantId, topic,

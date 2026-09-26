@@ -1644,41 +1644,27 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
                   });
             break;
           }
-          case "recruitment_screening_override_routes__1": {
-            // Restored: the override request and the application it overturns
-            // (both under their own optimistic-version guards).
-            const r = await overrideRepo.findRequestTx(tx, p.tenantId, reqId);
-            if (!r) throw new HttpError(404, "NOT_FOUND", "override request not found");
-            const a = await screeningRepo.findApplicationTx(tx, p.tenantId, r.applicationId);
-            if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
-            await screeningRepo.setScreening(tx, p.tenantId, r.applicationId, {
-                      screeningDecision: r.toDecision,
-                      screeningReasonCode: r.reasonCode ?? null,
-                      screeningRemarks: r.reason,
-                      screenedBy: msg.actorId, screenedAt: new Date(),
-                    }, a.version);
-                    await screeningRepo.insertEvent(tx, {
-                      tenantId: p.tenantId, applicationId: r.applicationId, jobOpeningId: r.jobOpeningId,
-                      action: "override", decision: r.toDecision, reasonCode: r.reasonCode ?? null,
-                      remarks: r.reason, isOverride: true, actorId: msg.actorId,
-                    });
-                    await overrideRepo.setRequestStatus(tx, p.tenantId, reqId, {
-                      status: "approved", decidedBy: msg.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
-                    }, r.version);
-                    await emitAudit(tx, auditCtx, "screening_override_approved", "screening_override", reqId, {
-                      applicationId: r.applicationId, fromDecision: r.fromDecision, toDecision: r.toDecision, requestedBy: r.requestedBy,
-                    });
-            break;
-          }
-          case "recruitment_screening_override_routes__2": {
-            // Restored: the override request (for the optimistic-version guard).
-            const r = await overrideRepo.findRequestTx(tx, p.tenantId, reqId);
-            if (!r) throw new HttpError(404, "NOT_FOUND", "override request not found");
-            await overrideRepo.setRequestStatus(tx, p.tenantId, reqId, {
-                    status: "rejected", decidedBy: msg.actorId, decidedAt: new Date(), decisionNote: body.note ?? null,
-                  }, r.version);
-            break;
-          }
+          // "recruitment_screening_override_routes__1" (approve + apply an
+          // override) is deliberately NOT handled here any more
+          // (fix/hrms-screening-override-toctou, R-RA-0111): this case
+          // re-fetched fresh rows but never re-checked isActionable/SoD/
+          // staleness before writing, relying entirely on the route's own
+          // (by-then-stale) pre-checks -- so two genuinely concurrent checker
+          // decisions on the same request (two approvals, or an approve
+          // racing a reject) could both pass the route's pre-check and both
+          // get queued, with no re-validation here to catch the second one.
+          // The route now performs both writes itself, synchronously and
+          // atomically, via screening-override-repo.ts's
+          // setRequestStatusIfPending and screening-repo.ts's setScreening --
+          // see the comment on screening-override-routes.ts's POST
+          // .../approve handler for the full write-up. The op string stays in
+          // the `ops` set above only as inert historical metadata; nothing
+          // publishes it any more.
+          //
+          // "recruitment_screening_override_routes__2" (reject an override)
+          // is likewise no longer handled here, for the identical reason: the
+          // route now performs the write itself via setRequestStatusIfPending
+          // -- see the comment on that handler's db.transaction call.
           case "recruitment_screening_override_routes__3": {
             // Restored: the override request (for the optimistic-version guard).
             const r = await overrideRepo.findRequestTx(tx, p.tenantId, reqId);
