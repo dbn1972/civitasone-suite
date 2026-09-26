@@ -41,11 +41,21 @@ function resolveServiceContextInner(req: FastifyRequest): RequestContext {
     ) {
       throw new AuthContextError(401, "UNAUTHENTICATED", "x-internal requires valid service secret");
     }
+    // Anchored to the real Keycloak realm roles (infra/keycloak/civitasone-realm.json):
+    // super_admin, tenant_admin, dept_head, officer, auditor, citizen, service_account.
+    // Previously included "hr_admin"/"payroll_admin"/"finance_admin", which Keycloak never
+    // issues to any principal. hasAnyRole()/requireRole() do exact string matching with no
+    // super_admin fast path, so those fictional strings didn't just fail to add access —
+    // they meant this trusted internal path was silently denied by any requireRole() check
+    // written against a real role other than "super_admin" (e.g. tenant_admin/dept_head).
+    // This is a narrow, self-contained fix: it does not change hasAnyRole/requireRole
+    // themselves (shared by all services), only the literal role list this one elevation
+    // path constructs.
     return {
       tenantId: tenantHeader,
       actorId: "00000000-0000-0000-0000-000000000099",
       actorType: "service_account",
-      roles: ["super_admin", "hr_admin", "payroll_admin", "finance_admin"],
+      roles: ["super_admin", "tenant_admin", "dept_head", "officer", "auditor", "citizen", "service_account"],
       correlationId,
       sessionId: "",
     };

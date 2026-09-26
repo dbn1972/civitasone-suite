@@ -42,6 +42,46 @@ describe("R12: x-internal secret hardening", () => {
     expect(body.roles).toContain("super_admin");
   });
 
+  // Regression for the fictional-role bug: the internal-elevation role list used to be
+  // ["super_admin", "hr_admin", "payroll_admin", "finance_admin"]. Keycloak's civitasone
+  // realm (infra/keycloak/civitasone-realm.json) never issues "hr_admin", "payroll_admin",
+  // or "finance_admin" to any principal. hasAnyRole()/requireRole() (packages/auth/src/index.ts)
+  // do exact string matching with no super_admin fast path, so a route guarded by
+  // requireRole(ctx, ["tenant_admin"]) or requireRole(ctx, ["dept_head"]) — real roles —
+  // silently rejected genuine internal service-to-service calls. The elevation path is
+  // supposed to carry full trusted access by design; it must expose every role that
+  // hasAnyRole()/requireRole() can actually be checked against, not fictional strings.
+  it("grants exactly the real Keycloak realm roles — no fictional role strings", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET", url: "/v1/probe",
+      headers: { "x-internal": "1", "x-tenant-id": TENANT, "x-service-secret": SECRET },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+
+    // The 7 roles actually defined in infra/keycloak/civitasone-realm.json.
+    const realRealmRoles = [
+      "super_admin",
+      "tenant_admin",
+      "dept_head",
+      "officer",
+      "auditor",
+      "citizen",
+      "service_account",
+    ];
+    for (const role of realRealmRoles) {
+      expect(body.roles).toContain(role);
+    }
+    expect(body.roles).toHaveLength(realRealmRoles.length);
+
+    // The fictional roles Keycloak never issues must never reappear here.
+    for (const fictional of ["hr_admin", "payroll_admin", "finance_admin"]) {
+      expect(body.roles).not.toContain(fictional);
+    }
+  });
+
   it("rejects a wrong secret of equal length", async () => {
     const app = await buildApp();
     const wrong = "x".repeat(SECRET.length);
