@@ -67,6 +67,16 @@ vi.mock("../src/modules/period-close/repo.js", () => ({
   findPeriodCloseTx: vi.fn(async () => null),
   upsertPeriodClose: vi.fn(async () => undefined),
   logReopen: vi.fn(async () => undefined),
+  // CONCURRENCY FIX (period-close vs. post-journal race): finance.period.close
+  // and finance.period.reopen (period-close/consumer.ts) now call
+  // periodRepo.lockPeriodTx(tx, ...) directly, as their first action after
+  // markProcessed -- before ever reaching the (mocked, no-op) upsertPeriodClose
+  // above. Without a stub here that call resolves to undefined and throws
+  // "lockPeriodTx is not a function" before either handler can enqueue
+  // anything, which failed "finance.period.reopen processes a reopen" below
+  // (this file's mock replaces the whole module, so the real lockPeriodTx
+  // exported from repo.ts never runs).
+  lockPeriodTx: vi.fn(async () => undefined),
 }));
 vi.mock("../src/modules/reports/routes.js", () => ({
   deriveFY: vi.fn((period: string) => `${period.slice(0, 4)}-${(Number(period.slice(0, 4)) + 1).toString().slice(2)}`),
