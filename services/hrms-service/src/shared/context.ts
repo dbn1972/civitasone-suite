@@ -5,7 +5,13 @@ import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
 export class HttpError extends Error {
-  constructor(public status: number, public code: string, message: string) {
+  // `details`: optional structured extra fields merged into the error JSON
+  // body by a route's errorHandler (see recruitment/routes.ts) alongside
+  // code/message/correlationId — e.g. a DUPLICATE_APPLICATION error handing
+  // back the real, already-existing resource's id so the caller isn't left
+  // with nothing to reference. Optional and additive: every existing 3-arg
+  // `new HttpError(status, code, message)` call site is unaffected.
+  constructor(public status: number, public code: string, message: string, public details?: Record<string, unknown>) {
     super(message);
   }
 }

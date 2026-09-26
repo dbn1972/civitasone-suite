@@ -12,7 +12,6 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as screeningRepo from "./screening-repo.js";
-import { countApplicationsForEmail } from "./eligibility-repo.js";
 import { resolveDeptScope } from "./dept-scope.js";
 import { tenantStorage } from "@civitasone/db";
 
@@ -242,26 +241,32 @@ export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<voi
       throw new HttpError(409, "VACANCY_CLOSED", applicationClosedReason(vacancy as never, Date.now()));
     }
     const dedupKey = deriveDedupKey(vacancy, body.email);
-    // HIGH fix: this id/reference-number used to be generated and returned as
-    // a convincing "success" screen BEFORE any dedup check ran. The actual
-    // insert happens later, asynchronously, in consumer.ts's applicationCreate
-    // handler; a genuine repeat submission was silently dropped there (a
-    // caught 23505 against hrms_applications_dedup_uq, logged and returned —
-    // see that handler's catch block) with NO row ever created for the id the
-    // candidate was already shown as their reference number. Mirrors the
-    // synchronous pre-check + consumer-side-atomic-recheck defense-in-depth
-    // pattern this file already uses for offer/hire (repo.NOT_OFFERABLE_*
-    // above) and eligibility-routes.ts's own apply path (which this same
-    // countApplicationsForEmail call is borrowed from) — a real duplicate now
-    // gets a clear, immediate 409 instead of a fabricated reference number.
-    if (dedupKey && body.email) {
-      const existing = await countApplicationsForEmail(vacancy.tenantId, body.jobOpeningId, body.email);
-      if (existing > 0) {
-        throw new HttpError(409, "DUPLICATE_APPLICATION", "an application for this vacancy already exists for this email");
+    // HIGH fix (response-integrity): a prior version of this pre-check caught
+    // only SEQUENTIAL duplicates (a second request arriving after the first's
+    // row had already landed) — it could not catch genuinely CONCURRENT
+    // duplicates, because every concurrent caller reads "no existing
+    // application" before any of their inserts land. That gap is closed
+    // below in commands.submitPublicApplication, which does the insert
+    // synchronously and reports back whichever row the DB's own unique index
+    // actually let through — this remains as a cheap fast path that avoids
+    // even attempting a write (and, incidentally, an unnecessary PII-encrypt
+    // cycle) for the common case of an obvious prior duplicate.
+    if (dedupKey) {
+      const existing = await repo.findApplicationByDedupKey(vacancy.tenantId, body.jobOpeningId, dedupKey);
+      if (existing) {
+        throw new HttpError(409, "DUPLICATE_APPLICATION", "an application for this vacancy already exists for this email",
+          { applicationId: existing.id, applicationNo: existing.applicationNo });
       }
     }
-    const result = await commands.createPublicApplication(vacancy.tenantId, body, dedupKey);
-    return reply.code(202).send(result);
+    const result = await commands.submitPublicApplication(vacancy.tenantId, body, dedupKey);
+    if (result.alreadyApplied) {
+      // Lost a genuine concurrent dedup race (see submitPublicApplication) —
+      // tell this caller about the real application that won, the same way
+      // the pre-check above does, rather than a fabricated id.
+      throw new HttpError(409, "DUPLICATE_APPLICATION", "an application for this vacancy already exists for this email",
+        { applicationId: result.id, applicationNo: result.applicationNo });
+    }
+    return reply.code(202).send({ id: result.id, applicationNo: result.applicationNo, status: result.status });
   });
 
   app.setErrorHandler(errorHandler);
@@ -274,7 +279,8 @@ export async function publicRecruitmentRoutes(app: FastifyInstance): Promise<voi
  * else null. The DB's existing partial unique index
  * (hrms_applications_dedup_uq on tenant_id, job_opening_id, dedup_key WHERE
  * dedup_key IS NOT NULL AND status <> 'withdrawn') does the actual
- * enforcement once this is set on insert (see consumer.ts). No email, or no
+ * enforcement once this is set on insert (see consumer.ts for the internal
+ * apply path, commands.ts's submitPublicApplication for this one). No email, or no
  * vacancy/criteria to read (e.g. HR recording against an id that turns out
  * not to exist) -> null (can't dedupe on nothing; matches eligibility-routes.ts's
  * own "unless explicitly allowed" default otherwise).
@@ -292,7 +298,7 @@ function errorHandler(err: unknown, req: any, reply: any): void {
     return;
   }
   if (err instanceof HttpError) {
-    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false });
+    void reply.code(err.status).send({ code: err.code, message: err.message, correlationId, retryable: false, ...(err.details ?? {}) });
     return;
   }
   req.log.error({ err }, "unhandled error");
