@@ -92,20 +92,38 @@
 --      cross-tenant SELECT bypass either, so that check must run under the
 --      same per-tenant app.tenant_id to see its own existing rows at all.
 --
---   Session-scoped SET/set_config (not transaction-local) is correct and
---   sufficient here, matching lock_timeout below: this script's connection
---   is a one-shot migration run, never pooled or reused for any other
---   tenant's request, unlike the app-code callers of scopedPlatformRead.
+--   Correction (PERF-001 / raw-session-guc-guard): the paragraph that used to
+--   sit here argued session-scoped (non-transaction-local) SET/set_config was
+--   fine because this connection is "never pooled" -- that premise is wrong
+--   for this repo. scripts/ci/raw-session-guc-guard.mjs's own header is
+--   explicit that PERF-001 routes the WHOLE fleet, migrations included,
+--   through PgBouncer in `pool_mode = transaction`, which is exactly why that
+--   guard enforces services/*/migrations/** unconditionally -- and why it
+--   cites two OTHER production migrations that already shipped this same
+--   session-scoped-GUC mistake. Both GUCs below are therefore set with
+--   is_local=true (transaction-scoped, auto-cleared at commit) and,
+--   critically, both are set INSIDE this same DO block rather than as
+--   separate top-level statements: the migration runner (scripts/dev/
+--   migrate-all.mjs) pipes each file to `psql`, which autocommits each
+--   top-level statement as its own transaction, so a transaction-scoped SET
+--   before the DO block would already have evaporated by the time the block
+--   runs. Placing it inside the block keeps it live for this block's own
+--   implicit transaction -- the same shape as the established compliant
+--   pattern in services/audit-service/migrations/0025_fix_legacy_status_values.sql.
+--   app.platform_bypass only needs to be set once (it doesn't vary per
+--   tenant like app.tenant_id does), so it's set a single time at the top of
+--   the block, before the loop.
 
 SET lock_timeout = '5s';
-SET app.platform_bypass = 'true';
 
 DO $$
 DECLARE
   t uuid;
 BEGIN
+  PERFORM set_config('app.platform_bypass', 'true', true);
+
   FOR t IN SELECT DISTINCT tenant_id FROM employee.hrms_employees LOOP
-    PERFORM set_config('app.tenant_id', t::text, false);
+    PERFORM set_config('app.tenant_id', t::text, true);
 
     IF NOT EXISTS (SELECT 1 FROM leave.hrms_holidays WHERE tenant_id = t) THEN
       INSERT INTO leave.hrms_holidays (tenant_id, name, date, type, created_by)
