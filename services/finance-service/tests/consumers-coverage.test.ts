@@ -39,7 +39,24 @@ vi.mock("../src/shared/outbox.js", () => ({
   markProcessed: vi.fn(async () => markProcessedResult),
 }));
 vi.mock("../src/shared/infra.js", () => ({
-  cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
+  // BUG FIX (finance-service test-infra cleanup): the real Cache class
+  // exposes invalidateResource(tenantId, resource) as a distinct method
+  // from invalidate(key) -- see packages/cache/src/index.ts. Most
+  // consumers under test here (org-structure, cashbook, gst, bank-recon,
+  // reports) call cache.invalidateResource(...), not cache.invalidate().
+  // Without this stub, that call threw "cache.invalidateResource is not a
+  // function" and MemoryQueue retried the handler (default maxAttempts:5).
+  // Since the mocked markProcessed() below always reports "not yet
+  // processed", every retry re-ran the insert/enqueue logic, so however
+  // many retries landed before this file's settle() timeout fired, the
+  // domain/audit event arrays ended up with that many duplicate entries
+  // instead of one -- the intermittent "expected 1, got 3" (or similar)
+  // failures this fix resolves.
+  cache: {
+    invalidate: vi.fn(async () => undefined),
+    invalidateResource: vi.fn(async () => undefined),
+    makeKey: (...parts: string[]) => parts.join(":"),
+  },
 }));
 vi.mock("../src/modules/bank-recon/repo.js", () => ({
   insertStatement: (...a: any[]) => insertStatementMock(...a),
