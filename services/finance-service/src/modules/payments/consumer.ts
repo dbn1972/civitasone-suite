@@ -514,13 +514,22 @@ export function registerPaymentsConsumers(queue: Queue): void {
       const schema = z.object({
         id: z.string().uuid(),
         tenantId: z.string().uuid(),
-        adjustedMinor: z.union([z.string(), z.number()]),
+        // BUG FIX: adjustAdvanceBody now validates adjustedMinor via the
+        // route's bigint-safe moneyMinorField (see validators.ts) instead of a
+        // raw z.number() with no safe-integer bound -- accept the resulting
+        // bigint payload here too, matching billCreate/paymentInitiate's
+        // schema unions above. This exact fix (extend the union with
+        // z.bigint()) was applied to billCreate/paymentInitiate but missed
+        // here, so every advanceAdjust command dead-lettered with
+        // SCHEMA_VIOLATION: the route always sends a real bigint and neither
+        // z.string() nor z.number() accepts one.
+        adjustedMinor: z.union([z.string(), z.number(), z.bigint()]),
         reason: z.string().min(1),
       });
       const _v = schema.safeParse(msg.payload);
       if (!_v.success) throw new NonRetryableError(`[finance/payments] advanceAdjust SCHEMA_VIOLATION: ${_v.error.message}`);
     }
-    const p = msg.payload as { id: string; tenantId: string; adjustedMinor: number; reason: string };
+    const p = msg.payload as { id: string; tenantId: string; adjustedMinor: number | string | bigint; reason: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const advance = await repo.findAdvanceByIdForUpdateTx(tx, p.id);
