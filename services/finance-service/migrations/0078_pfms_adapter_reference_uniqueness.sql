@@ -40,6 +40,6 @@
 -- translates that into 409 REFERENCE_ALREADY_IN_USE -- before ever calling
 -- e-Kuber, so a detected collision never results in a duplicate/ambiguous
 -- real submission against the shared credential.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_finance_pfms_ekuber_adapter_pfms_id_unique
+CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS idx_finance_pfms_ekuber_adapter_pfms_id_unique
   ON payments.finance_pfms (pfms_id)
   WHERE channel = 'ekuber_adapter';
