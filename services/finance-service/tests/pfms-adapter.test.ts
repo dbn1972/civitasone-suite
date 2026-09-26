@@ -8,6 +8,10 @@
  * 4. Circuit breaker opens after 5 failures
  * 5. Timeout handling (15s)
  * 6. No PII in logs
+ * 7. Reconciliation — adapter submissions/status land in the same
+ *    payments.finance_pfms ledger routes.ts's treasury batch path uses
+ *    (channel = 'ekuber_adapter'), and routes.ts refuses to sign/bank-file
+ *    a row from that channel.
  */
 import { describe, it, expect, beforeAll, afterAll, vi, beforeEach, afterEach } from "vitest";
 import { signToken } from "@civitasone/auth";
@@ -15,10 +19,16 @@ import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
+// A real UUID, not a friendly placeholder: this actorId now flows into
+// financePfms.createdBy/updatedBy (uuid NOT NULL) once the adapter's own
+// persistence lands (repo.upsertAdapterPfmsRecord) — a non-UUID sub, as this
+// used to be, fails that insert since the adapter route now does a real DB
+// write on the happy path.
+const ACTOR = "cccccccc-1111-4000-8000-000000000001";
 
 function makeToken(roles: string[] = ["finance_officer"]) {
   return signToken(
-    { sub: "user-001", tid: TENANT, roles, sid: "sess-001" },
+    { sub: ACTOR, tid: TENANT, roles, sid: "sess-001" },
     SECRET,
   );
 }
@@ -210,6 +220,116 @@ describe("PFMS Adapter — enabled (mocked fetch)", () => {
     expect(body.data.referenceId).toBe("REF-001");
     expect(body.data.status).toBe("completed");
     expect(body.data.utrNumber).toBe("UTR2026070100001");
+  });
+
+  describe("reconciliation with the treasury batch ledger", () => {
+    // Dedicated referenceId so these assertions don't depend on execution
+    // order against the REF-001 rows the tests above create/mutate.
+    const REF = "REF-RECON-001";
+
+    it("a successful submission is traceable via GET /v1/finance/pfms/batches (channel = ekuber_adapter)", async () => {
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          referenceId: REF,
+          pfmsTransactionId: "PFMS-TXN-RECON-1",
+          status: "accepted",
+          timestamp: "2026-07-01T10:00:00Z",
+        }),
+      } as Response);
+
+      const token = makeToken(["finance_officer"]);
+      const submitRes = await app.inject({
+        method: "POST",
+        url: "/v1/finance/pfms/payments",
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          referenceId: REF,
+          beneficiaryCode: "BEN-RECON",
+          amount: "250000",
+          purposeCode: "SALARY",
+          schemeCode: "SCHEME01",
+          ddoCode: "DDO001",
+        },
+      });
+      expect(submitRes.statusCode).toBe(201);
+
+      // This is routes.ts's pre-existing status lookup — the treasury batch
+      // path's only surface for "was this disbursement actually paid". Before
+      // this fix, an e-Kuber submission would never appear here.
+      const listRes = await app.inject({
+        method: "GET",
+        url: "/v1/finance/pfms/batches",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(listRes.statusCode).toBe(200);
+      const row = listRes.json().data.find((b: { pfmsId: string }) => b.pfmsId === REF);
+      expect(row).toBeDefined();
+      expect(row.channel).toBe("ekuber_adapter");
+      expect(row.submissionStatus).toBe("accepted");
+      expect(row.amountMinor).toBe("250000");
+      expect(row.schemeCode).toBe("SCHEME01");
+      expect(row.ddoCode).toBe("DDO001");
+    });
+
+    it("a later status check updates the SAME ledger row rather than creating a second one", async () => {
+      (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          referenceId: REF,
+          pfmsTransactionId: "PFMS-TXN-RECON-1",
+          status: "completed",
+          utrNumber: "UTR2026070100099",
+          processedAt: "2026-07-02T09:00:00Z",
+        }),
+      } as Response);
+
+      const token = makeToken(["finance_officer"]);
+      const statusRes = await app.inject({
+        method: "GET",
+        url: `/v1/finance/pfms/payments/${REF}/status`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(statusRes.statusCode).toBe(200);
+
+      const listRes = await app.inject({
+        method: "GET",
+        url: "/v1/finance/pfms/batches",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const matches = listRes.json().data.filter((b: { pfmsId: string }) => b.pfmsId === REF);
+      expect(matches).toHaveLength(1);
+      expect(matches[0].submissionStatus).toBe("completed");
+      expect(matches[0].utrNumber).toBe("UTR2026070100099");
+    });
+
+    it("routes.ts refuses to sign or bank-file an e-Kuber adapter row (INVALID_CHANNEL)", async () => {
+      const token = makeToken(["finance_officer"]);
+      const listRes = await app.inject({
+        method: "GET",
+        url: "/v1/finance/pfms/batches",
+        headers: { authorization: `Bearer ${token}` },
+      });
+      const row = listRes.json().data.find((b: { pfmsId: string }) => b.pfmsId === REF);
+      expect(row).toBeDefined();
+
+      const signRes = await app.inject({
+        method: "POST",
+        url: `/v1/finance/pfms/${row.id}/sign`,
+        headers: { authorization: `Bearer ${token}` },
+        payload: { certificateRef: "cert-1", signaturePayload: "payload-1" },
+      });
+      expect(signRes.statusCode).toBe(400);
+      expect(signRes.json().code).toBe("INVALID_CHANNEL");
+
+      const bankFileRes = await app.inject({
+        method: "GET",
+        url: `/v1/finance/pfms/${row.id}/bank-file`,
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(bankFileRes.statusCode).toBe(400);
+      expect(bankFileRes.json().code).toBe("INVALID_CHANNEL");
+    });
   });
 
   it("returns 502 on upstream API error", async () => {

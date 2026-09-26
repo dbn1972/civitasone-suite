@@ -2,6 +2,15 @@ export type PfmsBatchRow = {
   id: string;
   pfmsId: string;
   type: string;
+  /**
+   * Which PFMS submission mechanism produced this row: 'treasury_batch'
+   * (batch/DSC-sign/SFTP — this panel's original rows, sign/bank-file apply)
+   * or 'ekuber_adapter' (live REST adapter via SubmitPaymentForm — already a
+   * completed submission; sign/bank-file do not apply). Both channels are
+   * unified into this one list so it answers "was this disbursement actually
+   * paid" regardless of which mechanism handled it.
+   */
+  channel: string;
   /** Minor units (paise) as a string — server emits an exact decimal string, never a Number. */
   amountMinor: string;
   agencyCode: string | null;

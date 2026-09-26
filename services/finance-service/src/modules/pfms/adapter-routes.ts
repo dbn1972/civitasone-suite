@@ -9,12 +9,25 @@
  * Returns 502 with UPSTREAM_ERROR on PFMS API failures.
  *
  * No PII in logs — only correlation IDs, adapter name, and status codes.
+ *
+ * Reconciliation: this adapter is otherwise stateless (no repo/DB call at
+ * all) — a payment submitted here left no trace anywhere else the app could
+ * look it up, unlike routes.ts's treasury batch path, which tracks its own
+ * submissionStatus in payments.finance_pfms. Every successful submit/status
+ * call below also best-effort-records into that SAME table via
+ * repo.upsertAdapterPfmsRecord (channel = 'ekuber_adapter'), so
+ * GET /v1/finance/pfms/batches is one lookup that answers "was this
+ * disbursement actually paid" regardless of which PFMS mechanism handled it.
+ * This is deliberately best-effort: a local persistence failure must never
+ * mask or retract a real e-Kuber outcome that already happened, so it is
+ * logged and swallowed, never thrown back to the caller.
  */
 
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { submitPaymentBody, referenceParam } from "./validators.js";
+import * as repo from "./repo.js";
 import {
   submitPayment,
   checkStatus,
@@ -63,6 +76,28 @@ export async function pfmsAdapterRoutes(app: FastifyInstance): Promise<void> {
         ddoCode: body.ddoCode,
         remarks: body.remarks,
       });
+
+      try {
+        await repo.upsertAdapterPfmsRecord({
+          tenantId: ctx.tenantId,
+          actorId: ctx.actorId,
+          referenceId: result.referenceId,
+          submissionStatus: result.status,
+          amountMinor: BigInt(body.amount),
+          schemeCode: body.schemeCode ?? null,
+          ddoCode: body.ddoCode ?? null,
+        });
+      } catch (persistErr) {
+        // Best-effort — see file header. The e-Kuber submission already
+        // succeeded; a ledger-write failure must not turn that into an error
+        // response (which could cause a caller to retry a non-idempotent
+        // financial submission that already went through).
+        req.log.warn(
+          { err: persistErr, adapter: "pfms", correlationId: req.id },
+          "Failed to record e-Kuber PFMS submission in shared ledger",
+        );
+      }
+
       return reply.code(201).send({ data: result });
     } catch (err) {
       if (err instanceof PfmsAdapterError && err.code === "INTEGRATION_DISABLED") {
@@ -122,6 +157,22 @@ export async function pfmsAdapterRoutes(app: FastifyInstance): Promise<void> {
 
     try {
       const result = await checkStatus(ref);
+
+      try {
+        await repo.upsertAdapterPfmsRecord({
+          tenantId: ctx.tenantId,
+          actorId: ctx.actorId,
+          referenceId: result.referenceId,
+          submissionStatus: result.status,
+          utrNumber: result.utrNumber ?? null,
+        });
+      } catch (persistErr) {
+        req.log.warn(
+          { err: persistErr, adapter: "pfms", correlationId: req.id },
+          "Failed to record e-Kuber PFMS status in shared ledger",
+        );
+      }
+
       return reply.send({ data: result });
     } catch (err) {
       if (err instanceof PfmsAdapterError && err.code === "INTEGRATION_DISABLED") {
