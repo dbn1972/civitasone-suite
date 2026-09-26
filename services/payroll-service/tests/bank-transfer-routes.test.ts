@@ -277,6 +277,37 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     expect(res.json().code).toBe("APBS_NOT_ENABLED");
   });
 
+  // ═══ 422 — APBS requested, but no Aadhaar/IIN data exists anywhere ══════
+  it("returns 422 APBS_DATA_UNAVAILABLE (not 500) when APBS is enabled, before ever building beneficiaries", async () => {
+    const { findByTenantId } = await import("../src/modules/sponsor-config/repo.js");
+    const { fetchPayrollInput } = await import("../src/shared/hrms-client.js");
+    const { generateBankFile } = await import("../src/modules/bank-transfer/format-router.js");
+    vi.mocked(findByTenantId).mockResolvedValue({
+      id: "cfg-1", tenantId: TENANT, sponsorCode: "SPONS01",
+      sponsorIfsc: "SBIN0000001", sponsorAccount: "9999999999",
+      utilityCode: "UTIL01", userNumber: "USR001",
+      settlementOffsetDays: 1, nachEnabled: true, apbsEnabled: true,
+      maxRecordsPerFile: 100000, maxAmountPerFileMinor: 1000000000n,
+      createdAt: new Date(), updatedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR,
+    } as never);
+    mockScopedRead.mockResolvedValueOnce([makeRun()]); // run found
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=apbs`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("APBS_DATA_UNAVAILABLE");
+    // The fix must short-circuit BEFORE ever fetching slips/employees or
+    // calling the writer -- confirms this isn't just a downstream validation
+    // catch, but a genuine upfront guard.
+    expect(fetchPayrollInput).not.toHaveBeenCalled();
+    expect(vi.mocked(generateBankFile)).not.toHaveBeenCalled();
+  });
+
   // ═══ 404 — no slips found (NACH) ═════════════════════════════════════════
   it("returns 404 when no slips exist for the run (NACH format)", async () => {
     const { findByTenantId } = await import("../src/modules/sponsor-config/repo.js");
