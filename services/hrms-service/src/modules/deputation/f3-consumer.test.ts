@@ -8,9 +8,12 @@
  * the deputation body. No deputation row, no posting/reporting switch and no
  * service-book entry were ever written.
  *
- * `deputation_routes__1` (repatriate/cancel) is STILL broken by design — see
- * the KNOWN GAP test at the bottom and the TODO(unresolved-f3-bug) in
- * f3-consumer.ts.
+ * `deputation_routes__1` / `deputation_routes__2` (repatriate / cancel) used to
+ * share ONE op string with an identical payload shape, so this consumer had no
+ * way to tell which action a message meant — see the TODO(unresolved-f3-bug)
+ * history in f3-consumer.ts / routes.ts. Fixed by giving each endpoint its own
+ * op (routes.ts) and its own switch case here, each with a literal terminal
+ * status, so nothing is ever inferred from message content.
  *
  * Driven directly over a MemoryQueue (as ../leave/f3-consumer.test.ts does)
  * because the F3 consumers are registered only in worker.ts, never in app.ts.
@@ -20,11 +23,13 @@ import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 
 const {
-  mockTx, dbTransactionFn, scopedReadResult,
-  insertDeputationMock, closeDeputationMock, updateSetMock, insertValuesMock,
+  mockTx, dbTransactionFn, scopedReadResult, depResult,
+  insertDeputationMock, closeDeputationMock, findByIdTxMock, updateSetMock, insertValuesMock,
 } = vi.hoisted(() => {
   const _insertDeputationMock = vi.fn(async (..._a: any[]) => undefined);
   const _closeDeputationMock = vi.fn(async (..._a: any[]) => undefined);
+  const _depResult: { current: any } = { current: null };
+  const _findByIdTxMock = vi.fn(async (..._a: any[]) => _depResult.current);
   const _updateSetMock = vi.fn().mockReturnValue({ where: vi.fn(async (..._a: any[]) => undefined) });
   const _insertValuesMock = vi.fn(async (..._a: any[]) => undefined);
   const _scopedReadResult: { current: any[] } = { current: [] };
@@ -44,8 +49,8 @@ const {
   };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
   return {
-    mockTx: _mockTx, dbTransactionFn: _dbTransactionFn, scopedReadResult: _scopedReadResult,
-    insertDeputationMock: _insertDeputationMock, closeDeputationMock: _closeDeputationMock,
+    mockTx: _mockTx, dbTransactionFn: _dbTransactionFn, scopedReadResult: _scopedReadResult, depResult: _depResult,
+    insertDeputationMock: _insertDeputationMock, closeDeputationMock: _closeDeputationMock, findByIdTxMock: _findByIdTxMock,
     updateSetMock: _updateSetMock, insertValuesMock: _insertValuesMock,
   };
 });
@@ -61,6 +66,10 @@ vi.mock("../../shared/outbox.js", () => ({
 vi.mock("./repo.js", () => ({
   insertDeputation: (...a: unknown[]) => insertDeputationMock(...(a as [])),
   closeDeputation: (...a: unknown[]) => closeDeputationMock(...(a as [])),
+  // findByIdTx (not the scopedRead-based findById) is what the fixed
+  // deputation_routes__1/__2 cases call, to avoid the same nested-tx deadlock
+  // class the deputation_routes__0 fix above already guards against.
+  findByIdTx: (...a: unknown[]) => findByIdTxMock(...(a as [])),
   findById: vi.fn(async (..._a: any[]) => null),
   findActiveByEmployee: vi.fn(async (..._a: any[]) => null),
   listByEmployee: vi.fn(async (..._a: any[]) => []),
@@ -80,6 +89,15 @@ const BORROW_MGR = "50000000-eeee-4000-8000-000000000002";
 const employee = (over: Record<string, unknown> = {}) => ({
   id: EMPLOYEE, tenantId: TENANT, employeeNo: "E-001", fullName: "Test Emp",
   departmentId: PARENT_DEPT, managerId: PARENT_MGR, status: "confirmed",
+  ...over,
+});
+
+const DEPUTATION_ID = "70000000-ffff-4000-8000-000000000001";
+const deputation = (over: Record<string, unknown> = {}) => ({
+  id: DEPUTATION_ID, tenantId: TENANT, employeeId: EMPLOYEE,
+  parentCadre: "Section Officer", parentDepartmentId: PARENT_DEPT, parentManagerId: PARENT_MGR,
+  borrowingDepartment: "Finance Ministry", borrowingDepartmentId: BORROW_DEPT, borrowingManagerId: BORROW_MGR,
+  status: "active", version: 1,
   ...over,
 });
 
@@ -111,6 +129,8 @@ async function buildQueue(): Promise<MemoryQueue> {
 beforeEach(() => {
   vi.clearAllMocks();
   scopedReadResult.current = [employee()];
+  depResult.current = deputation();
+  findByIdTxMock.mockImplementation(async (..._a: any[]) => depResult.current);
   updateSetMock.mockReturnValue({ where: vi.fn(async (..._a: any[]) => undefined) });
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
 });
@@ -207,28 +227,122 @@ describe("deputation_routes__0 (depute OUT)", () => {
   });
 });
 
-describe("deputation_routes__1 (repatriate / cancel)", () => {
-  it("KNOWN GAP: still dead-letters — repatriate and cancel are indistinguishable in the queue", async () => {
-    // Both POST .../repatriate and POST .../cancel go through the same shared
-    // close() helper in routes.ts and publish the SAME op string with the same
-    // { body, params, query }, so `newStatus` ("repatriated" vs "cancelled")
-    // cannot be recovered here. Writing the wrong terminal status onto a real
-    // service record is worse than failing, so this case is deliberately left
-    // unfixed until the route forwards it. See TODO(unresolved-f3-bug) in
-    // f3-consumer.ts.
-    //
-    // WHEN THE ROUTE IS FIXED: delete this test and replace it with real
-    // repatriate/cancel coverage.
+describe("deputation_routes__1 / __2 (repatriate / cancel)", () => {
+  it("deputation_routes__1 repatriates: persists status, restores parent posting, records a repatriation entry", async () => {
     const q = await buildQueue();
     await q.publish(COMMANDS.f3RouteWrite, makeMsg({
       op: "deputation_routes__1", id: randomUUID(), tenantId: TENANT,
-      body: { repatriatedOn: "2026-06-01" }, params: { depId: randomUUID() }, query: {},
+      body: { repatriatedOn: "2026-06-01", note: "tour of duty complete" },
+      params: { depId: DEPUTATION_ID }, query: {},
     }));
     await q.drain();
 
+    expect(q.dlq).toHaveLength(0);
+    expect(closeDeputationMock).toHaveBeenCalledOnce();
+    const [, , closedId, patch, expectedVersion] = closeDeputationMock.mock.calls[0]! as [unknown, unknown, string, Record<string, unknown>, number];
+    expect(closedId).toBe(DEPUTATION_ID);
+    expect(patch.status).toBe("repatriated");
+    expect(patch.repatriatedOn).toBe("2026-06-01");
+    expect(patch.repatriationNote).toBe("tour of duty complete");
+    expect(expectedVersion).toBe(1);
+
+    // Parent posting/reporting snapshot restored on the employee row.
+    expect(updateSetMock).toHaveBeenCalledOnce();
+    const empPatch = updateSetMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(empPatch.departmentId).toBe(PARENT_DEPT);
+    expect(empPatch.managerId).toBe(PARENT_MGR);
+
+    expect(insertValuesMock).toHaveBeenCalledOnce();
+    const sb = insertValuesMock.mock.calls[0]![0] as Record<string, any>;
+    expect(sb.employeeId).toBe(EMPLOYEE);
+    expect(sb.entryType).toBe("repatriation");
+    expect(sb.description).toContain("Finance Ministry");
+    expect(sb.description).toContain("Section Officer");
+    await q.stop();
+  });
+
+  it("deputation_routes__2 cancels: persists status, restores parent posting, records a deputation_cancelled entry", async () => {
+    const q = await buildQueue();
+    await q.publish(COMMANDS.f3RouteWrite, makeMsg({
+      op: "deputation_routes__2", id: randomUUID(), tenantId: TENANT,
+      body: { note: "posting rescinded" }, params: { depId: DEPUTATION_ID }, query: {},
+    }));
+    await q.drain();
+
+    expect(q.dlq).toHaveLength(0);
+    expect(closeDeputationMock).toHaveBeenCalledOnce();
+    const [, , closedId, patch] = closeDeputationMock.mock.calls[0]! as [unknown, unknown, string, Record<string, unknown>, number];
+    expect(closedId).toBe(DEPUTATION_ID);
+    expect(patch.status).toBe("cancelled");
+    expect(patch.repatriationNote).toBe("posting rescinded");
+
+    expect(updateSetMock).toHaveBeenCalledOnce();
+    const empPatch = updateSetMock.mock.calls[0]![0] as Record<string, unknown>;
+    expect(empPatch.departmentId).toBe(PARENT_DEPT);
+    expect(empPatch.managerId).toBe(PARENT_MGR);
+
+    expect(insertValuesMock).toHaveBeenCalledOnce();
+    const sb = insertValuesMock.mock.calls[0]![0] as Record<string, any>;
+    expect(sb.entryType).toBe("deputation_cancelled");
+    expect(sb.description).toContain("cancelled");
+    await q.stop();
+  });
+
+  it("regression: processing a repatriate and a cancel together resolves each to its OWN correct terminal status", async () => {
+    // This is exactly the failure mode the original bug risked: both actions
+    // used to publish the SAME op with an otherwise-identical payload, so a
+    // naive fix (e.g. just declaring the missing `depId`) could easily have
+    // made one action work while silently misrouting the other onto the wrong
+    // status. Distinct ops (__1 / __2) with a literal status per switch case
+    // mean there is no shared mutable state or inferred field for the two to
+    // collide on, even when handled back-to-back for different deputations.
+    const q = await buildQueue();
+    const REPAT_ID = randomUUID();
+    const CANCEL_ID = randomUUID();
+
+    await q.publish(COMMANDS.f3RouteWrite, makeMsg({
+      op: "deputation_routes__1", id: randomUUID(), tenantId: TENANT,
+      body: {}, params: { depId: REPAT_ID }, query: {},
+    }));
+    await q.publish(COMMANDS.f3RouteWrite, makeMsg({
+      op: "deputation_routes__2", id: randomUUID(), tenantId: TENANT,
+      body: {}, params: { depId: CANCEL_ID }, query: {},
+    }));
+    await q.drain();
+
+    expect(q.dlq).toHaveLength(0);
+    expect(closeDeputationMock).toHaveBeenCalledTimes(2);
+    const statusById = new Map(
+      closeDeputationMock.mock.calls.map((c) => [c[2] as string, (c[3] as Record<string, unknown>).status]),
+    );
+    expect(statusById.get(REPAT_ID)).toBe("repatriated");
+    expect(statusById.get(CANCEL_ID)).toBe("cancelled");
+    await q.stop();
+  });
+
+  it("skips without throwing when the deputation no longer exists", async () => {
+    depResult.current = null;
+    const q = await buildQueue();
+    await q.publish(COMMANDS.f3RouteWrite, makeMsg({
+      op: "deputation_routes__1", id: randomUUID(), tenantId: TENANT,
+      body: {}, params: { depId: randomUUID() }, query: {},
+    }));
+    await q.drain();
+    expect(q.dlq).toHaveLength(0);
     expect(closeDeputationMock).not.toHaveBeenCalled();
-    expect(q.dlq).toHaveLength(1);
-    expect(q.dlq[0]!.error).toMatch(/is not defined/);
+    await q.stop();
+  });
+
+  it("skips without throwing when the deputation is already closed (redelivery)", async () => {
+    depResult.current = deputation({ status: "cancelled" });
+    const q = await buildQueue();
+    await q.publish(COMMANDS.f3RouteWrite, makeMsg({
+      op: "deputation_routes__2", id: randomUUID(), tenantId: TENANT,
+      body: {}, params: { depId: DEPUTATION_ID }, query: {},
+    }));
+    await q.drain();
+    expect(q.dlq).toHaveLength(0);
+    expect(closeDeputationMock).not.toHaveBeenCalled();
     await q.stop();
   });
 });
