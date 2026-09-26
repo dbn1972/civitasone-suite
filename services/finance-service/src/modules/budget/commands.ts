@@ -45,7 +45,16 @@ export async function createSanction(ctx: RequestContext, body: CreateSanctionBo
 export async function updateHeadHoA(ctx: RequestContext, id: string, body: UpdateHeadHoABody): Promise<void> {
   const head = await repo.findHeadById(id);
   if (!head || head.tenantId !== ctx.tenantId) throw new Error("head not found");
-  await repo.updateHead(db, id, { hoaCode: body.hoaCode, updatedBy: ctx.actorId });
+  // FIX: this previously wrote via the bare `db` import instead of an open
+  // db.transaction(), so budget.finance_heads' FORCE ROW LEVEL SECURITY policy
+  // saw current_tenant_id() as NULL (no app.tenant_id GUC set) and the UPDATE
+  // matched zero rows -- silently, since drizzle doesn't surface affected-row
+  // counts. Route still returned 200. Mirrors the already-correct sibling
+  // PATCH /v1/finance/accounts/:id handler below (routes.ts), which wraps the
+  // same repo.updateHead(tx, ...) call in db.transaction() for this reason.
+  await db.transaction(async (tx) => {
+    await repo.updateHead(tx, id, { hoaCode: body.hoaCode, updatedBy: ctx.actorId });
+  });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "accounts", "list:50"));
 }
 
