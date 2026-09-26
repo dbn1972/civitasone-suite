@@ -199,11 +199,39 @@ export async function findAdvanceByIdTx(tx: Writer, id: string): Promise<Advance
   return rows[0] ?? null;
 }
 
+/**
+ * BUG FIX: this used to cast the raw driver rows straight to `AdvanceRow[]`
+ * (camelCase) with no actual mapping. `SELECT *` returns the real Postgres
+ * column names -- snake_case (tenant_id, adjusted_minor, amount_minor, ...)
+ * -- so every field a caller read off the result (advance.tenantId,
+ * .adjustedMinor, .amountMinor) was silently `undefined` at runtime despite
+ * the type-checker being satisfied by the `as` cast. In consumer.ts's
+ * advanceAdjust handler this made `advance.tenantId !== p.tenantId` always
+ * true, so every adjustment was rejected as ADVANCE_NOT_FOUND even once the
+ * advance genuinely existed for the right tenant.
+ * Mirrors the already-correct findDepositByIdForUpdateTx pattern in
+ * treasury/repo.ts: map snake_case raw columns onto the drizzle AdvanceRow
+ * shape by hand, and BigInt() the two money columns (postgres.js returns
+ * bigint/int8 columns as strings from a raw, unmapped query).
+ */
 export async function findAdvanceByIdForUpdateTx(tx: Exec, id: string): Promise<AdvanceRow | null> {
-  const rows = await tx.execute(
+  const res = await tx.execute(
     sql`SELECT * FROM payments.finance_advances WHERE id = ${id}::uuid FOR UPDATE`
   );
-  return (rows as AdvanceRow[])[0] ?? null;
+  const rows = (res as { rows?: unknown[] }).rows ?? (res as unknown[]);
+  const arr = rows as Array<Record<string, unknown>>;
+  if (!arr[0]) return null;
+  const r = arr[0];
+  return {
+    id: r.id, tenantId: r.tenant_id, advanceNo: r.advance_no,
+    beneficiary: r.beneficiary, type: r.type,
+    amountMinor: BigInt(r.amount_minor as string), currency: r.currency,
+    disbursedDate: r.disbursed_date, dueDate: r.due_date,
+    adjustedMinor: BigInt((r.adjusted_minor as string) ?? "0"),
+    purpose: r.purpose, status: r.status,
+    createdAt: r.created_at, updatedAt: r.updated_at,
+    createdBy: r.created_by, updatedBy: r.updated_by, version: r.version,
+  } as unknown as AdvanceRow;
 }
 
 export async function updateAdvance(tx: Writer, id: string, patch: Partial<AdvanceInsert>): Promise<void> {
