@@ -15,6 +15,18 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
     const p = msg.payload as { tenantId: string; period: string; closeType: "soft_close" | "hard_close" };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // CONCURRENCY FIX: acquire the period's advisory lock (repo.ts's
+      // lockPeriodTx) as early as possible — before `closedAt: new Date()`
+      // below is computed, and before the idempotency read. postJournal
+      // (gl/consumer.ts) takes the same lock before its own period-status
+      // check, so this either waits out any post already in flight for this
+      // period or blocks any post that arrives after it. Locking BEFORE
+      // computing closedAt (rather than relying only on upsertPeriodClose's
+      // own internal call to the same lock) matters here specifically so
+      // closedAt reflects the moment this transaction actually got exclusive
+      // access to the period — its true effective-close time — instead of a
+      // stale pre-wait attempt time; see lockPeriodTx's doc comment.
+      await periodRepo.lockPeriodTx(tx, p.tenantId, p.period);
       const existing = await periodRepo.findPeriodCloseTx(tx, p.tenantId, p.period);
       if (existing?.status === "hard_close") return; // already hard-closed, idempotent
       if (existing?.status === p.closeType) return; // already in desired state
@@ -46,6 +58,10 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
     const p = msg.payload as { tenantId: string; period: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // CONCURRENCY FIX: same reasoning as finance.period.close above — take
+      // the period's advisory lock before reading/writing its status, so a
+      // reopen can't interleave with a concurrent post or close either.
+      await periodRepo.lockPeriodTx(tx, p.tenantId, p.period);
       const existing = await periodRepo.findPeriodCloseTx(tx, p.tenantId, p.period);
       if (!existing || existing.status === "open") return; // already open
       const fromStatus = existing.status;
