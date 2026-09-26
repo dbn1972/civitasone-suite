@@ -233,27 +233,63 @@ describe("Gov Rail Contract: PFMS/e-Kuber", () => {
 
   describe("circuit breaker → 503 CIRCUIT_OPEN after 5 failures", () => {
     it("trips circuit breaker after 5 consecutive upstream failures", async () => {
+      // Unique to this test/tenant -- tests/pfms-adapter.test.ts reuses the
+      // bare "REF-001" literal under a DIFFERENT tenant, and referenceId
+      // collision across tenants is now meaningfully enforced (SEC fix).
+      const REF = "REF-GOVRAIL-CIRCUITBREAKER-001";
+
       vi.stubEnv("PFMS_ENABLED", "true");
       vi.stubEnv("PFMS_BASE_URL", "https://pfms-sandbox.gov.in");
       vi.stubEnv("PFMS_API_KEY", "sandbox-key-pfms");
       vi.stubEnv("JWT_SECRET", JWT_SECRET);
 
-      vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
-        ok: false,
-        status: 500,
-        text: () => Promise.resolve("e-Kuber gateway unavailable"),
-      }));
+      const fetchMock = vi.fn();
+      vi.stubGlobal("fetch", fetchMock);
 
       const { buildApp } = await import("../src/app.js");
       app = await buildApp();
 
       const token = makeToken();
 
+      // Real callers always submit a payment (SubmitPaymentForm) before
+      // checking its status (PaymentStatusLookup) -- see PR #1591's
+      // description. Establish that ownership record first so the
+      // tenant-ownership check (SEC fix) lets the status checks below
+      // actually reach checkStatus() and exercise the breaker, instead of
+      // 404ing on a reference this tenant never submitted.
+      fetchMock.mockResolvedValueOnce({
+        ok: true,
+        json: () => Promise.resolve({
+          referenceId: REF,
+          pfmsTransactionId: "EKUB-TXN-CIRCUITBREAKER",
+          status: "accepted",
+          timestamp: "2026-07-10T10:30:00.000Z",
+        }),
+      });
+      const submitRes = await app.inject({
+        method: "POST",
+        url: "/v1/finance/pfms/payments",
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          referenceId: REF,
+          beneficiaryCode: "BEN-CIRCUITBREAKER",
+          amount: "100000",
+          purposeCode: "SALARY",
+        },
+      });
+      expect(submitRes.statusCode).toBe(201);
+
+      fetchMock.mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: () => Promise.resolve("e-Kuber gateway unavailable"),
+      });
+
       // Trigger 5 failures to trip the breaker
       for (let i = 0; i < 5; i++) {
         const res = await app.inject({
           method: "GET",
-          url: "/v1/finance/pfms/payments/REF-001/status",
+          url: `/v1/finance/pfms/payments/${REF}/status`,
           headers: { authorization: `Bearer ${token}` },
         });
         expect(res.statusCode).toBe(502);
@@ -262,7 +298,7 @@ describe("Gov Rail Contract: PFMS/e-Kuber", () => {
       // 6th call should hit the open circuit breaker
       const res = await app.inject({
         method: "GET",
-        url: "/v1/finance/pfms/payments/REF-001/status",
+        url: `/v1/finance/pfms/payments/${REF}/status`,
         headers: { authorization: `Bearer ${token}` },
       });
 

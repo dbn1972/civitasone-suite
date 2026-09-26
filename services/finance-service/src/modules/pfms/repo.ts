@@ -204,3 +204,58 @@ export async function upsertAdapterPfmsRecord(params: {
     });
   });
 }
+
+/**
+ * Tenant-ownership check for GET /v1/finance/pfms/payments/:ref/status.
+ *
+ * adapter.ts's PFMS_BASE_URL/PFMS_API_KEY are a single module-level
+ * credential shared by every tenant in this deployment (see adapter.ts's
+ * file header) -- the outbound e-Kuber call itself enforces no tenant
+ * boundary at all. The only tenant boundary available anywhere in this path
+ * is whether this exact referenceId was ever submitted/checked by this
+ * tenant before, which upsertAdapterPfmsRecord has recorded (channel =
+ * 'ekuber_adapter') since PR #1591. Reuses the same
+ * idx_finance_pfms_tenant_pfmsid_channel index as upsertAdapterPfmsRecord's
+ * own lookup (index scan, not a seq scan).
+ *
+ * Returns only a boolean, deliberately never the row itself: the caller
+ * must not learn anything about a foreign tenant's reference beyond "this
+ * is not yours" -- see adapter-routes.ts's 404 (not 403).
+ */
+export async function isAdapterPfmsRecordOwnedByTenant(tenantId: string, referenceId: string): Promise<boolean> {
+  const CHANNEL = "ekuber_adapter";
+  const rows = await scopedRead((tx) => tx.select({ id: financePfms.id }).from(financePfms)
+    .where(and(
+      eq(financePfms.tenantId, tenantId),
+      eq(financePfms.pfmsId, referenceId),
+      eq(financePfms.channel, CHANNEL),
+    ))
+    .limit(1));
+  return rows.length > 0;
+}
+
+/**
+ * Cross-tenant collision guard for POST /v1/finance/pfms/payments.
+ *
+ * referenceId is caller-chosen, but adapter.ts's e-Kuber credential is one
+ * shared module-level singleton for the whole deployment -- referenceId is
+ * therefore a single, deployment-wide namespace at the real e-Kuber end even
+ * though payments.finance_pfms is keyed per-tenant. Without this guard, two
+ * different tenants could each end up with their own local row for the SAME
+ * referenceId, and isAdapterPfmsRecordOwnedByTenant above would then let
+ * BOTH of them pass its ownership check for a referenceId e-Kuber only
+ * actually recognizes as one real transaction. Rejecting a referenceId
+ * another tenant already holds keeps "one referenceId, one owning tenant"
+ * true, which the status-check ownership gate depends on. A resubmission by
+ * the SAME tenant that already owns this referenceId is left unaffected.
+ */
+export async function isAdapterPfmsRecordClaimedByOtherTenant(tenantId: string, referenceId: string): Promise<boolean> {
+  const CHANNEL = "ekuber_adapter";
+  const rows = await scopedRead((tx) => tx.select({ tenantId: financePfms.tenantId }).from(financePfms)
+    .where(and(
+      eq(financePfms.pfmsId, referenceId),
+      eq(financePfms.channel, CHANNEL),
+    ))
+    .limit(1));
+  return rows.length > 0 && rows[0]!.tenantId !== tenantId;
+}

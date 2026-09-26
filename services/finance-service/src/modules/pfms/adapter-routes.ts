@@ -31,6 +31,7 @@ import * as repo from "./repo.js";
 import {
   submitPayment,
   checkStatus,
+  isEnabled,
   PfmsAdapterError,
   CircuitBreakerOpenError,
 } from "./adapter.js";
@@ -64,6 +65,34 @@ export async function pfmsAdapterRoutes(app: FastifyInstance): Promise<void> {
         });
       }
       throw err;
+    }
+
+    // Gated on isEnabled(): a disabled adapter is a service-level state (503
+    // INTEGRATION_DISABLED, below via submitPayment's own assertEnabled)
+    // that must take priority over a per-reference collision verdict -- it
+    // doesn't depend on tenant or referenceId, so checking it first leaks
+    // nothing (mirrors the same ordering on the status-check route below).
+    if (isEnabled()) {
+      const claimedByOtherTenant = await repo.isAdapterPfmsRecordClaimedByOtherTenant(
+        ctx.tenantId,
+        body.referenceId,
+      );
+      if (claimedByOtherTenant) {
+        // See repo.ts's isAdapterPfmsRecordClaimedByOtherTenant doc comment:
+        // referenceId is a deployment-wide namespace at the shared e-Kuber
+        // account even though our own ledger is keyed per-tenant.
+        req.log.warn(
+          { adapter: "pfms", correlationId: req.id },
+          "PFMS submit rejected — referenceId already claimed by another tenant",
+        );
+        return reply.code(409).send({
+          error: {
+            code: "REFERENCE_ALREADY_IN_USE",
+            message: "referenceId is already in use",
+            correlationId: req.id,
+          },
+        });
+      }
     }
 
     try {
@@ -154,6 +183,42 @@ export async function pfmsAdapterRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, FINANCE_ROLES);
 
     const { ref } = referenceParam.parse(req.params);
+
+    // Tenant-ownership check BEFORE calling e-Kuber or touching the shared
+    // ledger. adapter.ts's PFMS_BASE_URL/PFMS_API_KEY are one shared
+    // module-level credential for the whole deployment (see adapter.ts's
+    // file header), so checkStatus(ref) itself enforces no tenant boundary
+    // at all -- it will happily return ANY tenant's real e-Kuber payment
+    // data for ANY ref. The only tenant boundary available anywhere in this
+    // path is whether this tenant is the one who actually
+    // submitted/checked this exact referenceId before (tracked via
+    // repo.upsertAdapterPfmsRecord since PR #1591). A reference this tenant
+    // never touched is either wholly unknown or belongs to someone else --
+    // from the caller's vantage those two cases must look identical, so
+    // this 404s rather than 403s and never confirms a foreign reference's
+    // existence.
+    //
+    // Gated on isEnabled(): when the adapter itself isn't configured, that's
+    // a service-level state (503 INTEGRATION_DISABLED, below via checkStatus's
+    // own assertEnabled) which must take priority over a per-reference
+    // ownership verdict -- it doesn't depend on tenant or reference, so
+    // checking it first leaks nothing.
+    if (isEnabled()) {
+      const owned = await repo.isAdapterPfmsRecordOwnedByTenant(ctx.tenantId, ref);
+      if (!owned) {
+        req.log.warn(
+          { adapter: "pfms", correlationId: req.id },
+          "PFMS status check rejected — reference not owned by caller tenant",
+        );
+        return reply.code(404).send({
+          error: {
+            code: "NOT_FOUND",
+            message: "PFMS reference not found",
+            correlationId: req.id,
+          },
+        });
+      }
+    }
 
     try {
       const result = await checkStatus(ref);
