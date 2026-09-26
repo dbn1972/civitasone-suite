@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { encryptedText } from "../../shared/pii-crypto.js";
 import { HttpError } from "../../shared/context.js";
-import { assertOpeningBalancesBalanced } from "./domain.js";
+import { assertOpeningBalancesBalanced, DomainError } from "./domain.js";
 
 const log = pino({ name: "finance.masters.consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -155,15 +155,48 @@ export function registerMastersConsumers(queue: Queue): void {
       // including the markProcessed row, so a redelivery is rejected the
       // same way every time rather than being silently swallowed.
       assertOpeningBalancesBalanced(p.entries);
+      // gl.finance_opening_balances already carries UNIQUE(tenant_id, fy_code,
+      // account_code) (migrations/0022_fy_opening_balance.sql, present since
+      // that file's first commit -- verified directly against a fresh
+      // Postgres built from this repo's own migrations, not assumed). An
+      // opening balance is entered once per account+FY: OpeningBalanceForm.tsx
+      // always starts blank and has no edit/correct affordance, so a second
+      // submission naming an account+FY that already has a row is a genuine
+      // duplicate, not a correction, and must be rejected loudly.
+      //
+      // PROVEN silent-data-loss bug this closes: two finance_admins submitted
+      // opening balances for the same account+FY (fyCode 2027-28, accounts
+      // 1100/2202) concurrently with different amounts. Only the first
+      // request's amounts persisted; the second got 202 accepted but its data
+      // existed nowhere -- no row, no error, no log trace. Root cause: the
+      // bare `.onConflictDoNothing()` below (no conflict target) silently
+      // catches ANY unique-constraint violation on this table -- including
+      // this natural-key one -- exactly like COMMANDS.fiscalYearCreate above
+      // already relies on it to. Unlike that handler, this one never checked
+      // whether a row was actually written, so the losing submission's insert
+      // was silently skipped, the transaction still committed, and the
+      // "success" audit event below still fired for data that was never
+      // persisted. Checking `.returning().length` and throwing here rolls
+      // back the WHOLE transaction (including markProcessed), so a
+      // redelivery is rejected identically every time and the failure is
+      // finally observable (queue_consumer_error / DLQ) instead of silent and
+      // untraceable. See tests/masters-opening-balance-race.test.ts (real
+      // Postgres, genuine concurrent Promise.all) for the regression proof.
       for (const entry of p.entries) {
-        await tx.insert(openingBalances).values({
+        const inserted = await tx.insert(openingBalances).values({
           id: entry.id, tenantId: p.tenantId, fyCode: p.fyCode,
           accountCode: entry.accountCode,
           debitMinor: BigInt(entry.debitMinor),
           creditMinor: BigInt(entry.creditMinor),
           narration: entry.narration,
           enteredBy: msg.actorId,
-        }).onConflictDoNothing();
+        }).onConflictDoNothing().returning({ id: openingBalances.id });
+        if (inserted.length === 0) {
+          throw new DomainError(
+            "OPENING_BALANCE_ALREADY_EXISTS",
+            `an opening balance for account ${entry.accountCode} in FY ${p.fyCode} already exists`,
+          );
+        }
       }
       await audit(tx, msg, "enter_opening_balances", "opening_balance", p.id);
     });
