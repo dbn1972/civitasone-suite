@@ -3,7 +3,7 @@
  * Source: modules/payroll/domain.ts, tax/engine.ts, bank-transfer/domain.ts, statutory/ecr-domain.ts
  */
 import { describe, it, expect, beforeAll } from "vitest";
-import { computeSlip, computeGratuity, isPayrollEligible, assertRunStatusTransition, hraSlabPct, roundRupee, additionalPensionPct, DomainError } from "../src/modules/payroll/domain.js";
+import { computeSlip, computeGratuity, completedYearsPgAct, computeLeaveEncashmentGrossMinor, isPayrollEligible, assertRunStatusTransition, hraSlabPct, roundRupee, additionalPensionPct, DomainError } from "../src/modules/payroll/domain.js";
 import { registerTaxConfig, computeTax, hraExemptionMinor, trueUpTdsMinor, type FyTaxConfig } from "../src/modules/tax/engine.js";
 import { computeSettlementDate, validateNachBeneficiaries, splitIntoBatches, computeBatchHash, sanitizeAscii } from "../src/modules/bank-transfer/domain.js";
 import { computePensionableWage, EPF_WAGE_CEILING } from "../src/modules/statutory/ecr-domain.js";
@@ -89,6 +89,45 @@ describe("F&F — computeGratuity", () => {
     const with6m = computeGratuity(10.5, 100_000_00n);
     const without = computeGratuity(10.4, 100_000_00n);
     expect(with6m).toBeGreaterThan(without);
+  });
+});
+
+// ─── Regression: all-zero F&F settlement (integration/consumer.ts's
+// employeeSeparated handler used to publish payroll.fnf.compute without
+// gratuityGrossMinor/leaveEncashmentGrossMinor/lastDrawnWagesMinor/
+// completedYears at all, so every automatic separation persisted an
+// all-zero fnf_settlements row). completedYearsPgAct and
+// computeLeaveEncashmentGrossMinor are the two pieces of that fix pulled
+// out into named, independently testable functions. The full event → queue
+// → computeFnfSettlement pipeline is covered end-to-end in
+// integration-separation-gratuity.test.ts. ──────────────────────────────────
+describe("F&F — completedYearsPgAct (shared by computeGratuity above)", () => {
+  it("matches computeGratuity's own internal rounding", () => {
+    // computeGratuity(10.5, ...) already asserts 10.5 rounds up to 11 complete
+    // years above ("6+ months in final year rounds up") -- this asserts the
+    // extracted helper agrees, since integration/consumer.ts now calls this
+    // helper directly to derive FnfInput.completedYears for the SAME
+    // separation computeGratuity is pricing, and the two must never disagree.
+    expect(completedYearsPgAct(10.5)).toBe(11);
+    expect(completedYearsPgAct(10.4)).toBe(10);
+    expect(completedYearsPgAct(16.0)).toBe(16);
+    expect(completedYearsPgAct(4.99)).toBe(5);
+  });
+});
+
+describe("F&F — computeLeaveEncashmentGrossMinor", () => {
+  it("formula: (Basic+DA)/30 * balance days", () => {
+    // (Basic+DA)=56,000, 150 days: 56,000/30 * 150 = 56,000 * 5 = Rs 2,80,000.
+    expect(computeLeaveEncashmentGrossMinor(40_000_00n, 16_000_00n, 150)).toBe(280_000_00n);
+  });
+  it("caps at 300 days even when the balance is higher", () => {
+    // 320 days of balance still only pays out for the statutory 300-day cap.
+    const at300 = computeLeaveEncashmentGrossMinor(40_000_00n, 16_000_00n, 300);
+    const at320 = computeLeaveEncashmentGrossMinor(40_000_00n, 16_000_00n, 320);
+    expect(at320).toBe(at300);
+  });
+  it("zero balance days pays nothing", () => {
+    expect(computeLeaveEncashmentGrossMinor(40_000_00n, 16_000_00n, 0)).toBe(0n);
   });
 });
 

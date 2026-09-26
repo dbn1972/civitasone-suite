@@ -595,16 +595,47 @@ export function assertRunStatusTransition(current: string, next: string): void {
 }
 
 /**
+ * Payment of Gratuity Act / CCS 6-month rounding: >=6 months served into the
+ * final year of service rounds up to the next completed year. Exported so
+ * callers that need the SAME completedYears figure computeGratuity itself
+ * used (e.g. integration/consumer.ts's employeeSeparated handler, which also
+ * feeds completedYears into the Sec 10(10)/10(10AA) exemption-ceiling
+ * formulas in tax/exemptions.ts) can never silently drift onto a different
+ * tenure number for the very same separation.
+ */
+export function completedYearsPgAct(yearsOfService: number): number {
+  const whole = Math.floor(yearsOfService);
+  const fracMonths = Math.round((yearsOfService - whole) * 12);
+  return whole + (fracMonths >= 6 ? 1 : 0);
+}
+
+/**
  * Payment of Gratuity Act / CCS: (15/26) * (last Basic+DA) * completed years,
  * where >=6 months in the final year rounds up; capped at 20 lakh.
  */
 export function computeGratuity(yearsOfService: number, lastBasicMinor: bigint, lastDaMinor = 0n): bigint {
   if (yearsOfService < 5) return 0n;
-  const whole = Math.floor(yearsOfService);
-  const fracMonths = Math.round((yearsOfService - whole) * 12);
-  const completedYears = BigInt(whole + (fracMonths >= 6 ? 1 : 0));
+  const completedYears = BigInt(completedYearsPgAct(yearsOfService));
   const emoluments = lastBasicMinor + lastDaMinor;
   const raw = (emoluments * 15n * completedYears) / 26n;
   const rounded = roundRupee(raw);
   return rounded > GRATUITY_CAP ? GRATUITY_CAP : rounded;
+}
+
+/**
+ * Earned-Leave encashment on separation = (Basic+DA)/30 * min(balance, 300
+ * days) -- the same statutory 300-day cap as hrms-service's own elEncashment
+ * (pension/engine.ts), but priced off THIS service's own
+ * dearness_allowance_rates lookup (see integration/consumer.ts's
+ * employeeSeparated handler) rather than a hardcoded DA percentage, so
+ * gratuity and leave encashment for the same separation are never priced
+ * off two different DA rates. Bigint-paise throughout (no float division),
+ * matching this module's own house rule that no money amount is ever
+ * produced by float arithmetic.
+ */
+export function computeLeaveEncashmentGrossMinor(lastBasicMinor: bigint, lastDaMinor: bigint, leaveBalanceDays: number): bigint {
+  if (leaveBalanceDays <= 0) return 0n;
+  const emoluments = lastBasicMinor + lastDaMinor;
+  const cappedDays = BigInt(Math.min(leaveBalanceDays, 300));
+  return roundRupee((emoluments * cappedDays) / 30n);
 }
