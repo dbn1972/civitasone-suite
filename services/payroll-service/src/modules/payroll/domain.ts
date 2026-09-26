@@ -610,11 +610,47 @@ export function completedYearsPgAct(yearsOfService: number): number {
 }
 
 /**
- * Payment of Gratuity Act / CCS: (15/26) * (last Basic+DA) * completed years,
- * where >=6 months in the final year rounds up; capped at 20 lakh.
+ * Separation causes for which the Payment of Gratuity Act, 1972 §4(1) first
+ * proviso — carried forward verbatim in the Code on Social Security, 2020
+ * §53(1) proviso — waives the 5-year minimum continuous-service condition:
+ * termination of employment by death, or by disablement due to accident or
+ * disease. This ONLY removes the eligibility floor: §4(2)/§53(2) apply the
+ * exact same (15/26) x emoluments x completed-years formula regardless of
+ * cause, with no separate/enhanced formula for the sub-5-year case. A
+ * separation with 0 completed years (e.g. death within 6 months of joining)
+ * therefore still legitimately computes to 0 — that is the Act's own result,
+ * not a bug. "invalidation" is accepted as a synonym for disablement,
+ * matching the term this codebase already uses for the equivalent CCS
+ * (Pension) Rules waiver (see hrms-service employee/consumer.ts's
+ * GRATUITY_ELIGIBLE_TYPES). Matching is case-insensitive; an absent or
+ * unrecognised separationType does NOT waive the floor (fail-safe default:
+ * the standard 5-year rule applies, preserving behaviour for every existing
+ * caller that doesn't pass this argument).
  */
-export function computeGratuity(yearsOfService: number, lastBasicMinor: bigint, lastDaMinor = 0n): bigint {
-  if (yearsOfService < 5) return 0n;
+const MIN_SERVICE_WAIVED_SEPARATION_TYPES = new Set(["death", "disablement", "disability", "invalidation"]);
+
+function waivesGratuityMinService(separationType?: string | null): boolean {
+  return !!separationType && MIN_SERVICE_WAIVED_SEPARATION_TYPES.has(separationType.toLowerCase());
+}
+
+/**
+ * Payment of Gratuity Act, 1972 §4(2) / Code on Social Security, 2020 §53(2):
+ * (15/26) * (last Basic+DA) * completed years, where >=6 months in the final
+ * year rounds up; capped at 20 lakh. The 5-year minimum continuous-service
+ * condition (§4(1) / §53(1)) is waived for death/disablement separations —
+ * see MIN_SERVICE_WAIVED_SEPARATION_TYPES above for the accepted cause
+ * strings and legal basis. Bug fix: this used to apply the 5-year floor
+ * unconditionally (no separationType parameter existed at all), silently
+ * zeroing out gratuity for every death/disablement separation under 5 years
+ * — contrary to the Act — with no error or flag anywhere.
+ */
+export function computeGratuity(
+  yearsOfService: number,
+  lastBasicMinor: bigint,
+  lastDaMinor = 0n,
+  separationType?: string | null,
+): bigint {
+  if (yearsOfService < 5 && !waivesGratuityMinService(separationType)) return 0n;
   const completedYears = BigInt(completedYearsPgAct(yearsOfService));
   const emoluments = lastBasicMinor + lastDaMinor;
   const raw = (emoluments * 15n * completedYears) / 26n;

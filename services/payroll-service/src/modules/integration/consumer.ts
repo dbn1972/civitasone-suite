@@ -118,7 +118,16 @@ export function registerIntegrationConsumers(queue: Queue): void {
       }
       const daRateBps = BigInt(daRows[0]!.rate_bps);
       const lastDaMinor = (basicMinor * daRateBps) / 10000n;
-      const gratuityMinor = computeGratuity(years, basicMinor, lastDaMinor);
+      // BUG FIX (death/disablement gratuity denial): separationType was
+      // already destructured above (it's used for the fnfCompute payload
+      // below) but was never passed into computeGratuity, so its 5-year
+      // floor applied unconditionally -- a death or disablement separation
+      // under 5 years silently computed (and persisted) a zero gratuity,
+      // contrary to the Payment of Gratuity Act, 1972 §4(1) first proviso /
+      // Code on Social Security, 2020 §53(1) proviso, which waive that floor
+      // for exactly those two causes. See
+      // MIN_SERVICE_WAIVED_SEPARATION_TYPES in payroll/domain.ts.
+      const gratuityMinor = computeGratuity(years, basicMinor, lastDaMinor, p.separationType);
       // BUG FIX: this used to `return` here whenever gratuityMinor was 0
       // (< 5 years' qualifying service), which skipped the fnfCompute
       // publish below entirely -- a short-tenure separation got NO F&F
