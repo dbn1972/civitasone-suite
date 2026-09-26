@@ -24,7 +24,7 @@ export function registerUserConsumers(rawQueue: Queue): void {
   // `rawQueue` — subscribing on the raw queue bypasses tenant scoping.
   const queue = tenantScoped(rawQueue);
 
-  queue.subscribe<UserView & { createdBy: string }>(COMMANDS.createUser, async (msg) => {
+  queue.subscribe<UserView & { createdBy: string; initialRealmRoles?: string[] }>(COMMANDS.createUser, async (msg) => {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const p = msg.payload;
@@ -37,10 +37,28 @@ export function registerUserConsumers(rawQueue: Queue): void {
     });
     await cache.put(keyFor(msg.payload.tenantId, msg.payload.id), msg.payload);
     // Keycloak federation (best-effort, feature-flagged, never blocks user create).
+    // Optional initialRealmRoles (e.g. the tenant-onboard flow's bootstrap-admin
+    // role set) are mapped onto the user AFTER provisioning resolves — sequenced
+    // within this same chain (not a separate queued command) so role assignment
+    // never races the realm user's own creation. Skipped/degraded the same
+    // best-effort way as provisioning itself: a Keycloak hiccup here must not
+    // fail user creation, and is left for the operator to see in logs/captured
+    // errors rather than blocking anything.
+    const initialRoles = msg.payload.initialRealmRoles;
     void keycloak.provisionUser(
       { id: msg.payload.id, tenantId: msg.payload.tenantId, email: msg.payload.email, name: msg.payload.name },
       kcLog,
-    ).then((r) => { if (!r.skipped) kcLog.info({ userId: msg.payload.id, result: r }, "keycloak provision"); });
+    ).then(async (r) => {
+      if (!r.skipped) kcLog.info({ userId: msg.payload.id, result: r }, "keycloak provision");
+      if (r.ok && !r.skipped && initialRoles && initialRoles.length > 0) {
+        const rr = await keycloak.assignRealmRoles(
+          { tenantId: msg.payload.tenantId, email: msg.payload.email },
+          initialRoles,
+          kcLog,
+        );
+        if (!rr.skipped) kcLog.info({ userId: msg.payload.id, result: rr }, "keycloak initial role assignment");
+      }
+    });
   });
 
   queue.subscribe<{ id: string; name?: string; empCode?: string }>(COMMANDS.updateUser, async (msg) => {

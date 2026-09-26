@@ -3,9 +3,11 @@
  *
  * Federates identity-service users into the Keycloak realm so they can
  * authenticate via OIDC. Operations:
- *   - provisionUser:   create (or no-op if exists) the realm user on user create
- *   - deactivateUser:  disable the user + revoke/logout all sessions on deactivate
- *   - reconcileUser:   drift-repair — ensure realm state matches identity-service
+ *   - provisionUser:    create (or no-op if exists) the realm user on user create
+ *   - assignRealmRoles: map existing REALM roles (by name) onto a federated user —
+ *                        the piece provisionUser deliberately does NOT do (see below)
+ *   - deactivateUser:   disable the user + revoke/logout all sessions on deactivate
+ *   - reconcileUser:    drift-repair — ensure realm state matches identity-service
  *
  * FEATURE FLAG / GRACEFUL DEGRADATION:
  *   This client is ENABLED only when admin credentials are present in env
@@ -146,6 +148,90 @@ export async function provisionUser(u: { id: string; tenantId: string; email: st
   } catch (err) {
     captureError(err, { service: "identity", event: "keycloak_provision_failed", userId: u.id });
     log?.warn({ userId: u.id, err: String(err) }, "keycloak provisioning failed (degraded)");
+    return { ok: false, reason: String(err) };
+  }
+}
+
+/**
+ * Map realm ROLES (by name) onto an already-federated user.
+ *
+ * provisionUser() deliberately never does this itself: it only creates the
+ * bare realm user (username/attributes), with no realm-role mapping call at
+ * all. Nothing else in the codebase calls Keycloak's role-mappings endpoint
+ * either — the identity-service `rbac` module's role-assign command family
+ * (identity.rbac.role.assign) writes to identity-service's OWN tenant-scoped
+ * custom-permission tables (roleId → a row in that tenant's rbac_roles),
+ * which is unrelated to, and never reaches, Keycloak. So a user federated via
+ * provisionUser() alone ends up with ZERO realm roles beyond Keycloak's own
+ * built-in `default-roles-<realm>` composite — every `requireRole()` check in
+ * every service then 403s for them, confirmed live against this realm: the
+ * two users already provisioned this way (tenant-namespaced usernames, no
+ * caller ever having called a role-mapping endpoint for them) carry only
+ * `default-roles-civitasone`.
+ *
+ * This function is the missing piece: given realm ROLE NAMES, resolve each to
+ * its Keycloak role representation ({id, name} — the role-mappings endpoint
+ * requires the full representation, not a bare name) and POST them onto the
+ * user's realm role-mappings. A role name that does not exist in this realm's
+ * catalog is skipped (logged), not fatal — the realm's role catalog can lag
+ * what services expect (see infra/keycloak/civitasone-realm.json drift), and
+ * granting the subset that DOES exist is strictly better than granting none.
+ *
+ * Best-effort, same graceful-degradation contract as the rest of this file:
+ * never throws, returns { ok:false } (captured + logged) on failure so a
+ * Keycloak hiccup never blocks the caller's own success path.
+ */
+export async function assignRealmRoles(
+  u: { tenantId: string; email: string },
+  roleNames: string[],
+  log?: { warn: (o: unknown, m: string) => void },
+): Promise<KcResult> {
+  const cfg = readConfig();
+  if (!cfg) return { ok: true, skipped: true, reason: "keycloak admin creds not configured" };
+  if (roleNames.length === 0) return { ok: true, reason: "no roles requested" };
+  try {
+    const token = await getAdminToken(cfg);
+    const existing = await findUser(cfg, token, u.tenantId, u.email);
+    if (!existing) return { ok: false, reason: "user not present in keycloak" };
+
+    const resolved: Array<{ id: string; name: string }> = [];
+    for (const name of roleNames) {
+      const res = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/roles/${encodeURIComponent(name)}`, {
+        headers: { authorization: `Bearer ${token}` },
+      });
+      if (res.status === 200) {
+        const role = (await res.json()) as { id: string; name: string };
+        resolved.push({ id: role.id, name: role.name });
+      } else if (res.status === 404) {
+        log?.warn({ tenantId: u.tenantId, email: u.email, role: name }, "keycloak realm role not found in catalog — skipped");
+      } else {
+        throw new Error(`keycloak role lookup failed: ${res.status} (role=${name})`);
+      }
+    }
+    if (resolved.length === 0) {
+      return { ok: false, reason: "none of the requested roles exist in the realm catalog" };
+    }
+
+    const upd = await fetch(`${cfg.url}/admin/realms/${cfg.realm}/users/${existing.id}/role-mappings/realm`, {
+      method: "POST",
+      headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+      body: JSON.stringify(resolved),
+    });
+    if (!upd.ok && upd.status !== 204) {
+      throw new Error(`keycloak role-mapping assign failed: ${upd.status} ${await upd.text()}`);
+    }
+    const assignedNames = resolved.map((r) => r.name);
+    const skippedNames = roleNames.filter((n) => !assignedNames.includes(n));
+    return {
+      ok: true,
+      kcUserId: existing.id,
+      reason: skippedNames.length === 0
+        ? `assigned: ${assignedNames.join(", ")}`
+        : `assigned: ${assignedNames.join(", ")}; skipped (not in catalog): ${skippedNames.join(", ")}`,
+    };
+  } catch (err) {
+    captureError(err, { service: "identity", event: "keycloak_role_assign_failed", tenantId: u.tenantId, email: u.email });
+    log?.warn({ tenantId: u.tenantId, email: u.email, err: String(err) }, "keycloak role assignment failed (degraded)");
     return { ok: false, reason: String(err) };
   }
 }
