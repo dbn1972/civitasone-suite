@@ -154,7 +154,7 @@ export default function ApplicationDetailPage() {
       const focusable = dialogRef.current.querySelectorAll<HTMLElement>(
         "input:not([disabled]), select:not([disabled]), textarea:not([disabled]), button:not([disabled]), [tabindex]:not([tabindex=\"-1\"])"
       );
-      if (focusable.length === 0) return;
+      if (focusable.length === 0) return; // ux-001-ok: DOM focus-trap over this dialog's own focusable elements (keyboard nav), not a data loader
       const first = focusable[0];
       const last = focusable[focusable.length - 1];
       if (e.shiftKey) {

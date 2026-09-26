@@ -191,7 +191,14 @@ function findContainingStatement(block, node) {
   return block.statements.find((s) => s.getStart() <= node.getStart() && s.getEnd() >= node.getEnd());
 }
 
-const RESOURCE_CALL_NAMES = new Set(["useResource", "combineResourceState"]);
+// `toResourceState` (../_data/useResource.ts) has the identical error-first
+// contract as `combineResourceState`: both check `source === "error"` and
+// return `status: "error"` BEFORE ever invoking the caller's `isEmpty`
+// callback, so an empty-check inside that callback structurally cannot run
+// in the error case. Missing here was a guard gap, not a real violation --
+// found while triaging tenant-admin/compliance/page.tsx:23 and
+// workflow/page.tsx:10, both false-flagged for exactly this reason.
+const RESOURCE_CALL_NAMES = new Set(["useResource", "combineResourceState", "toResourceState"]);
 
 /**
  * Is `fn` (an arrow function or function expression) itself one of the

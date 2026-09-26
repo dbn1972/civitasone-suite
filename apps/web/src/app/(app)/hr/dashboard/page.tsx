@@ -123,7 +123,7 @@ export default async function HRDashboardPage() {
     // run today), not a genuine 0% -- same fabricated-zero-vs-honest-absence
     // guard as HRKPIStrip.tsx's hasValue(), just applied to a ratio instead
     // of a passed-through count.
-    const attendanceThisMonthPct = attendanceFailed || attendanceResult.data.length === 0
+    const attendanceThisMonthPct = attendanceFailed || attendanceResult.data.length === 0 // ux-001-ok: attendanceFailed IS attendanceResult.source === "error" (aliased above) -- already gated, the guard's text-only match just can't see through the identifier
       ? null
       : Math.round((attendanceResult.data.filter((a) => a.status === "present").length / attendanceResult.data.length) * 100);
     const pendingCount = myAppsFailed ? null : myAppsResult.data.filter((a) => a.status === "pending").length;

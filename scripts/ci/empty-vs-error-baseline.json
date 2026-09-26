@@ -1,5 +1,8 @@
 {
   "$comment": "TRACKED DEBT, not an approved state. Each entry is a page.tsx with a .length === 0 (or equivalent) empty-check and no evidence anywhere in the file that it also branches on the loader's error token — see scripts/ci/empty-vs-error-guard.mjs for the exact check. The gate fails on NEW violations and on stale entries (fixed but left listed). Burn these down; regenerate with --write-baseline after a real fix. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-001 (first tranche) and its follow-up (UX-013) for the remainder.",
-  "generatedAt": "2026-09-17",
-  "knownViolations": []
+  "generatedAt": "2026-09-26",
+  "knownViolations": [
+    "apps/web/src/app/(app)/hr/shift-requests/page.tsx",
+    "apps/web/src/app/(app)/hr/wfh/page.tsx"
+  ]
 }

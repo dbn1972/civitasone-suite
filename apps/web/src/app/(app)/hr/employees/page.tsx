@@ -52,7 +52,12 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   // out a real headcount -- same reasoning applies for hr_admin as manager,
   // it just practically triggers only when a scoped query and the
   // dashboard aggregate disagree, which is rarer tenant-wide.
-  const total = page === 0 && employees.length === 0 ? 0 : (hrDashboard.headcount || employees.length);
+  // UX-001: `source` (destructured above from getEmployees()) tells us whether
+  // this page's own scoped query actually loaded -- an empty `employees` from
+  // a genuine fetch failure must not collapse to the same "confirmed zero"
+  // reading as a real empty roster, or a network blip would show "Total: 0"
+  // as if that were trustworthy data instead of falling back to headcount.
+  const total = page === 0 && !(source === "error") && employees.length === 0 ? 0 : (hrDashboard.headcount || employees.length);
   // NOTE: `active`/`others` below still derive from the current page only (same
   // page-scoped-math class as the type-tabs bug this fix targets), because there is
   // no existing tenant-wide "serving" aggregate to source them from without adding a
