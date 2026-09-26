@@ -61,6 +61,15 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
 
 vi.mock("../src/modules/payroll/domain.js", () => ({
   computeGratuity: vi.fn(() => 500000n),
+  // PR #1600: consumer.ts's employeeSeparated handler now also imports these
+  // two exports directly (completedYearsPgAct for the tenure figure fed into
+  // the fnfCompute payload's completedYears field; computeLeaveEncashmentGrossMinor
+  // for its leaveEncashmentGrossMinor field). Stubbed here with the same
+  // fixed-value-regardless-of-input style as computeGratuity above -- an ESM
+  // mock factory fully replaces the module, so an export it omits comes back
+  // as undefined and throws the moment consumer.ts imports it.
+  completedYearsPgAct: vi.fn(() => 15),
+  computeLeaveEncashmentGrossMinor: vi.fn(() => 0n),
 }));
 
 vi.mock("../src/modules/tax/ltc-exemption.js", () => ({
@@ -441,8 +450,22 @@ describe("Integration consumer — employeeSeparated", () => {
         // No dateOfJoining — falls back to effectiveDate → 0 years
       },
     });
-    // With 0 years, computeGratuity returns 0n → should NOT insert or enqueue
-    expect(mockEnqueue).not.toHaveBeenCalled();
+    // With 0 years, computeGratuity returns 0n, so the gratuity-only branch
+    // (insertGratuity + its "gratuity_compute" audit event) is skipped. But
+    // PR #1600 fixed the bug where the handler used to `return` at this same
+    // point, which silently skipped F&F settlement entirely -- a short-tenure
+    // separation got no F&F record at all, not even for leave encashment or
+    // notice pay it was still owed regardless of gratuity eligibility. The
+    // fnfCompute command must still be enqueued exactly once, unconditionally,
+    // so finance can settle whatever the employee is owed beyond gratuity.
+    expect(mockEnqueue).toHaveBeenCalledOnce();
+    expect(mockEnqueue).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        topic: COMMANDS.fnfCompute,
+        payload: expect.objectContaining({ gratuityGrossMinor: "0" }),
+      }),
+    );
   });
 });
 
