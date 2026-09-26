@@ -12,6 +12,8 @@ export const COMMANDS = {
   roleFeatureGrant:  "policy.role_feature.grant",
   roleFeatureRevoke: "policy.role_feature.revoke",
   provisionMunicipalRoles: "policy.municipal_roles.provision",
+  // Phase 1b RBAC remediation — see roles/keycloak-catalog.ts.
+  provisionKeycloakRoles: "policy.keycloak_roles.provision",
 } as const;
 
 export const EVENTS = {

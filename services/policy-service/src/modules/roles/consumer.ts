@@ -5,6 +5,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { provisionMunicipalRolesForTenant } from "./municipal-provision.js";
+import { provisionKeycloakRolesForTenant } from "./keycloak-provision.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -76,6 +77,37 @@ export function registerRoleConsumers(q: Queue): void {
         payload: {
           service: "policy",
           action: "provision_municipal_roles",
+          resourceType: "tenant",
+          resourceId: msg.tenantId,
+          outcome: "success",
+          ...result,
+        },
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, RESOURCE.role, msg.tenantId));
+  });
+
+  // Phase 1b RBAC remediation (see roles/keycloak-catalog.ts). Same rationale
+  // as provisionMunicipalRoles just above for emitting only the generic
+  // audit-trail record rather than minting a new domain event: this action
+  // has no consumer of its own anywhere in the fleet, so a
+  // "policy.keycloak_roles.provisioned" event would be a fourth orphan next
+  // to the three already tracked in tests/contract/known-defects.json — the
+  // audit record is the real signal a provisioning action needs, and
+  // audit-service already consumes AUDIT_TOPIC.
+  q.subscribe<{ tenantId: string }>(COMMANDS.provisionKeycloakRoles, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const result = await provisionKeycloakRolesForTenant(tx, msg.tenantId, msg.actorId);
+      await enqueue(tx, {
+        topic: AUDIT_TOPIC,
+        eventType: AUDIT_TOPIC,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: {
+          service: "policy",
+          action: "provision_keycloak_roles",
           resourceType: "tenant",
           resourceId: msg.tenantId,
           outcome: "success",

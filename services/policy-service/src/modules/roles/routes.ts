@@ -8,6 +8,7 @@ import { createRoleBody, updateRoleBody, addPermissionBody, roleIdParam } from "
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { MUNICIPAL_SERVICE_CATALOG, listMunicipalRoleNames } from "./municipal-catalog.js";
+import { KEYCLOAK_REALM_ROLE_CATALOG, listKeycloakRoleNames } from "./keycloak-catalog.js";
 
 const ADMIN = ["platform_admin", "super_admin", "tenant_admin"];
 
@@ -49,6 +50,28 @@ export async function roleRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN);
     return sendAccepted(reply, acceptedResponseSchema, await commands.provisionMunicipalRoles(ctx));
+  });
+
+  /**
+   * Read-only catalog of the 7 real Keycloak realm roles and their seeded
+   * permissions. See keycloak-catalog.ts: everything past super_admin and
+   * tenant_admin is a deliberately conservative starting point, not a final
+   * policy decision.
+   */
+  app.get("/policy/roles/catalog/keycloak", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    return reply.send({
+      data: KEYCLOAK_REALM_ROLE_CATALOG,
+      meta: { roleCount: listKeycloakRoleNames().length },
+    });
+  });
+
+  /** Bootstrap tenant-scoped Keycloak realm roles + permissions from catalog (idempotent). */
+  app.post("/policy/roles/provision/keycloak", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.provisionKeycloakRoles(ctx));
   });
 
   app.patch("/policy/roles/:id", async (req, reply) => {

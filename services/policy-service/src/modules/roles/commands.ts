@@ -48,3 +48,23 @@ export async function provisionMunicipalRoles(ctx: RequestContext): Promise<Acce
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
+
+/**
+ * Bootstrap tenant-scoped Keycloak realm roles (the 7 real roles this
+ * platform's Keycloak realm issues) from the canonical catalog. See
+ * roles/keycloak-catalog.ts for the (deliberately conservative starter)
+ * permission sets seeded per role.
+ */
+export async function provisionKeycloakRoles(ctx: RequestContext): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.provisionKeycloakRoles, {
+    messageId: id,
+    type: COMMANDS.provisionKeycloakRoles,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
