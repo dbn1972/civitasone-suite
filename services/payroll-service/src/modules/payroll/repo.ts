@@ -183,12 +183,20 @@ export type ArrearInsert = {
   oldAmountMinor: number; newAmountMinor: number; reason: string | null; actorId: string;
 };
 
+// FORCE-RLS fix: this used to run as a bare db.execute() outside any
+// transaction. payroll.payroll_arrears is FORCE RLS, so under the
+// NOBYPASSRLS payroll_svc role the INSERT's WITH CHECK has no app.tenant_id
+// GUC to satisfy -- confirmed directly against Postgres, this throws "new
+// row violates row-level security policy" on every call, not a silent
+// no-op. Same fix as this file's sibling *read* functions just above
+// (listArrears etc.) already use: route the write through scopedRead so its
+// db.transaction wrapper sets the GUC first.
 export async function insertArrear(p: ArrearInsert) {
   const diff = p.newAmountMinor - p.oldAmountMinor;
-  const rows = await db.execute(sql`
+  const rows = await scopedRead((tx) => tx.execute(sql`
     INSERT INTO payroll.payroll_arrears(tenant_id,employee_id,component_code,from_period,to_period,old_amount_minor,new_amount_minor,difference_minor,reason,created_by)
     VALUES(${p.tenantId}::uuid,${p.employeeId}::uuid,${p.componentCode},${p.fromPeriod},${p.toPeriod},${p.oldAmountMinor},${p.newAmountMinor},${diff},${p.reason},${p.actorId}::uuid)
-    RETURNING id,difference_minor,status`);
+    RETURNING id,difference_minor,status`));
   return (rows as unknown[])[0];
 }
 
@@ -203,11 +211,13 @@ export type BonusInsert = {
   basicMinor: number; bonusPct: number; bonusAmountMinor: number;
 };
 
+// FORCE-RLS fix: same bare-db.execute()-outside-any-transaction anti-pattern
+// as insertArrear above (payroll.payroll_bonus is FORCE RLS too); same fix.
 export async function insertBonus(p: BonusInsert) {
-  const rows = await db.execute(sql`
+  const rows = await scopedRead((tx) => tx.execute(sql`
     INSERT INTO payroll.payroll_bonus(tenant_id,employee_id,fy,basic_minor,bonus_pct,bonus_amount_minor)
     VALUES(${p.tenantId}::uuid,${p.employeeId}::uuid,${p.fy},${p.basicMinor},${p.bonusPct},${p.bonusAmountMinor})
-    RETURNING id,bonus_amount_minor,status`);
+    RETURNING id,bonus_amount_minor,status`));
   return (rows as unknown[])[0];
 }
 
@@ -234,11 +244,13 @@ export type ReimbursementInsert = {
   billDate: string | null; billRef: string | null; period: string; actorId: string;
 };
 
+// FORCE-RLS fix: same bare-db.execute()-outside-any-transaction anti-pattern
+// as insertArrear above (payroll.payroll_reimbursements is FORCE RLS too); same fix.
 export async function insertReimbursement(p: ReimbursementInsert) {
-  const rows = await db.execute(sql`
+  const rows = await scopedRead((tx) => tx.execute(sql`
     INSERT INTO payroll.payroll_reimbursements(tenant_id,employee_id,category,amount_minor,bill_date,bill_ref,period,created_by)
     VALUES(${p.tenantId}::uuid,${p.employeeId}::uuid,${p.category},${p.amountMinor},${p.billDate}::date,${p.billRef},${p.period},${p.actorId}::uuid)
-    RETURNING id,category,amount_minor,status`);
+    RETURNING id,category,amount_minor,status`));
   return (rows as unknown[])[0];
 }
 
