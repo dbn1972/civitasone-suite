@@ -7,7 +7,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./distribution-repo.js";
 import {
   assertDistributionAmountValid, assertDistinctOffices, assertWithinAllocation,
-  assertAcknowledgerDistinct, remainingDistributable,
+  assertAcknowledgerDistinct, assertDistributionTransition, remainingDistributable,
 } from "./distribution-domain.js";
 import { DomainError } from "./domain.js";
 import { createDistributionBody, acknowledgeBody, distributionQuery, idParam, allocIdParam } from "./distribution-validators.js";
@@ -105,6 +105,19 @@ export async function allocationDistributionRoutes(app: FastifyInstance): Promis
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
+    // BUG FIX (missing synchronous pre-accept validation): the state-transition
+    // guard (assertDistributionTransition) previously ran only inside the async
+    // consumer (sub(COMMANDS.allocationDistributionIssue, ...), consumer.ts), so
+    // issuing a distribution that isn't in 'draft' (e.g. already issued) still
+    // got a 202 accept -- the rejection happened invisibly, after the response
+    // was already sent. Same bug class as the create/acknowledge fixes above.
+    // Read-only, no transaction, no lock: a plain status-field read, no
+    // amount/race dimension, so lifting it synchronously fully closes the gap.
+    const existing = await repo.findDistributionById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "distribution not found");
+    try {
+      assertDistributionTransition(existing.status as any, "issued");
+    } catch (err) { toDomain(err, 409); }
     await queue.publish(COMMANDS.allocationDistributionIssue, {
       messageId: randomUUID(), type: COMMANDS.allocationDistributionIssue,
       tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

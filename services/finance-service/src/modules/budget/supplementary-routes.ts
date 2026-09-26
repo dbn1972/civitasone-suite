@@ -6,6 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./supplementary-repo.js";
 import {
   assertSupplementaryValid, assertValidSupplementaryKind,
+  assertSupplementaryTransition, assertSupplementaryApproverDistinct,
 } from "./supplementary-domain.js";
 import { DomainError } from "./domain.js";
 import { createSupplementaryBody, rejectSupplementaryBody, supplementaryQuery, idParam } from "./supplementary-validators.js";
@@ -66,6 +67,22 @@ export async function supplementaryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, APPROVER_ROLES);
     const { id } = idParam.parse(req.params);
+    // BUG FIX (missing synchronous pre-accept validation): both the
+    // state-transition guard (assertSupplementaryTransition) and the
+    // maker-checker guard (assertSupplementaryApproverDistinct) previously ran
+    // only inside the async consumer (sub(COMMANDS.supplementaryApprove, ...),
+    // consumer.ts), so approving a demand that isn't 'pending_approval' (e.g.
+    // already approved/rejected), or self-approving one's own demand, still
+    // got a 202 accept -- the rejection happened invisibly, after the response
+    // was already sent. Read-only, no transaction, no lock: plain status/
+    // identity reads, no amount/race dimension, so lifting both synchronously
+    // fully closes the gap.
+    const existing = await repo.findSupplementaryById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "supplementary demand not found");
+    try {
+      assertSupplementaryTransition(existing.status as any, "approved");
+      assertSupplementaryApproverDistinct(existing.createdBy, ctx.actorId);
+    } catch (err) { toDomain(err, 409); }
     const messageId = randomUUID();
     await queue.publish(COMMANDS.supplementaryApprove, {
       messageId, type: COMMANDS.supplementaryApprove,
@@ -80,6 +97,19 @@ export async function supplementaryRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVER_ROLES);
     const { id } = idParam.parse(req.params);
     const body = rejectSupplementaryBody.parse(req.body);
+    // BUG FIX (missing synchronous pre-accept validation): the state-transition
+    // guard (assertSupplementaryTransition) previously ran only inside the
+    // async consumer (sub(COMMANDS.supplementaryReject, ...), consumer.ts), so
+    // rejecting a demand that isn't 'pending_approval' (e.g. already
+    // approved/rejected) still got a 202 accept -- the rejection happened
+    // invisibly, after the response was already sent. Read-only, no
+    // transaction, no lock: a plain status-field read, no amount/race
+    // dimension, so lifting it synchronously fully closes the gap.
+    const existing = await repo.findSupplementaryById(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "supplementary demand not found");
+    try {
+      assertSupplementaryTransition(existing.status as any, "rejected");
+    } catch (err) { toDomain(err, 409); }
     const messageId = randomUUID();
     await queue.publish(COMMANDS.supplementaryReject, {
       messageId, type: COMMANDS.supplementaryReject,

@@ -291,6 +291,40 @@ describe("SVC-033 allocation distribution — flow", () => {
     } finally { await app.close(); }
   });
 
+  // Transition-guard regression: issuing a distribution that isn't 'draft'
+  // (e.g. already issued) used to still get a 202 and then silently no-op
+  // once the consumer's assertDistributionTransition rejected it —
+  // assertDistributionTransition now runs synchronously in the route (see
+  // distribution-routes.ts), so this is caught immediately, before ever
+  // reaching the queue (no drain() needed).
+  it("blocks re-issuing an already-issued distribution (invalid transition)", async () => {
+    await cleanup();
+    const app = await buildApp();
+    try {
+      const allocationId = await makeAllocation(app, TENANT_A, ISSUER);
+      const d1 = await app.inject({
+        method: "POST", url: "/v1/finance/allocation-distributions", headers: officer(),
+        payload: { allocationId, fromOfficeId: OFFICE_HQ, toOfficeId: OFFICE_A, amountMinor: 100000000 },
+      });
+      const distId = d1.json().data.id as string;
+      await drain();
+
+      const issued = await app.inject({ method: "PATCH", url: `/v1/finance/allocation-distributions/${distId}/issue`, headers: officer() });
+      expect(issued.statusCode).toBe(202);
+      await drain();
+      expect((await app.inject({ method: "GET", url: `/v1/finance/allocation-distributions/${distId}`, headers: officer() })).json().data.status)
+        .toBe("issued");
+
+      const reIssue = await app.inject({ method: "PATCH", url: `/v1/finance/allocation-distributions/${distId}/issue`, headers: officer() });
+      expect(reIssue.statusCode).toBe(409);
+      expect(reIssue.json().code).toBe("INVALID_TRANSITION");
+
+      // state never moved off "issued"
+      expect((await app.inject({ method: "GET", url: `/v1/finance/allocation-distributions/${distId}`, headers: officer() })).json().data.status)
+        .toBe("issued");
+    } finally { await app.close(); }
+  });
+
   it("403 for a non-finance role", async () => {
     const app = await buildApp();
     try {

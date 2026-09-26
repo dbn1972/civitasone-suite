@@ -85,6 +85,24 @@ export function assertAchievementValid(achieved: bigint): void {
 }
 
 /**
+ * Achievement is locked once the outcome has been evaluated (or closed): the
+ * evaluation rating is a point-in-time judgement against the achievement as it
+ * stood, so changing the achievement afterwards would silently invalidate a
+ * rating that has already been recorded and potentially acted on. Same code
+ * and message as the check consumer.ts's budgetOutcomeAchievement handler has
+ * always enforced inline -- factored out here so the route can run it
+ * synchronously too (see outcome-routes.ts), without changing its behaviour.
+ */
+export function assertAchievementEditable(status: OutcomeStatus): void {
+  if (status === "evaluated" || status === "closed") {
+    throw new DomainError(
+      "OUTCOME_ALREADY_EVALUATED",
+      `achievement is locked once the outcome is ${status}`,
+    );
+  }
+}
+
+/**
  * Maker-checker on evaluation: the officer evaluating an outcome must differ
  * from the officer who created it, so an output cannot be self-certified as
  * achieved by the same hand that framed the target.

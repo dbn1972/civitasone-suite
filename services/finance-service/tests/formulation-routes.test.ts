@@ -119,6 +119,50 @@ describe("SVC-031 formulation — flow", () => {
     } finally { await app.close(); }
   });
 
+  // Transition-guard regression: submit/review on a proposal in the wrong
+  // state used to still get a 202 and then silently no-op once the
+  // consumer's assertProposalTransition rejected it —
+  // assertProposalTransition now runs synchronously in both routes (see
+  // formulation-routes.ts), so both are caught immediately, before ever
+  // reaching the queue (no drain() needed for either assertion below).
+  it("blocks submit on an already-submitted proposal and review on a not-yet-submitted one", async () => {
+    await cleanup();
+    const app = await buildApp();
+    try {
+      const created = await app.inject({
+        method: "POST", url: "/v1/finance/budget-proposals", headers: officer(),
+        payload: { fy: "2026-27", deptCode: "PWD", headId: HEAD_1, ceilingMinor: 100000000, proposedMinor: 90000000, justification: "" },
+      });
+      const id = created.json().data.id as string;
+      await drain();
+      expect((await app.inject({ method: "GET", url: `/v1/finance/budget-proposals/${id}`, headers: officer() })).json().data.status)
+        .toBe("draft");
+
+      // draft -> under_review (skipping submit) is not a legal transition.
+      const reviewTooEarly = await app.inject({
+        method: "PATCH", url: `/v1/finance/budget-proposals/${id}/review`, headers: admin(),
+        payload: { decision: "accept", note: "jumping the gun" },
+      });
+      expect(reviewTooEarly.statusCode).toBe(409);
+      expect(reviewTooEarly.json().code).toBe("INVALID_TRANSITION");
+
+      const submitted = await app.inject({ method: "PATCH", url: `/v1/finance/budget-proposals/${id}/submit`, headers: officer() });
+      expect(submitted.statusCode).toBe(202);
+      await drain();
+      expect((await app.inject({ method: "GET", url: `/v1/finance/budget-proposals/${id}`, headers: officer() })).json().data.status)
+        .toBe("submitted");
+
+      // submitted -> submitted (re-submit) is not a legal transition either.
+      const resubmit = await app.inject({ method: "PATCH", url: `/v1/finance/budget-proposals/${id}/submit`, headers: officer() });
+      expect(resubmit.statusCode).toBe(409);
+      expect(resubmit.json().code).toBe("INVALID_TRANSITION");
+
+      // state never moved off "submitted"
+      expect((await app.inject({ method: "GET", url: `/v1/finance/budget-proposals/${id}`, headers: officer() })).json().data.status)
+        .toBe("submitted");
+    } finally { await app.close(); }
+  });
+
   it("revision creates a new version linked to its parent", async () => {
     await cleanup();
     const app = await buildApp();

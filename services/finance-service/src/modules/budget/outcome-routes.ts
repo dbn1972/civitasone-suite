@@ -6,6 +6,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./outcome-repo.js";
 import {
   assertOutcomeLinkageValid, assertAchievementValid,
+  assertAchievementEditable, assertEvaluatorDistinct,
   achievementRatioBps,
 } from "./outcome-domain.js";
 import { DomainError } from "./domain.js";
@@ -76,6 +77,22 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
       throw err;
     }
+    // BUG FIX (missing synchronous pre-accept validation): the post-evaluation
+    // lock (assertAchievementEditable) previously ran only inside the async
+    // consumer (sub(COMMANDS.budgetOutcomeAchievement, ...), consumer.ts) as an
+    // inline check, so recording achievement against an already-evaluated (or
+    // closed) outcome still got a 202 accept -- the rejection happened
+    // invisibly, after the response was already sent. Read-only, no
+    // transaction, no lock: a plain status-field read, no amount/race
+    // dimension, so lifting it synchronously fully closes the gap.
+    const existingOutcome = await repo.findOutcomeById(id, ctx.tenantId);
+    if (!existingOutcome) throw new HttpError(404, "NOT_FOUND", "outcome not found");
+    try {
+      assertAchievementEditable(existingOutcome.status as any);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
+      throw err;
+    }
     const messageId = randomUUID();
     await queue.publish(COMMANDS.budgetOutcomeAchievement, {
       messageId, type: COMMANDS.budgetOutcomeAchievement,
@@ -90,6 +107,22 @@ export async function budgetOutcomeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["finance_admin", "super_admin"]);
     const { id } = idParam.parse(req.params);
     const body = evaluateOutcomeBody.parse(req.body);
+    // BUG FIX (missing synchronous pre-accept validation): the maker-checker
+    // guard (assertEvaluatorDistinct) previously ran only inside the async
+    // consumer (sub(COMMANDS.budgetOutcomeEvaluate, ...), consumer.ts), so a
+    // self-evaluate attempt still got a 202 accept -- the rejection happened
+    // invisibly, after the response was already sent. Same bug class as the
+    // distribution-routes.ts / formulation-routes.ts fixes. Read-only, no
+    // transaction, no lock: a plain identity comparison on an
+    // already-persisted row, so lifting it synchronously fully closes the gap.
+    const existingOutcome = await repo.findOutcomeById(id, ctx.tenantId);
+    if (!existingOutcome) throw new HttpError(404, "NOT_FOUND", "outcome not found");
+    try {
+      assertEvaluatorDistinct(existingOutcome.createdBy, ctx.actorId);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
+      throw err;
+    }
     const messageId = randomUUID();
     await queue.publish(COMMANDS.budgetOutcomeEvaluate, {
       messageId, type: COMMANDS.budgetOutcomeEvaluate,
