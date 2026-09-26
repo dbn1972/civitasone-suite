@@ -107,8 +107,11 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     }
     // P1-4: build the NEFT advice from REAL finance_payments beneficiaries
     // (real amount / account / ref / DDO), not a hardcoded stub. Account/IFSC
-    // are emitted from captured data; IFSC is blank where no beneficiary bank
-    // master exists in this service (documented gap — not fabricated).
+    // are the VENDOR's own payment-routing details (finance_vendors.
+    // bank_account_no/.ifsc, resolved by repo.ts's listRealBeneficiaries) --
+    // blank only when the payment's bill/vendor can't be resolved at all
+    // (orphaned vendor_id), never fabricated and never the department's own
+    // treasury account.
     const beneficiaries = await repo.listRealBeneficiaries(ctx.tenantId, batch.pfmsId);
     const rows = beneficiaries.map((b) => ({
       beneficiary: VENDOR_NAMES[b.beneficiary] ?? (b.beneficiary || "Unknown beneficiary"),
