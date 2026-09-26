@@ -142,6 +142,37 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
       throw err;
     }
+
+    // Synchronous duplicate pre-check: an opening balance is entered once per
+    // account+FY (OpeningBalanceForm.tsx always starts blank -- there is no
+    // edit/correct flow), so a resubmission naming an account+FY that already
+    // has a row is a duplicate, not a correction. This catches the common
+    // (non-racing) case -- e.g. a second finance_admin submitting minutes
+    // later without noticing the balances table below the form already has
+    // rows -- with an immediate, honest 409 instead of a false 202.
+    //
+    // This is a fast-path convenience, not the authoritative guard: two
+    // requests that race within this same window can both pass it (neither
+    // commit is visible to the other yet), exactly like this file's balanced-
+    // entries check above and COMMANDS.fiscalYearCreate's ALREADY_EXISTS both
+    // already accept for their own synchronous pre-checks. The consumer's
+    // insert-time conflict check (masters/consumer.ts) is what makes THAT
+    // case non-bypassable: it can't stop the second caller's HTTP response
+    // from already having gone out as 202, but it does guarantee the loser is
+    // never silently dropped -- rejected loudly and traceably instead.
+    const existing = await scopedRead((tx) => tx.select({ accountCode: openingBalances.accountCode })
+      .from(openingBalances)
+      .where(and(eq(openingBalances.tenantId, ctx.tenantId), eq(openingBalances.fyCode, body.fyCode))));
+    const existingCodes = new Set(existing.map((r) => r.accountCode));
+    const duplicateCodes = [...new Set(body.entries.map((e) => e.accountCode).filter((code) => existingCodes.has(code)))];
+    if (duplicateCodes.length > 0) {
+      throw new HttpError(
+        409,
+        "OPENING_BALANCE_ALREADY_EXISTS",
+        `an opening balance already exists for FY ${body.fyCode}, account(s): ${duplicateCodes.join(", ")}`,
+      );
+    }
+
     const id = randomUUID();
     const entries = body.entries.map((e) => ({
       id: randomUUID(),

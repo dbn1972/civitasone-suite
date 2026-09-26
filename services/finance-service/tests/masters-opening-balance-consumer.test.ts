@@ -12,8 +12,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 
-const { mockTx, dbTransactionFn, insertValuesMock, onConflictDoNothingMock, markProcessedMock } = vi.hoisted(() => {
-  const _onConflictDoNothingMock = vi.fn().mockResolvedValue(undefined);
+const { mockTx, dbTransactionFn, insertValuesMock, onConflictDoNothingMock, returningMock, markProcessedMock } = vi.hoisted(() => {
+  // .onConflictDoNothing() now returns a chainable `.returning(...)` (masters/
+  // consumer.ts checks its result length to detect a silently-skipped insert
+  // -- see OPENING_BALANCE_ALREADY_EXISTS). Defaults to a non-empty array
+  // (row inserted); masters-opening-balance-race.test.ts covers the
+  // empty-array/conflict path against a real Postgres, not mocks.
+  const _returningMock = vi.fn().mockResolvedValue([{ id: "mock-inserted-id" }]);
+  const _onConflictDoNothingMock = vi.fn().mockReturnValue({ returning: _returningMock });
   const _insertValuesMock = vi.fn().mockReturnValue({ onConflictDoNothing: _onConflictDoNothingMock });
   const _mockTx = { insert: vi.fn().mockReturnValue({ values: _insertValuesMock }) };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => { await cb(_mockTx); });
@@ -22,6 +28,7 @@ const { mockTx, dbTransactionFn, insertValuesMock, onConflictDoNothingMock, mark
     dbTransactionFn: _dbTransactionFn as any,
     insertValuesMock: _insertValuesMock,
     onConflictDoNothingMock: _onConflictDoNothingMock,
+    returningMock: _returningMock,
     markProcessedMock: vi.fn(async () => true),
   };
 });
@@ -53,7 +60,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   dbTransactionFn.mockImplementation(async (cb: (tx: unknown) => Promise<void>) => { await cb(mockTx); });
   markProcessedMock.mockResolvedValue(true);
-  onConflictDoNothingMock.mockResolvedValue(undefined);
+  returningMock.mockResolvedValue([{ id: "mock-inserted-id" }]);
+  onConflictDoNothingMock.mockReturnValue({ returning: returningMock });
   insertValuesMock.mockReturnValue({ onConflictDoNothing: onConflictDoNothingMock });
 });
 
