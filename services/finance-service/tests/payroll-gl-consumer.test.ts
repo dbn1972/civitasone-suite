@@ -66,6 +66,13 @@ const {
         where: vi.fn().mockReturnValue({ limit: vi.fn().mockResolvedValue([]) }),
       }),
     }),
+    // getPeriodStatusTx (period-close/repo.ts) now takes a transaction-scoped
+    // advisory lock (lockPeriodTx) before its SELECT, as part of the
+    // postJournal-vs-hard-close concurrency fix -- postJournal (gl/consumer.ts)
+    // calls it on every posting path, including this payroll settlement one.
+    // A real tx supports .execute(); this mock must too, or lockPeriodTx
+    // throws before getPeriodStatusTx ever reaches the .select() above.
+    execute: vi.fn().mockResolvedValue(undefined),
   };
   const _dbTransactionFn = vi.fn(async (cb: (tx: unknown) => Promise<void>) => {
     await cb(_mockTx);

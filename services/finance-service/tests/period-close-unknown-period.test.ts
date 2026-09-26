@@ -50,8 +50,15 @@ describe("DOM-010 — period-close/repo.ts fails closed on an unrecognized perio
     // A well-formed period with no close row must still reach the query and
     // fall back to "open" there — proving the fix only narrows the "unknown"
     // classification to genuinely malformed input, not to every period.
+    //
+    // getPeriodStatusTx now also takes a transaction-scoped advisory lock
+    // (lockPeriodTx, keyed on tenant+period) before this SELECT — see
+    // repo.ts's lockPeriodTx doc comment (period-close vs. post-journal
+    // concurrency fix). A real tx supports .execute(); this stub must too,
+    // or the call throws before ever reaching .select() below.
     const rows: unknown[] = [];
     const tx = {
+      execute: async () => [],
       select: () => ({
         from: () => ({
           where: () => ({
