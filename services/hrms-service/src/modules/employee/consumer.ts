@@ -303,6 +303,10 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
           encashmentDays: p.encashmentDays,
           basicMinor: emp?.basicMinor?.toString() ?? "0",
           dateOfJoining: emp?.dateOfJoining ?? p.effectiveDate,
+          // payroll-service's integration/consumer.ts uses this to compute
+          // the F&F settlement's TDS true-up under the employee's own
+          // elected regime instead of guessing "new" for everyone.
+          taxRegime: emp?.taxRegime ?? "new",
         },
       });
       await audit(tx, msg, "separate", "employee", p.employeeId);
