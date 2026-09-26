@@ -325,6 +325,75 @@ describe("computeGratuity", () => {
     const result = computeGratuity(30, inr(1_000_000)); // almost certain to exceed cap
     expect(result).toBeLessThanOrEqual(inr(20_00_000));
   });
+
+  // -------------------------------------------------------------------------
+  // BUG FIX — death/disablement waiver of the 5-year minimum (Payment of
+  // Gratuity Act, 1972 §4(1) first proviso / Code on Social Security, 2020
+  // §53(1) proviso). Previously computeGratuity had no separationType
+  // parameter at all, so `yearsOfService < 5` zeroed out gratuity even when
+  // the separation was due to death or disablement — cases where the Act
+  // explicitly says the 5-year floor "shall not be necessary". The AMOUNT
+  // formula itself (§4(2)/§53(2)) is unchanged; only the eligibility floor
+  // is removed.
+  // -------------------------------------------------------------------------
+  it("death before 5 years waives the minimum-service floor", () => {
+    const basic = inr(30_000);
+    // 2 completed years, no rounding ambiguity (clean case).
+    const expected = roundRupee((basic * 15n * 2n) / 26n);
+    expect(computeGratuity(2, basic, 0n, "death")).toBe(expected);
+    expect(computeGratuity(2, basic, 0n, "death")).toBeGreaterThan(0n);
+  });
+
+  it("disablement before 5 years also waives the floor — same formula, no enhancement", () => {
+    const basic = inr(30_000);
+    // 3.5y -> 0.5*12 = 6 months excess -> rounds up to 4 completed years,
+    // via the SAME 6-month rounding rule as the >=5-year case. The waiver
+    // removes only the eligibility floor, not the computation.
+    const expected = roundRupee((basic * 15n * 4n) / 26n);
+    expect(computeGratuity(3.5, basic, 0n, "disablement")).toBe(expected);
+  });
+
+  it("recognises death/disablement synonyms and matching is case-insensitive", () => {
+    const basic = inr(30_000);
+    const expected = roundRupee((basic * 15n * 2n) / 26n);
+    for (const t of ["death", "DEATH", "Death", "disablement", "DISABLEMENT", "disability", "invalidation"]) {
+      expect(computeGratuity(2, basic, 0n, t)).toBe(expected);
+    }
+  });
+
+  it("the waiver does not invent an amount where <6 months' service yields 0 completed years", () => {
+    // The proviso waives the 5-year ELIGIBILITY floor; it does not change
+    // §4(2)'s per-completed-year AMOUNT formula. An employee who dies after
+    // only 3 months has 0 completed years and hasn't crossed the 6-month
+    // rounding threshold, so the correct statutory amount is still 0 — the
+    // Act's own harsh-but-accurate result, not a residual bug.
+    expect(computeGratuity(0.25, inr(30_000), 0n, "death")).toBe(0n);
+  });
+
+  it("resignation before 5 years is NOT waived — the floor still applies", () => {
+    expect(computeGratuity(3, inr(30_000), 0n, "resignation")).toBe(0n);
+  });
+
+  it("an unrelated valid separation type (e.g. termination) does not waive the floor", () => {
+    // "termination" is a real separationType value elsewhere in this
+    // codebase (hrms-service lifecycle validators) but is neither death nor
+    // disablement, so the standard 5-year rule must still apply.
+    expect(computeGratuity(2, inr(30_000), 0n, "termination")).toBe(0n);
+  });
+
+  it("omitted separationType preserves prior behaviour for existing callers", () => {
+    expect(computeGratuity(4.9, inr(30_000))).toBe(0n);
+    expect(computeGratuity(4.9, inr(30_000), 0n, undefined)).toBe(0n);
+  });
+
+  it("death/disablement at >=5 years is unaffected — computes via the identical normal formula", () => {
+    const basic = inr(30_000);
+    const da = inr(10_000);
+    const withoutType = computeGratuity(10, basic, da);
+    expect(computeGratuity(10, basic, da, "death")).toBe(withoutType);
+    expect(computeGratuity(10, basic, da, "disablement")).toBe(withoutType);
+    expect(withoutType).toBeGreaterThan(0n);
+  });
 });
 
 // ---------------------------------------------------------------------------

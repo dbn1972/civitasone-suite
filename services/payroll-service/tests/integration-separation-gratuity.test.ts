@@ -348,6 +348,140 @@ describe("hrms.employee.separated → gratuity computation", () => {
     expect(insertGratuityMock).toHaveBeenCalledOnce();
     await q.stop();
   });
+
+  // ---------------------------------------------------------------------------
+  // BUG FIX — death/disablement waiver of the 5-year minimum (Payment of
+  // Gratuity Act, 1972 §4(1) first proviso / Code on Social Security, 2020
+  // §53(1) proviso). computeGratuity previously had no separationType
+  // parameter, so a death/disablement separation under 5 years silently
+  // computed (and persisted) a zero gratuity. Confirmed live against
+  // unmodified main by publishing this exact shape of event before the fix.
+  // ---------------------------------------------------------------------------
+  it("HAND-VERIFIED: death under 5 years now pays gratuity via the §4(1) proviso waiver (was silently 0 before the fix)", async () => {
+    executeResult.rows = [{ rate_bps: 0 }]; // DA=0 -- isolates the waiver from DA arithmetic
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.employeeSeparated,
+      makeMsg(CONSUMED_EVENTS.employeeSeparated, {
+        employeeId: "emp-death-1",
+        effectiveDate: "2025-01-01",
+        basicMinor: "8000000", // ₹80,000
+        dateOfJoining: "2023-01-01", // 731 days / 365.25 ≈ 2.0014y -> 2 completed years (< 5)
+        separationType: "death",
+      }),
+    );
+    await settle();
+
+    expect(insertGratuityMock).toHaveBeenCalledOnce();
+    const [, row] = insertGratuityMock.mock.calls[0]!;
+    // (15/26) * ₹80,000 * 2 completed years = ₹92,307.69.., rounded to ₹92,308.
+    // (This is the figure the Act's own §4(2) formula actually produces for
+    // these inputs -- NOT the ~₹1,41,231 floated in the original bug report,
+    // which does not match §4(2) for a 2-completed-year/₹80,000-basic/no-DA
+    // separation; verified independently against the bare Act text.)
+    expect(row.gratuityMinor).toBe(9_230_800n);
+    expect(row.status).toBe("computed");
+
+    const auditEvent = enqueuedMessages.find((m) => m.topic === "audit.event.record");
+    expect(auditEvent, "gratuity is correctly non-zero, so the audit event must fire").toBeDefined();
+
+    // Cascades into the F&F settlement too -- this used to silently carry
+    // gratuityGrossMinor: "0" downstream into fnf/consumer.ts as well.
+    const fnfCompute = enqueuedMessages.find((m) => m.topic === COMMANDS.fnfCompute);
+    expect((fnfCompute!.payload as Record<string, unknown>).gratuityGrossMinor).toBe("9230800");
+    await q.stop();
+  });
+
+  it("disablement under 5 years also pays gratuity via the waiver", async () => {
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.employeeSeparated,
+      makeMsg(CONSUMED_EVENTS.employeeSeparated, {
+        employeeId: "emp-disabled-1",
+        effectiveDate: "2025-06-30",
+        basicMinor: "5000000",
+        dateOfJoining: "2023-01-01", // ~2.5 years — below the 5-year threshold
+        separationType: "disablement",
+      }),
+    );
+    await settle();
+
+    expect(insertGratuityMock).toHaveBeenCalledOnce();
+    const [, row] = insertGratuityMock.mock.calls[0]!;
+    expect(row.gratuityMinor).toBeGreaterThan(0n);
+    await q.stop();
+  });
+
+  it("resignation under 5 years is still correctly zero — the waiver does not apply", async () => {
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.employeeSeparated,
+      makeMsg(CONSUMED_EVENTS.employeeSeparated, {
+        employeeId: "emp-resign-1",
+        effectiveDate: "2025-06-30",
+        basicMinor: "8000000",
+        dateOfJoining: "2023-01-01", // ~2.5 years
+        separationType: "resignation",
+      }),
+    );
+    await settle();
+
+    expect(insertGratuityMock).not.toHaveBeenCalled();
+    const auditEvent = enqueuedMessages.find((m) => m.topic === "audit.event.record");
+    expect(auditEvent).toBeUndefined();
+    // F&F settlement (leave encashment/notice pay) still goes out, but with
+    // a correctly-zero gratuity gross — the pre-existing "does NOT compute
+    // gratuity when years of service < 5" test above covers the
+    // no-separationType case; this covers an explicit resignation type.
+    const fnfCompute = enqueuedMessages.find((m) => m.topic === COMMANDS.fnfCompute);
+    expect((fnfCompute!.payload as Record<string, unknown>).gratuityGrossMinor).toBe("0");
+    await q.stop();
+  });
+
+  it("death at >=5 years computes via the normal formula (unaffected by the waiver)", async () => {
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.employeeSeparated,
+      makeMsg(CONSUMED_EVENTS.employeeSeparated, {
+        employeeId: "emp-5y-death",
+        effectiveDate: "2025-06-30",
+        basicMinor: "5000000",
+        dateOfJoining: "2015-01-01", // ~10.5 years — safely above the 5-year threshold
+        separationType: "death",
+      }),
+    );
+    await settle();
+
+    expect(insertGratuityMock).toHaveBeenCalledOnce();
+    const [, row] = insertGratuityMock.mock.calls[0]!;
+    expect(row.gratuityMinor).toBeGreaterThan(0n);
+    await q.stop();
+  });
+
+  it("disablement at >=5 years computes via the normal formula (unaffected by the waiver)", async () => {
+    const q = await buildQueue();
+
+    await q.publish(
+      CONSUMED_EVENTS.employeeSeparated,
+      makeMsg(CONSUMED_EVENTS.employeeSeparated, {
+        employeeId: "emp-5y-disabled",
+        effectiveDate: "2025-06-30",
+        basicMinor: "5000000",
+        dateOfJoining: "2015-01-01", // ~10.5 years — safely above the 5-year threshold
+        separationType: "disablement",
+      }),
+    );
+    await settle();
+
+    expect(insertGratuityMock).toHaveBeenCalledOnce();
+    const [, row] = insertGratuityMock.mock.calls[0]!;
+    expect(row.gratuityMinor).toBeGreaterThan(0n);
+    await q.stop();
+  });
 });
 
 // ---------------------------------------------------------------------------
