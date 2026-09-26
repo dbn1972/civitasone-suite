@@ -84,11 +84,16 @@ export function registerFnfConsumers(queue: Queue): void {
         deductions80dMinor: BigInt(p.deductions80dMinor ?? "0"),
         otherDeductionsMinor: BigInt(p.otherDeductionsMinor ?? "0"),
         fyStartYear: p.fyStartYear,
-        // Use DB ceilings, fallback to statutory defaults (in paise)
-        gratuityCeilingMinor: ceilingMap.get("10_10") ?? 2000000000n,
-        leaveEncashCeilingMinor: ceilingMap.get("10_10AA") ?? 2500000000n,
-        retrenchmentCeilingMinor: ceilingMap.get("10_10B") ?? 500000000n,
-        vrsCeilingMinor: ceilingMap.get("10_10C") ?? 500000000n,
+        // Use DB ceilings, fallback to statutory defaults, in paise (₹1L =
+        // ₹1,00,000; paise = rupees × 100). Previously 10x too high
+        // (2000000000n etc.) -- see migration
+        // 0048_fix_fnf_exemption_ceilings_10x.sql for the full writeup;
+        // these MUST always match that migration's corrected seed values
+        // exactly.
+        gratuityCeilingMinor: ceilingMap.get("10_10") ?? 200000000n,     // ₹20L
+        leaveEncashCeilingMinor: ceilingMap.get("10_10AA") ?? 250000000n, // ₹25L
+        retrenchmentCeilingMinor: ceilingMap.get("10_10B") ?? 50000000n,  // ₹5L
+        vrsCeilingMinor: ceilingMap.get("10_10C") ?? 50000000n,           // ₹5L
       };
 
       const result = computeFnfSettlement(input);
