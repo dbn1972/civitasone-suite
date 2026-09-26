@@ -88,6 +88,17 @@ export const financePfms = paymentsSchema.table("finance_pfms", {
   signatureRef:     text("signature_ref"),
   submissionStatus: varchar("submission_status", { length: 24 }).notNull().default("pending"),
   status:           varchar("status", { length: 24 }).notNull().default("pending"),
+  // Which of the two independent PFMS submission mechanisms produced this
+  // row: 'treasury_batch' (routes.ts / integrations SFTP egress — every
+  // pre-existing row, via the column default) or 'ekuber_adapter' (the live
+  // e-Kuber REST adapter, adapter-routes.ts). See migrations/
+  // 0076_pfms_channel_reconciliation.sql for why this exists.
+  channel:          varchar("channel", { length: 24 }).notNull().default("treasury_batch"),
+  // Bank UTR from the e-Kuber adapter's status-check response. The treasury/
+  // SFTP channel's UTR lives on payments.finance_payments instead (see
+  // repo.ts's listRealBeneficiaries), so this is only ever populated for
+  // channel = 'ekuber_adapter' rows.
+  utrNumber:        text("utr_number"),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),
