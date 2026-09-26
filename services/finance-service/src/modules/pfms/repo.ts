@@ -174,6 +174,14 @@ export async function upsertAdapterPfmsRecord(params: {
       await tx.update(financePfms).set({
         submissionStatus: params.submissionStatus,
         ...(params.utrNumber !== undefined ? { utrNumber: params.utrNumber } : {}),
+        // Fills in the real values over reserveAdapterPfmsReference's
+        // placeholder (amountMinor 0n, schemeCode/ddoCode null) when this
+        // update follows a reservation. Callers that never had these values
+        // to begin with (the status-check route) never pass them, so these
+        // keys stay undefined and nothing is overwritten there.
+        ...(params.amountMinor !== undefined ? { amountMinor: params.amountMinor } : {}),
+        ...(params.schemeCode !== undefined ? { schemeCode: params.schemeCode } : {}),
+        ...(params.ddoCode !== undefined ? { ddoCode: params.ddoCode } : {}),
         updatedAt: new Date(),
         updatedBy: params.actorId,
       }).where(eq(financePfms.id, existing[0].id));
@@ -235,27 +243,118 @@ export async function isAdapterPfmsRecordOwnedByTenant(tenantId: string, referen
 }
 
 /**
- * Cross-tenant collision guard for POST /v1/finance/pfms/payments.
- *
- * referenceId is caller-chosen, but adapter.ts's e-Kuber credential is one
- * shared module-level singleton for the whole deployment -- referenceId is
- * therefore a single, deployment-wide namespace at the real e-Kuber end even
- * though payments.finance_pfms is keyed per-tenant. Without this guard, two
- * different tenants could each end up with their own local row for the SAME
- * referenceId, and isAdapterPfmsRecordOwnedByTenant above would then let
- * BOTH of them pass its ownership check for a referenceId e-Kuber only
- * actually recognizes as one real transaction. Rejecting a referenceId
- * another tenant already holds keeps "one referenceId, one owning tenant"
- * true, which the status-check ownership gate depends on. A resubmission by
- * the SAME tenant that already owns this referenceId is left unaffected.
+ * Mirrors the isUniqueViolation idiom used in masters/repo.ts (and, per that
+ * file's own doc comment, court-service's config-registry/repo.ts and
+ * cause-list/repo.ts) rather than importing it across modules for one small,
+ * dependency-free helper.
  */
-export async function isAdapterPfmsRecordClaimedByOtherTenant(tenantId: string, referenceId: string): Promise<boolean> {
+function isUniqueViolation(err: unknown): boolean {
+  const code = (err as { code?: string } | null | undefined)?.code;
+  return code === "23505" || code === "23P01";
+}
+
+export class AdapterPfmsReferenceClaimedError extends Error {
+  constructor(referenceId: string) {
+    super(`referenceId ${referenceId} is already in use`);
+    this.name = "AdapterPfmsReferenceClaimedError";
+  }
+}
+
+/**
+ * Cross-tenant collision guard for POST /v1/finance/pfms/payments -- REPLACES
+ * a previous isAdapterPfmsRecordClaimedByOtherTenant that looked for an
+ * existing row via a plain cross-tenant SELECT. That approach was
+ * STRUCTURALLY BROKEN and has been removed: payments.finance_pfms has FORCE
+ * ROW LEVEL SECURITY with a tenant_isolation policy USING (tenant_id =
+ * budget.current_tenant_id()) (migrations/0020_rls_completion.sql), which
+ * finance-service's own connection sets from the request's tenant on every
+ * db.transaction()/scopedRead() call (see shared/db.ts's scopedRead doc
+ * comment). That policy applies to SELECT unconditionally, including a query
+ * that deliberately omits its own tenant filter to look across tenants --
+ * Postgres silently re-adds "tenant_id = current_tenant_id()" underneath ANY
+ * select against this table, regardless of what WHERE clause the caller
+ * wrote. So the old function could never see another tenant's row (0 rows
+ * returned cross-tenant vs. 1 same-tenant, confirmed against the real
+ * NOBYPASSRLS finance_svc role -- a test role created via a plain
+ * `POSTGRES_USER` Docker env var is a cluster SUPERUSER, which unconditionally
+ * BYPASSES RLS and will hide this bug; verifying this requires a role created
+ * the same way infra/db/bootstrap/bootstrap.generated.sql creates finance_svc
+ * -- a plain CREATE ROLE ... LOGIN, no BYPASSRLS).
+ *
+ * RLS does NOT, however, protect a UNIQUE INDEX from enforcing across rows a
+ * role can't see via SELECT: a uniqueness violation is raised at the index
+ * level against the physical index when a conflicting row is inserted, not
+ * through a policy-filtered read. migrations/
+ * 0078_pfms_adapter_reference_uniqueness.sql adds a partial unique index on
+ * pfms_id WHERE channel = 'ekuber_adapter' -- global across every tenant for
+ * this channel (referenceId really is a single, deployment-wide namespace at
+ * the shared e-Kuber account -- see adapter.ts's file header), unlike the
+ * existing (tenant_id, pfms_id, channel) index, which is per-tenant. This
+ * function relies on that constraint: it INSERTs a placeholder row for
+ * referenceId and translates the resulting 23505 unique-violation (another
+ * tenant already holds it) into AdapterPfmsReferenceClaimedError.
+ *
+ * Callers MUST first confirm (via isAdapterPfmsRecordOwnedByTenant) that the
+ * CALLING tenant does not already own this referenceId before calling this --
+ * the unique index doesn't distinguish "same tenant, resubmission" from
+ * "different tenant, collision", so calling this for a reference the caller's
+ * own tenant already owns would incorrectly reject a legitimate resubmission.
+ *
+ * Callers MUST call this and handle AdapterPfmsReferenceClaimedError as 409
+ * BEFORE calling e-Kuber's submitPayment: a collision detected only after a
+ * real e-Kuber submission would mean a duplicate/ambiguous real financial
+ * transaction already went through against the shared credential, which is
+ * strictly worse than the cross-tenant read this whole fix exists to close.
+ */
+export async function reserveAdapterPfmsReference(params: {
+  tenantId: string;
+  actorId: string;
+  referenceId: string;
+}): Promise<void> {
   const CHANNEL = "ekuber_adapter";
-  const rows = await scopedRead((tx) => tx.select({ tenantId: financePfms.tenantId }).from(financePfms)
-    .where(and(
+  try {
+    await db.transaction(async (tx) => {
+      await (tx as typeof db).insert(financePfms).values({
+        tenantId: params.tenantId,
+        pfmsId: params.referenceId,
+        type: "adhoc",
+        channel: CHANNEL,
+        amountMinor: 0n,
+        beneficiaryCount: 1,
+        submissionStatus: "pending",
+        createdBy: params.actorId,
+        updatedBy: params.actorId,
+      });
+    });
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new AdapterPfmsReferenceClaimedError(params.referenceId);
+    }
+    throw err;
+  }
+}
+
+/**
+ * Best-effort cleanup for a reservation made by reserveAdapterPfmsReference
+ * when the real e-Kuber submitPayment call that was supposed to follow it
+ * then failed -- so a failed submission still leaves no trace in the ledger,
+ * matching this route's pre-existing behavior for failures (and the "was
+ * this disbursement actually paid" ledger's whole purpose -- a perpetually
+ * "pending" row for a submission that never actually reached e-Kuber would
+ * be misleading). Deliberately scoped to (tenantId, referenceId, channel,
+ * submissionStatus='pending') so it can only ever delete the CALLER's own
+ * just-created, still-pending reservation -- never another tenant's row, and
+ * never a row that has since progressed past "pending" (e.g. a concurrent
+ * status check already updated it).
+ */
+export async function releaseAdapterPfmsReservation(tenantId: string, referenceId: string): Promise<void> {
+  const CHANNEL = "ekuber_adapter";
+  await db.transaction(async (tx) => {
+    await (tx as typeof db).delete(financePfms).where(and(
+      eq(financePfms.tenantId, tenantId),
       eq(financePfms.pfmsId, referenceId),
       eq(financePfms.channel, CHANNEL),
-    ))
-    .limit(1));
-  return rows.length > 0 && rows[0]!.tenantId !== tenantId;
+      eq(financePfms.submissionStatus, "pending"),
+    ));
+  });
 }
