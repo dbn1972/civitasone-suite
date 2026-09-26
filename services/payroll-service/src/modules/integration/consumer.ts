@@ -7,6 +7,7 @@ import * as lopRepo from "./lop-repo.js";
 import { fetchAttendanceLopApplies, fetchLeaveLopFractionBps } from "../../shared/hrms-client.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { computeGratuity, completedYearsPgAct, computeLeaveEncashmentGrossMinor } from "../payroll/domain.js";
+import { NonRetryableError } from "@civitasone/queue";
 import { computeLtcExemption } from "../tax/ltc-exemption.js";
 import { ltcExemptions } from "../fnf/schema.js";
 import { randomUUID } from "node:crypto";
@@ -97,12 +98,25 @@ export function registerIntegrationConsumers(queue: Queue): void {
       const sep = new Date(p.effectiveDate);
       const years = Math.max(0, (sep.getTime() - join.getTime()) / (365.25 * 86400000));
       // Gratuity emoluments = last Basic + DA (CCS/Gratuity Act). Resolve DA rate at separation.
+      // bug-fix (silent-DA-gap): mirrors the identical fix in
+      // payroll/consumer.ts's resolveDaRateBps -- a tenant with NO rate row
+      // covering the separation date at all is a configuration gap (not a
+      // deliberate zero rate, which would be an explicit rate_bps=0 row), and
+      // silently treating it as 0n understated gratuity emoluments with no
+      // signal anywhere. This handler has no run row to mark 'failed', so it
+      // throws and lets the queue's standard consumer-error handling
+      // (logged + dead-lettered, same as any other failed event handler)
+      // hold the message for redelivery once the rate is configured, instead
+      // of computing and persisting a wrong (understated) gratuity amount.
       const daRows = (await tx.execute(sql`
         SELECT rate_bps FROM payroll.dearness_allowance_rates
         WHERE tenant_id = ${msg.tenantId}::uuid AND effective_from <= ${p.effectiveDate}::date
         ORDER BY effective_from DESC LIMIT 1
       `)) as unknown as Array<{ rate_bps: number | string }>;
-      const daRateBps = daRows[0]?.rate_bps != null ? BigInt(daRows[0].rate_bps) : 0n;
+      if (daRows.length === 0) {
+        throw new NonRetryableError(`DA_RATE_NOT_CONFIGURED: no Dearness Allowance rate configured for tenant ${msg.tenantId} covering separation date ${p.effectiveDate}; add a payroll.dearness_allowance_rates row (rate_bps=0 if DA genuinely does not apply) before this employee's gratuity can be computed`);
+      }
+      const daRateBps = BigInt(daRows[0]!.rate_bps);
       const lastDaMinor = (basicMinor * daRateBps) / 10000n;
       const gratuityMinor = computeGratuity(years, basicMinor, lastDaMinor);
       // BUG FIX: this used to `return` here whenever gratuityMinor was 0

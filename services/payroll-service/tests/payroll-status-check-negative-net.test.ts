@@ -34,7 +34,7 @@ import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { MemoryQueue } from "@civitasone/queue";
 import type { Queue, Handler } from "@civitasone/queue";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
 import { payrollRuns, payrollSlips, payrollStructures, payrollComponents } from "../src/modules/payroll/schema.js";
@@ -93,6 +93,12 @@ async function wipeTestData() {
     await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
     await tx.delete(payrollComponents).where(eq(payrollComponents.tenantId, TENANT));
     await tx.delete(payrollStructures).where(eq(payrollStructures.tenantId, TENANT));
+    // Seeded below (beforeAll) so processPayrollRun's now-mandatory DA-rate
+    // check (DA_RATE_NOT_CONFIGURED) doesn't reject this run -- deleted here
+    // too so re-running this suite against a persistent (non-wiped) test
+    // database doesn't hit dearness_allowance_rates' unique
+    // (tenant_id, effective_from) constraint on the next beforeAll insert.
+    await tx.execute(sql`DELETE FROM payroll.dearness_allowance_rates WHERE tenant_id = ${TENANT}::uuid`);
     await tx.delete(processed).where(eq(processed.messageId, MSG_ID));
   }));
 }
@@ -115,6 +121,15 @@ describe("payroll_slips / payroll_runs status CHECK constraints (migration 0047)
         code: "COURT_ORDER", name: "Court-Ordered Recovery", componentType: "deduction",
         fixedMinor: 2_000_000n, createdBy: ACTOR, updatedBy: ACTOR,
       });
+      // This test is about the status CHECK constraint, not DA -- but
+      // resolveDaRateBps now rejects a run whose tenant/period has no DA
+      // rate configured at all (see consumer.ts's DA_RATE_NOT_CONFIGURED
+      // fix), so a rate must be seeded for the run to reach the negative-net
+      // path this test actually exercises.
+      await tx.execute(sql`
+        INSERT INTO payroll.dearness_allowance_rates (tenant_id, effective_from, rate_bps)
+        VALUES (${TENANT}::uuid, '2026-01-01'::date, 5000)
+      `);
     }));
   });
 
