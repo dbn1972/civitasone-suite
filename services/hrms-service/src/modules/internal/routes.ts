@@ -181,12 +181,25 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
    * This is the cross-service equivalent: same resolver, reached over the
    * internal boundary like payroll-input/employee-summaries above.
    *
-   * :actorId and ?email are EXPLICIT parameters, not read from this
-   * request's own ctx.actorId -- an x-internal call authenticates as the
-   * fixed internal service account (resolveServiceContextInner in
+   * :actorId is an EXPLICIT parameter, not read from this request's own
+   * ctx.actorId -- an x-internal call authenticates as the fixed internal
+   * service account (resolveServiceContextInner in
    * packages/auth/src/context.ts), not as the original end user, so the
-   * caller (payroll-service) must forward the real actor's id/email itself.
-   * Returns `employeeId: null` (200), not 404, when the actor has no linked
+   * caller (payroll-service) must forward the real actor's id itself, which
+   * is safe because payroll-service derived it from its own JWT
+   * verification of the real bearer token, never from anything client-
+   * supplied beyond that.
+   *
+   * SEC fix (self-service identity hijack): this route used to also accept
+   * an explicit `?email` query param and pass it straight into
+   * resolveEmployeeForActor, because payroll-service (like every hrms-
+   * service route) used to source that value from the unauthenticated
+   * x-user-email header. resolveEmployeeForActor now resolves the actor's
+   * verified email itself (via identity-service, keyed by this same
+   * actorId) when the primary lookup misses, so this route no longer
+   * accepts or forwards a caller-supplied email at all -- see
+   * employee/actor-link.ts's doc comment for the full vulnerability
+   * writeup. Returns `employeeId: null` (200), not 404, when the actor has no linked
    * employee record -- a real "you have no self-service identity" outcome
    * the caller must treat as "cannot own anything" (fails closed), mirroring
    * resolveEmployeeForActor's own `undefined` contract.
@@ -195,8 +208,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, INTERNAL_ROLES);
     const { actorId } = z.object({ actorId: z.string().uuid() }).parse(req.params);
-    const q = z.object({ email: z.string().email().optional() }).parse(req.query);
-    const emp = await resolveEmployeeForActor(ctx.tenantId, actorId, q.email);
+    const emp = await resolveEmployeeForActor(ctx.tenantId, actorId);
     return reply.send({ employeeId: emp ? emp.id : null });
   });
 

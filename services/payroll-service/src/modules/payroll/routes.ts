@@ -1,4 +1,4 @@
-import type { FastifyInstance, FastifyRequest } from "fastify";
+import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
@@ -16,21 +16,6 @@ const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 // payroll-critical fix: an employee viewing their OWN payslip, layered on
 // top of READER_ROLES below (never in place of it).
 const SLIP_ROLES = [...READER_ROLES, "employee"];
-
-/**
- * Mirrors hrms-service's employee/actor-link.ts extractActorEmail exactly
- * (same authPlugin-decorated jwtPayload, falling back to the same
- * gateway-forwarded header) -- payroll-service has no local copy of that
- * helper to import (different service), and the email is only needed here
- * as a bootstrap fallback for resolveActorEmployeeId's cross-service call
- * below, for an employee not yet linked by actorId.
- */
-function extractActorEmail(req: FastifyRequest): string | undefined {
-  const raw = (req as unknown as { jwtPayload?: { email?: string } }).jwtPayload;
-  if (raw?.email) return raw.email;
-  const hdr = req.headers["x-user-email"];
-  return typeof hdr === "string" ? hdr : undefined;
-}
 
 export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/runs", async (req, reply) => {
@@ -127,7 +112,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     if (isSelfServiceEmployee(ctx)) {
       let ownEmployeeId: string | null;
       try {
-        ownEmployeeId = await resolveActorEmployeeId(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+        ownEmployeeId = await resolveActorEmployeeId(ctx.tenantId, ctx.actorId);
       } catch (err) {
         // Mirrors commands.ts's assertEmployeeExists: remap HrmsUnavailableError
         // to the same 502 HRMS_UNAVAILABLE this service's other HRMS-dependent

@@ -14,7 +14,7 @@ import { and, eq, inArray } from "drizzle-orm";
 import { hrmsTrainings } from "./schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -39,7 +39,7 @@ async function resolveOwnEmployeeIdIfBareEmployee(
 ): Promise<string | null> {
   const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
   if (isPrivileged) return requested;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }
 
@@ -58,7 +58,7 @@ async function resolveOwnEmployeeIdIfNonHr(
   ctx: RequestContext, req: FastifyRequest, requested: string,
 ): Promise<string | null> {
   if (HR_ROLES.some((r) => ctx.roles.includes(r))) return requested;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }
 

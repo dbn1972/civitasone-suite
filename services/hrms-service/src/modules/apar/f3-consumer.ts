@@ -125,7 +125,7 @@ export function registerF3_apar_Consumers(queue: Queue): void {
       "apar_routes__1", "apar_routes__2", "apar_routes__3", "apar_routes__4", "apar_routes__5",
     ]);
     const actingEmployeeId = STAGE_TRANSITION_OPS.has(op)
-      ? (await resolveEmployeeForActor(p.tenantId, msg.actorId, undefined))?.id ?? null
+      ? (await resolveEmployeeForActor(p.tenantId, msg.actorId))?.id ?? null
       : null;
     const mustAppraisal = async (tx: repo.Writer): Promise<AppraisalRow> => {
       const a = await repo.findAppraisalTx(tx, appraisalId, p.tenantId);

@@ -15,7 +15,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import * as loanCommands from "./loans-commands.js";
 import { pgSchema, uuid, varchar, integer, bigint, timestamp, text, date } from "drizzle-orm/pg-core";
 import { hrmsEmployees } from "./schema.js";
-import { resolveEmployeeForActor, extractActorEmail } from "./actor-link.js";
+import { resolveEmployeeForActor } from "./actor-link.js";
 
 // "hr_officer" is treated as an HR-tier role everywhere else in this codebase
 // (medical/routes.ts, employee/routes.ts both fold it into their own
@@ -49,7 +49,7 @@ const ALL_ROLES = [...HR_ROLES, "manager", "officer"];
 async function resolveManagerScope(ctx: RequestContext, req: FastifyRequest): Promise<string | null | undefined> {
   const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
   if (isHrActor) return undefined;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp?.id ?? null;
 }
 

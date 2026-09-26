@@ -11,7 +11,7 @@ import { COMMANDS } from "../../topics.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import type { AppraisalRow } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -95,7 +95,7 @@ async function assertAppraisalStageOwner(
   }
 
   const ownerId = appraisalStageOwner(a);
-  const actingEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actingEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   const actingEmployeeId = actingEmp?.id ?? null;
   const isOwner = ownerId !== null && actingEmployeeId !== null && actingEmployeeId === ownerId;
   if (isOwner) return { override: false };
@@ -134,7 +134,7 @@ async function resolveAppraisalReadScope(ctx: RequestContext, req: FastifyReques
   const allowed = new Set<string>();
   const needsOwnEmployee = ctx.roles.includes("employee") || ctx.roles.includes("manager");
   const ownEmp = needsOwnEmployee
-    ? await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req))
+    ? await resolveEmployeeForActor(ctx.tenantId, ctx.actorId)
     : undefined;
 
   if (ctx.roles.includes("employee") && ownEmp) {

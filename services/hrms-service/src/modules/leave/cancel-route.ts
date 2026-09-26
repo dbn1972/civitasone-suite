@@ -11,7 +11,7 @@ import { scopedRead } from "../../shared/db.js";
 import { eq, and } from "drizzle-orm";
 import { hrmsLeaveApps } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import * as commands from "./cancel-commands.js";
 
 const ALL_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
@@ -41,7 +41,7 @@ export async function leaveCancelRoutes(app: FastifyInstance): Promise<void> {
     const HR_ROLES_INNER = ["hr_admin", "hr_officer", "super_admin"];
     const isHrActor = HR_ROLES_INNER.some((r) => ctx.roles.includes(r));
     if (!isHrActor) {
-      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
       const isSelf = actorEmp?.id === application.employeeId;
       // Look up target employee to check reporting line (managerId lives on
       // hrmsEmployees, not on the leave application).

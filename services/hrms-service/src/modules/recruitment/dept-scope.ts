@@ -1,6 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 /** Roles that see the full tenant's recruitment data, unscoped by department. */
 export const TENANT_WIDE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -36,6 +36,6 @@ export interface DeptScope {
  */
 export async function resolveDeptScope(req: FastifyRequest, ctx: RequestContext): Promise<DeptScope> {
   if (ctx.roles.some((r: string) => TENANT_WIDE_ROLES.includes(r))) return { tenantWide: true, departmentId: null };
-  const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return { tenantWide: false, departmentId: emp?.departmentId ?? null };
 }

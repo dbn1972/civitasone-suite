@@ -5,7 +5,7 @@ import { resolveContext, HttpError } from "../../shared/context.js";
 import { scopedRead} from "../../shared/db.js";
 import { maskPii } from "../../shared/pii-mask.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { hrmsLeaveAllocs, hrmsLeaveApps } from "../leave/schema.js";
 import { hrmsAttendance } from "../attendance/schema.js";
 
@@ -23,7 +23,7 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
   // depending on which endpoint they hit first.
   app.get("/v1/hrms/me/profile", async (req, reply) => {
     const ctx = resolveContext(req);
-    const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+    const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
     if (!emp) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record linked to your user" });
     return reply.send(maskPii(emp));
   });

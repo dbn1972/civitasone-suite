@@ -10,7 +10,7 @@ import {
   createFrameworkBody, createCompetencyBody, roleRequirementBody, setEmployeeCompetencyBody,
 } from "./validators.js";
 import * as repo from "./repo.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -36,7 +36,7 @@ const idParam = z.object({ id: z.string().uuid() });
 async function assertEmployeeReadable(ctx: RequestContext, req: FastifyRequest, targetEmployeeId: string): Promise<void> {
   const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
   if (isPrivileged) return;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   if (!actorEmp || actorEmp.id !== targetEmployeeId) {
     throw new HttpError(404, "NOT_FOUND", "employee not found");
   }

@@ -20,7 +20,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsCoiDeclarations } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const VIGILANCE_ROLES = [...HR_ROLES, "vigilance_officer"];
@@ -65,7 +65,7 @@ async function assertOwnEmployeeOrPrivileged(
   targetEmployeeId: string,
 ): Promise<void> {
   if (VIGILANCE_ROLES.some((r) => ctx.roles.includes(r))) return;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   if (!actorEmp || actorEmp.id !== targetEmployeeId) {
     throw new HttpError(403, "FORBIDDEN", "you may only access your own declarations");
   }
