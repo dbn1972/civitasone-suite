@@ -2,7 +2,10 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
 import { queue } from "../../shared/infra.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
+import * as repo from "./repo.js";
 import type { CreateJobOpeningBody, CreateApplicationBody, OfferApplicationBody, HireApplicationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -93,36 +96,89 @@ export async function hireApplication(ctx: RequestContext, applicationId: string
 
 import type { PublicApplicationBody } from "./validators.js";
 
+const PUBLIC_ACTOR = "00000000-0000-0000-0000-000000000000";
+
+export type PublicApplicationResult = { id: string; applicationNo: string; status: string; alreadyApplied: boolean };
+
 /**
- * Public application — submitted by an external candidate without authentication.
- * The tenant is resolved from the vacancy, not from the session. Source = "public_portal".
+ * HIGH fix (response-integrity): public applications used to be created by
+ * generating an id here and firing COMMANDS.applicationCreate at the queue
+ * (the old createPublicApplication, replaced by this function), returning
+ * 202 + that id immediately — BEFORE consumer.ts's applicationCreate
+ * subscriber (the thing that actually runs the INSERT) had even run. Proven
+ * exploitable: 5 genuinely concurrent (Promise.all) identical-email
+ * submissions against the same opening each got back their own 202 + id,
+ * but hrms_applications_dedup_uq (migration 0074_application_eligibility.sql)
+ * only ever lets ONE row land — the other 4 ids callers were shown correspond
+ * to NO row at all. The consumer's catch of the resulting 23505 just logs
+ * "duplicate application suppressed" and drops the message; there was no way
+ * for those callers, who already hold an apparently-successful response, to
+ * ever find out.
+ *
+ * Fix: do the insert here, synchronously, inside the request. This table's
+ * write is one cheap insert (+ a notification enqueue + an audit enqueue,
+ * both via the transactional outbox, so still just DB writes in the same
+ * transaction) — nothing about it actually needed the queue's async
+ * fan-out. The DB's own partial unique index — not app-level timing — now
+ * decides who wins a concurrent race, and every caller (winner or not) is
+ * told the outcome the index actually produced before the response is sent:
+ * `alreadyApplied: true` carries back the REAL, already-persisted row's own
+ * id/applicationNo (routes.ts turns this into a 409 with that id attached)
+ * instead of a fabricated one. The (unauthenticated, no RequestContext)
+ * public route still can't use publishF3Write, same reasoning as
+ * candidate-public-auth-routes.ts's scopedWriteForTenant — hence the
+ * literal SYSTEM actor UUID, as before.
  */
-export async function createPublicApplication(tenantId: string, body: PublicApplicationBody, dedupKey: string | null): Promise<{ id: string; status: string }> {
+export async function submitPublicApplication(tenantId: string, body: PublicApplicationBody, dedupKey: string | null): Promise<PublicApplicationResult> {
   const id = randomUUID();
-  // Public applications use a system actor UUID (the actorId column is uuid type).
-  const SYSTEM_ACTOR = "00000000-0000-0000-0000-000000000000";
-  await queue.publish(COMMANDS.applicationCreate, {
-    messageId: id, type: COMMANDS.applicationCreate,
-    tenantId, actorId: SYSTEM_ACTOR, correlationId: id, schemaVersion: "1.0",
-    payload: {
-      id, tenantId, jobOpeningId: body.jobOpeningId,
-      applicantName: body.applicantName, email: body.email,
-      mobile: body.mobile ?? null,
-      qualification: body.qualification ?? null,
-      experienceYears: body.experienceYears ?? null,
-      skills: body.skills ?? [],
-      source: "public_portal",
-      // Type-specific fields (only present for internship/apprenticeship/volunteership)
-      institutionName: body.institutionName ?? null,
-      graduationYear: body.graduationYear ?? null,
-      semester: body.semester ?? null,
-      tradeCategory: body.tradeCategory ?? null,
-      itiCertNo: body.itiCertNo ?? null,
-      availabilityHoursPerWeek: body.availabilityHoursPerWeek ?? null,
-      stipendExpectedMinor: body.stipendExpectedMinor ?? null,
-      // Bug 2 hardening — see createApplication's dedupKey doc comment above.
-      dedupKey,
-    },
-  });
-  return { id, status: "received" };
+  const applicationNo = `APP-${new Date().getFullYear()}-${id.slice(-6).toUpperCase()}`;
+  try {
+    await db.transaction(async (tx) => {
+      await repo.insertApplication(tx, {
+        id, tenantId, jobOpeningId: body.jobOpeningId,
+        applicantName: body.applicantName, email: body.email,
+        mobile: body.mobile ?? null, resumeRef: null,
+        qualification: body.qualification ?? null,
+        experienceYears: body.experienceYears ?? null,
+        skills: body.skills ?? [],
+        source: "public_portal",
+        applicationNo, stage: "applied", status: "active",
+        dedupKey,
+        institutionName: body.institutionName ?? null,
+        graduationYear: body.graduationYear ?? null,
+        semester: body.semester ?? null,
+        tradeCategory: body.tradeCategory ?? null,
+        itiCertNo: body.itiCertNo ?? null,
+        availabilityHoursPerWeek: body.availabilityHoursPerWeek ?? null,
+        stipendExpectedMinor: body.stipendExpectedMinor != null ? BigInt(body.stipendExpectedMinor) : null,
+        createdBy: PUBLIC_ACTOR, updatedBy: PUBLIC_ACTOR,
+      });
+      if (body.email) {
+        await enqueue(tx, {
+          topic: "hrms.candidate.application_confirmed", eventType: "hrms.candidate.application_confirmed",
+          tenantId, actorId: PUBLIC_ACTOR, correlationId: id,
+          payload: { applicationId: id, applicationNo, applicantName: body.applicantName, email: body.email, jobOpeningId: body.jobOpeningId },
+        });
+      }
+      await enqueue(tx, {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId, actorId: PUBLIC_ACTOR, correlationId: id,
+        payload: { service: "hrms", action: "create", resourceType: "application", resourceId: id, outcome: "success" },
+      });
+    });
+    return { id, applicationNo, status: "received", alreadyApplied: false };
+  } catch (err: unknown) {
+    // Mirrors consumer.ts's applicationCreate catch: a 23505 here can only be
+    // hrms_applications_dedup_uq (the partial index only applies WHEN
+    // dedupKey is set), i.e. a genuine concurrent/duplicate submission that
+    // lost the race. Look up whichever row actually won so the caller gets
+    // told about THAT one instead of nothing.
+    if (dedupKey && err && typeof err === "object" && "code" in err && (err as { code?: unknown }).code === "23505") {
+      const existing = await repo.findApplicationByDedupKey(tenantId, body.jobOpeningId, dedupKey);
+      if (existing) {
+        return { id: existing.id, applicationNo: existing.applicationNo ?? "", status: "duplicate", alreadyApplied: true };
+      }
+    }
+    throw err;
+  }
 }
