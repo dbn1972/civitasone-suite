@@ -252,25 +252,35 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Empanelled hospital list
-  app.get("/v1/hrms/medical/hospitals", async (req, reply) => {
+  //
+  // NOT_IMPLEMENTED (was a 500 crash for every role, including super_admin):
+  // this queried `employee.empanelled_hospitals`, a table that has never
+  // existed under that name OR under any other name/schema anywhere in this
+  // repo -- grepped every services/hrms-service/migrations/*.sql and every
+  // *.sql file repo-wide for "hospital" and "empanel"; the only hits are the
+  // unrelated hospital_name/hospital_id free-text columns on
+  // medical.hrms_medical_claims (a claim records the hospital that treated
+  // the claimant, it is not a master directory) and an unrelated "Hospital
+  // Leave" leave-TYPE seed row. There is no real empanelled-hospital data
+  // source anywhere to point this at -- this was never a working feature, not
+  // a broken reference. Rather than invent a table or return a silent empty
+  // list (which would misrepresent "no data source exists" as "zero
+  // hospitals are empanelled"), this fails closed with an explicit 501 so
+  // callers/UI can distinguish "not built yet" from "really zero rows".
+  // Request validation and the role gate still run first, unchanged, so this
+  // is a strict improvement (real, distinguishable error) over the previous
+  // unconditional 500 -- see the PR description for the full writeup.
+  app.get("/v1/hrms/medical/hospitals", async (req, _reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, SELF_ROLES);
 
-    const query = z.object({
+    z.object({
       city: z.string().max(128).optional(),
       limit: z.coerce.number().int().min(1).max(200).default(100),
     }).parse(req.query);
 
-    const rows = await sqlClient`
-      SELECT id, name, city, state, type, empanelment_expiry, specialities
-      FROM employee.empanelled_hospitals
-      WHERE tenant_id = ${ctx.tenantId}
-        ${query.city ? sqlClient`AND LOWER(city) = LOWER(${query.city})` : sqlClient``}
-      ORDER BY name
-      LIMIT ${query.limit}
-    `;
-
-    return reply.send({ data: rows });
+    throw new HttpError(501, "NOT_IMPLEMENTED",
+      "empanelled hospital directory has not been implemented — no backing table exists yet");
   });
 
   // My insurance details

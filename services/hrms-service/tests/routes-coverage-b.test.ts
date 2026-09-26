@@ -441,14 +441,21 @@ describe("GET /v1/hrms/medical/claims", () => {
 });
 
 describe("GET /v1/hrms/medical/hospitals", () => {
-  it("returns 200 or 500 with valid token (table may not exist in test DB)", async () => {
+  // Was: tolerated [200, 500] because the underlying query hit
+  // employee.empanelled_hospitals, a table that never existed under that
+  // name or any other name/schema anywhere in this repo -- see
+  // medical/routes.ts's comment on this handler. The endpoint now fails
+  // closed with a deterministic 501 instead of crashing, so this no longer
+  // needs to shrug at "or 500".
+  it("returns 501 NOT_IMPLEMENTED with a valid token (no backing table exists)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET", url: "/v1/hrms/medical/hospitals",
       headers: { authorization: `Bearer ${makeToken()}` },
     });
     await app.close();
-    expect([200, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(501);
+    expect(res.json().code).toBe("NOT_IMPLEMENTED");
   });
 
   it("returns 401 without token", async () => {
