@@ -1,6 +1,7 @@
 import type { FastifyRequest, FastifyReply } from "fastify";
 import { ZodError } from "zod";
 import { resolveServiceContext, AuthContextError } from "@civitasone/auth/context";
+import { requirePermission } from "@civitasone/auth/permissions";
 import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
@@ -98,4 +99,15 @@ export function financeErrorHandler(err: unknown, req: FastifyRequest, reply: Fa
   }
   req.log.error({ err }, "unhandled error");
   return reply.code(500).send({ code: "INTERNAL", message: "internal error", correlationId, retryable: true });
+}
+
+export async function requirePermissionKey(ctx: RequestContext, permissionKey: string): Promise<void> {
+  try {
+    await requirePermission(ctx, permissionKey);
+  } catch (err) {
+    if (err instanceof AuthContextError) {
+      throw new HttpError(err.status, err.code, err.message);
+    }
+    throw err;
+  }
 }

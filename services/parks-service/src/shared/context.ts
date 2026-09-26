@@ -1,5 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import { resolveServiceContext, AuthContextError } from "@civitasone/auth/context";
+import { requirePermission } from "@civitasone/auth/permissions";
 import { hasAnyRole } from "@civitasone/auth";
 
 export class HttpError extends Error {
@@ -29,5 +30,16 @@ export function requireRole(
 ): void {
   if (!hasAnyRole(ctx, [...roles])) {
     throw new HttpError(403, "FORBIDDEN", "Insufficient role");
+  }
+}
+
+export async function requirePermissionKey(ctx: ReturnType<typeof resolveContext>, permissionKey: string): Promise<void> {
+  try {
+    await requirePermission(ctx, permissionKey);
+  } catch (err) {
+    if (err instanceof AuthContextError) {
+      throw new HttpError(err.status, err.code, err.message);
+    }
+    throw err;
   }
 }
