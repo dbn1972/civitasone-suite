@@ -539,32 +539,44 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       // the same rule (COALESCE(ddo_code,'__ALL__')) as a belt-and-suspenders
       // guard — so two DDOs each get one regular run in the same month.
       if (runType === "regular") {
+        // Concurrency fix (see commands.ts's createRun for the full story):
+        // the row + its "create" audit event for a *regular* run are now
+        // created synchronously by commands.ts, under this exact advisory
+        // lock, BEFORE this message is ever published. Normal path: the row
+        // already exists by the time this message is picked up, so there's
+        // nothing left to create here — fall through to the per-employee
+        // processing below (still fully async, unaffected by this fix).
+        const already = (await tx.execute(sql`
+          SELECT 1 FROM payroll.payroll_runs WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid LIMIT 1
+        `)) as unknown as Array<unknown>;
+        if (already.length > 0) return;
+
+        // Defensive fallback only, for a message that somehow reaches this
+        // handler without having gone through that synchronous path (no
+        // other producer of COMMANDS.runCreate exists in this codebase
+        // today, but this keeps the handler correct on its own rather than
+        // silently assuming that holds forever).
+        //
         // round2 fix: this check-and-insert is not atomic under READ
-        // COMMITTED. Two runCreate messages for the same tenant+month+DDO
+        // COMMITTED on its own. Two attempts for the same tenant+month+DDO
         // landing close together can both run the SELECT below before either
         // has committed an INSERT, so neither sees the other — both pass,
         // both attempt repo.insertRun, and the DB's partial-unique index
         // (ux_payroll_runs_tenant_month_ddo_regular) stops the loser's
         // INSERT, but that surfaces as a raw constraint-violation rather than
         // this handler's own well-understood DUPLICATE_RUN_FOR_PERIOD
-        // rejection — and by then the HTTP layer has already returned 202 for
-        // BOTH requests (commands.ts's synchronous pre-check has the same
-        // blind spot: it also just SELECTs). The loser's run row never exists
-        // (GET on its id 404s forever) and nothing observable records the
-        // failure at the data level.
-        //
-        // A transaction-scoped advisory lock keyed on the same period the
-        // unique index protects serializes concurrent attempts: the loser
-        // blocks here until the winner commits (releasing the lock), then
-        // re-runs the SELECT below, now sees the committed row, and throws
-        // the same clean DUPLICATE_RUN_FOR_PERIOD DomainError as the ordinary
-        // (non-race) duplicate case — which the queue consumer already logs
-        // (queue_consumer_error) and eventually dead-letters like any other
-        // failed handler, instead of racing the INSERT and losing to a raw
-        // unique-violation with no clean rejection path. Mirrors the
-        // established pattern in audit-service's chain-append guard and
-        // hrms-service's GPF/CPF/NPS ledger locks (hashtextextended keyed on
-        // the same columns the invariant is scoped to).
+        // rejection. The transaction-scoped advisory lock below, keyed on
+        // the same period the unique index protects, serializes that: the
+        // loser blocks here until the winner commits (releasing the lock),
+        // then re-runs the SELECT below, now sees the committed row, and
+        // throws the same clean DUPLICATE_RUN_FOR_PERIOD DomainError as the
+        // ordinary (non-race) duplicate case — which the queue consumer
+        // already logs (queue_consumer_error) and eventually dead-letters
+        // like any other failed handler, instead of racing the INSERT and
+        // losing to a raw unique-violation with no clean rejection path.
+        // Mirrors the established pattern in audit-service's chain-append
+        // guard and hrms-service's GPF/CPF/NPS ledger locks (hashtextextended
+        // keyed on the same columns the invariant is scoped to).
         const lockKey = `payroll_run:${p.tenantId}:${p.month}:${ddoCode ?? "__ALL__"}:regular`;
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${lockKey}, 0))`);
 
@@ -1747,7 +1759,10 @@ export async function computeAndInsertSlip(
   return result;
 }
 
-async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+// Exported (round2 concurrency fix) so commands.ts's createRun can record
+// the same "create" audit event synchronously, from its own transaction,
+// for a regular run — see that function's doc comment.
+export async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,

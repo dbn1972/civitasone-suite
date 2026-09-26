@@ -38,14 +38,22 @@ export function BatchesPanel({ batches }: { batches: PfmsBatchRow[] }) {
           key: "id",
           label: t("colActions"),
           sortable: false,
-          render: (row) => (
-            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <BankFileAction batchId={row.id} pfmsId={row.pfmsId} submissionStatus={row.submissionStatus} />
-              {row.submissionStatus !== "signed" && (
-                <SignBatchAction batchId={row.id} pfmsId={row.pfmsId} />
-              )}
-            </div>
-          ),
+          render: (row) => {
+            // Sign / bank-file are treasury-batch concepts (DSC signing, NEFT
+            // bank file for SFTP transmission). A row with channel ===
+            // 'ekuber_adapter' is a completed live REST submission — the
+            // backend now rejects both actions for it (INVALID_CHANNEL), so
+            // don't offer them here either. See routes.ts's matching guard.
+            if (row.channel !== "treasury_batch") return null;
+            return (
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <BankFileAction batchId={row.id} pfmsId={row.pfmsId} submissionStatus={row.submissionStatus} />
+                {row.submissionStatus !== "signed" && (
+                  <SignBatchAction batchId={row.id} pfmsId={row.pfmsId} />
+                )}
+              </div>
+            );
+          },
         },
       ]}
       rows={batches}

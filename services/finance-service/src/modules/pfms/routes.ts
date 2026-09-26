@@ -69,6 +69,11 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
         id: r.id,
         pfmsId: r.pfmsId,
         type: r.type,
+        // Reconciliation: which PFMS mechanism produced this row —
+        // 'treasury_batch' (this route's own batch/DSC-sign/SFTP path) or
+        // 'ekuber_adapter' (adapter-routes.ts's live REST path, unified into
+        // this same table/lookup — see migrations/0076_pfms_channel_reconciliation.sql).
+        channel: r.channel,
         // M1: emit paise as an exact decimal string (no Number() precision loss
         // on aggregate paise > 2^53).
         amountMinor: r.amountMinor.toString(),
@@ -76,6 +81,7 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
         schemeCode: r.schemeCode,
         ddoCode: r.ddoCode,
         submissionStatus: r.submissionStatus,
+        utrNumber: r.utrNumber,
         signedAt: r.signedAt?.toISOString() ?? null,
       })),
     });
@@ -87,6 +93,15 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const batch = await repo.findPfmsById(id, ctx.tenantId);
     if (!batch) throw new HttpError(404, "NOT_FOUND", "PFMS batch not found");
+    // A row from the e-Kuber adapter channel (adapter-routes.ts) is a
+    // completed synchronous REST submission, not a treasury batch — it has
+    // no beneficiary set in finance_payments and nothing to put in a bank
+    // file. Now that both channels share this table (see migrations/
+    // 0076_pfms_channel_reconciliation.sql), guard explicitly instead of
+    // silently emitting a header-only CSV.
+    if (batch.channel !== "treasury_batch") {
+      throw new HttpError(400, "INVALID_CHANNEL", "bank file is only applicable to treasury batch submissions");
+    }
     if (batch.submissionStatus !== "signed" && batch.submissionStatus !== "pending") {
       throw new HttpError(400, "INVALID_STATE", "bank file requires signed or pending batch");
     }
@@ -123,6 +138,12 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const batch = await repo.findPfmsById(id, ctx.tenantId);
     if (!batch) throw new HttpError(404, "NOT_FOUND", "PFMS batch not found");
+    // See the same guard in GET /:id/bank-file above — DSC-signing is a
+    // treasury batch concept; an e-Kuber adapter row is already a completed
+    // (accepted/rejected) synchronous submission with nothing to sign.
+    if (batch.channel !== "treasury_batch") {
+      throw new HttpError(400, "INVALID_CHANNEL", "signing is only applicable to treasury batch submissions");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.signBatch(ctx, id, body));
   });
 }

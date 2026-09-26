@@ -39,6 +39,30 @@ export async function insertApplication(tx: Writer, row: typeof hrmsApplications
   await tx.insert(hrmsApplications).values(row);
 }
 
+/**
+ * Response-integrity fix (public apply race — see commands.ts's
+ * submitPublicApplication): after a 23505 against hrms_applications_dedup_uq,
+ * find the row that actually won the race so a "losing" concurrent caller
+ * can be told about their real, already-existing application instead of a
+ * fabricated id. Mirrors that partial unique index's own predicate exactly
+ * (migration 0074_application_eligibility.sql): tenant_id + job_opening_id +
+ * dedup_key, excluding withdrawn (a withdrawn application frees its
+ * dedup_key for a fresh one, per that same migration).
+ */
+export async function findApplicationByDedupKey(tenantId: string, jobOpeningId: string, dedupKey: string): Promise<{ id: string; applicationNo: string | null } | null> {
+  const rows = await scopedRead((tx) => tx
+    .select({ id: hrmsApplications.id, applicationNo: hrmsApplications.applicationNo })
+    .from(hrmsApplications)
+    .where(and(
+      eq(hrmsApplications.tenantId, tenantId),
+      eq(hrmsApplications.jobOpeningId, jobOpeningId),
+      eq(hrmsApplications.dedupKey, dedupKey),
+      ne(hrmsApplications.status, "withdrawn"),
+    ))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function updateApplication(tx: Writer, id: string, patch: Partial<typeof hrmsApplications.$inferInsert>): Promise<void> {
   await tx.update(hrmsApplications).set({ ...patch, updatedAt: new Date() }).where(eq(hrmsApplications.id, id));
 }

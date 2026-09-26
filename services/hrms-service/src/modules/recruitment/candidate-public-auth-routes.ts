@@ -43,7 +43,7 @@ import * as otpRepo from "./otp-verify-repo.js";
  * new async one. Fixed by explicitly establishing the ambient tenant context
  * from the request's OWN `tenantId` (there is no session to source it from —
  * same reasoning as `publishPublicF3Write` below and `commands.ts`'s
- * `createPublicApplication`), via this helper.
+ * `submitPublicApplication`), via this helper.
  */
 async function scopedReadForTenant<T>(tenantId: string, fn: Parameters<typeof scopedRead<T>>[0]): Promise<T> {
   return runWithTenant(tenantId, () => scopedRead(fn));
@@ -153,7 +153,7 @@ function normalizeEmail(email: string): string {
 /**
  * These routes are public (`config: { public: true }`) — there is no
  * `resolveContext(req)`/`RequestContext` to hand `publishF3Write`, the same
- * way `recruitment/commands.ts`'s `createPublicApplication` bypasses it for
+ * way `recruitment/commands.ts`'s `submitPublicApplication` bypasses it for
  * the (also unauthenticated) public job-application submission. Mirror that
  * precedent: publish the `f3RouteWrite` envelope directly with the SYSTEM
  * actor, using the request's correlation header (falling back to the

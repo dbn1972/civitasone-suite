@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { financePfms } from "../payments/schema.js";
 import { financePfmsConfig } from "./schema.js";
@@ -118,4 +118,89 @@ export async function listRealBeneficiaries(tenantId: string, pfmsId: string, li
 
 export async function updatePfmsBatch(tx: Writer, id: string, patch: Partial<typeof financePfms.$inferInsert>): Promise<void> {
   await tx.update(financePfms).set({ ...patch, updatedAt: new Date() }).where(eq(financePfms.id, id));
+}
+
+/**
+ * Reconciliation bridge between the two independent PFMS submission
+ * mechanisms: routes.ts's treasury batch/DSC-sign/SFTP path (this table's
+ * original writer, via insertPfmsBatch/updatePfmsBatch above, always
+ * channel = 'treasury_batch') and adapter-routes.ts's live e-Kuber REST
+ * adapter, which used to make zero DB calls at all -- a payment submitted
+ * through it left no trace discoverable via GET /v1/finance/pfms/batches,
+ * the app's only PFMS status lookup. This lets the e-Kuber path write into
+ * the SAME ledger (channel = 'ekuber_adapter') so that lookup answers "was
+ * this disbursement actually paid" regardless of which mechanism handled it.
+ *
+ * Insert-or-update by (tenantId, pfmsId, channel) rather than an ON CONFLICT
+ * upsert: (tenant_id, pfms_id) does have a DB-level unique constraint
+ * (finance_pfms_tenant_id_pfms_id_key), but it does NOT include channel, so
+ * targeting it with onConflictDoUpdate would let a caller-chosen e-Kuber
+ * referenceId that happens to collide with an existing treasury batch's
+ * system-generated pfmsId silently overwrite that batch's row with e-Kuber
+ * fields. Filtering the SELECT by channel = 'ekuber_adapter' instead means
+ * that vanishingly-rare collision instead fails the INSERT on the unique
+ * constraint, which the caller (adapter-routes.ts) already treats as a
+ * best-effort, log-and-swallow failure — safer than corrupting the other
+ * channel's row. A tiny race window exists if the same referenceId is
+ * submitted and status-checked concurrently, which the caller-supplied
+ * referenceId contract (a human fills in one form, then later checks status)
+ * makes very unlikely in practice.
+ *
+ * Best-effort by design: adapter-routes.ts wraps calls to this in try/catch
+ * and never lets a local persistence failure mask or retract a real e-Kuber
+ * outcome that already happened.
+ */
+export async function upsertAdapterPfmsRecord(params: {
+  tenantId: string;
+  actorId: string;
+  referenceId: string;
+  submissionStatus: string;
+  amountMinor?: bigint;
+  schemeCode?: string | null;
+  ddoCode?: string | null;
+  utrNumber?: string | null;
+}): Promise<void> {
+  const CHANNEL = "ekuber_adapter";
+  await db.transaction(async (tx) => {
+    const existing = await (tx as typeof db).select().from(financePfms)
+      .where(and(
+        eq(financePfms.tenantId, params.tenantId),
+        eq(financePfms.pfmsId, params.referenceId),
+        eq(financePfms.channel, CHANNEL),
+      ))
+      .limit(1);
+
+    if (existing[0]) {
+      await tx.update(financePfms).set({
+        submissionStatus: params.submissionStatus,
+        ...(params.utrNumber !== undefined ? { utrNumber: params.utrNumber } : {}),
+        updatedAt: new Date(),
+        updatedBy: params.actorId,
+      }).where(eq(financePfms.id, existing[0].id));
+      return;
+    }
+
+    await tx.insert(financePfms).values({
+      tenantId: params.tenantId,
+      pfmsId: params.referenceId,
+      type: "adhoc",
+      channel: CHANNEL,
+      amountMinor: params.amountMinor ?? 0n,
+      beneficiaryCount: 1,
+      schemeCode: params.schemeCode ?? null,
+      ddoCode: params.ddoCode ?? null,
+      // submissionStatus carries e-Kuber's own disposition vocabulary
+      // (accepted/rejected/processing/completed/failed/pending) —
+      // finance_pfms_submission_status_check was extended for this channel
+      // in migrations/0076_pfms_channel_reconciliation.sql. `status` is left
+      // at its column default ('pending') deliberately: it's constrained to
+      // the treasury batch's own vocabulary and no UI surfaces it for this
+      // channel — submissionStatus is what GET /v1/finance/pfms/batches and
+      // BatchesPanel.tsx actually show.
+      submissionStatus: params.submissionStatus,
+      utrNumber: params.utrNumber ?? null,
+      createdBy: params.actorId,
+      updatedBy: params.actorId,
+    });
+  });
 }
