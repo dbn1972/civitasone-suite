@@ -7,6 +7,7 @@
  */
 
 import { useRef, useState, type DragEvent } from "react";
+import { useFormError } from "@/lib/useFormError";
 
 export type DocStatus = "pending" | "uploaded" | "verified" | "rejected";
 
@@ -72,6 +73,10 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
   // severity-based status/alert convention already established elsewhere in
   // this design system (FileUpload, ErrorState).
   const [uploadSuccessMessage, setUploadSuccessMessage] = useState<string | null>(null);
+  // Same presign+PUT flow as the DS FileUpload component (apps/web/src/app/_components/ds/FileUpload.tsx)
+  // — reuse its useFormError convention so failures never leak a raw HTTP status
+  // or a bespoke "Upload failed" literal to the user. See docs/ENTERPRISE-GAP-REPORT-2026-09-07.md UX-003.
+  const formError = useFormError("document upload");
 
   async function handleFile(file: File) {
     if (file.size > 10 * 1024 * 1024) {
@@ -88,7 +93,11 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
       if (res.ok) {
         const { uploadUrl, key, headers } = await res.json() as { uploadUrl: string; key: string; headers: Record<string, string> };
         const put = await fetch(uploadUrl, { method: "PUT", headers, body: file });
-        if (!put.ok) throw new Error(`Upload failed (${put.status})`);
+        if (!put.ok) {
+          setUploadSuccessMessage(null);
+          setUploadError(formError.fromException("save").message);
+          return;
+        }
         setUploadError(null);
         setLocalFile(file.name);
         setLocalStatus("uploaded");
@@ -96,11 +105,11 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
         onUploaded?.(doc.id, key);
       } else {
         setUploadSuccessMessage(null);
-        setUploadError(`Could not prepare upload (${res.status})`);
+        setUploadError((await formError.fromResponse(res, "save")).message);
       }
-    } catch (err) {
+    } catch {
       setUploadSuccessMessage(null);
-      setUploadError(err instanceof Error ? err.message : "Upload failed — please try again.");
+      setUploadError(formError.fromException("save").message);
     } finally {
       setUploading(false);
     }

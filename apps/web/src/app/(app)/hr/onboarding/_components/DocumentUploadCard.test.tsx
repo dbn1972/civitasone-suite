@@ -78,8 +78,12 @@ describe("DocumentUploadCard", () => {
 
       fireEvent.change(input, { target: { files: [file] } });
 
+      // Clerk-safe copy via useFormError (UX-003/UX-016), same convention as
+      // ds/FileUpload.test.tsx's "never the raw response text" check -- never
+      // the raw HTTP status code this used to interpolate directly.
       const alert = await screen.findByRole("alert");
-      expect(alert).toHaveTextContent("Could not prepare upload (500)");
+      expect(alert).toHaveTextContent(/couldn't save/i);
+      expect(alert).not.toHaveTextContent(/500/);
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
 
