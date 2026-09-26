@@ -96,6 +96,32 @@ const SYNC_WRITE = /\b(?:db|tx)\.(?:insert|update|delete|execute)\s*\(|\bdb\.tra
  *   step" problem as the OTP case above. Re-architecting this module onto
  *   the async F3 pattern is a real option but out of scope for a same-file
  *   RLS migration; see the matching comment in integration/routes.ts itself.
+ * - recruitment/screening-routes.ts:110 (`db.transaction(...)` wrapping
+ *   `repo.insertEvent` inside the local `denyAsOverride` helper) — R-RA-0111
+ *   TOCTOU fix (fix/hrms-screening-toctou): a denied re-decision, whether
+ *   caught by the route's own sequential pre-check or by losing the atomic
+ *   race below, must leave an audit trail in the SAME step as the 409 it
+ *   returns. If this write moved back onto the async queue, publishF3Write
+ *   would resolve (and the 409 go out) before its consumer ever ran, so a
+ *   caller could receive the 409 with no corresponding `override_denied`
+ *   event yet on record — reopening the exact "zero-trace override" gap this
+ *   PR closes. See screening-decision-race.test.ts's audit-trail assertions.
+ * - recruitment/screening-routes.ts:170 (`db.transaction(...)`) and :173
+ *   (`repo.insertEvent(tx, ...)` inside it) — the same fix's core write: a
+ *   first-time screening decision on a still-pending application. Same shape
+ *   as the OTP case above: the decide ("is this still the first decision?")
+ *   and the durable write (screening-repo.ts's setScreeningIfPending, a
+ *   conditional `UPDATE ... WHERE screening_decision = 'pending'`) must be
+ *   one atomic step, because two genuinely concurrent decisions on the same
+ *   application both read 'pending' before either write lands (the proven
+ *   bug this PR fixes) and the route's response — 200 isOverride:false for
+ *   the winner, 409 OVERRIDE_VIA_MAKER_CHECKER for the loser — must reflect
+ *   which one actually won the atomic UPDATE, not a queue-publish
+ *   acknowledgment sent before either write happens. Routing this back
+ *   through publishF3Write reopens exactly the race
+ *   screening-decision-race.test.ts proves closed (10/10 real Promise.all
+ *   runs, no artificial gate needed — see that file's header for why). See
+ *   the comment directly above this db.transaction call in screening-routes.ts.
  */
 const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "recruitment/otp-verify-routes.ts:96",
@@ -107,6 +133,9 @@ const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "manpower-planning/routes.ts:176",
   "integration/routes.ts:75",
   "integration/routes.ts:92",
+  "recruitment/screening-routes.ts:110",
+  "recruitment/screening-routes.ts:170",
+  "recruitment/screening-routes.ts:173",
 ]);
 
 describe("F3 leftover hrms CQRS route boundary", () => {

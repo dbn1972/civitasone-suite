@@ -98,6 +98,14 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     // it towards the real maker-checker override flow (R-RA-0111): a second
     // decision on an already-decided application must never be silently
     // applied -- and must never vanish without a trace either.
+    //
+    // This db.transaction call is pinned in the KNOWN_INTENTIONAL_SYNC_WRITES
+    // allowlist in tests/f3-leftover-hrms-cqrs.test.ts
+    // (fix/hrms-screening-toctou) -- it is a deliberate exception to that
+    // guard test's sync-write scan, not an accidental F3 leftover. Do not
+    // "fix" it back to an async publishF3Write: the 409 this throws must be
+    // backed by an audit event that has ALREADY landed by the time the
+    // caller sees it, not one a queue consumer might write later (or never).
     async function denyAsOverride(jobOpeningId: string, currentDecision: string): Promise<never> {
       await db.transaction((tx) => repo.insertEvent(tx, {
         tenantId: ctx.tenantId, applicationId: id, jobOpeningId,
@@ -143,6 +151,14 @@ export async function screeningRoutes(app: FastifyInstance): Promise<void> {
     // affects zero rows -- closing the TOCTOU window a plain read-then-write
     // (or a version-only guard, which never inspects screening_decision)
     // leaves open.
+    //
+    // This db.transaction call (and the repo.insertEvent inside it) is
+    // pinned in the KNOWN_INTENTIONAL_SYNC_WRITES allowlist in
+    // tests/f3-leftover-hrms-cqrs.test.ts (fix/hrms-screening-toctou) -- a
+    // deliberate exception to that guard test's sync-write scan, not an
+    // accidental F3 leftover. Do not "fix" it back to an async
+    // publishF3Write; that would reopen the exact race
+    // screening-decision-race.test.ts proves closed.
     const stagePatch = stageForScreeningDecision(body.decision as ScreeningDecision);
     const patch = {
       screeningDecision: body.decision,

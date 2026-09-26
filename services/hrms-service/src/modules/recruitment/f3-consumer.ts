@@ -31,7 +31,7 @@ import {
 } from "./requisition-domain.js";
 import { DEFAULT_OFFER_CHAIN, computeCompensation } from "./offer-domain.js";
 import { normalizeEmail, mobileDedupKey } from "./candidate.js";
-import { autoScreenDecision, stageForScreeningDecision, type ScreeningDecision } from "./screening.js";
+import { autoScreenDecision } from "./screening.js";
 import { assessFee } from "./application-fee.js";
 import { commsEnabled, resolveDispatch, buildCommMessage, type InterviewCommType } from "./interview-comms.js";
 import { computeRetentionUntil, DEFAULT_RETENTION_DAYS } from "./interview-recording.js";
@@ -1711,31 +1711,16 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             log.info({ op, jobOpeningId: id, screened, skipped }, "auto-screen applied");
             break;
           }
-          case "recruitment_screening_routes__1": {
-            // Restored: the application (its job opening and version).
-            const a = await screeningRepo.findApplicationTx(tx, p.tenantId, id);
-            if (!a) throw new HttpError(404, "NOT_FOUND", "application not found");
-            // HIGH finding: also advance `stage` to match the decision (see
-            // screening.ts's stageForScreeningDecision doc comment) -- this
-            // used to write screening metadata only, so the frontend's
-            // optimistic stage update had nothing behind it and reverted to
-            // "applied" on reload.
-            const stagePatch = stageForScreeningDecision(body.decision as ScreeningDecision);
-            await screeningRepo.setScreening(tx, p.tenantId, id, {
-                      screeningDecision: body.decision,
-                      screeningReasonCode: body.reasonCode ?? null,
-                      screeningRemarks: body.remarks ?? null,
-                      screenedBy: msg.actorId, screenedAt: new Date(),
-                      ...(stagePatch ? { stage: stagePatch } : {}),
-                    }, a.version);
-                    await screeningRepo.insertEvent(tx, {
-                      tenantId: p.tenantId, applicationId: id, jobOpeningId: a.jobOpeningId,
-                      action: "decision", decision: body.decision,
-                      reasonCode: body.reasonCode ?? null, remarks: body.remarks ?? null,
-                      isOverride: false, actorId: msg.actorId,
-                    });
-            break;
-          }
+          // "recruitment_screening_routes__1" (record a screening decision) is
+          // deliberately NOT handled here any more (fix/hrms-screening-toctou,
+          // R-RA-0111): the route stopped publishing this op and now performs
+          // the write itself, synchronously, via screening-repo.ts's
+          // setScreeningIfPending -- see the comment on screening-routes.ts's
+          // POST /v1/hrms/applications/:id/screening-decision handler for why
+          // the fire-and-forget version of this case could never make the
+          // maker-checker override guarantee an HTTP-visible contract. The op
+          // string stays in the `ops` set above only as inert historical
+          // metadata; nothing publishes it any more.
           case "recruitment_screening_routes__2": {
             // Restored: the requested applications (scoped to this vacancy) and
             // the shortlisted/skipped counters.
