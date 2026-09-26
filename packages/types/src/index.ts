@@ -699,7 +699,7 @@ export type UCSummary = {
   ucNo: string;
   grantRef?: string;
   grantee: string;
-  amount: number;
+  amount: string;        // minor units (paise), bigint-safe decimal string
   periodFrom: string;
   periodTo: string;
   submittedDate?: string;
