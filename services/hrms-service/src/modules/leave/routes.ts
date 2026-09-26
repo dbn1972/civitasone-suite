@@ -8,7 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
 import { scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody } from "./validators.js";
 import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
 import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.js";
@@ -57,7 +57,7 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
   // themselves just because /me/profile was never called first.
   const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
   if (!isHrActor) {
-    const actorEmp = await resolveEmployeeForActor(tenantId, ctx.actorId, extractActorEmail(req));
+    const actorEmp = await resolveEmployeeForActor(tenantId, ctx.actorId);
     const isSelf = actorEmp?.id === body.employeeId;
     const isManagerOfTarget = ctx.roles.includes("manager") && actorEmp != null && emp.managerId === actorEmp.id;
     if (!isSelf && !isManagerOfTarget) {
@@ -147,7 +147,7 @@ async function resolveNonHrEmployeeScope(
   req: FastifyRequest,
   requested: string | undefined,
 ): Promise<string[]> {
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   if (!actorEmp) return [];
   if (!ctx.roles.includes("manager")) return [actorEmp.id];
   const reports = await scopedRead((tx) => tx.select().from(hrmsEmployees)

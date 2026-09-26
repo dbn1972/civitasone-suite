@@ -8,7 +8,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import * as employeeRepo from "../employee/repo.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "hr_officer"];
@@ -32,7 +32,7 @@ async function resolveOwnEmployeeIdIfBareEmployee(
 ): Promise<string | null> {
   const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
   if (isPrivileged) return requested;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }
 
@@ -53,7 +53,7 @@ async function resolveOwnEmployeeIdIfNonHr(
   ctx: RequestContext, req: FastifyRequest,
 ): Promise<string | null | undefined> {
   if (HR_ROLES.some((r) => ctx.roles.includes(r))) return undefined;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
 }
 
@@ -391,7 +391,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     const isPrivileged = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
     const actorEmp = isPrivileged
       ? null
-      : await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+      : await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
     const outcome = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       const rows = (await sql.unsafe(
@@ -444,7 +444,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ employeeId: z.string().uuid(), raters: z.array(z.object({ raterId: z.string().uuid(), raterGroup: z.string().max(32) })).min(1).max(20) }).parse(req.body);
 
     if (!HR_ROLES.some((r) => ctx.roles.includes(r))) {
-      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
       const target = await employeeRepo.findById(body.employeeId, ctx.tenantId);
       const isManagerOfTarget = actorEmp != null && target != null && target.managerId === actorEmp.id;
       if (!isManagerOfTarget) {
@@ -476,7 +476,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const body = z.object({ cycleId: z.string().uuid(), employeeId: z.string().uuid(), raterGroup: z.string().max(32), scores: z.record(z.number()), comments: z.string().max(2000).optional() }).parse(req.body);
 
-    const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+    const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
     if (!actorEmp) {
       throw new HttpError(403, "FORBIDDEN", "no linked employee record for this actor");
     }

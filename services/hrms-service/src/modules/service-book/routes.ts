@@ -3,7 +3,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import * as employeeRepo from "../employee/repo.js";
 import * as repo from "./repo.js";
 
@@ -27,7 +27,7 @@ export async function serviceBookRoutes(app: FastifyInstance): Promise<void> {
     // elsewhere.
     const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
     if (!isHrActor) {
-      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
       if (!actorEmp) throw new HttpError(403, "NO_EMPLOYEE_LINK", "no linked employee record for this actor");
       const target = await employeeRepo.findById(id, ctx.tenantId);
       if (!target || target.departmentId !== actorEmp.departmentId) {

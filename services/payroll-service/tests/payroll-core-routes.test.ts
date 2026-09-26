@@ -466,7 +466,7 @@ describe("GET /v1/payroll/slips/:id — employee self-service ownership (core)",
     await app.close();
     expect(res.statusCode).toBe(200);
     expect(res.json().employeeId).toBe(OWNER_EMPLOYEE_ID);
-    expect(resolveActorEmployeeId).toHaveBeenCalledWith(OWN_TENANT, OWNER_ACTOR, undefined);
+    expect(resolveActorEmployeeId).toHaveBeenCalledWith(OWN_TENANT, OWNER_ACTOR);
   });
 
   it("403 — employee is rejected viewing a COLLEAGUE's payslip", async () => {

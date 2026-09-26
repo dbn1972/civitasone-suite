@@ -7,7 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsGeoAttendance, hrmsOfficeLocations } from "./schema.js";
 import { hrmsHolidays } from "../holidays/schema.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { isExitedStatus } from "../employee/status.js";
 import type { RequestContext } from "@civitasone/types";
 
@@ -60,7 +60,7 @@ const geoCheckInBody = z.object({
 async function resolveSelfEmployeeOrThrow(
   ctx: RequestContext, req: FastifyRequest, claimedEmployeeId: string,
 ): Promise<{ id: string }> {
-  const self = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const self = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   if (!self) {
     throw new HttpError(403, "NO_EMPLOYEE_RECORD", "no employee record is linked to this account; attendance cannot be recorded");
   }

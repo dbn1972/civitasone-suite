@@ -24,7 +24,7 @@ import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import { computeOverallGrade, type ScoreInput } from "./engine.js";
 import type { AppraisalRow } from "../appraisals/schema.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ACTOR_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -77,7 +77,7 @@ export async function assertStageOwner(ctx: RequestContext, req: FastifyRequest,
     throw new HttpError(409, "WRONG_STAGE", `appraisal is at stage '${a.status}', expected '${expected}'`);
   }
   const { ownerId } = stageOwner(a);
-  const actingEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actingEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   const actingEmployeeId = actingEmp?.id ?? null;
   const isOwner = ownerId !== null && actingEmployeeId !== null && actingEmployeeId === ownerId;
   if (isOwner) return { override: false };
@@ -146,7 +146,7 @@ async function resolveAparReadScope(ctx: RequestContext, req: FastifyRequest): P
   // "manager" roles must not pay for (or risk divergent results from) two
   // separate lookups of their own record.
   const ownEmp = needsOwnEmployee
-    ? await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req))
+    ? await resolveEmployeeForActor(ctx.tenantId, ctx.actorId)
     : undefined;
 
   if (ctx.roles.includes("employee") && ownEmp) {

@@ -349,11 +349,17 @@ export async function fetchDefaultSlipTemplate(tenantId: string): Promise<Payrol
 export async function resolveActorEmployeeId(
   tenantId: string,
   actorId: string,
-  email: string | undefined,
 ): Promise<string | null> {
-  const url = `${HRMS_URL}/v1/hrms/internal/employees/actor/${encodeURIComponent(actorId)}/resolve${
-    email ? `?email=${encodeURIComponent(email)}` : ""
-  }`;
+  // SEC fix (self-service identity hijack): this used to forward a client-
+  // supplied `email` (sourced from the equally-vulnerable x-user-email
+  // header via this file's own now-deleted extractActorEmail helper) as a
+  // trusted `?email=` query param to hrms-service's internal actor/resolve
+  // route below. hrms-service now resolves the actor's verified email
+  // itself (via identity-service, keyed by this same actorId) -- see
+  // hrms-service's employee/actor-link.ts resolveEmployeeForActor and
+  // shared/identity-client.ts for the full writeup -- so this call no
+  // longer needs to (and must not) supply one.
+  const url = `${HRMS_URL}/v1/hrms/internal/employees/actor/${encodeURIComponent(actorId)}/resolve`;
   const res = await fetchInternalWithRetry(
     url,
     { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },

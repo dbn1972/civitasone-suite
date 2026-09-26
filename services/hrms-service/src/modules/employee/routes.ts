@@ -8,7 +8,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
 import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody, employeeListQuery } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
-import { resolveEmployeeForActor, extractActorEmail } from "./actor-link.js";
+import { resolveEmployeeForActor } from "./actor-link.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
 import { promotionBody } from "../lifecycle/validators.js";
 import * as commands from "./commands.js";
@@ -73,7 +73,7 @@ const DIRECTORY_ROLES = [...READER_ROLES, "employee"];
 async function resolveManagerScope(ctx: RequestContext, req: FastifyRequest): Promise<string | null | undefined> {
   const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
   if (isHrActor) return undefined;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp?.id ?? null;
 }
 

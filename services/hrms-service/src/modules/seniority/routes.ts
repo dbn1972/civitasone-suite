@@ -49,7 +49,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { db, scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { resolveEmployeeForActor, extractActorEmail } from "../employee/actor-link.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { buildSeniority } from "./engine.js";
 import { hrmsSeniorityLists } from "./schema.js";
 
@@ -101,7 +101,7 @@ async function resolveManagerDepartmentScope(
 ): Promise<string | undefined | null> {
   const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
   if (isHrActor) return requested;
-  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId, extractActorEmail(req));
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.departmentId : null;
 }
 
