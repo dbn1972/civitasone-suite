@@ -1,7 +1,3 @@
-// @ts-nocheck — RETAINED ONLY for case `deputation_routes__1`, which cannot be
-// reconstructed from the queued payload (see the TODO(unresolved-f3-bug) on that
-// case). `deputation_routes__0` below is fully repaired and type-correct; drop
-// this banner as soon as __1 is fixed at the route.
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
@@ -12,6 +8,63 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import * as repo from "./repo.js";
 const log = pino({ name: "hrms-f3-deputation" });
+
+/**
+ * Shared close logic for repatriate (op "deputation_routes__1") and cancel
+ * (op "deputation_routes__2"). `newStatus` is always a literal supplied by
+ * the caller at the bottom of this file -- one call site per op, never
+ * derived from message content -- so there is no path back to the original
+ * ambiguity this fixes (see TODO(unresolved-f3-bug) history in routes.ts).
+ */
+async function closeDeputationCommand(
+  tx: repo.Writer,
+  tenantId: string,
+  depId: string,
+  newStatus: "repatriated" | "cancelled",
+  body: Record<string, any>,
+  actorId: string,
+): Promise<void> {
+  // findByIdTx (NOT the scopedRead-based findById) reads through the
+  // caller's already-open tx -- same nested-tx deadlock shape as the
+  // deputation_routes__0 fix above and documented in
+  // .claude/skills/16-production-readiness-audit.md section 1. The old
+  // TODO's own sketch of this fix called plain `repo.findById(...)`, which
+  // would have reintroduced exactly that deadlock; use findByIdTx instead.
+  const dep = await repo.findByIdTx(tx, tenantId, depId);
+  if (!dep) return; // deputation no longer exists -- nothing to close.
+  // Already closed by an earlier delivery of this (or the other) command --
+  // the route's own mustDeputation/409 guard normally prevents this, but
+  // staying idempotent here is cheap and avoids a spurious version-conflict
+  // throw on a harmless redelivery.
+  if (dep.status !== "active") return;
+
+  const effectiveDate = (body.repatriatedOn as string | undefined) ?? new Date().toISOString().slice(0, 10);
+
+  await repo.closeDeputation(tx, tenantId, depId, {
+    status: newStatus,
+    repatriatedOn: effectiveDate,
+    ...(body.note ? { repatriationNote: body.note as string } : {}),
+    updatedBy: actorId,
+  }, dep.version);
+
+  // Restore the parent posting/reporting snapshot.
+  await tx.update(hrmsEmployees).set({
+    departmentId: dep.parentDepartmentId,
+    managerId: dep.parentManagerId,
+    updatedBy: actorId,
+  }).where(and(eq(hrmsEmployees.id, dep.employeeId), eq(hrmsEmployees.tenantId, tenantId)));
+
+  await tx.insert(hrmsServiceBookEntries).values({
+    tenantId, employeeId: dep.employeeId,
+    entryType: newStatus === "repatriated" ? "repatriation" : "deputation_cancelled",
+    effectiveDate,
+    description: newStatus === "repatriated"
+      ? `Repatriated from ${dep.borrowingDepartment} back to parent cadre ${dep.parentCadre}`
+      : `Deputation to ${dep.borrowingDepartment} cancelled`,
+    recordedBy: actorId,
+  });
+}
+
 export function registerF3_deputation_Consumers(queue: Queue): void {
   queue.subscribe(COMMANDS.f3RouteWrite, async (msg) => {
     const p = msg.payload as Record<string, any>;
@@ -19,6 +72,7 @@ export function registerF3_deputation_Consumers(queue: Queue): void {
     const ops = new Set([
       "deputation_routes__0",
       "deputation_routes__1",
+      "deputation_routes__2",
     ]);
     if (!ops.has(op)) return;
     const body = p.body ?? {};
@@ -95,61 +149,20 @@ export function registerF3_deputation_Consumers(queue: Queue): void {
             break;
           }
           case "deputation_routes__1": {
-            // TODO(unresolved-f3-bug): STILL BROKEN — throws a ReferenceError on
-            // every invocation (`depId`, `dep`, `newStatus`, `effectiveDate` are
-            // never defined) while the route already answered 200. Deputations
-            // are therefore NEVER closed: status stays "active", the parent
-            // posting/reporting is never restored, and no service-book entry is
-            // written.
-            //
-            // `depId`, `dep` and `effectiveDate` ARE recoverable here
-            // (params.depId → repo.findById → body.repatriatedOn ?? today), but
-            // `newStatus` is NOT, and it is the value that decides whether this
-            // is a repatriation or a cancellation:
-            //
-            //   deputation/routes.ts wires BOTH endpoints to the same shared
-            //   `close()` helper, which publishes the SAME op string for both:
-            //     POST /v1/hrms/deputations/:depId/repatriate → close(…, "repatriated")
-            //     POST /v1/hrms/deputations/:depId/cancel     → close(…, "cancelled")
-            //     → both: publishF3Write(ctx, "deputation_routes__1", …)
-            //   and the queued payload carries only { body, params, query }.
-            //   params is `{ depId }` and body is `{ repatriatedOn?, note? }` for
-            //   both — nothing in the message distinguishes the two endpoints.
-            //
-            // Guessing would write the wrong terminal status and the wrong
-            // service-book entry type ("repatriation" vs "deputation_cancelled")
-            // onto a real service record, so this case is deliberately left
-            // failing rather than silently wrong.
-            //
-            // FIX AT THE ROUTE (outside this file's scope): either give the two
-            // endpoints distinct op strings (`deputation_routes__1` /
-            // `deputation_routes__2`), or have `close()` forward `newStatus` in
-            // the published payload. Then reconstruct this case as:
-            //   const dep = await repo.findById(p.tenantId, String(params.depId));
-            //   const effectiveDate = body.repatriatedOn ?? new Date().toISOString().slice(0, 10);
-            await repo.closeDeputation(tx, p.tenantId, depId, {
-                    status: newStatus,
-                    repatriatedOn: effectiveDate,
-                    ...(body.note ? { repatriationNote: body.note } : {}),
-                    updatedBy: msg.actorId,
-                  }, dep.version);
-
-                  // Restore the parent posting/reporting snapshot.
-                  await tx.update(hrmsEmployees).set({
-                    departmentId: dep.parentDepartmentId,
-                    managerId: dep.parentManagerId,
-                    updatedBy: msg.actorId,
-                  }).where(and(eq(hrmsEmployees.id, dep.employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
-
-                  await tx.insert(hrmsServiceBookEntries).values({
-                    tenantId: p.tenantId, employeeId: dep.employeeId,
-                    entryType: newStatus === "repatriated" ? "repatriation" : "deputation_cancelled",
-                    effectiveDate,
-                    description: newStatus === "repatriated"
-                      ? `Repatriated from ${dep.borrowingDepartment} back to parent cadre ${dep.parentCadre}`
-                      : `Deputation to ${dep.borrowingDepartment} cancelled`,
-                    recordedBy: msg.actorId,
-                  });
+            // Repatriate. Was previously ambiguous with cancel under the same
+            // shared op (see git history / TODO(unresolved-f3-bug)); routes.ts
+            // now publishes this op ONLY for POST .../repatriate, so the
+            // terminal status below is a literal, not a guess.
+            const depId = String(params.depId ?? "");
+            await closeDeputationCommand(tx, p.tenantId, depId, "repatriated", body, msg.actorId);
+            break;
+          }
+          case "deputation_routes__2": {
+            // Cancel. Mirrors deputation_routes__1 above with the other
+            // terminal status; routes.ts publishes this op ONLY for
+            // POST .../cancel.
+            const depId = String(params.depId ?? "");
+            await closeDeputationCommand(tx, p.tenantId, depId, "cancelled", body, msg.actorId);
             break;
           }
         }

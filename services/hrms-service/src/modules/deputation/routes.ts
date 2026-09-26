@@ -122,7 +122,18 @@ export async function deputationRoutes(app: FastifyInstance): Promise<void> {
     }
     const effectiveDate = body.repatriatedOn ?? new Date().toISOString().slice(0, 10);
 
-    await publishF3Write(ctx, "deputation_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // Repatriate and cancel used to share the single op "deputation_routes__1",
+    // and the queued payload ({ body, params, query }) is otherwise IDENTICAL
+    // for both endpoints -- nothing in it says which action was requested. The
+    // f3-consumer had no reliable way to pick the right terminal status, so it
+    // was deliberately left throwing (see TODO(unresolved-f3-bug) there) rather
+    // than risk writing "repatriated" for a cancel or vice versa. Giving each
+    // endpoint its own op, following this file's existing per-route "__N"
+    // convention (see "deputation_routes__0" above), removes the ambiguity at
+    // the source instead of asking the consumer to recover intent it was never
+    // given.
+    const op = newStatus === "repatriated" ? "deputation_routes__1" : "deputation_routes__2";
+    await publishF3Write(ctx, op, randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
 
     return reply.send(jsonSafe({
       id: depId, employeeId: dep.employeeId, status: newStatus, effectiveDate,
