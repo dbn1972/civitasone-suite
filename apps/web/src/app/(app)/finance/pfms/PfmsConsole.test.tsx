@@ -18,7 +18,7 @@ function renderConsole(props: { batches: PfmsBatchRow[]; config: PfmsConfig | nu
 
 const batches: PfmsBatchRow[] = [
   {
-    id: "b1", pfmsId: "PFMS-0001", type: "salary", amountMinor: "150000000",
+    id: "b1", pfmsId: "PFMS-0001", type: "salary", channel: "treasury_batch", amountMinor: "150000000",
     agencyCode: "AG01", schemeCode: "SCH01", ddoCode: "DDO01",
     submissionStatus: "pending", signedAt: null,
   },
