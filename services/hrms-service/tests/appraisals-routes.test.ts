@@ -249,6 +249,41 @@ describe("GET /v1/hrms/appraisals", () => {
     expect(r.statusCode).toBe(403);
     await app.close();
   });
+
+  it("200 — every row survives response validation across the full shared status vocabulary (legacy + in-progress + APAR terminal stages)", async () => {
+    // hrms_appraisals.status is written by TWO route modules on the SAME
+    // column (this module's 5-stage APPRAISAL_STAGES and apar/routes.ts's
+    // 7-stage APAR_STAGES, which continues on to disclosed/representation/
+    // finalised -- see routes.ts's header comment). sendValidated's
+    // schema.parse() 400s the ENTIRE array if even one row fails, so the
+    // regression test needs the full union, not just the happy-path
+    // pending/in_review/completed -- that gap is exactly what let any
+    // tenant with real APAR usage 400 on this endpoint, permanently.
+    // disclosed/representation/finalised aren't insertable against a real
+    // DB yet (a separate, pre-existing CHECK-constraint gap tracked and
+    // fixed on its own -- see migrations/0111_apar_status_check.sql); using
+    // the mocked queries.listAppraisals here proves the RESPONSE SCHEMA is
+    // already forward-compatible with that fix landing. The real-DB
+    // equivalent for everything the live DB accepts today lives in
+    // appraisals-identity-resolution.test.ts.
+    const statuses = [
+      "pending", "in_review", "self_pending", "reporting_officer",
+      "reviewing_officer", "accepting_authority", "disclosed", "representation",
+      "finalised", "completed",
+    ] as const;
+    const rows = statuses.map((status, i) => ({
+      id: `row-${i}`, employeeId: EMP, employeeName: `Employee ${i}`, department: "HR",
+      appraisalPeriod: "2025-2026", status,
+    }));
+    H.listAppraisals.mockResolvedValue(rows);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/appraisals", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    const body = r.json() as Array<{ id: string; status: string }>;
+    expect(body).toHaveLength(statuses.length);
+    expect(body.map((a) => a.status)).toEqual([...statuses]);
+    await app.close();
+  });
 });
 
 // ─── POST /v1/hrms/appraisals ──────────────────────────────────────────────────
