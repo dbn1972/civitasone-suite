@@ -24,14 +24,14 @@
  * anything — so the loser's HTTP response reflects the real outcome
  * immediately, not a later, invisible one.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, and, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 import { db, sqlClient } from "../src/shared/db.js";
-import { payrollRuns } from "../src/modules/payroll/schema.js";
+import { payrollRuns, payrollStructures } from "../src/modules/payroll/schema.js";
 import { buildApp } from "../src/app.js";
 import * as commands from "../src/modules/payroll/commands.js";
 import { HttpError } from "../src/shared/context.js";
@@ -40,6 +40,17 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
 const OFFICER = randomUUID();
 const ADMIN = randomUUID();
+// commands.ts's createRun now rejects any structureId that doesn't name a
+// real, active row in payroll.payroll_structures (see that function's
+// STRUCTURE_NOT_FOUND check) -- every test below used to pass a bare
+// randomUUID() here, which sailed through before that check existed but is
+// now rejected with a 400 before this suite's own lock/duplicate logic ever
+// runs. Mirrors the identical fix already applied to rls-isolation.test.ts,
+// payroll-status-check-negative-net.test.ts and
+// perf-021-sitea-payroll-nplus1.test.ts: seed one real, active structure
+// once (below) and reuse its id everywhere this file used to mint a fresh,
+// nonexistent one.
+const STRUCT = randomUUID();
 
 const auth = (sub: string, roles: string[]) => ({
   authorization: `Bearer ${signToken({ sub, tid: TENANT, roles, sid: "sess-race" }, SECRET)}`,
@@ -60,8 +71,24 @@ async function runsFor(month: string, ddoCode: string) {
     .where(and(eq(payrollRuns.tenantId, TENANT), eq(payrollRuns.month, month), eq(payrollRuns.ddoCode, ddoCode)))));
 }
 
+beforeAll(async () => {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    // Delete-then-insert keeps this idempotent across repeated runs against
+    // a persistent (non-wiped) test database (same convention as
+    // rls-isolation.test.ts's beforeAll).
+    await tx.delete(payrollStructures).where(eq(payrollStructures.id, STRUCT));
+    await tx.insert(payrollStructures).values({
+      id: STRUCT, tenantId: TENANT, name: "Race Test Structure",
+      isDefault: true, status: "active", createdBy: OFFICER, updatedBy: OFFICER,
+    });
+  }));
+});
+
 afterAll(async () => {
-  await runWithTenant(TENANT, () => db.transaction((tx) => tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT))));
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
+    await tx.delete(payrollStructures).where(eq(payrollStructures.id, STRUCT));
+  }));
   await sqlClient.end();
 });
 
@@ -69,7 +96,7 @@ describe("POST /v1/payroll/runs — regular-run duplicate guard under TRUE concu
   it("two genuinely concurrent requests for the same tenant+month+DDO: exactly one 202, one clean 409 — immediately, not after an async step", async () => {
     const month = "2031-07";
     const ddoCode = "DDO-RACE-1";
-    const structureId = randomUUID();
+    const structureId = STRUCT;
     const app = await buildApp();
 
     // Fired back-to-back with no await between them -- both requests' own
@@ -107,7 +134,7 @@ describe("POST /v1/payroll/runs — regular-run duplicate guard under TRUE concu
   it("control: a THIRD, sequential attempt after a row already exists still gets an immediate 409 (the pre-fix guard's one working case, unregressed)", async () => {
     const month = "2031-07";
     const ddoCode = "DDO-RACE-2";
-    const structureId = randomUUID();
+    const structureId = STRUCT;
     const app = await buildApp();
 
     const first = await app.inject({
@@ -132,7 +159,7 @@ describe("POST /v1/payroll/runs — regular-run duplicate guard under TRUE concu
   it("control: normal (non-concurrent) run creation is unaffected -- 202, then immediately visible via GET", async () => {
     const month = "2031-07";
     const ddoCode = "DDO-RACE-3";
-    const structureId = randomUUID();
+    const structureId = STRUCT;
     const app = await buildApp();
 
     const created = await app.inject({
@@ -154,7 +181,7 @@ describe("POST /v1/payroll/runs — regular-run duplicate guard under TRUE concu
   it("the advisory lock genuinely serializes two createRun calls even with ZERO real timing overlap (deterministic, not schedule-dependent)", async () => {
     const month = "2031-09";
     const ddoCode = "DDO-RACE-GATE";
-    const structureId = randomUUID();
+    const structureId = STRUCT;
 
     const parked = deferred<void>();
     const release = deferred<void>();
