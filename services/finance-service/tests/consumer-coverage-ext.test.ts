@@ -47,8 +47,15 @@ vi.mock("../src/shared/outbox.js", () => ({
   outboxSchema: {},
 }));
 vi.mock("../src/shared/infra.js", () => ({
+  // BUG FIX (finance-service test-infra cleanup): see the identical fix
+  // and full explanation in consumers-coverage.test.ts. Most consumers
+  // exercised here (period-close, instruments, pfms, tds, recurring,
+  // masters, hoa) call cache.invalidateResource(tenantId, resource), which
+  // this mock did not stub -- causing MemoryQueue retries and duplicate
+  // domain/audit events on every "processes ..." assertion below.
   cache: {
     invalidate: vi.fn(async () => undefined),
+    invalidateResource: vi.fn(async () => undefined),
     makeKey: (...parts: string[]) => parts.join(":"),
   },
 }));

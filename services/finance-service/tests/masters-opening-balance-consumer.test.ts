@@ -39,7 +39,21 @@ vi.mock("../src/shared/outbox.js", () => ({
   markProcessed: (...a: any[]) => markProcessedMock(...a),
 }));
 vi.mock("../src/shared/infra.js", () => ({
-  cache: { invalidate: vi.fn(async () => undefined) },
+  // BUG FIX (finance-service test-infra cleanup): the real Cache class
+  // (packages/cache/src/index.ts) exposes invalidate(key) and
+  // invalidateResource(tenantId, resource) as two distinct methods.
+  // masters/consumer.ts calls cache.invalidateResource(...) after every
+  // transaction -- never cache.invalidate(). Without this stub, that call
+  // threw "cache.invalidateResource is not a function" on the mocked
+  // object; with maxAttempts:1 below, MemoryQueue.deliver() had no retry
+  // left and pushed the message straight to the dlq, so the "balanced
+  // entries" regression test below always failed with an unwanted dlq
+  // entry (q.dlq.length: expected 0, got 1) despite the insert itself
+  // having already committed successfully.
+  cache: {
+    invalidate: vi.fn(async () => undefined),
+    invalidateResource: vi.fn(async () => undefined),
+  },
 }));
 
 import { registerMastersConsumers } from "../src/modules/masters/consumer.js";
