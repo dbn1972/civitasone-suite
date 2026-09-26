@@ -332,6 +332,14 @@ describe("PERF-021 (Site A) — processPayrollRun end-to-end: correctness + boun
     await runWithTenant(tenant, () => db.transaction(async (tx) => {
       await tx.execute(sql`INSERT INTO payroll.payroll_professional_tax (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor) VALUES (${tenant}::uuid, 'KA', 0, 999999999999, 20000)`);
       await tx.execute(sql`INSERT INTO payroll.payroll_professional_tax (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor) VALUES (${tenant}::uuid, 'MH', 0, 999999999999, 17500)`);
+      // resolveDaRateBps now rejects a run whose tenant/period has no DA rate
+      // configured at all (DA_RATE_NOT_CONFIGURED) -- seed one so this
+      // performance/correctness test's run reaches processPayrollRun's body
+      // instead of failing fast on an unrelated configuration gap. The exact
+      // rate doesn't matter to this test's assertions (LOP/PT/ARREAR are
+      // basic- or table-driven, and ARREAR is checked for self-consistency
+      // against payroll_arrears, not a hardcoded value).
+      await tx.execute(sql`INSERT INTO payroll.dearness_allowance_rates (tenant_id, effective_from, rate_bps) VALUES (${tenant}::uuid, '2026-01-01'::date, 5000)`);
       await tx.insert(payrollRuns).values({
         id: approvedRunId, tenantId: tenant, runNo: `PRIOR-${tenant.slice(0, 8)}`, month: "2026-06",
         structureId: randomUUID(), status: "approved", createdBy: ACTOR, updatedBy: ACTOR,
@@ -426,13 +434,20 @@ describe("PERF-021 (Site A) — processPayrollRun end-to-end: correctness + boun
       const components = slip!.components as Array<{ code: string; type: string; amountMinor: number }>;
 
       // M2: ledger (2 days) must win over the HRMS feed (10 days).
-      // dailyRate = 3500000n / 30n (Sep has 30 days) = 116666n; * 2 days =
-      // 233332, which computeSlip's engine rounds to the nearest rupee
-      // (roundRupee) -> 233300. If the ledger's 2 days did NOT win, this
-      // would instead reflect the HRMS feed's 10 days (~1166600 range) --
-      // an order of magnitude off, so this assertion still discriminates.
+      // consumer.ts's lopDeduction is (basicMinor + daMinor) * lopDays /
+      // daysInMonth (Basic+DA, the standard LOP base, not Basic alone).
+      // basicMinor=3500000, daMinor=50% of that=1750000 (this DA rate is now
+      // seeded in seedFixtures and correctly resolved -- see
+      // DA_RATE_NOT_CONFIGURED / the scopedRead fix to resolveDaRateBps's
+      // call site; before that RLS-scoping fix this read was always blind
+      // and daMinor was silently always 0, which is what the previous
+      // 233300 (Basic-only) expectation here was quietly depending on).
+      // dailyRate = (3500000+1750000)/30 = 175000; * 2 days = 350000 exactly
+      // (no rounding needed). If the ledger's 2 days did NOT win, this would
+      // instead reflect the HRMS feed's 10 days (1750000) -- 5x off, so this
+      // assertion still discriminates.
       const lop = components.find((c) => c.code === "LOP");
-      expect(lop?.amountMinor, `LOP for ${emp.employeeNo}`).toBe(233300);
+      expect(lop?.amountMinor, `LOP for ${emp.employeeNo}`).toBe(350000);
 
       // H14: PT differs by the employee's own state, from the SAME batched fetch.
       const pt = components.find((c) => c.code === "PT");

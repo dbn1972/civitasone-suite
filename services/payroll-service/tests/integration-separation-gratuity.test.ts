@@ -242,8 +242,11 @@ describe("hrms.employee.separated → gratuity computation", () => {
     await q.stop();
   });
 
-  it("handles missing DA rate (defaults to 0)", async () => {
-    // No DA rate rows — DA defaults to 0.
+  it("rejects (does not silently default to 0) when no DA rate is configured", async () => {
+    // No DA rate rows at all for this tenant/date -- a configuration gap,
+    // not a deliberate zero rate (which would be an explicit rate_bps=0
+    // row). Previously this silently defaulted to 0 and computed gratuity
+    // on basic alone with no signal anywhere; it must now reject instead.
     executeResult.rows = [];
     const q = await buildQueue();
 
@@ -253,15 +256,19 @@ describe("hrms.employee.separated → gratuity computation", () => {
         employeeId: "emp-4",
         effectiveDate: "2025-06-30",
         basicMinor: "5000000",
-        dateOfJoining: "2010-01-01", // 15+ years
+        dateOfJoining: "2010-01-01", // 15+ years -- would otherwise qualify
       }),
     );
     await settle();
 
-    // Still qualifies (>5 years) — gratuity should be computed on basic alone.
-    expect(insertGratuityMock).toHaveBeenCalledOnce();
-    const [, row] = insertGratuityMock.mock.calls[0]!;
-    expect(row.gratuityMinor).toBeGreaterThan(0n);
+    // Non-retryable (permanent until a human adds the rate row): rejected on
+    // the first attempt straight to the DLQ instead of computing (and
+    // persisting) a gratuity amount that silently omits DA.
+    expect(insertGratuityMock).not.toHaveBeenCalled();
+    const auditEvent = enqueuedMessages.find((m) => m.topic === "audit.event.record");
+    expect(auditEvent).toBeUndefined();
+    expect(q.dlq).toHaveLength(1);
+    expect(q.dlq[0]?.error).toContain("DA_RATE_NOT_CONFIGURED");
     await q.stop();
   });
 

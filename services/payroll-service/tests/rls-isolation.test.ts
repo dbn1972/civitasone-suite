@@ -6,9 +6,12 @@
  * - Attempts to access a specific Tenant B resource by ID return HTTP 404 (not 403)
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
-import { sqlClient } from "../src/shared/db.js";
+import { db, sqlClient } from "../src/shared/db.js";
+import { payrollStructures } from "../src/modules/payroll/schema.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -17,6 +20,7 @@ const TENANT_A = "aaaaaaaa-0000-4000-8000-000000000001";
 const TENANT_B = "bbbbbbbb-0000-4000-8000-000000000002";
 const ACTOR_A = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa";
 const ACTOR_B = "bbbbbbbb-0000-4000-8000-bbbbbbbbbbbb";
+const STRUCTURE_A = "eeeeeeee-0001-0000-0000-000000000001";
 
 function tokenForTenant(tenantId: string, actorId: string, roles: string[] = ["super_admin", "hr_admin", "payroll_admin"]) {
   return signToken({ sub: actorId, tid: tenantId, roles, sid: "sess-rls" }, SECRET, 3600);
@@ -30,6 +34,18 @@ beforeAll(async () => {
   app = await buildApp();
   tokenA = tokenForTenant(TENANT_A, ACTOR_A);
   tokenB = tokenForTenant(TENANT_B, ACTOR_B);
+  // "Tenant A creates a payroll run" below references this structureId -- it
+  // now has to actually exist (see commands.ts's STRUCTURE_NOT_FOUND fix).
+  // This test's purpose is RLS isolation, not structure validation, so seed
+  // a real row. Delete-then-insert keeps this idempotent across repeated
+  // runs against a persistent (non-wiped) test database.
+  await runWithTenant(TENANT_A, () => db.transaction(async (tx) => {
+    await tx.delete(payrollStructures).where(eq(payrollStructures.id, STRUCTURE_A));
+    await tx.insert(payrollStructures).values({
+      id: STRUCTURE_A, tenantId: TENANT_A, name: "RLS Test Structure",
+      isDefault: true, status: "active", createdBy: ACTOR_A, updatedBy: ACTOR_A,
+    });
+  }));
 });
 
 afterAll(async () => {
@@ -48,7 +64,7 @@ describe("Payroll — Cross-Tenant RLS Isolation", () => {
       payload: {
         runNo: `RLS-RUN-${Date.now()}`,
         month: "2026-06",
-        structureId: "eeeeeeee-0001-0000-0000-000000000001",
+        structureId: STRUCTURE_A,
         runType: "regular",
       },
     });

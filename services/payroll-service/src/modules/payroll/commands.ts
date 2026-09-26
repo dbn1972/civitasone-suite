@@ -31,6 +31,29 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
 export async function createRun(ctx: RequestContext, body: CreateRunBody): Promise<Accepted> {
   const id = randomUUID();
   const runType = body.runType ?? "regular";
+  // structureId is only validated as a well-formed UUID by createRunBody
+  // (validators.ts) -- nothing previously checked it actually names a row in
+  // payroll.payroll_structures. A well-formed but nonexistent id sailed
+  // through to a 202 identical to a real one, and the async consumer
+  // (processPayrollRun's repo.listComponentsByStructure) silently returned
+  // zero components: a payslip with no BASIC/HRA/etc line items and no error
+  // anywhere. Reject synchronously here, before any run is created, so the
+  // caller gets a clear 400 instead of a 202 that quietly produces an empty
+  // structure. (400, not 404/422, to match this route's other
+  // payload-validation failures -- see errorHandler below.) Checked
+  // unconditionally, ahead of the runType==="regular" block below, so it
+  // also protects that block's own repo.insertRun(structureId: ...) call
+  // from ever writing a dangling id.
+  if (body.structureId) {
+    const struct = await scopedRead((tx) => tx.execute(sql`
+      SELECT id FROM payroll.payroll_structures
+      WHERE id = ${body.structureId}::uuid AND tenant_id = ${ctx.tenantId}::uuid AND status = 'active'
+      LIMIT 1
+    `));
+    if (!struct[0]) {
+      throw new HttpError(400, "STRUCTURE_NOT_FOUND", `payroll structure ${body.structureId} does not exist for this tenant`);
+    }
+  }
   const ddoCode = body.ddoCode ?? null;
   // Concurrency fix (High, proven via a genuine `Promise.all` repro): BUG-3
   // and round2 (see the history of this comment, and consumer.ts's own
