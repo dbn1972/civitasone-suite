@@ -2,6 +2,7 @@ import type { FastifyRequest } from "fastify";
 // Matches finance-service exactly (services/finance-service/src/shared/context.ts)
 // so the auth-context behaviour cannot drift between services again.
 import { resolveServiceContext, AuthContextError } from "@civitasone/auth/context";
+import { requirePermission } from "@civitasone/auth/permissions";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -71,4 +72,15 @@ export function resolveContext(req: FastifyRequest): RequestContext {
 export function requireRole(ctx: RequestContext, allowed: string[]): void {
   const has = (ctx.roles ?? []).some((r) => allowed.includes(r));
   if (!has) throw new HttpError(403, "FORBIDDEN", "insufficient role");
+}
+
+export async function requirePermissionKey(ctx: RequestContext, permissionKey: string): Promise<void> {
+  try {
+    await requirePermission(ctx, permissionKey);
+  } catch (err) {
+    if (err instanceof AuthContextError) {
+      throw new HttpError(err.status, err.code, err.message);
+    }
+    throw err;
+  }
 }

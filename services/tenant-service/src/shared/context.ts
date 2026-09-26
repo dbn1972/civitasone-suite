@@ -1,5 +1,6 @@
 import type { FastifyRequest } from "fastify";
 import { resolveServiceContext, AuthContextError } from "@civitasone/auth/context";
+import { requirePermission } from "@civitasone/auth/permissions";
 import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
@@ -53,4 +54,15 @@ export function requireInternalOrRoles(ctx: RequestContext, roles: string[]): vo
       ? `requires a genuine internal service call or one of: ${roles.join(", ")}`
       : "requires a genuine internal service-to-service call",
   );
+}
+
+export async function requirePermissionKey(ctx: RequestContext, permissionKey: string): Promise<void> {
+  try {
+    await requirePermission(ctx, permissionKey);
+  } catch (err) {
+    if (err instanceof AuthContextError) {
+      throw new HttpError(err.status, err.code, err.message);
+    }
+    throw err;
+  }
 }
