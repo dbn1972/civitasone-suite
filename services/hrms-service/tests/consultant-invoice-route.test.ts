@@ -99,9 +99,15 @@ function invoice(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  H.scopedReadMock.mockImplementation(async () => [
-    { id: CONSULTANT, tenantId: TENANT, employeeType: H.empType.type, gstin: null, sacCode: null },
-  ]);
+  H.scopedReadMock.mockImplementation(async (fn?: (tx: unknown) => unknown) => {
+    // FORCE-RLS fix follow-up: see consultant-invoice-routes.test.ts's
+    // identical comment -- the approve route now also wraps
+    // repo.ytdApprovedGrossTx in scopedRead, so this mock must actually
+    // invoke `fn` (against the shared stubTx) rather than unconditionally
+    // returning employee rows.
+    if (typeof fn === "function") return fn(stubTx);
+    return [{ id: CONSULTANT, tenantId: TENANT, employeeType: H.empType.type, gstin: null, sacCode: null }];
+  });
   H.loadResolverMock.mockResolvedValue(buildTypeResolver([], CANON));
   H.ytdMock.mockResolvedValue(0n);
   H.updateInvoiceMock.mockResolvedValue(undefined);

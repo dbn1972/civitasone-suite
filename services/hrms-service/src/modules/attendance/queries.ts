@@ -1,5 +1,5 @@
 import { cache } from "../../shared/infra.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
@@ -83,7 +83,16 @@ export async function getAttendanceSummaryForMonth(
   const [year, mon] = month.split("-").map(Number) as [number, number];
   const lastDay = new Date(year, mon, 0).getDate(); // day 0 of next month = last day of this month
   const endDate = `${month}-${String(lastDay).padStart(2, "0")}`;
-  const rows = (await db.execute(sql`
+  // FORCE-RLS fix: this used to run as a bare db.execute() outside any
+  // db.transaction()/scopedRead(), so under the NOBYPASSRLS hrms_svc role no
+  // app.tenant_id GUC was ever set and the fail-closed policy on
+  // attendance.hrms_attendance (FORCE ROW LEVEL SECURITY — migration 0026/0034)
+  // silently returned zero rows even for a tenant with genuine attendance
+  // records for the month — an empty summary is indistinguishable from "no
+  // one has attendance recorded yet", so the caller (routes.ts's GET
+  // /v1/hrms/attendance/summary) never saw an error. scopedRead sets the GUC
+  // from the request's tenant context before the read runs.
+  const rows = (await scopedRead((tx) => tx.execute(sql`
     SELECT
       attendance_date::text AS date,
       COUNT(*) FILTER (WHERE status IN ('present', 'half_day')) AS present_count,
@@ -95,7 +104,7 @@ export async function getAttendanceSummaryForMonth(
       AND attendance_date <= ${endDate}::date
     GROUP BY attendance_date
     ORDER BY attendance_date
-  `)) as unknown as Array<{
+  `))) as unknown as Array<{
     date: string;
     present_count: string | number;
     absent_count: string | number;

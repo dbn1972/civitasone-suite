@@ -26,7 +26,7 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import { computeContractTax, type ContractorKind } from "./domain.js";
@@ -226,21 +226,33 @@ export async function contractorBillRoutes(app: FastifyInstance): Promise<void> 
     // synchronously: this is the exact same pure function (computeContractTax)
     // and the exact same YTD query (ytdApprovedGrossTx/ytdOn) the consumer
     // uses to persist the real numbers (contractor-bill/f3-consumer.ts, op
-    // __4) — called here through `db` (unlocked) rather than the consumer's
-    // transaction-scoped `tx` (locked via lockContractorForBilling).
-    // `contractor.contractorKind` (the 194C rate driver) is already in hand
-    // from the CLRA gate checks above, so it's exactly the same value the
-    // consumer reads.
+    // __4). `contractor.contractorKind` (the 194C rate driver) is already in
+    // hand from the CLRA gate checks above, so it's exactly the same value
+    // the consumer reads.
     //
-    // Residual TOCTOU race: two concurrent approvals for the SAME contractor
-    // could each read a pre-threshold YTD total here and both report
-    // tdsApplied:false, while the consumer's advisory lock
-    // (lockContractorForBilling) guarantees the PERSISTED amounts are correct
-    // regardless — so a genuine race could make this response's numbers stale
-    // relative to what actually gets withheld. Same class of residual risk as
-    // documented for the CPF/NPS pre-checks and the consultant-invoice
-    // approve route in this PR; not guessing to close it further.
-    const ytd = await repo.ytdApprovedGrossTx(db, ctx.tenantId, bill.contractorId, fy.from, fy.to, billId);
+    // FORCE-RLS fix: this previously called ytdApprovedGrossTx(db, ...) —
+    // the bare pooled `db` singleton, not merely "unlocked" as this comment
+    // used to frame it. Under the NOBYPASSRLS hrms_svc role, a bare `db`
+    // read never has app.tenant_id set, so the fail-closed RLS policy on
+    // agency.hrms_contractor_bills (FORCE ROW LEVEL SECURITY — migration
+    // 0071) silently returned YTD=0 on EVERY approval, not only under a race
+    // — the Section-194C threshold pre-check shown on the approver's own
+    // screen never actually tripped, for any tenant, any contractor, ever.
+    // scopedRead (already used elsewhere in this same file —
+    // findBillByNumber/listBillsByContractor/listBillsByStatus) sets the GUC
+    // from the request's tenant context before the read runs.
+    //
+    // Residual TOCTOU race (this part of the original note still holds):
+    // scopedRead does not take the consumer's advisory lock
+    // (lockContractorForBilling) — two concurrent approvals for the SAME
+    // contractor could each read a pre-threshold YTD total here and both
+    // report tdsApplied:false, while the consumer's advisory lock guarantees
+    // the PERSISTED amounts are correct regardless — so a genuine race could
+    // still make this response's numbers stale relative to what actually
+    // gets withheld. Same class of residual risk as documented for the
+    // CPF/NPS pre-checks and the consultant-invoice approve route; not
+    // guessing to close it further here.
+    const ytd = await scopedRead((tx) => repo.ytdApprovedGrossTx(tx, ctx.tenantId, bill.contractorId, fy.from, fy.to, billId));
     const tax = computeContractTax({
       grossMinor: bill.grossMinor, gstApplicable: bill.gstApplicable, gstRateBps,
       contractorKind: contractor.contractorKind as ContractorKind,

@@ -108,8 +108,17 @@ function invoice(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  H.scopedReadMock.mockImplementation(async (fn: (tx: unknown) => unknown) => {
-    // For mustEmployee — returns employee data
+  H.scopedReadMock.mockImplementation(async (fn?: (tx: unknown) => unknown) => {
+    // FORCE-RLS fix follow-up: the approve route now also wraps
+    // repo.ytdApprovedGrossTx in scopedRead (previously called with a bare
+    // `db`), so this mock must actually invoke `fn` (against the shared
+    // stubTx) instead of unconditionally returning employee rows -- the
+    // ytd path resolves through the separately-mocked ytdApprovedGrossTx
+    // (which slices off its own tx argument), while the mustEmployee
+    // inline select-chain still resolves to employee data via stubTx's own
+    // select() -> ... -> limit() chain (which calls this same mock with NO
+    // args, hence the `typeof fn === "function"` guard below).
+    if (typeof fn === "function") return fn(stubTx);
     return [employee()];
   });
   H.loadResolverMock.mockResolvedValue(buildTypeResolver([], CANON));
