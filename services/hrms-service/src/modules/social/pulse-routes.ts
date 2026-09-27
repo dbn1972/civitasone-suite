@@ -31,6 +31,29 @@ const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
  * handlers this change's fix depends on actually returning real rows -- the
  * pulse-survey/goals/assistant handlers below share the same gap and are
  * flagged separately as a follow-up, not fixed here.
+ *
+ * Follow-up: pulse_surveys, pulse_responses, goals, goal_checkins are all
+ * FORCE ROW LEVEL SECURITY too (confirmed against the live dev DB), including
+ * the leaderboard_points writes below the two already-fixed leaderboard GET
+ * handlers (award-on-respond, award-on-completion) that this file's own
+ * earlier fix missed. All wrapped the same way now (verified end-to-end with
+ * real seeded data). The leave-balance and next-holiday branches of the
+ * /assistant handler are NOT touched: hrms.leave_allocations and hrms.holidays
+ * do not exist under any schema in this service (confirmed against the live
+ * dev DB) -- a separate, pre-existing, always-500s-or-never-shipped bug, not
+ * the RLS gap this fix targets.
+ *
+ * The manager_info branch's two employee.hrms_employees reads are ALSO now
+ * wrapped (the GUC gap there is real too), but that alone does not make the
+ * branch work end-to-end: its query references e1.user_id, e1.reporting_to,
+ * and first_name/last_name/designation/phone, none of which exist on the
+ * real table (confirmed live -- see ai-ml/nlu-chatbot.ts's header for the
+ * identical defect and full column-by-column detail: real columns are
+ * user_ref, five different manager-relationship columns with no single
+ * "reporting_to" among them, full_name as one field, and mobile not phone).
+ * Left the query text as-is and applied only the GUC wrap; flagged in full
+ * in the PR description, not fixed here -- picking one of the five manager
+ * columns without product input would be a guess.
  */
 function withTenantGuc<T>(
   tenantId: string,
@@ -96,11 +119,11 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     const body = pulseCreateSchema.parse(req.body);
     const id = randomUUID();
 
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.pulse_surveys (id, tenant_id, question, category, anonymous, created_by, created_at, expires_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW(), $7)`,
       [id, ctx.tenantId, body.question, body.category ?? "engagement", body.anonymous ?? true, ctx.actorId, body.expiresAt ?? null],
-    );
+    ));
 
     return reply.code(201).send({ id, status: "created" });
   });
@@ -109,7 +132,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/pulse-surveys", async (req, reply) => {
     const ctx = resolveContext(req);
 
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT s.id, s.question, s.category, s.anonymous, s.created_at,
               (SELECT COUNT(*) FROM hrms.pulse_responses r WHERE r.survey_id = s.id) AS response_count,
               EXISTS(SELECT 1 FROM hrms.pulse_responses r WHERE r.survey_id = s.id AND r.respondent_id = $2) AS already_responded
@@ -117,7 +140,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
        WHERE s.tenant_id = $1 AND s.is_active = true AND (s.expires_at IS NULL OR s.expires_at > NOW())
        ORDER BY s.created_at DESC LIMIT 20`,
       [ctx.tenantId, ctx.actorId],
-    );
+    ));
 
     return reply.send({ data: rows.rows });
   });
@@ -129,26 +152,26 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     const body = pulseRespondSchema.parse(req.body);
 
     // Check survey exists and is active
-    const survey = await sqlClient.query(
+    const survey = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id FROM hrms.pulse_surveys WHERE id = $1 AND tenant_id = $2 AND is_active = true`,
       [id, ctx.tenantId],
-    );
+    ));
     if (survey.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Survey not found");
 
     // Upsert response (one per person)
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.pulse_responses (tenant_id, survey_id, respondent_id, score, comment, responded_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
        ON CONFLICT (survey_id, respondent_id) DO UPDATE SET score = $4, comment = $5, responded_at = NOW()`,
       [ctx.tenantId, id, ctx.actorId, body.score, body.comment ?? null],
-    );
+    ));
 
     // Award leaderboard points for responding
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.leaderboard_points (tenant_id, employee_id, points, reason, source_id, awarded_at)
        VALUES ($1, $2, 5, 'survey_responded', $3, NOW())`,
       [ctx.tenantId, ctx.actorId, id],
-    );
+    ));
 
     return reply.send({ status: "submitted" });
   });
@@ -164,19 +187,19 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = req.params as { id: string };
 
-    const stats = await sqlClient.query(
+    const stats = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT COUNT(*) AS total, AVG(score)::numeric(3,1) AS avg_score,
               COUNT(CASE WHEN score >= 4 THEN 1 END) AS positive,
               COUNT(CASE WHEN score <= 2 THEN 1 END) AS negative
        FROM hrms.pulse_responses WHERE survey_id = $1 AND tenant_id = $2`,
       [id, ctx.tenantId],
-    );
+    ));
 
-    const distribution = await sqlClient.query(
+    const distribution = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT score, COUNT(*) AS count FROM hrms.pulse_responses
        WHERE survey_id = $1 AND tenant_id = $2 GROUP BY score ORDER BY score`,
       [id, ctx.tenantId],
-    );
+    ));
 
     return reply.send({
       surveyId: id,
@@ -199,12 +222,12 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     const id = randomUUID();
     const now = new Date().toISOString();
 
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.goals (id, tenant_id, employee_id, title, description, category, key_results, due_date, period, parent_goal_id, created_at, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $11)`,
       [id, ctx.tenantId, ctx.actorId, body.title, body.description ?? "", body.category ?? "individual",
        JSON.stringify(body.keyResults ?? []), body.dueDate ?? null, body.period ?? null, body.parentGoalId ?? null, now],
-    );
+    ));
 
     return reply.code(201).send({ id, status: "created" });
   });
@@ -214,13 +237,13 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const status = (req.query as any)?.status ?? "active";
 
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, title, description, category, key_results, progress, status, due_date, period, created_at, updated_at
        FROM hrms.goals
        WHERE tenant_id = $1 AND employee_id = $2 AND ($3 = 'all' OR status = $3)
        ORDER BY created_at DESC`,
       [ctx.tenantId, ctx.actorId, status],
-    );
+    ));
 
     return reply.send({
       data: rows.rows.map((r: any) => ({
@@ -238,33 +261,33 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     const body = goalCheckinSchema.parse(req.body);
 
     // Verify ownership
-    const goal = await sqlClient.query(
+    const goal = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
       [id, ctx.tenantId, ctx.actorId],
-    );
+    ));
     if (goal.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Goal not found");
 
     // Insert check-in
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.goal_checkins (goal_id, tenant_id, employee_id, progress, note, created_at)
        VALUES ($1, $2, $3, $4, $5, NOW())`,
       [id, ctx.tenantId, ctx.actorId, body.progress, body.note ?? ""],
-    );
+    ));
 
     // Update goal progress
     const newStatus = body.progress >= 100 ? "completed" : "active";
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `UPDATE hrms.goals SET progress = $1, status = $2, updated_at = NOW() WHERE id = $3`,
       [body.progress, newStatus, id],
-    );
+    ));
 
     // Award points for completion
     if (body.progress >= 100) {
-      await sqlClient.query(
+      await withTenantGuc(ctx.tenantId, (pool) => pool.query(
         `INSERT INTO hrms.leaderboard_points (tenant_id, employee_id, points, reason, source_id, awarded_at)
          VALUES ($1, $2, 50, 'goal_completed', $3, NOW())`,
         [ctx.tenantId, ctx.actorId, id],
-      );
+      ));
     }
 
     return reply.send({ status: "checked_in", progress: body.progress });
@@ -290,17 +313,17 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const { id } = req.params as { id: string };
 
-    const goal = await sqlClient.query(
+    const goal = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
       [id, ctx.tenantId, ctx.actorId],
-    );
+    ));
     if (goal.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Goal not found");
 
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, progress, note, created_at FROM hrms.goal_checkins
        WHERE goal_id = $1 AND tenant_id = $2 ORDER BY created_at DESC`,
       [id, ctx.tenantId],
-    );
+    ));
 
     return reply.send({ data: rows.rows });
   });
@@ -415,6 +438,9 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     let response: { text: string; data?: any; action?: string } | null = null;
 
     // ─── Leave balance query ──────────────────────────────────────────
+    // NOT wrapped in withTenantGuc: hrms.leave_allocations does not exist under
+    // any schema in this service (confirmed against the live dev DB) -- a
+    // separate, pre-existing, unrelated bug, not the RLS gap this fix targets.
     if (query.includes("leave") && (query.includes("balance") || query.includes("how much") || query.includes("how many"))) {
       const bal = await sqlClient.query(
         `SELECT leave_type_code, leave_type_name, total_days, balance_days
@@ -434,6 +460,10 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
       response = { text: "You can view your latest payslip in the Payslips section. Would you like me to navigate there?", action: "navigate_payslips" };
     }
     // ─── Holiday query ────────────────────────────────────────────────
+    // NOT wrapped in withTenantGuc: hrms.holidays does not exist under any
+    // schema in this service either (real table is leave.hrms_holidays,
+    // different name and schema) -- same class of separate, pre-existing,
+    // unrelated bug as the leave-balance branch above.
     else if (query.includes("holiday") || query.includes("next holiday") || query.includes("public holiday")) {
       const holidays = await sqlClient.query(
         `SELECT name, date, type FROM hrms.holidays
@@ -454,19 +484,19 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     }
     // ─── Manager / reporting ──────────────────────────────────────────
     else if (query.includes("manager") || query.includes("reporting to") || query.includes("who is my")) {
-      const emp = await sqlClient.query(
+      const emp = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
         `SELECT reporting_to FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
         [ctx.actorId, ctx.tenantId],
-      );
+      ));
       if (emp.rows[0]?.reporting_to) {
         // Was missing the tenant_id filter every other query in this file
         // carries -- harmless in practice (reporting_to is itself sourced
         // from a tenant-scoped lookup just above), but inconsistent and
         // one copy-paste away from a real cross-tenant read.
-        const mgr = await sqlClient.query(
+        const mgr = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
           `SELECT first_name, last_name, designation FROM employee.hrms_employees WHERE id = $1 AND tenant_id = $2`,
           [emp.rows[0].reporting_to, ctx.tenantId],
-        );
+        ));
         if (mgr.rows[0]) {
           response = { text: `Your reporting manager is ${mgr.rows[0].first_name} ${mgr.rows[0].last_name} (${mgr.rows[0].designation}).` };
         }

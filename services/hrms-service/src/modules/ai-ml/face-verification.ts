@@ -18,7 +18,38 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, HttpError } from "../../shared/context.js";
-import { sqlPool as sqlClient } from "../../shared/db.js";
+import { sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
+
+/**
+ * Audit: hrms.face_embeddings and hrms.face_verification_log are both FORCE
+ * ROW LEVEL SECURITY (tenant_isolation_policy). This module used to call
+ * sqlPool.query() (a bare, pooled connection with no app.tenant_id GUC set)
+ * directly, so under hrms_svc (NOBYPASSRLS) every policy failed CLOSED --
+ * enrollment silently no-op'd (INSERT satisfied no rows, verify/status reads
+ * came back empty), never an error. Same bug, same fix as social/routes.ts's
+ * identical withTenantGuc (see that file's header for the full story); this
+ * module never received it. sqlPool is no longer imported here -- every call
+ * site now goes through this wrapper instead.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (pool: {
+    query<R = any>(text: string, params?: readonly unknown[]): Promise<{ rows: R[]; rowCount: number }>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, async (tx) => {
+    const pool = {
+      async query<R = any>(text: string, params: readonly unknown[] = []): Promise<{ rows: R[]; rowCount: number }> {
+        const result = await tx.unsafe(text, params as unknown as never[]);
+        const rows = result as unknown as R[];
+        const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+        return { rows, rowCount };
+      },
+    };
+    return fn(pool);
+  });
+}
 
 const verifySchema = z.object({
   employeeId: z.string().uuid(),
@@ -82,13 +113,13 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
     const embedding = await extractEmbedding(body.photoKey);
 
     // Store embedding in employee profile
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.face_embeddings (id, tenant_id, employee_id, embedding, photo_key, enrolled_at)
        VALUES ($1, $2, $3, $4, $5, NOW())
        ON CONFLICT (tenant_id, employee_id) DO UPDATE SET
         embedding = $4, photo_key = $5, enrolled_at = NOW()`,
       [randomUUID(), ctx.tenantId, body.employeeId, JSON.stringify(embedding), body.photoKey],
-    );
+    ));
 
     return reply.code(201).send({
       status: "enrolled",
@@ -104,10 +135,10 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
     const body = verifySchema.parse(req.body);
 
     // Get enrolled embedding
-    const enrolled = await sqlClient.query(
+    const enrolled = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT embedding FROM hrms.face_embeddings WHERE tenant_id = $1 AND employee_id = $2`,
       [ctx.tenantId, body.employeeId],
-    );
+    ));
 
     if (enrolled.rowCount === 0) {
       throw new HttpError(404, "NOT_ENROLLED", "Employee face not enrolled. Please enroll first.");
@@ -128,11 +159,11 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
     else result = "FAIL";
 
     // Log verification attempt
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.face_verification_log (id, tenant_id, employee_id, selfie_key, similarity, result, verified_at)
        VALUES ($1, $2, $3, $4, $5, $6, NOW())`,
       [randomUUID(), ctx.tenantId, body.employeeId, body.selfieKey, similarity, result],
-    );
+    ));
 
     return reply.send({
       result,
@@ -148,11 +179,11 @@ export async function faceVerificationMlRoutes(app: FastifyInstance): Promise<vo
     const ctx = resolveContext(req);
     const { employeeId } = req.params as { employeeId: string };
 
-    const row = await sqlClient.query(
+    const row = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT employee_id, photo_key, enrolled_at FROM hrms.face_embeddings
        WHERE tenant_id = $1 AND employee_id = $2`,
       [ctx.tenantId, employeeId],
-    );
+    ));
 
     if (row.rowCount === 0) {
       return reply.send({ enrolled: false });

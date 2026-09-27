@@ -32,6 +32,34 @@ function isHr(ctx: { roles: string[] }): boolean {
  * actually returning real rows; the goals/learning-paths handlers below share
  * the same underlying gap and are flagged separately as a follow-up, not fixed
  * here, to keep this change to what hr/goals's dev-plans section needs.
+ *
+ * Follow-up: the goals PATCH/DELETE handlers below share this exact gap
+ * (hrms.goals is FORCE ROW LEVEL SECURITY too) and have now been wrapped
+ * the same way.
+ *
+ * The learning-paths gaps query (below) is NOT the same simple case -- flagging
+ * rather than forcing a fix (see PR description for the full writeup):
+ *  1. It joins `employee.role_requirements`, which does not exist under any
+ *     schema (confirmed against the live dev DB). Two real tables are
+ *     plausible replacements and neither is an obvious drop-in: `competency.
+ *     role_requirements` (schema-adjacent name, but required_level is
+ *     `integer`) and `employee.role_competency_map` (schema-matching,
+ *     required_level is `varchar` defaulting to 'intermediate' -- matching
+ *     `skill_assessments.assessed_level`'s type, used by the sibling
+ *     gap-features/routes.ts for this exact competency-gap concept).
+ *  2. Independently of (1): `employee.skill_assessments.assessed_level` is
+ *     itself a qualitative varchar (beginner/intermediate/advanced/expert --
+ *     matching `competencies.proficiency_levels` and how gap-features/
+ *     routes.ts already treats it: display/group-by only, never arithmetic).
+ *     This query does `GREATEST(required_level - assessed_level, 0)`, which
+ *     fails with "COALESCE types character varying and integer cannot be
+ *     matched" against EITHER candidate table above -- confirmed live.
+ * Picking a join target without also inventing a levels-to-numbers mapping
+ * (there is no established one in this codebase) would still 500; inventing
+ * one would be a product decision, not a tenant-scoping fix. Left the join
+ * and the arithmetic exactly as they were; wrapped the query in the same
+ * withTenantGuc regardless, since that gap is real and independent of this
+ * one -- it just means end-to-end verification isn't possible here yet.
  */
 function withTenantGuc<T>(
   tenantId: string,
@@ -71,10 +99,10 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
     // HR admins may update any goal; employees only their own
     const ownerClause = isHr(ctx) ? "" : "AND employee_id = $3";
     const checkParams = isHr(ctx) ? [id, ctx.tenantId] : [id, ctx.tenantId, ctx.actorId];
-    const { rows: existing } = await sqlPool.query(
+    const { rows: existing } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 ${ownerClause}`,
       checkParams,
-    );
+    ));
     if (!existing[0]) throw new HttpError(404, "NOT_FOUND", "Goal not found");
 
     const sets: string[] = ["updated_at = NOW()"];
@@ -87,10 +115,10 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
     if (body.dueDate     !== undefined){ sets.push(`due_date = $${i++}`);    vals.push(body.dueDate); }
     if (vals.length === 0) return reply.send({ updated: false });
     vals.push(id, ctx.tenantId);
-    await sqlPool.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `UPDATE hrms.goals SET ${sets.join(", ")} WHERE id = $${i} AND tenant_id = $${i + 1}`,
       vals,
-    );
+    ));
     return reply.send({ updated: true });
   });
 
@@ -99,10 +127,10 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const { rowCount } = await sqlPool.query(
+    const { rowCount } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `DELETE FROM hrms.goals WHERE id = $1 AND tenant_id = $2`,
       [id, ctx.tenantId],
-    );
+    ));
     if (!rowCount) throw new HttpError(404, "NOT_FOUND", "Goal not found");
     return reply.code(204).send();
   });
@@ -194,7 +222,7 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
       throw new HttpError(403, "FORBIDDEN", "Cannot view another employee's learning path");
 
     // Identify competency gaps
-    const { rows: gaps } = await sqlPool.query(
+    const { rows: gaps } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT c.id AS "competencyId", c.name AS skill, c.category,
               COALESCE(sa.assessed_level, 0) AS "currentLevel",
               COALESCE(rr.required_level, 3) AS "requiredLevel",
@@ -208,18 +236,18 @@ export async function performanceDevRoutes(app: FastifyInstance): Promise<void> 
          AND GREATEST(COALESCE(rr.required_level,3) - COALESCE(sa.assessed_level,0), 0) > 0
        ORDER BY gap DESC LIMIT 10`,
       [ctx.tenantId, targetId],
-    );
+    ));
 
     const paths: unknown[] = [];
     for (const g of gaps.slice(0, 6)) {
-      const { rows: courses } = await sqlPool.query(
+      const { rows: courses } = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
         `SELECT id, code, name, duration_hours AS "durationHours", mandatory_for_roles AS "mandatoryForRoles"
          FROM training.lms_courses
          WHERE tenant_id = $1 AND status = 'active'
            AND (skills_gained::jsonb ? $2 OR name ILIKE '%' || $2 || '%')
          ORDER BY duration_hours ASC LIMIT 3`,
         [ctx.tenantId, g.skill],
-      );
+      ));
       paths.push({
         skillGap:    g.skill,
         gapPoints:   Number(g.gap),

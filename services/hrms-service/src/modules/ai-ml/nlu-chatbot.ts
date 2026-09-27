@@ -26,7 +26,55 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, HttpError } from "../../shared/context.js";
-import { sqlPool as sqlClient } from "../../shared/db.js";
+import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
+
+/**
+ * Audit: employee.hrms_employees is FORCE ROW LEVEL SECURITY
+ * (tenant_isolation_policy). Plain sqlClient.query() (== sqlPool, see
+ * shared/db.ts) runs on a pooled connection with no app.tenant_id GUC set, so
+ * under hrms_svc (NOBYPASSRLS) the policy fails CLOSED. Wrapped the
+ * manager_info intent handler the same way social/routes.ts's withTenantGuc
+ * already does elsewhere in this service.
+ *
+ * IMPORTANT -- this alone does NOT make manager_info work end-to-end. Its
+ * query references e1.user_id, e1.reporting_to, and e2.first_name/last_name/
+ * designation/phone, none of which exist on the real employee.hrms_employees
+ * (confirmed live: the real columns are user_ref, and there are FIVE
+ * different manager-relationship columns -- manager_id, reporting_officer_id,
+ * hod_id, functional_manager_id, project_manager_id -- with no single
+ * "reporting_to" among them and no established convention for which one
+ * "my manager" should mean; full_name is one field, not first_name+last_name;
+ * phone is mobile). This is a separate, deeper, pre-existing defect (wrong/
+ * missing/ambiguous columns), not a tenant-scoping gap -- picking one of the
+ * five manager columns without product input would be a guess, not a fix.
+ * Left the query exactly as originally written and applied only the GUC
+ * wrap, so the tenant-scoping half is already correct once this gets its own
+ * dedicated fix. Flagged in full in the PR description; not fixed here.
+ *
+ * leave_balance and holiday_next below have a *different* pre-existing bug
+ * (hrms.leave_allocations and hrms.holidays do not exist under any schema in
+ * this service at all; confirmed against the live dev DB) and are left
+ * untouched here too; not the same gap either, out of scope for this fix.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (pool: {
+    query<R = any>(text: string, params?: readonly unknown[]): Promise<{ rows: R[]; rowCount: number }>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(rawSqlClient, tenantId, async (tx) => {
+    const pool = {
+      async query<R = any>(text: string, params: readonly unknown[] = []): Promise<{ rows: R[]; rowCount: number }> {
+        const result = await tx.unsafe(text, params as unknown as never[]);
+        const rows = result as unknown as R[];
+        const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+        return { rows, rowCount };
+      },
+    };
+    return fn(pool);
+  });
+}
 
 const chatSchema = z.object({
   message: z.string().min(1).max(500),
@@ -189,13 +237,13 @@ export async function nluChatbotRoutes(app: FastifyInstance): Promise<void> {
       }
 
       case "manager_info": {
-        const emp = await sqlClient.query(
+        const emp = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
           `SELECT e2.first_name, e2.last_name, e2.designation, e2.email, e2.phone
            FROM employee.hrms_employees e1
            JOIN employee.hrms_employees e2 ON e2.id = e1.reporting_to AND e2.tenant_id = e1.tenant_id
            WHERE e1.user_id = $1 AND e1.tenant_id = $2`,
           [ctx.actorId, ctx.tenantId],
-        );
+        ));
         if (emp.rowCount && emp.rowCount > 0) {
           const m = emp.rows[0];
           response = { text: `Your reporting manager is **${m.first_name} ${m.last_name}** (${m.designation}).\n\n📧 ${m.email ?? '—'}\n📱 ${m.phone ?? '—'}`, suggestions: ["Team directory", "Org chart"] };

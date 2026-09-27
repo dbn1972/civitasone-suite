@@ -37,10 +37,10 @@ const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"];
  * the wrong-table-reference 500s below: fixing the table references alone
  * left attrition-risk/succession/leave-prediction returning 200 with
  * silently empty/zero data instead of crashing, which is arguably worse
- * (see PR description). Applied only to the three endpoints touched by this
- * fix (attrition-risk, succession, leave-prediction) -- workforce-insights
- * below has the same gap but is untouched/unreported here; flagged
- * separately rather than folded into this diff.
+ * (see PR description). Originally applied only to those three endpoints;
+ * workforce-insights below shared the same gap (five more bare sqlClient
+ * calls against employee.hrms_employees) and has now been wrapped the same
+ * way.
  */
 function withTenantGuc<T>(
   tenantId: string,
@@ -203,43 +203,43 @@ export async function aiPredictionsRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
 
     // Rule-based scoring — replace with ML model when training data available
-    const [headcount] = await sqlClient`
+    const [headcount] = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT COUNT(*)::int AS total
       FROM employee.hrms_employees
       WHERE tenant_id = ${ctx.tenantId} AND status NOT IN ('separated', 'retired')
-    `;
+    `);
 
-    const [avgTenure] = await sqlClient`
+    const [avgTenure] = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT ROUND(AVG(EXTRACT(YEAR FROM AGE(CURRENT_DATE, date_of_joining::date)))::numeric, 1) AS avg_years
       FROM employee.hrms_employees
       WHERE tenant_id = ${ctx.tenantId} AND status NOT IN ('separated', 'retired')
-    `;
+    `);
 
-    const [retiringThisYear] = await sqlClient`
+    const [retiringThisYear] = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT COUNT(*)::int AS count
       FROM employee.hrms_employees
       WHERE tenant_id = ${ctx.tenantId}
         AND status NOT IN ('separated', 'retired')
         AND date_of_birth IS NOT NULL
         AND (date_of_birth + INTERVAL '60 years') BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '1 year')
-    `;
+    `);
 
-    const joinsByMonth = await sqlClient`
+    const joinsByMonth = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT TO_CHAR(date_of_joining::date, 'YYYY-MM') AS month, COUNT(*)::int AS joins
       FROM employee.hrms_employees
       WHERE tenant_id = ${ctx.tenantId}
         AND date_of_joining::date >= (CURRENT_DATE - INTERVAL '12 months')
       GROUP BY month ORDER BY month
-    `;
+    `);
 
-    const separationsByMonth = await sqlClient`
+    const separationsByMonth = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT TO_CHAR(updated_at, 'YYYY-MM') AS month, COUNT(*)::int AS separations
       FROM employee.hrms_employees
       WHERE tenant_id = ${ctx.tenantId}
         AND status = 'separated'
         AND updated_at >= (CURRENT_DATE - INTERVAL '12 months')
       GROUP BY month ORDER BY month
-    `;
+    `);
 
     return reply.send({
       data: {
