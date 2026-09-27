@@ -22,7 +22,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { and, eq } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import { EVENTS } from "../../topics.js";
 import { hrmsEmployees } from "../employee/schema.js";
@@ -181,17 +181,31 @@ export async function consultantInvoiceRoutes(app: FastifyInstance): Promise<voi
     // synchronously: this is the exact same pure function
     // (computeInvoiceTax) and the exact same YTD query
     // (ytdApprovedGrossTx/ytdOn) the consumer uses to persist the real
-    // numbers (consultant-invoice/f3-consumer.ts, op __2) — called here
-    // through `db` (unlocked) rather than the consumer's transaction-scoped
-    // `tx` (locked via lockConsultantForInvoicing). Residual TOCTOU race: two
-    // concurrent approvals for the SAME consultant could each read a
-    // pre-crossing YTD total here and both report tdsApplied:false, while the
-    // consumer's advisory lock (lockConsultantForInvoicing) guarantees the
-    // PERSISTED amounts are correct regardless — so a genuine race could make
-    // this response's numbers stale relative to what actually gets withheld.
-    // That is the same class of residual risk documented for the CPF/NPS
-    // pre-checks in this PR, not a new one; not guessing to close it further.
-    const ytd = await repo.ytdApprovedGrossTx(db, ctx.tenantId, inv.consultantId, fy.from, fy.to, invId);
+    // numbers (consultant-invoice/f3-consumer.ts, op __2).
+    //
+    // FORCE-RLS fix: this previously called ytdApprovedGrossTx(db, ...) —
+    // the bare pooled `db` singleton, not merely "unlocked" as this comment
+    // used to frame it. Under the NOBYPASSRLS hrms_svc role, a bare `db`
+    // read never has app.tenant_id set, so the fail-closed RLS policy on
+    // consultant.hrms_consultant_invoices (FORCE ROW LEVEL SECURITY —
+    // migration 0069) silently returned YTD=0 on EVERY approval, not only
+    // under a race — the Section-194J FY-aggregate threshold pre-check shown
+    // on the approver's own screen never actually tripped, for any tenant,
+    // any consultant, ever. scopedRead (already used elsewhere in this same
+    // file — findInvoiceByNumber/listByConsultant/listByStatus) sets the GUC
+    // from the request's tenant context before the read runs.
+    //
+    // Residual TOCTOU race (this part of the original note still holds):
+    // scopedRead does not take the consumer's advisory lock
+    // (lockConsultantForInvoicing) — two concurrent approvals for the SAME
+    // consultant could each read a pre-crossing YTD total here and both
+    // report tdsApplied:false, while the consumer's advisory lock guarantees
+    // the PERSISTED amounts are correct regardless — so a genuine race could
+    // still make this response's numbers stale relative to what actually
+    // gets withheld. Same class of residual risk documented for the CPF/NPS
+    // pre-checks and the contractor-bill approve route; not guessing to
+    // close it further here.
+    const ytd = await scopedRead((tx) => repo.ytdApprovedGrossTx(tx, ctx.tenantId, inv.consultantId, fy.from, fy.to, invId));
     const tax = computeInvoiceTax({
       grossMinor: inv.grossMinor, gstApplicable: inv.gstApplicable, gstRateBps,
       tdsRateBps, tdsThresholdMinor: TDS_194J_THRESHOLD_MINOR, ytdGrossMinor: ytd,

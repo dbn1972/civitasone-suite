@@ -11,7 +11,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
 import { eq, and, desc } from "drizzle-orm";
 
@@ -276,13 +276,20 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // IDOR guard: employees may only read their own OT requests
     const isHrOrManager = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
     const effectiveEmpId = isHrOrManager ? q.empId : ctx.actorId;
-    const rows = await db.select().from(hrmsOvertimeRequests)
+    // FORCE-RLS fix: was a bare db.select() against attendance.hrms_overtime_requests
+    // (FORCE ROW LEVEL SECURITY — migration 0148), so under the NOBYPASSRLS
+    // hrms_svc role no app.tenant_id GUC was ever set and the fail-closed
+    // policy silently returned zero rows regardless of real data — an
+    // employee's/manager's/HR's OT list always looked empty. scopedRead is
+    // already used a few lines below (the approve route) for exactly this
+    // table; mirror it here.
+    const rows = await scopedRead((tx) => tx.select().from(hrmsOvertimeRequests)
       .where(and(
         eq(hrmsOvertimeRequests.tenantId, ctx.tenantId),
         effectiveEmpId ? eq(hrmsOvertimeRequests.employeeId, effectiveEmpId) : undefined,
       ))
       .orderBy(desc(hrmsOvertimeRequests.requestDate))
-      .limit(200);
+      .limit(200));
     return reply.send({ data: rows });
   });
 

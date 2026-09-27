@@ -22,6 +22,16 @@ import { runSchedulerOnce, SCHEDULER_JOB_NAME } from "./tick.js";
  * database (hrms_svc / civitas_hrms) instead of mocking the DB layer, for an
  * end-to-end "a real metric increments, a real log line appears, a real
  * last-successful-run timestamp updates" proof against a live Postgres.
+ *
+ * FORCE-RLS fix follow-up: runSchedulerOnce()'s tenant discovery was
+ * previously RLS-blind (bare cross-tenant db.execute(), see tick.ts's own
+ * header comment) and always saw zero tenants, so both tests below used to
+ * complete in milliseconds regardless of how many real tenants/employees
+ * existed. Now correctly scoped via scopedPlatformRead + runWithTenant, a
+ * tick genuinely walks every tenant this shared dev DB has ever accumulated
+ * across this campaign's test history (hundreds, growing over time) — a few
+ * seconds per call, not milliseconds. Bumped timeouts below accordingly;
+ * nothing else about these tests changed.
  */
 describe("hrms scheduler tick — PERF-011 observability (live DB)", () => {
   beforeEach(() => {
@@ -48,7 +58,7 @@ describe("hrms scheduler tick — PERF-011 observability (live DB)", () => {
     const row = (rows as unknown as Array<{ status: string; tenants_seen: number }>)[0];
     expect(row?.status).toBe("ok");
     expect(row?.tenants_seen).toBe(result.tenantsSeen);
-  });
+  }, 30_000);
 
   it("running it again the same day stays idempotent and still records a second success run", async () => {
     const first = await runSchedulerOnce(db);
@@ -56,5 +66,5 @@ describe("hrms scheduler tick — PERF-011 observability (live DB)", () => {
 
     expect(second.runDate).toBe(first.runDate);
     expect(getScheduledJobRunCount(SCHEDULER_JOB_NAME, "success")).toBe(2);
-  });
+  }, 30_000);
 });
