@@ -1,4 +1,4 @@
--- Migration 0040: indent budget-consumption tracking (committed_minor)
+-- Migration 0041: indent budget-consumption tracking (committed_minor)
 --
 -- CRITICAL FIX: po/consumer.ts's poCreate handler never looked up the indent
 -- referenced by a PO at all -- indentRef was stored as a completely

@@ -13,7 +13,7 @@ export const procurementIndents = indentSchema.table("procurement_indents", {
   // indent (addIndentCommittedGuarded in repo.ts is the sole writer).
   // Available headroom = total_minor - committed_minor. Mirrors
   // finance-service's finance_budget_allocation.committed_minor for
-  // cross-codebase naming consistency (see migrations/0040_indent_committed_minor.sql).
+  // cross-codebase naming consistency (see migrations/0041_indent_committed_minor.sql).
   committedMinor: bigint("committed_minor", { mode: "bigint" }).notNull().default(0n),
   currency:     char("currency", { length: 3 }).notNull().default("INR"),
   status:       varchar("status", { length: 24 }).notNull().default("draft"),
