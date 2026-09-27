@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlPool as sqlClient } from "../../shared/db.js";
+import { sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
 
 /**
  * Device Trust & Compliance Module.
@@ -39,6 +40,48 @@ const policyUpdateSchema = z.object({
   maxInactiveDays: z.number().int().min(7).max(365).optional(),
 });
 
+/**
+ * Audit: hrms.trusted_devices, hrms.device_activity_log and hrms.device_policies
+ * are all FORCE ROW LEVEL SECURITY (tenant_isolation_policy, migration
+ * 0123_rls_completeness.sql). This module talked to the bare sqlPool adapter
+ * (shared/db.ts's `sqlPool.query()`, itself just `sqlClient.unsafe()` with no
+ * app.tenant_id GUC set) on a pooled connection, so under hrms_svc
+ * (NOBYPASSRLS) every policy failed CLOSED: SELECTs silently returned zero
+ * rows and UPDATEs silently affected zero rows, while a plain INSERT (no
+ * conflicting row yet) instead threw a hard 42501 "new row violates row-level
+ * security policy" error. Confirmed live against a real disposable Postgres:
+ * PATCH /v1/hrms/devices/:id/block returned 200 { status: "blocked" } while
+ * the row's trust_status silently stayed 'trusted' in the database, so
+ * POST /v1/hrms/devices/heartbeat's own blocked-device check never saw the
+ * block and let the device straight back in — the actual device-block
+ * security control never worked. Same bug, same fix as social/routes.ts's
+ * identical withTenantGuc (see that file's header for the full story) and
+ * gap-features/performance-dev-routes.ts / social/pulse-routes.ts's
+ * identically-shaped pool.query() adapter (this module shares their exact
+ * sqlPool.query(text, params) call shape) — this module never received it.
+ * Named explicitly as a still-unaudited sqlPool consumer in PR #1560's commit
+ * message. Every sqlClient.query() call site in this file is scoped to the
+ * current tenant below.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (pool: {
+    query<R = any>(text: string, params?: readonly unknown[]): Promise<{ rows: R[]; rowCount: number }>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, async (tx) => {
+    const pool = {
+      async query<R = any>(text: string, params: readonly unknown[] = []): Promise<{ rows: R[]; rowCount: number }> {
+        const result = await tx.unsafe(text, params as unknown as never[]);
+        const rows = result as unknown as R[];
+        const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+        return { rows, rowCount };
+      },
+    };
+    return fn(pool);
+  });
+}
+
 export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
 
   // ─── DEVICE HEARTBEAT (called by mobile app on login/sync) ────────────
@@ -51,11 +94,11 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     const ip = req.ip ?? "";
 
     // Check if device is blocked
-    const existing = await sqlClient.query(
+    const existing = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT trust_status, blocked_reason FROM hrms.trusted_devices
        WHERE tenant_id = $1 AND user_id = $2 AND device_id = $3`,
       [ctx.tenantId, ctx.actorId, body.deviceId],
-    );
+    ));
 
     if (existing.rows[0]?.trust_status === "blocked") {
       return reply.code(403).send({
@@ -88,7 +131,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
       : "trusted";
 
     // Upsert device record
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.trusted_devices (id, tenant_id, user_id, device_id, device_name, platform,
         os_version, app_version, is_rooted, has_screen_lock, is_encrypted, biometric_available,
         trust_status, flagged_reason, last_seen_at, last_ip, login_count)
@@ -107,18 +150,18 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
         trustStatus, flags.length > 0 ? flags.join(", ") : null,
         now, ip,
       ],
-    );
+    ));
 
     // SEC: Enforce max device limit (3 devices per user) — prevent credential sharing
     const MAX_DEVICES_PER_USER = 3;
-    const activeDevices = await sqlClient.query(
+    const activeDevices = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT COUNT(*)::int AS count FROM hrms.trusted_devices
        WHERE tenant_id = $1 AND user_id = $2 AND trust_status = 'trusted'`,
       [ctx.tenantId, ctx.actorId],
-    );
+    ));
     if ((activeDevices.rows[0]?.count ?? 0) > MAX_DEVICES_PER_USER) {
       // Auto-block the oldest device (not the current one)
-      await sqlClient.query(
+      await withTenantGuc(ctx.tenantId, (pool) => pool.query(
         `UPDATE hrms.trusted_devices SET trust_status = 'blocked', blocked_reason = 'max_devices_exceeded'
          WHERE id = (
            SELECT id FROM hrms.trusted_devices
@@ -126,15 +169,15 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
            ORDER BY last_seen_at ASC LIMIT 1
          )`,
         [ctx.tenantId, ctx.actorId, body.deviceId],
-      );
+      ));
     }
 
     // Log activity
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.device_activity_log (tenant_id, device_id, user_id, event_type, metadata, ip_address)
        VALUES ($1, $2, $3, 'heartbeat', $4, $5)`,
       [ctx.tenantId, body.deviceId, ctx.actorId, JSON.stringify({ flags, appVersion: body.appVersion }), ip],
-    );
+    ));
 
     // If rooted and policy says block → deny access
     if (trustStatus === "blocked") {
@@ -167,7 +210,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     if (platform) { where += ` AND d.platform = $${idx++}`; params.push(platform); }
     if (search) { where += ` AND (d.device_name ILIKE $${idx} OR e.first_name ILIKE $${idx} OR e.last_name ILIKE $${idx})`; params.push(`%${search}%`); idx++; }
 
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT d.id, d.device_id, d.device_name, d.platform, d.os_version, d.app_version,
               d.is_rooted, d.has_screen_lock, d.biometric_available, d.trust_status,
               d.flagged_reason, d.first_seen_at, d.last_seen_at, d.last_ip, d.login_count,
@@ -177,7 +220,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
        ${where}
        ORDER BY d.last_seen_at DESC LIMIT 200`,
       params,
-    );
+    ));
 
     return reply.send({
       data: rows.rows.map((r: any) => ({
@@ -212,20 +255,23 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     const { id } = req.params as { id: string };
     const { reason } = (req.body as any) ?? {};
 
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `UPDATE hrms.trusted_devices SET trust_status = 'blocked', blocked_by = $1, blocked_at = NOW(), blocked_reason = $2
        WHERE id = $3 AND tenant_id = $4`,
       [ctx.actorId, reason ?? "Blocked by admin", id, ctx.tenantId],
-    );
+    ));
 
     // Log the block event
-    const device = await sqlClient.query(`SELECT device_id, user_id FROM hrms.trusted_devices WHERE id = $1`, [id]);
+    const device = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `SELECT device_id, user_id FROM hrms.trusted_devices WHERE id = $1`,
+      [id],
+    ));
     if (device.rows[0]) {
-      await sqlClient.query(
+      await withTenantGuc(ctx.tenantId, (pool) => pool.query(
         `INSERT INTO hrms.device_activity_log (tenant_id, device_id, user_id, event_type, metadata, ip_address)
          VALUES ($1, $2, $3, 'blocked', $4, $5)`,
         [ctx.tenantId, device.rows[0].device_id, device.rows[0].user_id, JSON.stringify({ reason, blockedBy: ctx.actorId }), req.ip],
-      );
+      ));
     }
 
     return reply.send({ id, status: "blocked" });
@@ -239,11 +285,11 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
     const { id } = req.params as { id: string };
 
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `UPDATE hrms.trusted_devices SET trust_status = 'trusted', blocked_by = NULL, blocked_at = NULL, blocked_reason = NULL
        WHERE id = $1 AND tenant_id = $2 AND trust_status = 'blocked'`,
       [id, ctx.tenantId],
-    );
+    ));
 
     return reply.send({ id, status: "trusted" });
   });
@@ -255,13 +301,13 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const { deviceId } = req.params as { deviceId: string };
 
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT event_type, metadata, ip_address, created_at
        FROM hrms.device_activity_log
        WHERE tenant_id = $1 AND device_id = $2
        ORDER BY created_at DESC LIMIT 50`,
       [ctx.tenantId, deviceId],
-    );
+    ));
 
     return reply.send({ data: rows.rows });
   });
@@ -281,7 +327,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
     const body = policyUpdateSchema.parse(req.body);
 
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.device_policies (tenant_id, min_os_version_android, min_os_version_ios,
         min_app_version, block_rooted, require_screen_lock, require_biometric, max_inactive_days, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
@@ -301,7 +347,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
         body.requireScreenLock ?? null, body.requireBiometric ?? null,
         body.maxInactiveDays ?? null,
       ],
-    );
+    ));
 
     return reply.send({ status: "updated" });
   });
@@ -312,14 +358,14 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/devices/me", async (req, reply) => {
     const ctx = resolveContext(req);
 
-    const rows = await sqlClient.query(
+    const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, device_id, device_name, platform, os_version, app_version,
               trust_status, flagged_reason, first_seen_at, last_seen_at, login_count
        FROM hrms.trusted_devices
        WHERE tenant_id = $1 AND user_id = $2
        ORDER BY last_seen_at DESC`,
       [ctx.tenantId, ctx.actorId],
-    );
+    ));
 
     return reply.send({ data: rows.rows });
   });
@@ -348,12 +394,12 @@ type Policy = {
 };
 
 async function getPolicy(tenantId: string): Promise<Policy> {
-  const row = await sqlClient.query(
+  const row = await withTenantGuc(tenantId, (pool) => pool.query(
     `SELECT min_os_version_android, min_os_version_ios, min_app_version,
             block_rooted, require_screen_lock, require_biometric, max_inactive_days
      FROM hrms.device_policies WHERE tenant_id = $1`,
     [tenantId],
-  );
+  ));
 
   if (row.rowCount === 0) {
     return {
