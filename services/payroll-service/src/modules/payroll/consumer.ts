@@ -118,7 +118,7 @@ export async function resolveDaRateBps(tx: typeof db, tenantId: string, month: s
 }
 
 /** Active Professional Tax slabs for the tenant + state (H14 fix). */
-async function resolvePtSlabs(tx: typeof db, tenantId: string, stateCode?: string): Promise<Array<{ from: bigint; to: bigint; amount: bigint }>> {
+export async function resolvePtSlabs(tx: typeof db, tenantId: string, stateCode?: string): Promise<Array<{ from: bigint; to: bigint; amount: bigint }>> {
   // tenantTransaction re-audit: reads through the caller-supplied tx (db
   // itself for the pre-loop call, the outer transaction tx for the per-employee
   // in-loop call) instead of always hitting the pool-level db -- a bare
@@ -277,9 +277,20 @@ export async function resolveTdsYtdMinorsTx(tx: typeof db, tenantId: string, emp
   return result;
 }
 
-/** P3: configurable protected-net floor (paise) for the tenant; 0 if unset. */
-async function resolveProtectedNetFloorMinor(tenantId: string): Promise<bigint> {
-  const rows = (await db.execute(sql`
+/**
+ * P3: configurable protected-net floor (paise) for the tenant; 0 if unset.
+ *
+ * FORCE-RLS fix: this used to run as a bare `db.execute()` outside any
+ * `db.transaction()`/`scopedRead()`, so under the NOBYPASSRLS `payroll_svc`
+ * role no `app.tenant_id` GUC was ever set and the fail-closed RLS policy on
+ * payroll.payroll_settings silently returned zero rows even for a tenant
+ * that had genuinely configured a floor -- resolving to 0 every time,
+ * indistinguishable from "no floor configured". Same shape and same fix as
+ * resolveDaRateBps above: take `tx` and let the caller supply it via
+ * scopedRead, so the wrapper sets the GUC before this reads.
+ */
+export async function resolveProtectedNetFloorMinor(tx: typeof db, tenantId: string): Promise<bigint> {
+  const rows = (await tx.execute(sql`
     SELECT protected_net_floor_minor FROM payroll.payroll_settings
     WHERE tenant_id = ${tenantId}::uuid LIMIT 1
   `)) as unknown as Array<{ protected_net_floor_minor: string | number }>;
@@ -511,13 +522,39 @@ const NIL_STRUCTURE_ID = "00000000-0000-0000-0000-000000000000";
  * Returns null when no mapping exists (caller then pays the whole tenant — the
  * legacy whole-tenant run). When a ddoCode is given but unmapped, an empty set
  * is returned so the run pays nobody rather than silently paying everyone.
+ *
+ * FORCE-RLS fix: this used to run as a bare `db.execute()` outside any
+ * `db.transaction()`/`scopedRead()`, so under the NOBYPASSRLS `payroll_svc`
+ * role no `app.tenant_id` GUC was ever set and the fail-closed RLS policy on
+ * payroll.payroll_ddo_departments silently returned zero rows even for a
+ * genuinely-mapped DDO -- every DDO-scoped run paid nobody, indistinguishable
+ * from "this DDO really has no departments mapped". Same shape and fix as
+ * resolveDaRateBps above: take `tx` and let the caller supply it via
+ * scopedRead, so the wrapper sets the GUC before this reads.
+ *
+ * Safety net: now that the read is correctly tenant-scoped, an empty result
+ * is narrowed further -- a ddoCode that isn't even a registered DDO for this
+ * tenant (payroll.payroll_ddos) is a real input error (typo'd/unknown code)
+ * and throws loudly; a ddoCode that IS registered but currently has zero
+ * mapped departments is left as the documented "pays nobody" empty set,
+ * since that is a plausible, legitimate state for a real (if newly set up,
+ * or intentionally empty) DDO and a naive "throw on empty" would be noisy
+ * false-positive churn for it.
  */
-async function resolveDdoDepartments(tenantId: string, ddoCode: string | null): Promise<Set<string> | null> {
+export async function resolveDdoDepartments(tx: typeof db, tenantId: string, ddoCode: string | null): Promise<Set<string> | null> {
   if (!ddoCode) return null;
-  const rows = (await db.execute(sql`
+  const rows = (await tx.execute(sql`
     SELECT department_id FROM payroll.payroll_ddo_departments
     WHERE tenant_id = ${tenantId}::uuid AND ddo_code = ${ddoCode}
   `)) as unknown as Array<{ department_id: string }>;
+  if (rows.length === 0) {
+    const ddo = (await tx.execute(sql`
+      SELECT 1 FROM payroll.payroll_ddos WHERE tenant_id = ${tenantId}::uuid AND ddo_code = ${ddoCode} LIMIT 1
+    `)) as unknown as Array<unknown>;
+    if (ddo.length === 0) {
+      throw new NonRetryableError(`DDO_NOT_FOUND: ddoCode ${ddoCode} is not a registered DDO for tenant ${tenantId}`);
+    }
+  }
   return new Set(rows.map((r) => r.department_id));
 }
 
@@ -1208,7 +1245,9 @@ async function processPayrollRun(
   const input = await fetchPayrollInput(p.tenantId, p.month);
   const structComps = await repo.listComponentsByStructure(p.structureId, p.tenantId);
   // Multi-DDO: the departments this DDO pays (null => whole tenant, legacy).
-  const ddoDepartments = await resolveDdoDepartments(p.tenantId, p.ddoCode ?? null);
+  // FORCE-RLS fix: was called with a bare `db` (RLS-blind, see
+  // resolveDdoDepartments's own doc comment); now routed through scopedRead.
+  const ddoDepartments = await scopedRead((tx) => resolveDdoDepartments(tx, p.tenantId, p.ddoCode ?? null));
   // bug-fix (silent-DA-gap): must be tenant-scoped (see resolveDaRateBps's
   // doc comment) -- the bare `db` this used to call with is RLS-blind on
   // payroll.dearness_allowance_rates and silently resolved every real,
@@ -1216,11 +1255,24 @@ async function processPayrollRun(
   const daRateBps = await scopedRead((tx) => resolveDaRateBps(tx, p.tenantId, p.month));
   // H14 FIX: PT slabs are now resolved per-employee (by state_code) inside the loop.
   // A tenant-level fallback is kept for employees without a state_code.
-  const ptSlabsFallback = await resolvePtSlabs(db, p.tenantId);
-  const protectedNetFloorMinor = await resolveProtectedNetFloorMinor(p.tenantId);
+  // FORCE-RLS fix: resolvePtSlabs already took `tx: typeof db` correctly --
+  // only this call site was wrong, passing the bare pooled `db` (RLS-blind
+  // on payroll.payroll_professional_tax) instead of routing through
+  // scopedRead. Sibling in-loop call (further below) was already correct.
+  const ptSlabsFallback = await scopedRead((tx) => resolvePtSlabs(tx, p.tenantId));
+  // FORCE-RLS fix: was called with a bare `db` (RLS-blind, see
+  // resolveProtectedNetFloorMinor's own doc comment); now routed through scopedRead.
+  const protectedNetFloorMinor = await scopedRead((tx) => resolveProtectedNetFloorMinor(tx, p.tenantId));
   // DOM-008: effective-dated PF/ESI/80C/80D config, resolved once per run
   // (tenantId + month are constant across every employee in this run).
-  const statutoryConfig = await resolveRunStatutoryConfig(db, p.tenantId, p.month);
+  // FORCE-RLS fix: resolveRunStatutoryConfig already took `tx: typeof db`
+  // correctly -- only this call site was wrong, passing the bare pooled `db`
+  // (RLS-blind on statutory.statutory_config). The silent fallback here was
+  // DEFAULT_STATUTORY_CONFIG in place of the tenant's real, configured
+  // override (see resolveStatutoryConfig in domain.ts) -- same "empty read
+  // treated as legitimate" shape, just a substituted default instead of an
+  // outright empty result.
+  const statutoryConfig = await scopedRead((tx) => resolveRunStatutoryConfig(tx, p.tenantId, p.month));
   // Days in the run month (LOP divisor) — 7th CPC uses actual days, not flat 30.
   const daysInMonth = BigInt(new Date(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 0).getDate());
   let totalGross = 0n;
@@ -1531,6 +1583,55 @@ async function processPayrollRun(
   });
 }
 
+type PensionerRow = {
+  id: string; ppo_no: string; full_name: string; date_of_birth: string;
+  basic_pension_minor: string | number; commuted_pension_minor: string | number;
+  commutation_date: string | null; medical_allowance_minor: string | number; tax_regime: string;
+};
+
+/**
+ * Every active pensioner of the DDO (or whole tenant when ddoCode is null).
+ *
+ * FORCE-RLS fix: this used to run inline as a bare `db.execute()` inside
+ * processPensionRun, OUTSIDE any `db.transaction()`/`scopedRead()` -- and
+ * critically BEFORE that function's own later `db.transaction()` block (which
+ * exists only to persist slips/TDS, is correctly tenant-scoped already, and
+ * is untouched by this fix). Under the NOBYPASSRLS `payroll_svc` role no
+ * `app.tenant_id` GUC was ever set for this read, so the fail-closed RLS
+ * policy on payroll.payroll_pensioners silently returned zero rows even for
+ * a real, active pensioner -- every pensioner payroll run paid nobody.
+ * Extracted into its own function (mirroring resolveDaRateBps/
+ * resolveDdoDepartments above) so the caller can supply a real `tx` via
+ * scopedRead, which sets the GUC before this reads.
+ *
+ * Safety net: zero pensioners tenant-wide (ddoCode null) is a plausible,
+ * legitimate state (a tenant with no pensioners on this system yet) and does
+ * NOT throw -- a naive "throw on empty" would be noisy false-positive churn
+ * for that real case. A ddoCode that isn't even a registered DDO for this
+ * tenant is a real input error and DOES throw, mirroring
+ * resolveDdoDepartments's identical safety net immediately above.
+ */
+export async function resolvePensioners(tx: typeof db, tenantId: string, ddoCode: string | null): Promise<PensionerRow[]> {
+  const rows = (await tx.execute(sql`
+    SELECT id, ppo_no, full_name, date_of_birth::text AS date_of_birth,
+           basic_pension_minor, commuted_pension_minor, commutation_date::text AS commutation_date,
+           medical_allowance_minor, tax_regime
+    FROM payroll.payroll_pensioners
+    WHERE tenant_id = ${tenantId}::uuid AND status = 'active'
+      AND (${ddoCode}::varchar IS NULL OR ddo_code = ${ddoCode})
+    ORDER BY ppo_no
+  `)) as unknown as PensionerRow[];
+  if (rows.length === 0 && ddoCode != null) {
+    const ddo = (await tx.execute(sql`
+      SELECT 1 FROM payroll.payroll_ddos WHERE tenant_id = ${tenantId}::uuid AND ddo_code = ${ddoCode} LIMIT 1
+    `)) as unknown as Array<unknown>;
+    if (ddo.length === 0) {
+      throw new NonRetryableError(`DDO_NOT_FOUND: ddoCode ${ddoCode} is not a registered DDO for tenant ${tenantId}`);
+    }
+  }
+  return rows;
+}
+
 /**
  * Pensioner payroll run: a distinct run type from salary. Computes monthly
  * pension (basic pension, DR on pension, additional pension by age band,
@@ -1556,19 +1657,7 @@ async function processPensionRun(
   const monthIdxInFy = (Number(p.month.slice(5, 7)) - 4 + 12) % 12; // Apr=0..Mar=11
   const monthsRemaining = 12 - monthIdxInFy;
 
-  const pensioners = (await db.execute(sql`
-    SELECT id, ppo_no, full_name, date_of_birth::text AS date_of_birth,
-           basic_pension_minor, commuted_pension_minor, commutation_date::text AS commutation_date,
-           medical_allowance_minor, tax_regime
-    FROM payroll.payroll_pensioners
-    WHERE tenant_id = ${p.tenantId}::uuid AND status = 'active'
-      AND (${p.ddoCode}::varchar IS NULL OR ddo_code = ${p.ddoCode})
-    ORDER BY ppo_no
-  `)) as unknown as Array<{
-    id: string; ppo_no: string; full_name: string; date_of_birth: string;
-    basic_pension_minor: string | number; commuted_pension_minor: string | number;
-    commutation_date: string | null; medical_allowance_minor: string | number; tax_regime: string;
-  }>;
+  const pensioners = await scopedRead((tx) => resolvePensioners(tx, p.tenantId, p.ddoCode));
 
   // M1: resume — skip pensioners already having a slip for this run.
   const existingSlips = await repo.listSlipsByRun(p.id, p.tenantId);
