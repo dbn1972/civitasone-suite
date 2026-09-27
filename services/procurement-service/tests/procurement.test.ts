@@ -205,11 +205,32 @@ describe("PO consumer — sequential creation for one tenant (integration)", () 
     "44444444-9999-4000-8000-000000000003",
   ];
 
+  // CRITICAL FIX (indent-budget enforcement, PR #1630, merged after this test
+  // was written): poCreate now looks up the real indent behind indentRef and
+  // reserves budget against it (see po/consumer.ts's reserveIndentBudget /
+  // indent/repo.ts's addIndentCommittedGuarded) before writing the PO row.
+  // The fabricated "procurement_indent:seq-N" refs this test used originally
+  // had no backing row, so all three creates below were cleanly rejected as
+  // INDENT_NOT_FOUND -- zeroing out this test's actual premise (it must
+  // guard the transport-layer PUBLISH-VOID incident, not accidentally
+  // re-prove the indent gate rejects unknown refs, which
+  // indent-budget-enforcement.test.ts already covers directly). Same
+  // fixture-update precedent as tender-lifecycle.test.ts's
+  // seedApprovedIndent: seed one real approved indent per PO, each sized to
+  // exactly cover that PO's own total so the indent gate is satisfied
+  // without becoming a second limiting factor.
+  const SEQ_IND = [
+    "22222222-9999-4000-8000-000000000001",
+    "22222222-9999-4000-8000-000000000002",
+    "22222222-9999-4000-8000-000000000003",
+  ];
+
   async function wipeSeqTenant() {
     await runWithTenant(SEQ_TENANT, () => db.transaction(async (tx) => {
       await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, SEQ_TENANT));
       await tx.delete(procurementPoItems).where(eq(procurementPoItems.tenantId, SEQ_TENANT));
       await tx.delete(procurementPos).where(eq(procurementPos.tenantId, SEQ_TENANT));
+      await tx.delete(procurementIndents).where(eq(procurementIndents.tenantId, SEQ_TENANT));
       await tx.delete(docCounters).where(eq(docCounters.tenantId, SEQ_TENANT));
       for (const id of SEQ_MSG) {
         await tx.delete(processed).where(eq(processed.messageId, id));
@@ -217,7 +238,19 @@ describe("PO consumer — sequential creation for one tenant (integration)", () 
     }));
   }
 
-  beforeAll(async () => { await wipeSeqTenant(); });
+  beforeAll(async () => {
+    await wipeSeqTenant();
+    // One approved indent per PO, totalMinor exactly matching that PO's own
+    // quantity * unitPriceMinor (2*5000, 5*5000, 1*5000) -- see the SEQ_IND
+    // comment above for why this fixture exists.
+    await runWithTenant(SEQ_TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(procurementIndents).values([
+        { id: SEQ_IND[0]!, tenantId: SEQ_TENANT, indentNo: "IND-SEQ-0001", department: "Admin", purpose: "sequential-PO test fixture", totalMinor: 10_000n, committedMinor: 0n, currency: "INR", status: "approved", createdBy: SEQ_ACTOR, updatedBy: SEQ_ACTOR },
+        { id: SEQ_IND[1]!, tenantId: SEQ_TENANT, indentNo: "IND-SEQ-0002", department: "Admin", purpose: "sequential-PO test fixture", totalMinor: 25_000n, committedMinor: 0n, currency: "INR", status: "approved", createdBy: SEQ_ACTOR, updatedBy: SEQ_ACTOR },
+        { id: SEQ_IND[2]!, tenantId: SEQ_TENANT, indentNo: "IND-SEQ-0003", department: "Admin", purpose: "sequential-PO test fixture", totalMinor: 5_000n, committedMinor: 0n, currency: "INR", status: "approved", createdBy: SEQ_ACTOR, updatedBy: SEQ_ACTOR },
+      ]);
+    }));
+  });
   afterAll(async () => { await wipeSeqTenant(); });
 
   it("three back-to-back PO creates for the same tenant all persist with correct gapless numbering", async () => {
@@ -245,9 +278,9 @@ describe("PO consumer — sequential creation for one tenant (integration)", () 
     // correctly regardless of dispatch order. Deterministic via drain()
     // (awaits every tracked in-flight delivery) rather than a fixed sleep —
     // REL-028: a fixed sleep can flake under host contention.
-    await publishPo(SEQ_MSG[0]!, SEQ_PO[0]!, SEQ_VENDOR_A, "procurement_indent:seq-1", 2);
-    await publishPo(SEQ_MSG[1]!, SEQ_PO[1]!, SEQ_VENDOR_B, "procurement_indent:seq-2", 5);
-    await publishPo(SEQ_MSG[2]!, SEQ_PO[2]!, SEQ_VENDOR_A, "procurement_indent:seq-3", 1);
+    await publishPo(SEQ_MSG[0]!, SEQ_PO[0]!, SEQ_VENDOR_A, `procurement_indent:${SEQ_IND[0]}`, 2);
+    await publishPo(SEQ_MSG[1]!, SEQ_PO[1]!, SEQ_VENDOR_B, `procurement_indent:${SEQ_IND[1]}`, 5);
+    await publishPo(SEQ_MSG[2]!, SEQ_PO[2]!, SEQ_VENDOR_A, `procurement_indent:${SEQ_IND[2]}`, 1);
     await q.drain();
     await q.stop();
 

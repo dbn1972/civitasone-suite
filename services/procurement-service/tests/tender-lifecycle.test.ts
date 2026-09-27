@@ -28,6 +28,7 @@ import {
   procurementTenders, procurementTenderBids, procurementTenderFinancialBids,
 } from "../src/modules/tender/schema.js";
 import { procurementVendors } from "../src/modules/vendor/schema.js";
+import { procurementIndents } from "../src/modules/indent/schema.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { outboxMessages, processed, commandResults, getCommandOutcome } from "../src/shared/outbox.js";
 import { registerTenderConsumers } from "../src/modules/tender/consumer.js";
@@ -79,6 +80,29 @@ async function seedVendor(id: string, vendorType = "registered") {
   }));
 }
 
+// CRITICAL FIX (indent-budget enforcement): poCreate now looks up the real
+// indent behind indentRef and reserves budget against it (see
+// po/consumer.ts's reserveIndentBudget / indent/repo.ts's
+// addIndentCommittedGuarded) — a fabricated "tender:finance-test"-style ref
+// with no backing row is no longer silently accepted. This fleet's own
+// precedent for updating a fixture once validation tightens is DOM-002's
+// GRN-creation tests, which needed a real PO + PO item once the over-receipt
+// guard started re-deriving orderedQty server-side instead of trusting the
+// client. seedApprovedIndent is that same kind of fixture update, scoped
+// only to the "Finance commitment" describe block below whose PO must
+// actually be WRITTEN (the sibling budget-exceeded test never reaches the
+// indent gate at all — finance rejects it first — so it needs no indent).
+async function seedApprovedIndent(id: string, totalMinor: bigint) {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(procurementIndents).values({
+      id, tenantId: TENANT, indentNo: `IND-FIN-${id.slice(-6)}`,
+      department: "Admin", purpose: "tender-lifecycle finance-commitment fixture",
+      totalMinor, committedMinor: 0n, currency: "INR", status: "approved",
+      createdBy: CREATOR, updatedBy: CREATOR,
+    }).onConflictDoNothing();
+  }));
+}
+
 async function wipeTenant(t: string) {
   await runWithTenant(t, () => db.transaction(async (tx) => {
     await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
@@ -92,6 +116,7 @@ async function wipeTenant(t: string) {
     await tx.delete(procurementTenderBids).where(eq(procurementTenderBids.tenantId, t));
     await tx.delete(procurementTenders).where(eq(procurementTenders.tenantId, t));
     await tx.delete(procurementVendors).where(eq(procurementVendors.tenantId, t));
+    await tx.delete(procurementIndents).where(eq(procurementIndents.tenantId, t));
   }));
 }
 
@@ -404,9 +429,17 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
   const SANCTIONED_PO = randomUUID();
   const REJECTED_PO = randomUUID();
   const vendorId = "99999999-0000-4000-8000-0000000000f1";
+  // Rs 3,50,000 approved — exactly covers the SANCTIONED_PO test's Rs
+  // 3,50,000 line item, so the PO-creation test below still proves what it
+  // always proved (finance sanction sufficiency writes the PO) without
+  // accidentally also exercising indent-budget headroom as its limiting
+  // factor. REJECTED_PO's own test never reaches the indent gate — finance
+  // rejects it first on sanction insufficiency — so it needs no indent.
+  const FINANCE_TEST_INDENT = randomUUID();
 
   beforeAll(async () => {
     await seedVendor(vendorId);
+    await seedApprovedIndent(FINANCE_TEST_INDENT, 35_000_000n);
   });
 
   it("finance returns available >= total (2xx) → PO is written", async () => {
@@ -424,7 +457,7 @@ describe("Finance commitment — PO consumer calls finance for sanction availabi
     await q.start();
     await q.publish(COMMANDS.poCreate, msg(COMMANDS.poCreate, {
       id: SANCTIONED_PO, tenantId: TENANT, poNo: "AUTO", vendorId,
-      indentRef: "tender:finance-test", sanctionRef: "finance_sanction:abc-123",
+      indentRef: `procurement_indent:${FINANCE_TEST_INDENT}`, sanctionRef: "finance_sanction:abc-123",
       items: [{ itemCode: "X", description: "Item", quantity: 1, unit: "nos", unitPriceMinor: 35_000_000, itemType: "service" }],
     }));
     await new Promise<void>((r) => setTimeout(r, 400)); // settle create (queue stays running)
