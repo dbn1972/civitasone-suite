@@ -2,7 +2,7 @@
   "realm": "civitasone",
   "enabled": true,
   "displayName": "CivitasOne Suite",
-  "displayNameHtml": "<strong>CIVITASONE</strong> SUITE",
+  "displayNameHtml": "<strong>CivitasOne</strong> Suite",
   "loginTheme": "civitasone",
   "sslRequired": "external",
   "registrationAllowed": false,
@@ -19,9 +19,9 @@
   "maxDeltaTimeSeconds": 43200,
   "failureFactor": 5,
   "passwordPolicy": "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1) and notUsername(undefined) and passwordHistory(5)",
-  "ssoSessionMaxLifespan": 36000,
-  "ssoSessionIdleTimeout": 7200,
-  "accessTokenLifespan": 3600,
+  "ssoSessionMaxLifespan": 28800,
+  "ssoSessionIdleTimeout": 1800,
+  "accessTokenLifespan": 1800,
   "accessTokenLifespanForImplicitFlow": 900,
   "refreshTokenMaxReuse": 0,
   "revokeRefreshToken": true,
@@ -55,6 +55,102 @@
       {
         "name": "service_account",
         "description": "Service-to-service machine identity"
+      },
+      {
+        "name": "admin"
+      },
+      {
+        "name": "audit_admin"
+      },
+      {
+        "name": "audit_officer"
+      },
+      {
+        "name": "budget_officer"
+      },
+      {
+        "name": "citizen_officer"
+      },
+      {
+        "name": "crm_admin",
+        "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "crm_user",
+        "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "data_principal"
+      },
+      {
+        "name": "dept_officer"
+      },
+      {
+        "name": "employee",
+        "description": "Employee self-service (test role, minimal — added for role-coverage UX testing)"
+      },
+      {
+        "name": "estab_officer"
+      },
+      {
+        "name": "finance_admin"
+      },
+      {
+        "name": "finance_officer"
+      },
+      {
+        "name": "grievance_officer"
+      },
+      {
+        "name": "hr_admin"
+      },
+      {
+        "name": "hr_officer"
+      },
+      {
+        "name": "inspection_admin"
+      },
+      {
+        "name": "inspector"
+      },
+      {
+        "name": "legal_admin"
+      },
+      {
+        "name": "legal_officer"
+      },
+      {
+        "name": "manager",
+        "description": "Line manager (test role, minimal — added for role-coverage UX testing)"
+      },
+      {
+        "name": "payroll_admin",
+        "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "payroll_officer",
+        "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "platform_admin"
+      },
+      {
+        "name": "procurement_admin"
+      },
+      {
+        "name": "procurement_officer"
+      },
+      {
+        "name": "sales_officer",
+        "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "section_officer",
+        "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
+      },
+      {
+        "name": "works_admin",
+        "description": "Created for Tier-1 RBAC audit 2026-08-20 — role was checked in service code but did not exist in Keycloak"
       }
     ]
   },
@@ -67,7 +163,7 @@
       "publicClient": true,
       "standardFlowEnabled": true,
       "implicitFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
+      "directAccessGrantsEnabled": true,
       "serviceAccountsEnabled": false,
       "redirectUris": [
         "http://localhost:3000/*",
@@ -203,8 +299,32 @@
       "publicClient": false,
       "secret": "${KEYCLOAK_ADMIN_CLI_SECRET}",
       "standardFlowEnabled": false,
-      "directAccessGrantsEnabled": false,
-      "serviceAccountsEnabled": true
+      "directAccessGrantsEnabled": true,
+      "serviceAccountsEnabled": true,
+      "protocolMappers": [
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "tenant-id",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-attribute-mapper",
+          "config": {
+            "user.attribute": "tenantId",
+            "claim.name": "tid",
+            "jsonType.label": "String",
+            "access.token.claim": "true"
+          }
+        }
+      ]
     }
   ],
   "identityProviders": [],
@@ -232,7 +352,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Admin@1234",
+          "value": "SuperAdmin@1234",
           "temporary": false
         }
       ],
