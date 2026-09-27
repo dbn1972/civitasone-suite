@@ -19,7 +19,39 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { resolveContext, HttpError } from "../../shared/context.js";
-import { sqlPool as sqlClient } from "../../shared/db.js";
+import { sqlClient } from "../../shared/db.js";
+import { withRawTenantGuc } from "@civitasone/db";
+
+/**
+ * Audit: hrms.ai_plugin_configs and hrms.ai_prediction_log are both FORCE ROW
+ * LEVEL SECURITY (tenant_isolation_policy). This module used to call
+ * sqlPool.query() (a bare, pooled connection with no app.tenant_id GUC set)
+ * directly, so under hrms_svc (NOBYPASSRLS) every policy failed CLOSED -- the
+ * whole admin UI at /tenant-admin/ai-plugins silently showed every plugin as
+ * never-configured/zero-stats regardless of real usage, and toggling a plugin
+ * on/off silently affected zero rows. Same bug, same fix as social/routes.ts's
+ * identical withTenantGuc (see that file's header for the full story); this
+ * module never received it. sqlPool is no longer imported here -- every call
+ * site now goes through this wrapper instead.
+ */
+function withTenantGuc<T>(
+  tenantId: string,
+  fn: (pool: {
+    query<R = any>(text: string, params?: readonly unknown[]): Promise<{ rows: R[]; rowCount: number }>;
+  }) => Promise<T>,
+): Promise<T> {
+  return withRawTenantGuc(sqlClient, tenantId, async (tx) => {
+    const pool = {
+      async query<R = any>(text: string, params: readonly unknown[] = []): Promise<{ rows: R[]; rowCount: number }> {
+        const result = await tx.unsafe(text, params as unknown as never[]);
+        const rows = result as unknown as R[];
+        const rowCount = (result as unknown as { count?: number }).count ?? rows.length;
+        return { rows, rowCount };
+      },
+    };
+    return fn(pool);
+  });
+}
 
 // ─── All available ML plugins ─────────────────────────────────────────────────
 
@@ -182,16 +214,16 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
 
     // Get tenant-specific configs
-    const configs = await sqlClient.query(
+    const configs = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT plugin_id, enabled, mode, confidence_threshold, notify_on_prediction,
               auto_action, max_predictions_per_day, updated_at
        FROM hrms.ai_plugin_configs WHERE tenant_id = $1`,
       [ctx.tenantId],
-    );
+    ));
     const configMap = new Map(configs.rows.map((r: any) => [r.plugin_id, r]));
 
     // Get prediction stats (last 30 days)
-    const stats = await sqlClient.query(
+    const stats = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT plugin_id,
               COUNT(*)::int AS prediction_count,
               ROUND(AVG(confidence)::numeric, 1) AS avg_confidence,
@@ -203,7 +235,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
        WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '30 days'
        GROUP BY plugin_id`,
       [ctx.tenantId],
-    );
+    ));
     const statsMap = new Map(stats.rows.map((r: any) => [r.plugin_id, r]));
 
     const plugins = ML_PLUGINS.map((p) => {
@@ -235,7 +267,18 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
     return reply.send({ data: plugins });
   });
 
-  /** PATCH /v1/hrms/ai/plugins/:pluginId — update plugin config (enable/disable/threshold) */
+  /**
+   * PATCH /v1/hrms/ai/plugins/:pluginId — update plugin config (enable/disable/threshold)
+   *
+   * Audit (unrelated to the GUC fix above, found while adding regression
+   * coverage for it): the INSERT below always supplies all 9 columns, never
+   * omitting one to let its DEFAULT apply, so a plugin's FIRST-ever PATCH
+   * that leaves notifyOnPrediction/autoAction/maxPredictionsPerDay unset
+   * inserts NULL into their NOT NULL columns and 500s -- on both pre- and
+   * post-GUC-fix code (confirmed against unmodified main). Pre-existing,
+   * out of scope for a tenant-scoping fix; flagged in the PR description,
+   * not fixed here.
+   */
   app.patch("/v1/hrms/ai/plugins/:pluginId", async (req, reply) => {
     const ctx = resolveContext(req);
     const { pluginId } = req.params as { pluginId: string };
@@ -245,7 +288,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
     const plugin = ML_PLUGINS.find((p) => p.id === pluginId);
     if (!plugin) throw new HttpError(404, "NOT_FOUND", `Unknown AI plugin: ${pluginId}`);
 
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `INSERT INTO hrms.ai_plugin_configs (id, tenant_id, plugin_id, enabled, mode,
         confidence_threshold, notify_on_prediction, auto_action, max_predictions_per_day, updated_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
@@ -263,7 +306,7 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
         body.confidenceThreshold ?? null, body.notifyOnPrediction ?? null,
         body.autoAction ?? null, body.maxPredictionsPerDay ?? null,
       ],
-    );
+    ));
 
     return reply.send({ pluginId, status: "updated", config: body });
   });
@@ -274,17 +317,17 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
     const { pluginId } = req.params as { pluginId: string };
 
     // Daily prediction counts (last 30 days)
-    const daily = await sqlClient.query(
+    const daily = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT DATE(created_at) AS date, COUNT(*)::int AS predictions,
               ROUND(AVG(confidence)::numeric, 1) AS avg_confidence
        FROM hrms.ai_prediction_log
        WHERE tenant_id = $1 AND plugin_id = $2 AND created_at > NOW() - INTERVAL '30 days'
        GROUP BY DATE(created_at) ORDER BY date`,
       [ctx.tenantId, pluginId],
-    );
+    ));
 
     // Confidence distribution
-    const distribution = await sqlClient.query(
+    const distribution = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT
         CASE
           WHEN confidence >= 90 THEN '90-100'
@@ -297,16 +340,16 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
        WHERE tenant_id = $1 AND plugin_id = $2 AND created_at > NOW() - INTERVAL '30 days'
        GROUP BY bucket ORDER BY bucket DESC`,
       [ctx.tenantId, pluginId],
-    );
+    ));
 
     // Recent predictions (last 20)
-    const recent = await sqlClient.query(
+    const recent = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, confidence, outcome, input_summary, output_summary, latency_ms, created_at
        FROM hrms.ai_prediction_log
        WHERE tenant_id = $1 AND plugin_id = $2
        ORDER BY created_at DESC LIMIT 20`,
       [ctx.tenantId, pluginId],
-    );
+    ));
 
     return reply.send({
       data: {
@@ -328,11 +371,11 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
       notes: z.string().max(500).optional(),
     }).parse(req.body);
 
-    await sqlClient.query(
+    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `UPDATE hrms.ai_prediction_log SET outcome = $1, feedback_notes = $2, feedback_by = $3, feedback_at = NOW()
        WHERE id = $4 AND tenant_id = $5 AND plugin_id = $6`,
       [body.outcome, body.notes ?? null, ctx.actorId, body.predictionId, ctx.tenantId, pluginId],
-    );
+    ));
 
     return reply.send({ status: "feedback_recorded" });
   });
@@ -341,14 +384,14 @@ export async function aiPluginRegistryRoutes(app: FastifyInstance): Promise<void
   app.get("/v1/hrms/ai/plugins/summary", async (req, reply) => {
     const ctx = resolveContext(req);
 
-    const [totals] = await sqlClient.query(
+    const [totals] = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT
         (SELECT COUNT(*)::int FROM hrms.ai_plugin_configs WHERE tenant_id = $1 AND enabled = true) AS active_plugins,
         (SELECT COUNT(*)::int FROM hrms.ai_prediction_log WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '24 hours') AS predictions_today,
         (SELECT COUNT(*)::int FROM hrms.ai_prediction_log WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '30 days') AS predictions_30d,
         (SELECT ROUND(AVG(confidence)::numeric, 1) FROM hrms.ai_prediction_log WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '7 days') AS avg_confidence_7d`,
       [ctx.tenantId],
-    ).then(r => r.rows);
+    )).then(r => r.rows);
 
     return reply.send({
       data: {
