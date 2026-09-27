@@ -5,6 +5,7 @@ import {
   incrementConsumerError, getConsumerErrorCount,
   incrementDlqMessage, getDlqMessageCount,
   incrementOutboxRelayFailure, getOutboxRelayFailureCount,
+  incrementPublishNoSubscribers, getPublishNoSubscribersCount,
   resetConsumerErrorMetrics, resetFailureMetrics,
 } from "@civitasone/observability";
 import { MemoryQueue } from "../src/bus.js";
@@ -44,10 +45,19 @@ describe("observability — error capture + failure metrics (09-T1)", () => {
     incrementConsumerError("finance", "finance.gl.post");
     incrementDlqMessage("finance.gl.post");
     incrementOutboxRelayFailure("finance");
+    incrementPublishNoSubscribers("finance.gl.post");
 
     expect(getConsumerErrorCount("finance", "finance.gl.post")).toBe(2);
     expect(getDlqMessageCount("finance.gl.post")).toBe(1);
     expect(getOutboxRelayFailureCount("finance")).toBe(1);
+    expect(getPublishNoSubscribersCount("finance.gl.post")).toBe(1);
+  });
+
+  it("resetFailureMetrics clears publish_no_subscribers_total too", () => {
+    incrementPublishNoSubscribers("finance.gl.post");
+    expect(getPublishNoSubscribersCount("finance.gl.post")).toBe(1);
+    resetFailureMetrics();
+    expect(getPublishNoSubscribersCount("finance.gl.post")).toBe(0);
   });
 
   it("captureError increments the service-labeled captured_errors_total metric (T1.2)", () => {
@@ -90,5 +100,41 @@ describe("observability — error capture + failure metrics (09-T1)", () => {
     expect(calls).toBe(3);
     expect(q.dlq.length).toBe(1);
     expect(q.dlq[0]?.topic).toBe("test.topic");
+  });
+
+  // PUBLISH-VOID: root cause of a procurement-service incident where a PO
+  // creation command published while nobody had subscribed to its topic was
+  // silently delivered to nobody — publish() still resolved normally (no
+  // throw, no queue_consumer_error, no DLQ entry), so the only trace was the
+  // missing downstream write. MemoryQueue is what every non-LocalStack-gated
+  // test in this repo actually exercises, so this is the regression surface
+  // that matters most for catching this again; the SQS driver's counterpart
+  // is covered by queue-service/tests/sqs.localstack.test.ts.
+  it("PUBLISH-VOID: publishing to a topic with zero subscribers is now observable, not silent", async () => {
+    const q = new MemoryQueue();
+
+    const messageId = await q.publish("nobody.listening", {
+      type: "nobody.listening", tenantId: "t", actorId: "a", correlationId: "c", schemaVersion: "1.0", payload: {},
+    });
+
+    // The bug: publish() still "succeeds" — same contract as always, so this
+    // fix never turns a previously-working call into a thrown error.
+    expect(typeof messageId).toBe("string");
+    // The fix: the zero-destination case is no longer invisible.
+    expect(getPublishNoSubscribersCount("nobody.listening")).toBe(1);
+  });
+
+  it("PUBLISH-VOID: once a subscriber exists, the same topic publishes normally with no false-positive metric", async () => {
+    const q = new MemoryQueue();
+    const received: unknown[] = [];
+    q.subscribe("somebody.listening", async (msg) => { received.push(msg); });
+
+    await q.publish("somebody.listening", {
+      type: "somebody.listening", tenantId: "t", actorId: "a", correlationId: "c", schemaVersion: "1.0", payload: {},
+    });
+    await q.drain();
+
+    expect(received).toHaveLength(1);
+    expect(getPublishNoSubscribersCount("somebody.listening")).toBe(0);
   });
 });

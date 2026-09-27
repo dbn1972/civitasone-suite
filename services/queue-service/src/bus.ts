@@ -21,7 +21,7 @@ import {
 import { Agent as HttpAgent } from "node:http";
 import { Agent as HttpsAgent } from "node:https";
 import { NodeHttpHandler } from "@smithy/node-http-handler";
-import { incrementConsumerError, incrementDlqMessage, captureError, recordConsumerHeartbeat } from "@civitasone/observability";
+import { incrementConsumerError, incrementDlqMessage, incrementPublishNoSubscribers, captureError, recordConsumerHeartbeat } from "@civitasone/observability";
 import { parseEnvelope } from "@civitasone/events";
 import { withTenantConsumer } from "@civitasone/db";
 
@@ -294,6 +294,27 @@ export class MemoryQueue implements Queue {
   async publish<T>(topic: string, input: PublishInput<T>, _options?: PublishOptions): Promise<string> {
     const msg = envelope(input);
     const handlers = this.handlers.get(topic) ?? [];
+    // PUBLISH-VOID: nobody has subscribed to this topic on this queue instance
+    // yet, so the fan-out below is a no-op and this message is about to be
+    // delivered to nobody — make that loud (see @civitasone/observability's
+    // PUBLISH-VOID doc comment) instead of returning a success-looking
+    // messageId with zero trace, which is what let a real PO-creation command
+    // vanish silently upstream of this driver's SQS counterpart.
+    if (handlers.length === 0) {
+      incrementPublishNoSubscribers(topic);
+      // eslint-disable-next-line no-console -- structured operational error log
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "queue_publish_no_subscribers",
+          driver: "memory",
+          topic,
+          messageId: msg.messageId,
+          correlationId: msg.correlationId,
+          traceparent: msg.traceparent,
+        }),
+      );
+    }
     // Delivery stays fire-and-forget (publish returns the id immediately), but we
     // retain a promise that settles once every handler for this message has fully
     // run (including retry backoffs) so drain() can await it. deliver() never
@@ -793,6 +814,33 @@ export class SqsQueue implements Queue {
   async publish<T>(topic: string, input: PublishInput<T>, options?: PublishOptions): Promise<string> {
     const msg = envelope(input);
     const urls = await this.resolveSubscriberQueues(topic);
+    // PUBLISH-VOID: no subscriber queue exists for this topic yet (its own
+    // consumer never subscribed on this broker — not deployed, crashed, or
+    // removed from the process manager), so the Promise.all(urls.map(...))
+    // fan-out below is a no-op: this message is about to be delivered to
+    // nobody. That previously returned msg.messageId looking exactly like a
+    // normal successful publish — no error, no DLQ entry, no log, no metric,
+    // because no consumer code ever ran to produce one — which is precisely
+    // how a procurement PO-creation command could vanish silently while its
+    // HTTP caller still saw 202 Accepted. Make the zero-destination case
+    // loud without changing delivery semantics (still fire-and-forget: this
+    // call still does not throw, so it stays a drop-in-safe addition for
+    // every existing caller/topic, including ones with no consumer by design).
+    if (urls.length === 0) {
+      incrementPublishNoSubscribers(topic);
+      // eslint-disable-next-line no-console -- structured operational error log
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "queue_publish_no_subscribers",
+          service: this.service,
+          topic,
+          messageId: msg.messageId,
+          correlationId: msg.correlationId,
+          traceparent: msg.traceparent,
+        }),
+      );
+    }
     const body = JSON.stringify(msg);
     const attrs = {
       messageId:     { DataType: "String" as const, StringValue: msg.messageId },

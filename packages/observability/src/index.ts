@@ -366,10 +366,34 @@ const outboxRelayFailuresTotal = new Map<string, number>(); // service -> count
 // an additive metric.
 const dlqTotal = new Map<string, number>();
 const capturedErrorsTotal = new Map<string, number>();       // service -> count
+// PUBLISH-VOID: a publish() that resolves to zero subscriber queues/handlers
+// for its topic delivers to nobody — SendMessage (SqsQueue) / the handler
+// fan-out (MemoryQueue) is simply never invoked, so publish() still resolves
+// normally and looks identical to a successful delivery. That is very often
+// a real bug (the topic's own consumer hasn't subscribed yet: not deployed,
+// crashed, or dropped from the process manager) rather than an intentional
+// "nobody listens to this event yet," and previously it left NO trace
+// anywhere — not a queue_consumer_error log, not a DLQ entry, not a metric —
+// because no consumer code ever ran to produce one. Root-caused from a
+// procurement-service incident: PO-creation commands published while
+// procurement-worker's own subscriber queue did not yet exist were silently
+// discarded, with the HTTP layer still reporting 202 Accepted.
+const publishNoSubscribersTotal = new Map<string, number>(); // topic -> count
 
 /** Increment outbox_relay_failures_total{service}. */
 export function incrementOutboxRelayFailure(service: string): void {
   outboxRelayFailuresTotal.set(service, (outboxRelayFailuresTotal.get(service) ?? 0) + 1);
+}
+
+/**
+ * Increment publish_no_subscribers_total{topic} — call every time publish()
+ * discovers zero subscriber queues/handlers for a topic (see PUBLISH-VOID
+ * above). Delivery semantics are unchanged (publish() still does not throw,
+ * preserving today's fire-and-forget contract for every existing caller);
+ * this only makes the zero-destination case observable instead of silent.
+ */
+export function incrementPublishNoSubscribers(topic: string): void {
+  publishNoSubscribersTotal.set(topic, (publishNoSubscribersTotal.get(topic) ?? 0) + 1);
 }
 
 /**
@@ -403,10 +427,16 @@ export function getDlqMessageCount(topic: string, reason?: string): number {
   }
   return sum;
 }
+
+/** publish_no_subscribers_total count for `topic`. */
+export function getPublishNoSubscribersCount(topic: string): number {
+  return publishNoSubscribersTotal.get(topic) ?? 0;
+}
 export function resetFailureMetrics(): void {
   outboxRelayFailuresTotal.clear();
   dlqTotal.clear();
   capturedErrorsTotal.clear();
+  publishNoSubscribersTotal.clear();
 }
 
 function formatFailureMetrics(): string[] {
@@ -433,6 +463,13 @@ function formatFailureMetrics(): string[] {
   );
   for (const [service, count] of capturedErrorsTotal) {
     lines.push(`captured_errors_total{service="${service}"} ${count}`);
+  }
+  lines.push(
+    "# HELP publish_no_subscribers_total Publishes that found zero subscriber queues/handlers for their topic (message delivered to nobody), by topic",
+    "# TYPE publish_no_subscribers_total counter",
+  );
+  for (const [topic, count] of publishNoSubscribersTotal) {
+    lines.push(`publish_no_subscribers_total{topic="${topic}"} ${count}`);
   }
   return lines;
 }

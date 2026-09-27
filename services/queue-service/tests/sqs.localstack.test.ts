@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, afterAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 import { SqsQueue, type CommandEnvelope } from "../src/bus.js";
-import { getDlqMessageCount, resetFailureMetrics } from "@civitasone/observability";
+import { getDlqMessageCount, getPublishNoSubscribersCount, resetFailureMetrics } from "@civitasone/observability";
 
 /**
  * 05-T5: real-SqsQueue integration against LocalStack.
@@ -105,4 +105,19 @@ describe.skipIf(!endpoint)("SqsQueue ↔ LocalStack (05-T5)", () => {
     expect(applied).toBe(1);
     await queue.stop();
   }, 60_000);
+
+  // PUBLISH-VOID: this is the production driver's half of the incident this
+  // fix closes. resolveSubscriberQueues() does a real ListQueues against
+  // LocalStack, so a fresh topic that nothing has ever subscribed to (no
+  // "<topic>__<service>" queue exists yet) reproduces exactly the state
+  // procurement.po.create was found in — publish() must keep "succeeding"
+  // (no thrown error, unchanged contract) while now recording the drop.
+  it("publish() to a topic with no subscriber queue yet is observable, not silent", async () => {
+    const topic = `qtest.void.${randomUUID().slice(0, 8)}`;
+
+    const messageId = await new SqsQueue().publish(topic, publishInput(topic));
+
+    expect(typeof messageId).toBe("string");
+    expect(getPublishNoSubscribersCount(topic)).toBe(1);
+  }, 30_000);
 });
