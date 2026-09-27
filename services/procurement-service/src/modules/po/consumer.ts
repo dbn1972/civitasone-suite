@@ -8,6 +8,8 @@ import * as repo from "./repo.js";
 import { assertBudgetSufficient, assertCanDispatch, assertTransitionAllowed, assertDistinctMakerChecker, DomainError } from "./domain.js";
 import * as vendorRepo from "../vendor/repo.js";
 import * as blacklistRepo from "../vendor-blacklist/repo.js";
+import * as indentRepo from "../indent/repo.js";
+import { assertIndentApproved, DomainError as IndentDomainError } from "../indent/domain.js";
 import { allocateDocNo } from "../../shared/numbering.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -50,6 +52,67 @@ async function checkSanctionAvailable(sanctionRef: string, required: bigint, ten
   const data = await res.json() as { available: string };
   // Throws DomainError("BUDGET_EXCEEDED") only when funds are genuinely insufficient.
   assertBudgetSufficient(BigInt(data.available), required);
+}
+
+const REF_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * CRITICAL FIX: a purchase order (poCreate) or GeM award (gemOrderCreate) was
+ * previously written with NO check against the indent it references at
+ * all — indentRef was a completely unvalidated opaque string, with no
+ * lookup, no check against the indent's approved total_minor, and no
+ * tracking of how much of an indent had already been consumed by prior
+ * POs. Confirmed live: a Rs 900 PO succeeded against a Rs 500 *approved*
+ * indent, and two simultaneous PO-creation requests against one fresh
+ * Rs 900 indent both succeeded (Rs 1,800 committed against a Rs 900
+ * ceiling).
+ *
+ * This reserves budget atomically via indentRepo.addIndentCommittedGuarded
+ * (a single guarded UPDATE — see its doc comment in indent/repo.ts for why
+ * that alone closes the concurrent-double-spend race with no separate
+ * SELECT ... FOR UPDATE step) and MUST be called from inside the same
+ * db.transaction() that will insert the PO row, so the reservation and the
+ * PO write commit or roll back together. Zero-tolerance hard block: this
+ * platform's GFR library (gfr/mode-bands.ts) governs procurement-MODE
+ * selection by value band only and has no documented overrun-percentage
+ * exception for a PO against its indent, so headroom is enforced at exactly
+ * 100% — mirroring finance-service's own removal of a soft "enforce" bypass
+ * on its analogous chk_allocation_no_overcommit guard.
+ *
+ * Returns null on success (budget reserved). On failure, returns the
+ * {code, reason} to emit on EVENTS.poBudgetExceeded. The guarded UPDATE
+ * above is the sole atomic gate; the lookup below only determines *why* it
+ * failed (not found / not approved / insufficient headroom) for a clear,
+ * specific error — it cannot itself be raced into a false "success" because
+ * the reservation has already definitively failed by the time it runs.
+ */
+async function reserveIndentBudget(
+  tx: any,
+  indentRef: string,
+  tenantId: string,
+  requiredMinor: bigint,
+): Promise<{ code: string; reason: string } | null> {
+  const indentId = indentRef.replace(/^.*:/, "");
+  const validId = REF_UUID_RE.test(indentId);
+  const reserved = validId && (await indentRepo.addIndentCommittedGuarded(tx, indentId, tenantId, requiredMinor));
+  if (reserved) return null;
+
+  const indent = validId ? await indentRepo.findIndentByIdTx(tx, indentId) : null;
+  if (!indent || indent.tenantId !== tenantId) {
+    return { code: "INDENT_NOT_FOUND", reason: `indent referenced by '${indentRef}' was not found for this tenant` };
+  }
+  try {
+    assertIndentApproved(indent.status ?? "draft");
+  } catch (err) {
+    if (err instanceof IndentDomainError) return { code: err.code, reason: err.message };
+    throw err;
+  }
+  // Status is approved but the guard still failed -> insufficient headroom.
+  const remaining = indent.totalMinor - indent.committedMinor;
+  return {
+    code: "INDENT_BUDGET_EXCEEDED",
+    reason: `PO value ${requiredMinor} paise exceeds indent ${indent.indentNo}'s remaining approved amount ${remaining} paise (total=${indent.totalMinor}, already committed=${indent.committedMinor})`,
+  };
 }
 
 export function registerPoConsumers(queue: Queue): void {
@@ -125,8 +188,27 @@ export function registerPoConsumers(queue: Queue): void {
         return;
       }
 
+      // CRITICAL FIX: reserve indent budget atomically BEFORE allocating a PO
+      // number or writing the PO row — see reserveIndentBudget's doc comment.
+      // A PO rejected for indent-budget reasons never consumes a PO number,
+      // mirroring the blacklist gate's own guarantee above.
+      const indentRejection = await reserveIndentBudget(tx, p.indentRef, p.tenantId, totalMinor);
+      if (indentRejection) {
+        await enqueue(tx, {
+          topic: EVENTS.poBudgetExceeded, eventType: EVENTS.poBudgetExceeded,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            poId: p.id, poNo: p.poNo, indentRef: p.indentRef, totalMinor: totalMinor.toString(),
+            reason: indentRejection.reason, code: indentRejection.code,
+          },
+        });
+        await audit(tx, msg, "rejected_indent_budget_exceeded", "po", p.id);
+        return;
+      }
+
       // Gapless server-generated PO number (#12) — allocated only after the
-      // blacklist gate passes, so a rejected PO never consumes a number.
+      // blacklist and indent-budget gates pass, so a rejected PO never
+      // consumes a number.
       const poNo = await allocateDocNo(tx, p.tenantId, "po");
       await repo.insertPo(tx, {
         id: p.id, tenantId: p.tenantId, poNo, vendorId: p.vendorId,
@@ -256,6 +338,23 @@ export function registerPoConsumers(queue: Queue): void {
           },
         });
         await audit(tx, msg, "rejected_blacklisted", "po", p.id);
+        return;
+      }
+
+      // CRITICAL FIX: GeM awards write into the same procurement_pos table as
+      // poCreate and were the identical unguarded bypass — same atomic
+      // indent-budget reservation, same reasoning as poCreate above.
+      const indentRejection = await reserveIndentBudget(tx, p.indentRef, p.tenantId, totalMinor);
+      if (indentRejection) {
+        await enqueue(tx, {
+          topic: EVENTS.poBudgetExceeded, eventType: EVENTS.poBudgetExceeded,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            poId: p.id, poNo: p.poNo, indentRef: p.indentRef, totalMinor: totalMinor.toString(),
+            reason: indentRejection.reason, code: indentRejection.code,
+          },
+        });
+        await audit(tx, msg, "rejected_indent_budget_exceeded", "po", p.id);
         return;
       }
 

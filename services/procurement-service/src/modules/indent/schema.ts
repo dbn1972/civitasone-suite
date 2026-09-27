@@ -9,6 +9,12 @@ export const procurementIndents = indentSchema.table("procurement_indents", {
   department:   text("department").notNull(),
   purpose:      text("purpose").notNull(),
   totalMinor:   bigint("total_minor", { mode: "bigint" }).notNull().default(0n),
+  // Sum of total_minor across all non-cancelled POs raised against this
+  // indent (addIndentCommittedGuarded in repo.ts is the sole writer).
+  // Available headroom = total_minor - committed_minor. Mirrors
+  // finance-service's finance_budget_allocation.committed_minor for
+  // cross-codebase naming consistency (see migrations/0040_indent_committed_minor.sql).
+  committedMinor: bigint("committed_minor", { mode: "bigint" }).notNull().default(0n),
   currency:     char("currency", { length: 3 }).notNull().default("INR"),
   status:       varchar("status", { length: 24 }).notNull().default("draft"),
   indentDate:   date("indent_date").notNull().defaultNow(),
