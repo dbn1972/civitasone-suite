@@ -6,6 +6,10 @@
  * Test 3 — GRN three-way match: qty mismatch → three_way_match=false, grnRejected in outbox.
  * Test 4 — CQRS wiring: POST /procurement/grns → queue → consumer → DB (MemoryQueue + MemoryCache).
  * Test 5 — MSE preference (pure): 15% effective price reduction for MSE vendors.
+ * Test 2b — PO consumer sequential creation (integration): three POs created back-to-back for
+ *   the SAME tenant each persist (row + items) with the correct gapless sequential poNo, and
+ *   doc_counters.last_seq matches the PO count exactly — regression coverage for an incident where
+ *   a tenant's second-and-later POs vanished silently (202 Accepted, zero DB writes, zero logs).
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -18,6 +22,7 @@ import { procurementGrns } from "../src/modules/grn/schema.js";
 import { procurementIndents } from "../src/modules/indent/schema.js";
 import { procurementPos, procurementPoItems } from "../src/modules/po/schema.js";
 import { outboxMessages, processed } from "../src/shared/outbox.js";
+import { docCounters } from "../src/shared/numbering.js";
 import { registerIndentConsumers } from "../src/modules/indent/consumer.js";
 import { registerGrnConsumers }    from "../src/modules/grn/consumer.js";
 import { registerPoConsumers }     from "../src/modules/po/consumer.js";
@@ -164,6 +169,111 @@ describe("PO consumer — budget exceeded (integration)", () => {
     const types = rows.map((r) => r.eventType);
     expect(types).toContain(EVENTS.poBudgetExceeded);
     expect(types).not.toContain(EVENTS.poApproved);
+  });
+});
+
+// ── 2b. PO consumer — sequential creation for one tenant (integration) ────
+//
+// Root-cause regression test: a full assessment campaign found that a
+// tenant's FIRST PO create succeeded (correct doc_counters increment, row
+// written), but every SUBSEQUENT create for that SAME tenant returned 202
+// Accepted while writing nothing and logging nothing. allocateDocNo's
+// INSERT..ON CONFLICT DO UPDATE..RETURNING under FORCE RLS, the consumer's
+// transaction boundary, and markProcessed's idempotency claim were each
+// independently verified correct (both via an isolated SQL-level repro and
+// by running this exact consumer, unmodified, against a real RLS-enforced
+// DB) — the actual defect was one layer down, in the shared queue transport
+// (@civitasone/queue-service's publish() fan-out: see the PUBLISH-VOID fix
+// in services/queue-service/src/bus.ts + observability.test.ts), which
+// silently delivers to nobody when a topic's consumer has not subscribed
+// yet. This test guards the consumer/domain side of that incident: it must
+// keep handling any NUMBER of sequential creates for one tenant correctly,
+// so a future regression here — not just in the transport — still fails CI.
+describe("PO consumer — sequential creation for one tenant (integration)", () => {
+  const SEQ_TENANT = "11111111-aaaa-4000-8000-000000000099";
+  const SEQ_ACTOR  = "00000000-aaaa-4000-8000-000000000099";
+  const SEQ_VENDOR_A = "aaaaaaaa-9999-4000-8000-000000000001";
+  const SEQ_VENDOR_B = "aaaaaaaa-9999-4000-8000-000000000002";
+  const SEQ_MSG = [
+    "55555555-9999-4000-8000-000000000001",
+    "55555555-9999-4000-8000-000000000002",
+    "55555555-9999-4000-8000-000000000003",
+  ];
+  const SEQ_PO = [
+    "44444444-9999-4000-8000-000000000001",
+    "44444444-9999-4000-8000-000000000002",
+    "44444444-9999-4000-8000-000000000003",
+  ];
+
+  async function wipeSeqTenant() {
+    await runWithTenant(SEQ_TENANT, () => db.transaction(async (tx) => {
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, SEQ_TENANT));
+      await tx.delete(procurementPoItems).where(eq(procurementPoItems.tenantId, SEQ_TENANT));
+      await tx.delete(procurementPos).where(eq(procurementPos.tenantId, SEQ_TENANT));
+      await tx.delete(docCounters).where(eq(docCounters.tenantId, SEQ_TENANT));
+      for (const id of SEQ_MSG) {
+        await tx.delete(processed).where(eq(processed.messageId, id));
+      }
+    }));
+  }
+
+  beforeAll(async () => { await wipeSeqTenant(); });
+  afterAll(async () => { await wipeSeqTenant(); });
+
+  it("three back-to-back PO creates for the same tenant all persist with correct gapless numbering", async () => {
+    const q = wireTenantAwareQueue(new MemoryQueue());
+    registerPoConsumers(q);
+    await q.start();
+
+    // No sanctionRef + a total well under SANCTION_REQUIRED_ABOVE_MINOR
+    // (Rs 1,000 in paise) skips both the sanction-required-rejection branch
+    // AND the finance-service budget-check branch, going straight to the
+    // creation transaction — exactly like the original incident's repro.
+    const publishPo = (messageId: string, poId: string, vendorId: string, indentRef: string, quantity: number) =>
+      q.publish(COMMANDS.poCreate, {
+        messageId, type: COMMANDS.poCreate, tenantId: SEQ_TENANT, actorId: SEQ_ACTOR,
+        correlationId: `corr-${messageId}`, schemaVersion: "1.0",
+        payload: {
+          id: poId, tenantId: SEQ_TENANT, poNo: "CLIENT-SUPPLIED-IGNORED", vendorId, indentRef,
+          items: [{ itemCode: "ITEM-1", description: "test item", quantity, unit: "nos", unitPriceMinor: 5000 }],
+        },
+      });
+
+    // Fired back-to-back (not serialised with sleeps between them) so this
+    // also exercises genuine concurrency for the same tenant's doc_counters
+    // row — allocateGaplessSeq's row-locked UPDATE must serialise these
+    // correctly regardless of dispatch order. Deterministic via drain()
+    // (awaits every tracked in-flight delivery) rather than a fixed sleep —
+    // REL-028: a fixed sleep can flake under host contention.
+    await publishPo(SEQ_MSG[0]!, SEQ_PO[0]!, SEQ_VENDOR_A, "procurement_indent:seq-1", 2);
+    await publishPo(SEQ_MSG[1]!, SEQ_PO[1]!, SEQ_VENDOR_B, "procurement_indent:seq-2", 5);
+    await publishPo(SEQ_MSG[2]!, SEQ_PO[2]!, SEQ_VENDOR_A, "procurement_indent:seq-3", 1);
+    await q.drain();
+    await q.stop();
+
+    const pos = await runWithTenant(SEQ_TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(procurementPos).where(eq(procurementPos.tenantId, SEQ_TENANT))
+    ));
+    const counters = await runWithTenant(SEQ_TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(docCounters).where(eq(docCounters.tenantId, SEQ_TENANT))
+    ));
+
+    // The exact assertion the original bug would have failed: every one of
+    // the three PO ids actually persisted, not just the first.
+    const persistedIds = pos.map((p) => p.id);
+    expect(persistedIds).toContain(SEQ_PO[0]);
+    expect(persistedIds).toContain(SEQ_PO[1]);
+    expect(persistedIds).toContain(SEQ_PO[2]);
+    expect(pos).toHaveLength(3);
+
+    // Gapless, correctly-sequential numbering — no duplicates, no gaps.
+    const poNos = pos.map((p) => p.poNo).sort();
+    expect(poNos).toEqual(["PO/2026/0001", "PO/2026/0002", "PO/2026/0003"]);
+
+    // doc_counters.last_seq must equal the PO count exactly (no phantom
+    // increments that rolled back, and no increments that were skipped).
+    const poCounter = counters.find((c) => c.docType === "po");
+    expect(poCounter?.lastSeq).toBe(3n);
   });
 });
 
