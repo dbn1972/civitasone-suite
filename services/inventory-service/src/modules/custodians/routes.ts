@@ -8,7 +8,7 @@
 import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { custodians } from "../items/schema.js";
 import { resolveContext, requireRole, registerErrorHandler } from "../../shared/context.js";
 import { createCustodianBody, idParam, custodianQueryParams } from "./validators.js";
@@ -48,10 +48,12 @@ export async function custodianRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_STORE_ROLES);
     const { id } = idParam.parse(req.params);
-    const rows = await db
+    // scopedRead() (not a bare db.select()) so the TenantRouter wrapper sets the
+    // app.tenant_id GUC — required for FORCE RLS to return any rows at all.
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(custodians)
-      .where(and(eq(custodians.tenantId, ctx.tenantId), eq(custodians.storeId, id)));
+      .where(and(eq(custodians.tenantId, ctx.tenantId), eq(custodians.storeId, id))));
     return reply.send({ data: rows });
   });
 
@@ -60,12 +62,14 @@ export async function custodianRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READ_ALL_ROLES);
     const q = custodianQueryParams.parse(req.query);
-    const rows = await db
+    // scopedRead() (not a bare db.select()) so the TenantRouter wrapper sets the
+    // app.tenant_id GUC — required for FORCE RLS to return any rows at all.
+    const rows = await scopedRead((tx) => tx
       .select()
       .from(custodians)
       .where(eq(custodians.tenantId, ctx.tenantId))
       .limit(q.limit)
-      .offset(q.offset);
+      .offset(q.offset));
     return reply.send({ data: rows });
   });
 

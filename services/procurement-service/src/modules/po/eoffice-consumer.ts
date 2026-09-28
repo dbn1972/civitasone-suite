@@ -5,6 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { assertDistinctMakerChecker, DomainError } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -19,6 +20,16 @@ const AUDIT_TOPIC = "audit.event.record";
  *
  * Without this, the file was approved in eOffice but the PO never moved — the
  * integration loop was open.
+ *
+ * SoD (#9): an "approved" decision is gated by the same
+ * assertDistinctMakerChecker guard as the internal poApprove command handler
+ * (see po/consumer.ts) — the approver (cb.decidedBy) must differ from the
+ * PO's creator. estab-service's own file-noting chain enforces no such
+ * distinctness itself (a single officer can legitimately be both the file's
+ * initiator and, through role overlap or a misrouted/compromised decision,
+ * its decider), so this was the only line of defense against self-approval
+ * on this path and it was missing. A self-decided "rejected"/"returned" is
+ * NOT a security concern and is left ungated.
  */
 export function registerEOfficeDecisionConsumers(queue: Queue): void {
   queue.subscribe(CONSUMED_EVENTS.poFileDecided, async (msg) => {
@@ -38,6 +49,22 @@ export function registerEOfficeDecisionConsumers(queue: Queue): void {
       if (po.status !== "pending" && po.status !== "draft") return;
 
       if (cb.decision === "approved") {
+        // SoD (#9): the eOffice decider must differ from the PO's creator —
+        // reject the decision instead of approving on self-approval.
+        try {
+          assertDistinctMakerChecker(po.createdBy, cb.decidedBy);
+        } catch (err) {
+          if (err instanceof DomainError && err.code === "SOD_VIOLATION") {
+            await enqueue(tx, {
+              topic: EVENTS.poApprovalRejected, eventType: EVENTS.poApprovalRejected,
+              tenantId: msg.tenantId, actorId: cb.decidedBy, correlationId: msg.correlationId,
+              payload: { poId: cb.refId, poNo: po.poNo, reason: err.message, code: err.code },
+            });
+            await audit(tx, msg, "eoffice_approval_rejected_sod", cb.refId, { fileNo: cb.fileNo, dscHash: cb.dscHash ?? null });
+            return;
+          }
+          throw err;
+        }
         await repo.updatePoVersioned(tx, cb.refId, po.version ?? 1, { status: "approved", updatedBy: cb.decidedBy });
         await enqueue(tx, {
           topic: EVENTS.poApproved, eventType: EVENTS.poApproved,

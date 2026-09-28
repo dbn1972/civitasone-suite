@@ -16,10 +16,32 @@ import { registerF3EnterpriseConsumers } from "./modules/enterprise/f3-consumer.
 import { registerCondemnationConsumers } from "./modules/condemnation/consumer.js";
 import { registerFleetConsumers }         from "./modules/fleet/consumer.js";
 import { registerVerificationConsumers } from "./modules/verification/consumer.js";
+import { registerStreetlightConsumers }  from "./modules/streetlight/consumer.js";
 import { registerWaterMeteringConsumers } from "./modules/water-metering/consumer.js";
 import { startDepScheduler }            from "./modules/depreciation/scheduler.js";
 
 const log = pino({ name: "asset-worker" });
+
+// Fail closed if ASSET_SCANNER_DATABASE_URL is missing/unset in production:
+// the depreciation scheduler's cross-tenant scan (repo.findDueTenantPeriods,
+// via src/shared/scanner-db.ts) silently returns zero rows under FORCE RLS
+// when it falls back to the NOBYPASSRLS DATABASE_URL, so a misconfigured
+// deployment must crash loudly at boot instead of running forever with the
+// scheduler quietly finding nothing to post. Mirrors visitor-service's
+// worker.ts assertScannerConfigured().
+function assertScannerConfigured(): void {
+  if ((process.env.NODE_ENV ?? "") !== "production") return;
+  const scanner = process.env.ASSET_SCANNER_DATABASE_URL ?? "";
+  const primary = process.env.DATABASE_URL ?? "";
+  if (!scanner || scanner === primary) {
+    throw new Error(
+      "ASSET_SCANNER_DATABASE_URL must be set and distinct from DATABASE_URL in production " +
+        "(BYPASSRLS asset_scanner role required for the depreciation scheduler's cross-tenant scan)",
+    );
+  }
+}
+
+assertScannerConfigured();
 
 // Wrap queue.subscribe to set tenant context from message — consumers run
 // db.transaction() and RLS policies require app.tenant_id GUC to be set.
@@ -45,6 +67,7 @@ registerF3EnterpriseConsumers(queue);
 registerCondemnationConsumers(queue);
 registerFleetConsumers(queue);
 registerVerificationConsumers(queue);
+registerStreetlightConsumers(queue);
 registerWaterMeteringConsumers(queue);
 
 await queue.start();
