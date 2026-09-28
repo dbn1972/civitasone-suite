@@ -90,8 +90,16 @@ export async function findCategoryById(id: string, tenantId: string): Promise<Ca
   return rows[0] ?? null;
 }
 
-export async function updateCategory(id: string, tenantId: string, patch: Partial<CategoryInsert>, actorId: string): Promise<void> {
-  await db.update(assetCategories)
-    .set({ ...patch, updatedAt: new Date(), updatedBy: actorId })
+// P0: like updateAssetStatus/updateAssetBookValue/updateAssetLocation/
+// updateAssetBarcode above, this MUST take an already-open tx and run inside
+// the caller's db.transaction() — a bare db.update() runs with no RLS GUC
+// set (wrapWithTenantGuc only hooks db.transaction()), so under FORCE RLS
+// register.asset_categories's tenant_isolation_policy never matches and the
+// UPDATE silently affects zero rows while the route still returns 200. Also
+// bumps `version` so a persisted update is observable end-to-end (name,
+// updatedAt, version), matching what the column exists for.
+export async function updateCategory(tx: Writer, id: string, tenantId: string, patch: Partial<CategoryInsert>, actorId: string): Promise<void> {
+  await (tx as typeof db).update(assetCategories)
+    .set({ ...patch, updatedAt: new Date(), updatedBy: actorId, version: sql`${assetCategories.version} + 1` })
     .where(and(eq(assetCategories.id, id), eq(assetCategories.tenantId, tenantId)));
 }

@@ -57,7 +57,11 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (body.depMethod !== undefined) patch.depMethod = body.depMethod;
     if (body.depRate !== undefined) patch.depRate = String(body.depRate);
     if (body.usefulLifeYears !== undefined) patch.usefulLifeYears = body.usefulLifeYears;
-    await repo.updateCategory(id, ctx.tenantId, patch, ctx.actorId);
+    // db.transaction() so wrapWithTenantGuc sets app.tenant_id before the
+    // UPDATE runs — see the comment on repo.updateCategory.
+    await db.transaction(async (tx) => {
+      await repo.updateCategory(tx, id, ctx.tenantId, patch, ctx.actorId);
+    });
     return reply.send({ id });
   });
 
