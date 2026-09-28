@@ -19,7 +19,7 @@
  * already follow -- followed here too.
  *
  * REAL BUG #1 (found while writing this test) -- NOW FIXED, see
- * migrations/0021_cycle_counts_status_chk_fix.sql and
+ * migrations/0022_cycle_counts_status_chk_fix.sql and
  * tests/cycle-count-lifecycle.integration.test.ts. Originally confirmed via a
  * LIVE POSTGRES ERROR, not just static reading: every single cycle-count
  * create failed, for every tenant, regardless of variance -- the module's
@@ -34,7 +34,7 @@
  * response revealed the failure -- confirmed at the time via the queue's own
  * DLQ, which captured the real Postgres error (`new row for relation
  * "cycle_counts" violates check constraint "cycle_counts_status_chk"`) after
- * all retries were exhausted. Migration 0021 widens the constraint to the
+ * all retries were exhausted. Migration 0022 widens the constraint to the
  * vocabulary domain.ts/validators.ts (and this file's own basePayload/
  * assertions) already agreed on.
  *

@@ -1,4 +1,4 @@
--- 0021_cycle_counts_status_chk_fix.sql
+-- 0022_cycle_counts_status_chk_fix.sql
 --
 -- Purpose: 0011's cycle_counts_status_chk CHECK constraint allows only
 -- ('pending', 'approved', 'rejected', 'auto_adjusted') -- but domain.ts's

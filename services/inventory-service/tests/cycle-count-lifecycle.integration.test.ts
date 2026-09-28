@@ -8,7 +8,7 @@
  *      domain.ts's evaluateCycleCount() can only ever produce 'auto_posted'
  *      or 'pending_approval' -- every create failed on a real Postgres
  *      CHECK-constraint violation. Fixed by
- *      migrations/0021_cycle_counts_status_chk_fix.sql.
+ *      migrations/0022_cycle_counts_status_chk_fix.sql.
  *   #2 consumer.ts hardcoded `const systemQty = 0` instead of querying the
  *      real stock balance -- every count showed a 100% variance regardless
  *      of reality. Fixed via movements/repo.ts's lockBalance (see
