@@ -22,6 +22,23 @@ export async function findApplicationById(id: string, tenantId: string): Promise
   return rows[0] ?? null;
 }
 
+/**
+ * Tx-scoped variant of findApplicationById: reads through the caller's
+ * already-open transaction instead of opening a nested one via scopedRead.
+ * The consumer's installConnection handler needs to read the parent
+ * application (for connectionType/address) from INSIDE the same transaction
+ * it inserts the new connection row in; calling the scopedRead-based version
+ * there would open a SECOND transaction competing for a connection from the
+ * same pool as the outer one (see register/repo.ts's identical note and
+ * .claude/skills/16-production-readiness-audit.md section 1).
+ */
+export async function findApplicationByIdTx(tx: Writer, id: string, tenantId: string): Promise<WaterApplicationRow | null> {
+  const rows = await (tx as typeof db).select().from(assetWaterApplications)
+    .where(and(eq(assetWaterApplications.id, id), eq(assetWaterApplications.tenantId, tenantId)))
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateApplicationStatus(
   tx: Writer, id: string, tenantId: string, status: string, extra?: Record<string, unknown>,
 ): Promise<void> {
