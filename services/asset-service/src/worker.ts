@@ -16,6 +16,7 @@ import { registerF3EnterpriseConsumers } from "./modules/enterprise/f3-consumer.
 import { registerCondemnationConsumers } from "./modules/condemnation/consumer.js";
 import { registerFleetConsumers }         from "./modules/fleet/consumer.js";
 import { registerVerificationConsumers } from "./modules/verification/consumer.js";
+import { registerWaterMeteringConsumers } from "./modules/water-metering/consumer.js";
 import { startDepScheduler }            from "./modules/depreciation/scheduler.js";
 
 const log = pino({ name: "asset-worker" });
@@ -44,6 +45,7 @@ registerF3EnterpriseConsumers(queue);
 registerCondemnationConsumers(queue);
 registerFleetConsumers(queue);
 registerVerificationConsumers(queue);
+registerWaterMeteringConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
