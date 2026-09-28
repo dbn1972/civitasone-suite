@@ -19,6 +19,15 @@
  * Requires a live Postgres reachable at DATABASE_URL (see vitest.config.ts —
  * defaults to the dev civitas_asset DB), migrated through at least
  * 0009_rls_full_tenant_isolation.sql.
+ *
+ * NOTE: this NULL-safety fix is necessary but was not sufficient for the
+ * scheduler to actually find anything. A second, independent bug (the
+ * asset_scanner BYPASSRLS role scanner-db.ts depends on was never
+ * provisioned -- see migrations/0026_asset_scanner_role.sql) meant
+ * repo.findDueTenantPeriods() kept silently returning zero rows for every
+ * tenant even after this fix landed: NULL-safe just means the cross-tenant
+ * scan no longer throws 42704, not that it can see rows belonging to a
+ * tenant it was never authorized to bypass RLS for in the first place.
  */
 import { describe, it, expect } from "vitest";
 import { sql } from "drizzle-orm";
