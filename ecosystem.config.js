@@ -564,7 +564,9 @@ module.exports = {
     worker("grant",        "grant_svc",        "civitas_grant"),
     worker("project",      "project_svc",      "civitas_project"),
     worker("estab",        "estab_svc",        "civitas_estab"),
-    worker("asset",        "asset_svc",        "civitas_asset"),
+    worker("asset",        "asset_svc",        "civitas_asset", {
+      ASSET_SCANNER_DATABASE_URL: scannerDbUrl("asset_scanner", "civitas_asset", "ASSET_SCANNER_DATABASE_URL"),
+    }),
     worker("stock",        "stock_svc",        "civitas_stock"),
     worker("citizen",      "citizen_svc",      "civitas_citizen", { CITIZEN_PII_KEY }),
     worker("helpdesk",     "helpdesk_svc",     "civitas_helpdesk"),
