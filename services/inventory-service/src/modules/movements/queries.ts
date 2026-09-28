@@ -18,13 +18,23 @@ export async function listBalances(
   const hash = `list:${opts.itemId ?? ""}:${opts.storeId ?? ""}:${opts.limit}:${opts.offset}`;
   return cache.listOrLoad(tenantId, RESOURCE.balance, hash, async () => {
     const rows = await repo.listBalances(tenantId, opts);
+    // A FIFO item's stockBalances.avgRateMinor is only a derived reference rate
+    // (floor-divided, for display/back-compat); the authoritative value is the
+    // sum of its remaining cost layers at their original rates, not qty × rate.
+    const fifoItemIds = rows.filter((r) => r.valuationMethod === "FIFO").map((r) => r.itemId);
+    const fifoValues = await repo.sumOpenLayerValues(tenantId, fifoItemIds);
     return {
-      data: rows.map((r) => ({
-        itemId: r.itemId, storeId: r.storeId, onHandQty: r.onHandQty,
-        avgRateMinor: r.avgRateMinor.toString(),
-        valueMinor: (BigInt(r.onHandQty) * r.avgRateMinor).toString(),
-        currency: r.currency,
-      })),
+      data: rows.map((r) => {
+        const valueMinor = r.valuationMethod === "FIFO"
+          ? fifoValues.get(`${r.itemId}|${r.storeId}`) ?? 0n
+          : BigInt(r.onHandQty) * r.avgRateMinor;
+        return {
+          itemId: r.itemId, storeId: r.storeId, onHandQty: r.onHandQty,
+          avgRateMinor: r.avgRateMinor.toString(),
+          valueMinor: valueMinor.toString(),
+          currency: r.currency,
+        };
+      }),
     };
   });
 }

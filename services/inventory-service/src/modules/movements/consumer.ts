@@ -26,6 +26,8 @@ import {
 import {
   weightedAvgRate, assertSufficientStock, valuationMinor, isLowStock, suggestedReorderQty,
 } from "./domain.js";
+import { recomputeWavg } from "../costing/wavg-engine.js";
+import { consumeFifo } from "../costing/fifo-engine.js";
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
 
@@ -40,10 +42,10 @@ export function registerMovementConsumers(queue: Queue): void {
 
       let totalMinor = 0n;
       for (const line of p.lines) {
-        const cur = await repo.lockBalance(tx, p.tenantId, line.itemId, p.toStoreId);
-        const newRate = weightedAvgRate(cur, line.qty, BigInt(line.rateMinor));
-        const newQty = cur.qty + line.qty;
-        await repo.upsertBalance(tx, p.tenantId, line.itemId, p.toStoreId, newQty, newRate, line.currency);
+        const { newQty, newRate } = await postReceiptLine(
+          tx, p.tenantId, msg.actorId, line.itemId, p.toStoreId,
+          line.qty, BigInt(line.rateMinor), line.currency, p.postingDate, p.id,
+        );
         await ledger(tx, msg, p.id, "receipt", line.itemId, p.toStoreId, line.qty, 0, newQty, newRate, p.postingDate, null);
         totalMinor += valuationMinor(line.qty, BigInt(line.rateMinor));
       }
@@ -65,12 +67,11 @@ export function registerMovementConsumers(queue: Queue): void {
       const low: LowStockHit[] = [];
       let totalMinor = 0n;
       for (const line of p.lines) {
-        const cur = await repo.lockBalance(tx, p.tenantId, line.itemId, p.fromStoreId);
-        assertSufficientStock(cur.qty, line.qty);
-        const newQty = cur.qty - line.qty;
-        await repo.upsertBalance(tx, p.tenantId, line.itemId, p.fromStoreId, newQty, cur.rateMinor, line.currency);
-        await ledger(tx, msg, p.id, "issue", line.itemId, p.fromStoreId, 0, line.qty, newQty, cur.rateMinor, p.postingDate, p.reasonCode ?? null);
-        totalMinor += valuationMinor(line.qty, cur.rateMinor);
+        const { newQty, newRate, costOfIssuePaise } = await postIssueLine(
+          tx, p.tenantId, msg.actorId, line.itemId, p.fromStoreId, line.qty, line.currency,
+        );
+        await ledger(tx, msg, p.id, "issue", line.itemId, p.fromStoreId, 0, line.qty, newQty, newRate, p.postingDate, p.reasonCode ?? null);
+        totalMinor += costOfIssuePaise;
         await collectLowStock(tx, p.tenantId, line.itemId, p.fromStoreId, newQty, low);
       }
       await emitDomain(tx, msg, EVENTS.issuePosted, { movementId: p.id, fromStoreId: p.fromStoreId, lines: p.lines.length });
@@ -159,10 +160,10 @@ export function registerMovementConsumers(queue: Queue): void {
 
       let totalMinor = 0n;
       for (const item of stockItems) {
-        const cur = await repo.lockBalance(tx, msg.tenantId, item.itemId, storeId);
-        const newRate = weightedAvgRate(cur, item.acceptedQty, BigInt(item.rateMinor));
-        const newQty = cur.qty + item.acceptedQty;
-        await repo.upsertBalance(tx, msg.tenantId, item.itemId, storeId, newQty, newRate, item.currency);
+        const { newQty, newRate } = await postReceiptLine(
+          tx, msg.tenantId, msg.actorId, item.itemId, storeId,
+          item.acceptedQty, BigInt(item.rateMinor), item.currency, postingDate, movementId,
+        );
         await ledger(tx, msg, movementId, "receipt", item.itemId, storeId, item.acceptedQty, 0, newQty, newRate, postingDate, null);
         totalMinor += valuationMinor(item.acceptedQty, BigInt(item.rateMinor));
       }
@@ -177,6 +178,92 @@ export function registerMovementConsumers(queue: Queue): void {
 // ── helpers ──────────────────────────────────────────────────────────────
 
 interface LowStockHit { itemId: string; storeId: string; onHandQty: number; reorderLevel: number; reorderQty: number }
+
+/**
+ * Post a single receipt line onto the (item, store) balance, branching on the
+ * item's configured valuation method (Requirements 14.2–14.4):
+ *
+ *   WAVG     — costing/wavg-engine.ts recomputes the moving average (the same
+ *              formula movements/domain.ts's weightedAvgRate uses, so results
+ *              are byte-identical to before — see recomputeWavg's reuse below).
+ *   FIFO     — costing/fifo-engine.ts backs a new cost_layers row; the stored
+ *              rate is a derived reference only, floor-divided from the exact
+ *              layer total (the authoritative value lives in the layers and is
+ *              what the balances read path sums — see queries.ts).
+ *   STANDARD — the rate is pinned to the item's configured unitCostMinor; the
+ *              receipt's own price never moves it. This service has no
+ *              purchase-price-variance posting, so that variance (actual vs.
+ *              standard) is not booked anywhere — out of scope for this fix.
+ *
+ * Returns the new on-hand qty and the rate to post to stockBalances/the ledger.
+ */
+async function postReceiptLine(
+  tx: Tx, tenantId: string, actorId: string, itemId: string, storeId: string,
+  qty: number, rateMinor: bigint, currency: string, postingDate: string, receiptId: string,
+): Promise<{ newQty: number; newRate: bigint }> {
+  const valuation = await repo.getItemValuation(tx, tenantId, itemId);
+  const method = valuation?.valuationMethod ?? "WAVG";
+  const cur = await repo.lockBalance(tx, tenantId, itemId, storeId);
+  const newQty = cur.qty + qty;
+
+  if (method === "FIFO") {
+    const existingValue = await repo.sumOpenLayerValue(tx, tenantId, itemId, storeId);
+    await repo.insertCostLayer(tx, {
+      tenantId, itemId, warehouseId: storeId, receiptDate: new Date(postingDate),
+      qty, remainingQty: qty, unitCostPaise: rateMinor, receiptId,
+      createdBy: actorId, updatedBy: actorId,
+    });
+    const newValue = existingValue + BigInt(qty) * rateMinor;
+    const newRate = newQty > 0 ? newValue / BigInt(newQty) : 0n;
+    await repo.upsertBalance(tx, tenantId, itemId, storeId, newQty, newRate, currency);
+    return { newQty, newRate };
+  }
+
+  const newRate = method === "STANDARD"
+    ? valuation?.unitCostMinor ?? 0n
+    : recomputeWavg(
+        { qty: cur.qty, totalCostPaise: BigInt(cur.qty) * cur.rateMinor, unitCostPaise: cur.rateMinor },
+        { qty, unitCostPaise: rateMinor },
+      ).unitCostPaise;
+  await repo.upsertBalance(tx, tenantId, itemId, storeId, newQty, newRate, currency);
+  return { newQty, newRate };
+}
+
+/**
+ * Post a single issue line, branching on valuation method:
+ *
+ *   FIFO             — consumes the oldest open cost_layers first via
+ *                      costing/fifo-engine.ts; the exact consumed cost (not an
+ *                      average) backs the GL posting and the ledger row.
+ *   WAVG / STANDARD  — UNCHANGED: the balance's current rate applies (neither
+ *                      method moves the rate on issue), so WAVG-configured
+ *                      items behave byte-identically to before this change.
+ *
+ * Returns the new on-hand qty, the rate to post to stockBalances/the ledger,
+ * and the exact cost of the issued quantity (for GL posting).
+ */
+async function postIssueLine(
+  tx: Tx, tenantId: string, actorId: string, itemId: string, storeId: string,
+  qty: number, currency: string,
+): Promise<{ newQty: number; newRate: bigint; costOfIssuePaise: bigint }> {
+  const valuation = await repo.getItemValuation(tx, tenantId, itemId);
+  const cur = await repo.lockBalance(tx, tenantId, itemId, storeId);
+  assertSufficientStock(cur.qty, qty);
+  const newQty = cur.qty - qty;
+
+  if (valuation?.valuationMethod === "FIFO") {
+    const layers = await repo.lockOpenFifoLayers(tx, tenantId, itemId, storeId);
+    const result = consumeFifo(layers, qty);
+    await repo.applyFifoConsumption(tx, tenantId, actorId, result.consumed, result.remaining);
+    const remainingValue = result.remaining.reduce((s, l) => s + BigInt(l.remainingQty) * l.unitCostPaise, 0n);
+    const newRate = newQty > 0 ? remainingValue / BigInt(newQty) : 0n;
+    await repo.upsertBalance(tx, tenantId, itemId, storeId, newQty, newRate, currency);
+    return { newQty, newRate, costOfIssuePaise: result.totalCostPaise };
+  }
+
+  await repo.upsertBalance(tx, tenantId, itemId, storeId, newQty, cur.rateMinor, currency);
+  return { newQty, newRate: cur.rateMinor, costOfIssuePaise: valuationMinor(qty, cur.rateMinor) };
+}
 
 interface HeaderFields {
   postingDate: string;
