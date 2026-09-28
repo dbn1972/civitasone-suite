@@ -6,6 +6,19 @@ import { cache } from "../../shared/infra.js";
 import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { suggestedReorderQty } from "./domain.js";
+import type { MovementRow } from "./schema.js";
+
+/**
+ * Fetch a movement header by id — the caller's only way to learn the
+ * outcome of an async receipt/issue/transfer/adjustment (mirrors
+ * getBatch/getItem/getGoodsReturn). A rejected or still-in-retry command
+ * never persists a row (assertSufficientStock/DomainError checks abort the
+ * whole transaction), so this reads as "not found" the same way a rejected
+ * batch.issue or srn.create does for its sibling modules.
+ */
+export async function getMovement(tenantId: string, id: string): Promise<MovementRow | null> {
+  return cache.getOrLoad(cache.makeKey(tenantId, RESOURCE.movement, id), () => repo.getMovement(tenantId, id));
+}
 
 export type BalanceView = {
   itemId: string; storeId: string; onHandQty: number;

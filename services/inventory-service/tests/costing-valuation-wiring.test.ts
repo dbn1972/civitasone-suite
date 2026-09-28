@@ -500,6 +500,97 @@ describe("Mixed tenant — FIFO and WAVG items interleaved in the same store", (
   });
 });
 
+// ──────────────────────────────────────────────────────────────────────────
+// 6. Unrecognized valuationMethod — fail loud, not a silent WAVG fallback
+// ──────────────────────────────────────────────────────────────────────────
+
+describe("Unrecognized valuationMethod — postReceiptLine/postIssueLine fail loud instead of silently defaulting to WAVG", () => {
+  const TENANT = "77770000-0000-4000-8000-000000000040";
+  const STORE_1 = "77770000-0000-4000-8000-000000000041";
+  const ITEM_BOGUS_RECEIPT = "77770000-0000-4000-8000-000000000042";
+  const ITEM_BOGUS_ISSUE = "77770000-0000-4000-8000-000000000043";
+  const mid = (n: number) => `78920000-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const messageIds = [1, 2].map(mid);
+
+  beforeAll(async () => {
+    await cleanupTenant(TENANT, messageIds);
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(stores).values([
+        { id: STORE_1, tenantId: TENANT, name: "Bogus-method Store", code: "BOGUS-1", createdBy: ACTOR, updatedBy: ACTOR },
+      ]);
+      // valuationMethod has no DB CHECK constraint — only the Zod schema on
+      // the HTTP surface enforces FIFO/WAVG/STANDARD (see items/validators.ts).
+      // This direct Drizzle insert bypasses Zod entirely, exactly the gap
+      // this test proves is now handled.
+      await tx.insert(items).values([
+        { id: ITEM_BOGUS_RECEIPT, tenantId: TENANT, name: "Bogus method (receipt)", sku: "BOGUS-A", valuationMethod: "BOGUS", createdBy: ACTOR, updatedBy: ACTOR },
+        { id: ITEM_BOGUS_ISSUE, tenantId: TENANT, name: "Bogus method (issue)", sku: "BOGUS-B", valuationMethod: "BOGUS", createdBy: ACTOR, updatedBy: ACTOR },
+      ]);
+      // The issue-side item needs existing stock so the handler reaches the
+      // valuation-method guard rather than failing on something else first.
+      await tx.insert(stockBalances).values([
+        { tenantId: TENANT, itemId: ITEM_BOGUS_ISSUE, storeId: STORE_1, onHandQty: 10, avgRateMinor: 500n, currency: "INR" },
+      ]);
+    }));
+  });
+  afterAll(async () => {
+    await cleanupTenant(TENANT, messageIds);
+  });
+
+  it("receiptCreate on an item with an unrecognized valuationMethod dead-letters immediately and posts nothing", async () => {
+    const { q, drain } = await newQueue();
+    const mq = q as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+
+    await q.publish(COMMANDS.receiptCreate, {
+      messageId: mid(1), type: COMMANDS.receiptCreate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "b1", schemaVersion: "1.0",
+      payload: { id: mid(1), tenantId: TENANT, toStoreId: STORE_1, postingDate: "2026-06-01",
+        lines: [{ itemId: ITEM_BOGUS_RECEIPT, qty: 10, rateMinor: 500, currency: "INR" }] },
+    });
+    await drain();
+    await q.stop();
+
+    // NonRetryableError (thrown by assertValidValuationMethod) dead-letters
+    // on the first delivery — no fixed-duration timing assertion here (see
+    // this file's own header note: elapsed-time assertions flake on this
+    // host under concurrent-suite load). The DLQ error text below already
+    // proves it was OUR guard, and the untouched balance below proves no
+    // silent WAVG mutation ever happened, regardless of attempt count.
+    const dlqEntry = mq.dlq.slice(before).find((d) => d.msg.messageId === mid(1));
+    expect(dlqEntry?.error).toMatch(/unrecognized valuationMethod "BOGUS"/);
+
+    // Nothing was silently posted as WAVG — the whole transaction rolled back.
+    const bal = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockBalances)
+        .where(and(eq(stockBalances.tenantId, TENANT), eq(stockBalances.itemId, ITEM_BOGUS_RECEIPT), eq(stockBalances.storeId, STORE_1)))));
+    expect(bal).toHaveLength(0);
+  });
+
+  it("issueCreate on an item with an unrecognized valuationMethod dead-letters immediately and leaves the balance untouched", async () => {
+    const { q, drain } = await newQueue();
+    const mq = q as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+
+    await q.publish(COMMANDS.issueCreate, {
+      messageId: mid(2), type: COMMANDS.issueCreate,
+      tenantId: TENANT, actorId: ACTOR, correlationId: "b2", schemaVersion: "1.0",
+      payload: { id: mid(2), tenantId: TENANT, fromStoreId: STORE_1, postingDate: "2026-06-01",
+        lines: [{ itemId: ITEM_BOGUS_ISSUE, qty: 1, rateMinor: 0, currency: "INR" }] },
+    });
+    await drain();
+    await q.stop();
+
+    const dlqEntry = mq.dlq.slice(before).find((d) => d.msg.messageId === mid(2));
+    expect(dlqEntry?.error).toMatch(/unrecognized valuationMethod "BOGUS"/);
+
+    const bal = await runWithTenant(TENANT, () => db.transaction(async (tx) =>
+      tx.select().from(stockBalances)
+        .where(and(eq(stockBalances.tenantId, TENANT), eq(stockBalances.itemId, ITEM_BOGUS_ISSUE), eq(stockBalances.storeId, STORE_1)))));
+    expect(bal[0]?.onHandQty).toBe(10); // unchanged — the guard fired before any mutation
+  });
+});
+
 // One shared connection pool (shared/db.ts module singleton) backs every
 // describe block above — close it exactly once, after all of them are done,
 // not from a per-block afterAll (which would end it while a later block's

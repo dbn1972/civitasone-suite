@@ -131,6 +131,7 @@ export const RESOURCE = {
   balance:       "balance",
   ledger:        "ledger",
   lowStock:      "low-stock",
+  movement:      "movement",
   batch:         "batch",
   serial:        "serial",
   cycleCount:    "cycle-count",

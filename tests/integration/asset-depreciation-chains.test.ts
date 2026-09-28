@@ -14,9 +14,21 @@
  * period / book, that the dep entry is marked posted, and that a redelivery is
  * gated (idempotency) by the per-entry UUIDv5 key.
  *
- * DB + outbox + cache are stubbed in-memory so it runs in CI with no Postgres.
+ * DB + outbox are stubbed in-memory so it runs in CI with no Postgres. Cache
+ * uses the REAL Cache class from @civitasone/cache backed by its in-memory
+ * MemoryCache store (no Redis needed) -- not a bare stub -- so the "cache
+ * regression" describe block below exercises the actual key-construction
+ * (makeKey/listKey) and invalidate() calls the depRun handler makes, the
+ * same way journey-cache-regression.test.ts / tasks-cache-regression.test.ts
+ * use the real Cache class rather than mocking getOrLoad/invalidate away.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+// Relative path, not the bare "@civitasone/cache" specifier: this file lives
+// under tests/integration/, which (like harness.ts's own packages/queue
+// import just below) has no direct workspace dependency on the package, so
+// the bare specifier does not resolve from here the way it does from inside
+// a service package that actually declares it as a dependency.
+import { Cache, MemoryCache } from "../../packages/cache/dist/index.js";
 import { ChainHarness, setCurrentHarness } from "./harness.js";
 
 // --- asset-service data layer ----------------------------------------------
@@ -38,17 +50,17 @@ vi.mock("../../services/asset-service/src/shared/outbox.js", async () => {
   };
 });
 
-// cache.invalidate runs outside the tx — stub it so no Redis is needed.
+// cache.invalidate runs outside the tx. Real Cache + MemoryCache (no Redis
+// needed) so makeKey/listKey/invalidate all behave exactly as production —
+// required now that depRun also calls cache.listKey() (see regression tests).
 vi.mock("../../services/asset-service/src/shared/infra.js", () => ({
-  cache: {
-    invalidate: async () => {},
-    makeKey: (...parts: string[]) => parts.join(":"),
-  },
+  cache: new Cache({ service: "asset-chain-test", defaultTtlSeconds: 60, store: new MemoryCache() }),
 }));
 
 const { registerDepreciationConsumers } = await import(
   "../../services/asset-service/src/modules/depreciation/consumer.js"
 );
+const { cache } = await import("../../services/asset-service/src/shared/infra.js");
 
 const TENANT = "aaaa1111-1111-4000-8000-000000000001";
 const ACTOR = "bbbb2222-2222-4000-8000-000000000001";
@@ -195,5 +207,46 @@ describe("Cross-service chain #3: asset.dep.run → finance.gl.post (depreciatio
 
     // Per-entry UUIDv5(messageId:entryId) dedupes the second delivery → one GL.
     expect(seen).toHaveLength(1);
+  });
+});
+
+// ═══ Regression: depRun must invalidate dep_schedule/dep_entry, not just asset ═══
+//
+// Live bug (asset-service sweep, 2026-09-29): GET /v1/assets/assets/:id/depreciation
+// (depreciation/queries.ts's getDepSchedule + getDepEntries) kept returning the
+// pre-run cached copy -- postedAt: null on every entry -- for up to the cache's
+// TTL (60s) after a depreciation run had already committed the posting, because
+// depRun's handler only ever invalidated the "asset" key. Self-healed once the
+// TTL elapsed, so this was a caching bug, not a data-correctness bug (the DB
+// write itself was always right). getDepSchedule reads via
+// cache.makeKey(tenantId, "dep_schedule", assetId); getDepEntries reads via
+// cache.listKey(tenantId, "dep_entry", assetId) -- depRun must invalidate
+// exactly those two keys (in addition to "asset") for a cache HIT to ever be
+// possible right after a run.
+describe("Regression: depRun cache invalidation covers dep_schedule + dep_entry (not just asset)", () => {
+  it("invalidates the exact dep_schedule (makeKey) and dep_entry (listKey) cache keys queries.ts reads from, alongside asset", async () => {
+    harness.seedSelect("dep_entries", [dueEntry()]);
+    harness.seedSelect("asset_assets", [assetRow()]);
+
+    const invalidateSpy = vi.spyOn(cache, "invalidate");
+    const glPosted = harness.nextEvent("finance.gl.post");
+
+    await harness.queue.publish(
+      "asset.dep.run",
+      envelope("e3000099-0001-4000-8000-000000000001", "asset.dep.run", {
+        tenantId: TENANT,
+        period: PERIOD,
+        depBook: "company",
+      }),
+    );
+    await glPosted;
+
+    const invalidatedKeys = invalidateSpy.mock.calls.map((call) => call[0]);
+    expect(invalidatedKeys).toContain(cache.makeKey(TENANT, "asset", ASSET_ID));
+    // These two were the actual live bug -- previously never called at all.
+    expect(invalidatedKeys).toContain(cache.makeKey(TENANT, "dep_schedule", ASSET_ID));
+    expect(invalidatedKeys).toContain(cache.listKey(TENANT, "dep_entry", ASSET_ID));
+
+    invalidateSpy.mockRestore();
   });
 });

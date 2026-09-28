@@ -14,6 +14,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -28,6 +29,7 @@ import {
 } from "./domain.js";
 import { recomputeWavg } from "../costing/wavg-engine.js";
 import { consumeFifo } from "../costing/fifo-engine.js";
+import { DomainError } from "../../shared/domain.js";
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
 
@@ -93,7 +95,13 @@ export function registerMovementConsumers(queue: Queue): void {
       const low: LowStockHit[] = [];
       for (const line of p.lines) {
         const src = await repo.lockBalance(tx, p.tenantId, line.itemId, p.fromStoreId);
-        assertSufficientStock(src.qty, line.qty);
+        // Same deterministic-rejection reasoning as issueCreate above.
+        try {
+          assertSufficientStock(src.qty, line.qty);
+        } catch (err) {
+          if (err instanceof DomainError) throw new NonRetryableError(err.message);
+          throw err;
+        }
         const newSrcQty = src.qty - line.qty;
         await repo.upsertBalance(tx, p.tenantId, line.itemId, p.fromStoreId, newSrcQty, src.rateMinor, line.currency);
         await ledger(tx, msg, p.id, "transfer", line.itemId, p.fromStoreId, 0, line.qty, newSrcQty, src.rateMinor, p.postingDate, null);
@@ -197,12 +205,36 @@ interface LowStockHit { itemId: string; storeId: string; onHandQty: number; reor
  *
  * Returns the new on-hand qty and the rate to post to stockBalances/the ledger.
  */
+
+const VALID_VALUATION_METHODS = new Set(["WAVG", "FIFO", "STANDARD"]);
+
+/**
+ * `items.valuation_method` has no DB CHECK constraint — only the Zod schema
+ * on the HTTP surface enforces the FIFO/WAVG/STANDARD enum, so a write that
+ * bypasses Zod (e.g. a direct Drizzle insert) can leave an item with an
+ * unrecognized value. Both postReceiptLine and postIssueLine branch on this
+ * value with an `if (method === "FIFO") ... else if STANDARD ... else`
+ * shape, so before this guard any other value silently fell through to the
+ * WAVG code path with no indication the configured method was ever honored.
+ * Fail loud instead: an unrecognized value is a deterministic data problem
+ * (retrying the same message will not fix it), so dead-letter immediately —
+ * same reasoning as assertSufficientStock's NonRetryableError above.
+ */
+function assertValidValuationMethod(method: string, itemId: string): void {
+  if (!VALID_VALUATION_METHODS.has(method)) {
+    throw new NonRetryableError(
+      `item ${itemId} has an unrecognized valuationMethod "${method}" (expected FIFO, WAVG, or STANDARD) — refusing to silently default to WAVG`,
+    );
+  }
+}
+
 async function postReceiptLine(
   tx: Tx, tenantId: string, actorId: string, itemId: string, storeId: string,
   qty: number, rateMinor: bigint, currency: string, postingDate: string, receiptId: string,
 ): Promise<{ newQty: number; newRate: bigint }> {
   const valuation = await repo.getItemValuation(tx, tenantId, itemId);
   const method = valuation?.valuationMethod ?? "WAVG";
+  assertValidValuationMethod(method, itemId);
   const cur = await repo.lockBalance(tx, tenantId, itemId, storeId);
   const newQty = cur.qty + qty;
 
@@ -247,8 +279,19 @@ async function postIssueLine(
   qty: number, currency: string,
 ): Promise<{ newQty: number; newRate: bigint; costOfIssuePaise: bigint }> {
   const valuation = await repo.getItemValuation(tx, tenantId, itemId);
+  assertValidValuationMethod(valuation?.valuationMethod ?? "WAVG", itemId);
   const cur = await repo.lockBalance(tx, tenantId, itemId, storeId);
-  assertSufficientStock(cur.qty, qty);
+  // Same deterministic-rejection reasoning as issueCreate/transferCreate in
+  // consumer.ts: a stock shortfall can never clear on retry, so it must
+  // dead-letter immediately instead of exhausting the bus's retry/backoff
+  // budget first (matches batches/items/srn: any DomainError from a
+  // domain-rule check becomes a NonRetryableError).
+  try {
+    assertSufficientStock(cur.qty, qty);
+  } catch (err) {
+    if (err instanceof DomainError) throw new NonRetryableError(err.message);
+    throw err;
+  }
   const newQty = cur.qty - qty;
 
   if (valuation?.valuationMethod === "FIFO") {
@@ -354,4 +397,5 @@ async function invalidate(tenantId: string): Promise<void> {
   await cache.invalidateResource(tenantId, RESOURCE.balance);
   await cache.invalidateResource(tenantId, RESOURCE.ledger);
   await cache.invalidateResource(tenantId, RESOURCE.lowStock);
+  await cache.invalidateResource(tenantId, RESOURCE.movement);
 }

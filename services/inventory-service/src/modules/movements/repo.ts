@@ -8,7 +8,7 @@ import { db, scopedRead } from "../../shared/db.js";
 import {
   movements, movementLines, stockBalances, stockLedger,
   type MovementInsert, type MovementLineInsert, type LedgerInsert,
-  type StockBalanceRow, type LedgerRow,
+  type StockBalanceRow, type LedgerRow, type MovementRow,
 } from "./schema.js";
 import { items } from "../items/schema.js";
 import { costLayers, type CostLayerInsert } from "../costing/schema.js";
@@ -35,6 +35,14 @@ export async function insertMovementLines(tx: Writer, rows: MovementLineInsert[]
 
 export async function appendLedger(tx: Writer, row: LedgerInsert): Promise<void> {
   await tx.insert(stockLedger).values(row);
+}
+
+/** Fetch a single movement header by id (tenant-scoped). Null if not found/rejected. */
+export async function getMovement(tenantId: string, id: string): Promise<MovementRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(movements)
+    .where(and(eq(movements.id, id), eq(movements.tenantId, tenantId)))
+    .limit(1));
+  return rows[0] ?? null;
 }
 
 // ── Stock balances ─────────────────────────────────────────────────────────
