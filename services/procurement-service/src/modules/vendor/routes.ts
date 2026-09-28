@@ -67,6 +67,16 @@ export async function vendorRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.empanelVendor(ctx, id, body));
   });
 
+  // Legacy simple form, kept for backward compatibility with existing callers.
+  // A different HTTP verb (POST) on this exact same URL path is registered by
+  // vendor-blacklist/routes.ts, backed by a richer, dedicated blacklist
+  // resource (reason + effective dates + order reference, listable via
+  // GET /vendor-blacklist and GET /vendors/blacklisted, reversible via its
+  // own DELETE) -- prefer that route for new integrations. This PATCH's
+  // consumer (vendor/consumer.ts's COMMANDS.vendorBlacklist handler) writes
+  // into that same structured store too, so both paths converge on one
+  // source of truth; it just can't collect the richer fields this compact
+  // {reason} body doesn't carry.
   app.patch("/v1/procurement/vendors/:id/blacklist", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PROC_ROLES);

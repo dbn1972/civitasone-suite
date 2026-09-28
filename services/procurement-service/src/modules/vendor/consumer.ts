@@ -7,6 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { assertCanEmpanel } from "./domain.js";
+import * as blacklistRepo from "../vendor-blacklist/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -60,6 +61,36 @@ export function registerVendorConsumers(queue: Queue): void {
       await repo.updateVendorVersioned(tx, p.id, vendor.version ?? 1, {
         vendorType: "blacklisted", blacklistReason: p.reason, updatedBy: msg.actorId,
       });
+
+      // Reporting-gap fix: this legacy PATCH-driven path used to flip only
+      // vendor.vendorType/blacklistReason, leaving no row in
+      // procurement.vendor_blacklist -- the table GET /v1/procurement/vendor-blacklist
+      // and GET /v1/procurement/vendors/blacklisted actually read
+      // (vendor-blacklist/repo.ts::listActiveByTenant), and the one that the
+      // DELETE reinstate route/consumer checks via findActive()/findActiveTx().
+      // A vendor blacklisted ONLY this way was invisible to both listing
+      // endpoints and could never be reinstated through the standard API.
+      // Write the same structured row vendor-blacklist/consumer.ts's
+      // addVendorBlacklist handler writes, so both entry points share one
+      // source of truth. Idempotent: skip if an active row already exists
+      // (e.g. this vendor was already blacklisted via
+      // POST /vendors/:id/blacklist), matching uq_vendor_blacklist_active's
+      // one-active-row-per-vendor invariant -- this PATCH route has no 409
+      // guard of its own and must stay safely repeatable.
+      const existingBlacklistRow = await blacklistRepo.findActiveTx(tx, p.tenantId, p.id);
+      if (!existingBlacklistRow) {
+        await blacklistRepo.insertBlacklistTx(tx, {
+          id: randomUUID(),
+          tenantId: p.tenantId,
+          vendorId: p.id,
+          reason: p.reason,
+          blacklistedBy: msg.actorId,
+          createdBy: msg.actorId,
+          blacklistedFrom: new Date().toISOString().slice(0, 10),
+          status: "active",
+        });
+      }
+
       await enqueue(tx, {
         topic: EVENTS.vendorBlacklisted, eventType: EVENTS.vendorBlacklisted,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
