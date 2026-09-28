@@ -1,4 +1,4 @@
--- Migration: 0026_streetlight_tables.sql
+-- Migration: 0030_streetlight_tables.sql
 -- Purpose: facade-closure for asset-service's streetlight module.
 --   streetlight/routes.ts publishes commands (asset.streetlight.create,
 --   asset.streetlight.status.update, asset.streetlight.fault.*,

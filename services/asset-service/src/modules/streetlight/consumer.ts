@@ -5,7 +5,7 @@
  * Before this: streetlight/routes.ts published commands (asset.streetlight.*)
  * with no consumer.ts ever registered in worker.ts, and no migration ever
  * created the `streetlight` schema/tables (see
- * migrations/0026_streetlight_tables.sql). POST returned 202
+ * migrations/0030_streetlight_tables.sql). POST returned 202
  * {id,status:"accepted"} but nothing was ever persisted; GET list/by-id hit
  * "relation ... does not exist" (500) or came back empty.
  *
