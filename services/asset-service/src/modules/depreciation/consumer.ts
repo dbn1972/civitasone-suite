@@ -189,7 +189,21 @@ export function registerDepreciationConsumers(rawQueue: Queue): void {
         });
         await audit(tx, msg, "dep_post", "dep_entry", entry.id);
       });
+      // Cache invalidation here must cover every key depreciation/queries.ts's
+      // read side actually serves for this asset -- GET .../depreciation
+      // (queries.getDepSchedule + queries.getDepEntries) kept returning the
+      // pre-run cached copy (postedAt: null on every entry) for up to the
+      // cache's TTL after markEntryPosted() had already committed, because
+      // only "asset" was invalidated below. dep_schedule/dep_entry are built
+      // here with the EXACT same key shape their read side uses (makeKey for
+      // the single schedule doc, listKey for the entries list) so a cache hit
+      // on either now actually matches what just got invalidated. Self-heals
+      // after the TTL either way (04-T5), but there is no reason to accept
+      // that window when the write path already knows exactly which asset
+      // just posted.
       await cache.invalidate(cache.makeKey(msg.tenantId, "asset", entry.assetId));
+      await cache.invalidate(cache.makeKey(msg.tenantId, "dep_schedule", entry.assetId));
+      await cache.invalidate(cache.listKey(msg.tenantId, "dep_entry", entry.assetId));
     }
   });
 }
