@@ -6,10 +6,10 @@
 import type { FastifyInstance } from "fastify";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, registerErrorHandler } from "../../shared/context.js";
+import { resolveContext, requireRole, registerErrorHandler, HttpError } from "../../shared/context.js";
 import {
   createReceiptBody, createIssueBody, createTransferBody, createAdjustmentBody,
-  balanceQueryParams, ledgerQueryParams, lowStockQueryParams,
+  balanceQueryParams, ledgerQueryParams, lowStockQueryParams, idParam,
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -49,6 +49,19 @@ export async function movementRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // ── Reads ───────────────────────────────────────────────────────────────
+  // The only way a caller can learn a receipt/issue/transfer/adjustment's
+  // outcome: a rejected or still-retrying command never persists a row, so
+  // this 404s exactly like a rejected batch.issue/srn.create does — same
+  // GET-by-id contract as batches/items/srn, just previously missing here.
+  app.get("/v1/inventory/movements/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const movement = await queries.getMovement(ctx.tenantId, id);
+    if (!movement) throw new HttpError(404, "NOT_FOUND", "movement not found");
+    return reply.send({ data: movement });
+  });
+
   app.get("/v1/inventory/balances", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

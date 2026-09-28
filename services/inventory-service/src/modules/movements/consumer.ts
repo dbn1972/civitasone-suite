@@ -14,6 +14,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -26,6 +27,7 @@ import {
 import {
   weightedAvgRate, assertSufficientStock, valuationMinor, isLowStock, suggestedReorderQty,
 } from "./domain.js";
+import { DomainError } from "../../shared/domain.js";
 
 type EnqueueTx = Parameters<typeof enqueue>[0];
 
@@ -66,7 +68,16 @@ export function registerMovementConsumers(queue: Queue): void {
       let totalMinor = 0n;
       for (const line of p.lines) {
         const cur = await repo.lockBalance(tx, p.tenantId, line.itemId, p.fromStoreId);
-        assertSufficientStock(cur.qty, line.qty);
+        // A stock shortfall is deterministic — it will never clear on retry,
+        // so it must dead-letter immediately instead of exhausting the bus's
+        // retry/backoff budget first (matches batches/items/srn: any
+        // DomainError from a domain-rule check becomes a NonRetryableError).
+        try {
+          assertSufficientStock(cur.qty, line.qty);
+        } catch (err) {
+          if (err instanceof DomainError) throw new NonRetryableError(err.message);
+          throw err;
+        }
         const newQty = cur.qty - line.qty;
         await repo.upsertBalance(tx, p.tenantId, line.itemId, p.fromStoreId, newQty, cur.rateMinor, line.currency);
         await ledger(tx, msg, p.id, "issue", line.itemId, p.fromStoreId, 0, line.qty, newQty, cur.rateMinor, p.postingDate, p.reasonCode ?? null);
@@ -92,7 +103,13 @@ export function registerMovementConsumers(queue: Queue): void {
       const low: LowStockHit[] = [];
       for (const line of p.lines) {
         const src = await repo.lockBalance(tx, p.tenantId, line.itemId, p.fromStoreId);
-        assertSufficientStock(src.qty, line.qty);
+        // Same deterministic-rejection reasoning as issueCreate above.
+        try {
+          assertSufficientStock(src.qty, line.qty);
+        } catch (err) {
+          if (err instanceof DomainError) throw new NonRetryableError(err.message);
+          throw err;
+        }
         const newSrcQty = src.qty - line.qty;
         await repo.upsertBalance(tx, p.tenantId, line.itemId, p.fromStoreId, newSrcQty, src.rateMinor, line.currency);
         await ledger(tx, msg, p.id, "transfer", line.itemId, p.fromStoreId, 0, line.qty, newSrcQty, src.rateMinor, p.postingDate, null);
@@ -267,4 +284,5 @@ async function invalidate(tenantId: string): Promise<void> {
   await cache.invalidateResource(tenantId, RESOURCE.balance);
   await cache.invalidateResource(tenantId, RESOURCE.ledger);
   await cache.invalidateResource(tenantId, RESOURCE.lowStock);
+  await cache.invalidateResource(tenantId, RESOURCE.movement);
 }

@@ -92,6 +92,10 @@ export const grnAcceptedPayload = z.object({
   })).default([]),
 });
 
+// ── Path params ───────────────────────────────────────────────────────────
+
+export const idParam = z.object({ id: z.string().uuid() });
+
 // ── Query params ──────────────────────────────────────────────────────────
 
 export const balanceQueryParams = z.object({
