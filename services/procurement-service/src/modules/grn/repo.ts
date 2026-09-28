@@ -72,17 +72,25 @@ export async function countAcceptedGrnsByPoRef(tenantId: string, poRef: string):
 
 /** Check three_way_match table for a matched record with invoice. The payment
  *  gate passes a poRef that may carry a `procurement_po:` prefix; three_way_match
- *  stores the bare PO uuid, so strip the prefix before comparing. */
+ *  stores the bare PO uuid, so strip the prefix before comparing.
+ *  Wrapped in db.transaction() so wrapWithTenantGuc injects app.tenant_id
+ *  before this read — a bare db.execute() runs with no RLS GUC set, and
+ *  procurement.three_way_match is FORCE ROW LEVEL SECURITY: an unset GUC
+ *  fails CLOSED (always zero rows), not open, so the un-fixed shape here
+ *  silently blocked every legitimate payment rather than leaking
+ *  cross-tenant data. Mirrors this file's other db.transaction()-wrapped
+ *  reads (findGrnById, findGrnItemsByGrnId, findInspectionByGrnId,
+ *  countAcceptedGrnsByPoRef) — this was the one missed instance. */
 export async function hasMatchedThreeWayWithInvoice(tenantId: string, poRef: string): Promise<boolean> {
   const poId = poRef.replace(/^procurement_po:/, "");
-  const result = await db.execute(sql`
+  const result = await db.transaction((tx) => tx.execute(sql`
     SELECT 1 FROM procurement.three_way_match
     WHERE tenant_id = ${tenantId}::uuid
       AND po_id::text = ${poId}
       AND match_status = 'matched'
       AND invoice_id IS NOT NULL
     LIMIT 1
-  `);
+  `));
   return (result as unknown as { length: number }).length > 0;
 }
 
