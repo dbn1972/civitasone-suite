@@ -4508,7 +4508,9 @@
     "submitRequest": "Submit Request",
     "submitting": "Submitting…",
     "errorBothDatesRequired": "Both From date and To date are required.",
-    "errorToBeforeFrom": "To date cannot be before From date."
+    "errorToBeforeFrom": "To date cannot be before From date.",
+    "confirming": "Request submitted — confirming…",
+    "stillProcessing": "Still processing. Refresh this page to check."
   },
   "wfhRequests": {
     "title": "Work From Home Requests",
@@ -5974,7 +5976,9 @@
     "submitRequest": "Submit Request",
     "submitting": "Submitting…",
     "errorRequiredFields": "Current shift, requested shift, and effective date are all required.",
-    "errorSameShift": "Requested shift must be different from the current shift."
+    "errorSameShift": "Requested shift must be different from the current shift.",
+    "confirming": "Request submitted — confirming…",
+    "stillProcessing": "Still processing. Refresh this page to check."
   },
   "shiftActions": {
     "colEmployee": "Employee",

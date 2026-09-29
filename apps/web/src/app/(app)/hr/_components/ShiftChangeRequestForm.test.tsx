@@ -62,10 +62,33 @@ describe("ShiftChangeRequestForm", () => {
     expect(fetchMock).not.toHaveBeenCalledWith("/api/proxy/v1/hrms/shift-requests", expect.anything());
   });
 
-  it("submits the real backend contract and redirects on success", async () => {
-    fetchMock.mockImplementation((url: string) => {
+  /**
+   * SF-15: previously mocked every fetch() call (POST and any later reads
+   * alike) with the same bare 202 body and just asserted `pushMock` fired
+   * after a fixed 950ms sleep -- exactly the "assume the async write has
+   * landed by now" guess this fix replaces. Real behavior: the POST is
+   * accepted (202) before the queued write has actually run, so the new
+   * request is not yet visible on GET /shift-requests; the form must show
+   * an explicit pending/confirming state and keep polling until it is, and
+   * only navigate once that's genuinely true.
+   */
+  it("submits the real backend contract, shows pending, confirms via GET, then redirects", async () => {
+    const createdId = "sr-1";
+    // The first poll's response is held open under explicit test control so
+    // the "pushMock not called yet" assertion is deterministic regardless
+    // of real elapsed time / host speed.
+    let resolveFirstPoll!: (r: Response) => void;
+    const firstPoll = new Promise<Response>((resolve) => { resolveFirstPoll = resolve; });
+    let pollCalls = 0;
+
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/shift-requests") && init?.method === "POST") {
+        return Promise.resolve(new Response(JSON.stringify({ id: createdId, status: "pending" }), { status: 202 }));
+      }
       if (url.includes("/shift-requests")) {
-        return Promise.resolve(new Response(JSON.stringify({ id: "sr-1", status: "pending" }), { status: 202 }));
+        pollCalls += 1;
+        if (pollCalls === 1) return firstPoll; // queue consumer hasn't run yet
+        return Promise.resolve(new Response(JSON.stringify({ data: [{ id: createdId }] }), { status: 200 }));
       }
       return Promise.reject(new Error("network"));
     });
@@ -84,7 +107,7 @@ describe("ShiftChangeRequestForm", () => {
       "/api/proxy/v1/hrms/shift-requests",
       expect.objectContaining({ method: "POST" }),
     ));
-    const call = fetchMock.mock.calls.find((args: unknown[]) => String(args[0]).includes("/shift-requests"));
+    const call = fetchMock.mock.calls.find((args: unknown[]) => String(args[0]).includes("/shift-requests") && (args[1] as RequestInit | undefined)?.method === "POST");
     const body = JSON.parse((call as [string, RequestInit])[1].body as string);
     expect(body).toEqual({
       employeeId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
@@ -94,9 +117,18 @@ describe("ShiftChangeRequestForm", () => {
       reason: "Childcare schedule",
     });
 
-    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/submitted/i));
-    await new Promise((r) => setTimeout(r, 950));
-    expect(pushMock).toHaveBeenCalledWith("/hr/shift-requests");
+    // Pending state shown immediately -- not a premature "submitted"
+    // success -- while the write is still unconfirmed. Deterministic: the
+    // still-unresolved first poll makes confirmation impossible so far.
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/confirming/i));
+    expect(pushMock).not.toHaveBeenCalledWith("/hr/shift-requests");
+
+    // First poll: the request isn't visible yet -- still not confirmed.
+    resolveFirstPoll(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    expect(pushMock).not.toHaveBeenCalledWith("/hr/shift-requests");
+
+    // Only once the id genuinely appears on GET /shift-requests does it redirect.
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/hr/shift-requests"), { timeout: 8000 });
   });
 
   it("shows a clerk-safe error, never the raw HTTP status, on failure", async () => {
