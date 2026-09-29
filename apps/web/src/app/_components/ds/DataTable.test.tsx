@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+import type { ReactNode } from "react";
 import { DataTable } from "./DataTable";
 
 type Row = { id: string; name: string; amount: number; status: string };
@@ -290,6 +291,106 @@ describe("DataTable", () => {
     it("does not add role=button to rows when the table has no row link", () => {
       render(<DataTable columns={columns} rows={rows} />);
       expect(screen.queryAllByRole("button")).toHaveLength(0);
+    });
+  });
+
+  // SF-08: a "date" cellType, formatting via the shared formatIndianDate()
+  // helper (GFR 2017 / PFMS dd/MM/yyyy convention) — server-safe, so a Server
+  // Component can format a date column without a `render:` closure. Mirrors
+  // the existing cellType:"amount"/"rupees" tests above, incl. the UX-006
+  // "—" for missing data convention.
+  describe("date cellType (SF-08)", () => {
+    type DateRow = { id: string; label: string; when: string | null | undefined };
+    const dateColumns = [
+      { key: "label" as const, label: "Label" },
+      { key: "when" as const, label: "When", cellType: "date" as const },
+    ];
+
+    it("formats an ISO date string the same way formatIndianDate does (dd/MM/yyyy)", () => {
+      const dateRows: DateRow[] = [
+        // Midday UTC so this lands on the same calendar day in every real
+        // timezone the test suite might run under (no local-TZ flakiness).
+        { id: "1", label: "Kickoff", when: "2026-01-26T12:00:00.000Z" },
+      ];
+      render(<DataTable columns={dateColumns} rows={dateRows} />);
+      expect(screen.getByText("26/01/2026")).toBeInTheDocument();
+    });
+
+    it("renders an em-dash for a null/undefined date, same convention as every other cellType", () => {
+      const dateRows: DateRow[] = [
+        { id: "1", label: "Missing", when: null },
+        { id: "2", label: "Undefined", when: undefined },
+      ];
+      render(<DataTable columns={dateColumns} rows={dateRows} />);
+      expect(screen.getAllByText("—").length).toBe(2);
+    });
+
+    it("passes an unparseable date string through unchanged, matching formatIndianDate's own fallback", () => {
+      const dateRows: DateRow[] = [{ id: "1", label: "Bad", when: "not-a-date" }];
+      render(<DataTable columns={dateColumns} rows={dateRows} />);
+      expect(screen.getByText("not-a-date")).toBeInTheDocument();
+    });
+
+    it("exports the date cellType via CSV using the same formatting", () => {
+      const originalCreateObjectURL = URL.createObjectURL;
+      const blobs: Blob[] = [];
+      URL.createObjectURL = vi.fn((blob: Blob) => {
+        blobs.push(blob);
+        return "blob:mock";
+      });
+      URL.revokeObjectURL = vi.fn();
+      const dateRows: DateRow[] = [{ id: "1", label: "Kickoff", when: "2026-01-26T12:00:00.000Z" }];
+      render(<DataTable columns={dateColumns} rows={dateRows} exportable />);
+      fireEvent.click(screen.getByText("⬇ CSV"));
+      expect(blobs.length).toBe(1);
+      URL.createObjectURL = originalCreateObjectURL;
+    });
+  });
+
+  // SF-08: DataTable's `render` prop is documented client-only (see Column<T>
+  // in DataTable.tsx) because a function can't cross the Server->Client (RSC)
+  // boundary — the crash that class of bug produces (GAP-HR-EXPENSES-01 /
+  // PR #1647) happens upstream of this component ever running, so nothing
+  // here can prevent it (that's scripts/ci/datatable-render-guard.mjs's job).
+  // What DataTable can do is not compound a broken `render` into a second,
+  // more cryptic crash ("col.render is not a function") — these tests cover
+  // that narrower, real guarantee only.
+  describe("render prop dev-mode guard (SF-08)", () => {
+    it("still calls a real function render normally and logs no warning (legitimate Client Component usage)", () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const cols = [
+        { key: "id" as const, label: "ID" },
+        { key: "name" as const, label: "Name", render: (r: Row) => <b>{r.name}</b> },
+      ];
+      render(<DataTable columns={cols} rows={rows} />);
+      expect(screen.getByText("Office Supplies")).toBeInTheDocument();
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    it("falls back to plain rendering (not a crash) and warns naming the offending column when render is not callable", () => {
+      const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      type BadRow = { id: string; quirkyField: string };
+      const badRows: BadRow[] = [{ id: "1", quirkyField: "hello" }];
+      const badColumns: { key: keyof BadRow & string; label: string; render?: (row: BadRow) => ReactNode }[] = [
+        { key: "id", label: "ID" },
+        {
+          key: "quirkyField",
+          label: "Quirky Column",
+          // Simulates whatever non-function value could reach this component
+          // at runtime in place of a real render function (e.g. a Server
+          // Component's function prop failing to survive the RSC boundary
+          // intact) -- not something honestly-typed code could construct.
+          render: "not-a-function" as unknown as (row: BadRow) => ReactNode,
+        },
+      ];
+      expect(() => render(<DataTable columns={badColumns} rows={badRows} />)).not.toThrow();
+      expect(screen.getByText("hello")).toBeInTheDocument();
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      const [message] = errorSpy.mock.calls[0] as [string];
+      expect(message).toContain("quirkyField");
+      expect(message).toContain("Quirky Column");
+      errorSpy.mockRestore();
     });
   });
 });

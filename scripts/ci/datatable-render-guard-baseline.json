@@ -1,0 +1,8 @@
+{
+  "_comment": "TRACKED DEBT, not an approved state. Each entry is a <file>:<line> where a Server Component passes `render:` into DataTable's columns (the GAP-HR-EXPENSES-01 / PR #1647 crash class). The gate fails on NEW entries and on stale entries (fixed, or never real, but still listed). Burn these down; regenerate with --write-baseline after a real fix, same convention as stat-tile-literal-baseline.json / nested-tx-baseline.json.",
+  "generatedAt": "2026-09-29",
+  "count": 1,
+  "entries": [
+    "apps/web/src/app/(app)/hr/locations/page.tsx:128"
+  ]
+}

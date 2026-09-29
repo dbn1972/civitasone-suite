@@ -74,6 +74,15 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
       // best-effort fallback (estab-service's hrms-client enrichment fails
       // open, so employeeName may legitimately be absent).
       employeeDisplay: a.employeeName ?? employeeShort,
+      // GAP-ESTAB-QUARTERS-DETAIL-EMPREF (SF-08): precomputed plain string
+      // (reuses the same employeeShort truncation as employeeDisplay's own
+      // fallback above), so the "Employee ref" column can reference a plain
+      // server-safe field instead of a `render:` closure -- this page is a
+      // Server Component (no "use client"), and a `render` function can't
+      // cross the RSC boundary into DataTable ("use client"); see
+      // GAP-HR-EXPENSES-01 / PR #1647 for the same bug class. Drops only the
+      // column's monospace styling; every other display value is unchanged.
+      employeeRefShort: employeeShort,
       designation: a.designation ?? "—",
       payLevel: a.payLevel ?? "—",
       status: a.status,
@@ -117,7 +126,7 @@ export default async function QuarterDetailPage({ params }: { params: { id: stri
           <DataTable
             columns={[
               { key: "employeeDisplay" as const, label: "Employee" },
-              { key: "employeeRef" as const, label: "Employee ref", render: (r) => <span className="mono">{String(r.employeeRef).slice(0, 8)}…</span> },
+              { key: "employeeRefShort" as const, label: "Employee ref" },
               { key: "designation" as const, label: "Designation" },
               { key: "payLevel" as const, label: "Pay Level" },
               { key: "status" as const, label: "Status", cellType: "status" as const },

@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button } from "./Button";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
-import { formatMoney, formatRupees } from "@/lib/formatters";
+import { formatMoney, formatRupees, formatIndianDate } from "@/lib/formatters";
 
 /**
  * DataTable is a "use client" component rendered from ~80+ call sites across
@@ -41,10 +41,27 @@ interface Column<T> {
   key: keyof T & string;
   label: string;
   align?: "left" | "right" | "center";
-  /** Use from client components only — cannot be passed from Server Components */
+  /**
+   * Use from client components only — cannot be passed from Server Components.
+   * A function can't cross the Server->Client (RSC) boundary: TypeScript has no
+   * way to see which side of that boundary a value was constructed on (a
+   * function is a perfectly valid JS value either way), so this can't be
+   * enforced at the type level. When a Server Component does it anyway, Next.js
+   * throws while serializing that Server Component's props ("Functions cannot
+   * be passed directly to Client Components...") *before DataTable's own code
+   * ever runs* — see GAP-HR-EXPENSES-01 / PR #1647 for a real instance. Nothing
+   * at runtime, here or anywhere else in this file, can intercept or improve
+   * *that* crash; `scripts/ci/datatable-render-guard.mjs` (wired into the
+   * Architecture Guard CI job) is what actually prevents it, by flagging
+   * `render:` in any file that isn't a Client Component before it ships. What
+   * DataTable *can* do at runtime is refuse to blow up on a `render` that is
+   * present but not callable, and warn naming the offending column — see
+   * cellValue() below — which covers plain typos/bugs and any codepath where a
+   * bad value reaches a mounted client tree without ever hitting that CI guard.
+   */
   render?: (row: T) => ReactNode;
-  /** Server-safe: renders StatusPill from the row value at `key` */
-  cellType?: "status" | "amount" | "rupees";
+  /** Server-safe: renders StatusPill/formatMoney/formatRupees/formatIndianDate from the row value at `key` */
+  cellType?: "status" | "amount" | "rupees" | "date";
   /** Opt-in: set false to exclude a column from sorting when the table is sortable. */
   sortable?: boolean;
 }
@@ -122,8 +139,37 @@ function resolveRowKey<T extends Record<string, unknown>>(
   return index;
 }
 
+// Dev-mode dedup for the bad-`render` warning below: keyed by column identity
+// (key+label), not by row, so a table with many rows only ever logs once per
+// offending COLUMN DEFINITION, not once per cell.
+const warnedRenderColumns = new Set<string>();
+
 function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): ReactNode {
-  if (col.render) return col.render(row);
+  if ("render" in col && col.render != null) {
+    if (typeof col.render === "function") return col.render(row);
+    // `render` is present but not callable -- most likely a Server Component
+    // handed DataTable a function that Next.js's RSC serializer stripped or
+    // otherwise failed to deliver intact (see the Column<T> doc comment above
+    // for why this specific crash class can't be caught earlier, in here).
+    // Rather than call it and crash with a bare "col.render is not a
+    // function" deep in this file, warn loudly (once per column) and fall
+    // through to this column's cellType/default rendering instead.
+    if (process.env.NODE_ENV !== "production") {
+      const dedupeKey = `${col.key}::${col.label}`;
+      if (!warnedRenderColumns.has(dedupeKey)) {
+        warnedRenderColumns.add(dedupeKey);
+        // eslint-disable-next-line no-console -- dev-mode-only diagnostic, same rationale as RouteError.tsx
+        console.error(
+          `DataTable: column "${col.key}" (label "${col.label}") has a "render" prop that isn't a ` +
+          `function (got ${typeof col.render}). This usually means a Server Component tried to pass a ` +
+          `render function to DataTable ("use client") -- functions can't cross that boundary. Use a ` +
+          `built-in cellType ("status" | "amount" | "rupees" | "date") instead, or move this column's ` +
+          `custom rendering into a Client Component. Falling back to this column's cellType/default ` +
+          `rendering for now.`,
+        );
+      }
+    }
+  }
   if (col.cellType === "status") return <StatusPill status={String(row[col.key] ?? "")} />;
   if (col.cellType === "amount") {
     // UX-006: pass the raw value through — formatMoney() itself renders "—"
@@ -134,6 +180,9 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
   }
   if (col.cellType === "rupees") {
     return formatRupees(row[col.key] as number | string | null | undefined);
+  }
+  if (col.cellType === "date") {
+    return formatIndianDate(row[col.key] as string | null | undefined);
   }
   return String(row[col.key] ?? "");
 }
@@ -267,6 +316,7 @@ export function DataTable<T extends Record<string, unknown>>({
   function csvCellValue<T2 extends Record<string, unknown>>(col: Column<T2>, row: T2): string {
     if (col.cellType === "amount") return String(formatMoney(row[col.key] as number | null) ?? "");
     if (col.cellType === "rupees") return String(formatRupees(row[col.key] as number | string | null) ?? "");
+    if (col.cellType === "date") return formatIndianDate(row[col.key] as string | null | undefined);
     if (col.cellType === "status") return String(row[col.key] ?? "");
     return String(row[col.key] ?? "");
   }
