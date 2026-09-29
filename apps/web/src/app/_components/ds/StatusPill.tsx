@@ -36,6 +36,88 @@ const STATUS_MAP: Record<string, PillVariant> = {
   unconfigured: "mut",
   "low stock": "bad",
   archived: "mut",
+
+  // --- GAP SF-04 (additive): every key below was verified against a real call
+  // site under apps/web/src/app/(app)/hr/** (incl. payroll/** and
+  // recruitment/**, which share hr/layout.tsx) -- either a direct
+  // `<StatusPill status={...}/>` usage or a DataTable `cellType: "status"`
+  // column -- cross-checked against the hrms-service enum or DB CHECK
+  // constraint that actually produces the value. All keys are written in
+  // normalizeStatusKey()'s canonical space-separated lowercase form (real API
+  // values are snake_case, e.g. "pending_approval"; see that function).
+  // Status words the gap catalog mentioned but that do not appear anywhere in
+  // the real tree today -- "on_hold", "released", "delayed" -- were checked
+  // for and deliberately left out; add them if/when a real caller uses them.
+
+  // Attendance (services/hrms-service/src/modules/attendance/validators.ts)
+  present: "good",
+  absent: "bad",
+  "half day": "warn", // partial day; usually needs a regularisation follow-up
+  "on leave": "info", // planned/approved absence, not actionable
+  holiday: "info",
+
+  // Employee lifecycle (services/hrms-service/.../employee/status.ts EMPLOYEE_STATUSES)
+  suspended: "bad",
+  deputation: "info", // the *employee's* own status while posted elsewhere
+  separated: "mut",
+  "no show": "bad",
+
+  // Deputation record itself (hr/deputation) -- active/pending/completed already mapped
+  recalled: "warn",
+
+  // Disciplinary case lifecycle (migrations 0022 + 0029, hrms_disc_cases_status_check)
+  opened: "warn",
+  "charge memo issued": "warn",
+  "inquiry appointed": "warn",
+  "finding recorded": "warn",
+  "pending approval": "warn",
+  "penalty imposed": "bad",
+  "appeal filed": "warn",
+  "appeal decided": "info",
+  dropped: "mut",
+
+  // Grievance / ICC (POSH) case intake
+  registered: "warn",
+  "under inquiry": "warn",
+  inquiry: "warn",
+  disposed: "mut",
+
+  // RTI
+  filed: "warn",
+  assigned: "warn",
+  responded: "good",
+
+  // Medical claims / payroll settlement -- settled/credited/disbursed share the
+  // "money actually moved, favourably" tone as the existing paid/cleared keys
+  settled: "good",
+  credited: "good",
+  disbursed: "good",
+  computed: "warn",
+  processing: "warn",
+  finalized: "good",
+  applied: "warn",
+  "late filed": "warn",
+
+  // Recruitment pipeline / job-opening lifecycle
+  scheduled: "info",
+  cancelled: "bad",
+  validated: "good",
+  selected: "good",
+  offered: "good",
+  hired: "good",
+
+  // Transfer / promotion / apar
+  initiated: "warn",
+  "order issued": "warn",
+  relieved: "good",
+  disputed: "bad",
+  accepted: "good", // apar record accepted by the accepting authority -- final positive sign-off
+
+  // Training
+  upcoming: "info",
+
+  // Leave-routing engine failure (a technical failure, not a human rejection)
+  "routing failed": "bad",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any
@@ -44,13 +126,29 @@ const STATUS_MAP: Record<string, PillVariant> = {
 // neutral "info" fallback would weaken, so that table is intentionally left
 // un-consolidated (see UX-009 PR description).
 
+// Real status values are inconsistent about word separators depending on which
+// API/module produced them (snake_case "pending_approval" from most backend
+// enums, occasional camelCase, hyphens in a couple of hand-written literals) --
+// STATUS_MAP itself is keyed on a single canonical space-separated form (matching
+// its pre-existing multi-word keys like "in progress"), so every caller's status
+// prop is normalized the same way before lookup, regardless of which separator
+// style it happened to arrive in.
+function normalizeStatusKey(status: string): string {
+  return status
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2") // camelCase word boundary -> space
+    .replace(/[_-]+/g, " ") // underscores/hyphens -> space
+    .replace(/\s+/g, " ") // collapse repeats
+    .trim()
+    .toLowerCase();
+}
+
 interface StatusPillProps {
   status: string;
   label?: string;
 }
 
 export function StatusPill({ status, label }: StatusPillProps) {
-  const variant: PillVariant = STATUS_MAP[status.toLowerCase()] ?? "info";
+  const variant: PillVariant = STATUS_MAP[normalizeStatusKey(status)] ?? "info";
   // Bug fix: this used to fall back to the raw `status` value itself
   // ("pending", "active", "na", ...) whenever a caller didn't pass an
   // explicit label -- a real database enum value shown verbatim, unstyled
