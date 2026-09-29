@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 
+const pushMock = vi.fn();
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  useRouter: () => ({ push: pushMock, refresh: vi.fn() }),
 }));
 
 import { OvertimeClaimForm } from "./OvertimeClaimForm";
@@ -15,7 +16,14 @@ function fillRequiredFields() {
   fireEvent.change(screen.getByLabelText(/hours worked ot/i), { target: { value: "2" } });
 }
 
+// Reset at the file level (not per-describe-block): pushMock is a single,
+// module-scoped spy shared across every describe block below, so a reset
+// nested inside only one of them would leave earlier blocks' calls (e.g.
+// the Cancel-button tests) bleeding into later ones' assertions.
+beforeEach(() => pushMock.mockReset());
+
 describe("OvertimeClaimForm", () => {
+
   it("renders CCS Rules policy note", () => {
     render(<OvertimeClaimForm />);
     expect(screen.getByRole("note")).toBeInTheDocument();
@@ -120,5 +128,62 @@ describe("OvertimeClaimForm — UX-016 clerk-safe errors", () => {
     fireEvent.submit(screen.getByRole("form", { name: /overtime claim form/i }));
 
     expect(await screen.findByText("Hours must be a valid number.")).toBeInTheDocument();
+  });
+});
+
+/**
+ * SF-15: the POST here is a 202-accepted async write -- the claim only
+ * exists once the queue consumer runs, not the instant the POST resolves.
+ * This proves the migrated form shows an explicit pending state and only
+ * navigates once GET /overtime-requests actually confirms the new claim,
+ * instead of the old fixed-950ms-then-redirect guess.
+ */
+describe("OvertimeClaimForm — SF-15 async confirmation", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows pending, then confirms via GET, then redirects — not a blind timeout", async () => {
+    const createdId = "ot-1";
+    // The first poll's response is held open under explicit test control so
+    // the "pushMock not called yet" assertion is deterministic regardless
+    // of real elapsed time / host speed.
+    let resolveFirstPoll!: (r: Response) => void;
+    const firstPoll = new Promise<Response>((resolve) => { resolveFirstPoll = resolve; });
+    let pollCalls = 0;
+
+    fetchMock.mockImplementation((url: string, init?: RequestInit) => {
+      if (url.includes("/overtime-requests") && init?.method === "POST") {
+        return Promise.resolve(
+          new Response(JSON.stringify({ id: createdId, status: "pending" }), { status: 202 }),
+        );
+      }
+      if (url.includes("/overtime-requests")) {
+        pollCalls += 1;
+        if (pollCalls === 1) return firstPoll; // queue consumer hasn't run yet
+        return Promise.resolve(new Response(JSON.stringify({ data: [{ id: createdId }] }), { status: 200 }));
+      }
+      return Promise.reject(new Error("network"));
+    });
+
+    render(<OvertimeClaimForm />);
+    fillRequiredFields();
+    fireEvent.submit(screen.getByRole("form", { name: /overtime claim form/i }));
+
+    // Pending state shown immediately -- not a premature "submitted" success.
+    // Deterministic: the still-unresolved first poll makes confirmation
+    // impossible so far.
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/confirming/i));
+    expect(pushMock).not.toHaveBeenCalledWith("/hr/workforce/overtime");
+
+    // First poll: the claim isn't visible yet -- still not confirmed.
+    resolveFirstPoll(new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    expect(pushMock).not.toHaveBeenCalledWith("/hr/workforce/overtime");
+
+    // Only once the claim genuinely appears on GET /overtime-requests does it redirect.
+    await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/hr/workforce/overtime"), { timeout: 8000 });
   });
 });

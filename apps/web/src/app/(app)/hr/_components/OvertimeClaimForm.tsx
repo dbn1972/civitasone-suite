@@ -8,7 +8,11 @@
 import { useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
+import { useAsyncMutation } from "@/lib/useAsyncMutation";
 import { Button } from "../../../_components/ds";
+
+type CreatedRequest = { id: string };
+type OvertimeRequestsList = { data: Array<{ id: string }> };
 
 type SubmitState = "idle" | "submitting" | "done" | "error";
 type CompMode = "cash" | "comp_off";
@@ -34,6 +38,48 @@ export function OvertimeClaimForm() {
   const idCash = useId();
   const idCompOff = useId();
 
+  // SF-15: the POST below is a 202-accepted async write -- see
+  // WFHRequestForm for the full rationale. Same fix here: pending state,
+  // then poll GET /overtime-requests until the new claim's id is visible,
+  // then navigate (or fall back to "still processing").
+  const asyncMutation = useAsyncMutation<CreatedRequest, OvertimeRequestsList>({
+    mutate: async () => {
+      let res: Response;
+      try {
+        res = await fetch("/api/proxy/v1/hrms/overtime-requests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            employeeId,
+            requestDate,
+            hoursRequested: Number(hours),
+            reason: reason || undefined,
+            dutyOfficerId: approver || undefined,
+            compensationMode: compMode,
+          }),
+        });
+      } catch {
+        throw new Error(formError.fromException("save").message);
+      }
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
+      }
+      return (await res.json()) as CreatedRequest;
+    },
+    poll: async (created) => {
+      const qs = employeeId ? `?empId=${encodeURIComponent(employeeId)}` : "";
+      const res = await fetch(`/api/proxy/v1/hrms/overtime-requests${qs}`);
+      if (!res.ok) throw new Error(String(res.status));
+      return (await res.json()) as OvertimeRequestsList;
+    },
+    isDone: (polled, created) => polled.data.some((row) => row.id === created.id),
+    onConfirmed: () => router.push("/hr/workforce/overtime"),
+  });
+
+  const displayPhase = state === "error" ? "error" : asyncMutation.phase;
+  const displayErrorMsg = state === "error" ? errorMsg : asyncMutation.error;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (Number(hours) <= 0) {
@@ -41,34 +87,10 @@ export function OvertimeClaimForm() {
       setState("error");
       return;
     }
-    setState("submitting");
+    setState("idle");
     setErrorMsg("");
     formError.clear();
-    try {
-      const res = await fetch("/api/proxy/v1/hrms/overtime-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          employeeId,
-          requestDate,
-          hoursRequested: Number(hours),
-          reason: reason || undefined,
-          dutyOfficerId: approver || undefined,
-          compensationMode: compMode,
-        }),
-      });
-      if (!res.ok) {
-        const resolved = await formError.fromResponse(res, "save");
-        setErrorMsg(resolved.message);
-        setState("error");
-        return;
-      }
-      setState("done");
-      setTimeout(() => router.push("/hr/workforce/overtime"), 900);
-    } catch {
-      setErrorMsg(formError.fromException("save").message);
-      setState("error");
-    }
+    await asyncMutation.run();
   }
 
   return (
@@ -208,12 +230,15 @@ export function OvertimeClaimForm() {
         />
       </div>
 
-      {(state === "error" || state === "done") && (
+      {displayPhase !== "idle" && displayPhase !== "submitting" && (
         <p
-          role={state === "error" ? "alert" : "status"}
-          style={{ fontSize: 13, color: state === "error" ? "var(--red, #dc2626)" : "var(--green, #16a34a)", margin: 0 }}
+          role={displayPhase === "error" ? "alert" : "status"}
+          style={{ fontSize: 13, color: displayPhase === "error" ? "var(--red, #dc2626)" : "var(--green, #16a34a)", margin: 0 }}
         >
-          {state === "done" ? "Overtime claim submitted. Redirecting…" : errorMsg}
+          {displayPhase === "error" && displayErrorMsg}
+          {displayPhase === "pending" && "Overtime claim submitted — confirming…"}
+          {displayPhase === "confirmed" && "Overtime claim submitted. Redirecting…"}
+          {displayPhase === "timed_out" && "Still processing. Refresh this page to check."}
         </p>
       )}
 
@@ -229,9 +254,11 @@ export function OvertimeClaimForm() {
         <Button
           type="submit"
           style={{ minHeight: 44 }}
-          loading={state === "submitting"}
+          disabled={asyncMutation.isBusy}
+          aria-busy={asyncMutation.isBusy}
+          loading={asyncMutation.isBusy}
         >
-          {state === "submitting" ? "Submitting…" : "Submit Claim"}
+          {asyncMutation.isBusy ? "Submitting…" : "Submit Claim"}
         </Button>
       </div>
     </form>

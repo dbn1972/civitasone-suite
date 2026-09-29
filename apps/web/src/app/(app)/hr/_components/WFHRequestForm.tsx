@@ -9,7 +9,11 @@ import { useEffect, useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { useAsyncMutation } from "@/lib/useAsyncMutation";
 import { Button } from "../../../_components/ds";
+
+type CreatedRequest = { id: string };
+type WfhRequestsList = { data: Array<{ id: string }> };
 
 type EmployeeOption = { id: string; name?: string; employeeNo?: string };
 
@@ -97,7 +101,45 @@ export function WFHRequestForm({
   const weeklyCapReached = weeklyWfhCount !== undefined && weeklyWfhCount >= 2;
   const payLevelUnknown = payLevel === undefined;
 
-  const submitDisabled = isGazetted || weeklyCapReached || state === "submitting";
+  // SF-15: the POST below is a 202-accepted async write (CLAUDE.md CQRS
+  // rule) -- the row this creates only exists once the queue consumer runs,
+  // not the instant the POST resolves. Previously this component assumed a
+  // fixed 900ms was always enough and redirected regardless. Now it shows an
+  // explicit pending state and polls GET /wfh-requests (the same list the
+  // /hr/wfh page reads) until the new request's id actually appears, and
+  // only then navigates -- falling back to a "still processing" message
+  // rather than guessing forever if it doesn't show up in time.
+  const asyncMutation = useAsyncMutation<CreatedRequest, WfhRequestsList>({
+    mutate: async () => {
+      let res: Response;
+      try {
+        res = await fetch("/api/proxy/v1/hrms/wfh-requests", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ employeeId, fromDate, toDate, reason: reason || undefined }),
+        });
+      } catch {
+        throw new Error(formError.fromException("save").message);
+      }
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
+      }
+      return (await res.json()) as CreatedRequest;
+    },
+    poll: async (created) => {
+      const qs = employeeId ? `?empId=${encodeURIComponent(employeeId)}` : "";
+      const res = await fetch(`/api/proxy/v1/hrms/wfh-requests${qs}`);
+      if (!res.ok) throw new Error(String(res.status));
+      return (await res.json()) as WfhRequestsList;
+    },
+    isDone: (polled, created) => polled.data.some((row) => row.id === created.id),
+    onConfirmed: () => router.push(redirectHref),
+  });
+
+  const submitDisabled = isGazetted || weeklyCapReached || asyncMutation.isBusy;
+  const displayPhase = state === "error" ? "error" : asyncMutation.phase;
+  const displayErrorMsg = state === "error" ? errorMsg : asyncMutation.error;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -112,27 +154,10 @@ export function WFHRequestForm({
       setState("error");
       return;
     }
-    setState("submitting");
+    setState("idle");
     setErrorMsg("");
     formError.clear();
-    try {
-      const res = await fetch("/api/proxy/v1/hrms/wfh-requests", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ employeeId, fromDate, toDate, reason: reason || undefined }),
-      });
-      if (!res.ok) {
-        const resolved = await formError.fromResponse(res, "save");
-        setErrorMsg(resolved.message);
-        setState("error");
-        return;
-      }
-      setState("done");
-      setTimeout(() => router.push(redirectHref), 900);
-    } catch {
-      setErrorMsg(formError.fromException("save").message);
-      setState("error");
-    }
+    await asyncMutation.run();
   }
 
   return (
@@ -280,17 +305,20 @@ export function WFHRequestForm({
         />
       </div>
 
-      {(state === "error" || state === "done") && (
+      {displayPhase !== "idle" && displayPhase !== "submitting" && (
         <p
           id={errId}
-          role={state === "error" ? "alert" : "status"}
+          role={displayPhase === "error" ? "alert" : "status"}
           style={{
             fontSize: 13,
-            color: state === "error" ? "var(--red, #dc2626)" : "var(--green, #16a34a)",
+            color: displayPhase === "error" ? "var(--red, #dc2626)" : "var(--green, #16a34a)",
             margin: 0,
           }}
         >
-          {state === "done" ? t("successMessage") : errorMsg}
+          {displayPhase === "error" && displayErrorMsg}
+          {displayPhase === "pending" && t("confirming")}
+          {displayPhase === "confirmed" && t("successMessage")}
+          {displayPhase === "timed_out" && t("stillProcessing")}
         </p>
       )}
 
@@ -307,10 +335,10 @@ export function WFHRequestForm({
           type="submit"
           style={{ minHeight: 44 }}
           disabled={submitDisabled}
-          aria-busy={state === "submitting"}
+          aria-busy={asyncMutation.isBusy}
           aria-disabled={submitDisabled}
         >
-          {state === "submitting" ? t("submitting") : t("submitRequest")}
+          {asyncMutation.isBusy ? t("submitting") : t("submitRequest")}
         </Button>
       </div>
     </form>
