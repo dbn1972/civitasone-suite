@@ -2,9 +2,12 @@ import { getTranslations } from "next-intl/server";
 import type { NavTile } from "@civitasone/types";
 import { PageHeader } from "../../_components/ds";
 import { HRHubNavigation } from "./_components/HRHubNavigation";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { hasHrTileAccess } from "@/lib/auth/hrTileAccess";
 
 export default async function Page() {
 	const t = await getTranslations("hr");
+	const roles = getSessionRoles();
 
 	/**
 	 * Tiles grouped by category for progressive disclosure.
@@ -185,6 +188,14 @@ export default async function Page() {
 		},
 	];
 
+	// GAP-HR-HOME-01: hide a tile (and, once empty, its whole category) when
+	// the current session holds none of the destination's own permitted
+	// roles -- see hrTileAccess.ts for what's covered and why. Server checks
+	// at each destination are unchanged; this only removes a dead-end link.
+	const visibleCategories = hrCategories
+		.map((cat) => ({ ...cat, tiles: cat.tiles.filter((tile) => hasHrTileAccess(tile.href, roles)) }))
+		.filter((cat) => cat.tiles.length > 0);
+
 	return (
 		<div className="page-main wrap" aria-labelledby="page-heading">
 			<PageHeader
@@ -205,7 +216,7 @@ export default async function Page() {
 			 * (same hrCategories data, just handed to the searchable component
 			 * instead of mapped inline) -- no tile becomes unreachable.
 			 */}
-			<HRHubNavigation categories={hrCategories} />
+			<HRHubNavigation categories={visibleCategories} />
 		</div>
 	);
 }
