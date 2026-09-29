@@ -21,6 +21,11 @@ export const assetWaterApplications = waterConnectionsSchema.table("asset_water_
   feePaid:           boolean("fee_paid").notNull().default(false),
   feeTransactionId:  text("fee_transaction_id"),
   feasibilityReport: jsonb("feasibility_report"),
+  // Added alongside the persistence fix: routes.ts's POST .../:id/reject
+  // already validates and accepts `reason` (z.string().min(1)), but no
+  // column ever existed to persist it -- the same silent-data-loss bug this
+  // migration otherwise fixes for the whole module, just for one field.
+  rejectionReason:   text("rejection_reason"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:         uuid("created_by").notNull(),

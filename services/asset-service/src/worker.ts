@@ -17,6 +17,7 @@ import { registerCondemnationConsumers } from "./modules/condemnation/consumer.j
 import { registerFleetConsumers }         from "./modules/fleet/consumer.js";
 import { registerVerificationConsumers } from "./modules/verification/consumer.js";
 import { registerStreetlightConsumers }  from "./modules/streetlight/consumer.js";
+import { registerWaterConnectionConsumers } from "./modules/water-connections/consumer.js";
 import { registerWaterMeteringConsumers } from "./modules/water-metering/consumer.js";
 import { startDepScheduler }            from "./modules/depreciation/scheduler.js";
 
@@ -68,6 +69,7 @@ registerCondemnationConsumers(queue);
 registerFleetConsumers(queue);
 registerVerificationConsumers(queue);
 registerStreetlightConsumers(queue);
+registerWaterConnectionConsumers(queue);
 registerWaterMeteringConsumers(queue);
 
 await queue.start();
