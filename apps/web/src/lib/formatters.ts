@@ -1,9 +1,161 @@
-/** GFR 2017 / PFMS mandate: dates displayed as dd/MM/yyyy in Indian locale. */
+const IST_TIME_ZONE = "Asia/Kolkata";
+const BARE_CALENDAR_DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * True when `value` is a bare calendar-date string like "2024-03-31" -- no
+ * time component, no "T", no offset. A bare calendar date names a *day*, not
+ * an instant, so it has no timezone to convert: "2024-03-31" means the same
+ * calendar day everywhere. A full ISO timestamp such as
+ * "2024-03-31T18:30:00.000Z" names an instant, and DOES need to be resolved
+ * to its Asia/Kolkata calendar day before display. Getting this distinction
+ * backwards is a real, previously-reported bug: converting a bare date "as
+ * if" it were a UTC instant can shift it onto the wrong day.
+ */
+function isBareCalendarDate(value: string): boolean {
+  return BARE_CALENDAR_DATE_RE.test(value);
+}
+
+/**
+ * A Date's calendar day *as seen in* `timeZone`, as "YYYY-MM-DD". Used
+ * internally to move a real instant onto its IST (or UTC) calendar day before
+ * doing pure Y/M/D arithmetic on it, and as the basis for display formatting
+ * below.
+ */
+function datePartsInZone(d: Date, timeZone: string): string {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat("en-US", { timeZone, year: "numeric", month: "2-digit", day: "2-digit" })
+      .formatToParts(d)
+      .map((p) => [p.type, p.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+// Fixed 3-letter month table for "dd Mon yyyy" display -- deliberately NOT
+// `toLocaleDateString(..., { month: "short" })`. Recent CLDR English data
+// renders September as "Sept" (four letters) while every other month stays
+// three, which would make this format inconsistently 3-or-4 letters
+// depending on the month, and could silently shift again with the runtime's
+// ICU/CLDR version. A fixed table keeps every month exactly three letters,
+// deterministically, matching how "dd Mon yyyy" is actually specified.
+const SHORT_MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** "dd Mon yyyy" (e.g. "28 Sep 2026") for a real instant, resolved in `timeZone`. */
+function formatDateInZone(d: Date, timeZone: string): string {
+  const [y, m, day] = datePartsInZone(d, timeZone).split("-");
+  return `${day} ${SHORT_MONTH_NAMES[Number(m) - 1]} ${y}`;
+}
+
+/**
+ * Indian date-format standard (decided under HR gap-remediation gap SF-07):
+ * "dd Mon yyyy", e.g. "28 Sep 2026" -- replacing the platform's previous
+ * dd/MM/yyyy rendering.
+ *
+ * NOTE ON THE PRIOR dd/MM/yyyy FORMAT: this function (and its test file)
+ * previously cited "GFR 2017 / PFMS mandate" as the reason for dd/MM/yyyy.
+ * That citation is not re-verified as part of this change -- SF-07's decision
+ * packet framed this as a UX/consistency call, not a statutory-format review.
+ * If dd/MM/yyyy turns out to be a genuine external filing/interop requirement
+ * (GFR 2017, PFMS, or otherwise) rather than just this app's own display
+ * convention, that is a separate compliance question worth confirming
+ * explicitly before this ships beyond a reviewed PR.
+ *
+ * Also fixes a separate, independently-real bug: this function used to call
+ * toLocaleDateString with no explicit `timeZone`, so a date near midnight
+ * could render as the wrong calendar day depending on the server's local
+ * clock/TZ. It now always resolves a real timestamp via Asia/Kolkata.
+ *
+ * A bare "YYYY-MM-DD" calendar-date string (no time component -- several
+ * callers pass one, e.g. after `.slice(0, 10)`) is formatted literally, with
+ * no timezone conversion: it has no time component to convert. A full ISO
+ * timestamp is treated as an instant and converted to its Asia/Kolkata
+ * calendar day first. See isBareCalendarDate() above.
+ *
+ *   formatIndianDate("2024-03-31")                  -> "31 Mar 2024"
+ *   formatIndianDate("2024-01-15T19:00:00.000Z")     -> "16 Jan 2024" (IST rollover)
+ *   formatIndianDate(null)                            -> "—"
+ */
 export function formatIndianDate(isoDate: string | null | undefined): string {
   if (!isoDate) return "—";
+  if (isBareCalendarDate(isoDate)) {
+    const [y, m, d] = isoDate.split("-").map(Number);
+    const asUtcMidnight = new Date(Date.UTC(y, m - 1, d));
+    if (isNaN(asUtcMidnight.getTime())) return isoDate;
+    return formatDateInZone(asUtcMidnight, "UTC");
+  }
   const d = new Date(isoDate);
   if (isNaN(d.getTime())) return isoDate;
-  return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
+  return formatDateInZone(d, IST_TIME_ZONE);
+}
+
+/**
+ * Like formatIndianDate, but for a value that also carries a time of day
+ * (e.g. an interview slot, "last active at") -- "dd Mon yyyy, hh:mm am/pm",
+ * always resolved via Asia/Kolkata. Unlike formatIndianDate there is no bare
+ * "calendar date, no time" case to special-case here: a date+time formatter
+ * is only ever meaningful for a value that actually carries a time, i.e. a
+ * real instant, so it is always converted.
+ *
+ *   formatIndianDateTime("2024-01-15T19:00:00.000Z") -> "16 Jan 2024, 12:30 am"
+ *   formatIndianDateTime(null)                         -> "—"
+ */
+export function formatIndianDateTime(isoStringOrDate: string | Date | null | undefined): string {
+  if (!isoStringOrDate) return "—";
+  const d = isoStringOrDate instanceof Date ? isoStringOrDate : new Date(isoStringOrDate);
+  if (isNaN(d.getTime())) return typeof isoStringOrDate === "string" ? isoStringOrDate : "—";
+  const datePart = formatDateInZone(d, IST_TIME_ZONE);
+  const timePart = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true, timeZone: IST_TIME_ZONE });
+  return `${datePart}, ${timePart}`;
+}
+
+/**
+ * Today's calendar date in Asia/Kolkata, as "YYYY-MM-DD" -- the same
+ * date-only shape the codebase's own date-comparison logic already uses
+ * everywhere (e.g. `new Date().toISOString().slice(0, 10)` /
+ * `.split("T")[0]`, repeated across hr/confirmation, hr/onboarding,
+ * hr/transfer and elsewhere, for "is this overdue" checks and date-input
+ * min/max bounds). That existing pattern computes "today" in UTC, which is
+ * quietly wrong for the first 5.5 hours of every IST calendar day. todayIST()
+ * is the IST-correct drop-in: same "YYYY-MM-DD" string shape, so existing
+ * string comparisons (e.g. `dueDate < todayIST()`) keep working unchanged.
+ *
+ *   todayIST() -> "2026-09-29"  (whatever the IST calendar date is "now")
+ */
+export function todayIST(): string {
+  return datePartsInZone(new Date(), IST_TIME_ZONE);
+}
+
+/**
+ * Add (or, with a negative `days`, subtract) whole calendar days to `date` in
+ * Asia/Kolkata, returning the result as a "YYYY-MM-DD" string -- the same
+ * shape as todayIST(), so the two compose directly, e.g. a form's `max` date
+ * is `addDaysIST(todayIST(), 30)`.
+ *
+ * `date` may be a bare "YYYY-MM-DD" calendar-date string, a full ISO
+ * timestamp, or a Date. A bare date's literal Y/M/D is used as-is (nothing to
+ * convert); a timestamp/Date is first resolved to its Asia/Kolkata calendar
+ * day, exactly as in formatIndianDate/isBareCalendarDate above. Returns "—"
+ * for missing/invalid input, matching this file's UX-006 convention
+ * (missing is not zero, and here, not "today" either).
+ *
+ *   addDaysIST("2026-09-29", 7)   -> "2026-10-06"
+ *   addDaysIST("2026-09-29", -7)  -> "2026-09-22"
+ *   addDaysIST(null, 7)            -> "—"
+ */
+export function addDaysIST(date: string | Date | null | undefined, days: number): string {
+  if (!date) return "—";
+  let y: number, m: number, d: number;
+  if (typeof date === "string" && isBareCalendarDate(date)) {
+    [y, m, d] = date.split("-").map(Number);
+  } else {
+    const parsed = date instanceof Date ? date : new Date(date);
+    if (isNaN(parsed.getTime())) return "—";
+    [y, m, d] = datePartsInZone(parsed, IST_TIME_ZONE).split("-").map(Number);
+  }
+  const shifted = new Date(Date.UTC(y, m - 1, d + days));
+  const yyyy = shifted.getUTCFullYear();
+  const mm = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(shifted.getUTCDate()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 /**

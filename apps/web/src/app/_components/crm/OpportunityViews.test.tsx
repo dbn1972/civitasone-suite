@@ -98,7 +98,7 @@ describe("OpportunityViews (OP-004)", () => {
     render(<OpportunityViews />);
     await waitFor(() => expect(screen.getByText("Datacentre")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("tab", { name: "Calendar" }));
-    await waitFor(() => expect(screen.getByText(/01\/09\/2026/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/01 Sep 2026/)).toBeInTheDocument());
   });
 
   it("renders the funnel view with a meter per stage", async () => {
