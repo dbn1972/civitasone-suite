@@ -24,11 +24,6 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
-function formatINR(minor: number): string {
-  if (minor == null) return "—";
-  return `₹${(minor / 100).toLocaleString("en-IN")}`;
-}
-
 function mapExpenses(rows: ApiExpense[]): Row[] {
   return rows.map((e) => ({
     id: e.id,
@@ -60,9 +55,15 @@ export default async function ExpensesPage() {
   const pending = items.filter((i) => i.status === "pending").length;
   const rejected = items.filter((i) => i.status === "rejected").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status"; render?: (r: Row) => string }[] = [
+  // GAP-HR-EXPENSES-01: this is a Server Component (no "use client") -- a
+  // `render` function prop can't cross the RSC boundary into DataTable
+  // ("use client") and threw at runtime on every load. DataTable's own
+  // `cellType: "amount"` is server-safe: it formats a minor-units (paise)
+  // value via formatMoney(), the exact same convention already used by the
+  // sibling hr/loans, hr/advances, and hr/medical pages.
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" }[] = [
     { key: "category", label: t("colCategory") },
-    { key: "amount", label: t("colAmount"), render: (r) => formatINR(r.amount) },
+    { key: "amount", label: t("colAmount"), cellType: "amount" },
     { key: "description", label: t("colDescription") },
     { key: "date", label: t("colClaimDate") },
     { key: "status", label: t("colStatus"), cellType: "status" },
