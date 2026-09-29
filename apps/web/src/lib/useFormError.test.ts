@@ -61,6 +61,19 @@ describe("useFormError", () => {
     expect(result.current.message).not.toContain("CIRCUIT_OPEN");
   });
 
+  it("maps a FORBIDDEN code to the distinct 'no permission' copy (SF-14), not a generic save failure", async () => {
+    const { result } = renderHook(() => useFormError("designation"));
+    const res = jsonResponse(403, { code: "FORBIDDEN", message: "forbidden" });
+
+    await act(async () => {
+      await result.current.fromResponse(res, "save");
+    });
+
+    expect(result.current.message).toMatch(/permission/i);
+    expect(result.current.message).not.toMatch(/couldn't save/i);
+    expect(result.current.message).not.toMatch(/\b403\b/);
+  });
+
   it("fromException never reads err.message and never leaks a status code", () => {
     const { result } = renderHook(() => useFormError("grievance"));
     act(() => {

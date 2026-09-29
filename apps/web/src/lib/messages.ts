@@ -21,7 +21,8 @@ export type MessageKind =
   | "save"
   | "offline"
   | "unknownStatus"
-  | "accepted";
+  | "accepted"
+  | "forbidden";
 
 /**
  * Build a clerk-safe message for a known situation. `area` is an optional plain
@@ -69,6 +70,15 @@ export function toHumanError(kind: MessageKind, ctx?: { area?: string }): HumanE
         what: "Your request was received.",
         next: "It's being processed now and will appear here shortly.",
         actions: ["back"],
+      };
+    case "forbidden":
+      // Deliberately distinct from "save"/"load": a permission problem is not
+      // something retrying will fix, so this is the one kind that never offers
+      // "retry" as a safe action.
+      return {
+        what: "You don't have permission to do this.",
+        next: "Contact your administrator if you think this is a mistake.",
+        actions: ["back", "help"],
       };
     default:
       return {
