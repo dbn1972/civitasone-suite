@@ -11,6 +11,16 @@ type Row = {
   employee: string;
   program: string;
   rating: number;
+  /**
+   * GAP-HR-TRAINING-FEEDBACK-RATING (SF-08): precomputed display string
+   * (`rating.toFixed(1)`), so the "rating" column can reference a plain
+   * server-safe field instead of a `render:` closure -- this page is a
+   * Server Component (no "use client"), and a `render` function can't cross
+   * the RSC boundary into DataTable ("use client"); see GAP-HR-EXPENSES-01 /
+   * PR #1647 for the same bug class. `rating` itself stays a number, since
+   * statAvgRating below needs to do real arithmetic on it.
+   */
+  ratingDisplay: string;
   submittedOn: string;
 } & Record<string, unknown>;
 
@@ -20,7 +30,10 @@ async function getData(): Promise<LoaderResult<Row[]>> {
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
       if (!Array.isArray(arr)) return null;
-      return arr.map((f: Record<string, unknown>) => ({ ...f, rating: parseFloat(String(f.rating)) || 0 })) as Row[];
+      return arr.map((f: Record<string, unknown>) => {
+        const rating = parseFloat(String(f.rating)) || 0;
+        return { ...f, rating, ratingDisplay: rating.toFixed(1) };
+      }) as Row[];
     },
   });
   return r;
@@ -43,10 +56,10 @@ export default async function TrainingFeedbackPage() {
 
   const { data: items, source } = await getData();
 
-  const columns: { key: keyof Row & string; label: string; render?: (r: Row) => string }[] = [
+  const columns: { key: keyof Row & string; label: string }[] = [
     { key: "employee", label: t("colEmployee") },
     { key: "program", label: t("colProgram") },
-    { key: "rating", label: t("colOverallRating"), render: (r) => r.rating.toFixed(1) },
+    { key: "ratingDisplay", label: t("colOverallRating") },
     { key: "submittedOn", label: t("colSubmitted") },
   ];
 

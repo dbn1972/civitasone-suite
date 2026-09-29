@@ -36,16 +36,6 @@ function getDayName(dateStr: string): string {
   }
 }
 
-function formatDate(dateStr: string): string {
-  try {
-    const d = new Date(dateStr);
-    if (isNaN(d.getTime())) return dateStr;
-    return d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
-  } catch {
-    return dateStr;
-  }
-}
-
 function mapHolidays(apiHolidays: ApiHoliday[]): Row[] {
   return apiHolidays.map((h) => ({
     id: h.id,
@@ -87,8 +77,15 @@ export default async function HolidaysPage() {
   const gazetted = items.filter((i) => i.type === "gazetted" || i.type === "Gazetted").length;
   const restricted = items.filter((i) => i.type === "restricted" || i.type === "Restricted").length;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status"; render?: (r: Row) => string }[] = [
-    { key: "date", label: t("colDate"), render: (r) => formatDate(r.date) },
+  // GAP-HR-HOLIDAYS-DATE (SF-08): this is a Server Component (no "use client")
+  // -- a `render` function prop can't cross the RSC boundary into DataTable
+  // ("use client") and would throw at runtime on every load, the same crash
+  // class as GAP-HR-EXPENSES-01 / PR #1647. DataTable's own `cellType: "date"`
+  // is server-safe: it formats via the shared formatIndianDate() helper, which
+  // produces the exact same dd/MM/yyyy output this file's own (now removed)
+  // local formatDate() did.
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date" }[] = [
+    { key: "date", label: t("colDate"), cellType: "date" },
     { key: "day", label: t("colDay") },
     { key: "name", label: t("colHoliday") },
     { key: "type", label: t("colType") },

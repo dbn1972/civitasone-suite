@@ -1,6 +1,6 @@
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, DataTable } from "@/app/_components/ds";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney } from "@/lib/formatters";
 import { getStockItems } from "../../../_data/loaders";
 import { getInventoryCycleCounts, type InventoryCycleCountRow } from "../_data";
 import { InventoryStockListClient } from "./InventoryStockListClient";
@@ -8,8 +8,15 @@ import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+// GAP-INVENTORY-LIST-COUNTEDAT (SF-08): this is a Server Component (no
+// "use client") -- a `render` function prop can't cross the RSC boundary
+// into DataTable ("use client") and would throw at runtime on every load,
+// the same crash class as GAP-HR-EXPENSES-01 / PR #1647. DataTable's own
+// `cellType: "date"` is server-safe: it formats via the shared
+// formatIndianDate() helper, the exact function this file's own (now
+// removed) render closure called directly.
 const CYCLE_COUNT_COLUMNS = [
-  { key: "countedAt" as const, label: "Counted", render: (r: InventoryCycleCountRow) => formatIndianDate(r.countedAt) },
+  { key: "countedAt" as const, label: "Counted", cellType: "date" as const },
   { key: "itemId" as const, label: "Item" },
   { key: "warehouseId" as const, label: "Warehouse" },
   { key: "systemQty" as const, label: "System qty", align: "right" as const },
