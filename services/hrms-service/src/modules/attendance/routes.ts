@@ -4,6 +4,7 @@ import { ZodError, z } from "zod";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { attendanceSummaryResponseSchema, AttendanceRegularisationListSchema, AttendanceSummaryListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
+import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import { markAttendanceBody, regularisationCreateBody, periodLockBody } from "./validators.js";
@@ -11,6 +12,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
 import { eq, and, desc } from "drizzle-orm";
@@ -29,6 +31,74 @@ async function assertPeriodsUnlocked(tenantId: string, dates: string[]): Promise
       `attendance period(s) ${locked.sort().join(", ")} are locked (payroll cut-off) — reopen the period before editing`,
     );
   }
+}
+
+// GAP-HR-SF-10 fix. This file used to scope/guard non-privileged ("employee")
+// callers with raw `ctx.actorId` comparisons against hrms_employees-linked
+// columns (employeeId). ctx.actorId is the JWT subject (the login/account
+// id); hrms_employees.id is a separate id space linked via
+// hrms_employees.user_ref -- see employee/actor-link.ts's
+// resolveEmployeeForActor doc comment. The two never coincide, so every
+// comparison below silently failed CLOSED (empty lists, spurious 403s on a
+// caller's own records) -- broken self-service, not a leak, but it also left
+// the "cannot approve your own request" guards on WFH/shift-requests
+// permanently inert, which becomes a live self-approval hole for anyone
+// holding both "manager" and "employee" roles the moment self-service starts
+// working. Fixed by resolving through resolveEmployeeForActor, the same
+// pattern already used by ~25 other modules in this service (apar,
+// geo-attendance, medical, leave, self-service, etc.) -- see medical/
+// routes.ts's resolveSelfScopedEmployeeId for the closest precedent to the
+// two helpers below.
+
+/**
+ * Self-scoping for the list/read routes below: HR or manager may pass an
+ * explicit empId (or omit it to see the full tenant queue); a bare
+ * "employee" caller is always forced onto their OWN resolved
+ * hrms_employees.id, regardless of what (if anything) they requested.
+ * Returns:
+ *   - `requested` unchanged                — privileged (HR/manager) caller.
+ *   - the actor's own resolved employee id — self-service caller, resolved.
+ *   - null                                  — self-service caller with NO
+ *     linked employee record. Callers MUST treat this as "nothing to show"
+ *     (fail CLOSED), never fall through to an unscoped query.
+ */
+async function resolveSelfScopedEmployeeId(
+  ctx: RequestContext,
+  requested: string | undefined,
+): Promise<string | undefined | null> {
+  const isHrOrManager = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
+  if (isHrOrManager) return requested;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  return actorEmp ? actorEmp.id : null;
+}
+
+/**
+ * IDOR guard for the *create* routes below. Deliberately NOT the same
+ * privilege set as resolveSelfScopedEmployeeId above: a manager may VIEW the
+ * full queue but (existing, unchanged behavior) may not submit a request on
+ * someone else's behalf -- only HR can. Throws 403 unless the caller is HR
+ * or claimedEmployeeId resolves to the caller's own linked hrms_employees
+ * row.
+ */
+async function assertSelfOrHr(ctx: RequestContext, claimedEmployeeId: string, action: string): Promise<void> {
+  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+  if (isHrActor) return;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp || claimedEmployeeId !== actorEmp.id) {
+    throw new HttpError(403, "FORBIDDEN", `employees may only ${action} for themselves`);
+  }
+}
+
+/**
+ * Self-approval guard for the approve/reject routes below. ownerEmployeeId
+ * (from the fetched request row) is already an hrms_employees.id; resolve
+ * the approving actor's own linked row the same way before comparing -- an
+ * actor with no linked employee row cannot BE the request's owner, so the
+ * guard simply does not apply (returns false); it does not error.
+ */
+async function isSelfApproval(ctx: RequestContext, ownerEmployeeId: string): Promise<boolean> {
+  const approverEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  return !!approverEmp && ownerEmployeeId === approverEmp.id;
 }
 
 export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
@@ -185,8 +255,10 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // Self-service (WAVE-4): employees may only list their own shift-change
     // requests; HR/manager keep the full tenant queue or an empId filter.
     // Mirrors GET /v1/hrms/overtime-requests' IDOR guard below.
-    const isHrOrManager = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-    const effectiveEmpId = isHrOrManager ? q.empId : ctx.actorId;
+    const effectiveEmpId = await resolveSelfScopedEmployeeId(ctx, q.empId);
+    if (effectiveEmpId === null) {
+      return reply.send({ data: [] });
+    }
     // SEC-010: attendance.hrms_shift_change_requests is now FORCE RLS'd. A
     // bare db.select() runs with no app.tenant_id GUC set, which would fail
     // closed to zero rows for every tenant (see shared/db.ts's scopedRead
@@ -222,8 +294,10 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // Self-service (WAVE-4): employees may only list their own WFH requests;
     // HR/manager keep the full tenant queue or an empId filter. Mirrors
     // GET /v1/hrms/overtime-requests' IDOR guard below.
-    const isHrOrManager = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-    const effectiveEmpId = isHrOrManager ? q.empId : ctx.actorId;
+    const effectiveEmpId = await resolveSelfScopedEmployeeId(ctx, q.empId);
+    if (effectiveEmpId === null) {
+      return reply.send({ data: [] });
+    }
     // SEC-010: attendance.hrms_wfh_requests is now FORCE RLS'd — same reasoning
     // as GET /v1/hrms/shift-requests above.
     const rows = await scopedRead((tx) =>
@@ -260,10 +334,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       reason:         z.string().max(500).optional(),
     }).parse(req.body);
     // IDOR guard: employees may only submit OT requests for themselves
-    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
-    if (!isHrActor && body.employeeId !== ctx.actorId) {
-      throw new HttpError(403, "FORBIDDEN", "employees may only create overtime requests for themselves");
-    }
+    await assertSelfOrHr(ctx, body.employeeId, "create overtime requests");
     const id = randomUUID();
     await publishF3Write(ctx, "attendance_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "pending" }) as any;
@@ -274,8 +345,10 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, [...HR_ROLES, "employee", "manager"]);
     const q = z.object({ empId: z.string().uuid().optional() }).parse(req.query);
     // IDOR guard: employees may only read their own OT requests
-    const isHrOrManager = [...HR_ROLES, "manager"].some((r) => ctx.roles.includes(r));
-    const effectiveEmpId = isHrOrManager ? q.empId : ctx.actorId;
+    const effectiveEmpId = await resolveSelfScopedEmployeeId(ctx, q.empId);
+    if (effectiveEmpId === null) {
+      return reply.send({ data: [] });
+    }
     // FORCE-RLS fix: was a bare db.select() against attendance.hrms_overtime_requests
     // (FORCE ROW LEVEL SECURITY — migration 0148), so under the NOBYPASSRLS
     // hrms_svc role no app.tenant_id GUC was ever set and the fail-closed
@@ -369,10 +442,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       message: "toDate must be on or after fromDate", path: ["toDate"],
     }).parse(req.body);
     // IDOR guard: employees may only submit WFH requests for themselves.
-    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
-    if (!isHrActor && body.employeeId !== ctx.actorId) {
-      throw new HttpError(403, "FORBIDDEN", "employees may only create WFH requests for themselves");
-    }
+    await assertSelfOrHr(ctx, body.employeeId, "create WFH requests");
     const id = randomUUID();
     await publishF3Write(ctx, "attendance_routes__5", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "pending" }) as any;
@@ -395,7 +465,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (!existing[0]) {
       throw new HttpError(404, "NOT_FOUND", "WFH request not found");
     }
-    if (existing[0].employeeId === ctx.actorId) {
+    if (await isSelfApproval(ctx, existing[0].employeeId)) {
       throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own WFH request");
     }
     if (existing[0].status !== "pending") {
@@ -421,7 +491,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (!existing[0]) {
       throw new HttpError(404, "NOT_FOUND", "WFH request not found");
     }
-    if (existing[0].employeeId === ctx.actorId) {
+    if (await isSelfApproval(ctx, existing[0].employeeId)) {
       throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own WFH request");
     }
     if (existing[0].status !== "pending") {
@@ -456,10 +526,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     // IDOR guard: employees may only submit shift-change requests for
     // themselves.
-    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
-    if (!isHrActor && body.employeeId !== ctx.actorId) {
-      throw new HttpError(403, "FORBIDDEN", "employees may only create shift-change requests for themselves");
-    }
+    await assertSelfOrHr(ctx, body.employeeId, "create shift-change requests");
     const id = randomUUID();
     await publishF3Write(ctx, "attendance_routes__8", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "pending" }) as any;
@@ -482,7 +549,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (!existing[0]) {
       throw new HttpError(404, "NOT_FOUND", "shift-change request not found");
     }
-    if (existing[0].employeeId === ctx.actorId) {
+    if (await isSelfApproval(ctx, existing[0].employeeId)) {
       throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own shift-change request");
     }
     if (existing[0].status !== "pending") {
@@ -508,7 +575,7 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (!existing[0]) {
       throw new HttpError(404, "NOT_FOUND", "shift-change request not found");
     }
-    if (existing[0].employeeId === ctx.actorId) {
+    if (await isSelfApproval(ctx, existing[0].employeeId)) {
       throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own shift-change request");
     }
     if (existing[0].status !== "pending") {
