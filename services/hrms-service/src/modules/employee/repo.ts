@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
@@ -221,4 +221,58 @@ export async function updateEmployeeVersioned(
       `employee ${id} was modified by another writer since version ${expectedVersion} was read; refusing to apply this write blindly`,
     );
   }
+}
+
+/**
+ * Batch id -> row/name lookups for cross-module display enrichment
+ * (GAP-HR-SF-17). Other modules (e.g. lifecycle/routes.ts) resolve
+ * employee/department/designation NAMES for a list of ids through these
+ * exports — never by importing ./schema.js and querying hrmsEmployees /
+ * hrmsDepartments / hrmsDesignations directly from outside this module,
+ * which would violate CLAUDE.md rule 4 (module isolation: a module's repo
+ * queries only its own schema; cross-module data goes through an
+ * in-process domain interface — this file is that interface for the
+ * employee module's lookup tables). See shared/batch-resolve.ts for the
+ * generic Map-building wrapper these feed.
+ *
+ * Column-projected (not a full EmployeeRow select) on purpose: callers only
+ * need display fields, and a generic cross-module helper shouldn't pull
+ * salary/bank/Aadhaar-adjacent columns just to resolve a name.
+ */
+export async function findManyByIds(
+  tenantId: string,
+  ids: string[],
+): Promise<Array<{ id: string; fullName: string; departmentId: string; designationId: string }>> {
+  if (ids.length === 0) return [];
+  return scopedRead((tx) => tx
+    .select({
+      id: hrmsEmployees.id,
+      fullName: hrmsEmployees.fullName,
+      departmentId: hrmsEmployees.departmentId,
+      designationId: hrmsEmployees.designationId,
+    })
+    .from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.tenantId, tenantId), inArray(hrmsEmployees.id, ids))));
+}
+
+export async function findDepartmentsByIds(
+  tenantId: string,
+  ids: string[],
+): Promise<Array<{ id: string; name: string }>> {
+  if (ids.length === 0) return [];
+  return scopedRead((tx) => tx
+    .select({ id: hrmsDepartments.id, name: hrmsDepartments.name })
+    .from(hrmsDepartments)
+    .where(and(eq(hrmsDepartments.tenantId, tenantId), inArray(hrmsDepartments.id, ids))));
+}
+
+export async function findDesignationsByIds(
+  tenantId: string,
+  ids: string[],
+): Promise<Array<{ id: string; name: string }>> {
+  if (ids.length === 0) return [];
+  return scopedRead((tx) => tx
+    .select({ id: hrmsDesignations.id, name: hrmsDesignations.name })
+    .from(hrmsDesignations)
+    .where(and(eq(hrmsDesignations.tenantId, tenantId), inArray(hrmsDesignations.id, ids))));
 }

@@ -5,6 +5,7 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
+import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import { hrmsPromotions, hrmsTransfers } from "./schema.js";
 import { createTransferBody, createPromotionBody, issueOrderBody, relieveBody, joinBody, idParam } from "./validators.js";
 import * as commands from "./commands.js";
@@ -12,13 +13,33 @@ import * as commands from "./commands.js";
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
+  // GAP-HR-SF-17: this list previously returned raw employeeId/fromDesigId/
+  // toDesigId with no resolved name, forcing the web layer to either show a
+  // raw UUID or make N+1 follow-up calls. Adds employeeName/from-toDesignationName
+  // alongside the existing raw fields (kept unchanged, still needed for actions)
+  // via the shared batch-resolution helper — same shape as the already-correct
+  // lifecycle/m7-list-routes.ts pattern, but resolved through employee/repo.ts's
+  // in-process interface rather than importing employee/schema.js directly
+  // (CLAUDE.md rule 4: module isolation).
   app.get("/v1/hrms/lifecycle/promotions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const rows = await scopedRead((tx) => tx.select().from(hrmsPromotions)
       .where(eq(hrmsPromotions.tenantId, ctx.tenantId))
       .orderBy(desc(hrmsPromotions.effectiveDate)));
-    return reply.send({ data: rows });
+    if (rows.length === 0) return reply.send({ data: [] });
+    const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
+    const desigMap = await batchDesignations(ctx.tenantId, [
+      ...rows.map((r) => r.fromDesigId),
+      ...rows.map((r) => r.toDesigId),
+    ]);
+    const data = rows.map((r) => ({
+      ...r,
+      employeeName: empMap.get(r.employeeId)?.fullName ?? "—",
+      fromDesignationName: desigMap.get(r.fromDesigId) ?? "—",
+      toDesignationName: desigMap.get(r.toDesigId) ?? "—",
+    }));
+    return reply.send({ data });
   });
 
   app.post("/v1/hrms/lifecycle/promotions", async (req, reply) => {
@@ -28,13 +49,30 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPromotion(ctx, body as unknown as Record<string, unknown>));
   });
 
+  // GAP-HR-SF-17: same enrichment as promotions above — employeeName plus
+  // from/toDepartmentName resolved alongside the existing raw ids and the
+  // free-text fromStation/toStation (kept as-is; station and department are
+  // distinct concepts in this schema, so both are surfaced rather than one
+  // silently standing in for the other).
   app.get("/v1/hrms/lifecycle/transfers", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const rows = await scopedRead((tx) => tx.select().from(hrmsTransfers)
       .where(eq(hrmsTransfers.tenantId, ctx.tenantId))
       .orderBy(desc(hrmsTransfers.effectiveDate)));
-    return reply.send({ data: rows });
+    if (rows.length === 0) return reply.send({ data: [] });
+    const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
+    const deptMap = await batchDepartments(ctx.tenantId, [
+      ...rows.map((r) => r.fromDeptId),
+      ...rows.map((r) => r.toDeptId),
+    ]);
+    const data = rows.map((r) => ({
+      ...r,
+      employeeName: empMap.get(r.employeeId)?.fullName ?? "—",
+      fromDepartmentName: deptMap.get(r.fromDeptId) ?? "—",
+      toDepartmentName: deptMap.get(r.toDeptId) ?? "—",
+    }));
+    return reply.send({ data });
   });
 
   app.post("/v1/hrms/lifecycle/transfers", async (req, reply) => {
