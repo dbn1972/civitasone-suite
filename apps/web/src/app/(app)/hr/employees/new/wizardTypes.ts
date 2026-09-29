@@ -63,6 +63,17 @@ export const WIZARD_INIT: WizardData = {
 
 export const SESSION_KEY = "civitas-add-emp-draft";
 
+/**
+ * GAP-HR-EMPLOYEES-NEW-03: statutory identifier fields that must never be
+ * written to the sessionStorage draft (see AddEmployeeWizard's saveDraft /
+ * restoreDraft). PAN, Aadhaar reference, and bank details are sensitive
+ * financial/statutory identifiers — unlike the rest of the wizard state, the
+ * user always re-enters these four rather than having them autosaved.
+ * pfEnrolled / esiEnrolled / ptApplicable are plain enrollment booleans, not
+ * identifiers, so they keep autosaving with everything else.
+ */
+export const SENSITIVE_DRAFT_FIELDS = ["pan", "aadhaarRef", "bankAccountNo", "bankIfsc"] as const;
+
 // ── Shared DS tokens ─────────────────────────────────────────────────────────
 export const ACCENT = "#047857";
 
