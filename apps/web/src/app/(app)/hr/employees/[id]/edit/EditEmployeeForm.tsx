@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
+import { Button, EntityPicker, Field } from "@/app/_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { searchPayStructures, resolvePayStructures } from "@/lib/entityAdapters/payStructure";
 import { useTranslations } from "next-intl";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -13,9 +15,6 @@ const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
 interface Props {
   employee: EmployeeDetail;
 }
-
-type EmployeeOption = { id: string; name?: string; employeeNo?: string };
-type PayStructureOption = { id: string; name?: string; code?: string };
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -42,8 +41,17 @@ export function EditEmployeeForm({ employee }: Props) {
 
   const [mobile, setMobile] = useState(employee.phone ?? "");
   const [email, setEmail] = useState(employee.email ?? "");
-  const [managerId, setManagerId] = useState(employee.reportingTo ?? "");
-  const [payStructureId, setPayStructureId] = useState("");
+  // GAP-HR-SF-06 (EntityPicker) / GAP-HR-EMPLOYEES-DETAIL-EDIT-04: seeded
+  // from the real FK (managerId/payStructureId), not a display name. The
+  // pre-conversion managerId state seeded itself from `employee.reportingTo`
+  // (the manager's NAME) and only worked at all because the "did the user
+  // actually change this" comparison below used that same name as its own
+  // baseline; payStructureId seeded blank unconditionally, every visit,
+  // because getEmployeeDetail never returned it (see queries.ts fix). Both
+  // are real uuid columns and EntityPicker's resolve() needs a real id to
+  // resolve a label for, not a name.
+  const [managerId, setManagerId] = useState<string | null>(employee.managerId ?? null);
+  const [payStructureId, setPayStructureId] = useState<string | null>(employee.payStructureId ?? null);
 
   // Statutory & financial fields
   const [bankAccountNo, setBankAccountNo] = useState((employee as Record<string,unknown>).bankAccountNo as string ?? "");
@@ -51,29 +59,6 @@ export function EditEmployeeForm({ employee }: Props) {
   const [uanNumber, setUanNumber] = useState((employee as Record<string,unknown>).uanNumber as string ?? "");
   const [esicIpNumber, setEsicIpNumber] = useState((employee as Record<string,unknown>).esicIpNumber as string ?? "");
   const [pran, setPran] = useState((employee as Record<string,unknown>).pran as string ?? "");
-
-  // Dropdown options for manager and pay structure (follows WFHRequestForm pattern)
-  const [managerOptions, setManagerOptions] = useState<EmployeeOption[]>([]);
-  const [payStructureOptions, setPayStructureOptions] = useState<PayStructureOption[]>([]);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch("/api/proxy/v1/hrms/employees?limit=500")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((body: { data?: EmployeeOption[] } | EmployeeOption[]) => {
-        if (cancelled) return;
-        setManagerOptions(Array.isArray(body) ? body : (body.data ?? []));
-      })
-      .catch(() => { /* graceful fallback to text input */ });
-    fetch("/api/proxy/v1/payroll/structures?limit=200")
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
-      .then((body: { data?: PayStructureOption[] } | PayStructureOption[]) => {
-        if (cancelled) return;
-        setPayStructureOptions(Array.isArray(body) ? body : (body.data ?? []));
-      })
-      .catch(() => { /* graceful fallback to text input */ });
-    return () => { cancelled = true; };
-  }, []);
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -117,10 +102,15 @@ export function EditEmployeeForm({ employee }: Props) {
     const patch: Record<string, string> = {};
     if (trimmedMobile !== (employee.phone ?? "")) patch.mobile = trimmedMobile;
     if (trimmedEmail !== (employee.email ?? "")) patch.email = trimmedEmail;
-    if (managerId.trim() !== (employee.reportingTo ?? ""))
-      patch.managerId = managerId.trim();
-    if (payStructureId.trim() !== "")
-      patch.payStructureId = payStructureId.trim();
+    // Clearing a manager/pay-structure back to "none" is not sent: both are
+    // z.string().uuid().optional() server-side, which rejects an empty
+    // string -- the pre-conversion code had this exact same limitation
+    // (sending "" on clear would already have 400'd), so this preserves
+    // behavior rather than introducing a new restriction.
+    const initialManagerId = employee.managerId ?? null;
+    const initialPayStructureId = employee.payStructureId ?? null;
+    if (managerId && managerId !== initialManagerId) patch.managerId = managerId;
+    if (payStructureId && payStructureId !== initialPayStructureId) patch.payStructureId = payStructureId;
     // Data-corruption fix: bankAccountNo/bankIfsc arrive here pre-masked by
     // the backend (pii-mask.ts maskValue -- "*******1234"), and this state
     // was seeded directly from that masked value above. A plain non-empty
@@ -302,65 +292,34 @@ export function EditEmployeeForm({ employee }: Props) {
             )}
           </div>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.managerId} style={labelStyle}>
-              {t("managerIdLabel")}
-            </label>
-            {managerOptions.length > 0 ? (
-              <select
-                id={ids.managerId}
-                style={inputStyle}
-                value={managerId}
-                onChange={(e) => setManagerId(e.target.value)}
-              >
-                <option value="">{t("selectManagerPlaceholder")}</option>
-                {managerOptions.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
-                    {emp.name ?? emp.id}{emp.employeeNo ? ` (${emp.employeeNo})` : ""}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id={ids.managerId}
-                type="text"
-                value={managerId}
-                onChange={(e) => setManagerId(e.target.value)}
-                placeholder={t("managerIdPlaceholder")}
-                style={inputStyle}
-              />
-            )}
-          </div>
+          <Field label={t("managerIdLabel")} error={formError.fieldError("managerId")}>
+            <EntityPicker
+              value={managerId}
+              onChange={(v) => setManagerId(Array.isArray(v) ? (v[0] ?? null) : v)}
+              search={searchEmployees}
+              resolve={resolveEmployees}
+              initialOptions={
+                employee.managerId && employee.reportingTo
+                  ? [{ id: employee.managerId, label: employee.reportingTo }]
+                  : undefined
+              }
+              placeholder={t("selectManagerPlaceholder")}
+              searchingText={t("pickerSearching")}
+              noResultsText={t("pickerNoResults")}
+            />
+          </Field>
 
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={ids.payStructureId} style={labelStyle}>
-              {t("payStructureIdLabel")}
-            </label>
-            {payStructureOptions.length > 0 ? (
-              <select
-                id={ids.payStructureId}
-                style={inputStyle}
-                value={payStructureId}
-                onChange={(e) => setPayStructureId(e.target.value)}
-              >
-                <option value="">{t("selectPayStructurePlaceholder")}</option>
-                {payStructureOptions.map((ps) => (
-                  <option key={ps.id} value={ps.id}>
-                    {ps.name ?? ps.code ?? ps.id}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <input
-                id={ids.payStructureId}
-                type="text"
-                value={payStructureId}
-                onChange={(e) => setPayStructureId(e.target.value)}
-                placeholder={t("payStructureIdPlaceholder")}
-                style={inputStyle}
-              />
-            )}
-          </div>
+          <Field label={t("payStructureIdLabel")} error={formError.fieldError("payStructureId")}>
+            <EntityPicker
+              value={payStructureId}
+              onChange={(v) => setPayStructureId(Array.isArray(v) ? (v[0] ?? null) : v)}
+              search={searchPayStructures}
+              resolve={resolvePayStructures}
+              placeholder={t("selectPayStructurePlaceholder")}
+              searchingText={t("pickerSearching")}
+              noResultsText={t("pickerNoResults")}
+            />
+          </Field>
         </div>
 
 

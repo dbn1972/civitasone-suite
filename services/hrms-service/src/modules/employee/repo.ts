@@ -1,4 +1,4 @@
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, or, ilike, sql, inArray } from "drizzle-orm";
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
@@ -48,14 +48,39 @@ export async function findByNo(employeeNo: string, tenantId: string): Promise<Em
  * exists, we use it as reporting officer" comment in
  * migrations/0007_geo_attendance_ro.sql).
  */
-export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string): Promise<EmployeeRow[]> {
+export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string): Promise<EmployeeRow[]> {
   const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
   if (employeeType) conditions.push(eq(hrmsEmployees.employeeType, employeeType));
   if (managerId) conditions.push(eq(hrmsEmployees.managerId, managerId));
+  // GAP-HR-SF-06 (EntityPicker): optional free-text search over name/employee
+  // number for the picker's search(q) adapter -- same tenant/manager scoping
+  // as every other filter on this query, just one more optional condition.
+  if (q) {
+    const pattern = `%${q}%`;
+    conditions.push(or(ilike(hrmsEmployees.fullName, pattern), ilike(hrmsEmployees.employeeNo, pattern))!);
+  }
   return scopedRead((tx) => tx.select().from(hrmsEmployees)
     .where(and(...conditions))
     .limit(limit)
     .offset(offset));
+}
+
+/**
+ * Batch id lookup, tenant + optional manager-scope filtered, full row shape
+ * (matching listByTenant) -- backs GET /v1/hrms/employees?ids=... , the
+ * picker's resolve(ids) adapter (GAP-HR-SF-06), which pre-populates an edit
+ * form's label for an id it already has (e.g. GAP-HR-EMPLOYEES-DETAIL-
+ * EDIT-04's blank pay-structure/manager select). Deliberately reuses the
+ * exact same row shape as listByTenant (queries.ts's listEmployees maps
+ * both through identical mapping code) rather than a bespoke projection, so
+ * the same "only these columns ever leave this route" guarantee covers
+ * both paths.
+ */
+export async function listByIds(tenantId: string, ids: string[], managerId?: string): Promise<EmployeeRow[]> {
+  if (ids.length === 0) return [];
+  const conditions = [eq(hrmsEmployees.tenantId, tenantId), inArray(hrmsEmployees.id, ids)];
+  if (managerId) conditions.push(eq(hrmsEmployees.managerId, managerId));
+  return scopedRead((tx) => tx.select().from(hrmsEmployees).where(and(...conditions)));
 }
 
 /**

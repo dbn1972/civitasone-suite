@@ -901,6 +901,12 @@ export const EmployeeDetailSchema = z.object({
   // Real FK (hrms_employees.manager_id) backing "reporting officer" —
   // distinct from reportingTo above, which only carries the manager's name.
   managerId: z.string().optional(),
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-04 / GAP-HR-SF-06 (EntityPicker): real FK
+  // (hrms_employees.pay_structure_id) -- without also declaring it here,
+  // apps/web's loader (which validates the response against this exact
+  // schema) would silently strip it back out before EditEmployeeForm.tsx
+  // ever saw it, exactly like managerId above before that field was added.
+  payStructureId: z.string().optional(),
   // Statutory identifiers -- not masked (see hrms-service's shared/pii-mask.ts
   // PII_FIELDS, which deliberately excludes these three), unlike
   // bankAccountNo/bankIfsc/pan above. FINDING-3 (HRMS role-based review):
