@@ -19,6 +19,7 @@ import { registerVerificationConsumers } from "./modules/verification/consumer.j
 import { registerStreetlightConsumers }  from "./modules/streetlight/consumer.js";
 import { registerWaterConnectionConsumers } from "./modules/water-connections/consumer.js";
 import { registerWaterMeteringConsumers } from "./modules/water-metering/consumer.js";
+import { registerWaterTankerConsumers } from "./modules/water-tanker/consumer.js";
 import { startDepScheduler }            from "./modules/depreciation/scheduler.js";
 
 const log = pino({ name: "asset-worker" });
@@ -71,6 +72,7 @@ registerVerificationConsumers(queue);
 registerStreetlightConsumers(queue);
 registerWaterConnectionConsumers(queue);
 registerWaterMeteringConsumers(queue);
+registerWaterTankerConsumers(queue);
 
 await queue.start();
 const relay = startRelay(db, queue);
