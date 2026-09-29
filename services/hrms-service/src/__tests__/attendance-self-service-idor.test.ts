@@ -115,6 +115,18 @@ beforeEach(() => {
  * JSON.stringify.
  */
 function paramValues(sql: unknown, out: unknown[] = []): unknown[] {
+  // inArray(...) (added by the GAP-HR-SF-16 fix, for a manager's multi-id
+  // scope) nests its bound parameter LIST as a bare array chunk within
+  // queryChunks -- e.g. queryChunks[3] is `[Param]`, not an object exposing
+  // `.value`/`.queryChunks` the way every other chunk type does. eq(...)'s
+  // simpler shape never produces this, so this branch was never needed
+  // before inArray was introduced here. Must run BEFORE the object branch
+  // below (arrays are also typeof "object"), recursing into the array's own
+  // elements directly rather than looking for value/queryChunks props on it.
+  if (Array.isArray(sql)) {
+    for (const c of sql) paramValues(c, out);
+    return out;
+  }
   if (sql && typeof sql === "object") {
     if ("value" in (sql as Record<string, unknown>)) out.push((sql as Record<string, unknown>).value);
     const chunks = (sql as Record<string, unknown>).queryChunks ?? (sql as Record<string, unknown>).value;
@@ -222,16 +234,40 @@ describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
     expect(scopedReadMock).not.toHaveBeenCalled();
   });
 
-  it("manager can still filter by an explicit empId (privileged path unaffected)", async () => {
+  it("GAP-HR-SF-16: manager filtering by a genuine direct report's empId succeeds (their own identity IS now resolved, to verify the report relationship — not blindly trusted)", async () => {
     const cap = capturingTx([]);
+    // 1st scopedRead: the manager's own direct-reports lookup (new, added by
+    // the GAP-HR-SF-16 fix) -- EMP_OTHER is seeded here as a real report so
+    // the requested empId is authorised. 2nd scopedRead: the actual data
+    // query, captured to prove the runtime filter really is EMP_OTHER.
+    scopedReadMock.mockResolvedValueOnce([{ id: EMP_OTHER }]);
     scopedReadMock.mockImplementationOnce(async (cb: unknown) => (cb as (tx: unknown) => Promise<unknown[]>)(cap.tx));
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(MGR_EMP));
     const r = await app.inject({
       method: "GET", url: `/v1/hrms/overtime-requests?empId=${EMP_OTHER}`,
       headers: { authorization: `Bearer ${tok(["manager"], MGR_ACTOR)}` },
     });
     expect(r.statusCode).toBe(200);
-    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+    // Pre-GAP-HR-SF-16 this asserted the OPPOSITE (resolveEmployeeForActor
+    // NOT called) -- that was the vulnerability: a manager's explicit empId
+    // was passed straight through with no ownership check at all, so any
+    // manager could read ANY employee's (not just a report's) requests.
+    expect(resolveEmployeeForActorMock).toHaveBeenCalledWith(TENANT, MGR_ACTOR);
     expect(cap.values()).toContain(EMP_OTHER);
+  });
+
+  it("GAP-HR-SF-16: manager filtering by an empId that is NOT their direct report is denied (empty), not passed through", async () => {
+    scopedReadMock.mockResolvedValueOnce([]); // manager has no reports matching EMP_OTHER
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(MGR_EMP));
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/overtime-requests?empId=${EMP_OTHER}`,
+      headers: { authorization: `Bearer ${tok(["manager"], MGR_ACTOR)}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: [] });
+    // Only the reports-lookup scopedRead call happens -- the route must
+    // short-circuit before ever building/running the data query.
+    expect(scopedReadMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -379,16 +415,37 @@ describe("GET /v1/hrms/shift-requests — self-scoping", () => {
     expect(scopedReadMock).not.toHaveBeenCalled();
   });
 
-  it("manager can still filter by an explicit empId (privileged path unaffected)", async () => {
+  it("GAP-HR-SF-16: manager filtering by a genuine direct report's empId succeeds (their own identity IS now resolved, to verify the report relationship — not blindly trusted)", async () => {
     const cap = capturingTx([]);
+    // Call order for a manager under the GAP-HR-SF-16 fix: 1) their own
+    // direct-reports lookup (new) -- EMP_OTHER seeded as a real report;
+    // 2) the actual data query (captured); 3) employeeRepo.listByTenant,
+    // used unconditionally to build the response's employeeName map.
+    scopedReadMock.mockResolvedValueOnce([{ id: EMP_OTHER }]);
     scopedReadMock.mockImplementationOnce(async (cb: unknown) => (cb as (tx: unknown) => Promise<unknown[]>)(cap.tx));
-    scopedReadMock.mockResolvedValueOnce([]);
+    scopedReadMock.mockResolvedValueOnce([]); // employeeRepo.listByTenant
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(MGR_EMP));
     const r = await app.inject({
       method: "GET", url: `/v1/hrms/shift-requests?empId=${EMP_OTHER}`,
       headers: { authorization: `Bearer ${tok(["manager"], MGR_ACTOR)}` },
     });
     expect(r.statusCode).toBe(200);
-    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+    // Pre-GAP-HR-SF-16 this asserted the OPPOSITE (resolveEmployeeForActor
+    // NOT called) -- that was the vulnerability: a manager's explicit empId
+    // was passed straight through with no ownership check at all.
+    expect(resolveEmployeeForActorMock).toHaveBeenCalledWith(TENANT, MGR_ACTOR);
     expect(cap.values()).toContain(EMP_OTHER);
+  });
+
+  it("GAP-HR-SF-16: manager filtering by an empId that is NOT their direct report is denied (empty), not passed through", async () => {
+    scopedReadMock.mockResolvedValueOnce([]); // manager has no reports matching EMP_OTHER
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(MGR_EMP));
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/shift-requests?empId=${EMP_OTHER}`,
+      headers: { authorization: `Bearer ${tok(["manager"], MGR_ACTOR)}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: [] });
+    expect(scopedReadMock).toHaveBeenCalledTimes(1);
   });
 });

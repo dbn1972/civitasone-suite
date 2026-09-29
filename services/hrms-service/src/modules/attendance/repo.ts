@@ -201,10 +201,13 @@ export async function updateOvertimeStatus(
 }
 
 /** Checkin-log: attendance rows with inTime/outTime formatted for the UI. */
-export async function listCheckinLog(tenantId: string, limit = 200) {
+export async function listCheckinLog(tenantId: string, limit = 200, employeeIds?: string[]) {
   const rows = await scopedRead((tx) =>
     tx.select().from(hrmsAttendance)
-      .where(eq(hrmsAttendance.tenantId, tenantId))
+      .where(and(
+        eq(hrmsAttendance.tenantId, tenantId),
+        employeeIds && employeeIds.length > 0 ? inArray(hrmsAttendance.employeeId, employeeIds) : undefined,
+      ))
       .limit(limit)
   );
   return rows.map((r) => ({

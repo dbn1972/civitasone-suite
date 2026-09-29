@@ -35,6 +35,13 @@ type EnrichedTask = WorkflowTask & {
   dates: string;
   days: number | string;
   reason: string;
+  /** False when this row's leave-application detail failed to load (the
+   * enrichment fetch failed entirely, or simply didn't include this row —
+   * e.g. a delegated/second-level approver outside the applicant's direct
+   * reporting line after the backend's read-scoping fix). Approve/Reject
+   * must be disabled for that row specifically: "Unknown employee" alone
+   * previously left the decision fully clickable, a blind-approval risk. */
+  hasLeaveDetail: boolean;
 } & Record<string, unknown>;
 
 type Decision = "approve" | "reject";
@@ -117,6 +124,7 @@ export function LeaveApprovalsPanel() {
           dates: l ? `${formatIndianDate(l.fromDate)} – ${formatIndianDate(l.toDate)}` : "—",
           days: l?.days ?? "—",
           reason: l?.reason ?? "—",
+          hasLeaveDetail: l != null,
         };
       }),
     [tasks, leaveById],
@@ -203,6 +211,7 @@ export function LeaveApprovalsPanel() {
           <Button
             size="sm"
             style={{ minHeight: 44 }}
+            disabled={!row.hasLeaveDetail}
             onClick={() => {
               setDialogError(undefined);
               setPending({ task: row, decision: "approve" });
@@ -214,6 +223,7 @@ export function LeaveApprovalsPanel() {
             variant="ghost"
             size="sm"
             style={{ minHeight: 44 }}
+            disabled={!row.hasLeaveDetail}
             onClick={() => {
               setDialogError(undefined);
               setPending({ task: row, decision: "reject" });

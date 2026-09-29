@@ -79,6 +79,11 @@ async function seedRequesterAndManager(): Promise<SeededPair> {
       fullName: "Requester Employee",
       departmentId: randomUUID(), designationId: randomUUID(),
       dateOfJoining: "2020-01-01", status: "confirmed",
+      // GAP-HR-SF-16: linked to managerId below so the GET self-scoping test
+      // exercises a REAL reporting relationship -- a manager's list is now
+      // scoped to self + direct reports, not the whole tenant, so this link
+      // must exist for that test to mean anything.
+      managerId,
       createdBy: systemActorId, updatedBy: systemActorId,
     });
     await tx.insert(hrmsEmployees).values({
@@ -284,7 +289,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
     }
   });
 
-  it("GET self-scoping: an employee only sees their own WFH requests, a manager sees the whole tenant queue", async () => {
+  it("GET self-scoping: an employee only sees their own WFH requests; a manager sees their direct report's, not the whole tenant (GAP-HR-SF-16)", async () => {
     const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
@@ -304,6 +309,15 @@ describe("WFH requests — end-to-end (real DB)", () => {
       expect(requesterRows.length).toBe(1);
       expect(requesterRows[0].employeeId).toBe(requesterId);
 
+      // GAP-HR-SF-16: this used to assert "the manager sees the whole
+      // tenant queue" -- that was the vulnerability (a manager was treated
+      // as fully privileged, identical to HR, with no reports check at
+      // all). seedRequesterAndManager now links requesterId as managerId's
+      // direct report, so this proves the CORRECTED behavior: a manager
+      // sees their own + their direct reports' requests specifically,
+      // not an unscoped tenant-wide dump (see
+      // attendance-manager-scope-real-db.test.ts for the full matrix,
+      // including an unrelated outsider who must NOT appear here).
       const asManager = await app.inject({
         method: "GET", url: "/v1/hrms/wfh-requests",
         headers: authHeader(managerId, tenantId, ["manager"]),

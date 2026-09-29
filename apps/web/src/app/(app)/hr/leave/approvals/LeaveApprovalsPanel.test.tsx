@@ -209,3 +209,56 @@ describe("LeaveApprovalsPanel — network failure on load (UX-016)", () => {
     expect(screen.queryByText(/Failed to fetch/i)).not.toBeInTheDocument();
   });
 });
+
+/**
+ * GAP-HR-SF-16 item 4: scoping GET /leave-requests server-side means a
+ * second-level/delegated approver outside the applicant's direct reporting
+ * line will now legitimately get a task with no matching leave detail (not
+ * just on a hard fetch failure). Before this fix, "Unknown employee" was
+ * shown but Approve/Reject stayed fully clickable — a blind-approval risk.
+ * This must be disabled per-row, not panel-wide: a row WITH real data must
+ * stay actionable even when a sibling row's data is missing.
+ */
+describe("LeaveApprovalsPanel — fail-open containment (GAP-HR-SF-16 item 4)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const TASK_OK = { id: "task-ok", instanceId: "inst-ok", name: "Leave approval", status: "pending", refType: "leave_app", refId: "leave-ok" };
+  const TASK_MISSING = { id: "task-missing", instanceId: "inst-missing", name: "Leave approval", status: "pending", refType: "leave_app", refId: "leave-missing" };
+  const LEAVE_OK = { id: "leave-ok", employeeName: "Asha Verma", leaveType: "Casual Leave", fromDate: "2026-09-01", toDate: "2026-09-02", days: 2, reason: "Family function" };
+
+  it("disables Approve/Reject only for the row whose leave detail is missing from an otherwise-successful response", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) return { ok: true, status: 200, json: async () => ({ data: [TASK_OK, TASK_MISSING] }) } as Response;
+      // leave-missing is legitimately absent (e.g. scoped out for this
+      // approver by the backend read-scoping fix) -- not a fetch failure.
+      if (url.includes("/hrms/leave-requests")) return { ok: true, status: 200, json: async () => ({ data: [LEAVE_OK] }) } as Response;
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    const okRow = (await screen.findByText("Asha Verma")).closest("tr");
+    const missingRow = (await screen.findByText("Unknown employee")).closest("tr");
+    if (!okRow || !missingRow) throw new Error("expected both rows to render");
+
+    expect(within(okRow).getByRole("button", { name: "Approve" })).toBeEnabled();
+    expect(within(okRow).getByRole("button", { name: "Reject" })).toBeEnabled();
+    expect(within(missingRow).getByRole("button", { name: "Approve" })).toBeDisabled();
+    expect(within(missingRow).getByRole("button", { name: "Reject" })).toBeDisabled();
+  });
+
+  it("disables Approve/Reject for every row when the whole enrichment fetch fails outright", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) return { ok: true, status: 200, json: async () => ({ data: [TASK_OK] }) } as Response;
+      if (url.includes("/hrms/leave-requests")) throw new TypeError("Failed to fetch");
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    const row = (await screen.findByText("Unknown employee")).closest("tr");
+    if (!row) throw new Error("expected the task row to render");
+    expect(within(row).getByRole("button", { name: "Approve" })).toBeDisabled();
+    expect(within(row).getByRole("button", { name: "Reject" })).toBeDisabled();
+  });
+});

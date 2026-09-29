@@ -37,6 +37,34 @@ async function resolveOwnEmployeeIdIfBareEmployee(
 }
 
 /**
+ * Scope resolver for GET /v1/hrms/certifications (CERTIFICATIONS-02) only —
+ * deliberately NOT resolveOwnEmployeeIdIfBareEmployee above (that one treats
+ * "manager" as fully privileged, an existing precedent this file's
+ * skills/work-summaries routes already rely on and which this fix does not
+ * touch). Certifications had no scoping at all before this fix, so there is
+ * a free choice here, and the campaign's stated target model is used: HR
+ * unrestricted (returns null — no filter), manager scoped to self + direct
+ * reports, bare employee scoped to self. Returns a concrete (possibly
+ * empty) array for non-HR; empty means "authorized for nothing" — callers
+ * must respond with an empty list, never fall back to unscoped.
+ */
+async function resolveCertificationsScope(ctx: RequestContext): Promise<string[] | null> {
+  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+  if (isHrActor) return null;
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) return [];
+  if (!ctx.roles.includes("manager")) return [actorEmp.id];
+  const rows = await sqlClient.begin(async (sql) => {
+    await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+    return sql.unsafe(
+      `SELECT id FROM employee.hrms_employees WHERE tenant_id = $1 AND manager_id = $2`,
+      [ctx.tenantId, actorEmp.id],
+    );
+  });
+  return [actorEmp.id, ...rows.map((r) => r.id as string)];
+}
+
+/**
  * IDOR fix (audit): GET /v1/hrms/skills and GET /v1/hrms/work-summaries were
  * org-wide list dumps with no employee filter at all, exposing every
  * employee's competency/appraisal data to any employee or manager. Unlike
@@ -595,6 +623,16 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // scope; this is unrelated training-certificate data) — included.
   app.get("/v1/hrms/certifications", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
+    // IDOR fix (CERTIFICATIONS-02): this route had NO employee scoping at
+    // all -- any employee/manager got every employee's completed training
+    // certifications tenant-wide. This route had no existing scope
+    // precedent of its own to preserve (unlike resolveOwnEmployeeIdIfBareEmployee
+    // above, which encodes THIS file's separate "manager = privileged"
+    // convention for skills/work-summaries) — a fresh check here targets
+    // the campaign's stated model: HR unrestricted, manager scoped to self
+    // + direct reports, bare employee scoped to self.
+    const scope = await resolveCertificationsScope(ctx);
+    if (Array.isArray(scope) && scope.length === 0) return reply.send({ data: [] });
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(`
@@ -606,8 +644,9 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         JOIN employee.hrms_employees e ON e.id = n.employee_id AND e.tenant_id = $1
         LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
         WHERE n.tenant_id = $1 AND n.status = 'completed' AND n.certificate_ref IS NOT NULL
+        ${scope ? "AND n.employee_id = ANY($2::uuid[])" : ""}
         ORDER BY n.completed_date DESC NULLS LAST LIMIT 200
-      `, [ctx.tenantId]);
+      `, scope ? [ctx.tenantId, scope] : [ctx.tenantId]);
     });
     return reply.send({ data: rows });
   });
