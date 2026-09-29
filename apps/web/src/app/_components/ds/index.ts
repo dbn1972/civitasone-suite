@@ -27,6 +27,8 @@ export { FileUpload } from "./FileUpload";
 export type { UploadedFileMeta } from "./FileUpload";
 export { Avatar } from "./Avatar";
 export { ProgressBar } from "./ProgressBar";
+export { Modal } from "./Modal";
+export type { ModalProps, ModalSize } from "./Modal";
 export { ConfirmDialog } from "./ConfirmDialog";
 export type { ConfirmDialogProps } from "./ConfirmDialog";
 export { ActionButton, useConfirmAction } from "./ActionButton";

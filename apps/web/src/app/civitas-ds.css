@@ -417,6 +417,21 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .cd-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
 .cd-error{color:var(--bad);font-size:12.5px;margin-top:6px}
 .btn.danger{background:var(--bad);color:#fff;box-shadow:0 8px 16px -8px var(--bad)}
+
+/* ============================================================
+   MODAL — generic dialog shell (role=dialog / alertdialog).
+   ConfirmDialog composes this and layers its "cd-*" classes on top (see
+   ds/Modal.tsx, ds/ConfirmDialog.tsx) so the rules above keep applying
+   unchanged; these are the base rules for any other Modal consumer.
+   ============================================================ */
+.modal-overlay{position:fixed;inset:0;z-index:1000;background:rgba(16,24,40,.45);
+  display:grid;place-items:center;padding:20px;animation:modal-fade .12s ease}
+@keyframes modal-fade{from{opacity:0}to{opacity:1}}
+.modal-panel{background:var(--panel);border:1px solid var(--line);border-radius:var(--r);
+  box-shadow:var(--sh-lg);max-width:440px;width:100%;padding:22px}
+.modal-panel--sm{max-width:360px}
+.modal-panel--lg{max-width:640px}
+.modal-title{font-size:17px;font-weight:750;letter-spacing:-.2px;margin-bottom:8px;display:flex;align-items:center;gap:9px}
 .btn.danger:hover{background:#912018}
 
 
