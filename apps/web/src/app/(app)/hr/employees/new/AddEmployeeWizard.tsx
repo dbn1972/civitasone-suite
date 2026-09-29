@@ -17,6 +17,7 @@ import {
   type FieldErrors,
   WIZARD_INIT,
   SESSION_KEY,
+  SENSITIVE_DRAFT_FIELDS,
   ACCENT,
   primaryBtn,
   ghostBtn,
@@ -45,7 +46,15 @@ function restoreDraft(): WizardData | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<WizardData>;
     // Merge with INIT so any new keys added after saving still get defaults
-    return { ...WIZARD_INIT, ...parsed };
+    const merged: WizardData = { ...WIZARD_INIT, ...parsed };
+    // GAP-HR-EMPLOYEES-NEW-03: never surface a statutory identifier back
+    // into the form on restore. saveDraft (below) never writes these, but a
+    // draft saved before this fix -- or otherwise tampered with -- could
+    // still carry them; re-blank defensively rather than trust the source.
+    for (const field of SENSITIVE_DRAFT_FIELDS) {
+      merged[field] = WIZARD_INIT[field];
+    }
+    return merged;
   } catch {
     return null;
   }
@@ -54,7 +63,17 @@ function restoreDraft(): WizardData | null {
 function saveDraft(data: WizardData) {
   if (typeof window === "undefined") return;
   try {
-    sessionStorage.setItem(SESSION_KEY, JSON.stringify(data));
+    // GAP-HR-EMPLOYEES-NEW-03: PAN / Aadhaar reference / bank account / IFSC
+    // are sensitive statutory identifiers -- never write them to
+    // sessionStorage, even though the rest of the wizard's in-progress state
+    // is autosaved here for draft recovery. The user always re-enters these
+    // four on restore (see restoreDraft above); every other field keeps
+    // autosaving unchanged.
+    const safe: Partial<WizardData> = { ...data };
+    for (const field of SENSITIVE_DRAFT_FIELDS) {
+      delete safe[field];
+    }
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(safe));
   } catch {
     // storage quota exceeded — ignore silently
   }

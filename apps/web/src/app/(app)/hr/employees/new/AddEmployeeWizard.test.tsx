@@ -73,3 +73,121 @@ describe("AddEmployeeWizard — UX-016 clerk-safe errors", () => {
     expect(alert.textContent).not.toMatch(/duplicate employeeNo/);
   });
 });
+
+/**
+ * GAP-HR-EMPLOYEES-NEW-03: the wizard autosaves its full in-progress state to
+ * sessionStorage on every change (draft recovery). PAN, Aadhaar reference,
+ * bank account number, and IFSC are sensitive statutory identifiers — they
+ * must never land in that plaintext sessionStorage draft, even though the
+ * rest of the wizard state (name, employee ID, department, ...) keeps
+ * autosaving normally.
+ */
+describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-03 draft never carries statutory identifiers", () => {
+  const SESSION_KEY = "civitas-add-emp-draft";
+
+  beforeEach(() => sessionStorage.clear());
+  afterEach(() => sessionStorage.clear());
+
+  async function fillToStep4WithStatutoryValues() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />
+      </NextIntlClientProvider>,
+    );
+
+    // Step 1 — Personal Info
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 2 — Employment
+    fireEvent.change(await screen.findByLabelText(/employee id/i), { target: { value: "NIC/2026/0001" } });
+    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/^department/i), { target: { value: "dep1" } });
+    fireEvent.change(screen.getByLabelText(/^designation/i), { target: { value: "des1" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 3 — Assignment (no required fields)
+    await screen.findByText(/step 3 of/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    // Step 4 — Statutory: fill every sensitive field
+    await screen.findByText(/step 4 of/i);
+    fireEvent.change(screen.getByLabelText(/pan/i), { target: { value: "ABCDE1234F" } });
+    fireEvent.change(screen.getByLabelText(/aadhaar/i), { target: { value: "XXXX XXXX 1234" } });
+    fireEvent.change(screen.getByLabelText(/bank account/i), { target: { value: "123456789012" } });
+    fireEvent.change(screen.getByLabelText(/ifsc/i), { target: { value: "SBIN0001234" } });
+  }
+
+  it("never writes PAN, Aadhaar reference, bank account, or IFSC into the sessionStorage draft", async () => {
+    await fillToStep4WithStatutoryValues();
+
+    await waitFor(() => expect(sessionStorage.getItem(SESSION_KEY)).not.toBeNull());
+    const raw = sessionStorage.getItem(SESSION_KEY)!;
+
+    // The raw values must be genuinely absent from the persisted string...
+    expect(raw).not.toContain("ABCDE1234F");
+    expect(raw).not.toContain("XXXX XXXX 1234");
+    expect(raw).not.toContain("123456789012");
+    expect(raw).not.toContain("SBIN0001234");
+
+    // ...and the keys themselves must be absent, not merely blanked, so a
+    // future field rename can't silently reintroduce the leak unnoticed.
+    const parsed: Record<string, unknown> = JSON.parse(raw);
+    expect(parsed).not.toHaveProperty("pan");
+    expect(parsed).not.toHaveProperty("aadhaarRef");
+    expect(parsed).not.toHaveProperty("bankAccountNo");
+    expect(parsed).not.toHaveProperty("bankIfsc");
+  });
+
+  it("keeps autosaving every non-sensitive field normally", async () => {
+    await fillToStep4WithStatutoryValues();
+
+    await waitFor(() => expect(sessionStorage.getItem(SESSION_KEY)).not.toBeNull());
+    const parsed = JSON.parse(sessionStorage.getItem(SESSION_KEY)!);
+
+    expect(parsed.fullName).toBe("Priya Sharma");
+    expect(parsed.employeeNo).toBe("NIC/2026/0001");
+    expect(parsed.departmentId).toBe("dep1");
+    expect(parsed.designationId).toBe("des1");
+    expect(parsed.dateOfJoining).toBe("2026-01-01");
+  });
+
+  it("restores the excluded fields empty even from a legacy draft that still carries them", async () => {
+    // Simulates a draft written before this fix (or otherwise tampered
+    // with) that still carries raw statutory values. Restoring it today
+    // must never surface them back into the form.
+    sessionStorage.setItem(
+      SESSION_KEY,
+      JSON.stringify({
+        fullName: "Legacy Draft",
+        employeeNo: "NIC/2026/9999",
+        departmentId: "dep1",
+        designationId: "des1",
+        dateOfJoining: "2026-01-01",
+        pan: "ZZZZZ0000Z",
+        aadhaarRef: "1111 2222 3333",
+        bankAccountNo: "999999999",
+        bankIfsc: "HDFC0000001",
+      }),
+    );
+
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />
+      </NextIntlClientProvider>,
+    );
+
+    await screen.findByText(/your in-progress draft has been restored/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 2 of/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 3 of/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 4 of/i);
+
+    expect(screen.getByLabelText(/pan/i)).toHaveValue("");
+    expect(screen.getByLabelText(/aadhaar/i)).toHaveValue("");
+    expect(screen.getByLabelText(/bank account/i)).toHaveValue("");
+    expect(screen.getByLabelText(/ifsc/i)).toHaveValue("");
+  });
+});
