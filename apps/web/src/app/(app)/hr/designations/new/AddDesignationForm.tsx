@@ -2,58 +2,67 @@
 
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
+import { z } from "zod";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "../../../../_components/ds";
+import { useZodFieldValidation } from "@/lib/form-validation";
+import { Button, Field, Input } from "../../../../_components/ds";
 
 interface Props {
   onCancel: () => void;
   onSuccess?: () => void;
 }
 
-const inputStyle: React.CSSProperties = {
-  width: "100%",
-  boxSizing: "border-box",
-  padding: "10px 12px",
-  fontSize: 14,
-  border: "1px solid var(--line, #cbd5e1)",
-  borderRadius: 10,
-  background: "var(--panel, #fff)",
-  color: "var(--ink, #0f172a)",
-  minHeight: 44,
-};
-
-const labelStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 600,
-  color: "var(--ink, #0f172a)",
-};
+/**
+ * SF-14 migration: this form used to hand-roll its own label/input/error
+ * markup and a manual `Set<string>` of invalid fields (see git history for
+ * the pre-migration version). It now uses the shared `Field`/`Input`
+ * primitives (app/_components/ds) and a zod schema via
+ * `useZodFieldValidation` (lib/form-validation.ts) as the proof that both
+ * genuinely replace what hand-rolled hr/ forms did today -- not just in
+ * isolation.
+ *
+ * The schema mirrors the exact rules the original hand-rolled version
+ * enforced (code required, <=20 chars; name 2-200 chars; level, if given, a
+ * clean positive-integer string; payGrade <=30 chars), so this migration is
+ * behavior-preserving: same validation outcomes, same request body shape.
+ * `level`/`payGrade` stay valid when empty -- both are optional, matching
+ * the request body only including them `if (trimLevel)` / `if
+ * (trimPayGrade)` below, exactly as before.
+ */
+const designationSchema = z.object({
+  code: z
+    .string()
+    .trim()
+    .min(1, "Code is required.")
+    .max(20, "Must be at most 20 characters."),
+  name: z
+    .string()
+    .trim()
+    .min(2, "Must be at least 2 characters.")
+    .max(200, "Must be at most 200 characters."),
+  level: z
+    .string()
+    .trim()
+    .refine((v) => v === "" || /^[1-9]\d*$/.test(v), {
+      message: "Enter a whole number of 1 or more.",
+    }),
+  payGrade: z.string().trim().max(30, "Must be at most 30 characters."),
+});
 
 export function AddDesignationForm({ onCancel, onSuccess }: Props) {
   const t = useTranslations("addDesignationForm");
   const formId = useId();
-  const [code, setCode] = useState("");
-  const [name, setName] = useState("");
-  const [level, setLevel] = useState("");
-  const [payGrade, setPayGrade] = useState("");
+  const { fields, validate, reset } = useZodFieldValidation(designationSchema);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
-  const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const formError = useFormError("designation");
 
-  const codeId = `${formId}-code`;
-  const nameId = `${formId}-name`;
-  const levelId = `${formId}-level`;
-  const payGradeId = `${formId}-payGrade`;
   const statusId = `${formId}-status`;
 
   function handleCancel() {
-    setCode("");
-    setName("");
-    setLevel("");
-    setPayGrade("");
+    reset();
     setMessage(null);
-    setInvalid(new Set());
     onCancel();
   }
 
@@ -61,28 +70,17 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
     e.preventDefault();
     setMessage(null);
 
-    const trimCode = code.trim();
-    const trimName = name.trim();
-    const trimLevel = level.trim();
-    const trimPayGrade = payGrade.trim();
-    const errs = new Set<string>();
-
-    if (!trimCode || trimCode.length > 20) errs.add("code");
-    if (trimName.length < 2 || trimName.length > 200) errs.add("name");
-    if (trimLevel) {
-      const n = parseInt(trimLevel, 10);
-      if (isNaN(n) || n < 1 || String(n) !== trimLevel) errs.add("level");
-    }
-    if (trimPayGrade.length > 30) errs.add("payGrade");
-
-    if (errs.size > 0) {
-      setInvalid(errs);
+    if (!validate()) {
       setTone("error");
       setMessage(t("statusFixFields"));
       return;
     }
 
-    setInvalid(new Set());
+    const trimCode = fields.code.value.trim();
+    const trimName = fields.name.value.trim();
+    const trimLevel = fields.level.value.trim();
+    const trimPayGrade = fields.payGrade.value.trim();
+
     setBusy(true);
     try {
       const body: Record<string, unknown> = {
@@ -107,10 +105,7 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
 
       setTone("success");
       setMessage(t("successMsg", { name: trimName }));
-      setCode("");
-      setName("");
-      setLevel("");
-      setPayGrade("");
+      reset();
       onSuccess?.();
     } catch {
       setTone("error");
@@ -164,95 +159,68 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
           }}
         >
           {/* Code */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={codeId} style={labelStyle}>
-              {t("codeLabel")}{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}>
-                *
-              </span>
-            </label>
-            <input
-              id={codeId}
-              type="text"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
+          <Field
+            label={t("codeLabel")}
+            required
+            // A backend rejection (e.g. a duplicate code) takes priority over a
+            // stale client-side message once both could apply.
+            error={formError.fieldError("code") || fields.code.error}
+          >
+            <Input
+              value={fields.code.value}
+              onChange={fields.code.onChange}
+              onBlur={fields.code.onBlur}
               placeholder={t("codePlaceholder")}
               maxLength={20}
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("code")}
-              style={inputStyle}
             />
-            {formError.fieldError("code") && (
-              <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("code")}</span>
-            )}
-          </div>
+          </Field>
 
           {/* Name */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={nameId} style={labelStyle}>
-              {t("nameLabel")}{" "}
-              <span aria-hidden="true" style={{ color: "var(--bad, #b91c1c)" }}>
-                *
-              </span>
-            </label>
-            <input
-              id={nameId}
-              type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+          <Field
+            label={t("nameLabel")}
+            required
+            error={formError.fieldError("name") || fields.name.error}
+          >
+            <Input
+              value={fields.name.value}
+              onChange={fields.name.onChange}
+              onBlur={fields.name.onBlur}
               placeholder={t("namePlaceholder")}
               maxLength={200}
-              required
-              aria-required="true"
-              aria-invalid={invalid.has("name")}
-              style={inputStyle}
             />
-          </div>
+          </Field>
 
           {/* Level */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={levelId} style={labelStyle}>
-              {t("levelLabel")}
-            </label>
-            <input
-              id={levelId}
+          <Field label={t("levelLabel")} error={formError.fieldError("level") || fields.level.error}>
+            <Input
               type="number"
               min={1}
               step={1}
-              value={level}
-              onChange={(e) => setLevel(e.target.value)}
+              value={fields.level.value}
+              onChange={fields.level.onChange}
+              onBlur={fields.level.onBlur}
               placeholder={t("levelPlaceholder")}
-              aria-invalid={invalid.has("level")}
-              style={inputStyle}
             />
-          </div>
+          </Field>
 
           {/* Pay Grade */}
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={payGradeId} style={labelStyle}>
-              {t("payGradeLabel")}
-            </label>
-            <input
-              id={payGradeId}
-              type="text"
-              value={payGrade}
-              onChange={(e) => setPayGrade(e.target.value)}
+          <Field
+            label={t("payGradeLabel")}
+            error={formError.fieldError("payGrade") || fields.payGrade.error}
+          >
+            <Input
+              value={fields.payGrade.value}
+              onChange={fields.payGrade.onChange}
+              onBlur={fields.payGrade.onBlur}
               placeholder={t("payGradePlaceholder")}
               maxLength={30}
-              aria-invalid={invalid.has("payGrade")}
-              style={inputStyle}
             />
-          </div>
+          </Field>
         </div>
 
         {/* Actions */}
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <Button
-            type="submit"
-            loading={busy}
-            style={{ minHeight: 44, minWidth: 140 }}
-          >
+          <Button type="submit" loading={busy} style={{ minHeight: 44, minWidth: 140 }}>
             {busy ? t("addingBtn") : t("addBtn")}
           </Button>
           <Button

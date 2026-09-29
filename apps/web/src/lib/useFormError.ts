@@ -41,6 +41,13 @@ const CODE_TO_KIND: Record<string, MessageKind> = {
   VALIDATION_FAILED: "save",
   VALIDATION_ERROR: "save",
   NOT_FOUND: "load",
+  // SF-14: a 403 gets its own clerk-safe "you don't have permission" copy,
+  // distinct from a generic save/validation failure -- see messages.ts's
+  // "forbidden" MessageKind. Confirmed against real backend responses (e.g.
+  // lib/cdp/steward.ts, lib/crm/opportunityHttp.ts): services in this repo
+  // send `{ code: "FORBIDDEN" }` on a 403, so this is reached the same way
+  // as every other cataloged code, no HTTP-status fallback needed here.
+  FORBIDDEN: "forbidden",
 };
 
 /**

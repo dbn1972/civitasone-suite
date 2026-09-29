@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { toHumanError, ACTION_LABELS, type MessageKind } from "./messages";
 import { findBannedTerms } from "./labels";
 
-const KINDS: MessageKind[] = ["load", "save", "offline", "unknownStatus", "accepted"];
+const KINDS: MessageKind[] = ["load", "save", "offline", "unknownStatus", "accepted", "forbidden"];
 
 describe("human error vocabulary (R5, R6)", () => {
   it.each(KINDS)("%s message has plain what + next and a safe action", (kind) => {
@@ -57,6 +57,20 @@ describe("human error vocabulary (R5, R6)", () => {
       const m = toHumanError("unknownStatus", { area });
       expect(m.what).toBe(`We couldn't check the status of ${area}.`);
       expect(m.what).not.toMatch(/\bthis\b/i);
+    });
+  });
+
+  describe("forbidden copy (UX gap SF-14: distinct from a generic validation/save error)", () => {
+    it("names the permission problem instead of a generic save failure", () => {
+      const m = toHumanError("forbidden");
+      expect(m.what).toMatch(/permission/i);
+      expect(m.what).not.toMatch(/couldn't save/i);
+      expect(m.what).not.toMatch(/couldn't load/i);
+    });
+
+    it("does not offer 'retry' -- a permission problem is not fixed by retrying", () => {
+      const m = toHumanError("forbidden");
+      expect(m.actions).not.toContain("retry");
     });
   });
 });

@@ -1,10 +1,28 @@
 /**
  * form-validation.ts
- * Lightweight, dependency-free form validation hook and common validators.
- * TypeScript typed; works with any React client component.
+ * Two client-side field-validation approaches live here, deliberately not
+ * left as two competing "the way to do it" systems:
+ *
+ * - `useZodFieldValidation` (SF-14, recommended for new/migrated forms):
+ *   rules live in one `z.object({...})` schema per form -- a single source
+ *   of truth that also documents the shape being validated. Pairs with the
+ *   `Field` / `Input` (and `Select` / `Textarea`) primitives in
+ *   `app/_components/ds` -- see `Field.tsx`'s doc comment for a worked
+ *   example, and hr/designations/new/AddDesignationForm.tsx for a real one.
+ * - `useFieldValidation` + the `required()` / `minLength()` / ... `Validator`
+ *   functions below (pre-SF-14, dependency-free): kept only for its existing
+ *   callers -- hr/leave/apply/ApplyLeaveForm.tsx and
+ *   hr/payroll/corrections/CreateCorrectionForm.tsx. Don't add new callers;
+ *   migrate a form off this and onto `useZodFieldValidation` the next time
+ *   it needs real changes, the way AddDesignationForm was.
+ *
+ * Both hooks return the same `{ fields, validate, reset, values }` shape, so
+ * moving a form from one to the other only changes how its rules are
+ * declared, never how it wires up its markup.
  */
 import { useCallback, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
+import { z } from "zod";
 
 // ---------------------------------------------------------------------------
 // Validator type
@@ -194,6 +212,137 @@ export function useFieldValidation<K extends string>(
     return keys.every(
       (k) => !runValidators(rulesRef.current[k], valuesRef.current[k]),
     );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keys]);
+
+  /** Reset all field values and clear touched state. */
+  const reset = useCallback((): void => {
+    setValues(emptyRecord(""));
+    setTouched(emptyRecord(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [keys]);
+
+  return { fields, validate, reset, values };
+}
+
+// ---------------------------------------------------------------------------
+// Zod-based hook (SF-14)
+// ---------------------------------------------------------------------------
+
+/** Per-field state returned by useZodFieldValidation -- same shape as FieldState above. */
+export interface ZodFieldState {
+  value: string;
+  onChange: (
+    e: ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>,
+  ) => void;
+  onBlur: () => void;
+  /** Validation error, only set once the field has been touched (blurred). */
+  error: string | undefined;
+  /** True after the field has been blurred at least once (or validate() was called). */
+  touched: boolean;
+}
+
+export interface UseZodFieldValidationReturn<K extends string> {
+  /** Per-field state objects — pass to Input/Select/Textarea (`value`, `onChange`, `onBlur`). */
+  fields: Record<K, ZodFieldState>;
+  /**
+   * Touch all fields and run the schema against the current values.
+   * Returns `true` when the whole schema parses; call this in your submit handler.
+   */
+  validate: () => boolean;
+  /** Reset all fields to empty strings and clear touched state. */
+  reset: () => void;
+  /** Current raw (untrimmed, as-typed) values -- the schema's own `.trim()`/transforms apply only during validation, not here, matching useFieldValidation's `values` contract above. */
+  values: Record<K, string>;
+}
+
+/**
+ * useZodFieldValidation — the zod-schema-driven counterpart to
+ * useFieldValidation above, with identical ergonomics (`fields` / `validate`
+ * / `reset` / `values`) so adopting it only changes how a form declares its
+ * rules -- a `z.object({...})` schema instead of an array of Validator
+ * functions per field -- not how it wires up Field/Input.
+ *
+ * Every field is validated independently via `schema.shape[key]`, so one
+ * field's error never depends on another's value; use a top-level
+ * `.refine()` / `.superRefine()` on `schema` itself for cross-field rules
+ * (checked by `validate()`, not per-field on blur).
+ *
+ * @param schema  A `z.object({...})` whose fields all parse `string` input
+ *                (every value in this hook, like useFieldValidation's, is a
+ *                plain string -- e.g. a numeric field stays a string and
+ *                validates its digits with `.refine()`, the same convention
+ *                the pre-existing hand-rolled `AddDesignationForm` used for
+ *                its "level" field before this migration).
+ *
+ * @example
+ * ```tsx
+ * const schema = z.object({
+ *   code: z.string().trim().min(1, "Code is required.").max(20, "Must be at most 20 characters."),
+ *   name: z.string().trim().min(2, "Must be at least 2 characters.").max(200, "Must be at most 200 characters."),
+ * });
+ * const { fields, validate } = useZodFieldValidation(schema);
+ *
+ * return (
+ *   <form onSubmit={(e) => { e.preventDefault(); if (validate()) submit(); }}>
+ *     <Field label="Code" required error={fields.code.error}>
+ *       <Input value={fields.code.value} onChange={fields.code.onChange} onBlur={fields.code.onBlur} />
+ *     </Field>
+ *   </form>
+ * );
+ * ```
+ */
+export function useZodFieldValidation<Shape extends z.ZodRawShape>(
+  schema: z.ZodObject<Shape>,
+): UseZodFieldValidationReturn<Extract<keyof Shape, string>> {
+  type K = Extract<keyof Shape, string>;
+
+  // Freeze the key list on first render — the field set must not change.
+  const keys = useRef(Object.keys(schema.shape) as K[]).current;
+
+  // Keep a stable ref to the latest schema so callbacks can read it without
+  // going stale.
+  const schemaRef = useRef(schema);
+  schemaRef.current = schema;
+
+  const emptyRecord = <V>(fill: V): Record<K, V> =>
+    Object.fromEntries(keys.map((k) => [k, fill])) as Record<K, V>;
+
+  const [values, setValues] = useState<Record<K, string>>(() => emptyRecord(""));
+  const [touched, setTouched] = useState<Record<K, boolean>>(() => emptyRecord(false));
+
+  // Stable ref for values — used by validate() to read current state synchronously.
+  const valuesRef = useRef(values);
+  valuesRef.current = values;
+
+  function fieldError(key: K, value: string): string | undefined {
+    const result = schemaRef.current.shape[key].safeParse(value);
+    return result.success ? undefined : result.error.issues[0]?.message;
+  }
+
+  // Build the per-field state objects during render (not memoised — cheap).
+  const fields = Object.fromEntries(
+    keys.map((key): [K, ZodFieldState] => [
+      key,
+      {
+        value: values[key],
+        onChange(e) {
+          const next = e.target.value;
+          setValues((prev) => ({ ...prev, [key]: next }));
+        },
+        onBlur() {
+          setTouched((prev) => ({ ...prev, [key]: true }));
+        },
+        error: touched[key] ? fieldError(key, values[key]) : undefined,
+        touched: touched[key],
+      },
+    ]),
+  ) as Record<K, ZodFieldState>;
+
+  /** Touch all fields and return whether the whole schema currently parses. */
+  const validate = useCallback((): boolean => {
+    setTouched(emptyRecord(true));
+    return schemaRef.current.safeParse(valuesRef.current).success;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [keys]);
 
