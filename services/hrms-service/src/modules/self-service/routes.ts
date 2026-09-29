@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { resolveContext, HttpError } from "../../shared/context.js";
 import { scopedRead} from "../../shared/db.js";
 import { maskPii } from "../../shared/pii-mask.js";
+import { maskEmployeeRecord } from "../../shared/data-governance.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { hrmsLeaveAllocs, hrmsLeaveApps } from "../leave/schema.js";
@@ -25,7 +26,21 @@ export async function selfServiceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     const emp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
     if (!emp) return reply.code(404).send({ code: "NOT_FOUND", message: "No employee record linked to your user" });
-    return reply.send(maskPii(emp));
+    // SF-05 backend half (Aadhaar-only slice): aadhaarRef now goes through
+    // the shared @civitasone/data-governance engine instead of pii-mask.ts's
+    // unconditional mask, so hr_admin/hr_officer/super_admin can see the
+    // full value (e.g. to verify it against a physical document) while
+    // every other caller still sees it masked -- UIDAI mandates partial-
+    // reveal masking for Aadhaar regardless of role, so this ships ahead of
+    // the pending PII-visibility decision packet. pan/bankAccountNo/
+    // bankIfsc/mobile are UNCHANGED: maskPii below still masks them
+    // unconditionally, exactly as before -- those wait on that decision.
+    // Restoring the raw aadhaarRef before re-applying maskEmployeeRecord is
+    // safe because applyMasking only ever touches keys present in its
+    // policy (here, only "aadhaarRef"); every other already-masked field
+    // passes through untouched.
+    const masked = maskPii(emp);
+    return reply.send(maskEmployeeRecord({ ...masked, aadhaarRef: emp.aadhaarRef }, ctx.roles));
   });
 
   // My leave balance

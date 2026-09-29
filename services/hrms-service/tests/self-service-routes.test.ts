@@ -94,6 +94,16 @@ const EMPLOYEE_ROW = {
   panHash: null,
 };
 
+// SF-05 backend half (Aadhaar-only slice): a variant fixture with real
+// aadhaarRef/mobile values on file, so the /me/profile masking behavior
+// (both the pre-existing mobile mask and the new role-gated aadhaarRef
+// mask) is actually exercised -- EMPLOYEE_ROW above never sets these.
+const EMPLOYEE_ROW_WITH_PII = {
+  ...EMPLOYEE_ROW,
+  mobile: "9876543210",
+  aadhaarRef: "123456789012",
+};
+
 beforeEach(() => {
   vi.clearAllMocks();
   H.selectFrom.mockResolvedValue([]);
@@ -142,6 +152,55 @@ describe("GET /v1/hrms/me/profile", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/me/profile" });
     expect(r.statusCode).toBe(401);
+    await app.close();
+  });
+
+  // SF-05 backend half (Aadhaar-only slice): aadhaarRef now runs through
+  // src/shared/data-governance.ts's maskEmployeeRecord instead of only
+  // pii-mask.ts's unconditional mask, so an HR-privileged role can see the
+  // full value while every other caller still sees it masked. mobile stays
+  // on the old, unconditional pii-mask.ts path -- unchanged for every role,
+  // proving this fix did not widen access to any field besides aadhaarRef.
+  it("200 — masks aadhaarRef (and still masks mobile) for a non-privileged role", async () => {
+    H.selectFrom.mockResolvedValue([EMPLOYEE_ROW_WITH_PII]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/me/profile",
+      headers: auth(USER, ["employee"]),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.aadhaarRef).toBe("********9012");
+    expect(body.mobile).toBe("******3210");
+    await app.close();
+  });
+
+  it("200 — reveals aadhaarRef in full for an hr_admin caller (still masks mobile)", async () => {
+    H.selectFrom.mockResolvedValue([EMPLOYEE_ROW_WITH_PII]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/me/profile",
+      headers: auth(USER, ["hr_admin"]),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.aadhaarRef).toBe("123456789012");
+    expect(body.mobile).toBe("******3210"); // unchanged: bank/PAN/mobile are out of scope for this fix
+    await app.close();
+  });
+
+  it("200 — a manager (READER_ROLES member, not HR-privileged) still sees aadhaarRef masked", async () => {
+    H.selectFrom.mockResolvedValue([EMPLOYEE_ROW_WITH_PII]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/me/profile",
+      headers: auth(USER, ["manager"]),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().aadhaarRef).toBe("********9012");
     await app.close();
   });
 });
