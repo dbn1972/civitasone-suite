@@ -56,6 +56,11 @@ export const assetWaterServiceRequests = waterMeteringSchema.table("asset_water_
   status:       varchar("status", { length: 16 }).notNull().default("open"),
   assignedTo:   uuid("assigned_to"),
   resolvedAt:   timestamp("resolved_at", { withTimezone: true }),
+  // Added alongside the persistence fix: routes.ts's PATCH .../resolve
+  // already validates and accepts `resolution` (z.string().min(1)), but no
+  // column ever existed to persist it -- same bug class as the rest of this
+  // migration, just for one field.
+  resolution:   text("resolution"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:    uuid("created_by").notNull(),
