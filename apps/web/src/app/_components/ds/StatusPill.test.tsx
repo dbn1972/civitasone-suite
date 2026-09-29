@@ -2,6 +2,105 @@ import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { StatusPill } from "./StatusPill";
 
+function pillTone(status: string): string | null {
+  const { container } = render(<StatusPill status={status} />);
+  const el = container.querySelector(".pill");
+  const tone = el ? [...el.classList].find((c) => c !== "pill") : undefined;
+  return tone ?? null;
+}
+
+// The full pre-existing STATUS_MAP, exactly as it stood before GAP SF-04 added
+// the hr/**-derived keys below. Locked in here so a future edit to the map
+// can't silently change one of these tones as a side effect -- this is the
+// "snapshot" the SF-04 verification step asks for.
+const PRE_EXISTING_MAP: Record<string, string> = {
+  active: "good",
+  approved: "good",
+  paid: "good",
+  completed: "good",
+  passed: "good",
+  cleared: "good",
+  open: "good",
+  signed: "good",
+  pending: "warn",
+  "under review": "warn",
+  "in progress": "warn",
+  submitted: "warn",
+  review: "warn",
+  draft: "mut",
+  inactive: "mut",
+  closed: "mut",
+  confirmed: "good",
+  probation: "warn",
+  retired: "mut",
+  resigned: "mut",
+  terminated: "bad",
+  rejected: "bad",
+  overdue: "bad",
+  breached: "bad",
+  failed: "bad",
+  blocked: "bad",
+  expired: "bad",
+  success: "good",
+  failure: "bad",
+  connected: "good",
+  unconfigured: "mut",
+  "low stock": "bad",
+  archived: "mut",
+};
+
+// Every key GAP SF-04 added to STATUS_MAP, verified against a real call site
+// under apps/web/src/app/(app)/hr/** (incl. payroll/** and recruitment/**) --
+// see StatusPill.tsx's own comments for the module each cluster came from.
+const SF04_NEW_MAP: Record<string, string> = {
+  present: "good",
+  settled: "good",
+  credited: "good",
+  finalized: "good",
+  disbursed: "good",
+  validated: "good",
+  selected: "good",
+  offered: "good",
+  hired: "good",
+  responded: "good",
+  relieved: "good",
+  accepted: "good",
+  processing: "warn",
+  initiated: "warn",
+  opened: "warn",
+  registered: "warn",
+  "under inquiry": "warn",
+  inquiry: "warn",
+  applied: "warn",
+  filed: "warn",
+  "late filed": "warn",
+  assigned: "warn",
+  computed: "warn",
+  recalled: "warn",
+  "half day": "warn",
+  "charge memo issued": "warn",
+  "inquiry appointed": "warn",
+  "finding recorded": "warn",
+  "pending approval": "warn",
+  "appeal filed": "warn",
+  "order issued": "warn",
+  separated: "mut",
+  disposed: "mut",
+  dropped: "mut",
+  "on leave": "info",
+  holiday: "info",
+  deputation: "info",
+  scheduled: "info",
+  upcoming: "info",
+  "appeal decided": "info",
+  suspended: "bad",
+  "no show": "bad",
+  disputed: "bad",
+  cancelled: "bad",
+  "routing failed": "bad",
+  "penalty imposed": "bad",
+};
+
 describe("StatusPill", () => {
   it("renders a humanized status label when no explicit label is given", () => {
     render(<StatusPill status="active" />);
@@ -89,5 +188,63 @@ describe("StatusPill", () => {
   it("maps 'closed' to mut", () => {
     const { container } = render(<StatusPill status="closed" />);
     expect(container.querySelector(".pill.mut")).toBeInTheDocument();
+  });
+
+  // --- GAP SF-04 regression lock: every tone STATUS_MAP already assigned
+  // before this change must still resolve exactly the same way. If this
+  // fails, an edit to STATUS_MAP changed a pre-existing key's tone as a side
+  // effect of adding the new hr/** keys below.
+  describe("pre-existing STATUS_MAP entries are unchanged", () => {
+    it.each(Object.entries(PRE_EXISTING_MAP))("%s -> %s", (status, tone) => {
+      expect(pillTone(status)).toBe(tone);
+    });
+  });
+
+  // --- GAP SF-04: the "open" special case (always good/green platform-wide)
+  // must survive the new inventory-based entries untouched.
+  it("keeps the 'open' special case as good, case-insensitively", () => {
+    expect(pillTone("open")).toBe("good");
+    expect(pillTone("OPEN")).toBe("good");
+    expect(pillTone("Open")).toBe("good");
+  });
+
+  // --- GAP SF-04: every newly-added status key gets its verified tone.
+  describe("GAP SF-04 newly-added status keys", () => {
+    it.each(Object.entries(SF04_NEW_MAP))("%s -> %s", (status, tone) => {
+      expect(pillTone(status)).toBe(tone);
+    });
+  });
+
+  // --- GAP SF-04: case/underscore/hyphen/camelCase normalization. Real API
+  // values are snake_case; these variants must all resolve identically.
+  describe("normalizeStatusKey handles separator and case variants alike", () => {
+    it.each([
+      ["pending_approval", "pendingApproval", "pending-approval", "PENDING_APPROVAL", "pending approval"],
+      ["half_day", "halfDay", "half-day", "HALF_DAY", "half day"],
+      ["no_show", "noShow", "no-show", "NO_SHOW", "no show"],
+      ["routing_failed", "routingFailed", "routing-failed", "ROUTING_FAILED", "routing failed"],
+    ])("%s / %s / %s / %s all resolve the same as %s", (...variants) => {
+      const tones = variants.map((v) => pillTone(v));
+      expect(new Set(tones).size).toBe(1);
+      expect(tones[0]).not.toBeNull();
+    });
+
+    // The concrete bug this fixes: STATUS_MAP already had "in progress" (with
+    // a space) mapped to warn, but the real API/UI value is snake_case
+    // "in_progress" (goals, onboarding, grievance all use it) -- before
+    // normalization, that never matched and silently fell back to "info".
+    it("matches the pre-existing 'in progress' entry from the snake_case API value 'in_progress'", () => {
+      expect(pillTone("in_progress")).toBe("warn");
+      expect(pillTone("in_progress")).toBe(pillTone("in progress"));
+    });
+
+    it("still resolves plain single-word statuses unaffected by normalization", () => {
+      expect(pillTone("approved")).toBe("good");
+      expect(pillTone("APPROVED")).toBe("good");
+    });
+
+    it("still falls back to info for a truly unknown status after normalization", () => {
+      expect(pillTone("some_unmapped_status")).toBe("info");
+    });
   });
 });
