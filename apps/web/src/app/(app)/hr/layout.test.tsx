@@ -30,6 +30,7 @@ function sessionWithRoles(roles: string[]) {
 }
 
 import HrLayout from "./layout";
+import { HR_ROLES } from "@/lib/auth/workRoles";
 
 describe("HrLayout", () => {
   beforeEach(() => {
@@ -73,5 +74,67 @@ describe("HrLayout", () => {
     mockGet.mockReturnValue(undefined);
     render(<HrLayout>{"hr content"}</HrLayout>);
     expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
+  });
+
+  describe("GAP-HR-SF-09a extraction — every HR_ROLES member, exhaustively", () => {
+    // The three tests above predate this refactor and each hardcode one
+    // role; they stay as regression anchors. This block is the actual
+    // "byte-for-byte behavior-preserving" proof the extraction needs: it
+    // reads the real, current HR_ROLES export (the same one hr/layout.tsx
+    // now imports) and asserts every single member is admitted -- not a
+    // hand-picked sample -- so if HR_ROLES's membership ever drifts from
+    // what this layout actually enforces, this fails immediately regardless
+    // of which specific role changed.
+    it.each(HR_ROLES)("admits a caller whose only role is %s", (role) => {
+      sessionWithRoles([role]);
+      render(<HrLayout>{"hr content"}</HrLayout>);
+      expect(mockRedirect).not.toHaveBeenCalled();
+    });
+
+    it("HR_ROLES has exactly the 9 roles this layout has always admitted (no silent addition or removal)", () => {
+      // Guards the *set*, independent of the it.each above (which would
+      // simply run fewer/different cases if the export shrank or grew --
+      // still green, just quietly covering less). Order-independent on
+      // purpose: this refactor's contract is set membership, not array
+      // order (requireAnyRole only ever calls .some()/.includes() on it).
+      expect(new Set(HR_ROLES)).toEqual(
+        new Set([
+          "hr_admin",
+          "hr_officer",
+          "payroll_officer",
+          "payroll_admin",
+          "tenant_admin",
+          "platform_admin",
+          "super_admin",
+          "manager",
+          "employee",
+        ]),
+      );
+    });
+
+    it("does not admit a role outside HR_ROLES, for every role this exact refactor could plausibly have accidentally let in", () => {
+      // Roles from sibling gates (FINANCE_ROLES, PROPOSAL_WRITE_ROLES) and a
+      // handful the role-matrix contract test found on specific /hr-hosted
+      // backend routes but never in HR_ROLES (see
+      // tests/contract/hr-role-matrix.allowlist.json) -- the exact set an
+      // import-path mixup or a stray spread in this refactor could have
+      // wrongly widened this layout to.
+      const mustStillReject = [
+        "finance_officer",
+        "finance_admin",
+        "admin",
+        "audit_officer",
+        "budget_officer",
+        "icc_member",
+        "security_admin",
+      ];
+      for (const role of mustStillReject) {
+        mockRedirect.mockReset();
+        sessionWithRoles([role]);
+        const { unmount } = render(<HrLayout>{`hr content ${role}`}</HrLayout>);
+        expect(mockRedirect).toHaveBeenCalledWith("/dashboard");
+        unmount();
+      }
+    });
   });
 });
