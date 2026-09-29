@@ -57,8 +57,19 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/transfers", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
+    // IDOR fix (EMPLOYEES-DETAIL-01): the frontend's employee-detail page
+    // passes ?employeeId= expecting to see just that one employee's
+    // transfer history, but this route parsed no query params at all and
+    // always returned the WHOLE tenant's transfers regardless -- silently
+    // ignoring the filter it was given. Mirrors this same file's own GET
+    // /v1/hrms/service-book, which already supports this correctly.
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsTransfers).where(eq(hrmsTransfers.tenantId, ctx.tenantId)).orderBy(hrmsTransfers.effectiveDate, hrmsTransfers.id).limit(500),
+      tx.select().from(hrmsTransfers).where(
+        q.employeeId
+          ? and(eq(hrmsTransfers.tenantId, ctx.tenantId), eq(hrmsTransfers.employeeId, q.employeeId))
+          : eq(hrmsTransfers.tenantId, ctx.tenantId),
+      ).orderBy(hrmsTransfers.effectiveDate, hrmsTransfers.id).limit(500),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, [...new Set(rows.map((r) => r.employeeId))]);
@@ -79,8 +90,15 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/promotions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
+    // IDOR fix (EMPLOYEES-DETAIL-01): same "filter silently ignored" gap as
+    // GET /v1/hrms/transfers above -- see that route's comment.
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsPromotions).where(eq(hrmsPromotions.tenantId, ctx.tenantId)).orderBy(hrmsPromotions.effectiveDate, hrmsPromotions.id).limit(500),
+      tx.select().from(hrmsPromotions).where(
+        q.employeeId
+          ? and(eq(hrmsPromotions.tenantId, ctx.tenantId), eq(hrmsPromotions.employeeId, q.employeeId))
+          : eq(hrmsPromotions.tenantId, ctx.tenantId),
+      ).orderBy(hrmsPromotions.effectiveDate, hrmsPromotions.id).limit(500),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empIds = [...new Set(rows.map((r) => r.employeeId))];
@@ -144,8 +162,15 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/deputation", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
+    // IDOR fix (EMPLOYEES-DETAIL-01): same "filter silently ignored" gap as
+    // GET /v1/hrms/transfers above -- see that route's comment.
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsDeputations).where(eq(hrmsDeputations.tenantId, ctx.tenantId)).orderBy(hrmsDeputations.tenureFrom, hrmsDeputations.id).limit(500),
+      tx.select().from(hrmsDeputations).where(
+        q.employeeId
+          ? and(eq(hrmsDeputations.tenantId, ctx.tenantId), eq(hrmsDeputations.employeeId, q.employeeId))
+          : eq(hrmsDeputations.tenantId, ctx.tenantId),
+      ).orderBy(hrmsDeputations.tenureFrom, hrmsDeputations.id).limit(500),
     );
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, [...new Set(rows.map((r) => r.employeeId))]);

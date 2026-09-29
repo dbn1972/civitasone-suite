@@ -1,10 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 
-const ALL_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
+const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
 
 export async function leaveContextRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/leave-context", async (req, reply) => {
@@ -13,6 +15,27 @@ export async function leaveContextRoutes(app: FastifyInstance): Promise<void> {
     const q = z.object({ employeeId: z.string().uuid() }).parse(req.query);
     const employee = await employeeRepo.findById(q.employeeId, ctx.tenantId);
     if (!employee) throw new HttpError(404, "NOT_FOUND", "employee not found");
+
+    // IDOR fix (GAP-HR-SF-16 fold-in: LEAVE-02/LEAVE-APPLY-02/LEAVE-BALANCE-01):
+    // employeeId was a REQUIRED but entirely unchecked query param -- any
+    // ALL_ROLES-holding caller (including a bare "employee") could read any
+    // OTHER employee's leave types + balances just by passing their uuid.
+    // Unlike the list-shaped routes in leave/routes.ts, this is a
+    // single-target lookup, so the natural check is direct ownership (self
+    // or, for a manager, a direct report), matching this same service's
+    // enforceCcsLeaveRules ownership guard -- not resolveLeaveReadScope's
+    // list-of-ids shape, which would incorrectly exclude a manager's OWN
+    // context (that helper deliberately scopes managers to reports only,
+    // by design -- see leave-read-scope-real-db.test.ts).
+    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+    if (!isHrActor) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      const isSelf = actorEmp?.id === q.employeeId;
+      const isManagerOfTarget = ctx.roles.includes("manager") && actorEmp != null && employee.managerId === actorEmp.id;
+      if (!isSelf && !isManagerOfTarget) {
+        throw new HttpError(403, "FORBIDDEN", "you may only view your own leave context, or (for managers) a direct report's");
+      }
+    }
 
     const types = await repo.listLeaveTypesByTenant(ctx.tenantId);
     const allocs = await repo.listAllocsForEmployee(ctx.tenantId, q.employeeId);

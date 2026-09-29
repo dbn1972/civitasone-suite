@@ -348,8 +348,26 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/leave-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const q = listQuerySchema.parse(req.query);
-    sendValidated(reply, LeaveRequestDetailListSchema, await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset));
+    const q = listQuerySchema.extend({ empId: z.string().uuid().optional() }).parse(req.query);
+    // IDOR fix (GAP-HR-SF-16): this route returned every employee's leave
+    // request detail tenant-wide to ANY ALL_ROLES-holding caller (including
+    // a bare "employee"), with zero scoping -- unlike its siblings
+    // /leave-applications and /leave-allocations, which already call
+    // resolveLeaveReadScope. Reuses that exact helper/pattern: HR keeps the
+    // full tenant view (unchanged); a manager is scoped to their direct
+    // reports (never themselves -- "my team" = direct reports, not self,
+    // same convention as the sibling routes' own regression tests); a bare
+    // employee is scoped to just their own linked record. Filtering happens
+    // after the existing cached tenant-wide fetch rather than adding a new
+    // query variant, so HR's behavior/cache-key is byte-for-byte unchanged.
+    const employeeIds = await resolveLeaveReadScope(ctx, req, q.empId);
+    const rows = await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset);
+    if (employeeIds === undefined) {
+      sendValidated(reply, LeaveRequestDetailListSchema, rows);
+      return;
+    }
+    const scoped = new Set(employeeIds);
+    sendValidated(reply, LeaveRequestDetailListSchema, rows.filter((r) => scoped.has(r.employeeId)));
   });
 
   app.setErrorHandler(errorHandler);

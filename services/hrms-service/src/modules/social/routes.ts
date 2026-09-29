@@ -6,6 +6,9 @@ import { cache, queue } from "../../shared/infra.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 
+const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
+
 /**
  * Social Feed Module — peer recognition (kudos), birthdays, new joinees,
  * announcements, travel requests, and expense claims.
@@ -221,6 +224,15 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/social/feed — combined feed: kudos + birthdays + new joinees + announcements */
   app.get("/v1/hrms/social/feed", async (req, reply) => {
     const ctx = resolveContext(req);
+    // SEC containment (GAP-HR-SF-16 fold-in): this handler had literally no
+    // requireRole call at all -- any authenticated caller in the tenant got
+    // every employee whose birthday is today (name/department/designation)
+    // plus the rest of the combined feed. Adds the same role set the
+    // feature is meant for (HR, manager, employee); whether birthdays
+    // should additionally need an opt-in consent flag before display at all
+    // is a separate, still-open product decision tracked elsewhere -- this
+    // is just the missing containment gate.
+    requireRole(ctx, ALL_ROLES);
     const limit = Math.min(Number((req.query as any)?.limit ?? 30), 50);
     const feed: any[] = [];
 
@@ -389,6 +401,11 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/birthdays/today — today's birthdays */
   app.get("/v1/hrms/birthdays/today", async (req, reply) => {
     const ctx = resolveContext(req);
+    // SEC containment: same missing-role-check gap as GET /social/feed
+    // above (this route runs the identical birthdays query standalone) --
+    // fixed alongside it since leaving this twin open would re-expose the
+    // exact same data through an adjacent endpoint.
+    requireRole(ctx, ALL_ROLES);
     const today = new Date();
     const mm = today.getMonth() + 1;
     const dd = today.getDate();
