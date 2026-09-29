@@ -11,7 +11,7 @@ export default async function InventoryInsightsPage() {
       domain="inventory"
       evaluation={evaluation}
       source={source}
-      rowLinkPrefix="/inventory/items/"
+      rowLinkPrefix="/inventory/"
       statLabels={{
         predictions: "Forecasts Generated",
         accuracy: "MAPE (lower is better)",
