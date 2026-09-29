@@ -110,20 +110,19 @@ describe("COMP-007: water-metering -- GET /v1/assets/water/readings", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  // KNOWN ISSUE (found by this smoke test, not fixed here -- real migration
-  // authoring is out of COMP-007's scope): `water-metering/schema.ts` declares
-  // `pgSchema("water_metering").table("asset_water_meter_readings", ...)` (and
-  // the sibling bills / service-requests tables), but NO migration under
-  // services/asset-service/migrations/ ever creates a `water_metering` schema
-  // or any table in it -- confirmed by grepping every migration file. The
-  // module (routes + domain + repo + commands, 315 LOC) is fully wired into
-  // app.ts and looks complete, but every request against it hits a real
-  // Postgres and gets `relation "water_metering.asset_water_meter_readings"
-  // does not exist`. This is very likely why it had zero tests: it has never
-  // been possible to write one that passes end-to-end. Asserting the real,
-  // current behavior so this test documents the gap instead of hiding it;
-  // flagged separately as a higher-priority follow-up than COMP-007 itself.
-  it("KNOWN ISSUE: 500s -- the water_metering schema was never migrated", async () => {
+  // FIXED (was a KNOWN ISSUE documented by this smoke test): `water-metering/
+  // schema.ts` declared `pgSchema("water_metering").table("asset_water_meter_readings", ...)`
+  // (and the sibling bills / service-requests tables), but no migration ever
+  // created a `water_metering` schema or any table in it, and no
+  // consumer.ts was registered in worker.ts -- every request 500'd with
+  // `relation "water_metering.asset_water_meter_readings" does not exist`,
+  // and every POST silently discarded its write. Closed by
+  // migrations/0028_water_metering_tables.sql +
+  // modules/water-metering/consumer.ts (see tests/water-metering-consumer.test.ts
+  // for the full create/list/get-by-id + cross-tenant RLS coverage); this
+  // smoke test now asserts the real, current (fixed) behavior instead of
+  // documenting the gap.
+  it("returns 200 with a real (now-existing) list, not a 500", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
@@ -131,6 +130,7 @@ describe("COMP-007: water-metering -- GET /v1/assets/water/readings", () => {
       headers: { authorization: `Bearer ${makeToken(["water_admin"])}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(500);
+    expect(res.statusCode).toBe(200);
+    expect(Array.isArray(res.json().data)).toBe(true);
   });
 });
