@@ -41,3 +41,43 @@ export const FINANCE_ROLES = [
   "tenant_admin",
   "admin",
 ] as const;
+
+/**
+ * UX gate for every page under /hr, /hr/payroll and /hr/recruitment (all
+ * three share hr/layout.tsx's single `requireAnyRole(HR_ROLES)` call, since
+ * payroll and recruitment are sub-trees of the same URL prefix and layout).
+ *
+ * GAP-HR-SF-09a moved this list here verbatim from hr/layout.tsx's own local
+ * `const HR_ROLES = [...]` — a zero-behavior-change extraction, mirroring
+ * how FINANCE_ROLES/PROPOSAL_WRITE_ROLES already live in this shared file
+ * instead of each layout re-declaring its own copy. See hr/layout.tsx's own
+ * doc comment for the full history of *why* this list contains what it
+ * does (in particular, why "employee"/"manager" are included even though
+ * many individual HR-admin routes still correctly reject them).
+ *
+ * This list is NOT guaranteed to agree with every individual hrms-service /
+ * payroll-service route's own `requireRole(ctx, ...)` list — by design, it
+ * is the union of what ANY /hr sub-area needs, not what every single route
+ * needs. Known disagreements between this list (or a specific page's own
+ * tighter gate) and the backend are tracked, one GAP id per pattern, in
+ * tests/contract/hr-role-matrix.allowlist.json and enforced not to grow
+ * silently by tests/contract/hr-role-matrix.contract.test.ts — read that
+ * pair before assuming a role belongs here.
+ *
+ * Deliberately NOT `as const` (unlike FINANCE_ROLES/PROPOSAL_WRITE_ROLES
+ * above): the original hr/layout.tsx declaration was a plain `string[]`
+ * passed straight into `requireAnyRole(allowed: string[])`, and this
+ * extraction keeps that exact type so the call site needs no cast or
+ * spread — a smaller diff for a change that must not alter behavior.
+ */
+export const HR_ROLES = [
+  "hr_admin",
+  "hr_officer",
+  "payroll_officer",
+  "payroll_admin",
+  "tenant_admin",
+  "platform_admin",
+  "super_admin",
+  "manager",
+  "employee",
+];

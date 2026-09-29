@@ -1,0 +1,129 @@
+{
+  "$comment": "GAP-HR-SF-09a role-matrix allowlist. Each entry is a KNOWN, currently-accepted drift between hr/layout.tsx's shared HR_ROLES (or a specific /hr, /hr/payroll or /hr/recruitment page's own tighter gate) and the backend route(s) it is responsible for -- discovered by scripts/contract/hr-role-matrix.mjs, a static analyzer that reads both sides live from source on every run. This file does NOT fix any of them (that is GAP-HR-SF-09b's job, gated on SF-20 and the relevant policy decisions per the campaign plan); it only lets the contract test pass today by naming each one, so the test can fail on a genuinely NEW, previously-unknown drift instead of on all 186 already-known ones every time. Never add an entry here to make a NEW drift disappear without asking why it exists first -- that defeats the point of the gate. `match` keys are matched against the analyzer's per-route report exactly: a route's (extraInBackend, extraInWeb, comparator) triple, both arrays compared as sets.",
+  "generatedAt": "2026-09-29",
+  "driftEntries": [
+    {
+      "id": "GAP-HR-SF09A-001",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["finance_officer"], "extraInWeb": [] },
+      "routeCount": 119,
+      "reason": "The single largest cluster. hr/layout.tsx's HR_ROLES has no finance role at all, so a finance_officer cannot open ANY /hr page -- yet 119 hrms-service routes across gpf, nps, pension, cpf, pay-matrix, payroll-config, apprentice-stipend, consultant-invoice, contractor-bill and contracts already name finance_officer in their own requireRole list (these are HR-hosted but finance-relevant statutory/benefit/vendor-payment modules). FINANCE_ROLES's own doc comment (apps/web/src/lib/auth/workRoles.ts) already widened the FINANCE module's gate for the mirror-image reason (\"a payroll_admin hitting the PFMS salary-bill bridge\"); HR_ROLES was apparently never reciprocally widened. SF-09b should decide whether finance_officer belongs in HR_ROLES, or whether these specific modules should grow their own page-level gate instead (see GAP-HR-SF09A-017 for the one sub-case of this same pattern that already has a dedicated page)."
+    },
+    {
+      "id": "GAP-HR-SF09A-002",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["admin"], "extraInWeb": [] },
+      "routeCount": 13,
+      "reason": "Bare \"admin\" is treated as HR-admin-equivalent by several backend files (employee/masters-routes.ts, bulk-import/routes.ts, employee/employee-types-routes.ts, employee/loans-routes.ts's salary-advance approvals live in a separate bucket) AND by four web pages' OWN gates within this same /hr tree (departments/new, designations/new, leave-policies, locations/new -- see hr-role-matrix.json for the confirmed clean per-page matches on departments/new, designations/new and leave-policies specifically). hr/layout.tsx's HR_ROLES is the odd one out: an admin-only user is turned away at the very first gate before ever reaching a page that would otherwise admit them. This is the highest-confidence, most self-consistent finding in this whole sweep -- the web layer disagrees with itself, not just with the backend."
+    },
+    {
+      "id": "GAP-HR-SF09A-003",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["admin", "officer"], "extraInWeb": [] },
+      "routeCount": 12,
+      "reason": "Same root cause as GAP-HR-SF09A-002 (bare \"admin\" missing from HR_ROLES) plus a second, distinct role (\"officer\") that appears only in a handful of files (employee/employee-types-routes.ts, face-verification/routes.ts) and nowhere on the web side at all -- not even at a specific page's own gate. Kept as its own entry rather than merged into 002 because the second role needs its own answer (is \"officer\" a real, still-used role, or legacy)."
+    },
+    {
+      "id": "GAP-HR-SF09A-004",
+      "match": { "comparator": "page:disciplinary (DISCIPLINARY_ROLES)", "extraInBackend": [], "extraInWeb": ["hr_officer"] },
+      "routeCount": 7,
+      "reason": "hr_officer can open the disciplinary list/detail pages (DISCIPLINARY_ROLES admits it) but the 7 highest-stakes actions -- impose penalty, submit-approval, appeal-decision, close, drop, create suspension, revoke suspension -- narrow to hr_admin/super_admin only on the backend. Very plausibly an intentional authorization tier (hr_officer runs routine casework, hr_admin/super_admin signs off on the irreversible/severe steps), but it is a real DISCIPLINARY_ROLES-vs-specific-action mismatch and SF-09b should confirm it is deliberate rather than accidental, since nothing on the web page currently tells an hr_officer which specific buttons will 403 for them."
+    },
+    {
+      "id": "GAP-HR-SF09A-005",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["hiring_manager"], "extraInWeb": [] },
+      "routeCount": 7,
+      "reason": "recruitment/requisition-routes.ts admits a dedicated \"hiring_manager\" panel role that does not exist anywhere on the web side (not in HR_ROLES, not in any recruitment page gate). Plausibly by design -- ad hoc panel members likely reach requisition approval via a direct/emailed link rather than the general /hr nav -- but if that path doesn't exist yet, a hiring_manager-only account currently has zero way to use these 7 routes through the app."
+    },
+    {
+      "id": "GAP-HR-SF09A-006",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["audit_admin"], "extraInWeb": [] },
+      "routeCount": 6,
+      "reason": "ai-fraud/routes.ts (AI-assisted fraud detection alerts/scans/risk-scores/recommendations) admits audit_admin, which HR_ROLES doesn't have. Most likely intentional -- this is arguably an audit-service-adjacent surface hosted inside hrms-service -- but audit_admin has no way to reach it via /hr today."
+    },
+    {
+      "id": "GAP-HR-SF09A-007",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["dept_head"], "extraInWeb": [] },
+      "routeCount": 5,
+      "reason": "gap-features/performance-dev-routes.ts (goals, development plans) admits a \"dept_head\" role absent from HR_ROLES and from every page gate. Same shape as GAP-HR-SF09A-005/009 (a participant role with no web-reachable path) -- listed separately since it's a different role name on a different file."
+    },
+    {
+      "id": "GAP-HR-SF09A-008",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["it_admin"], "extraInWeb": [] },
+      "routeCount": 3,
+      "reason": "device-trust/routes.ts's block/unblock/policy-update endpoints admit it_admin, absent from HR_ROLES and every page gate. This module's device-trust dashboard route itself (GET /v1/hrms/devices/admin) has NO role check at all -- see GAP-HR-SF09A-019 -- so this whole module's access story needs a look together, not just this one list entry."
+    },
+    {
+      "id": "GAP-HR-SF09A-009",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["interviewer"], "extraInWeb": [] },
+      "routeCount": 3,
+      "reason": "recruitment/interview-scoring-routes.ts admits a dedicated \"interviewer\" panel role, same shape as GAP-HR-SF09A-005 (hiring_manager) and GAP-HR-SF09A-007 (dept_head) -- three different ad hoc recruitment-panel roles, none reachable via /hr nav today."
+    },
+    {
+      "id": "GAP-HR-SF09A-010",
+      "match": { "comparator": "page:apar (APAR_ROLES)", "extraInBackend": [], "extraInWeb": ["employee", "manager"] },
+      "routeCount": 2,
+      "reason": "Same action-tiering shape as GAP-HR-SF09A-004: APAR_ROLES admits employee/manager to view and to work their own self-appraisal/reporting/reviewing/accept/representation steps, but raw create (POST /v1/hrms/apar) and finalise narrow to hr_admin/hr_officer/super_admin on the backend -- plausibly intentional, worth SF-09b's explicit confirmation."
+    },
+    {
+      "id": "GAP-HR-SF09A-011",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["finance_admin"], "extraInWeb": [] },
+      "routeCount": 2,
+      "reason": "employee/loans-routes.ts's plain loans endpoints (list/EMI-paid; distinct from the salary-advances endpoints covered by the clean ADVANCE_ROLES match) admit finance_admin, absent from HR_ROLES. Same underlying \"HR_ROLES has no finance role\" cause as GAP-HR-SF09A-001, kept separate only because the exact extra-role-set differs (finance_admin here, finance_officer there)."
+    },
+    {
+      "id": "GAP-HR-SF09A-012",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["admin", "finance_admin", "finance_officer"], "extraInWeb": [] },
+      "routeCount": 2,
+      "reason": "GET /v1/hrms/departments and GET /v1/hrms/designations (the broadly-readable list endpoints -- reference data other modules' dropdowns depend on) use a wider HR_READ_ROLES than the create endpoints' HR_ROLES, and that wider list includes admin/finance_admin/finance_officer, none of which are in the web's HR_ROLES. Same two root causes as GAP-HR-SF09A-001 (no finance role) and GAP-HR-SF09A-002 (no bare admin) landing together on the same two read endpoints."
+    },
+    {
+      "id": "GAP-HR-SF09A-013",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["vigilance_officer"], "extraInWeb": [] },
+      "routeCount": 1,
+      "reason": "POST /v1/hrms/declarations/:declId/revoke (disciplinary/coi-routes.ts, Conflict-of-Interest declarations) admits a \"vigilance_officer\" role. This is UNRELATED to the /hr/vigilance page (that page covers a different backend concept, gap-features.ts's \"vigilance cases\", and its own VIGILANCE_ROLES cleanly matches gap-features.ts already -- see hr-role-matrix.json). \"vigilance_officer\" itself appears nowhere else in either service and has no web-side representation anywhere (not HR_ROLES, not any page gate, not even the /hr/vigilance page's own list) -- if this role is meant to have any web-facing capability, it currently has none at all."
+    },
+    {
+      "id": "GAP-HR-SF09A-014",
+      "match": { "comparator": "layout:HR_ROLES", "extraInBackend": ["finance_admin", "officer"], "extraInWeb": [] },
+      "routeCount": 1,
+      "reason": "GET /v1/hrms/loans (the plain loans list). Same finance_admin gap as GAP-HR-SF09A-011 plus the same standalone \"officer\" role seen in GAP-HR-SF09A-003, together on one route."
+    },
+    {
+      "id": "GAP-HR-SF09A-015",
+      "match": { "comparator": "page:advances (ADVANCE_ROLES)", "extraInBackend": [], "extraInWeb": ["manager", "officer"] },
+      "routeCount": 1,
+      "reason": "Same action-tiering shape as GAP-HR-SF09A-004/010: ADVANCE_ROLES admits manager/officer to view and request salary advances, but PATCH .../approve narrows to finance_admin/hr_admin/hr_officer/super_admin on the backend -- an approval step correctly excluding the requester's own tier, most likely intentional."
+    },
+    {
+      "id": "GAP-HR-SF09A-016",
+      "match": { "comparator": "page:work-summary (WORK_SUMMARY_ROLES)", "extraInBackend": ["employee"], "extraInWeb": [] },
+      "routeCount": 1,
+      "reason": "GET /v1/hrms/work-summaries accepts \"employee\" (self-service: an employee viewing their own work summary), but the web page's WORK_SUMMARY_ROLES omits employee entirely -- so a plain employee is shown \"Access Restricted\" by hr/work-summary/page.tsx before the backend call that would have actually worked for them ever runs. Same shape as this codebase's own already-fixed salary-slip employee-access bug (see the payroll/slips/[id] comment history) -- a strong candidate for SF-09b to fix first."
+    },
+    {
+      "id": "GAP-HR-SF09A-017",
+      "match": { "comparator": "page:payroll/salary-slips + slips (list) (SALARY_ADMIN_ROLES)", "extraInBackend": ["finance_officer"], "extraInWeb": [] },
+      "routeCount": 1,
+      "reason": "GET /v1/payroll/salary-slips accepts finance_officer, but SALARY_ADMIN_ROLES (shared by hr/payroll/salary-slips/page.tsx, salary-slips/[id]/page.tsx and slips/[id]/page.tsx) omits it -- unlike its sibling PENSIONER_VIEW_ROLES, which DOES include finance_officer and correctly matches the backend's pensioners READER_ROLES exactly. The two pages are backed by near-identical payroll-service patterns; only the salary-slip trio drifted. The matrix analyzer attributes this specific entry to the list page's route only, but the same finance_officer gap applies identically to the two detail routes (GET /v1/payroll/slips/:id and its /download, /pdf variants) via GAP-HR-SF09A-001's broader bucket, since SALARY_ADMIN_ROLES+employee is still missing finance_officer there too -- SF-09b should fix all three pages' constant together, not just the list page."
+    }
+  ],
+  "noRoleCheckEntries": [
+    {
+      "id": "GAP-HR-SF09A-019",
+      "routeCount": 32,
+      "reason": "Routes with no requireRole/requirePermissionKey call found at all -- any authenticated caller of ANY role reaches them (this is a materially different, more serious class of finding than a role-list drift, since it means the backend enforces no HR-role boundary whatsoever, not just a different one than the web expects). Sub-groups: (1) the entire \"social\" module -- kudos, kudos/feed, GET /v1/hrms/social/feed, announcements, birthdays, travel-requests, expenses(!), device registration, org chart, pulse-surveys, goals, leaderboard, AI assistant (21 routes across social/routes.ts + social/pulse-routes.ts). GET /v1/hrms/social/feed specifically is already tracked and being fixed by GAP-HR-SF-16 in a separate, currently-unmerged worktree (fix/gap-hr-sf-16-self-scoping) -- this analyzer's snapshot is against origin/main, which predates that fix landing. The other 20 social/pulse routes are a STRICTLY LARGER version of the same missing-guard pattern SF-16 already treats as a live exposure worth a dedicated fix, and are not yet claimed by any tracked item as far as this analysis found -- travel-requests and expenses in particular look like they need at least an ownership/self-scoping check even if broad employee access turns out to be correct by design. (2) gpf/routes.ts's four money-movement endpoints (subscription/advance/withdrawal/refund) -- no role check at all on PF transactions. (3) device-trust/routes.ts's admin dashboard, per-device activity log and policy GET routes (the /me ones are correctly excluded as self-service, see hr-role-matrix.mjs's OUT_OF_SCOPE_PATTERNS). (4) deputation/routes.ts's repatriate/cancel actions. (5) payroll-service's form16-verify POST route. None of these are fixed by this PR (SF-09a is explicitly detection-only); they are named here so SF-09b -- or a dedicated security follow-up, given several are more severe than a role-list mismatch -- has the full, exact list rather than having to rediscover it."
+    }
+  ],
+  "dynamicEntries": [
+    {
+      "id": "GAP-HR-SF09A-020",
+      "routeCount": 4,
+      "reason": "recruitment/offer-routes.ts's approve/return actions and recruitment/requisition-routes.ts's approve/return actions each call requireRole(ctx, [role, \"super_admin\"]) where `role` is a runtime-computed value (the specific approval-chain role for that requisition/offer's current stage), not a static list this analyzer -- or any purely static analyzer -- can resolve. Not a defect; recorded so the allowlist doesn't have to silently swallow \"errors\" on every future re-run, and so a human auditing approval-chain authorization knows to look at these 4 call sites directly rather than trusting this matrix for them."
+    }
+  ],
+  "noBackendRouteFound": [
+    {
+      "id": "GAP-HR-SF09A-018",
+      "webArea": "hr/locations/new (LOCATION_ADMIN_ROLES = [\"location_user\",\"location_admin\",\"super_admin\",\"admin\",\"hr_admin\"])",
+      "reason": "No route in services/hrms-service or services/payroll-service serves this page (surveyed: all 783 routes across both services). \"location_user\"/\"location_admin\" do not appear anywhere in either service's role vocabulary. A sibling, non-hr-prefixed page (apps/web/src/app/(app)/locations/maps/page.tsx) and a large, wholly separate services/location-service (cadastral, geocoding, geofence, hierarchy, land-records, routing, etc.) exist in this repo -- location-service was NOT surveyed by this analyzer (out of the named scope: it is a general-purpose GIS platform service, not HR/payroll/recruitment-adjacent). Needs out-of-band verification: either hr/locations calls location-service under a path this analyzer wouldn't recognize as HR's, or this create form has no live backend at all. Excluded from the route-level allowlist above since there is no in-scope route to compare against."
+    }
+  ]
+}
