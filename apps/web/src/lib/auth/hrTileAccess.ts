@@ -49,6 +49,8 @@ export const HR_TILE_ROLE_OVERRIDES: Record<string, readonly string[]> = {
   "/hr/vigilance": ["hr_admin", "hr_officer", "super_admin"], // vigilance/page.tsx VIGILANCE_ROLES
   "/hr/disciplinary": ["hr_admin", "hr_officer", "super_admin"], // disciplinary/page.tsx DISCIPLINARY_ROLES
   "/hr/work-summary": ["hr_admin", "hr_officer", "manager", "super_admin"], // work-summary/page.tsx WORK_SUMMARY_ROLES
+  "/hr/payroll/salary-slips": ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"], // payroll/salary-slips/page.tsx SALARY_ADMIN_ROLES
+  "/hr/payroll/pensioners": ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"], // payroll/pensioners/page.tsx PENSIONER_VIEW_ROLES
 
   // --- Acceptance-only (GAP-HR-HOME-01 names both tiles explicitly in its
   //     Acceptance list), but neither destination has a full-page gate to

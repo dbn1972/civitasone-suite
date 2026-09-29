@@ -72,6 +72,8 @@ const HIDDEN_FROM_EMPLOYEE = [
   "/hr/work-summary",
   "/hr/payroll",
   "/hr/audit-log",
+  "/hr/payroll/salary-slips",
+  "/hr/payroll/pensioners",
 ];
 
 describe("hasHrTileAccess", () => {
