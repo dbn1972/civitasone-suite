@@ -953,6 +953,24 @@ jobs:
         env:
           QUEUE_DRIVER: memory
 
+      # GAP-HR-SF-18 — route-existence contract (introduced in #1660, this
+      # step is the CI-wiring fast-follow found during that PR's review).
+      # Static analyzer (scripts/contract/route-existence.mjs) proving every
+      # internal nav target the web app can construct -- a literal href, a
+      # DataTable rowLinkPrefix drill-through, a router.push/replace/redirect
+      # call, or a helper function that maps a type/status/key to a URL and
+      # returns it -- resolves to a real Next.js route or public asset.
+      # Platform-wide (every module), unlike the CRM-only gate above.
+      # Protects the ongoing per-page remediation campaign from a dead link
+      # landing unnoticed. continue-on-error like every gate in this job
+      # (see the REL-043 note above) even though it is green today (14/14)
+      # -- the test and script already existed on main, just never invoked
+      # from CI until now.
+      - name: Run route-existence contract test (Vitest)
+        id: route_existence
+        continue-on-error: true
+        run: pnpm exec vitest run tests/contract/route-existence.contract.test.ts
+
       # The actual gate for this job. Every step above always runs (regardless
       # of any other step's result) and records its own pass/fail as its
       # `outcome`; this is the one step that turns any non-"success" outcome
@@ -969,7 +987,8 @@ jobs:
              [ "${{ steps.cross_service_events.outcome }}" != "success" ] || \
              [ "${{ steps.screens_contract.outcome }}" != "success" ] || \
              [ "${{ steps.render_smoke.outcome }}" != "success" ] || \
-             [ "${{ steps.crm_link_integrity.outcome }}" != "success" ]; then
+             [ "${{ steps.crm_link_integrity.outcome }}" != "success" ] || \
+             [ "${{ steps.route_existence.outcome }}" != "success" ]; then
             echo "::error::One or more contract-test gates did not pass -- see the failing step(s) above for detail."
             exit 1
           fi
