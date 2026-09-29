@@ -678,7 +678,7 @@ jobs:
         id: datatable-render-guard-tests
         continue-on-error: true
         run: pnpm exec vitest run tests/architecture/datatable-render-guard.test.ts
-      - name: DataTable render-prop guard (Server Component render: -> Client DataTable crash, SF-08)
+      - name: "DataTable render-prop guard (Server Component render: -> Client DataTable crash, SF-08)"
         id: datatable-render-guard
         continue-on-error: true
         run: node scripts/ci/datatable-render-guard.mjs
