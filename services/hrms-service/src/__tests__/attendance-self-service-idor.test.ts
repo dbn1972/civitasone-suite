@@ -1,0 +1,394 @@
+/**
+ * GAP-HR-SF-10 (Part 1) — attendance self-service IDOR / id-space bug.
+ *
+ * attendance/routes.ts used to scope/guard non-privileged ("employee")
+ * callers on:
+ *   GET  /v1/hrms/shift-requests
+ *   GET  /v1/hrms/wfh-requests
+ *   GET  /v1/hrms/overtime-requests
+ *   POST /v1/hrms/overtime-requests
+ *   POST /v1/hrms/wfh-requests
+ *   POST /v1/hrms/shift-requests
+ * with a raw `ctx.actorId` comparison against hrms_employees-linked
+ * `employeeId` columns. `ctx.actorId` is the JWT subject (the login/account
+ * id); `hrms_employees.id` is a separate id space linked via
+ * `hrms_employees.user_ref` — see employee/actor-link.ts's
+ * resolveEmployeeForActor doc comment. The two never coincide for a real
+ * account, so:
+ *   - every GET list for a plain "employee" caller came back empty (their
+ *     own effectiveEmpId never matched any real employee_id row) — broken
+ *     self-service, not a leak.
+ *   - every POST create 403'd for the same caller submitting their OWN
+ *     employeeId (body.employeeId !== ctx.actorId was always true).
+ *
+ * This suite proves the fix: self works, a DIFFERENT employee's records
+ * remain inaccessible, and privileged (HR/manager) behavior is unchanged.
+ *
+ * Pattern: buildApp() + app.inject() + signToken(), matching sibling suites
+ * in __tests__/ (e.g. leave-cancel-idor.test.ts). scopedRead and
+ * resolveEmployeeForActor are vi.fn()s so each scenario controls exactly
+ * what the DB/actor-link layer returns. For the GET list endpoints, the
+ * list-query scopedRead call is given a small fake `tx` that captures the
+ * real (unmocked) Drizzle `where(...)` condition the route built — letting
+ * the test assert on the actual runtime id used for employeeId, proving it
+ * came from the resolved employee id and not the raw actorId, without
+ * depending on any particular row ever being "returned" by a query the
+ * mock never really executes.
+ */
+import { describe, it, expect, beforeAll, afterAll, beforeEach, vi } from "vitest";
+import { signToken } from "@civitasone/auth";
+import type { FastifyInstance } from "fastify";
+
+const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
+const TENANT = "aaaaaaaa-c001-4000-8000-0000000000f1";
+
+// Deliberately DIFFERENT id spaces, matching the real bug: actorId is the
+// JWT subject (login/account id); the *_ID-shaped constants below are
+// hrms_employees.id (the linked employee row) — see employee/actor-link.ts.
+const ACTOR_SELF   = "a0000000-0000-4000-8000-00000000a001"; // JWT sub, self
+const EMP_SELF     = "11111111-0000-0000-0000-000000000001"; // self's linked employee row
+const EMP_OTHER    = "22222222-0000-0000-0000-000000000002"; // a different employee
+const ACTOR_NOLINK = "a0000000-0000-4000-8000-00000000a099"; // no hrms_employees row
+const HR_ACTOR     = "50000000-0000-4000-8000-000000000005";
+const MGR_ACTOR    = "60000000-0000-4000-8000-000000000006";
+const MGR_EMP      = "60000000-0000-0000-0000-000000000066"; // manager's own linked row
+
+function tok(roles: string[], sub: string) {
+  return signToken({ sub, tid: TENANT, roles, sid: "sess-attendance-sf10-p1" }, SECRET);
+}
+
+function empRow(id: string) {
+  return {
+    id, tenantId: TENANT, managerId: null, userRef: id,
+    email: `${id}@test.gov.in`, employeeType: "permanent", status: "active",
+    dateOfJoining: "2024-01-01",
+  };
+}
+
+// --- Mocks ---
+
+const scopedReadMock = vi.fn<(...args: unknown[]) => Promise<unknown[]>>();
+const resolveEmployeeForActorMock = vi.fn();
+
+vi.mock("../shared/db.js", () => {
+  const sqlClientFn = (..._args: unknown[]) => Promise.resolve([]);
+  sqlClientFn.end = vi.fn(async () => {});
+  sqlClientFn.unsafe = vi.fn((..._args: unknown[]) => Promise.resolve([]));
+  sqlClientFn.begin = vi.fn(async (fn: (tx: typeof sqlClientFn) => Promise<unknown>) => fn(sqlClientFn));
+  return {
+    db: { transaction: async (cb: (tx: unknown) => Promise<unknown>) => cb({}) },
+    sqlClient: sqlClientFn,
+    scopedRead: (...args: unknown[]) => scopedReadMock(...args),
+  };
+});
+
+vi.mock("../shared/infra.js", () => ({
+  queue: { publish: vi.fn(async () => {}), subscribe: vi.fn(), drain: vi.fn(async () => {}) },
+  cache: { get: vi.fn(async () => null), set: vi.fn(async () => {}), del: vi.fn(async () => {}) },
+}));
+
+// resolveEmployeeForActor is mocked directly (rather than driven through
+// scopedRead's own internal lookup) so each test controls the resolved
+// employee in one line, and so this suite stays independent of
+// actor-link.ts's own implementation details (its email-fallback path etc.
+// has its own coverage in actor-link-email-hijack-real-db.test.ts).
+vi.mock("../modules/employee/actor-link.js", () => ({
+  resolveEmployeeForActor: (...args: unknown[]) => resolveEmployeeForActorMock(...args),
+}));
+
+import { buildApp } from "../app.js";
+import { sqlClient } from "../shared/db.js";
+
+let app: FastifyInstance;
+beforeAll(async () => { app = await buildApp(); });
+afterAll(async () => { await app.close(); await sqlClient.end(); });
+beforeEach(() => {
+  scopedReadMock.mockReset();
+  resolveEmployeeForActorMock.mockReset();
+});
+
+/**
+ * Recursively walks a Drizzle SQL condition object's queryChunks/Param tree
+ * and collects every bound literal value it finds. Deliberately does NOT
+ * touch `.table`/column metadata (which is circular), so this is safe to
+ * run against a real `and(eq(...), eq(...))` condition without needing
+ * JSON.stringify.
+ */
+function paramValues(sql: unknown, out: unknown[] = []): unknown[] {
+  if (sql && typeof sql === "object") {
+    if ("value" in (sql as Record<string, unknown>)) out.push((sql as Record<string, unknown>).value);
+    const chunks = (sql as Record<string, unknown>).queryChunks ?? (sql as Record<string, unknown>).value;
+    if (Array.isArray(chunks)) for (const c of chunks) paramValues(c, out);
+  }
+  return out;
+}
+
+/**
+ * A minimal fake Drizzle `tx` for a list-query scopedRead call: records the
+ * exact `.where(...)` condition object the route built (using the real,
+ * unmocked eq/and from drizzle-orm under the hood), then resolves `rows`.
+ */
+function capturingTx(rows: unknown[]) {
+  let captured: unknown;
+  const chain = {
+    orderBy: () => ({ limit: () => Promise.resolve(rows) }),
+    limit: () => Promise.resolve(rows),
+  };
+  const tx = {
+    select: () => ({ from: () => ({ where: (cond: unknown) => { captured = cond; return chain; } }) }),
+  };
+  return { tx, values: () => paramValues(captured).flat(Infinity) };
+}
+
+describe("POST /v1/hrms/overtime-requests — self-service IDOR", () => {
+  it("202 — employee submits an overtime request for THEMSELVES (actorId != employeeId)", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/overtime-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+      payload: { employeeId: EMP_SELF, requestDate: "2026-10-01", hoursRequested: 2 },
+    });
+    expect(r.statusCode).toBe(202);
+  });
+
+  it("403 — employee CANNOT submit an overtime request for a DIFFERENT employee", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/overtime-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+      payload: { employeeId: EMP_OTHER, requestDate: "2026-10-01", hoursRequested: 2 },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
+  });
+
+  it("403 — employee with NO linked employee record cannot submit at all", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(undefined);
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/overtime-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_NOLINK)}` },
+      payload: { employeeId: EMP_OTHER, requestDate: "2026-10-01", hoursRequested: 2 },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("202 — HR admin can submit on behalf of any employee (privileged path unchanged, no resolve needed)", async () => {
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/overtime-requests",
+      headers: { authorization: `Bearer ${tok(["hr_admin"], HR_ACTOR)}` },
+      payload: { employeeId: EMP_OTHER, requestDate: "2026-10-01", hoursRequested: 2 },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+  });
+
+  it("403 — a manager+employee actor still cannot submit on behalf of a DIFFERENT employee (create guard does not treat manager as privileged)", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(MGR_EMP));
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/overtime-requests",
+      headers: { authorization: `Bearer ${tok(["manager", "employee"], MGR_ACTOR)}` },
+      payload: { employeeId: EMP_OTHER, requestDate: "2026-10-01", hoursRequested: 2 },
+    });
+    expect(r.statusCode).toBe(403);
+  });
+});
+
+describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
+  it("employee's list query is scoped to their OWN resolved employee id, ignoring an attempted ?empId override", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const cap = capturingTx([]);
+    scopedReadMock.mockImplementationOnce(async (cb: unknown) => (cb as (tx: unknown) => Promise<unknown[]>)(cap.tx));
+
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/overtime-requests?empId=${EMP_OTHER}`,
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+    });
+
+    expect(r.statusCode).toBe(200);
+    const values = cap.values();
+    expect(values).toContain(EMP_SELF);
+    expect(values).not.toContain(EMP_OTHER);
+    expect(values).not.toContain(ACTOR_SELF);
+  });
+
+  it("employee with no linked employee record gets an empty list, not a query", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(undefined);
+    const r = await app.inject({
+      method: "GET", url: "/v1/hrms/overtime-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_NOLINK)}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: [] });
+    expect(scopedReadMock).not.toHaveBeenCalled();
+  });
+
+  it("manager can still filter by an explicit empId (privileged path unaffected)", async () => {
+    const cap = capturingTx([]);
+    scopedReadMock.mockImplementationOnce(async (cb: unknown) => (cb as (tx: unknown) => Promise<unknown[]>)(cap.tx));
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/overtime-requests?empId=${EMP_OTHER}`,
+      headers: { authorization: `Bearer ${tok(["manager"], MGR_ACTOR)}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+    expect(cap.values()).toContain(EMP_OTHER);
+  });
+});
+
+describe("POST /v1/hrms/wfh-requests — self-service IDOR", () => {
+  const body = { fromDate: "2026-10-01", toDate: "2026-10-02" };
+
+  it("202 — employee submits a WFH request for THEMSELVES (actorId != employeeId)", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/wfh-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+      payload: { ...body, employeeId: EMP_SELF },
+    });
+    expect(r.statusCode).toBe(202);
+  });
+
+  it("403 — employee CANNOT submit a WFH request for a DIFFERENT employee", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/wfh-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+      payload: { ...body, employeeId: EMP_OTHER },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
+  });
+
+  it("202 — HR admin can submit on behalf of any employee (privileged path unchanged)", async () => {
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/wfh-requests",
+      headers: { authorization: `Bearer ${tok(["hr_admin"], HR_ACTOR)}` },
+      payload: { ...body, employeeId: EMP_OTHER },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/hrms/wfh-requests — self-scoping", () => {
+  it("employee's list query is scoped to their OWN resolved employee id, ignoring an attempted ?empId override", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const cap = capturingTx([]);
+    scopedReadMock.mockImplementationOnce(async (cb: unknown) => (cb as (tx: unknown) => Promise<unknown[]>)(cap.tx));
+    scopedReadMock.mockResolvedValueOnce([]); // employeeRepo.listByTenant (builds the display-name map)
+
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/wfh-requests?empId=${EMP_OTHER}`,
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+    });
+
+    expect(r.statusCode).toBe(200);
+    const values = cap.values();
+    expect(values).toContain(EMP_SELF);
+    expect(values).not.toContain(EMP_OTHER);
+    expect(values).not.toContain(ACTOR_SELF);
+  });
+
+  it("employee with no linked employee record gets an empty list, not a query", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(undefined);
+    const r = await app.inject({
+      method: "GET", url: "/v1/hrms/wfh-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_NOLINK)}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: [] });
+    expect(scopedReadMock).not.toHaveBeenCalled();
+  });
+
+  it("HR can still filter by an explicit empId (privileged path unaffected)", async () => {
+    const cap = capturingTx([]);
+    scopedReadMock.mockImplementationOnce(async (cb: unknown) => (cb as (tx: unknown) => Promise<unknown[]>)(cap.tx));
+    scopedReadMock.mockResolvedValueOnce([]);
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/wfh-requests?empId=${EMP_OTHER}`,
+      headers: { authorization: `Bearer ${tok(["hr_admin"], HR_ACTOR)}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+    expect(cap.values()).toContain(EMP_OTHER);
+  });
+});
+
+describe("POST /v1/hrms/shift-requests — self-service IDOR", () => {
+  const body = { currentShift: "Morning", requestedShift: "Evening", effectiveDate: "2026-10-01" };
+
+  it("202 — employee submits a shift-change request for THEMSELVES (actorId != employeeId)", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/shift-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+      payload: { ...body, employeeId: EMP_SELF },
+    });
+    expect(r.statusCode).toBe(202);
+  });
+
+  it("403 — employee CANNOT submit a shift-change request for a DIFFERENT employee", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/shift-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+      payload: { ...body, employeeId: EMP_OTHER },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
+  });
+
+  it("202 — HR admin can submit on behalf of any employee (privileged path unchanged)", async () => {
+    const r = await app.inject({
+      method: "POST", url: "/v1/hrms/shift-requests",
+      headers: { authorization: `Bearer ${tok(["hr_admin"], HR_ACTOR)}` },
+      payload: { ...body, employeeId: EMP_OTHER },
+    });
+    expect(r.statusCode).toBe(202);
+    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /v1/hrms/shift-requests — self-scoping", () => {
+  it("employee's list query is scoped to their OWN resolved employee id, ignoring an attempted ?empId override", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    const cap = capturingTx([]);
+    scopedReadMock.mockImplementationOnce(async (cb: unknown) => (cb as (tx: unknown) => Promise<unknown[]>)(cap.tx));
+    scopedReadMock.mockResolvedValueOnce([]); // employeeRepo.listByTenant
+
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/shift-requests?empId=${EMP_OTHER}`,
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
+    });
+
+    expect(r.statusCode).toBe(200);
+    const values = cap.values();
+    expect(values).toContain(EMP_SELF);
+    expect(values).not.toContain(EMP_OTHER);
+    expect(values).not.toContain(ACTOR_SELF);
+  });
+
+  it("employee with no linked employee record gets an empty list, not a query", async () => {
+    resolveEmployeeForActorMock.mockResolvedValueOnce(undefined);
+    const r = await app.inject({
+      method: "GET", url: "/v1/hrms/shift-requests",
+      headers: { authorization: `Bearer ${tok(["employee"], ACTOR_NOLINK)}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toEqual({ data: [] });
+    expect(scopedReadMock).not.toHaveBeenCalled();
+  });
+
+  it("manager can still filter by an explicit empId (privileged path unaffected)", async () => {
+    const cap = capturingTx([]);
+    scopedReadMock.mockImplementationOnce(async (cb: unknown) => (cb as (tx: unknown) => Promise<unknown[]>)(cap.tx));
+    scopedReadMock.mockResolvedValueOnce([]);
+    const r = await app.inject({
+      method: "GET", url: `/v1/hrms/shift-requests?empId=${EMP_OTHER}`,
+      headers: { authorization: `Bearer ${tok(["manager"], MGR_ACTOR)}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(resolveEmployeeForActorMock).not.toHaveBeenCalled();
+    expect(cap.values()).toContain(EMP_OTHER);
+  });
+});
