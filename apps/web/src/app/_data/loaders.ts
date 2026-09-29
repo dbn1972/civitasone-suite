@@ -5403,11 +5403,11 @@ function buildApprovalLink(module: string, refType: string, refId: string, taskI
     case "procurement_po":
       return `/procurement/orders/${refId}`;
     case "finance_bill":
-      return `/finance/bills/${refId}`;
+      return `/finance/expenditure/bills/${refId}`;
     case "estab_file":
       return `/estab/files/${refId}`;
     default:
-      return `/workflow/tasks`;
+      return `/workflow/my-tasks`;
   }
 }
 

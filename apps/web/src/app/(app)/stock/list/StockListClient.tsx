@@ -55,7 +55,7 @@ export function StockListClient({ items }: Props) {
         <DataTable
           columns={COLUMNS}
           rows={rows as unknown as Record<string, unknown>[]}
-          rowLinkPrefix="/stock/"
+          rowLinkPrefix="/inventory/"
           rowLinkKey="id"
           identifyingColumnKey="name"
           sortable
