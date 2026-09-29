@@ -18,6 +18,7 @@
     "@civitasone/auth": "workspace:*",
     "@civitasone/cache": "workspace:*",
     "@civitasone/circuit-breaker": "workspace:*",
+    "@civitasone/data-governance": "workspace:*",
     "@civitasone/db": "workspace:*",
     "@civitasone/eoffice-sdk": "workspace:*",
     "@civitasone/events": "workspace:*",
