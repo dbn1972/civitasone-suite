@@ -31,6 +31,7 @@ export type EmployeeDetailShape = {
   bankIfsc: string | null;
   pan: string | null;
   managerId?: string;
+  payStructureId?: string;
   uanNumber?: string;
   esicIpNumber?: string;
   pran?: string;
@@ -116,6 +117,17 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
     // approval, or geo-attendance-e2e.test.ts's "F4. Employee's reporting
     // officer is assigned") had no field to read it from at all.
     ...(emp.managerId      ? { managerId: emp.managerId }             : {}),
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-04 / GAP-HR-SF-06 (EntityPicker):
+    // payStructureId is a real column (hrms_employees.pay_structure_id,
+    // schema.ts) settable via both createEmployeeBody and
+    // updateEmployeeBody, but was never surfaced here -- so
+    // EditEmployeeForm.tsx's pay-structure picker could never show what
+    // was actually assigned (useState('') on every visit) even when a
+    // value was on file. Not PII (pii-mask.ts's PII_FIELDS excludes it,
+    // same as uanNumber/esicIpNumber/pran below), so no masking transform
+    // belongs here -- same "real column, never in the response shape" gap
+    // as those three, and the same fix.
+    ...(emp.payStructureId ? { payStructureId: emp.payStructureId }    : {}),
     // FINDING-3 (HRMS role-based review): uanNumber/esicIpNumber/pran are
     // real columns on `emp` already (uan_number/esic_ip_number/pran --
     // schema.ts; populated end-to-end by employee/consumer.ts on create,
@@ -145,13 +157,42 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
  *               CLOSED (empty page), not fail-open "no scope = see everyone".
  * Included in the cache hash: the result now depends on WHO is asking, not
  * just tenant/limit/offset/employeeType, so those must no longer share a key.
+ *
+ * `q`/`ids` (GAP-HR-SF-06, EntityPicker): the same route now backs the
+ * picker's two adapter calls alongside the pre-existing directory browse.
+ * `q` is a free-text search (repo.listByTenant's new ILIKE filter) folded
+ * into the existing cached browse path. `ids` is a batch lookup (picker's
+ * resolve(ids), fixing GAP-HR-EMPLOYEES-DETAIL-EDIT-04's blank-on-every-
+ * visit bug) -- handled as a separate, uncached, non-paginated branch below
+ * since it answers a completely different question ("these specific rows")
+ * than "the next page of everyone". Both stay behind the exact same
+ * DIRECTORY_ROLES gate and managerScope restriction as the browse path;
+ * neither adds a new field to the response shape.
  */
-export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[]): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
   if (managerScope === null) {
     return { data: [], pagination: { hasMore: false, pageSize: limit } };
   }
-  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType, managerScope);
+
+  if (ids && ids.length > 0) {
+    const rows = await repo.listByIds(tenantId, ids, managerScope ?? undefined);
+    const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
+    const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
+    return {
+      data: rows.map((r) => ({
+        id: r.id,
+        employeeNo: r.employeeNo,
+        name: r.fullName,
+        department: deptNameById.get(r.departmentId) ?? "—",
+        employeeType: r.employeeType,
+        status: r.status,
+      })),
+      pagination: { hasMore: false, pageSize: rows.length },
+    };
+  }
+
+  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
     return {

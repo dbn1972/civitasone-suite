@@ -80,10 +80,19 @@ async function resolveManagerScope(ctx: RequestContext, req: FastifyRequest): Pr
 export async function employeeRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/employees", async (req, reply) => {
     const ctx = resolveContext(req);
+    // GAP-HR-SF-06 (EntityPicker): this route now also backs the picker's
+    // search(q)/resolve(ids) adapters (lib/entityAdapters/employee.ts) --
+    // deliberately left on the exact same DIRECTORY_ROLES gate rather than
+    // a wider or narrower one. DIRECTORY_ROLES is the already-decided scope
+    // for "who may browse/search the employee list" (see this route's own
+    // DIRECTORY_ROLES comment above); the only currently-undecided question
+    // in this area (GAP-HR-DIRECTORY-04) is which *fields* it returns, and
+    // this change adds none -- q/ids reuse queries.listEmployees's existing
+    // id/employeeNo/name/department/employeeType/status shape unchanged.
     requireRole(ctx, DIRECTORY_ROLES);
     const q = employeeListQuery.parse(req.query);
     const managerScope = await resolveManagerScope(ctx, req);
-    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope));
+    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids));
   });
 
   app.post("/v1/hrms/employees", async (req, reply) => {

@@ -12,6 +12,7 @@ import {
   confirmEmployeeBody,
   updateEmployeeBody,
   idParam,
+  employeeListQuery,
 } from "../src/modules/employee/validators.js";
 import {
   EMPLOYEE_STATUSES,
@@ -225,5 +226,44 @@ describe("idParam", () => {
 
   it("rejects non-UUID", () => {
     expect(idParam.safeParse({ id: "bad" }).success).toBe(false);
+  });
+});
+
+describe("employeeListQuery — GAP-HR-SF-06 (EntityPicker) q/ids", () => {
+  it("accepts a plain list query with neither q nor ids (unchanged, pre-existing shape)", () => {
+    expect(employeeListQuery.safeParse({}).success).toBe(true);
+  });
+
+  it("accepts q as an optional free-text search term", () => {
+    const result = employeeListQuery.safeParse({ q: "Asha" });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.q).toBe("Asha");
+  });
+
+  it("rejects an empty q (must be meaningful text, not an empty search)", () => {
+    expect(employeeListQuery.safeParse({ q: "" }).success).toBe(false);
+  });
+
+  it("parses ids as a comma-separated list of uuids", () => {
+    const a = "32000000-cccc-4000-8000-000000000001";
+    const b = "42000000-dddd-4000-8000-000000000001";
+    const result = employeeListQuery.safeParse({ ids: `${a},${b}` });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.ids).toEqual([a, b]);
+  });
+
+  it("rejects ids containing a non-uuid entry", () => {
+    expect(employeeListQuery.safeParse({ ids: "not-a-uuid" }).success).toBe(false);
+  });
+
+  it("rejects more than 50 ids (keeps the IN() clause bounded)", () => {
+    const ids = Array.from({ length: 51 }, (_, i) => `32000000-cccc-4000-8000-${String(i).padStart(12, "0")}`).join(",");
+    expect(employeeListQuery.safeParse({ ids }).success).toBe(false);
+  });
+
+  it("leaves ids undefined when omitted (no behavior change for the pre-existing browse path)", () => {
+    const result = employeeListQuery.safeParse({});
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.ids).toBeUndefined();
   });
 });

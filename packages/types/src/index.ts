@@ -897,6 +897,17 @@ export type EmployeeDetail = {
   status: string;
   reportingTo?: string;
   postingLocation?: string;
+  // Real FK (hrms_employees.manager_id) -- already returned by
+  // getEmployeeDetail and declared on EmployeeDetailSchema (packages/
+  // schemas/src/web.ts), but never added here; EditEmployeeForm.tsx had to
+  // read it via an `as Record<string, unknown>` cast, same gap as the
+  // statutory fields below. Added now (GAP-HR-SF-06) so the EntityPicker
+  // adoption can seed the manager picker's value from a properly typed
+  // field instead of adding yet another cast.
+  managerId?: string;
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-04 / GAP-HR-SF-06: same gap, same fix, for
+  // the pay-structure picker.
+  payStructureId?: string;
 };
 
 // Procurement types

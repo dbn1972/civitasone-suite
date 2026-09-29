@@ -25,42 +25,62 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
 
-const { findByIdMock, rowsMock } = vi.hoisted(() => ({
+const { findByIdMock, rowsMock, listByTenantMock, listByIdsMock } = vi.hoisted(() => ({
   findByIdMock: vi.fn(),
   rowsMock: vi.fn(),
+  listByTenantMock: vi.fn(async () => []),
+  listByIdsMock: vi.fn(async () => []),
 }));
 
 // getEmployeeDetail resolves the main employee row (and, when managerId is
 // set, the manager's row) through repo.findById -- mock that module boundary
 // directly rather than the underlying db primitives.
 vi.mock("../src/modules/employee/repo.js", () => ({
-  listByTenant: vi.fn(async () => []),
+  listByTenant: (...a: unknown[]) => listByTenantMock(...a),
+  // GAP-HR-SF-06: batch id lookup backing listEmployees' resolve(ids) path.
+  listByIds: (...a: unknown[]) => listByIdsMock(...a),
   findById: (...a: unknown[]) => findByIdMock(...a),
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
   cache: {
     getOrLoad: async (_key: string, fn: () => Promise<unknown>) => fn(),
+    // GAP-HR-SF-06: listEmployees' browse/search path goes through
+    // listOrLoad, not getOrLoad -- bypass caching the same way getOrLoad is
+    // bypassed above so each test call re-runs its mocked repo call.
+    listOrLoad: async (_tenantId: string, _resource: string, _key: string, fn: () => Promise<unknown>) => fn(),
     makeKey: (...parts: string[]) => parts.join(":"),
   },
 }));
 
-// Only the dept and desig lookups go through scopedRead directly inside
-// queries.ts (in that fixed order); resolve them from a shared queue.
-vi.mock("../src/shared/db.js", () => ({
-  scopedRead: async (fn: any) =>
-    fn({
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => rowsMock(),
+// Only the dept/desig lookups (getEmployeeDetail, always .limit(1)) and the
+// dept-name-map lookup (listEmployees' browse/ids branches, no .limit() at
+// all -- see queries.ts) go through scopedRead directly inside queries.ts;
+// resolve them from a shared queue. The chain below is thenable at every
+// step (not just after an explicit .limit()) so both call shapes resolve to
+// the same queued rowsMock() value -- GAP-HR-SF-06's listEmployees tests are
+// what first exercised the no-.limit() shape in this file.
+vi.mock("../src/shared/db.js", () => {
+  function chain(): any {
+    return {
+      limit: () => chain(),
+      then: (resolve: (v: unknown) => unknown, reject: (e: unknown) => unknown) =>
+        Promise.resolve(rowsMock()).then(resolve, reject),
+    };
+  }
+  return {
+    scopedRead: async (fn: any) =>
+      fn({
+        select: () => ({
+          from: () => ({
+            where: () => chain(),
           }),
         }),
       }),
-    }),
-}));
+  };
+});
 
-import { getEmployeeDetail } from "../src/modules/employee/queries.js";
+import { getEmployeeDetail, listEmployees } from "../src/modules/employee/queries.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 
@@ -153,5 +173,69 @@ describe("getEmployeeDetail", () => {
 
     const result = await getEmployeeDetail(id, TENANT);
     expect(result?.phone).toBeUndefined();
+  });
+
+  it("includes payStructureId when the row has one (GAP-HR-EMPLOYEES-DETAIL-EDIT-04: previously always omitted, so the pay-structure picker started blank on every visit)", async () => {
+    const id = randomUUID();
+    const payStructureId = randomUUID();
+    findByIdMock.mockResolvedValueOnce(baseRow({ id, payStructureId }));
+    rowsMock.mockResolvedValueOnce([{ name: "Finance" }]);
+    rowsMock.mockResolvedValueOnce([{ name: "Officer", payGrade: null }]);
+
+    const result = await getEmployeeDetail(id, TENANT);
+    expect(result?.payStructureId).toBe(payStructureId);
+  });
+
+  it("omits payStructureId when the row has none (no regression)", async () => {
+    const id = randomUUID();
+    findByIdMock.mockResolvedValueOnce(baseRow({ id, payStructureId: null }));
+    rowsMock.mockResolvedValueOnce([{ name: "Finance" }]);
+    rowsMock.mockResolvedValueOnce([{ name: "Officer", payGrade: null }]);
+
+    const result = await getEmployeeDetail(id, TENANT);
+    expect(result?.payStructureId).toBeUndefined();
+  });
+});
+
+describe("listEmployees — GAP-HR-SF-06 (EntityPicker) q/ids", () => {
+  it("passes q through to repo.listByTenant (the browse/search path)", async () => {
+    listByTenantMock.mockResolvedValueOnce([]);
+    rowsMock.mockResolvedValueOnce([]);
+    await listEmployees(TENANT, 20, 0, undefined, undefined, "Asha");
+    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Asha");
+  });
+
+  it("ids takes the batch-lookup path (repo.listByIds), bypassing repo.listByTenant entirely", async () => {
+    const row = {
+      id: "e1",
+      employeeNo: "EMP001",
+      fullName: "Asha Rao",
+      departmentId: "d1",
+      employeeType: "permanent",
+      status: "active",
+    };
+    listByIdsMock.mockResolvedValueOnce([row]);
+    rowsMock.mockResolvedValueOnce([{ id: "d1", name: "Finance" }]);
+
+    const result = await listEmployees(TENANT, 20, 0, undefined, undefined, undefined, ["e1"]);
+
+    expect(listByIdsMock).toHaveBeenCalledWith(TENANT, ["e1"], undefined);
+    expect(listByTenantMock).not.toHaveBeenCalled();
+    expect(result.data).toEqual([
+      { id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", employeeType: "permanent", status: "active" },
+    ]);
+  });
+
+  it("ids path still fails closed to an empty list when managerScope is null (manager-only caller with no resolvable link)", async () => {
+    const result = await listEmployees(TENANT, 20, 0, undefined, null, undefined, ["e1"]);
+    expect(result).toEqual({ data: [], pagination: { hasMore: false, pageSize: 20 } });
+    expect(listByIdsMock).not.toHaveBeenCalled();
+  });
+
+  it("ids path forwards managerScope to repo.listByIds so a manager-only caller can only resolve their own direct reports", async () => {
+    listByIdsMock.mockResolvedValueOnce([]);
+    rowsMock.mockResolvedValueOnce([]);
+    await listEmployees(TENANT, 20, 0, undefined, "manager-emp-id", undefined, ["e1"]);
+    expect(listByIdsMock).toHaveBeenCalledWith(TENANT, ["e1"], "manager-emp-id");
   });
 });

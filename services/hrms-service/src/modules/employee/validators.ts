@@ -9,6 +9,25 @@ import { listQuerySchema } from "@civitasone/schemas/common";
 // insertions are identical so whichever PR merges second should merge cleanly.
 export const employeeListQuery = listQuerySchema.extend({
   employeeType: z.string().min(1).max(32).optional(),
+  // GAP-HR-SF-06 (EntityPicker): optional free-text search for the picker's
+  // search(q) adapter -- matches fullName/employeeNo (ILIKE, repo.ts), same
+  // DIRECTORY_ROLES gate and PII-free response shape as the existing list
+  // (see routes.ts's DIRECTORY_ROLES comment / queries.listEmployees).
+  q: z.string().trim().min(1).max(100).optional(),
+  // GAP-HR-SF-06: optional batch id lookup for the picker's resolve(ids)
+  // adapter -- pre-populates an edit form's label for an id it already has
+  // (this is the fix for GAP-HR-EMPLOYEES-DETAIL-EDIT-04's blank-on-every-
+  // visit pay-structure/manager select). Comma-separated uuids so it works
+  // through any querystring parser; capped at 50 so the IN() clause stays
+  // bounded.
+  ids: z
+    .string()
+    .optional()
+    .transform((s) => (s ? s.split(",").map((v) => v.trim()).filter(Boolean) : undefined))
+    .refine(
+      (arr) => !arr || (arr.length <= 50 && arr.every((v) => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v))),
+      { message: "ids must be a comma-separated list of up to 50 UUIDs" },
+    ),
 });
 export type EmployeeListQuery = z.infer<typeof employeeListQuery>;
 

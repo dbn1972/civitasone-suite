@@ -17,6 +17,8 @@ export { Select } from "./Select";
 export type { SelectProps } from "./Select";
 export { Textarea } from "./Textarea";
 export type { TextareaProps } from "./Textarea";
+export { EntityPicker } from "./EntityPicker";
+export type { EntityPickerProps, EntityOption } from "./EntityPicker";
 export { DataTable } from "./DataTable";
 export { StatusPill } from "./StatusPill";
 export { Segmented } from "./Segmented";
