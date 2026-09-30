@@ -975,27 +975,57 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/work-summaries", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
     const scopeId = await resolveOwnEmployeeIdIfNonHr(ctx, req);
-    if (scopeId === null) return reply.send({ data: [] });
+    if (scopeId === null) return reply.send({ data: [], total: 0, offset: 0 });
+    const q = z.object({ offset: z.coerce.number().int().min(0).default(0) }).parse(req.query ?? {});
+    const PAGE_SIZE = 500;
     // GUC fix: appraisal.hrms_appraisals has FORCE ROW LEVEL SECURITY;
     // sqlPool.query() never set app.tenant_id, so work-summaries silently
     // returned zero rows for every caller (HR included) regardless of the
     // employee-scoping above.
-    const rows = await sqlClient.begin(async (sql) => {
+    const { rows, total } = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-      return sql.unsafe(`
-        SELECT a.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
-               a.appraisal_period AS period, 'annual' AS "periodType",
-               COALESCE(ROUND(a.overall_grade)::int, 0) AS "tasksCompleted",
-               10 AS "totalTasks",
-               COALESCE(a.rating, 0)::numeric AS rating, a.status
+      const whereClause = scopeId !== undefined ? "AND a.employee_id = $2" : "";
+      const countParams = scopeId !== undefined ? [ctx.tenantId, scopeId] : [ctx.tenantId];
+      const countRows = await sql.unsafe(`
+        SELECT COUNT(*)::int AS total
+        FROM appraisal.hrms_appraisals a
+        WHERE a.tenant_id = $1 ${whereClause}
+      `, countParams);
+      const total = Number(countRows[0]?.total ?? 0);
+
+      // GAP-HR-WORK-SUMMARY-01/02: this used to invent "tasks" data
+      // (COALESCE(...overall_grade...) AS tasksCompleted + a literal
+      // `10 AS totalTasks` + a literal `'annual' AS periodType) with no
+      // underlying task data anywhere in this source, and masked a genuinely
+      // NULL rating as 0 (COALESCE(a.rating,0)) so an unrated appraisal
+      // looked like a real "0.0 / 5" score. Now selects the real
+      // overall_grade/rating columns un-coalesced (frontend renders null as
+      // "—") and drops the fabricated tasks/periodType fields entirely
+      // rather than inventing a replacement source for them. Also now
+      // selects e.id AS employeeId (GAP-HR-WORK-SUMMARY-06 — the frontend
+      // used to count distinct employees by *display name*, silently
+      // merging same-named people) and supports offset-based pagination
+      // (GAP-HR-WORK-SUMMARY-05 — LIMIT 500 previously truncated silently
+      // with no total count and no way to see the rest).
+      const dataParams = scopeId !== undefined
+        ? [ctx.tenantId, scopeId, PAGE_SIZE, q.offset]
+        : [ctx.tenantId, PAGE_SIZE, q.offset];
+      const limitIdx = scopeId !== undefined ? 3 : 2;
+      const offsetIdx = scopeId !== undefined ? 4 : 3;
+      const rows = await sql.unsafe(`
+        SELECT a.id, e.full_name AS employee, e.id AS "employeeId", COALESCE(d.name,'—') AS department,
+               a.appraisal_period AS period,
+               a.overall_grade AS "overallGrade",
+               a.rating AS rating, a.status
         FROM appraisal.hrms_appraisals a
         JOIN employee.hrms_employees e ON e.id = a.employee_id AND e.tenant_id = $1
         LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
-        WHERE a.tenant_id = $1 ${scopeId !== undefined ? "AND a.employee_id = $2" : ""}
-        ORDER BY a.appraisal_period DESC, e.full_name LIMIT 500
-      `, scopeId !== undefined ? [ctx.tenantId, scopeId] : [ctx.tenantId]);
+        WHERE a.tenant_id = $1 ${whereClause}
+        ORDER BY a.appraisal_period DESC, e.full_name LIMIT $${limitIdx} OFFSET $${offsetIdx}
+      `, dataParams);
+      return { rows, total };
     });
-    return reply.send({ data: rows });
+    return reply.send({ data: rows, total, offset: q.offset });
   });
 
   // Error handler
