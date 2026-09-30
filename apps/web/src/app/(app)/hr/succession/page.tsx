@@ -1,20 +1,33 @@
 /**
  * Succession Planning page — Sprint 14 / Lifecycle Phase 2
- * Transforms the pipeline + risk API responses into CriticalPost cards
- * with readiness level, skill gap indicators, and dev-plan link.
+ * Renders the pipeline + risk API responses as CriticalPost cards with
+ * real per-nominee readiness, and lets HR create critical roles/nominees.
  */
 import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
 import {
   SuccessionPlanList,
   type CriticalPost,
   type Successor,
 } from "./_components/SuccessionPlanCard";
+import { CreatePlanForm } from "./_components/CreatePlanForm";
+
+// GAP-HR-SUCCESSION-05: server enforces HR_ROLES on every succession route
+// already (gap-features/routes.ts) -- this mirrors that same list so a
+// non-HR caller admitted by hr/layout.tsx (employee, manager) gets an
+// honest PermissionDenied instead of a raw 403 surfacing as a generic
+// error. NOT a widening or narrowing of who has access: hr_officer already
+// has server-side access today (HR_ROLES = hr_admin, super_admin,
+// hr_officer), verified directly against gap-features/routes.ts.
+const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 /* ── API types ── */
 type PipelineRow = {
+  planId?: string;
   role_ref: string;
   department_id?: string;
   department?: string;
@@ -29,7 +42,10 @@ type PipelineRow = {
 type RiskRow = {
   role_ref: string;
   department_id?: string;
+  department?: string;
 } & Record<string, unknown>;
+
+type Department = { id: string; name: string };
 
 async function getPipeline() {
   return fetchJson<unknown, PipelineRow[]>("/api/v1/hrms/succession/pipeline", [], {
@@ -51,101 +67,94 @@ async function getRisk() {
   });
 }
 
-/**
- * Build CriticalPost[] from the pipeline API.
- * If the API already returns a `successors` array, we use it.
- * Otherwise we synthesise placeholder rows from the aggregate counts
- * so the card always renders meaningfully.
- */
-function buildPosts(rows: PipelineRow[], t: Awaited<ReturnType<typeof getTranslations>>): CriticalPost[] {
-  return rows.map((row, idx) => {
-    const successors: Successor[] =
-      Array.isArray(row.successors) && row.successors.length > 0
-        ? row.successors
-        : synthesise(row, t);
-
-    return {
-      id:            String(row.role_ref ?? idx),
-      roleRef:       String(row.role_ref ?? "—"),
-      department:    String(row.department ?? row.department_id ?? ""),
-      currentHolder: row.currentHolder,
-      retirementDate: row.retirementDate ?? null,
-      riskLevel:     row.riskLevel ?? (Number(row.ready_now) === 0 ? "high" : "medium"),
-      successors,
-    };
+async function getDepartments() {
+  return fetchJson<unknown, Department[]>("/api/v1/hrms/departments", [], {
+    telemetryKey: "hr.succession.departments",
+    mapResponse: (p) => {
+      const arr = Array.isArray(p) ? p : (p as { data?: Department[] })?.data;
+      return Array.isArray(arr) ? arr : null;
+    },
   });
 }
 
-function synthesise(row: PipelineRow, t: Awaited<ReturnType<typeof getTranslations>>): Successor[] {
-  const total     = Number(row.nominee_count ?? 0);
-  const readyNow  = Number(row.ready_now ?? 0);
-  const results: Successor[] = [];
-  for (let i = 0; i < readyNow; i++) {
-    results.push({
-      employeeId: `${row.role_ref}-rn-${i + 1}`,
-      name:       t("nomineeName", { n: i + 1 }),
-      readiness:  "ready_now",
-    });
-  }
-  const remaining = total - readyNow;
-  for (let i = 0; i < remaining; i++) {
-    results.push({
-      employeeId: `${row.role_ref}-ot-${i + 1}`,
-      name:       t("nomineeName", { n: readyNow + i + 1 }),
-      readiness:  i < remaining / 2 ? "one_two_years" : "three_five_years",
-    });
-  }
-  return results;
+// GAP-HR-SUCCESSION-01: the API now returns real successors directly;
+// synthesise()-ing placeholder "Nominee N" people is gone. A plan with
+// nominee_count > 0 but somehow no successor rows (should not happen once
+// -01's backend join is in place, kept as a defensive display fallback)
+// shows the raw counts instead of fabricating names.
+function buildPosts(rows: PipelineRow[]): CriticalPost[] {
+  return rows.map((row, idx) => ({
+    id: String(row.planId ?? row.role_ref ?? idx),
+    roleRef: String(row.role_ref ?? "—"),
+    department: row.department ? String(row.department) : undefined,
+    currentHolder: row.currentHolder,
+    retirementDate: row.retirementDate ?? null,
+    riskLevel: row.riskLevel ?? null,
+    successors: Array.isArray(row.successors) ? row.successors : [],
+    nomineeCount: Number(row.nominee_count ?? 0),
+  }));
 }
 
 export default async function SuccessionPage() {
   const t = await getTranslations("succession");
   const tCard = await getTranslations("successionPlanCard");
-  const [pipeResult, riskResult] = await Promise.all([getPipeline(), getRisk()]);
+  const roles = getSessionRoles();
+  const isHr = HR_ROLES.some((r) => roles.includes(r));
+
+  if (!isHr) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PermissionDenied module={t("title")} requiredRoles={HR_ROLES} backHref="/hr" />
+      </div>
+    );
+  }
+
+  const [pipeResult, riskResult, deptResult] = await Promise.all([getPipeline(), getRisk(), getDepartments()]);
   const pipeline = pipeResult.data;
-  const atRisk   = riskResult.data;
-  const source   =
-    pipeResult.source === "error" || riskResult.source === "error"
-      ? "error"
-      : pipeResult.source;
-  const errored = source === "error";
+  const atRisk = riskResult.data;
+  const departments = deptResult.data;
+  const source =
+    pipeResult.source === "error" || riskResult.source === "error" ? "error" : pipeResult.source;
+  const pipelineErrored = pipeResult.source === "error";
+  const riskErrored = riskResult.source === "error";
   // Whichever of the two calls actually failed carries the real reason
   // (e.g. a 403's backend message) -- prefer it over the other,
   // still-empty result so a genuine 403 doesn't get reported as a plain
   // network/5xx failure.
-  const errorResult = pipeResult.source === "error" ? pipeResult : riskResult;
+  const errorResult = pipelineErrored ? pipeResult : riskResult;
 
-  const posts        = buildPosts(pipeline, tCard);
-  const readyNow     = pipeline.reduce((s, r) => s + Number(r.ready_now ?? 0), 0);
-  const totalNominees= pipeline.reduce((s, r) => s + Number(r.nominee_count ?? 0), 0);
+  const posts = buildPosts(pipeline);
+  const readyNow = pipeline.reduce((s, r) => s + Number(r.ready_now ?? 0), 0);
+  const totalNominees = pipeline.reduce((s, r) => s + Number(r.nominee_count ?? 0), 0);
 
   const RISK_COLS: { key: keyof RiskRow & string; label: string }[] = [
-    { key: "role_ref",     label: t("colRoleAtRisk") },
-    { key: "department_id",label: t("colDepartment") },
+    { key: "role_ref", label: t("colRoleAtRisk") },
+    { key: "department", label: t("colDepartment") },
   ];
+
+  const roleOptions = pipeline
+    .filter((r) => r.planId)
+    .map((r) => ({ planId: String(r.planId), roleRef: String(r.role_ref ?? "") }));
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
-        back="/hr" backLabel="Back to HR"
-        actions={<span />}
-      />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
       <DataSourceBadge source={source} />
 
       <StatGrid>
-        <StatCard icon="🏆" iconBg="var(--infobg, #e6f0ff)" label={t("statCriticalRolesLabel")}  value={pipeline.length} />
-        <StatCard icon="👥" iconBg="var(--bg, #f5f5f5)" label={t("statTotalNomineesLabel")}  value={totalNominees} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statReadyNowLabel")}        value={readyNow} />
-        <StatCard icon="⚠️" iconBg="var(--badbg, #fff1f0)" label={t("statRolesAtRiskLabel")}   value={atRisk.length} />
+        {/* GAP-HR-SUCCESSION-04: '—' on a failed fetch, not 0 -- a failed
+            load previously looked identical to "zero critical roles". */}
+        <StatCard icon="🏆" iconBg="var(--infobg, #e6f0ff)" label={t("statCriticalRolesLabel")} value={pipelineErrored ? null : pipeline.length} />
+        <StatCard icon="👥" iconBg="var(--bg, #f5f5f5)" label={t("statTotalNomineesLabel")} value={pipelineErrored ? null : totalNominees} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statReadyNowLabel")} value={pipelineErrored ? null : readyNow} />
+        <StatCard icon="⚠️" iconBg="var(--badbg, #fff1f0)" label={t("statRolesAtRiskLabel")} value={riskErrored ? null : atRisk.length} />
       </StatGrid>
 
       {/* Rich succession plan cards */}
       <Card title={t("cardTitlePipeline")}>
-        {errored ? (
+        {pipelineErrored ? (
           <div className="pad">
-            <LoadErrorState result={errorResult} area="succession plans" backHref="/hr" />
+            <LoadErrorState result={pipeResult} area="succession plans" backHref="/hr" />
           </div>
         ) : (
           <div style={{ padding: 16 }}>
@@ -154,10 +163,24 @@ export default async function SuccessionPage() {
         )}
       </Card>
 
-      {/* At-risk table */}
-      {atRisk.length > 0 && (
-        <div style={{ marginTop: 16 }}>
-          <Card title={t("cardTitleAtRisk")}>
+      {/* GAP-HR-SUCCESSION-05: create UI -- POST /succession/critical-roles
+          and /nominees existed with no way to reach them from this page. */}
+      <div style={{ marginTop: 16 }}>
+        <CreatePlanForm departments={departments} roles={roleOptions} />
+      </div>
+
+      {/* At-risk table. GAP-HR-SUCCESSION-04: rendered whenever the risk
+          call itself succeeded (not gated on atRisk.length > 0), so the
+          "all critical roles have ready successors" empty state is
+          actually reachable, and a risk-call-only failure shows its own
+          error instead of silently reading as "0 at risk". */}
+      <div style={{ marginTop: 16 }}>
+        <Card title={t("cardTitleAtRisk")}>
+          {riskErrored ? (
+            <div className="pad">
+              <LoadErrorState result={errorResult} area="at-risk roles" backHref="/hr" />
+            </div>
+          ) : (
             <DataTable<RiskRow>
               columns={RISK_COLS}
               rows={atRisk}
@@ -167,9 +190,9 @@ export default async function SuccessionPage() {
               emptyTitle={t("emptyTitleAllReady")}
               emptyMessage=""
             />
-          </Card>
-        </div>
-      )}
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
