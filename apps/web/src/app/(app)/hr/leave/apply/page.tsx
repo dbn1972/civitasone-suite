@@ -17,14 +17,22 @@ export default async function ApplyLeavePage({
   // ever apply for their own leave. When the admin list comes back empty,
   // fall back to the self-service profile endpoint so a regular employee can
   // still apply, without needing (or ever seeing) the employee-list dropdown.
-  const { data: employees, source, status } = await getEmployees();
+  const [{ data: employees, source, status }, { data: myProfile, source: myProfileSourceEarly }] = await Promise.all([
+    getEmployees(),
+    // GAP-HR-LEAVE-APPLY-03: fetched unconditionally now (previously only as
+    // the employees.length===0 self-service fallback below) so the "myself"
+    // default/indicator works for HR/manager viewing the full roster too,
+    // not only the single-row self-service path.
+    getMyProfile(),
+  ]);
 
   let resolvedEmployees = employees;
   let resolvedSource = source;
   let noLinkedProfile = false;
+  const myEmployeeId = myProfile?.id;
 
   if (employees.length === 0) {
-    const { data: myProfile, source: mySource } = await getMyProfile();
+    const mySource = myProfileSourceEarly;
 
     // A 403 on the admin list is the expected, by-design response for a
     // plain `employee` role, not a real failure — and getMyProfile() already
@@ -69,6 +77,7 @@ export default async function ApplyLeavePage({
       <ApplyLeaveForm
         employees={resolvedEmployees}
         initialEmployeeId={searchParams?.empId}
+        myEmployeeId={myEmployeeId}
         noLinkedProfile={noLinkedProfile}
       />
     </div>

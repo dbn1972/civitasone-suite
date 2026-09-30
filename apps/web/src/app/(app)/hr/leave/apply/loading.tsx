@@ -1,24 +1,35 @@
+import { PageHeader, SkeletonBar } from "../../../../_components/ds";
 import { getTranslations } from "next-intl/server";
 
+/**
+ * GAP-HR-LEAVE-APPLY-06: was a hand-rolled `.ph` header (not the shared
+ * PageHeader) inside `.page-main` with no `wrap` class (page.tsx uses
+ * "page-main wrap"), plus a 4-tile stat-card-shaped skeleton the form
+ * doesn't have at all — causing a layout shift between loading and loaded.
+ * Rebuilt as a single form-shaped skeleton (label+field rows) matching
+ * ApplyLeaveForm's actual shape instead.
+ */
 export default async function Loading() {
   const t = await getTranslations("leaveApply");
   return (
-    <div className="page-main" aria-labelledby="page-heading">
-      <div className="ph">
-        <div>
-          <h1 id="page-heading">{t("title")}</h1>
-          <div className="sub">{t("loadingSubtitle")}</div>
+    <div className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader title={t("title")} subtitle={t("loadingSubtitle")} back="/hr/leave" backLabel="Back to Leave" />
+      <section className="mx-auto max-w-2xl">
+        <div
+          className="space-y-4 rounded-xl border p-6 shadow-sm"
+          style={{ background: "var(--panel, #fff)", borderColor: "var(--line, #e2e8f0)", display: "grid", gap: 16 }}
+          aria-hidden="true"
+        >
+          <SkeletonBar h={38} />
+          <SkeletonBar h={38} />
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <SkeletonBar h={38} />
+            <SkeletonBar h={38} />
+          </div>
+          <SkeletonBar h={72} />
+          <SkeletonBar h={38} w={160} />
         </div>
-      </div>
-      <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
-        <div style={{ height: 120, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
-          {[1, 2, 3, 4].map((i) => (
-            <div key={i} style={{ height: 80, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
-          ))}
-        </div>
-        <div style={{ height: 240, borderRadius: 12, background: "var(--bg, #f1f5f9)" }} />
-      </div>
+      </section>
     </div>
   );
 }

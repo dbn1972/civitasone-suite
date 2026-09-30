@@ -249,6 +249,31 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     return sendAccepted(reply, acceptedResponseSchema, await commands.applyLeave(ctx, applyBody));
   });
 
+  // GAP-HR-LEAVE-APPLY-01: read-only preview of what a submit would actually
+  // debit. ApplyLeaveForm.tsx's calcDays() is a naive inclusive calendar-day
+  // count; the real debit (BUG-1 fix, above) comes from enforceCcsLeaveRules
+  // running the CCS rules engine (holidays/sandwich/prefix-suffix aware) —
+  // the applicant previously never saw that number until after submitting.
+  // Reuses enforceCcsLeaveRules verbatim (same IDOR guard, same engagement-
+  // eligibility gate, same overlap check, same rules-engine call) so preview
+  // and submit can never diverge — this is not a second implementation of
+  // that logic, just the same one without the trailing commands.applyLeave
+  // publish. A rule violation / insufficient balance throws the same
+  // HttpError (422 etc.) submit itself would throw, which the client shows
+  // as a blocking inline error instead of letting a native confirm() past it.
+  app.post("/v1/hrms/leave-requests/preview", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const body = applyLeaveBody.parse(req.body);
+    const computedDays = await enforceCcsLeaveRules(ctx, body, req);
+    return reply.send({
+      computedDays: computedDays ?? body.daysApplied,
+      // false for a leave code outside the CCS engine (e.g. EOL/MED) — the
+      // client already shows the "approximate" framing for those, unchanged.
+      engineApplied: computedDays != null,
+    });
+  });
+
   app.patch("/v1/hrms/leave-applications/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager"]);
