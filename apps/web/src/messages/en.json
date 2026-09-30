@@ -1225,17 +1225,15 @@
   },
   "designationsTable": {
     "rowErrorRequired": "Code and name are required",
-    "rowErrorLevelInteger": "Level must be a positive integer if provided",
+    "rowErrorLevelInteger": "Level must be a whole number between 1 and 18 if provided",
     "colCode": "Code",
     "colDesignation": "Designation",
     "colPayLevel": "Pay Level (7th CPC)",
-    "colGradePay": "Grade Pay (₹)",
     "colServiceGroup": "Service Group",
     "colPayGrade": "Pay Grade",
     "designationCodeAriaLabel": "Designation code",
     "designationNameAriaLabel": "Designation name",
     "payLevelAriaLabel": "Pay level (1–18)",
-    "computedOnSave": "computed on save",
     "payGradeAriaLabel": "Pay grade",
     "savingBtn": "Saving…",
     "saveBtn": "Save",
@@ -1396,9 +1394,13 @@
   "employeeDetail": {
     "notFoundTitle": "Employee Profile",
     "notFoundMessage": "Employee not found.",
+    "errorTitle": "Couldn't load profile",
     "loadingTitle": "Employee Profile",
     "loadingSubtitle": "Loading profile…",
     "quickActionsTitle": "Quick Actions",
+    "lifecycleActionsTitle": "Lifecycle (HR only)",
+    "actionsUnavailableExited": "Lifecycle actions are unavailable — this employee has left the organisation.",
+    "actionsUnavailableOther": "Actions are unavailable while the employee is {status}.",
     "actionApplyLeave": "🌴 Apply Leave",
     "actionSalarySlips": "🧾 Salary Slips",
     "actionInitiateTransfer": "🔄 Initiate Transfer",
@@ -1417,6 +1419,11 @@
     "fieldReportsTo": "Reports To",
     "fieldEmail": "Email",
     "fieldPhone": "Phone",
+    "statutoryBankTitle": "Statutory & Bank",
+    "fieldPan": "PAN",
+    "fieldBankAccount": "Bank Account",
+    "fieldBankIfsc": "Bank IFSC",
+    "maskedAriaLabel": "Masked — last four digits shown",
     "lifecycleTitle": "Service History / Lifecycle Timeline"
   },
   "employeeEdit": {
@@ -1458,9 +1465,15 @@
     "pranLabel": "PRAN (NPS Account)",
     "pranPlaceholder": "12-digit PRAN",
     "statutoryNote": "Bank account and IFSC are required for salary disbursement. UAN is required for EPFO credit.",
+    "noAsteriskError": "This still contains part of the masked value shown before — please clear it and type the real number.",
+    "sensitiveConfirmTitle": "Confirm bank/statutory change",
+    "sensitiveConfirmDesc": "You're changing a bank account, IFSC, UAN, ESIC, or PRAN number. This is audited with a reason.",
+    "sensitiveReasonLabel": "Reason for change",
+    "sensitiveConfirmBtn": "Confirm change",
     "savingBtn": "Saving…",
     "saveChangesBtn": "Save Changes",
-    "cancelBtn": "Cancel"
+    "cancelBtn": "Cancel",
+    "loadingLabel": "Loading edit form…"
   },
   "employeeFyLookup": {
     "formTitle": "Look Up Form 12BA",
@@ -1623,10 +1636,10 @@
     "payGradeLabel": "Pay Grade",
     "selectGrade": "Select grade",
     "employmentTypeLabel": "Employment Type",
-    "gradeGroupA1": "Group A — Grade 1 (Pay Level 15–18)",
-    "gradeGroupA2": "Group A — Grade 2 (Pay Level 12–14)",
-    "gradeGroupB": "Group B (Pay Level 6–11)",
-    "gradeGroupC": "Group C (Pay Level 1–5)",
+    "gradeGroupA": "Group A",
+    "gradeGroupB": "Group B",
+    "gradeGroupC": "Group C",
+    "gradeComputedNote": "Computed automatically from the selected designation's pay level.",
     "gradeMts": "MTS",
     "gradeContractual": "Contractual",
     "empTypePermanent": "Permanent",
@@ -4490,7 +4503,9 @@
     "cardTitle": "Vigilance Cases Register",
     "filterPlaceholder": "Filter by employee, department or inquiry officer…",
     "emptyTitle": "No vigilance cases on record",
-    "emptyMessage": "Major departmental proceedings appear here — registered by the Vigilance Unit with charge memos, inquiry officer appointment, and penalty tracking under CCS (CCA) Rules."
+    "emptyMessage": "Major departmental proceedings appear here — registered by the Vigilance Unit with charge memos, inquiry officer appointment, and penalty tracking under CCS (CCA) Rules.",
+    "confidentialBannerTitle": "Confidential — Vigilance",
+    "confidentialBannerBody": "This register contains sensitive personal data relating to named employees under vigilance proceedings, including cases that were later dropped. Access is restricted to authorised HR/Vigilance roles and is logged."
   },
   "wfhForm": {
     "ariaLabel": "Work From Home request form",
@@ -4838,7 +4853,9 @@
     "filterPlaceholder": "Filter by employee, department or charge…",
     "emptyTitle": "No disciplinary cases on record",
     "emptyMessage": "All departmental proceedings under CCS (CCA) Rules appear here — both major vigilance cases (charge memo / inquiry) and minor proceedings.",
-    "vigilanceOnly": "Vigilance Only"
+    "vigilanceOnly": "Vigilance Only",
+    "confidentialBannerTitle": "Confidential — Disciplinary Cases",
+    "confidentialBannerBody": "This register contains sensitive personal data relating to named employees under disciplinary proceedings. Access is restricted to authorised HR roles and is logged."
   },
   "disciplinaryDetail": {
     "title": "Disciplinary case {caseLabel}",

@@ -7,7 +7,10 @@ import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 type Dept = { id: string; name: string };
-type Desig = { id: string; name: string };
+// `level` (optional — a designation need not have one) feeds Step2's
+// computed Service Group (GAP-HR-EMPLOYEES-NEW-05); GET /v1/hrms/designations
+// already returns it today, this type just didn't ask for it before.
+type Desig = { id: string; name: string; level?: number | null };
 type EmpSummary = { id: string; name: string; designationName?: string };
 
 /**

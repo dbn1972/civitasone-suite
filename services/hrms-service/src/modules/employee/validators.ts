@@ -99,8 +99,20 @@ export const updateEmployeeBody = z.object({
   sacCode:        z.string().max(6).optional(),
   agencyRef:      z.string().max(64).optional(),
   napsId:         z.string().max(24).optional(),
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: required (by routes.ts, not by this
+  // schema -- optional here so a non-sensitive edit, e.g. email alone,
+  // never needs one) whenever the patch touches bankAccountNo/bankIfsc/
+  // uanNumber/esicIpNumber/pran. Never persisted verbatim into hrms_
+  // employees itself -- consumed only by the audit trail (employee/
+  // consumer.ts).
+  reason:         z.string().trim().min(10).max(500).optional(),
 });
 export type UpdateEmployeeBody = z.infer<typeof updateEmployeeBody>;
+
+// GAP-HR-EMPLOYEES-DETAIL-EDIT-03: shared between routes.ts's synchronous
+// pre-check and anything else that needs to know "does this patch change
+// something sensitive enough to require a reason".
+export const SENSITIVE_UPDATE_FIELDS = ["bankAccountNo", "bankIfsc", "uanNumber", "esicIpNumber", "pran"] as const;
 
 export const employeeQueryParams = z.object({
   empId: z.string().uuid().optional(),

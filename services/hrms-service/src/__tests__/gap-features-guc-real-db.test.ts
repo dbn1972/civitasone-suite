@@ -349,36 +349,40 @@ describe("Certifications — different schema entirely (training.hrms_nomination
 });
 
 describe("Disciplinary cases & Vigilance — GUC fix (read-only lists; mutating routes already fixed in PR #1555)", () => {
+  // GAP-HR-DISCIPLINARY-01 / GAP-HR-VIGILANCE-01 (PII/DPDP): both list routes
+  // now return a truncated `charges_summary`, not the full `charges` field —
+  // every allegation seeded in this describe block is well under the 80-char
+  // summary limit, so the field is only renamed here, never truncated.
   it("a minor case is visible on the disciplinary-cases list but not on the vigilance (major-only) list", async () => {
     await seedDisciplinaryCase(TENANT_A, { employeeId: aliceEmpId, proceedingType: "minor", allegation: "Late attendance pattern", createdBy: HR_A });
 
     const disc = await app.inject({ method: "GET", url: "/v1/hrms/disciplinary-cases", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
     expect(disc.statusCode).toBe(200);
-    expect(disc.json().data.some((c: { charges: string; employee: string }) => c.charges === "Late attendance pattern" && c.employee === "Alice A")).toBe(true);
+    expect(disc.json().data.some((c: { charges_summary: string; employee: string }) => c.charges_summary === "Late attendance pattern" && c.employee === "Alice A")).toBe(true);
 
     const vig = await app.inject({ method: "GET", url: "/v1/hrms/vigilance", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
     expect(vig.statusCode).toBe(200);
-    expect(vig.json().data.some((c: { charges: string }) => c.charges === "Late attendance pattern")).toBe(false);
+    expect(vig.json().data.some((c: { charges_summary: string }) => c.charges_summary === "Late attendance pattern")).toBe(false);
   });
 
   it("a major case is visible on both lists (vigilance is disciplinary-cases filtered to proceeding_type='major', not a separate table)", async () => {
     await seedDisciplinaryCase(TENANT_A, { employeeId: bobEmpId, proceedingType: "major", allegation: "Alleged bribery", createdBy: HR_A });
 
     const disc = await app.inject({ method: "GET", url: "/v1/hrms/disciplinary-cases", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
-    expect(disc.json().data.some((c: { charges: string }) => c.charges === "Alleged bribery")).toBe(true);
+    expect(disc.json().data.some((c: { charges_summary: string }) => c.charges_summary === "Alleged bribery")).toBe(true);
 
     const vig = await app.inject({ method: "GET", url: "/v1/hrms/vigilance", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
-    expect(vig.json().data.some((c: { charges: string; employee: string }) => c.charges === "Alleged bribery" && c.employee === "Bob A")).toBe(true);
+    expect(vig.json().data.some((c: { charges_summary: string; employee: string }) => c.charges_summary === "Alleged bribery" && c.employee === "Bob A")).toBe(true);
   });
 
   it("tenant B's disciplinary case is invisible on tenant A's lists (cross-tenant isolation)", async () => {
     await seedDisciplinaryCase(TENANT_B, { employeeId: zaraEmpId, proceedingType: "major", allegation: "Tenant-B-only case", createdBy: HR_B });
 
     const disc = await app.inject({ method: "GET", url: "/v1/hrms/disciplinary-cases", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
-    expect(disc.json().data.some((c: { charges: string }) => c.charges === "Tenant-B-only case")).toBe(false);
+    expect(disc.json().data.some((c: { charges_summary: string }) => c.charges_summary === "Tenant-B-only case")).toBe(false);
 
     const vig = await app.inject({ method: "GET", url: "/v1/hrms/vigilance", headers: auth(TENANT_A, HR_A, ["hr_admin"]) });
-    expect(vig.json().data.some((c: { charges: string }) => c.charges === "Tenant-B-only case")).toBe(false);
+    expect(vig.json().data.some((c: { charges_summary: string }) => c.charges_summary === "Tenant-B-only case")).toBe(false);
   });
 });
 

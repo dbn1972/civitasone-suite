@@ -6,7 +6,7 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody, employeeListQuery } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody, employeeListQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
@@ -218,6 +218,24 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = updateEmployeeBody.parse(req.body);
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: bank account/IFSC/UAN/ESIC/PRAN route
+    // salary and statutory credits, edited on this same generic profile-
+    // update route with no separate confirmation and, until now, no
+    // required reason -- a single hr_officer could change salary bank
+    // details with nothing but the resulting audit "update" outcome (no
+    // old/new, no changed-field list) to show for it later. Per the
+    // published decision packet's recommendation (reason + masked-old/new
+    // audit; a second-approver maker-checker step was left an open
+    // question, not made a hard requirement): require a real reason before
+    // any of these five fields changes at all.
+    const touchesSensitiveField = SENSITIVE_UPDATE_FIELDS.some((f) => body[f] !== undefined);
+    if (touchesSensitiveField && !body.reason) {
+      throw new HttpError(
+        400,
+        "REASON_REQUIRED",
+        "A reason (at least 10 characters) is required when changing bank account, IFSC, UAN, ESIC, or PRAN.",
+      );
+    }
     // SEC CRITICAL (status-integrity fix): this generic profile-update route
     // had no status check at all — a terminated/separated/retired employee's
     // mobile/email/bank-account/IFSC etc. could still be edited. Synchronous

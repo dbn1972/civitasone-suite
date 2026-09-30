@@ -36,10 +36,16 @@ const createDeptBody = z.object({
   headEmployeeId: z.string().uuid().optional(),
 });
 
+// GAP-HR-DESIGNATIONS-01: the 7th CPC pay matrix only defines levels 1-18
+// (mirrors apps/web/src/lib/payLevels.ts's MIN_PAY_LEVEL/MAX_PAY_LEVEL — kept
+// as a literal 1/18 here rather than a cross-service import since web and
+// hrms-service are separate deployables with no shared validation package
+// today). Previously nonnegative-only, so e.g. level 40 saved and then
+// rendered as an unclassifiable "—" on every screen that reads it back.
 const createDesignationBody = z.object({
   code: z.string().min(1, "Designation code is required").max(20),
   name: z.string().min(2, "Designation name is required").max(200),
-  level: z.number().int().nonnegative().optional(),
+  level: z.number().int().min(1, "Pay level must be between 1 and 18.").max(18, "Pay level must be between 1 and 18.").optional(),
   payGrade: z.string().max(30).optional(),
 });
 
