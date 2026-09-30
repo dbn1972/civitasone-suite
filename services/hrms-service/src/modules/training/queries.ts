@@ -1,9 +1,22 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 
+/**
+ * GAP-HR-TRAINING-05: a UTC calendar-date comparison put the "upcoming" /
+ * "ongoing" cutover up to 5.5 hours off from what a viewer in India actually
+ * sees -- e.g. at 00:30 IST on the 5th (still 19:00 UTC on the 4th), a
+ * programme starting "today" (the 5th) still read as "upcoming" instead of
+ * "ongoing". `en-CA` gives an unambiguous YYYY-MM-DD string directly, the
+ * same Intl.DateTimeFormat pattern already used for this elsewhere in the
+ * codebase (e.g. GAP-HR-TRANSFER-02's order-date fix).
+ */
+function todayInIst(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
+
 function mapTrainingStatus(status: string, fromDate: string, toDate: string): "upcoming" | "ongoing" | "completed" | "cancelled" {
   if (status === "cancelled") return "cancelled";
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayInIst();
   if (today < fromDate) return "upcoming";
   if (today > toDate) return "completed";
   return "ongoing";
@@ -16,7 +29,13 @@ export async function listTrainingPrograms(tenantId: string, limit: number) {
     return rows.map((r) => ({
       id: r.id,
       title: r.title,
-      category: "general",
+      // GAP-HR-TRAINING-02/NEW-02: real value from the row (migration
+      // 0162), or null when HR genuinely never set one -- never a
+      // hard-coded 'general' that the web layer used to relabel as
+      // "Mandatory" for anything it didn't recognise.
+      category: r.category ?? null,
+      mode: r.mode ?? null,
+      enrollmentDeadline: r.enrollmentDeadline ?? null,
       trainerName: r.facilitator ?? undefined,
       startDate: r.fromDate,
       endDate: r.toDate,

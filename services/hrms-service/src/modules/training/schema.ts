@@ -16,6 +16,13 @@ export const hrmsTrainings = trainingSchema.table("hrms_trainings", {
   status:          varchar("status", { length: 24 }).notNull().default("planned"),
   // SVC-121 -> SVC-124: optional competency code fed on training completion.
   competencyRef:   text("competency_ref"),
+  // GAP-HR-TRAINING-NEW-02 (migration 0162): real category/mode/deadline,
+  // replacing the hard-coded 'general' category and the venue-text-keyword
+  // mode guess that used to live in queries.ts / the web _components. NULL
+  // on every pre-existing row -- never backfilled to a guessed value.
+  category:            varchar("category", { length: 16 }),
+  mode:                varchar("mode", { length: 16 }),
+  enrollmentDeadline:  date("enrollment_deadline"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),

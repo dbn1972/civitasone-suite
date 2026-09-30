@@ -2,7 +2,6 @@ import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { getTrainingPrograms } from "../../../_data/loaders";
-import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { UpcomingPrograms } from "./_components/UpcomingPrograms";
 import { ProgramCard } from "./_components/ProgramCard";
@@ -35,7 +34,20 @@ export default async function TrainingPage() {
         subtitle={t("subtitle")}
         actions={
           canCreate ? (
-            <Link href="/hr/training/new" className="btn primary">{t("newProgram")}</Link>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {/*
+               * GAP-HR-TRAINING-04: these two links used to live INSIDE the
+               * non-empty/non-error branch below, so an HR admin with zero
+               * programmes (or hitting an API error) had no way to reach
+               * Nominations/Feedback from this page at all. They are also
+               * HR-only destinations, so gating them the same way as
+               * "+ New Program" (canCreate) avoids sending a non-HR viewer
+               * to a page that only shows PermissionDenied.
+               */}
+              <Link href="/hr/training/nominations" className="btn ghost">{t("viewNominations")}</Link>
+              <Link href="/hr/training/feedback" className="btn ghost">{t("feedbackReports")}</Link>
+              <Link href="/hr/training/new" className="btn primary">{t("newProgram")}</Link>
+            </div>
           ) : undefined
         }
       />
@@ -68,31 +80,21 @@ export default async function TrainingPage() {
             <UpcomingPrograms programs={programs} />
           )}
 
-          {/* Full program grid */}
+          {/*
+           * GAP-HR-TRAINING-05: this Card's children used to be
+           * `programs.length > 0 ? grid : <EmptyState innerEmpty…/>` -- but
+           * we only ever reach this branch when `total` (=== programs.length)
+           * is already > 0, so the innerEmpty half could never render. The
+           * unused innerEmptyTitle/innerEmptyMessage i18n keys are removed
+           * in the same change (see messages/en.json).
+           */}
           <Card title={t("allProgramsTitle")}>
-            {programs.length > 0 ? (
-              <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {programs.map((p) => (
-                  <ProgramCard
-                    key={p.id}
-                    program={p}
-                  />
-                ))}
-              </div>
-            ) : (
-              <EmptyState
-                icon="📚"
-                title={t("innerEmptyTitle")}
-                message={t("innerEmptyMessage")}
-                action={canCreate ? <Link href="/hr/training/new" className="btn primary">{t("newProgram")}</Link> : undefined}
-              />
-            )}
+            <div className="p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {programs.map((p) => (
+                <ProgramCard key={p.id} program={p} />
+              ))}
+            </div>
           </Card>
-
-          <div style={{ marginTop: 12, display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <Link href="/hr/training/nominations" className="btn ghost">{t("viewNominations")}</Link>
-            <Link href="/hr/training/feedback" className="btn ghost">{t("feedbackReports")}</Link>
-          </div>
         </>
       )}
     </div>
