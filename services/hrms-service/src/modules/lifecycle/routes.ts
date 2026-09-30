@@ -69,6 +69,18 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       department: deptMap.get(empMap.get(r.employeeId)?.departmentId ?? "") ?? "—",
       fromDesignationName: desigMap.get(r.fromDesigId) ?? "—",
       toDesignationName: desigMap.get(r.toDesigId) ?? "—",
+      // GAP-HR-PROMOTION-01/06: `...r` above still carries the raw
+      // hrms_promotions row, including newBasicMinor as a plain JS bigint
+      // (lifecycle/schema.ts: bigint({mode:"bigint"})). JSON has no bigint
+      // type and this repo has no global BigInt serializer (confirmed: grep
+      // for "BigInt.prototype.toJSON" across services/hrms-service/src and
+      // packages finds none) -- reply.send(payload) would throw
+      // "TypeError: Do not know how to serialize a BigInt" for every
+      // promotion row that actually recorded a new basic pay, which is the
+      // core data this page exists to show. Overriding it here (after the
+      // spread, so this wins) to the same string-or-null shape formatMoney
+      // and the web PromotionRow type already expect.
+      newBasicMinor: r.newBasicMinor != null ? r.newBasicMinor.toString() : null,
     }));
     return reply.send({ data });
   });

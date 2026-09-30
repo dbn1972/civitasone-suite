@@ -2,7 +2,7 @@
 /**
  * PromotionCard — Sprint 13 / Lifecycle Phase 1
  * Shows: current designation → new designation (with arrow), effective date,
- * order number, increment in pay. Approval chain: Dept Head → HR → Finance → Signed.
+ * order number, increment in pay. Stepper: Raised → eOffice decision → Effective.
  *
  * GAP-HR-DPC-02: GET /v1/hrms/lifecycle/promotions (services/hrms-service/
  * .../lifecycle/routes.ts) already batch-resolves employeeName / department /
@@ -30,6 +30,24 @@
  * populate it from (see this GAP's own two options: add a migration + decide
  * who sets it, or drop the field; dropping is the safe default here, see PR
  * description).
+ *
+ * GAP-HR-PROMOTION-01/06: newBasicMinor now arrives pre-serialized as a
+ * string (lifecycle/routes.ts overrides the raw bigint field before
+ * replying — see that route's own comment) -- passed straight to
+ * formatMoney, which already accepts a numeric string/bigint directly.
+ * `Number(promotion.newBasicMinor)` was both unnecessary (formatMoney
+ * handles the string form itself) and, in principle, precision-lossy above
+ * 2^53 paise.
+ *
+ * GAP-HR-PROMOTION-02/04: the old 4-step "Dept Head → HR → Finance →
+ * Signed" chain modeled a maker-checker flow this module never actually
+ * uses -- the real flow (promotion-eoffice-consumer.ts) is a single eOffice
+ * file decision that moves a promotion pending_approval -> pending_effective
+ * (approved, effective on a future date) or cancelled, then -> completed
+ * once that date arrives. The stepper below models THAT flow; legacy rows
+ * that still carry the old dept_approved/hr_approved/finance_approved
+ * statuses (pre-eOffice data) are folded into the nearest equivalent step
+ * rather than dropped.
  */
 import { useTranslations } from "next-intl";
 import { StatusPill } from "@/app/_components/ds";
@@ -51,7 +69,8 @@ export type PromotionRow = {
   effectiveDate?: string | null;
   orderNo?: string | null;
   orderRef?: string | null;
-  newBasicMinor?: number | null;
+  // GAP-HR-PROMOTION-01/06: string, not number -- see file header comment.
+  newBasicMinor?: string | null;
   status: string;
   createdAt?: string;
 } & Record<string, unknown>;
@@ -61,6 +80,10 @@ export type PromotionRow = {
 // these lookup tables only carry the status-string -> key mapping.
 const STATUS_LABEL_KEYS: Record<string, string> = {
   pending: "statusInitiated",
+  // GAP-HR-PROMOTION-02: these two real eOffice statuses had no label at
+  // all before -- the raw backend code was printed verbatim.
+  pending_approval: "statusPendingApproval",
+  pending_effective: "statusPendingEffective",
   dept_approved: "statusDeptApproved",
   hr_approved: "statusHrApproved",
   finance_approved: "statusFinanceApproved",
@@ -70,20 +93,23 @@ const STATUS_LABEL_KEYS: Record<string, string> = {
   cancelled: "statusCancelled",
 };
 
-const CHAIN: Array<{ key: string; labelKey: string; icon: string }> = [
-  { key: "dept_approved",    labelKey: "chainDeptHead", icon: "🏢" },
-  { key: "hr_approved",      labelKey: "chainHr",        icon: "👥" },
-  { key: "finance_approved", labelKey: "chainFinance",   icon: "💰" },
-  { key: "signed",           labelKey: "chainSigned",    icon: "✍️" },
+const STEPS: Array<{ key: string; labelKey: string; icon: string }> = [
+  { key: "raised",           labelKey: "chainRaised",          icon: "📝" },
+  { key: "eoffice_decision", labelKey: "chainEofficeDecision",  icon: "🏛️" },
+  { key: "effective",        labelKey: "chainEffective",        icon: "✅" },
 ];
 
-function chainIndex(status: string): number {
+// GAP-HR-PROMOTION-02: pending_approval/pending_effective previously mapped
+// to nothing (chainIndex returned -1 for both), so the chain never advanced
+// for what is, in practice, most real rows.
+function stepIndex(status: string): number {
   const map: Record<string, number> = {
-    pending: -1,
-    dept_approved: 0,
-    hr_approved: 1,
-    finance_approved: 2, approved: 2,
-    signed: 3, completed: 3,
+    pending: -1,             // not yet raised for eOffice approval
+    pending_approval: 0,     // raised; awaiting the eOffice decision
+    dept_approved: 0, hr_approved: 0, // legacy pre-eOffice statuses: still "raised, in flight"
+    pending_effective: 1,    // eOffice approved; awaiting the effective date
+    finance_approved: 1, approved: 1, // legacy equivalent of "approved, not yet effected"
+    completed: 2, signed: 2,
   };
   return map[status] ?? -1;
 }
@@ -94,7 +120,7 @@ export function PromotionCard({ promotion }: Props) {
   const t           = useTranslations("promotionCard");
   const statusKey   = STATUS_LABEL_KEYS[promotion.status];
   const statusLabel = statusKey ? t(statusKey) : promotion.status;
-  const chainIdx    = chainIndex(promotion.status);
+  const stepIdx     = stepIndex(promotion.status);
   const isCancelled  = promotion.status === "cancelled";
   // GAP-HR-DPC-02/07: "—" for a genuinely unnamed employee, never the raw
   // UUID and never a hard-coded English "Unknown". `employeeName` is this
@@ -105,7 +131,7 @@ export function PromotionCard({ promotion }: Props) {
   const fromLabel   = promotion.fromDesignationName ?? promotion.fromGrade ?? "—";
   const toLabel     = promotion.toDesignationName   ?? promotion.toGrade   ?? "—";
   const payStr      = promotion.newBasicMinor != null
-    ? formatMoney(Number(promotion.newBasicMinor))
+    ? formatMoney(promotion.newBasicMinor)
     : null;
 
   return (
@@ -131,7 +157,7 @@ export function PromotionCard({ promotion }: Props) {
             <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("currentLabel")}</p>
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 600 }}>{fromLabel}</p>
           </div>
-          <div style={{ fontSize: 22, color: "var(--info, #2563eb)", flexShrink: 0 }}>&#8594;</div>
+          <div style={{ fontSize: 22, color: "var(--info, #2563eb)", flexShrink: 0 }} aria-hidden="true">&#8594;</div>
           <div style={{ textAlign: "center" }}>
             <p style={{ margin: 0, fontSize: "0.6875rem", color: "var(--mut)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{t("promotedToLabel")}</p>
             <p style={{ margin: "4px 0 0", fontSize: "0.9375rem", fontWeight: 700, color: "var(--good, #16a34a)" }}>{toLabel}</p>
@@ -173,9 +199,9 @@ export function PromotionCard({ promotion }: Props) {
             </p>
           ) : (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            {CHAIN.map(({ key, labelKey, icon }, i) => {
-              const done   = i <= chainIdx;
-              const active = i === chainIdx + 1;
+            {STEPS.map(({ key, labelKey, icon }, i) => {
+              const done   = i <= stepIdx;
+              const active = i === stepIdx + 1;
               return (
                 <div key={key} style={{
                   display: "flex", alignItems: "center", gap: 6,
@@ -185,7 +211,7 @@ export function PromotionCard({ promotion }: Props) {
                   fontSize: "0.8125rem", fontWeight: done || active ? 600 : 400,
                   color: done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--mut)",
                 }}>
-                  <span>{done ? "✓" : icon}</span>
+                  <span aria-hidden="true">{done ? "✓" : icon}</span>
                   <span>{t(labelKey)}</span>
                 </div>
               );

@@ -2,8 +2,17 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PromoteWithApproval } from "./PromoteWithApproval";
 import { PromotionCard, type PromotionRow } from "./_components/PromotionCard";
+
+// GAP-HR-PROMOTION-03: matches employee/routes.ts's own HR_ROLES gate on
+// POST .../promotion/submit-approval exactly -- keep in sync if that ever
+// changes. The wizard button used to render for every /hr viewer (hr/
+// layout.tsx admits manager and employee too), so an employee or manager
+// could fill in two steps of a confidential eFile action before hitting a
+// raw 403 on submit.
+const PROMOTION_SUBMIT_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 async function getData(): Promise<LoaderResult<PromotionRow[]>> {
   const r = await fetchJson<unknown, PromotionRow[]>("/api/v1/hrms/lifecycle/promotions", [], {
@@ -37,11 +46,20 @@ async function getData(): Promise<LoaderResult<PromotionRow[]>> {
 export default async function PromotionPage() {
   const t = await getTranslations("promotion");
   const { data: items, source, status, errorMessage } = await getData();
+  const canPromote = getSessionRoles().some((r) => PROMOTION_SUBMIT_ROLES.includes(r));
 
-  const approved  = items.filter((i) => ["approved", "signed", "completed", "finance_approved"].includes(i.status)).length;
-  const pending   = items.filter((i) => ["pending"].includes(i.status)).length;
-  const inApproval= items.filter((i) => ["dept_approved", "hr_approved"].includes(i.status)).length;
-  const completed = items.filter((i) => ["signed", "completed"].includes(i.status)).length;
+  // GAP-HR-PROMOTION-02: pending_approval/pending_effective previously
+  // landed in none of these buckets (only Total counted them) -- the real
+  // eOffice flow (promotion-eoffice-consumer.ts) produces pending ->
+  // pending_approval -> pending_effective -> completed/cancelled, so most
+  // real rows were invisible to every counter except Total. dept_approved/
+  // hr_approved/finance_approved/approved are legacy pre-eOffice statuses,
+  // kept so old rows still count correctly.
+  const approved   = items.filter((i) => ["approved", "signed", "completed", "finance_approved"].includes(i.status)).length;
+  const pending    = items.filter((i) => ["pending", "pending_approval"].includes(i.status)).length;
+  const inApproval = items.filter((i) => ["dept_approved", "hr_approved", "pending_effective"].includes(i.status)).length;
+  const completed  = items.filter((i) => ["signed", "completed"].includes(i.status)).length;
+  const cancelled  = items.filter((i) => i.status === "cancelled").length;
 
   const tableColumns: { key: keyof PromotionRow & string; label: string; cellType?: "status" }[] = [
     { key: "employee",     label: t("colEmployee")       },
@@ -59,7 +77,7 @@ export default async function PromotionPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
-        actions={<PromoteWithApproval />}
+        actions={canPromote ? <PromoteWithApproval /> : undefined}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
@@ -69,6 +87,7 @@ export default async function PromotionPage() {
         <StatCard icon="🔄" iconBg="var(--primary-soft, #ede9fe)"  label={t("statInApproval")}       value={inApproval} />
         <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)"  label={t("statInitiated")}         value={pending} />
         <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)"  label={t("statSignedIssued")}   value={completed} />
+        <StatCard icon="🚫" iconBg="var(--badbg, #fff1f0)"  label={t("statCancelled")}     value={cancelled} />
       </StatGrid>
 
       {/* Card grid view */}
