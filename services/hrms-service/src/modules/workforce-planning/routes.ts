@@ -5,6 +5,7 @@
  *  GET /v1/hrms/workforce/headcount            — current headcount by dept/grade/type
  *  GET /v1/hrms/workforce/vacancy-forecast     — projected vacancies (retirements 1/3/5 years)
  *  GET /v1/hrms/workforce/retirement-forecast  — employees retiring by month/quarter/year
+ *  GET /v1/hrms/workforce/analytics-kpis       — same-schema KPIs (avg tenure, gender ratio)
  *  GET /v1/hrms/workforce/budget               — position budget vs actual filled
  *  GET /v1/hrms/workforce/diversity            — SC/ST/OBC/EWS/PH composition vs mandate
  *
@@ -17,6 +18,37 @@ import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
 
 const READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "finance_officer"];
+
+/**
+ * GAP-HR-WORKFORCE-07: superannuation age used to be two independent literal
+ * `60`s (vacancy-forecast's CASE expression and retirement-forecast's WHERE
+ * filter) plus a THIRD hardcoded copy as the literal SQL string `'60 years'`
+ * inside retirement-forecast's `groupExpr` — three places that could silently
+ * diverge if only one were ever edited. Consolidated to one constant, used by
+ * every query below (including `groupExpr`, via `AGE_INTERVAL_SQL` rather
+ * than a second hardcoded "60 years" string), and surfaced in both
+ * endpoints' `meta.retirementAge` so the web can show it as a footnote
+ * ("Assumes superannuation at 60 years") instead of asserting it as fact with
+ * no visible basis.
+ *
+ * Left open (genuine business-policy call, not an engineering one): whether
+ * different tenant editions (Govt/PSU/Small Office) or employee categories
+ * (e.g. teachers) should retire at a different age, and whether this should
+ * become a tenant-config value. Not implemented here.
+ */
+const RETIREMENT_AGE_YEARS = 60;
+const AGE_INTERVAL_SQL = `INTERVAL '${RETIREMENT_AGE_YEARS} years'`;
+
+/**
+ * GAP-HR-WORKFORCE-ANALYTICS-06: per the published HR decision packet
+ * (reviewed directly — "DPDP & who sees what" theme, GAP-HR-WORKFORCE-
+ * ANALYTICS-06 card, tagged "Applying default"): a gender ratio computed
+ * over a tiny group re-identifies someone (a "ratio" of 1-of-2 people). The
+ * packet's stated default — "Suppress any breakdown where the underlying
+ * group is smaller than 10" — is applied here, at the source, rather than
+ * only hidden client-side.
+ */
+const GENDER_SUPPRESSION_THRESHOLD = 10;
 
 /**
  * employee.hrms_employees / hrms_departments / hrms_designations all have RLS
@@ -89,14 +121,12 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
 
-    // Superannuation age default: 60 years
-    const retirementAge = 60;
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT
         CASE
-          WHEN (date_of_birth + INTERVAL '${tx.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '1 year') THEN '1_year'
-          WHEN (date_of_birth + INTERVAL '${tx.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '3 years') THEN '3_years'
-          WHEN (date_of_birth + INTERVAL '${tx.unsafe(String(retirementAge))} years') <= (CURRENT_DATE + INTERVAL '5 years') THEN '5_years'
+          WHEN (date_of_birth + ${tx.unsafe(AGE_INTERVAL_SQL)}) <= (CURRENT_DATE + INTERVAL '1 year') THEN '1_year'
+          WHEN (date_of_birth + ${tx.unsafe(AGE_INTERVAL_SQL)}) <= (CURRENT_DATE + INTERVAL '3 years') THEN '3_years'
+          WHEN (date_of_birth + ${tx.unsafe(AGE_INTERVAL_SQL)}) <= (CURRENT_DATE + INTERVAL '5 years') THEN '5_years'
           ELSE 'beyond_5_years'
         END AS horizon,
         COUNT(*)::int AS count
@@ -108,7 +138,7 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
       ORDER BY horizon
     `);
 
-    return reply.send({ data: rows });
+    return reply.send({ data: rows, meta: { retirementAge: RETIREMENT_AGE_YEARS } });
   });
 
   // Retirement forecast — employees retiring by month/quarter/year
@@ -121,14 +151,13 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
       years: z.coerce.number().int().min(1).max(10).default(3),
     }).parse(req.query);
 
-    const retirementAge = 60;
     let groupExpr: string;
     if (query.granularity === "month") {
-      groupExpr = "TO_CHAR(date_of_birth + INTERVAL '60 years', 'YYYY-MM')";
+      groupExpr = `TO_CHAR(date_of_birth + ${AGE_INTERVAL_SQL}, 'YYYY-MM')`;
     } else if (query.granularity === "quarter") {
-      groupExpr = "TO_CHAR(date_of_birth + INTERVAL '60 years', 'YYYY') || '-Q' || EXTRACT(QUARTER FROM date_of_birth + INTERVAL '60 years')";
+      groupExpr = `TO_CHAR(date_of_birth + ${AGE_INTERVAL_SQL}, 'YYYY') || '-Q' || EXTRACT(QUARTER FROM date_of_birth + ${AGE_INTERVAL_SQL})`;
     } else {
-      groupExpr = "TO_CHAR(date_of_birth + INTERVAL '60 years', 'YYYY')";
+      groupExpr = `TO_CHAR(date_of_birth + ${AGE_INTERVAL_SQL}, 'YYYY')`;
     }
 
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
@@ -139,13 +168,74 @@ export async function workforcePlanningRoutes(app: FastifyInstance): Promise<voi
       WHERE tenant_id = ${ctx.tenantId}
         AND status != 'separated'
         AND date_of_birth IS NOT NULL
-        AND (date_of_birth + INTERVAL '${tx.unsafe(String(retirementAge))} years')
+        AND (date_of_birth + ${tx.unsafe(AGE_INTERVAL_SQL)})
             BETWEEN CURRENT_DATE AND (CURRENT_DATE + INTERVAL '${tx.unsafe(String(query.years))} years')
       GROUP BY period
       ORDER BY period
     `);
 
-    return reply.send({ data: rows });
+    return reply.send({ data: rows, meta: { retirementAge: RETIREMENT_AGE_YEARS } });
+  });
+
+  // Analytics KPIs — GAP-HR-WORKFORCE-ANALYTICS-01.
+  //
+  // Deliberately narrow: `turnoverPct`, `absenteeismPct` and `monthlyTrend`
+  // need attendance/lifecycle history that lives in OTHER hrms-service
+  // modules with no queryable read model today. This module's own CLAUDE.md
+  // rule (module isolation, no cross-module joins) forbids reaching for that
+  // data directly, so rather than fake it, those three fields are simply
+  // never included in the response — `meta.unavailable` names them
+  // explicitly so the web can render an honest "not available" state
+  // instead of guessing why a field is missing. `avgTenureYears` (from
+  // `date_of_joining`) and the gender counts (from `gender`) both live on
+  // this module's own `employee.hrms_employees` rows, so they're safe to
+  // compute directly, same-schema, no join.
+  app.get("/v1/hrms/workforce/analytics-kpis", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+
+    const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE gender = 'female')::int AS female_count,
+        COUNT(*) FILTER (WHERE gender = 'male')::int AS male_count,
+        (AVG(CURRENT_DATE - date_of_joining) / 365.25)::float8 AS avg_tenure_years
+      FROM employee.hrms_employees
+      WHERE tenant_id = ${ctx.tenantId} AND status != 'separated'
+    `);
+
+    const row = (rows[0] ?? {}) as {
+      total?: number;
+      female_count?: number;
+      male_count?: number;
+      avg_tenure_years?: number | string | null;
+    };
+    const total = Number(row.total ?? 0);
+    const genderSuppressed = total < GENDER_SUPPRESSION_THRESHOLD;
+    const avgTenureYears =
+      row.avg_tenure_years !== null && row.avg_tenure_years !== undefined
+        ? Number(row.avg_tenure_years)
+        : null;
+
+    const data: {
+      avgTenureYears: number | null;
+      genderRatioF?: number;
+      genderRatioM?: number;
+    } = { avgTenureYears };
+
+    if (!genderSuppressed) {
+      data.genderRatioF = Number(row.female_count ?? 0);
+      data.genderRatioM = Number(row.male_count ?? 0);
+    }
+
+    return reply.send({
+      data,
+      meta: {
+        genderSuppressed,
+        genderSuppressionThreshold: GENDER_SUPPRESSION_THRESHOLD,
+        unavailable: ["turnoverPct", "absenteeismPct", "monthlyTrend"],
+      },
+    });
   });
 
   // Position budget vs actual filled
