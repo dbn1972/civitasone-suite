@@ -186,8 +186,13 @@ describe("PATCH /v1/hrms/leave-applications/:id/cancel — IDOR guard", () => {
 describe("PATCH /v1/hrms/leave-applications/:id/cancel — reason required for an APPROVED leave", () => {
   it("400 — cancelling an APPROVED leave with no reason is rejected", async () => {
     scopedReadMock.mockResolvedValueOnce([leaveApp(EMP_SELF_ID, "approved")]);
-    // No further scopedRead calls expected: the reason check runs before
-    // the IDOR ownership lookup even fires.
+    // SEC fix (status-disclosure oracle): the IDOR ownership lookup now
+    // runs BEFORE the reason check (previously the reverse, which let an
+    // unauthorized caller learn an application's status from which error
+    // code it got back). The actor here is the leave's own owner, so this
+    // resolveEmployeeForActor call resolves and the IDOR guard passes
+    // silently -- REASON_REQUIRED is still the one that ultimately fires.
+    scopedReadMock.mockResolvedValueOnce([empRow(EMP_SELF_ID)]);
 
     const r = await app.inject({
       method: "PATCH",
@@ -223,5 +228,58 @@ describe("PATCH /v1/hrms/leave-applications/:id/cancel — reason required for a
       payload: {},
     });
     expect(r.statusCode).toBe(202);
+  });
+});
+
+/**
+ * SEC fix (status-disclosure oracle, found in review): REASON_REQUIRED must
+ * run AFTER the IDOR ownership guard, never before it. Before this fix, an
+ * authenticated caller with NO relationship to an arbitrary application UUID
+ * (not its owner, not its manager) could distinguish "approved" (400
+ * REASON_REQUIRED) from "pending/draft" (403) just from the error code --
+ * a real, if low-severity, leak of the target's status on a money/approval-
+ * adjacent endpoint. These three use a genuinely body-less request (no
+ * `payload` key at all, not `payload: {}`) -- the exact shape every
+ * pre-existing caller sends, and the shape this fix was re-verified against.
+ */
+describe("PATCH /v1/hrms/leave-applications/:id/cancel — status-disclosure oracle ordering (SEC fix)", () => {
+  it("202 — body-less cancel of a PENDING leave by its owner still succeeds (no regression)", async () => {
+    scopedReadMock.mockResolvedValueOnce([leaveApp(EMP_SELF_ID, "pending")]);
+    scopedReadMock.mockResolvedValueOnce([empRow(EMP_SELF_ID)]);
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/leave-applications/${LEAVE_APP_ID}/cancel`,
+      headers: { authorization: `Bearer ${tok(["employee"], EMP_SELF_ID)}` },
+    });
+    expect(r.statusCode).toBe(202);
+  });
+
+  it("400 REASON_REQUIRED — body-less cancel of an APPROVED leave by its OWNER", async () => {
+    scopedReadMock.mockResolvedValueOnce([leaveApp(EMP_SELF_ID, "approved")]);
+    scopedReadMock.mockResolvedValueOnce([empRow(EMP_SELF_ID)]);
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/leave-applications/${LEAVE_APP_ID}/cancel`,
+      headers: { authorization: `Bearer ${tok(["employee"], EMP_SELF_ID)}` },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("REASON_REQUIRED");
+  });
+
+  it("403 FORBIDDEN, NOT 400 — body-less cancel of an APPROVED leave by a NON-owner/non-manager (the oracle case this fix closes)", async () => {
+    // Belongs to EMP_TARGET_ID; actor is a fully unrelated employee -- not
+    // the owner, not their manager.
+    scopedReadMock.mockResolvedValueOnce([leaveApp(EMP_TARGET_ID, "approved")]);
+    scopedReadMock.mockResolvedValueOnce([empRow(EMP_OTHER_ID)]);
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/leave-applications/${LEAVE_APP_ID}/cancel`,
+      headers: { authorization: `Bearer ${tok(["employee"], EMP_OTHER_ID)}` },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
   });
 });

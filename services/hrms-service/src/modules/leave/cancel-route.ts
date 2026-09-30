@@ -52,15 +52,6 @@ export async function leaveCancelRoutes(app: FastifyInstance): Promise<void> {
     if (application.status !== "approved" && application.status !== "pending" && application.status !== "draft") {
       throw new HttpError(422, "CANNOT_CANCEL", `cannot cancel a leave application in status: ${application.status}`);
     }
-    // GAP-HR-LEAVE-HISTORY-04: cancelling an APPROVED leave reverses a
-    // completed decision and re-credits the balance (feeds payroll LOP) --
-    // require an explicit reason for that specific case, same rule the web
-    // ConfirmDialog enforces client-side (requireReason when
-    // status==='approved'). A pending/draft cancel is unaffected.
-    if (application.status === "approved" && !body.reason) {
-      throw new HttpError(400, "REASON_REQUIRED", "a reason is required to cancel an approved leave application");
-    }
-
     // IDOR guard: same isSelf||isManagerOfTarget pattern the leave-apply route uses.
     // HR roles have full exemption; managers may cancel a direct report's leave;
     // employees may cancel only their own.
@@ -82,6 +73,27 @@ export async function leaveCancelRoutes(app: FastifyInstance): Promise<void> {
       if (!isSelf && !isManagerOfTarget) {
         throw new HttpError(403, "FORBIDDEN", "employees may only cancel their own leave applications (or, for managers, a direct report's)");
       }
+    }
+
+    // SEC (status-disclosure oracle, found in review): REASON_REQUIRED
+    // below must run AFTER the IDOR guard above, never before it -- it
+    // depends on `application.status`, which the IDOR guard has not yet
+    // authorized this caller to learn. Running it first let an
+    // authenticated caller who neither owns nor manages an arbitrary
+    // application UUID distinguish "approved" (400 REASON_REQUIRED) from
+    // "pending/draft" (403) for that UUID -- a real, newly-introduced
+    // low-severity status-disclosure oracle on a money/approval-adjacent
+    // endpoint. Ordering it here means every unauthorized caller gets the
+    // same 403 regardless of the target's actual status, same as before
+    // this cluster's change.
+    //
+    // GAP-HR-LEAVE-HISTORY-04: cancelling an APPROVED leave reverses a
+    // completed decision and re-credits the balance (feeds payroll LOP) --
+    // require an explicit reason for that specific case, same rule the web
+    // ConfirmDialog enforces client-side (requireReason when
+    // status==='approved'). A pending/draft cancel is unaffected.
+    if (application.status === "approved" && !body.reason) {
+      throw new HttpError(400, "REASON_REQUIRED", "a reason is required to cancel an approved leave application");
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.cancelLeave(ctx, id, body.reason));
