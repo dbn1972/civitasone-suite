@@ -5,7 +5,8 @@ import { fetchJson } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
-import { OnboardingChecklist, type ChecklistStep } from "../_components/OnboardingChecklist";
+import { type ChecklistStep } from "../_components/OnboardingChecklist";
+import { ChecklistWithActions } from "../_components/ChecklistWithActions";
 import { DocumentUploadCard, type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
 import { getTranslations } from "next-intl/server";
@@ -259,7 +260,7 @@ export default async function OnboardingDetailPage({ params }: Props) {
               background: "var(--card-bg, #fff)",
             }}
           >
-            <OnboardingChecklist steps={checklist} />
+            <ChecklistWithActions steps={checklist} />
           </div>
 
           {/* Task calendar */}

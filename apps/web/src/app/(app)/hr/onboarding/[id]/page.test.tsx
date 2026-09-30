@@ -5,6 +5,12 @@ const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }),
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+}));
 
 import OnboardingDetailPage from "./page";
 
@@ -157,5 +163,21 @@ describe("OnboardingDetailPage", () => {
     expect(screen.getAllByText("PENDING")).toHaveLength(4);
     // Employee 1's uploaded government-ID state must not leak into employee 2.
     expect(screen.queryByText("UPLOADED")).not.toBeInTheDocument();
+  });
+
+  // GAP-HR-ONBOARDING-DETAIL-01 regression: the checklist used to render
+  // read-only (no onComplete passed from this server component), so "Mark
+  // done" could never appear no matter what state a task was in.
+  it("GAP-HR-ONBOARDING-DETAIL-01: wires the checklist to a real 'Mark done' action for a pending task", async () => {
+    fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
+    render(await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) }));
+
+    expect(
+      screen.getByRole("button", { name: /mark "collect department id badge" as complete/i }),
+    ).toBeInTheDocument();
+    // The already-completed task must not offer a redundant "Mark done".
+    expect(
+      screen.queryByRole("button", { name: /mark "submit joining report" as complete/i }),
+    ).not.toBeInTheDocument();
   });
 });
