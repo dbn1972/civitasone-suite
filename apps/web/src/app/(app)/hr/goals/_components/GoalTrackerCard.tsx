@@ -1,6 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
 
 export type GoalStatus = "active" | "on_track" | "at_risk" | "behind" | "achieved" | "completed";
@@ -63,20 +65,84 @@ export function GoalTrackerCard({
   id, title, description, targetMetric, progress, status,
   category, dueDate, cascadeLevel = "individual", parentGoalTitle, onCheckin, onEdit,
 }: GoalTrackerCardProps) {
+  const t = useTranslations("goals");
+  const tAction = useTranslations("action");
+  const router = useRouter();
   const [showCheckin, setShowCheckin] = useState(false);
   const [checkinProgress, setCheckinProgress] = useState(progress);
   const [checkinNote, setCheckinNote] = useState("");
+  // GAP-HR-GOALS-01: optimistic local view of what the server now holds,
+  // updated only after a real successful check-in (see handleCheckin) --
+  // distinct from `checkinProgress`/`checkinNote`, which are just the
+  // in-progress edit form's own draft values.
+  const [liveProgress, setLiveProgress] = useState(progress);
+  const [liveStatus, setLiveStatus] = useState<GoalStatus>(status);
+  const [busy, setBusy] = useState(false);
+  const [checkinError, setCheckinError] = useState("");
 
-  const sc  = STATUS_CONFIG[status] ?? STATUS_CONFIG.active;
+  const sc  = STATUS_CONFIG[liveStatus] ?? STATUS_CONFIG.active;
   const cc  = CASCADE_CONFIG[cascadeLevel];
-  const pct = Math.min(Math.max(progress, 0), 100);
+  const pct = Math.min(Math.max(liveProgress, 0), 100);
 
   const trackColor = sc.color;
 
-  function handleCheckin() {
-    onCheckin?.(id, checkinProgress, checkinNote);
-    setShowCheckin(false);
-    setCheckinNote("");
+  /**
+   * GAP-HR-GOALS-01: Save used to only call the optional `onCheckin` prop
+   * (`onCheckin?.(...)`) -- goals/page.tsx (a Server Component) never passed
+   * one, so clicking Save silently closed the form with no request, no
+   * confirmation, and no persisted change; POST /v1/hrms/goals/:id/checkin
+   * (services/hrms-service/.../pulse-routes.ts) was never reached from the
+   * UI at all.
+   *
+   * `onCheckin`, when a caller supplies it, is kept as an override/test seam
+   * (see GoalTrackerCard.test.tsx, whose four existing cases all pass one and
+   * assert it is called instead of any network request) so that suite's
+   * existing expectations are unchanged. The real production caller
+   * (goals/page.tsx) passes none, so this component now performs the request
+   * itself: integer 0-100 progress (native `<input type=number min=0 max=100>`
+   * plus the `Math.min/Math.max` clamp on `pct` already keep it in range;
+   * the backend's own zod schema is the authority), a busy/disabled state
+   * while in flight, and an inline error that keeps the form open on failure
+   * rather than closing on a request that never actually saved anything.
+   */
+  async function handleCheckin() {
+    if (onCheckin) {
+      onCheckin(id, checkinProgress, checkinNote);
+      setShowCheckin(false);
+      setCheckinNote("");
+      return;
+    }
+
+    setBusy(true);
+    setCheckinError("");
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/goals/${id}/checkin`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          progress: checkinProgress,
+          note: checkinNote.trim() || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({ message: t("checkinSaveFailed") }))) as { message?: string };
+        setCheckinError(err.message ?? t("checkinSaveFailed"));
+        setBusy(false);
+        return;
+      }
+      // Mirrors the backend's own status derivation exactly (pulse-routes.ts:
+      // `progress >= 100 ? "completed" : "active"`) so the card reflects the
+      // real post-write state without waiting on the parent list to refetch.
+      setLiveProgress(checkinProgress);
+      setLiveStatus(checkinProgress >= 100 ? "completed" : "active");
+      setShowCheckin(false);
+      setCheckinNote("");
+      setBusy(false);
+      router.refresh();
+    } catch {
+      setCheckinError(t("networkError"));
+      setBusy(false);
+    }
   }
 
   return (
@@ -142,14 +208,14 @@ export function GoalTrackerCard({
       {/* Target metric */}
       {targetMetric && (
         <div style={{ fontSize: 12, color: "var(--ink2, #475569)" }}>
-          <span style={{ fontWeight: 600, color: "var(--ink, #1e293b)" }}>Target:</span> {targetMetric}
+          <span style={{ fontWeight: 600, color: "var(--ink, #1e293b)" }}>{t("targetLabel")}</span> {targetMetric}
         </div>
       )}
 
       {/* Progress bar */}
       <div>
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
-          <span style={{ fontSize: 12, color: "var(--mut, #64748b)" }}>Progress</span>
+          <span style={{ fontSize: 12, color: "var(--mut, #64748b)" }}>{t("progressLabel")}</span>
           <span style={{ fontSize: 12, fontWeight: 700, color: trackColor }}>{pct}%</span>
         </div>
         <div style={{ height: 6, background: "var(--line, #e2e8f0)", borderRadius: 99, overflow: "hidden" }}>
@@ -171,11 +237,11 @@ export function GoalTrackerCard({
         <div style={{ display: "flex", gap: 6 }}>
           {onEdit && (
             <Button variant="ghost" size="sm" onClick={() => onEdit(id)}>
-              Edit
+              {t("editButton")}
             </Button>
           )}
           <Button size="sm" onClick={() => setShowCheckin(!showCheckin)}>
-            Check-in
+            {t("checkinButton")}
           </Button>
         </div>
       </div>
@@ -189,10 +255,11 @@ export function GoalTrackerCard({
           }}
         >
           <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink, #1e293b)" }}>
-            New progress (%)
+            {t("newProgressLabel")}
             <input
               type="number" min={0} max={100}
               value={checkinProgress}
+              disabled={busy}
               onChange={(e) => setCheckinProgress(Number(e.target.value))}
               style={{
                 display: "block", width: "100%", marginTop: 4, padding: "5px 8px",
@@ -201,12 +268,13 @@ export function GoalTrackerCard({
             />
           </label>
           <label style={{ fontSize: 12, fontWeight: 600, color: "var(--ink, #1e293b)" }}>
-            Note (optional)
+            {t("noteLabel")}
             <textarea
               rows={2}
               value={checkinNote}
+              disabled={busy}
               onChange={(e) => setCheckinNote(e.target.value)}
-              placeholder="What did you accomplish?"
+              placeholder={t("notePlaceholder")}
               style={{
                 display: "block", width: "100%", marginTop: 4, padding: "5px 8px",
                 border: "1px solid var(--line, #cbd5e1)", borderRadius: 6, fontSize: 13, resize: "vertical",
@@ -214,12 +282,15 @@ export function GoalTrackerCard({
               }}
             />
           </label>
+          {checkinError && (
+            <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad, #dc2626)" }}>{checkinError}</p>
+          )}
           <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
-            <Button variant="ghost" size="sm" onClick={() => setShowCheckin(false)}>
-              Cancel
+            <Button variant="ghost" size="sm" disabled={busy} onClick={() => { setShowCheckin(false); setCheckinError(""); }}>
+              {tAction("cancel")}
             </Button>
-            <Button size="sm" onClick={handleCheckin}>
-              Save
+            <Button size="sm" disabled={busy} onClick={handleCheckin}>
+              {busy ? t("savingLabel") : tAction("save")}
             </Button>
           </div>
         </div>

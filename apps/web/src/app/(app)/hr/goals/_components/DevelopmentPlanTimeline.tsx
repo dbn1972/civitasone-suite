@@ -1,6 +1,8 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
+import { humanizeStatus } from "@/lib/formatters";
 
 export interface DevActivity {
   id: string;
@@ -51,10 +53,17 @@ function formatDate(s: string): string {
 }
 
 export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineProps) {
+  const t = useTranslations("goals");
+  const PRIORITY_LABEL: Record<string, string> = {
+    high: t("priorityHigh"),
+    medium: t("priorityMedium"),
+    low: t("priorityLow"),
+  };
+
   if (activities.length === 0) {
     return (
       <div style={{ padding: 24, textAlign: "center", color: "var(--mut)", fontSize: 14 }}>
-        No development activities planned. Add activities from the Development Plan section.
+        {t("devPlanEmptyMessage")}
       </div>
     );
   }
@@ -146,7 +155,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <span style={{ fontSize: 14 }}>{TYPE_ICON[act.type] ?? "📌"}</span>
+                        <span style={{ fontSize: 14 }} aria-hidden="true">{TYPE_ICON[act.type] ?? "📌"}</span>
                         <span style={{ fontWeight: 600, fontSize: 13, color: "var(--ink, #1e293b)" }}>{act.title}</span>
                         <span
                           style={{
@@ -154,11 +163,16 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                             borderRadius: 20, padding: "1px 6px",
                           }}
                         >
-                          {act.status.replace("_", " ")}
+                          {/* GAP-HR-GOALS-06: was act.status.replace('_',' ') --
+                              read as data straight from a DB enum with no
+                              capitalisation; humanizeStatus (lib/formatters.ts)
+                              is the same helper other HR screens already use
+                              for this exact "enum -> display label" step. */}
+                          {humanizeStatus(act.status)}
                         </span>
                         {isPast && (
                           <span style={{ fontSize: 11, background: "var(--badbg, #fee2e2)", color: "var(--bad, #dc2626)", borderRadius: 4, padding: "1px 5px", fontWeight: 600 }}>
-                            Overdue
+                            {t("overdueLabel")}
                           </span>
                         )}
                       </div>
@@ -169,7 +183,7 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                         </span>
                         {act.skillTargeted && (
                           <span style={{ fontSize: 11, color: "var(--mut, #64748b)" }}>
-                            Targets: <strong>{act.skillTargeted}</strong>
+                            {t("targetsLabel")} <strong>{act.skillTargeted}</strong>
                           </span>
                         )}
                       </div>
@@ -180,7 +194,11 @@ export function DevelopmentPlanTimeline({ activities }: DevelopmentPlanTimelineP
                         color: PRIORITY_COLOR[act.priority], letterSpacing: "0.08em",
                       }}
                     >
-                      {act.priority}
+                      {/* GAP-HR-GOALS-06: was the raw enum word ("high"/"medium"/
+                          "low") relying on CSS text-transform:uppercase alone
+                          for presentation -- translated now, same as every
+                          other status/label on this page. */}
+                      {PRIORITY_LABEL[act.priority] ?? act.priority}
                     </span>
                   </div>
                 </div>
