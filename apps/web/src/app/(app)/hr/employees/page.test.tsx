@@ -46,13 +46,47 @@ describe("EmployeeDirectoryPage", () => {
   /**
    * GAP-HR-EMPLOYEES-02: a real fetch failure must not read as "0 of
    * everything" — that's indistinguishable from a genuinely empty tenant.
+   * Total/Active/Others all depend (directly, or via the total/others
+   * arithmetic) on the failed employees fetch, so all three dash out. Since
+   * the dashboard fetch independently succeeded here, OnLeave -- which is
+   * derived only from the dashboard, never from the employees list -- must
+   * still show its real fetched value rather than blanking out just
+   * because a *different* fetch failed (see the dashboard-only-failure test
+   * below for the mirror case). onLeave is deliberately non-zero here so
+   * the "no fabricated zero" check below isn't vacuously satisfied by its
+   * own legitimate value.
    */
   it("shows dash stats, not fabricated zeros, when the employees fetch errors", async () => {
     getEmployeesMock.mockResolvedValue({ data: [], source: "error" });
-    getHRDashboardMock.mockResolvedValue({ data: { headcount: 0, onLeave: 0, employeeTypeBreakdown: [] }, source: "api" });
+    getHRDashboardMock.mockResolvedValue({ data: { headcount: 0, onLeave: 2, employeeTypeBreakdown: [] }, source: "api" });
     await renderPage();
-    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
+    expect(screen.getAllByText("—").length).toBe(3);
+    expect(screen.getByText("2")).toBeInTheDocument();
     expect(screen.queryByText("0")).not.toBeInTheDocument();
+  });
+
+  /**
+   * GAP-HR-EMPLOYEES-02 (dashboard-only failure sub-case): getEmployees()
+   * and getHRDashboard() are independent fetches, so a failure confined to
+   * the dashboard call must be just as visible as an employees-fetch
+   * failure -- not silently absorbed. Before this fix only the
+   * employees-fetch `source` was captured, so a dashboard-only error fell
+   * back to displaying the current page's row count as Total/Others
+   * (hrDashboard.headcount defaults to 0 on error, so
+   * `hrDashboard.headcount || employees.length` resolves to
+   * `employees.length`) and 0 as OnLeave -- both rendered as if they were
+   * real tenant-wide numbers, with zero error indication.
+   */
+  it("shows dash for dashboard-derived stats, not a page-count fallback, when only the dashboard fetch errors", async () => {
+    getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+    getHRDashboardMock.mockResolvedValue({ data: { headcount: 0, onLeave: 0, employeeTypeBreakdown: [] }, source: "error" });
+    await renderPage();
+    // Total, OnLeave, and Others all derive (directly, or via the total/others
+    // arithmetic) from the now-failed dashboard fetch, so all three dash out.
+    expect(screen.getAllByText("—").length).toBe(3);
+    // Active is derived only from the (successfully-fetched) employees page,
+    // so it must still show its real count rather than dashing out too.
+    expect(screen.getByText("1")).toBeInTheDocument();
   });
 
   it("does not show dash stats on a genuine successful load", async () => {

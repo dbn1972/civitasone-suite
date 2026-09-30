@@ -48,7 +48,7 @@ function empPageHref(type: string, p: number): string {
 export default async function EmployeeDirectoryPage({ searchParams }: { searchParams?: Record<string, string> }) {
   const page = Math.max(0, parseInt(searchParams?.page ?? "0") || 0);
   const typeFilter = searchParams?.type ?? "all";
-  const [{ data: rawEmployees, source }, { data: hrDashboard }] = await Promise.all([
+  const [{ data: rawEmployees, source }, { data: hrDashboard, source: dashboardSource }] = await Promise.all([
     getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter),
     getHRDashboard(),
   ]);
@@ -145,12 +145,23 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           everything" -- that reads exactly like a genuinely empty tenant,
           and (see EmployeesTable below) used to invite an HR admin to
           "add your first employee" into a workforce that's actually just
-          unreachable right now, risking duplicate records once it recovers. */}
+          unreachable right now, risking duplicate records once it recovers.
+          Two independent fetches feed this grid -- getEmployees (`source`)
+          and getHRDashboard (`dashboardSource`) -- and each stat is only as
+          trustworthy as the fetch(es) it actually derives from. Gating every
+          card on `source` alone left a dashboard-only failure completely
+          unindicated: `total`/`others` would silently fall back to the
+          current page's row count (hrDashboard.headcount defaults to 0 on
+          error, so `hrDashboard.headcount || employees.length` resolves to
+          `employees.length`) and `onLeave` would silently show 0 -- both
+          rendered as if they were real tenant-wide numbers. Total/Others mix
+          both fetches, so either failing blanks them; Active is derived only
+          from the employees page; OnLeave only from the dashboard. */}
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statTotal")} value={source === "error" ? "—" : total} />
+        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statTotal")} value={source === "error" || dashboardSource === "error" ? "—" : total} />
         <StatCard icon="✅" iconBg="var(--infobg, #e6f0ff)" label={t("statActiveShown")} value={source === "error" ? "—" : active} />
-        <StatCard icon="🌴" iconBg="var(--warnbg, #fffbe6)" label={t("statOnLeave")} value={source === "error" ? "—" : onLeave} />
-        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOthersShown")} value={source === "error" ? "—" : others} />
+        <StatCard icon="🌴" iconBg="var(--warnbg, #fffbe6)" label={t("statOnLeave")} value={dashboardSource === "error" ? "—" : onLeave} />
+        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOthersShown")} value={source === "error" || dashboardSource === "error" ? "—" : others} />
       </StatGrid>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         {TYPE_TABS.map((tab) => (
