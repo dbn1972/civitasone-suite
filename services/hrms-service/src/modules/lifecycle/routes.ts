@@ -24,8 +24,25 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/lifecycle/promotions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
+    // GAP-HR-EMPLOYEES-DETAIL-04 / re-opened GAP-HR-EMPLOYEES-DETAIL-01
+    // (SF-16): PR #1651 fixed this exact "?employeeId= silently ignored"
+    // leak, but in lifecycle/m7-list-routes.ts's un-prefixed GET
+    // /v1/hrms/promotions -- a DIFFERENT route from this one. This route
+    // (GET /v1/hrms/lifecycle/promotions) is the one employees/[id]/
+    // page.tsx's getLifecycleEvents() actually calls, and it never got the
+    // same fix: every profile showed the WHOLE tenant's promotion history
+    // (grades/postings of every employee) to any HR-role viewer. GAP-HR-SF-17
+    // (#1658), merged after #1651 off an older base, re-added this exact
+    // route's body from a pre-#1651 copy without the filter -- same bug,
+    // back from a different commit. Mirrors #1651's m7-list-routes.ts
+    // pattern exactly, folded in with SF-17's batch name-resolution.
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = await scopedRead((tx) => tx.select().from(hrmsPromotions)
-      .where(eq(hrmsPromotions.tenantId, ctx.tenantId))
+      .where(
+        q.employeeId
+          ? and(eq(hrmsPromotions.tenantId, ctx.tenantId), eq(hrmsPromotions.employeeId, q.employeeId))
+          : eq(hrmsPromotions.tenantId, ctx.tenantId),
+      )
       .orderBy(desc(hrmsPromotions.effectiveDate)));
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
@@ -57,8 +74,15 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/lifecycle/transfers", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
+    // GAP-HR-EMPLOYEES-DETAIL-04 / re-opened GAP-HR-EMPLOYEES-DETAIL-01 --
+    // see the identical comment on GET /v1/hrms/lifecycle/promotions above.
+    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = await scopedRead((tx) => tx.select().from(hrmsTransfers)
-      .where(eq(hrmsTransfers.tenantId, ctx.tenantId))
+      .where(
+        q.employeeId
+          ? and(eq(hrmsTransfers.tenantId, ctx.tenantId), eq(hrmsTransfers.employeeId, q.employeeId))
+          : eq(hrmsTransfers.tenantId, ctx.tenantId),
+      )
       .orderBy(desc(hrmsTransfers.effectiveDate)));
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
