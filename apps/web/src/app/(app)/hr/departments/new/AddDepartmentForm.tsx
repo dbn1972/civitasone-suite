@@ -4,10 +4,20 @@ import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "../../../../_components/ds";
+import { eligibleParentOptions, type MinimalDept } from "@/lib/hr/departmentTree";
 
 interface Props {
   onCancel: () => void;
   onSuccess?: () => void;
+  /**
+   * GAP-HR-DEPARTMENTS-03: existing departments, for the optional "Parent
+   * department" select -- without this the form could only ever create
+   * top-level departments (parentId/level were never sent), so the tree
+   * and "Sub-Departments" stat could never gain a node from the UI.
+   * Optional (defaults to none) so this form still renders standalone in
+   * isolation (e.g. existing unit tests that mount it with no other prop).
+   */
+  departments?: MinimalDept[];
 }
 
 const inputStyle: React.CSSProperties = {
@@ -28,11 +38,12 @@ const labelStyle: React.CSSProperties = {
   color: "var(--ink, #0f172a)",
 };
 
-export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
+export function AddDepartmentForm({ onCancel, onSuccess, departments = [] }: Props) {
   const t = useTranslations("addDepartmentForm");
   const formId = useId();
   const [code, setCode] = useState("");
   const [name, setName] = useState("");
+  const [parentId, setParentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
@@ -41,11 +52,15 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
 
   const codeId = `${formId}-code`;
   const nameId = `${formId}-name`;
+  const parentSelectId = `${formId}-parent`;
   const statusId = `${formId}-status`;
+  // Creating brand-new, so nothing to exclude beyond what's already there.
+  const parentOptions = eligibleParentOptions(departments, null);
 
   function handleCancel() {
     setCode("");
     setName("");
+    setParentId("");
     setMessage(null);
     setInvalid(new Set());
     onCancel();
@@ -76,7 +91,13 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
       const res = await fetch("/api/proxy/v1/hrms/departments", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ code: trimCode, name: trimName }),
+        body: JSON.stringify({
+          code: trimCode,
+          name: trimName,
+          // level is derived server-side from the chosen parent
+          // (GAP-HR-DEPARTMENTS-03); never computed/sent from here.
+          ...(parentId ? { parentId } : {}),
+        }),
       });
 
       if (!res.ok) {
@@ -90,6 +111,7 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
       setMessage(t("successMsg", { name: trimName }));
       setCode("");
       setName("");
+      setParentId("");
       onSuccess?.();
     } catch {
       setTone("error");
@@ -190,6 +212,24 @@ export function AddDepartmentForm({ onCancel, onSuccess }: Props) {
             {formError.fieldError("name") && (
               <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{formError.fieldError("name")}</span>
             )}
+          </div>
+
+          {/* Parent department (GAP-HR-DEPARTMENTS-03) */}
+          <div style={{ display: "grid", gap: 6 }}>
+            <label htmlFor={parentSelectId} style={labelStyle}>
+              {t("parentLabel")}
+            </label>
+            <select
+              id={parentSelectId}
+              value={parentId}
+              onChange={(e) => setParentId(e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">{t("parentNone")}</option>
+              {parentOptions.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
           </div>
         </div>
 

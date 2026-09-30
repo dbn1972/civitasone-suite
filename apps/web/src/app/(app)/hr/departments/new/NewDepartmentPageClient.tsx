@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { PageHeader } from "../../../../_components/ds";
 import { AddDepartmentForm } from "./AddDepartmentForm";
+import type { MinimalDept } from "@/lib/hr/departmentTree";
 
 /**
  * The interactive part of /hr/departments/new (useRouter + the form's
@@ -14,7 +15,7 @@ import { AddDepartmentForm } from "./AddDepartmentForm";
  * interactive content can't live in the same "use client" file the way
  * this used to be a single file.
  */
-export function NewDepartmentPageClient() {
+export function NewDepartmentPageClient({ departments }: { departments: MinimalDept[] }) {
   const t = useTranslations("addDepartmentForm");
   const router = useRouter();
   return (
@@ -26,6 +27,7 @@ export function NewDepartmentPageClient() {
         backLabel={t("pageBackLabel")}
       />
       <AddDepartmentForm
+        departments={departments}
         onCancel={() => { router.push("/hr/departments"); }}
         onSuccess={() => {
           router.refresh();
