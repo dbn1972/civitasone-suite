@@ -251,6 +251,10 @@ export async function updateEmployee(ctx: RequestContext, id: string, body: Upda
       sacCode: body.sacCode,
       agencyRef: body.agencyRef,
       napsId: body.napsId,
+      // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: routes.ts already enforced that
+      // this is present whenever a sensitive field is being changed --
+      // threaded through so the consumer's audit trail actually captures it.
+      reason: body.reason,
     },
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));

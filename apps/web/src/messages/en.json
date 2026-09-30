@@ -1465,9 +1465,15 @@
     "pranLabel": "PRAN (NPS Account)",
     "pranPlaceholder": "12-digit PRAN",
     "statutoryNote": "Bank account and IFSC are required for salary disbursement. UAN is required for EPFO credit.",
+    "noAsteriskError": "This still contains part of the masked value shown before — please clear it and type the real number.",
+    "sensitiveConfirmTitle": "Confirm bank/statutory change",
+    "sensitiveConfirmDesc": "You're changing a bank account, IFSC, UAN, ESIC, or PRAN number. This is audited with a reason.",
+    "sensitiveReasonLabel": "Reason for change",
+    "sensitiveConfirmBtn": "Confirm change",
     "savingBtn": "Saving…",
     "saveChangesBtn": "Save Changes",
-    "cancelBtn": "Cancel"
+    "cancelBtn": "Cancel",
+    "loadingLabel": "Loading edit form…"
   },
   "employeeFyLookup": {
     "formTitle": "Look Up Form 12BA",
