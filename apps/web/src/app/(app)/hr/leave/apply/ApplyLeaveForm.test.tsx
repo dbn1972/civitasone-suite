@@ -29,15 +29,40 @@ function renderForm(props: Parameters<typeof ApplyLeaveForm>[0]) {
   );
 }
 
+// GAP-HR-LEAVE-APPLY-01: ApplyLeaveForm now ALSO calls POST .../leave-requests/
+// preview once allocId/fromDate/toDate are all set. Routes by URL so that call
+// never gets the leave-context response shape (no computedDays field) by
+// coincidence — every describe block below that stubs global fetch uses this.
+function stubContextAndPreview(opts: {
+  context?: unknown;
+  preview?: unknown | (() => Response);
+} = {}) {
+  const context = opts.context ?? { employee: {}, leaveTypes: [], allocations: [] };
+  const fetchMock = vi.fn(async (url: string) => {
+    if (typeof url === "string" && url.includes("/leave-requests/preview")) {
+      if (typeof opts.preview === "function") return (opts.preview as () => Response)();
+      return { ok: true, json: async () => (opts.preview ?? { computedDays: 0, engineApplied: false }) } as Response;
+    }
+    return { ok: true, json: async () => context } as Response;
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
+/** Waits for the (real, 400ms-debounced) preview fetch to have actually fired. */
+async function waitForPreviewFetch(fetchMock: ReturnType<typeof vi.fn>) {
+  await waitFor(
+    () => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/leave-requests/preview"), expect.anything()),
+    { timeout: 2000 },
+  );
+}
+
 describe("ApplyLeaveForm — deep-link preselection", () => {
   // The component's own useEffect fetches leave-context for the selected
   // employee on mount; stub it so that's deterministic and quiet.
   afterEach(() => vi.unstubAllGlobals());
   function stubLeaveContextFetch() {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => ({ ok: true, json: async () => ({ employee: {}, leaveTypes: [], allocations: [] }) }) as Response),
-    );
+    stubContextAndPreview();
   }
 
   it("defaults to the first employee when no initialEmployeeId is given", () => {
@@ -73,19 +98,14 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
   });
 
   function stubLeaveContextFetchWithAllocation() {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        ({
-          ok: true,
-          json: async () => ({
-            employee: { id: "emp-1", employeeNo: "E1", name: "Asha Verma" },
-            leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
-            allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", balanceDays: 10 }],
-          }),
-        }) as Response,
-      ),
-    );
+    stubContextAndPreview({
+      context: {
+        employee: { id: "emp-1", employeeNo: "E1", name: "Asha Verma" },
+        leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
+        allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", balanceDays: 10 }],
+      },
+      preview: { computedDays: 2, engineApplied: true },
+    });
   }
 
   async function fillAndSubmit() {
@@ -136,6 +156,64 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
  * coverage) must see a clear, honest message, never the bare, confusing
  * "No employees loaded" dropdown with an unexplained disabled submit button.
  */
+/**
+ * GAP-HR-LEAVE-APPLY-01/04: server preview replaces both the naive
+ * calendar-day count shown to the user and the native window.confirm()
+ * balance-overrun gate.
+ */
+describe("ApplyLeaveForm — server-confirmed preview", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    vi.mocked(fetchOrQueue).mockReset();
+  });
+
+  async function fillDatesAndAlloc() {
+    renderForm({ employees: EMPLOYEES });
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/leave type/i), { target: { value: "a1" } });
+    fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-09-18" } }); // Friday
+    fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-09-21" } }); // Monday — 4 calendar days, engine may compute fewer
+  }
+
+  it("shows the server-computed day count once preview resolves, not the raw calendar count", async () => {
+    const fetchMock = stubContextAndPreview({
+      context: {
+        employee: {}, leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
+        allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", balanceDays: 10 }],
+      },
+      preview: { computedDays: 2, engineApplied: true }, // engine excluded the weekend
+    });
+    await fillDatesAndAlloc();
+    await waitForPreviewFetch(fetchMock);
+
+    await waitFor(() => expect(screen.getByText(/this will debit/i)).toBeInTheDocument(), { timeout: 2000 });
+    expect(screen.getByText(/this will debit/i).parentElement).toHaveTextContent("2 days");
+    expect(screen.queryByText(/approximate/i)).not.toBeInTheDocument();
+  });
+
+  it("blocks submit inline (no native confirm, no ConfirmDialog) when preview itself reports a rule violation", async () => {
+    const fetchMock = stubContextAndPreview({
+      context: {
+        employee: {}, leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
+        allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", balanceDays: 1 }],
+      },
+      preview: () => new Response(JSON.stringify({ code: "LEAVE_RULE_VIOLATION", message: "insufficient balance" }), { status: 422 }),
+    });
+    await fillDatesAndAlloc();
+    fireEvent.change(screen.getByLabelText(/reason/i), { target: { value: "Family function out of town this week." } });
+    await waitForPreviewFetch(fetchMock);
+    // Let the rejected preview's .then() (setPreviewError) actually commit
+    // before clicking — waitForPreviewFetch only confirms the call fired.
+    await waitFor(() => expect(screen.queryByText(/checking against/i)).not.toBeInTheDocument(), { timeout: 2000 });
+
+    fireEvent.click(screen.getByRole("button", { name: /submit leave request/i }));
+
+    await waitFor(() => expect(screen.getByRole("alert").textContent?.trim()).not.toBe(""), { timeout: 2000 });
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument(); // no ConfirmDialog — blocked, not just warned
+    expect(fetchOrQueue).not.toHaveBeenCalled();
+  });
+});
+
 describe("ApplyLeaveForm — no linked employee record (self-service)", () => {
   afterEach(() => vi.unstubAllGlobals());
 

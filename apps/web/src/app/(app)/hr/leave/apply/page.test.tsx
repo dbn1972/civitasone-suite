@@ -96,14 +96,35 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
       ],
       source: "api",
     });
+    // GAP-HR-LEAVE-APPLY-03: getMyProfile() is now ALWAYS called in parallel
+    // (not just as the employees.length===0 fallback) so the "myself"
+    // default/indicator works for an HR/manager viewing the full roster
+    // too — this admin viewer has no employee record of their own here.
+    getMyProfileMock.mockResolvedValue({ data: null, source: "api" });
 
     await render(ApplyLeavePage({ searchParams: {} }));
 
     expect(screen.getByRole("option", { name: /asha verma/i })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: /rahul singh/i })).toBeInTheDocument();
     expect(screen.queryByText(/couldn't load/i)).not.toBeInTheDocument();
-    // The admin list succeeded, so the self-service fallback must never be consulted.
-    expect(getMyProfileMock).not.toHaveBeenCalled();
+    expect(getMyProfileMock).toHaveBeenCalled();
+  });
+
+  it("hr_admin/manager viewing the full roster who ALSO has their own employee record defaults to themselves, not an arbitrary first row", async () => {
+    stubLeaveContextFetch();
+    getEmployeesMock.mockResolvedValue({
+      data: [
+        { id: "emp-1", name: "Asha Verma", department: "Finance" },
+        { id: "emp-self", name: "Priya Nair", department: "IT" },
+      ],
+      source: "api",
+    });
+    getMyProfileMock.mockResolvedValue({ data: { id: "emp-self", name: "Priya Nair" }, source: "api" });
+
+    await render(ApplyLeavePage({ searchParams: {} }));
+
+    expect(screen.getByRole("combobox", { name: /employee/i })).toHaveValue("emp-self");
+    expect(screen.getByText(/myself/i)).toBeInTheDocument();
   });
 
   it("employee WITH a linked record: 403 on the admin list falls back to self, and (the bug) no misleading 'Couldn't load' badge once that fallback succeeds", async () => {
@@ -160,6 +181,7 @@ describe("ApplyLeavePage — role-based employee resolution", () => {
       ],
       source: "api",
     });
+    getMyProfileMock.mockResolvedValue({ data: null, source: "api" });
 
     await render(ApplyLeavePage({ searchParams: { empId: "emp-2" } }));
 
