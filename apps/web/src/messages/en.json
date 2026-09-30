@@ -983,12 +983,14 @@
     "colStatus": "Status",
     "statTotalLabel": "Total Contractual",
     "statActiveLabel": "Active",
+    "statExpiringLabel": "Expiring ≤30d",
     "statExpiredLabel": "Expired",
     "statAgenciesLabel": "Agencies",
     "cardTitle": "Contractual Staff",
     "filterPlaceholder": "Filter by name, agency or department…",
     "emptyTitle": "No contractual staff",
-    "emptyMessage": "Contractual employees appear here, showing their engagement terms and contract expiry dates."
+    "emptyMessage": "Contractual employees appear here, showing their engagement terms and contract expiry dates.",
+    "truncatedNotice": "Showing the first {count} contracts — more may exist. Search and filters below only cover this loaded set."
   },
   "corrections": {
     "loadingAriaLabel": "Loading…",
@@ -2551,7 +2553,7 @@
     "contractual": "Contractual",
     "contractualDesc": "Contractual employees",
     "outsourced": "Outsourced",
-    "outsourcedDesc": "Vendor-supplied workforce",
+    "outsourcedDesc": "Vendor-supplied workforce (coming soon)",
     "interns": "Interns",
     "internsDesc": "Interns and apprentices",
     "workforceAnalytics": "Workforce Analytics",
@@ -2673,13 +2675,9 @@
   },
   "interns": {
     "title": "Interns & Apprentices",
-    "subtitle": "Internship and apprenticeship engagements with mentor assignments.",
+    "subtitle": "Internship and apprenticeship engagements.",
     "colName": "Name",
-    "colInstitution": "Institution",
     "colDepartment": "Department",
-    "colFrom": "From",
-    "colTo": "To",
-    "colMentor": "Mentor",
     "colType": "Type",
     "colStatus": "Status",
     "statTotalLabel": "Total",
@@ -2687,9 +2685,10 @@
     "statInternsLabel": "Interns",
     "statApprenticesLabel": "Apprentices",
     "cardTitle": "Interns & Apprentices",
-    "filterPlaceholder": "Filter by name, institution or mentor…",
+    "filterPlaceholder": "Filter by name or department…",
+    "addInternAction": "+ Add intern",
     "emptyTitle": "No interns or apprentices",
-    "emptyMessage": "Intern and apprenticeship engagements appear here with stipend, mentor, and duration details."
+    "emptyMessage": "Intern and apprenticeship engagements appear here once added to the employee register."
   },
   "lang": {
     "switch": "Language",
@@ -3340,7 +3339,7 @@
   },
   "outsourced": {
     "title": "Outsourced Workforce",
-    "subtitle": "Vendor-wise outsourced staff, headcount, and contract details.",
+    "subtitle": "Vendor-supplied workforce.",
     "colVendor": "Vendor",
     "colDepartment": "Department",
     "colHeadcount": "Headcount",
@@ -3355,7 +3354,9 @@
     "cardTitle": "Outsourced Workforce",
     "filterPlaceholder": "Filter…",
     "emptyTitle": "Outsourced staff management is not yet available",
-    "emptyMessage": "Vendor-wise outsourced staff, headcount, and contract tracking isn't connected to a backend yet. This view will populate once that module is built."
+    "emptyMessage": "Vendor-wise outsourced staff, headcount, and contract tracking isn't connected to a backend yet. This view will populate once that module is built.",
+    "emptyActionContractual": "View contractual staff",
+    "emptyActionContractors": "View works contractors"
   },
   "payMatrix": {
     "title": "7th CPC Pay Matrix",

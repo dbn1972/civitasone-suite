@@ -2,14 +2,16 @@ import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db } from "../../shared/db.js";
+import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { hrmsContractConfig } from "./schema.js";
 import { DomainError, daysUntilExpiry } from "./domain.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { hrmsEmployees } from "../employee/schema.js";
+import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import {
   createContractBody,
   activateContractBody,
@@ -25,6 +27,53 @@ import {
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
+
+/**
+ * GAP-HR-CONTRACTUAL-02: the list route returned only the contracts table's
+ * own columns (contractNo/dates/status), so hr/contractual's agency,
+ * designation and employee-name columns were always "—" -- no page had ever
+ * called this route at all. Resolves employee name/department/designation
+ * via the SAME shared, in-process batch helper other list routes already
+ * use (Rule-4 compliant by construction: no cross-module schema join).
+ * agencyRef lives directly on hrms_employees (not resolved by
+ * batchEmployees, which only carries the fields orgchart/seniority/
+ * lifecycle already needed), so it gets its own narrow, tenant-scoped read
+ * here rather than widening that shared helper's return shape for every
+ * other caller.
+ */
+async function enrichWithEmployee<T extends { employeeId: string }>(
+  tenantId: string,
+  rows: T[],
+): Promise<Array<T & { employeeName: string; department: string; designation: string; agencyRef: string | null }>> {
+  if (rows.length === 0) return [];
+  const employeeIds = [...new Set(rows.map((r) => r.employeeId))];
+  const [empMap, agencyRows] = await Promise.all([
+    batchEmployees(tenantId, employeeIds),
+    scopedRead((tx) =>
+      tx
+        .select({ id: hrmsEmployees.id, agencyRef: hrmsEmployees.agencyRef })
+        .from(hrmsEmployees)
+        .where(and(eq(hrmsEmployees.tenantId, tenantId), inArray(hrmsEmployees.id, employeeIds))),
+    ),
+  ]);
+  const agencyMap = new Map(agencyRows.map((r) => [r.id, r.agencyRef]));
+  const deptIds = [...empMap.values()].map((e) => e.departmentId);
+  const desigIds = [...empMap.values()].map((e) => e.designationId);
+  const [deptMap, desigMap] = await Promise.all([
+    batchDepartments(tenantId, deptIds),
+    batchDesignations(tenantId, desigIds),
+  ]);
+  return rows.map((r) => {
+    const emp = empMap.get(r.employeeId);
+    return {
+      ...r,
+      employeeName: emp?.fullName ?? "—",
+      department: (emp && deptMap.get(emp.departmentId)) ?? "—",
+      designation: (emp && desigMap.get(emp.designationId)) ?? "—",
+      agencyRef: agencyMap.get(r.employeeId) ?? null,
+    };
+  });
+}
 
 export async function contractRoutes(app: FastifyInstance): Promise<void> {
   // ─── Task 9.1 — Contract CRUD ───────────────────────────────────────────────
@@ -54,7 +103,8 @@ export async function contractRoutes(app: FastifyInstance): Promise<void> {
     if (query.employeeId) filters.employeeId = query.employeeId;
     if (query.status) filters.status = query.status;
     const result = await repo.listContracts(ctx.tenantId, filters, { limit: query.limit, offset: query.offset });
-    return reply.send(result);
+    const data = await enrichWithEmployee(ctx.tenantId, result.data);
+    return reply.send({ ...result, data });
   });
 
   app.get("/v1/hrms/contracts/:id", async (req, reply) => {
