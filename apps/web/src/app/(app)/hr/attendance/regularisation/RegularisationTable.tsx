@@ -1,14 +1,24 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { DataTable, ConfirmDialog, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { AttendanceRegularisation } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
+
+/** GAP-HR-ATTENDANCE-REGULARISATION-05: the approve/reject toast used to be
+ *  a static pill that stayed on screen until the next reload/refresh --
+ *  every other toast-shaped notice in this codebase (ds/Toast.tsx) auto-
+ *  dismisses. Adopting the full ds Toast context here would mean wrapping
+ *  this table in its own ToastProvider (not otherwise used by this page),
+ *  a materially bigger change than this item asks for -- a plain timer is
+ *  the smaller, already-suggested alternative (the gap's own fix steps
+ *  list both options). */
+const TOAST_AUTO_DISMISS_MS = 5000;
 
 type Decision = "approve" | "reject";
 type Row = AttendanceRegularisation & Record<string, unknown>;
@@ -28,6 +38,14 @@ export function RegularisationTable({ regs, source = "api", canApprove = true }:
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const formError = useFormError("regularisation request");
+
+  // GAP-HR-ATTENDANCE-REGULARISATION-05: auto-dismiss, matching every other
+  // toast-shaped notice in this codebase (ds/Toast.tsx's AUTO_DISMISS_MS).
+  useEffect(() => {
+    if (!toast) return;
+    const timer = setTimeout(() => setToast(null), TOAST_AUTO_DISMISS_MS);
+    return () => clearTimeout(timer);
+  }, [toast]);
 
   // UX-012: preserve UX-017's existing translation of the cached-state note
   // by feeding it to DataSourceBadge's `message` override rather than
@@ -70,7 +88,10 @@ export function RegularisationTable({ regs, source = "api", canApprove = true }:
       { key: "employeeName" as const, label: t("colEmployee") },
       { key: "date" as const, label: t("colDate"), render: (r: Row) => formatIndianDate(r.date) },
       { key: "reason" as const, label: t("colReason") },
-      { key: "requestedStatus" as const, label: t("colRequestedStatus") },
+      // GAP-HR-ATTENDANCE-REGULARISATION-03: this printed the raw enum
+      // ("present", "half_day") with no render/cellType, unlike the Status
+      // column just below it (which already uses cellType "status").
+      { key: "requestedStatus" as const, label: t("colRequestedStatus"), render: (r: Row) => humanizeStatus(r.requestedStatus) },
       { key: "requestedAt" as const, label: t("colAppliedAt"), render: (r: Row) => formatIndianDate(r.requestedAt) },
       { key: "status" as const, label: t("colStatus"), cellType: "status" as const },
       {
@@ -139,7 +160,7 @@ export function RegularisationTable({ regs, source = "api", canApprove = true }:
                 verb: pending.decision === "approve" ? t("approveBtn") : t("rejectBtn"),
                 employeeName: pending.row.employeeName,
                 date: formatIndianDate(pending.row.date),
-                requestedStatus: pending.row.requestedStatus,
+                requestedStatus: humanizeStatus(pending.row.requestedStatus),
                 strongName: (chunks) => <strong>{chunks}</strong>,
                 strongDate: (chunks) => <strong>{chunks}</strong>,
                 strongStatus: (chunks) => <strong>{chunks}</strong>,
