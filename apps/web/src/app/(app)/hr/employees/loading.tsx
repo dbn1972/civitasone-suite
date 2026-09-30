@@ -8,9 +8,14 @@ export default async function EmployeesLoading() {
   const t = await getTranslations("employees");
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
+      {/* GAP-HR-EMPLOYEES-07: loadingTitle/loadingSubtitle used to say
+          "Employee Directory" / "All staff, grades and posting locations"
+          -- a different heading (and a promise this page doesn't keep)
+          from the loaded page's own "Employees" title, so the heading
+          visibly flashed/changed the moment data arrived. */}
       <PageHeader
-        title={t("loadingTitle")}
-        subtitle={t("loadingSubtitle")}
+        title={t("title")}
+        subtitle={t("subtitle")}
         actions={
           /* mirror the Add Employee button so header height is stable */
           <div
