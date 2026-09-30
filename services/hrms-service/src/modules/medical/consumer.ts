@@ -109,5 +109,25 @@ export function registerMedicalConsumers(queue: Queue): void {
     log.info({ messageId: msg.messageId }, "medical claim approval processed");
   });
 
+  // GAP-HR-MEDICAL-01 (DPDP): the actual audit-outbox insert for a
+  // privileged bulk list read — published (fire-and-forget) by routes.ts's
+  // auditMedicalClaimsListRead, since a route may not write to Postgres
+  // directly. msg.payload is already the exact shape the read route wants
+  // recorded, so it passes straight through as the audit event's payload.
+  queue.subscribe(COMMANDS.medicalClaimsListRead, async (msg) => {
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: AUDIT,
+        eventType: AUDIT,
+        tenantId: msg.tenantId,
+        actorId: msg.actorId,
+        correlationId: msg.correlationId,
+        payload: msg.payload as Record<string, unknown>,
+      });
+    });
+    log.info({ messageId: msg.messageId }, "medical claims list-read audit recorded");
+  });
+
   log.info("medical consumers registered");
 }

@@ -32,6 +32,17 @@ import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
+import { queue } from "../shared/infra.js";
+import { registerMedicalConsumers } from "../modules/medical/consumer.js";
+
+// GAP-HR-MEDICAL-01: buildApp() registers routes only, not consumers (each
+// runs in a separate worker process in production) — the new list-read
+// audit event is published via the queue and recorded by medical/consumer.
+// ts's own subscriber, so this file needs it registered against the SAME
+// global `queue` singleton routes.ts publishes to. Same convention as
+// disciplinary-case-create-readable-real-db.test.ts's registerF3_
+// disciplinary_Consumers(queue) call.
+registerMedicalConsumers(queue);
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "cccccccc-0040-4000-8000-000000000040";
@@ -55,7 +66,26 @@ const SELF_SUB = "cccccccc-0040-4000-8000-0000000000f1";
 const selfToken = tok(["employee"], SELF_SUB);
 const hrToken = tok(["hr_admin"], "cccccccc-0040-4000-8000-0000000000f2");
 
+// GAP-HR-MEDICAL-01 fixtures: a manager linked to MANAGER_SUB, two direct
+// reports (manager_id = MANAGER_ID), an unlinked manager token (no
+// hrms_employees row at all), and a dedicated employee for pagination
+// coverage. OTHER_EMPLOYEE_ID/otherClaimId (declared above) double as the
+// "exists in-tenant but is NOT a report" outsider case for the manager tests.
+const MANAGER_SUB = "cccccccc-0040-4000-8000-0000000000f3";
+const UNLINKED_MGR_SUB = "cccccccc-0040-4000-8000-0000000000f4";
+const MANAGER_ID = "cccccccc-0040-4000-8000-0000000000e3";
+const REPORT1_ID = "cccccccc-0040-4000-8000-0000000000e4";
+const REPORT2_ID = "cccccccc-0040-4000-8000-0000000000e5";
+const PAGINATION_EMPLOYEE_ID = "cccccccc-0040-4000-8000-0000000000e6";
+const managerToken = tok(["manager"], MANAGER_SUB);
+const unlinkedMgrToken = tok(["manager"], UNLINKED_MGR_SUB);
+
 let app: Awaited<ReturnType<typeof buildApp>>;
+// Set by the first describe block below; read by the GAP-HR-MEDICAL-01
+// describe blocks further down (hoisted to module scope so both can see
+// them — a per-describe `let` is not visible outside its own closure).
+let claimId: string;
+let otherClaimId: string;
 
 // medical.hrms_medical_claims is FORCE RLS: this test's own verification
 // queries need the same app.tenant_id GUC the fixed route now sets via
@@ -118,6 +148,32 @@ beforeAll(async () => {
       (${OTHER_EMPLOYEE_ID}, ${TENANT}, 'MEDTEST-002', 'Medical Test Other Employee', ${DEPT_ID}, ${DESIG_ID}, '2020-01-01', ${SEED_ACTOR}, ${SEED_ACTOR})
   `);
 
+  // GAP-HR-MEDICAL-01 fixtures: MANAGER_ID linked to managerToken's `sub` via
+  // user_ref, two direct reports (manager_id = MANAGER_ID). OTHER_EMPLOYEE_ID
+  // above doubles as the "exists in-tenant but is not a report" outsider.
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, created_by, updated_by)
+    VALUES
+      (${MANAGER_ID}, ${TENANT}, 'MEDTEST-003', 'Medical Test Manager', ${DEPT_ID}, ${DESIG_ID}, '2019-01-01', ${MANAGER_SUB}, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, manager_id, created_by, updated_by)
+    VALUES
+      (${REPORT1_ID}, ${TENANT}, 'MEDTEST-004', 'Medical Test Report One', ${DEPT_ID}, ${DESIG_ID}, '2021-01-01', ${MANAGER_ID}, ${SEED_ACTOR}, ${SEED_ACTOR}),
+      (${REPORT2_ID}, ${TENANT}, 'MEDTEST-005', 'Medical Test Report Two', ${DEPT_ID}, ${DESIG_ID}, '2021-06-01', ${MANAGER_ID}, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  // Dedicated employee for pagination coverage — kept separate from every
+  // other fixture above so an exact-count/exact-slice assertion can never be
+  // perturbed by claims another test in this file seeds.
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, created_by, updated_by)
+    VALUES
+      (${PAGINATION_EMPLOYEE_ID}, ${TENANT}, 'MEDTEST-006', 'Medical Test Pagination Employee', ${DEPT_ID}, ${DESIG_ID}, '2020-01-01', ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+
   app = await buildApp();
 });
 
@@ -128,9 +184,6 @@ afterAll(async () => {
 });
 
 describe("medical claims — real round-trip against medical.hrms_medical_claims", () => {
-  let claimId: string;
-  let otherClaimId: string;
-
   it("POST /v1/hrms/medical/claims — 201, and the row actually exists in medical.hrms_medical_claims", async () => {
     const r = await app.inject({
       method: "POST",
@@ -549,5 +602,274 @@ describe("medical claims — real round-trip against medical.hrms_medical_claims
     });
     expect(r.statusCode).toBe(409);
     expect(JSON.parse(r.body).code).toBe("WRONG_STATE");
+  });
+});
+
+// ── GAP-HR-MEDICAL-01 regression suite ────────────────────────────────────
+// First-pass claim: managers and HR see every employee's medical claims
+// tenant-wide (hospital, amounts, dependant relation) — resolveSelfScoped-
+// EmployeeId returned `requested` unchanged for [...HR_ROLES, "manager"],
+// and the list route's employee_id filter was skipped whenever that was
+// undefined. Fixed for the LIST route specifically (submit/insurance/
+// history's own manager behavior is deliberately unchanged — see
+// tests/medical-routes.test.ts's "managers can submit claims" and
+// "managers' access by employeeId is preserved (unaffected...)" specs):
+// manager is now scoped to direct reports only, mirroring the codebase-wide
+// "my team is direct reports, not self" convention (manager-employee-read-
+// scope-real-db.test.ts:146, loans-advances-manager-scope-real-db.test.ts,
+// leave/routes.ts's resolveNonHrEmployeeScope) — fails CLOSED to an empty
+// list when the manager has no resolvable hrms_employees link, exactly like
+// those precedents. Also covers the diagnosis/documents/remarks field drop
+// and the new DPDP audit-on-read emission.
+describe("GET /v1/hrms/medical/claims — GAP-HR-MEDICAL-01: manager scope", () => {
+  let managerOwnClaimId: string;
+  let report1ClaimId: string;
+  let report2ClaimId: string;
+
+  async function seedClaim(employeeId: string, hospitalName: string): Promise<string> {
+    const id = randomUUID();
+    await asTenant((tx) => tx`
+      INSERT INTO medical.hrms_medical_claims (
+        id, tenant_id, employee_id, claim_type, amount_minor, hospital_name,
+        diagnosis, documents, status, created_by, updated_by
+      ) VALUES (
+        ${id}, ${TENANT}, ${employeeId}, 'outdoor', 100000, ${hospitalName},
+        'Manager-scope test fixture', '[]', 'pending', ${SEED_ACTOR}, ${SEED_ACTOR}
+      )
+    `);
+    return id;
+  }
+
+  beforeAll(async () => {
+    managerOwnClaimId = await seedClaim(MANAGER_ID, "Manager Own Claim Hospital");
+    report1ClaimId = await seedClaim(REPORT1_ID, "Report One Hospital");
+    report2ClaimId = await seedClaim(REPORT2_ID, "Report Two Hospital");
+  });
+
+  it("REPRODUCTION: confirms today's fixed behavior is not accidentally still tenant-wide — a manager token must not see the pre-existing otherClaimId/claimId fixtures from the describe block above either", async () => {
+    // This is the same request the "leak" acceptance criterion is about;
+    // written first (before the narrower assertions below) as the direct
+    // reproduction of GAP-HR-MEDICAL-01's verified evidence: a manager
+    // caller omitting employeeId used to get every tenant claim back.
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).not.toContain(claimId);      // EMPLOYEE_ID's claim — not a report of MANAGER_ID
+    expect(ids).not.toContain(otherClaimId); // OTHER_EMPLOYEE_ID's claim — not a report either
+  });
+
+  it("manager with 2 direct reports sees exactly their reports' claims — not the outsider's, not their own", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(report1ClaimId);
+    expect(ids).toContain(report2ClaimId);
+    expect(ids).not.toContain(otherClaimId);      // not a report — must never leak tenant-wide
+    expect(ids).not.toContain(managerOwnClaimId); // "my team" = direct reports, not self
+  });
+
+  it("manager explicitly requesting a non-report's employeeId still does not leak it (silently narrowed, same 'ignore an over-broad ask' shape this route already uses for a bare employee)", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/medical/claims?employeeId=${OTHER_EMPLOYEE_ID}`,
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).not.toContain(otherClaimId);
+  });
+
+  it("manager-only token with NO resolvable employee link fails CLOSED to an empty list (never falls back to tenant-wide)", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${unlinkedMgrToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(JSON.parse(r.body).data).toEqual([]);
+  });
+
+  it("HR's tenant-wide access is unaffected by the manager scope fix", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(report1ClaimId);
+    expect(ids).toContain(report2ClaimId);
+    expect(ids).toContain(managerOwnClaimId);
+    expect(ids).toContain(otherClaimId);
+  });
+
+  it("a bare employee's own list is still unaffected by any of the manager-scope changes", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${selfToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(claimId);
+    expect(ids).not.toContain(managerOwnClaimId);
+    expect(ids).not.toContain(report1ClaimId);
+    expect(ids).not.toContain(report2ClaimId);
+  });
+
+  it("list response no longer includes diagnosis, documents or remarks — those stay detail-route-only", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const rows = JSON.parse(r.body).data as Array<Record<string, unknown>>;
+    expect(rows.length).toBeGreaterThan(0);
+    for (const row of rows) {
+      expect(row).not.toHaveProperty("diagnosis");
+      expect(row).not.toHaveProperty("documents");
+      expect(row).not.toHaveProperty("remarks");
+    }
+  });
+});
+
+describe("GET /v1/hrms/medical/claims — GAP-HR-MEDICAL-01: pagination and DPDP audit trail", () => {
+  const claimIds: string[] = [];
+
+  beforeAll(async () => {
+    // Three claims, 1s apart by explicit created_at so ORDER BY created_at
+    // DESC is deterministic (concurrent NOW() calls could otherwise tie).
+    const baseTime = Date.now();
+    for (let i = 0; i < 3; i++) {
+      const id = randomUUID();
+      await asTenant((tx) => tx`
+        INSERT INTO medical.hrms_medical_claims (
+          id, tenant_id, employee_id, claim_type, amount_minor, hospital_name,
+          diagnosis, documents, status, created_at, created_by, updated_by
+        ) VALUES (
+          ${id}, ${TENANT}, ${PAGINATION_EMPLOYEE_ID}, 'outdoor', 100000, ${"Pagination Hospital " + i},
+          'Pagination test fixture', '[]', 'pending', ${new Date(baseTime + i * 1000).toISOString()},
+          ${SEED_ACTOR}, ${SEED_ACTOR}
+        )
+      `);
+      claimIds.push(id); // index 0 = oldest; DESC order returns them reversed
+    }
+  });
+
+  it("limit/offset page through a single employee's claims deterministically (already-implemented server-side; now under regression coverage)", async () => {
+    const page1 = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/medical/claims?employeeId=${PAGINATION_EMPLOYEE_ID}&limit=2&offset=0`,
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(page1.statusCode).toBe(200);
+    const page1Ids = (JSON.parse(page1.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(page1Ids).toEqual([claimIds[2], claimIds[1]]); // newest-first, 2 rows
+
+    const page2 = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/medical/claims?employeeId=${PAGINATION_EMPLOYEE_ID}&limit=2&offset=2`,
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(page2.statusCode).toBe(200);
+    const page2Ids = (JSON.parse(page2.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(page2Ids).toEqual([claimIds[0]]); // the remaining, oldest row
+  });
+
+  it("limit above 100 is rejected (400), not silently clamped", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/medical/claims?employeeId=${PAGINATION_EMPLOYEE_ID}&limit=101`,
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(r.statusCode).toBe(400);
+  });
+
+  async function latestListAuditRow(): Promise<{ payload: Record<string, unknown> } | undefined> {
+    const [row] = await asTenant((tx) => tx`
+      SELECT payload FROM _outbox.messages
+      WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'
+        AND payload->>'resourceType' = 'medical_claim' AND payload->>'action' = 'list'
+      ORDER BY created_at DESC LIMIT 1
+    `);
+    return row as { payload: Record<string, unknown> } | undefined;
+  }
+
+  // The list route publishes the audit event (fire-and-forget: queue.
+  // publish() resolves before its consumer runs — see MemoryQueue's own doc
+  // comment in services/queue-service/src/bus.ts) rather than writing it
+  // synchronously. drain() forces every in-flight delivery for this queue
+  // instance to finish before the DB assertions below run — same idiom as
+  // disciplinary-case-create-readable-real-db.test.ts.
+  async function drainQueue(): Promise<void> {
+    await (queue as unknown as { drain: () => Promise<void> }).drain();
+  }
+
+  it("an HR list read emits an audit.event.record row with the actor, filter and row count", async () => {
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/medical/claims?employeeId=${PAGINATION_EMPLOYEE_ID}&status=pending`,
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    await drainQueue();
+
+    const auditRow = await latestListAuditRow();
+    if (!auditRow) throw new Error("expected an audit.event.record row after an HR list call");
+    expect(auditRow.payload.action).toBe("list");
+    expect(auditRow.payload.resourceType).toBe("medical_claim");
+    expect(auditRow.payload.rowCount).toBe(3);
+    expect((auditRow.payload.filter as { employeeId: string | null }).employeeId).toBe(PAGINATION_EMPLOYEE_ID);
+  });
+
+  it("a manager list read also emits an audit event (DPDP: any privileged bulk read of others' health data is audited)", async () => {
+    const [before] = await asTenant((tx) => tx`
+      SELECT count(*)::int AS n FROM _outbox.messages
+      WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'
+        AND payload->>'resourceType' = 'medical_claim' AND payload->>'action' = 'list'
+    `);
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${managerToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    await drainQueue();
+    const [after] = await asTenant((tx) => tx`
+      SELECT count(*)::int AS n FROM _outbox.messages
+      WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'
+        AND payload->>'resourceType' = 'medical_claim' AND payload->>'action' = 'list'
+    `);
+    expect(after?.n).toBe((before?.n ?? 0) + 1);
+  });
+
+  it("a bare employee's own-claims list read does NOT emit an audit event (only HR/manager reads of others' data are DPDP-audited)", async () => {
+    const [before] = await asTenant((tx) => tx`
+      SELECT count(*)::int AS n FROM _outbox.messages
+      WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'
+        AND payload->>'resourceType' = 'medical_claim' AND payload->>'action' = 'list'
+    `);
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${selfToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    await drainQueue();
+    const [after] = await asTenant((tx) => tx`
+      SELECT count(*)::int AS n FROM _outbox.messages
+      WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'
+        AND payload->>'resourceType' = 'medical_claim' AND payload->>'action' = 'list'
+    `);
+    expect(after?.n).toBe(before?.n);
   });
 });
