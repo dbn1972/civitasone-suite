@@ -555,8 +555,20 @@ export function mapEmployees(payload: unknown): EmployeeSummary[] | null {
     // re-mapping just never forwarded it, so the list page could never show
     // a Type column no matter what the API sent.
     const employeeType = toText(row.employeeType);
+    // GAP-HR-DASHBOARD-04: real columns already returned by the API
+    // (employee/queries.ts's listEmployees) but previously dropped here --
+    // `payGrade` (not `grade`) to match hr/dashboard/page.tsx's pre-existing
+    // EmpRow contract, which already expected this exact field name.
+    const dateOfJoining = toText(row.dateOfJoining);
+    const payGrade = toText(row.grade) ?? toText(row.payGrade);
     if (!id || !name) continue;
-    mapped.push({ id, name, department, status, ...(empNo ? { employeeNo: empNo } : {}), ...(employeeType ? { employeeType } : {}) });
+    mapped.push({
+      id, name, department, status,
+      ...(empNo ? { employeeNo: empNo } : {}),
+      ...(employeeType ? { employeeType } : {}),
+      ...(dateOfJoining ? { dateOfJoining } : {}),
+      ...(payGrade ? { payGrade } : {}),
+    });
   }
   return mapped;
 }
@@ -2226,6 +2238,7 @@ const HR_DASHBOARD_EMPTY: HRDashboard = {
   departmentBreakdown: [],
   employeeTypeBreakdown: [],
   routingFailedCount: 0,
+  totalDepartments: 0,
 };
 
 function mapHRDashboard(payload: unknown): HRDashboard | null {
@@ -2234,7 +2247,16 @@ function mapHRDashboard(payload: unknown): HRDashboard | null {
   return {
     headcount: typeof raw.headcount === "number" ? raw.headcount : 0,
     headcountLastMonth: typeof raw.headcountLastMonth === "number" ? raw.headcountLastMonth : 0,
-    attendanceTodayPct: typeof raw.attendanceTodayPct === "number" ? raw.attendanceTodayPct : 0,
+    // GAP-HR-DASHBOARD-07: a genuine `null` from the backend (no attendance
+    // feed synced for today) must pass through as null, not get coerced to a
+    // fabricated 0 here -- same bug class the backend fix just closed, one
+    // layer up. Only a truly missing/non-number/non-null field falls back to 0.
+    attendanceTodayPct:
+      typeof raw.attendanceTodayPct === "number"
+        ? raw.attendanceTodayPct
+        : raw.attendanceTodayPct === null
+        ? null
+        : 0,
     pendingLeaves: typeof raw.pendingLeaves === "number" ? raw.pendingLeaves : 0,
     onLeave: typeof raw.onLeave === "number" ? raw.onLeave : 0,
     payrollDue: typeof raw.payrollDue === "number" ? raw.payrollDue : 0,
@@ -2245,30 +2267,42 @@ function mapHRDashboard(payload: unknown): HRDashboard | null {
       ? (raw.employeeTypeBreakdown as { name: string; count: number }[])
       : [],
     routingFailedCount: typeof raw.routingFailedCount === "number" ? raw.routingFailedCount : 0,
+    totalDepartments: typeof raw.totalDepartments === "number" ? raw.totalDepartments : 0,
   };
 }
 
-export async function getDashboardLeaveInbox(): Promise<{ data: LeaveInboxItem[]; routingFailed: LeaveInboxItem[] }> {
-  try {
-    const res = await fetchJson<unknown, { data: LeaveInboxItem[]; routingFailed: LeaveInboxItem[] }>(
-      "/api/v1/hrms/dashboard/pending-leaves",
-      { data: [] as LeaveInboxItem[], routingFailed: [] as LeaveInboxItem[] },
-      {
-        revalidateSeconds: 30,
-        telemetryKey: "hr.dashboard.pending_leaves",
-        mapResponse: (p) => {
-          if (!isRecord(p) || !Array.isArray(p.data)) return { data: [] as LeaveInboxItem[], routingFailed: [] as LeaveInboxItem[] };
-          return {
-            data: p.data as LeaveInboxItem[],
-            routingFailed: Array.isArray(p.routingFailed) ? (p.routingFailed as LeaveInboxItem[]) : [],
-          };
-        },
-      }
-    );
-    return res.data;
-  } catch {
-    return { data: [], routingFailed: [] };
-  }
+/**
+ * GAP-HR-DASHBOARD-02: previously returned the bare `{data, routingFailed}`
+ * tuple with a try/catch that swallowed fetchJson's own `source` (fetchJson
+ * itself never throws -- see apiClient.ts's fetchJson, which always resolves
+ * to a LoaderResult -- so this catch could never fire on a real failure path
+ * and only masked the information loss). Any failure of
+ * /dashboard/pending-leaves silently produced {data:[],routingFailed:[]},
+ * which page.tsx and ActionInbox.tsx could not distinguish from a genuinely
+ * empty, healthy inbox -- rendering the false "Inbox clear" empty state
+ * instead of an honest error. Now returns the full LoaderResult so callers
+ * can key off `source` exactly like every other loader in this file.
+ */
+export async function getDashboardLeaveInbox(): Promise<LoaderResult<{ data: LeaveInboxItem[]; routingFailed: LeaveInboxItem[] }>> {
+  return fetchJson<unknown, { data: LeaveInboxItem[]; routingFailed: LeaveInboxItem[] }>(
+    "/api/v1/hrms/dashboard/pending-leaves",
+    { data: [] as LeaveInboxItem[], routingFailed: [] as LeaveInboxItem[] },
+    {
+      revalidateSeconds: 30,
+      telemetryKey: "hr.dashboard.pending_leaves",
+      mapResponse: (p) => {
+        // A malformed payload is a genuine invalid-payload failure (mirrors
+        // mapEmployees'/mapHRDashboard's null-on-unparseable convention) --
+        // NOT the same as "well-formed, zero pending items", which must
+        // still resolve to source:"api" with empty arrays.
+        if (!isRecord(p) || !Array.isArray(p.data)) return null;
+        return {
+          data: p.data as LeaveInboxItem[],
+          routingFailed: Array.isArray(p.routingFailed) ? (p.routingFailed as LeaveInboxItem[]) : [],
+        };
+      },
+    }
+  );
 }
 
 export async function getHRDashboard(): Promise<LoaderResult<HRDashboard>> {

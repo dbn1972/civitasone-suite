@@ -73,13 +73,19 @@ export function HRKPIStrip({
         <div className="kpi-trend trend-flat">{!hasValue(onLeave) ? "No data" : onLeave === 0 ? "No leave today" : `${onLeave} absent`}</div>
       </div>
 
-      {/* Payroll Closes */}
+      {/* Days left in month (GAP-HR-DASHBOARD-05): the previous "Payroll
+          Closes" label implied a real payroll-cutoff calendar this KPI has
+          never actually sourced from (payrollDaysLeft is just calendar
+          days to month-end, see page.tsx's payrollDaysLeft()) -- relabeled
+          honestly as the safe non-decision fallback; sourcing from a real
+          payroll-cutoff API is an open product decision, not made here. */}
       <div className="kpi-card kpi-amber" role="listitem" data-testid="kpi-payroll-closes">
         <div className="kpi-label">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="var(--warn, #d97706)" strokeWidth="2" aria-hidden="true"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-          Payroll Closes
+          Days left in month
         </div>
-        <div className="kpi-val kpi-val-sm">{payrollDaysLeft} days</div>
+        {/* GAP-HR-DASHBOARD-05: was the unpluralized literal "{payrollDaysLeft} days" (1 -> "1 days"). */}
+        <div className="kpi-val kpi-val-sm">{payrollDaysLeft} day{payrollDaysLeft !== 1 ? "s" : ""}</div>
         <div className="kpi-trend trend-flat">End of month</div>
       </div>
 
@@ -90,7 +96,10 @@ export function HRKPIStrip({
           Departments
         </div>
         <div className="kpi-val">{displayCount(departments)}</div>
-        <div className="kpi-trend trend-flat">{hasValue(departments) ? "Across all grades" : "No data"}</div>
+        {/* GAP-HR-DASHBOARD-06: "Across all grades" was meaningless filler;
+            "Active departments" actually describes what this number is now
+            that it's a real hrms_departments count (see page.tsx). */}
+        <div className="kpi-trend trend-flat">{hasValue(departments) ? "Active departments" : "No data"}</div>
       </div>
 
       {/* Present Today */}

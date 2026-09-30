@@ -5,6 +5,11 @@ import { GreetingHeader } from "./GreetingHeader";
 // Distinct, non-colliding real values, same convention as HRKPIStrip.test.tsx.
 const baseProps = {
   userName: "Asha",
+  // GAP-HR-DASHBOARD-08: now a plain, caller-supplied prop (page.tsx computes
+  // it server-side from the real IST hour via greetingForHour) -- no longer
+  // derived internally from dayName, so this component has no logic of its
+  // own left to test for it beyond "renders exactly what it was given".
+  greeting: "Good afternoon",
   pendingCount: 3,
   payrollDaysLeft: 12,
   today: "23 September 2026",
@@ -24,7 +29,18 @@ describe("GreetingHeader", () => {
   it("renders the greeting as an h2, not an h1", () => {
     render(<GreetingHeader {...baseProps} />);
     expect(within(getGreeting()).queryByRole("heading", { level: 1 })).not.toBeInTheDocument();
-    expect(within(getGreeting()).getByRole("heading", { level: 2 })).toHaveTextContent(/Good (morning|day), Asha/);
+    expect(within(getGreeting()).getByRole("heading", { level: 2 })).toHaveTextContent("Good afternoon, Asha");
+  });
+
+  // GAP-HR-DASHBOARD-08: this component renders whatever `greeting` string
+  // it's given verbatim -- computing the real hour-of-day greeting is
+  // page.tsx's job now (see page.test.tsx's greetingForHour tests), not
+  // this component's. This is a regression lock against the previous
+  // `dayName.startsWith("S") ? "Good day" : "Good morning"` weekday hack,
+  // which this component must never reintroduce.
+  it("renders the passed greeting verbatim regardless of dayName", () => {
+    render(<GreetingHeader {...baseProps} greeting="Good evening" dayName="Saturday" />);
+    expect(within(getGreeting()).getByRole("heading", { level: 2 })).toHaveTextContent("Good evening, Asha");
   });
 
   it("shows the pending-count briefing when there are pending items", () => {

@@ -36,7 +36,11 @@ const ACTIONS: QuickAction[] = [
   {
     label: "Download Report",
     desc: "Headcount & leaves",
-    href: "/hr/payroll",
+    // GAP-HR-DASHBOARD-06: was "/hr/payroll" -- not a report of any kind, a
+    // dead-end link. /reports/list/new?reportType=hr is a real, working
+    // report-generation flow (the generic reports pipeline's own form
+    // offers "hr" as its example report-type value).
+    href: "/reports/list/new?reportType=hr",
     iconColor: "var(--warnbg, #fffbeb)",
     icon: <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--warn, #d97706)" strokeWidth="2" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>,
   },
