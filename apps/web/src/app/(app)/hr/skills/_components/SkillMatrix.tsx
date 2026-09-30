@@ -1,54 +1,76 @@
 "use client";
 
 import React, { useState } from "react";
-import { Button } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
 
-export type Proficiency = 0 | 1 | 2 | 3 | 4; // 0=none,1=Beginner,2=Developing,3=Proficient,4=Expert
-export const PROFICIENCY_LABELS: Record<number, string> = {
-  0: "—",
-  1: "Beginner",
-  2: "Developing",
-  3: "Proficient",
-  4: "Expert",
-};
+// Proficiency scale matches the backend's canonical vocabulary (beginner,
+// intermediate, advanced, expert — see gap-features/routes.ts POST
+// /v1/hrms/skills/assessments) 1:1, so level 3 ("advanced") is reachable
+// (GAP-HR-SKILLS-03; the previous 5-way label set mapped both advanced and
+// expert to 4 and left level 3 permanently unreachable).
+export type Proficiency = 0 | 1 | 2 | 3 | 4; // 0=not assessed,1=Beginner,2=Intermediate,3=Advanced,4=Expert
 
 export interface SkillRecord {
   skill: string;
   category: string;
   employee: string;
   proficiency: Proficiency;
-  requiredLevel?: Proficiency; // role requirement for gap coloring
+  requiredLevel?: Proficiency; // baseline used for gap coloring
 }
 
 export interface SkillMatrixProps {
   records: SkillRecord[];
-  onExportPdf?: () => void;
 }
 
+// GAP-HR-SKILLS-04: colours are design tokens (light/dark aware) rather than
+// fixed hex, so the matrix keeps working contrast in dark mode.
 function dotColor(proficiency: Proficiency, required: Proficiency): string {
-  if (proficiency === 0) return "#e2e8f0";  // not assessed
-  if (proficiency >= required) return "#4ade80"; // at or above requirement
-  if (required - proficiency === 1) return "#fbbf24"; // one level below
-  return "#f87171"; // gap ≥ 2
+  if (proficiency === 0) return "var(--line)"; // not assessed
+  if (proficiency >= required) return "var(--good)"; // meets/exceeds baseline
+  if (required - proficiency === 1) return "var(--warn)"; // one level below
+  return "var(--bad)"; // gap of 2+ levels
 }
 
 function Dot({ filled, color }: { filled: boolean; color: string }) {
   return (
     <div
+      aria-hidden="true"
       style={{
-        width: 16, height: 16, borderRadius: "50%",
-        background: filled ? color : "var(--bg, #f1f5f9)",
-        border: `2px solid ${filled ? color : "var(--line, #e2e8f0)"}`,
+        width: 16,
+        height: 16,
+        borderRadius: "50%",
+        background: filled ? color : "var(--panel)",
+        border: `2px solid ${filled ? color : "var(--line)"}`,
         flexShrink: 0,
       }}
-      aria-label={filled ? "filled" : "empty"}
     />
   );
 }
 
-export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
+const cellStyle: React.CSSProperties = {
+  padding: "8px 10px",
+  border: "1px solid var(--line)",
+};
+
+export function SkillMatrix({ records }: SkillMatrixProps) {
+  const t = useTranslations("skills");
   const [filterCat, setFilterCat] = useState("All");
   const [filterEmp, setFilterEmp] = useState("");
+
+  const PROFICIENCY_LABELS: Record<number, string> = {
+    0: t("levelNone"),
+    1: t("levelBeginner"),
+    2: t("levelIntermediate"),
+    3: t("levelAdvanced"),
+    4: t("levelExpert"),
+  };
+
+  function gapWord(proficiency: Proficiency, required: Proficiency): string {
+    if (proficiency === 0) return t("gapNotAssessed");
+    if (proficiency >= required) return t("gapMeets");
+    if (required - proficiency === 1) return t("gapOneBelow");
+    return t("gapBehind");
+  }
 
   const categories = ["All", ...Array.from(new Set(records.map((r) => r.category))).sort()];
 
@@ -74,45 +96,44 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
         <input
           type="text"
-          aria-label="Filter by employee"
-          placeholder="Filter by employee…"
+          aria-label={t("filterEmployeeLabel")}
+          placeholder={t("filterEmployeePlaceholder")}
           value={filterEmp}
           onChange={(e) => setFilterEmp(e.target.value)}
           style={{
-            padding: "5px 10px", fontSize: 13, border: "1px solid var(--line, #cbd5e1)",
-            borderRadius: 6, flex: "1 1 160px", maxWidth: 200,
+            padding: "5px 10px",
+            fontSize: 13,
+            border: "1px solid var(--line)",
+            borderRadius: 6,
+            flex: "1 1 160px",
+            maxWidth: 200,
           }}
         />
         <select
+          aria-label={t("filterCategoryLabel")}
           value={filterCat}
           onChange={(e) => setFilterCat(e.target.value)}
-          style={{ padding: "5px 10px", fontSize: 13, border: "1px solid var(--line, #cbd5e1)", borderRadius: 6 }}
+          style={{ padding: "5px 10px", fontSize: 13, border: "1px solid var(--line)", borderRadius: 6 }}
         >
-          {categories.map((c) => <option key={c}>{c}</option>)}
+          {categories.map((c) => (
+            <option key={c} value={c}>
+              {c === "All" ? t("filterAllCategories") : c}
+            </option>
+          ))}
         </select>
-        {onExportPdf && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onExportPdf}
-            style={{ marginInlineStart: "auto" }}
-          >
-            Export PDF
-          </Button>
-        )}
       </div>
 
       {/* Legend */}
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", fontSize: 11 }}>
         {[
-          { color: "#4ade80", label: "At / above requirement" },
-          { color: "#fbbf24", label: "1 level below" },
-          { color: "#f87171", label: "Gap ≥ 2 levels" },
-          { color: "#e2e8f0", label: "Not assessed" },
+          { color: "var(--good)", label: t("legendMeets") },
+          { color: "var(--warn)", label: t("legendOneBelow") },
+          { color: "var(--bad)", label: t("legendGap") },
+          { color: "var(--line)", label: t("legendNotAssessed") },
         ].map(({ color, label }) => (
           <span key={label} style={{ display: "flex", alignItems: "center", gap: 4 }}>
             <Dot filled color={color} />
-            <span style={{ color: "var(--ink2, #475569)" }}>{label}</span>
+            <span style={{ color: "var(--ink2)" }}>{label}</span>
           </span>
         ))}
       </div>
@@ -120,24 +141,24 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
       {/* Matrix table */}
       <div style={{ overflowX: "auto" }}>
         {skills.length === 0 ? (
-          <p style={{ color: "var(--mut)", textAlign: "center", padding: 24 }}>No skill records match the filter.</p>
+          <p style={{ color: "var(--mut)", textAlign: "center", padding: 24 }}>{t("noMatch")}</p>
         ) : (
-          <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 640, width: "100%" }}>
+          <table style={{ borderCollapse: "collapse", fontSize: 12, minWidth: 720, width: "100%" }}>
             <thead>
-              <tr style={{ background: "var(--bg, #f8fafc)" }}>
-                <th style={{ textAlign: "start", padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)", minWidth: 150, fontWeight: 700, color: "var(--ink, #1e293b)" }}>
-                  Skill
+              <tr style={{ background: "var(--bg)" }}>
+                <th style={{ ...cellStyle, textAlign: "start", minWidth: 130, fontWeight: 700, color: "var(--ink)" }}>
+                  {t("colEmployee")}
                 </th>
-                <th style={{ textAlign: "start", padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)", minWidth: 100, fontWeight: 700, color: "var(--ink, #1e293b)" }}>
-                  Category
+                <th style={{ ...cellStyle, textAlign: "start", minWidth: 150, fontWeight: 700, color: "var(--ink)" }}>
+                  {t("colSkill")}
+                </th>
+                <th style={{ ...cellStyle, textAlign: "start", minWidth: 100, fontWeight: 700, color: "var(--ink)" }}>
+                  {t("colCategory")}
                 </th>
                 {COLS.map((level) => (
                   <th
                     key={level}
-                    style={{
-                      textAlign: "center", padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)",
-                      fontWeight: 700, color: "var(--ink, #1e293b)", whiteSpace: "nowrap",
-                    }}
+                    style={{ ...cellStyle, textAlign: "center", fontWeight: 700, color: "var(--ink)", whiteSpace: "nowrap" }}
                   >
                     {PROFICIENCY_LABELS[level]}
                   </th>
@@ -146,52 +167,59 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
             </thead>
             <tbody>
               {skills.flatMap((skill) => {
-                const skillRecs = filtered.filter((r) => r.skill === skill);
-                const required  = skillRecs[0]?.requiredLevel ?? 3;
-                return employees.map((emp, ei) => {
-                  const rec = lookup.get(`${emp}::${skill}`);
-                  if (!rec) return null;
+                // GAP-HR-SKILLS-02: index into the records that actually exist
+                // for this skill, not into the full (unfiltered) employees
+                // list — otherwise a skill whose alphabetically-first
+                // employee has no record loses its Skill/Category cells for
+                // every row.
+                const recs = employees
+                  .map((emp) => lookup.get(`${emp}::${skill}`))
+                  .filter((r): r is SkillRecord => Boolean(r));
+                const required = (recs[0]?.requiredLevel ?? 3) as Proficiency;
+
+                return recs.map((rec, idx) => {
+                  const summary = t("rowSummary", {
+                    employee: rec.employee,
+                    level: PROFICIENCY_LABELS[rec.proficiency],
+                    gap: gapWord(rec.proficiency, required),
+                  });
                   return (
-                    <tr
-                      key={`${skill}::${emp}`}
-                      style={{ background: ei % 2 === 0 ? "var(--panel, #fff)" : "#f8fafc" }}
-                    >
-                      {ei === 0 && (
+                    <tr key={`${skill}::${rec.employee}`} style={{ background: idx % 2 === 0 ? "var(--panel)" : "var(--bg)" }}>
+                      {/* GAP-HR-SKILLS-01: employee is now a real column, not
+                          just a filter — an org-wide row is otherwise
+                          unattributable. The single accessible summary for
+                          the whole row (GAP-HR-SKILLS-04) lives here so a
+                          screen reader gets one labelled image with the
+                          level name, instead of four separately-announced
+                          filled/empty dots. */}
+                      <td style={{ ...cellStyle, color: "var(--ink)" }}>
+                        {rec.employee}
+                        <span role="img" aria-label={summary} style={visuallyHidden} />
+                      </td>
+                      {idx === 0 && (
                         <>
-                          <td
-                            rowSpan={employees.filter((e) => lookup.has(`${e}::${skill}`)).length}
-                            style={{
-                              padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)",
-                              fontWeight: 600, color: "var(--ink, #1e293b)", verticalAlign: "top",
-                            }}
-                          >
+                          <td rowSpan={recs.length} style={{ ...cellStyle, fontWeight: 600, color: "var(--ink)", verticalAlign: "top" }}>
                             {skill}
                           </td>
-                          <td
-                            rowSpan={employees.filter((e) => lookup.has(`${e}::${skill}`)).length}
-                            style={{
-                              padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)",
-                              color: "var(--mut, #64748b)", verticalAlign: "top",
-                            }}
-                          >
+                          <td rowSpan={recs.length} style={{ ...cellStyle, color: "var(--mut)", verticalAlign: "top" }}>
                             {rec.category}
                           </td>
                         </>
                       )}
                       {COLS.map((level) => {
                         const isFilled = rec.proficiency >= level;
-                        const color    = dotColor(rec.proficiency as Proficiency, required as Proficiency);
+                        const color = dotColor(rec.proficiency, required);
                         return (
-                          <td key={level} style={{ textAlign: "center", padding: "8px 10px", border: "1px solid var(--line, #e2e8f0)" }}>
+                          <td key={level} style={{ ...cellStyle, textAlign: "center" }}>
                             <div style={{ display: "flex", justifyContent: "center" }}>
-                              <Dot filled={isFilled} color={isFilled ? color : "#e2e8f0"} />
+                              <Dot filled={isFilled} color={isFilled ? color : "var(--line)"} />
                             </div>
                           </td>
                         );
                       })}
                     </tr>
                   );
-                }).filter(Boolean);
+                });
               })}
             </tbody>
           </table>
@@ -200,3 +228,15 @@ export function SkillMatrix({ records, onExportPdf }: SkillMatrixProps) {
     </div>
   );
 }
+
+const visuallyHidden: React.CSSProperties = {
+  position: "absolute",
+  width: 1,
+  height: 1,
+  padding: 0,
+  margin: -1,
+  overflow: "hidden",
+  clip: "rect(0,0,0,0)",
+  whiteSpace: "nowrap",
+  border: 0,
+};
