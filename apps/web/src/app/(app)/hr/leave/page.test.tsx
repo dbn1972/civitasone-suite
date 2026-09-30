@@ -98,4 +98,17 @@ describe("LeaveManagementPage", () => {
     expect(screen.getByText("Policies")).toBeInTheDocument();
     expect(screen.getByText("Review now →")).toBeInTheDocument();
   });
+
+  // GAP-HR-LEAVE-POLICIES-01 regression: hr_officer clears this page's own
+  // isAdmin gate (HR_ROLES includes hr_officer) but leave-policies/page.tsx
+  // and policy-admin-routes.ts only ever admitted hr_admin/super_admin/
+  // tenant_admin/platform_admin — hr_officer used to see a "Policies" link
+  // that led to a dead-end PermissionDenied screen.
+  it("hides the Policies link for hr_officer (sees Allocate — hr_officer IS an allocate-capable HR role) even though it clears the page's own isAdmin gate", async () => {
+    mockRoles = ["hr_officer"];
+    fetchJsonMock.mockResolvedValue({ data: MOCK_REQUESTS, source: "api" });
+    await renderPage();
+    expect(screen.getByText("Allocate")).toBeInTheDocument();
+    expect(screen.queryByText("Policies")).not.toBeInTheDocument();
+  });
 });

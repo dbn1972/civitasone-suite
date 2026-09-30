@@ -12,12 +12,24 @@ import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { eq, and } from "drizzle-orm";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsLeavePolicyRules } from "./policy-schema.js";
 import { hrmsLeaveTypes } from "./schema.js";
 
-const HR_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+/**
+ * GAP-HR-LEAVE-POLICIES-01/02: mirrors the web's
+ * apps/web/src/lib/auth/workRoles.ts LEAVE_POLICY_ADMIN_ROLES exactly — keep
+ * both in sync. "admin" was dropped (not a role this system ever issues —
+ * see that constant's doc comment for the full re-derivation from the
+ * Keycloak realm/packages/auth role catalogue); tenant_admin/platform_admin
+ * were added (already admitted by hr/layout.tsx's HR_ROLES, so denying them
+ * here was a dead end, not a real boundary). hr_officer is deliberately not
+ * included — widening leave-entitlement admin to it needs HR sign-off.
+ */
+const HR_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];
 
 const employeeTypeEnum = z.enum(["permanent", "contractual", "vendor_deputed", "deputation", "consultant", "temporary", "intern", "apprentice", "volunteer"]);
 const countMethodEnum = z.enum(["calendar", "working_days"]);
@@ -40,7 +52,15 @@ const createPolicyBody = z.object({
   proRataOnJoining: z.boolean().default(true),
 });
 
-const updatePolicyBody = createPolicyBody.partial().omit({ leaveTypeId: true, employeeType: true });
+// GAP-HR-LEAVE-POLICIES-04: a policy could be deactivated (DELETE, below)
+// but never reactivated — updatePolicyBody had no isActive field at all, so
+// the only way back to isActive:true was re-POSTing the same
+// leaveType+employeeType (upsert semantics in f3-consumer.ts). The consumer
+// already applies `{...body, ...}` verbatim on update, so adding the field
+// here is sufficient — no consumer change needed.
+const updatePolicyBody = createPolicyBody.partial().omit({ leaveTypeId: true, employeeType: true }).extend({
+  isActive: z.boolean().optional(),
+});
 
 export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
   // ── List all leave policies for this tenant (filterable by employee type) ──
@@ -93,32 +113,22 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     const body = createPolicyBody.parse(req.body);
     const id = randomUUID();
 
-    const upsertValues = {
-      id,
-      tenantId: ctx.tenantId,
-      leaveTypeId: body.leaveTypeId,
-      employeeType: body.employeeType,
-      maxDaysPerYear: body.maxDaysPerYear,
-      carryForward: body.carryForward,
-      maxAccumulation: body.maxAccumulation,
-      encashable: body.encashable,
-      countMethod: body.countMethod,
-      maxContinuousDays: body.maxContinuousDays,
-      minServiceMonths: body.minServiceMonths,
-      genderRestriction: body.genderRestriction,
-      requiresMedicalCert: body.requiresMedicalCert,
-      requiresMedicalCertAfterDays: body.requiresMedicalCertAfterDays,
-      prefixSuffixRule: body.prefixSuffixRule,
-      sandwichRule: body.sandwichRule,
-      proRataOnJoining: body.proRataOnJoining,
-      createdBy: ctx.actorId,
-      updatedBy: ctx.actorId,
-    };
-
-    const result = await publishF3Write(ctx, "leave_policy_admin_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> }) as any
-
-    const returnedId = result[0]?.id ?? id;
-    return reply.code(201).send({ id: returnedId, status: "created", employeeType: body.employeeType, leaveTypeId: body.leaveTypeId });
+    // GAP-HR-LEAVE-POLICIES-03: this is a queued write (publishF3Write —
+    // applied later by f3-consumer.ts's leave_policy_admin_routes__0 case),
+    // but used to reply 201 "created" as if it had already happened
+    // (CLAUDE.md requires 202 for async writes). The client's immediate
+    // refetch could then show the pre-write list under a "created" toast.
+    // publishF3Write already returns exactly the {id,status:"accepted",
+    // correlationId} shape acceptedResponseSchema expects.
+    //
+    // Forward the PARSED `body` (Zod defaults applied — carryForward,
+    // maxAccumulation, countMethod, etc. all have .default(...)), not raw
+    // req.body: the pre-existing code built a whole `upsertValues` object
+    // from `body` here but then never actually used it (publishF3Write only
+    // ever saw raw req.body), so an omitted optional field's default was
+    // silently lost between validation and the queued write.
+    const result = await publishF3Write(ctx, "leave_policy_admin_routes__0", id, { body: body as unknown as Record<string, unknown>, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return sendAccepted(reply, acceptedResponseSchema, result);
   });
 
   // ── Update an existing policy rule ──
@@ -128,20 +138,27 @@ export async function policyAdminRoutes(app: FastifyInstance): Promise<void> {
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const body = updatePolicyBody.parse(req.body);
 
-    await publishF3Write(ctx, "leave_policy_admin_routes__1", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-
-    return reply.send({ id, status: "updated" }) as any;
+    // GAP-HR-LEAVE-POLICIES-03: same 200-"updated"-for-a-queued-write issue
+    // as POST above — the client's toast/refetch could precede the actual
+    // write and briefly show stale values under a "Policy updated" toast.
+    // Forwards the parsed `body` (see the POST handler's comment above for
+    // why, not raw req.body).
+    const result = await publishF3Write(ctx, "leave_policy_admin_routes__1", id, { body: body as unknown as Record<string, unknown>, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return sendAccepted(reply, acceptedResponseSchema, result);
   });
 
-  // ── Delete (soft: deactivate) a policy rule ──
+  // ── Deactivate a policy rule (soft delete: isActive=false) ──
   app.delete("/v1/hrms/admin/leave-policies/:id", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
 
-    await publishF3Write(ctx, "leave_policy_admin_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
-
-    return reply.code(204).send() as any;
+    // GAP-HR-LEAVE-POLICIES-04: this had no caller in the web app before
+    // this PR added one (LeavePoliciesClient's Deactivate action). Answering
+    // 202 (not 204) from the start, consistent with the other two queued
+    // writes above, rather than implying the deactivation is already visible.
+    const result = await publishF3Write(ctx, "leave_policy_admin_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
+    return sendAccepted(reply, acceptedResponseSchema, result);
   });
 
   app.setErrorHandler((err, req, reply) => {

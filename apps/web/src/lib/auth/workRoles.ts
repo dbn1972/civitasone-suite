@@ -97,3 +97,35 @@ export const HR_ROLES = [
   "manager",
   "employee",
 ];
+
+/**
+ * GAP-HR-LEAVE-POLICIES-01/02: roles allowed to administer leave policy
+ * rules (the /hr/leave-policies page and its backend, policy-admin-routes.ts's
+ * HR_ADMIN_ROLES — keep both in sync).
+ *
+ * Two corrections from the gap catalogue's first-pass list
+ * (["hr_admin", "super_admin", "admin"]), re-derived from the actual role
+ * catalogue rather than assumed:
+ *  - Dropped the bare "admin" role: it is not in Keycloak's realm roles
+ *    (infra/keycloak/civitasone-realm.json), not in HR_ROLES/
+ *    EMPLOYEE_ADMIN_ROLES above, and packages/auth's toRequestContext reads
+ *    `roles` straight off the verified JWT payload — "admin" is simply never
+ *    issued to any principal in this system (the one other place it
+ *    appears, FINANCE_ROLES above, is an unrelated module's role list).
+ *  - Added tenant_admin/platform_admin: both already clear hr/layout.tsx's
+ *    HR_ROLES (so they reach this page today) but were denied by the old,
+ *    narrower list here and by the backend — the exact same dead-end class
+ *    of bug GAP-HR-LEAVE-POLICIES-01 reports for hr_officer, just for two
+ *    different roles ("Reverse mismatch too" in that gap's evidence).
+ *    Unlike hr_officer (a lower/narrower HR tier — widening leave-entitlement
+ *    authority to it is a policy call needing HR sign-off, NOT done here),
+ *    tenant_admin/platform_admin are already-trusted, tenant-wide
+ *    administrative roles elsewhere in this app, so closing their dead end
+ *    is a safe, non-widening fix.
+ *  - hr_officer is deliberately NOT added: leave-policies changes affect
+ *    payroll/LOP calculation, and the catalogue's own risk note says that
+ *    widening needs explicit HR sign-off. GAP-HR-LEAVE-POLICIES-01 instead
+ *    stops hr_officer's dead-end by hiding the /hr/leave "Policies" link for
+ *    roles that can't use it (see leave/page.tsx's canManagePolicies).
+ */
+export const LEAVE_POLICY_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];

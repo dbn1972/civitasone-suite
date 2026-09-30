@@ -339,7 +339,11 @@ export function CreateLeavePolicyForm({ onCreated }: { onCreated?: () => void } 
           selectedLt ? (
             t.rich("confirmCreateDescRich", {
               leaveType: selectedLt.name,
-              employeeType: employeeType.replace(/_/g, " "),
+              // GAP-HR-LEAVE-POLICIES-07: use the same employeeTypes i18n
+              // map the form's own <select> options already use (line 47)
+              // instead of a raw replace(/_/g,' ') that bypasses translation
+              // and only substitutes the first underscore anyway.
+              employeeType: t(`employeeTypes.${employeeType}`),
               days: maxDaysPerYear,
               strongType: (chunks) => <strong>{chunks}</strong>,
               strongEmp: (chunks) => <strong style={{ textTransform: "capitalize" }}>{chunks}</strong>,

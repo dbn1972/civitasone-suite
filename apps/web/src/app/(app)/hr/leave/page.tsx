@@ -5,6 +5,7 @@ import { getLeaveRequestDetails } from "../../../_data/loaders";
 import type { LeaveRequestDetail } from "@civitasone/types";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { LEAVE_POLICY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { toHumanError } from "@/lib/messages";
 
 /**
@@ -20,6 +21,14 @@ export default async function LeaveManagementPage() {
   const roles = getSessionRoles();
   const isAdminOrManager = roles.some((r: string) => ADMIN_OR_MANAGER_ROLES.includes(r));
   const isAdmin = roles.some((r: string) => HR_ROLES.includes(r));
+  // GAP-HR-LEAVE-POLICIES-01: the Policies link used to be gated on `isAdmin`
+  // (hr_admin/hr_officer/super_admin — this page's own HR_ROLES), but the
+  // destination page and backend only ever admitted hr_admin/super_admin/
+  // "admin" — hr_officer cleared this gate and then hit a dead-end
+  // PermissionDenied. Gate on the SAME shared constant leave-policies/
+  // page.tsx and policy-admin-routes.ts actually enforce, so this link can
+  // never again promise access the destination doesn't grant.
+  const canManagePolicies = roles.some((r: string) => LEAVE_POLICY_ADMIN_ROLES.includes(r));
 
   const { data: allRequests, source } = await getLeaveRequestDetails();
   // GAP-HR-LEAVE-04: no client-side re-scoping here anymore. GET
@@ -85,7 +94,7 @@ export default async function LeaveManagementPage() {
               <Link href="/hr/leave/balance" className="btn">{t("navBalance")}</Link>
               <Link href="/hr/leave/history" className="btn">{t("navHistory")}</Link>
               {isAdmin && <Link href="/hr/leave/allocate" className="btn">{t("navAllocate")}</Link>}
-              {isAdmin && <Link href="/hr/leave-policies" className="btn">{t("navPolicies")}</Link>}
+              {canManagePolicies && <Link href="/hr/leave-policies" className="btn">{t("navPolicies")}</Link>}
             </span>
             {isAdminOrManager && <Link href="/hr/leave/approvals" className="btn">{t("approvals")}</Link>}
             <Link href="/hr/leave/apply" className="btn primary">{t("newLeave")}</Link>
