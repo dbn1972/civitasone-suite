@@ -155,7 +155,7 @@ export default async function Page() {
 				{ title: t("contractual"), href: "/hr/contractual", description: t("contractualDesc") },
 				{ title: t("outsourced"), href: "/hr/outsourced", description: t("outsourcedDesc") },
 				{ title: t("interns"), href: "/hr/interns", description: t("internsDesc") },
-				{ title: t("workforceAnalytics"), href: "/hr/workforce", description: t("workforceAnalyticsDesc") },
+				{ title: t("workforceOverview"), href: "/hr/workforce", description: t("workforceOverviewDesc") },
 				{ title: t("successionPlanning"), href: "/hr/succession", description: t("successionPlanningDesc") },
 			],
 		},
