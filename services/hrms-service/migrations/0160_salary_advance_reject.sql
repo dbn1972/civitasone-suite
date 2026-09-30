@@ -1,4 +1,4 @@
--- 0158_salary_advance_reject.sql
+-- 0160_salary_advance_reject.sql
 --
 -- GAP-HR-ADVANCES-02: an advance could never leave "Pending" via a reject
 -- path -- no reject endpoint existed, and hrms_salary_advances had no
