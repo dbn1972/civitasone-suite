@@ -875,7 +875,13 @@ export const AppraisalSummaryListSchema = z.array(AppraisalSummarySchema);
 export const TrainingProgramSummarySchema = z.object({
   id: z.string(),
   title: z.string(),
-  category: z.string(),
+  // GAP-HR-TRAINING-02/NEW-02 (migration 0162): real value or null -- a
+  // z.object() strips unknown keys by default, so these must be declared
+  // here or sendValidated would silently drop them before they reach the
+  // client.
+  category: z.string().nullable(),
+  mode: z.string().nullable(),
+  enrollmentDeadline: z.string().nullable(),
   trainerName: z.string().optional(),
   startDate: z.string(),
   endDate: z.string(),

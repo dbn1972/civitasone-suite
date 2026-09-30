@@ -869,7 +869,13 @@ export type AppraisalSummary = {
 export type TrainingProgramSummary = {
   id: string;
   title: string;
-  category: string;
+  /**
+   * GAP-HR-TRAINING-02/NEW-02 (migration 0162): real value or null, never a
+   * guessed default -- see training/queries.ts.
+   */
+  category: string | null;
+  mode: string | null;
+  enrollmentDeadline: string | null;
   trainerName?: string;
   startDate: string;
   endDate: string;
