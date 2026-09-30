@@ -20,6 +20,20 @@ export async function createLeaveType(ctx: RequestContext, body: CreateLeaveType
 }
 
 export async function allocateLeave(ctx: RequestContext, body: AllocateLeaveBody): Promise<Accepted> {
+  // GAP-HR-LEAVE-ALLOCATE-02: synchronous pre-check ahead of the queue
+  // publish, same pattern as approveLeave/rejectLeave's own pre-checks
+  // above -- without it, a duplicate allocation only ever failed (if at
+  // all) deep inside the async consumer, after the caller already got a
+  // 202. Recommended default (no clear existing precedent either way):
+  // reject, don't silently top up -- a top-up would need its own explicit
+  // arithmetic (add to totalDays/balanceDays vs replace) that nothing here
+  // defines. Real races (two concurrent requests both passing this check)
+  // are still closed by the unique index + onConflictDoNothing in
+  // repo.insertLeaveAlloc (migration 0163) -- this check alone cannot.
+  const existing = await repo.findAllocByEmpAndType(ctx.tenantId, body.employeeId, body.leaveTypeId, body.fy);
+  if (existing) {
+    throw new HttpError(409, "ALLOCATION_EXISTS", `an allocation already exists for this employee, leave type and financial year (${body.fy})`);
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.leaveAllocate, {
     messageId: id, type: COMMANDS.leaveAllocate,

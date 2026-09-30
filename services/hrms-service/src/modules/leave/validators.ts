@@ -19,7 +19,18 @@ export type CreateLeaveTypeBody = z.infer<typeof createLeaveTypeBody>;
 export const allocateLeaveBody = z.object({
   employeeId:  z.string().uuid(),
   leaveTypeId: z.string().uuid(),
-  fy:          z.string().regex(/^\d{4}-\d{2}$/, "must be YYYY-YY"),
+  // GAP-HR-LEAVE-ALLOCATE-05: the bare /^\d{4}-\d{2}$/ shape let '2026-99'
+  // and '2026-15' through -- refine checks the second (two-digit) year
+  // segment is actually startYear+1 mod 100, matching the real Indian FY
+  // convention (fiscalYearLabel/financialYearOf, apps/web/src/lib/
+  // fiscalYear.ts) this same string format is meant to encode everywhere
+  // else in the app.
+  fy: z.string()
+    .regex(/^\d{4}-\d{2}$/, "must be YYYY-YY")
+    .refine((v) => {
+      const [start, end] = v.split("-");
+      return Number(end) === (Number(start) + 1) % 100;
+    }, "must be a real financial year (e.g. 2026-27)"),
   totalDays:   z.number().int().positive(),
 });
 export type AllocateLeaveBody = z.infer<typeof allocateLeaveBody>;
