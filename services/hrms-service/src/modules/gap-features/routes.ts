@@ -234,7 +234,11 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
 
   app.post("/v1/hrms/skills/assessments", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const body = z.object({ employeeId: z.string().uuid(), competencyId: z.string().uuid(), assessedLevel: z.string().max(32), notes: z.string().max(512).optional() }).parse(req.body);
+    // GAP-HR-SKILLS-03: constrained to the vocabulary the web matrix actually
+    // renders (beginner/intermediate/advanced/expert); a free string let a
+    // manual POST invent a level ("proficient") the UI could never map to a
+    // dot count.
+    const body = z.object({ employeeId: z.string().uuid(), competencyId: z.string().uuid(), assessedLevel: z.enum(["beginner", "intermediate", "advanced", "expert"]), notes: z.string().max(512).optional() }).parse(req.body);
     const id = randomUUID();
     await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
@@ -805,10 +809,22 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/skills", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, READER_ROLES);
     const scopeId = await resolveOwnEmployeeIdIfNonHr(ctx, req);
-    if (scopeId === null) return reply.send({ data: [] });
-    const rows = await sqlClient.begin(async (sql) => {
+    if (scopeId === null) return reply.send({ data: [], meta: { total: 0, hasMore: false } });
+    // GAP-HR-SKILLS-06: the old hard LIMIT 500 with no offset/total silently
+    // truncated with no way for the client to know or page further.
+    const q = z.object({
+      limit: z.coerce.number().int().min(1).max(500).default(500),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
+    const scopeParams = scopeId !== undefined ? [ctx.tenantId, scopeId] : [ctx.tenantId];
+    const { rows, total } = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-      return sql.unsafe(`
+      const countRows = await sql.unsafe(
+        `SELECT COUNT(*)::int AS count FROM employee.skill_assessments sa
+         WHERE sa.tenant_id = $1 ${scopeId !== undefined ? "AND sa.employee_id = $2" : ""}`,
+        scopeParams,
+      );
+      const dataRows = await sql.unsafe(`
         SELECT sa.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
                c.name AS skill, c.category, sa.assessed_level AS proficiency,
                COALESCE(ae.full_name,'—') AS "assessedBy", sa.assessed_at AS "lastAssessed"
@@ -818,10 +834,12 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
         LEFT JOIN employee.hrms_employees ae ON ae.id = sa.assessed_by AND ae.tenant_id = $1
         WHERE sa.tenant_id = $1 ${scopeId !== undefined ? "AND sa.employee_id = $2" : ""}
-        ORDER BY sa.assessed_at DESC LIMIT 500
-      `, scopeId !== undefined ? [ctx.tenantId, scopeId] : [ctx.tenantId]);
+        ORDER BY sa.assessed_at DESC
+        LIMIT ${scopeId !== undefined ? "$3" : "$2"} OFFSET ${scopeId !== undefined ? "$4" : "$3"}
+      `, [...scopeParams, q.limit, q.offset]);
+      return { rows: dataRows, total: Number(countRows[0]?.count ?? 0) };
     });
-    return reply.send({ data: rows });
+    return reply.send({ data: rows, meta: { total, hasMore: q.offset + rows.length < total } });
   });
 
   // ── Gap: Staffing Plan (manpower vacancy analysis) ─────────────────────────
