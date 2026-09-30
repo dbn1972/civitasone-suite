@@ -2634,7 +2634,13 @@
     "cardTitle": "ICC Complaint Register",
     "filterPlaceholder": "Filter by reference or status…",
     "emptyTitle": "No ICC complaints on record",
-    "emptyMessage": "Complaints under the Prevention of Sexual Harassment (POSH) Act are handled by the Internal Complaints Committee (ICC) with full confidentiality."
+    "emptyMessage": "Complaints under the Prevention of Sexual Harassment (POSH) Act are handled by the Internal Complaints Committee (ICC) with full confidentiality.",
+    "confidentialSummaryPlaceholder": "Confidential complaint — case ref: {caseNo}",
+    "redactedNotice": "Some records are redacted under POSH Act 2013, §16 (confidentiality of Internal Committee proceedings).",
+    "paginationLabel": "ICC register pagination",
+    "prevPage": "Previous",
+    "nextPage": "Next",
+    "pageOf": "Page {page} of {totalPages}"
   },
   "idCards": {
     "title": "ID Card Management",

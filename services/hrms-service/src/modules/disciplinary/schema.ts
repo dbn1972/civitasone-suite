@@ -88,6 +88,16 @@ export const hrmsIccComplaints = disciplinarySchema.table("hrms_icc_complaints",
   iccMembersOnly: boolean("icc_members_only").notNull().default(true),
   createdBy:     uuid("created_by").notNull(),
   version:       integer("version").notNull().default(1),
+  // GAP-HR-ICC-04 (migration 0157_hrms_icc_case_no.sql): a stable, citable
+  // case number (ICC/YYYY/NNN, per-tenant-per-year sequence) -- the case
+  // register previously showed only a truncated UUID prefixed "ICC/", which
+  // is neither stable nor sequential and can't be quoted in a report or
+  // matched to the annual POSH return. Nullable (not backfill-guaranteed
+  // non-null the instant this ships -- the migration backfills every
+  // existing row in filedAt order, but a NOT NULL constraint on a
+  // sensitive, POSH-adjacent table is a bigger, separate call than this fix
+  // needs to make); the f3-consumer always sets it for every new row.
+  caseNo:        varchar("case_no", { length: 32 }),
 });
 
 // T26 (ER-GPDV-0568..0570): ICC hearing + finding.
