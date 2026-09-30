@@ -252,6 +252,15 @@ export function registerF3_lifecycle_Consumers(queue: Queue): void {
             // this codebase doesn't otherwise use.
             const employeeId = String(params.id ?? "");
             const docType = String(params.docType ?? "");
+            // GAP-HR-ONBOARDING-DETAIL-02: persist the uploaded file's
+            // storage key/filename if the caller sent one -- previously
+            // this handler only ever wrote status/receivedAt, so the actual
+            // uploaded file was unrecoverable even once the upload itself
+            // was wired up. A re-mark-received with no storageKey (e.g. a
+            // manual HR action) leaves whatever key/filename is already on
+            // file untouched rather than clobbering it with null.
+            const storageKey = typeof body.storageKey === "string" ? body.storageKey : undefined;
+            const fileName = typeof body.fileName === "string" ? body.fileName : undefined;
             const existing = await tx.select().from(hrmsOnboardingDocuments)
                   .where(and(
                     eq(hrmsOnboardingDocuments.tenantId, p.tenantId),
@@ -262,12 +271,18 @@ export function registerF3_lifecycle_Consumers(queue: Queue): void {
             const current = existing[0];
             if (current) {
               await tx.update(hrmsOnboardingDocuments)
-                    .set({ status: "uploaded", receivedAt: new Date(), updatedAt: new Date(), version: sql`${hrmsOnboardingDocuments.version} + 1` })
+                    .set({
+                      status: "uploaded", receivedAt: new Date(), updatedAt: new Date(),
+                      version: sql`${hrmsOnboardingDocuments.version} + 1`,
+                      ...(storageKey !== undefined ? { storageKey } : {}),
+                      ...(fileName !== undefined ? { fileName } : {}),
+                    })
                     .where(and(eq(hrmsOnboardingDocuments.tenantId, p.tenantId), eq(hrmsOnboardingDocuments.id, current.id)));
             } else {
               await tx.insert(hrmsOnboardingDocuments).values({
                     id, tenantId: p.tenantId, employeeId, docType,
                     status: "uploaded", receivedAt: new Date(), createdBy: msg.actorId,
+                    storageKey: storageKey ?? null, fileName: fileName ?? null,
                   });
             }
             break;

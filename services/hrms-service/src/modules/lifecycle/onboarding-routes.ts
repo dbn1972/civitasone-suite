@@ -60,6 +60,10 @@ export interface MergedOnboardingDocument {
   receivedAt: string | null;
   verifiedBy: string | null;
   verifiedAt: string | null;
+  /** Object-storage key of the uploaded file, if any (GAP-HR-ONBOARDING-DETAIL-02). */
+  storageKey: string | null;
+  /** Original filename of the uploaded file, if any. */
+  fileName: string | null;
 }
 
 /**
@@ -80,6 +84,8 @@ export function mergeOnboardingDocuments(
     receivedAt: Date | string | null;
     verifiedBy: string | null;
     verifiedAt: Date | string | null;
+    storageKey?: string | null;
+    fileName?: string | null;
   }>,
 ): MergedOnboardingDocument[] {
   const catalogue = configRows.length > 0 ? configRows : DEFAULT_DOC_CATALOGUE;
@@ -93,6 +99,8 @@ export function mergeOnboardingDocuments(
       receivedAt: row?.receivedAt ? new Date(row.receivedAt).toISOString() : null,
       verifiedBy: row?.verifiedBy ?? null,
       verifiedAt: row?.verifiedAt ? new Date(row.verifiedAt).toISOString() : null,
+      storageKey: row?.storageKey ?? null,
+      fileName: row?.fileName ?? null,
     };
   });
 }
@@ -290,7 +298,16 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/hrms/employees/:id/onboarding-documents/:docType/mark-received", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const { id, docType } = idDocTypeParam.parse(req.params);
-    await publishF3Write(ctx, "lifecycle_onboarding_routes__3", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
+    // GAP-HR-ONBOARDING-DETAIL-02: validate (not just pass through) an
+    // optional storage key + filename, so a malformed body fails fast with
+    // VALIDATION_FAILED instead of silently persisting garbage via the F3
+    // consumer. Both stay optional: HR can mark a document received as a
+    // manual action with no fresh upload attached.
+    const body = z.object({
+      storageKey: z.string().min(1).max(1024).optional(),
+      fileName: z.string().min(1).max(255).optional(),
+    }).parse(req.body ?? {});
+    await publishF3Write(ctx, "lifecycle_onboarding_routes__3", randomUUID(), { body: body as Record<string, unknown>, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ employeeId: id, docType, status: "uploaded" }) as any;
   });
 

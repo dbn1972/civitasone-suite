@@ -227,6 +227,12 @@ export const hrmsOnboardingDocuments = lifecycleSchema.table("hrms_onboarding_do
   receivedAt:    timestamp("received_at", { withTimezone: true }),
   verifiedBy:    uuid("verified_by"),
   verifiedAt:    timestamp("verified_at", { withTimezone: true }),
+  // GAP-HR-ONBOARDING-DETAIL-02 (0155 migration): the object-storage key
+  // (and original filename) of the uploaded file, if any -- without this a
+  // wired mark-received recorded only status/receivedAt, and the actual
+  // file was unrecoverable.
+  storageKey:    text("storage_key"),
+  fileName:      varchar("file_name", { length: 255 }),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),
