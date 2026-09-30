@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -5,13 +6,15 @@ import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
+import { FileRtiAction } from "./_components/FileRtiAction";
 
 const RTI_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+const PAGE_SIZE = 200;
 
 type Row = {
   id: string;
   referenceNo: string;
-  applicantName: string;
+  applicantName: string | null;
   subject: string;
   receivedDate: string;
   dueDate: string;
@@ -20,58 +23,77 @@ type Row = {
   daysToDue: number;
 } & Record<string, unknown>;
 
-type RowWithSla = Row & { slaLabel: string };
+type RowWithSla = Row & { slaLabel: string; applicantDisplay: string };
 
-async function getData(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/hrms/rti/requests", [], {
+type Summary = { total: number; pending: number; overdue: number; disposed: number; appealed: number };
+
+async function getData(offset: number): Promise<LoaderResult<{ items: Row[]; hasMore: boolean }>> {
+  return fetchJson<unknown, { items: Row[]; hasMore: boolean }>(`/api/v1/hrms/rti/requests?limit=${PAGE_SIZE}&offset=${offset}`, { items: [], hasMore: false }, {
     telemetryKey: "hr.rti",
     mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: Row[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+      const body = p as { data?: Row[]; hasMore?: boolean };
+      return Array.isArray(body?.data) ? { items: body.data, hasMore: Boolean(body.hasMore) } : null;
     },
   });
 }
 
-export default async function RtiPage() {
+async function getSummary(): Promise<LoaderResult<Summary>> {
+  const empty: Summary = { total: 0, pending: 0, overdue: 0, disposed: 0, appealed: 0 };
+  return fetchJson<unknown, Summary>("/api/v1/hrms/rti/requests/summary", empty, {
+    telemetryKey: "hr.rti_summary",
+    mapResponse: (p) => {
+      const body = (p as { data?: Summary })?.data;
+      return body ?? null;
+    },
+  });
+}
+
+export default async function RtiPage({ searchParams }: { searchParams?: Record<string, string> }) {
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => RTI_ROLES.includes(r));
   if (!canAccess) {
-    return <PermissionDenied module="RTI requests" requiredRoles={RTI_ROLES} />;
+    return <PermissionDenied module="RTI requests" requiredRoles={RTI_ROLES} backHref="/hr" backLabel="Back to HR" />;
   }
 
   const t = await getTranslations("rtiRequests");
-  const { data: items, source } = await getData();
+  const page = Math.max(1, parseInt(searchParams?.page ?? "1", 10) || 1);
+  const offset = (page - 1) * PAGE_SIZE;
+
+  const [{ data, source }, { data: summary }] = await Promise.all([getData(offset), getSummary()]);
   const errored = source === "error";
+  const { items, hasMore } = data;
 
-  const pending = items.filter((i) => i.status === "filed" || i.status === "assigned").length;
-  const overdue = items.filter((i) => i.overdue).length;
-  const disposed = items.filter((i) => i.status === "responded" || i.status === "closed").length;
-
-  // Per-request SLA visibility: overdue/daysToDue already come back from the
-  // API (routes.ts's withSla()) but were previously only ever aggregated
-  // into the page-level "Overdue" stat card -- a PIO looking at the actual
-  // register had no way to tell, request by request, which ones need
-  // action. slaLabel turns those two fields into one plain, sortable/
-  // filterable column string (DataTable's `render` column prop is client-
-  // only and this page is a Server Component, so this is computed here
-  // rather than as a custom cell renderer).
+  // GAP-HR-RTI-01: only "closed" had its own label before -- a "responded"
+  // or "appealed" request past its ORIGINAL due date has overdue=false
+  // (withSla only flags filed|assigned as overdue) and a negative
+  // daysToDue, which rendered as nonsense ("-32 days left"). Switches on
+  // status explicitly instead of falling through to the open-request math.
+  // GAP-HR-RTI-03: applicantName is `null` for a masked row (routes.ts) --
+  // shown as "Restricted" rather than blank/undefined.
   const rows: RowWithSla[] = items.map((item) => ({
     ...item,
+    applicantDisplay: item.applicantName ?? t("restricted"),
     slaLabel:
       item.status === "closed"
         ? t("slaClosed")
-        : item.overdue
-          ? t("slaOverdueByDays", { days: Math.abs(item.daysToDue) })
-          : t("slaDueInDays", { days: item.daysToDue }),
+        : item.status === "responded"
+          ? t("slaResponded")
+          : item.status === "appealed"
+            ? t("slaAppealed")
+            : item.overdue
+              ? t("slaOverdueByDays", { days: Math.abs(item.daysToDue) })
+              : t("slaDueInDays", { days: Math.max(0, item.daysToDue) }),
   }));
 
-  const columns: { key: keyof RowWithSla & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof RowWithSla & string; label: string; cellType?: "status" | "date" }[] = [
     { key: "referenceNo", label: t("colReferenceNo") },
-    { key: "applicantName", label: t("colApplicant") },
+    { key: "applicantDisplay", label: t("colApplicant") },
     { key: "subject", label: t("colSubject") },
-    { key: "receivedDate", label: t("colReceived") },
-    { key: "dueDate", label: t("colDueDate") },
+    // GAP-HR-RTI-07: cellType "date" (DataTable) instead of the raw ISO
+    // string DataTable's default cellValue() would otherwise print.
+    { key: "receivedDate", label: t("colReceived"), cellType: "date" },
+    { key: "dueDate", label: t("colDueDate"), cellType: "date" },
     { key: "slaLabel", label: t("colSla") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
@@ -82,14 +104,18 @@ export default async function RtiPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
-        actions={<span />}
+        actions={<FileRtiAction />}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📂" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? null : items.length} />
-        <StatCard icon="🔔" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? null : pending} />
-        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statOverdueLabel")} value={errored ? null : overdue} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedLabel")} value={errored ? null : disposed} />
+        <StatCard icon="📂" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? null : summary.total} />
+        <StatCard icon="🔔" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? null : summary.pending} />
+        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statOverdueLabel")} value={errored ? null : summary.overdue} />
+        {/* GAP-HR-RTI-02: "Under appeal" had no stat card at all -- first-
+            appeal cases (their own statutory clock, RTI Act s.19) simply
+            vanished from the summary before this. */}
+        <StatCard icon="⚖️" iconBg="var(--bg, #f5f5f5)" label={t("statAppealedLabel")} value={errored ? null : summary.appealed} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedLabel")} value={errored ? null : summary.disposed} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (
@@ -97,17 +123,42 @@ export default async function RtiPage() {
             <RefreshErrorState error={toHumanError("load", { area: "rti" })} backHref="/hr" />
           </div>
         ) : (
-          <DataTable<RowWithSla>
-          columns={columns}
-          rows={rows}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="📂"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+          <>
+            {/* GAP-HR-RTI-04: rows now link to a detail page with the actual
+                assign/respond/appeal/close workflow -- DataTable's
+                server-safe rowLinkKey/rowLinkPrefix, no client wrapper
+                needed for this part. */}
+            <DataTable<RowWithSla>
+              columns={columns}
+              rows={rows}
+              rowLinkKey="id"
+              rowLinkPrefix="/hr/rti/"
+              identifyingColumnKey="referenceNo"
+              sortable
+              filterable
+              filterKeys={["referenceNo", "applicantDisplay", "subject"]}
+              filterPlaceholder={t("filterPlaceholder")}
+              pageSize={15}
+              emptyIcon="📂"
+              emptyTitle={t("emptyTitle")}
+              emptyMessage={t("emptyMessage")}
+            />
+            {/* GAP-HR-RTI-05: was a hard cap with no way to reach an older
+                request past 200 -- a real "load next page" instead. */}
+            {(hasMore || page > 1) && (
+              <nav aria-label={t("paginationLabel")} style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 16 }}>
+                {page > 1 && (
+                  <Link href={`/hr/rti?page=${page - 1}`} className="btn ghost">← {t("prevPage")}</Link>
+                )}
+                <span style={{ alignSelf: "center", fontSize: 13, color: "var(--muted)" }}>
+                  {t("pageIndicator", { page })}
+                </span>
+                {hasMore && (
+                  <Link href={`/hr/rti?page=${page + 1}`} className="btn ghost">{t("nextPage")} →</Link>
+                )}
+              </nav>
+            )}
+          </>
         )}
       </Card>
     </div>

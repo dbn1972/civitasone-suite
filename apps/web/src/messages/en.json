@@ -4107,7 +4107,15 @@
     "cardTitle": "RTI Applications Register",
     "filterPlaceholder": "Filter by reference, applicant or subject…",
     "emptyTitle": "No RTI requests received",
-    "emptyMessage": "RTI applications filed by citizens appear here. CPIO assigns them and responds within 30 days under the Right to Information Act, 2005."
+    "emptyMessage": "RTI applications filed by citizens appear here. CPIO assigns them and responds within 30 days under the Right to Information Act, 2005.",
+    "slaResponded": "Responded",
+    "slaAppealed": "Under appeal",
+    "statAppealedLabel": "Under Appeal",
+    "restricted": "Restricted",
+    "paginationLabel": "RTI register pagination",
+    "prevPage": "Previous",
+    "nextPage": "Next",
+    "pageIndicator": "Page {page}"
   },
   "salaryRevisions": {
     "loadingAriaLabel": "Loading…",
