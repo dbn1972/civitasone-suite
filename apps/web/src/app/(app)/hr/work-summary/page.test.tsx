@@ -99,5 +99,39 @@ describe("WorkSummaryPage", () => {
     getSessionRolesMock.mockReturnValue(["citizen"]);
     await renderPage();
     expect(screen.queryByText("Work Summaries")).not.toBeInTheDocument();
+    // GAP-HR-SF09A-016 merge (from #1672's own citizen-denial test): a
+    // denied role must short-circuit before ever calling the backend.
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+  });
+
+  // The next two tests are ported from PR #1672 (GAP-HR-SF09A-016 /
+  // GAP-HR-WORK-SUMMARY-04's own role-gate tests), adapted to this file's
+  // mocking convention (getSessionRolesMock instead of a bare mockRoles
+  // module mock -- two separate vi.mock() calls for the same module can't
+  // coexist) and to WorkSummaryPage's current nested
+  // LoaderResult<{rows,total,offset}> contract (PR #1712, merged after
+  // #1672 was first written) -- #1672's own flat `{data: [], source}` mock
+  // would throw inside mapRows(page.rows) here, since `page` is now an
+  // object, not the row array itself.
+  it("GAP-HR-SF09A-016 / GAP-HR-WORK-SUMMARY-04: admits a plain employee instead of PermissionDenied (backend already self-scopes them)", async () => {
+    // Regression: WORK_SUMMARY_ROLES used to omit "employee" even though
+    // GET /v1/hrms/work-summaries (gap-features/routes.ts READER_ROLES)
+    // already admits and self-scopes them -- an employee got "Access
+    // restricted" before that already-correct backend check ever ran.
+    getSessionRolesMock.mockReturnValue(["employee"]);
+    fetchJsonMock.mockResolvedValue(loaderResult([], 0));
+    await renderPage();
+    expect(screen.queryByRole("heading", { name: "Access restricted" })).not.toBeInTheDocument();
+    expect(fetchJsonMock).toHaveBeenCalled();
+  });
+
+  it("still admits manager, hr_officer and super_admin (unaffected by the widened list)", async () => {
+    for (const role of ["manager", "hr_officer", "super_admin"]) {
+      getSessionRolesMock.mockReturnValue([role]);
+      fetchJsonMock.mockResolvedValue(loaderResult([], 0));
+      const { unmount } = await renderPage();
+      expect(screen.queryByRole("heading", { name: "Access restricted" })).not.toBeInTheDocument();
+      unmount();
+    }
   });
 });

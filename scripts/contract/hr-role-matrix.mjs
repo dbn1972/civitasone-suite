@@ -379,8 +379,20 @@ function layoutHrRoles() {
 const PAGE_GATES = [
   { area: "advances", page: "advances/page.tsx", constName: "ADVANCE_ROLES",
     match: (r) => /employee\/loans-routes\.ts$/.test(r.file) && r.routePath.includes("salary-advances") },
+  // GAP-HR-SF09A-010 / GAP-HR-APAR-04 / GAP-HR-APAR-NEW-01: apar/routes.ts's
+  // create (POST /v1/hrms/apar) and finalise (POST /v1/hrms/apar/:id/
+  // finalise) routes are HR-only (backend HR_ROLES), narrower than the rest
+  // of the module's ACTOR_ROLES (self-appraisal/reporting/reviewing/accept/
+  // representation, which also admit employee/manager) -- carved out into
+  // their own comparator so they're checked against apar/new/page.tsx's own
+  // APAR_INITIATE_ROLES gate instead of being wrongly compared to the
+  // page-wide APAR_ROLES below.
+  { area: "apar/new (initiate + finalise)", page: "apar/new/page.tsx", constName: "APAR_INITIATE_ROLES",
+    match: (r) => /\/modules\/apar\/routes\.ts$/.test(r.file) && r.method === "POST" &&
+      (r.routePath === "/v1/hrms/apar" || r.routePath === "/v1/hrms/apar/:id/finalise") },
   { area: "apar", page: "apar/page.tsx", constName: "APAR_ROLES",
-    match: (r) => /\/modules\/apar\/routes\.ts$/.test(r.file) },
+    match: (r) => /\/modules\/apar\/routes\.ts$/.test(r.file) && !(r.method === "POST" &&
+      (r.routePath === "/v1/hrms/apar" || r.routePath === "/v1/hrms/apar/:id/finalise")) },
   { area: "attendance/config", page: "attendance/config/page.tsx", constName: "ATTENDANCE_CONFIG_ROLES",
     match: (r) => /\/modules\/attendance\/routes\.ts$/.test(r.file) && r.roleExprs.some((e) => e.includes("LOCK_ROLES")) },
   { area: "departments/new", page: "departments/new/page.tsx", constName: "DEPARTMENT_ADMIN_ROLES",
