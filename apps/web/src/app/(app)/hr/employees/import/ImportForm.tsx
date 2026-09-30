@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
 import { Button } from "../../../../_components/ds";
 
 type Row = Record<string, string> & { lineNo: number };
@@ -10,6 +11,44 @@ type Row = Record<string, string> & { lineNo: number };
 // Hoisted so the handleSubmit validation and the JSX hint text below share
 // one list instead of two independently-maintained copies drifting apart.
 const REQUIRED_COLUMNS = ["employeeNo", "fullName", "departmentCode", "designationCode", "employeeType", "dateOfJoining", "basicPay"];
+// GAP-HR-EMPLOYEES-IMPORT-05: optional, resolved server-side (bulk-import/
+// routes.ts) from an existing employee's number to a real managerId -- not
+// a required column, so omitting it (most rows) is fine.
+const OPTIONAL_COLUMNS = ["managerEmployeeNo"];
+
+// GAP-HR-EMPLOYEES-IMPORT-03: the previous `line.split(",")` shifted every
+// later column whenever a value legitimately contained a comma (a quoted
+// "Das, Rashmi Ranjan" name, or a thousands-separated amount) -- this is a
+// minimal RFC 4180 reader (quoted fields, embedded commas, "" as an escaped
+// quote) rather than a dependency, since this file only ever needs to read
+// one flat CSV shape.
+function parseCsvLine(line: string): string[] {
+  const cells: string[] = [];
+  let cur = "";
+  let inQuotes = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuotes) {
+      if (c === '"') {
+        if (line[i + 1] === '"') { cur += '"'; i++; } else { inQuotes = false; }
+      } else {
+        cur += c;
+      }
+    } else if (c === '"') {
+      inQuotes = true;
+    } else if (c === ",") {
+      cells.push(cur);
+      cur = "";
+    } else {
+      cur += c;
+    }
+  }
+  cells.push(cur);
+  return cells.map((c) => c.trim());
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const GENDER_VALUES = new Set(["male", "female", "other", ""]);
 
 // The bulk endpoint (POST /v1/hrms/employees/bulk) caps a single request at
 // 500 employees (bulkImportBody in hrms-service's bulk-import/routes.ts).
@@ -65,7 +104,27 @@ export function ImportForm() {
   const [status, setStatus] = useState<"idle" | "parsing" | "uploading" | "done" | "error">("idle");
   const [progress, setProgress] = useState({ total: 0, success: 0, failed: 0 });
   const [errors, setErrors] = useState<string[]>([]);
+  // GAP-HR-EMPLOYEES-IMPORT-06: structured alongside the plain display
+  // strings above (which stay exactly as before, so the existing on-screen
+  // wording/tests are untouched) so a real CSV can be built from them --
+  // the display strings themselves are already fully-formed sentences, not
+  // suitable for re-splitting into columns.
+  const [errorRows, setErrorRows] = useState<{ lineNo: number; fullName: string; message: string }[]>([]);
   const formError = useFormError("employee row");
+
+  function downloadErrorReport() {
+    const csvLines = [
+      "lineNo,fullName,message",
+      ...errorRows.map((r) => [r.lineNo, `"${r.fullName.replace(/"/g, '""')}"`, `"${r.message.replace(/"/g, '""')}"`].join(",")),
+    ];
+    const blob = new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "import-errors.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   async function loadCodeMap(path: string): Promise<Map<string, string>> {
     const res = await fetch(path);
@@ -82,11 +141,16 @@ export function ImportForm() {
 
     setStatus("parsing");
     setErrors([]);
+    setErrorRows([]);
     const text = await file.text();
+    // GAP-HR-EMPLOYEES-IMPORT-03: a header-only BOM/CRLF is trimmed by the
+    // same per-line .trim() already used below; splitting on "\n" alone
+    // (not a full line-based CSV tokenizer) is unaffected by CRLF since the
+    // trailing \r ends up trimmed too.
     const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
     if (lines.length < 2) { setStatus("error"); setErrors([t("errMinRows")]); return; }
 
-    const headers = lines[0].split(",").map((h) => h.trim().replace(/^"/, "").replace(/"$/, ""));
+    const headers = parseCsvLine(lines[0]);
     const missing = REQUIRED_COLUMNS.filter((c) => !headers.includes(c));
     if (missing.length) { setStatus("error"); setErrors([t("errMissingColumns", { columns: missing.join(", ") })]); return; }
 
@@ -94,12 +158,27 @@ export function ImportForm() {
     // Record<string, string> CSV-column fields, which the index signature
     // can't express — building it as `any` here is the narrowest way to
     // bridge that, matching how this file already handled it.
-    const rows: Row[] = lines.slice(1).map((line, idx) => {
-      const vals = line.split(",").map((v) => v.trim().replace(/^"/, "").replace(/"$/, ""));
+    // GAP-HR-EMPLOYEES-IMPORT-03: a row whose cell count doesn't match the
+    // header count (e.g. an unquoted embedded comma still shifting columns,
+    // or a short/ragged line) is now flagged as its own error instead of
+    // being silently padded with "" for the missing trailing columns.
+    const errs: string[] = [];
+    const errRows: { lineNo: number; fullName: string; message: string }[] = [];
+    const rows: Row[] = [];
+    lines.slice(1).forEach((line, idx) => {
+      const lineNo = idx + 2;
+      const vals = parseCsvLine(line);
+      if (vals.length !== headers.length) {
+        const fullNameGuess = vals[headers.indexOf("fullName")] ?? "";
+        const msg = t("errColumnCountRow", { lineNo, expected: headers.length, found: vals.length });
+        errs.push(msg);
+        errRows.push({ lineNo, fullName: fullNameGuess, message: msg });
+        return;
+      }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const obj = { lineNo: idx + 2 } as any;
+      const obj = { lineNo } as any;
       headers.forEach((h, i) => { obj[h] = vals[i] ?? ""; });
-      return obj as Row;
+      rows.push(obj as Row);
     });
 
     const [deptByCode, desigByCode] = await Promise.all([
@@ -108,22 +187,31 @@ export function ImportForm() {
     ]);
 
     setStatus("uploading");
-    setProgress({ total: rows.length, success: 0, failed: 0 });
-    const errs: string[] = [];
+    setProgress({ total: rows.length, success: 0, failed: errs.length });
     let success = 0;
 
-    // Resolve codes to ids client-side (see header comment) — rows an
-    // unknown code makes un-submittable are reported here and never sent.
+    // Resolve codes to ids and validate client-side (see header comment) --
+    // rows an unknown code or an invalid field makes un-submittable are
+    // reported here and never sent, rather than silently reaching the
+    // server as NaN/garbage (GAP-HR-EMPLOYEES-IMPORT-03: basicPay in
+    // particular used to become NaN -> null on any non-numeric input).
     const resolved: ResolvedRow[] = [];
     for (const row of rows) {
       const departmentId = deptByCode.get(row.departmentCode);
       const designationId = desigByCode.get(row.designationCode);
-      if (!departmentId || !designationId) {
-        const bad = [
-          !departmentId && t("errUnknownDept", { code: row.departmentCode }),
-          !designationId && t("errUnknownDesig", { code: row.designationCode }),
-        ].filter(Boolean).join(t("andJoiner"));
-        errs.push(t("errUnknownRow", { lineNo: row.lineNo, fullName: row.fullName, bad }));
+      const rowErrors: string[] = [];
+      if (!departmentId) rowErrors.push(t("errUnknownDept", { code: row.departmentCode }));
+      if (!designationId) rowErrors.push(t("errUnknownDesig", { code: row.designationCode }));
+      if (row.dateOfJoining && !DATE_RE.test(row.dateOfJoining)) rowErrors.push(t("errInvalidDate", { value: row.dateOfJoining }));
+      if (row.gender && !GENDER_VALUES.has(row.gender)) rowErrors.push(t("errInvalidGender", { value: row.gender }));
+      const basicMinorStr = rupeesToMinorString(row.basicPay ?? "");
+      if (!basicMinorStr) rowErrors.push(t("errInvalidBasicPay", { value: row.basicPay }));
+
+      if (rowErrors.length > 0) {
+        const bad = rowErrors.join(t("andJoiner"));
+        const msg = t("errUnknownRow", { lineNo: row.lineNo, fullName: row.fullName, bad });
+        errs.push(msg);
+        errRows.push({ lineNo: row.lineNo, fullName: row.fullName, message: bad });
         continue;
       }
       resolved.push({
@@ -138,8 +226,10 @@ export function ImportForm() {
           designationId,
           employeeType: row.employeeType || "permanent",
           dateOfJoining: row.dateOfJoining,
-          basicMinor: Math.round(Number(row.basicPay || 0) * 100),
+          basicMinor: Number(basicMinorStr),
           gender: row.gender || undefined,
+          // GAP-HR-EMPLOYEES-IMPORT-05
+          managerEmployeeNo: row.managerEmployeeNo || undefined,
         },
       });
     }
@@ -161,7 +251,11 @@ export function ImportForm() {
           body: JSON.stringify({ employees: chunk.map((r) => r.body) }),
         });
       } catch {
-        for (const r of chunk) errs.push(t("errRowNetwork", { lineNo: r.lineNo, fullName: r.fullName }));
+        for (const r of chunk) {
+          const msg = t("errRowNetwork", { lineNo: r.lineNo, fullName: r.fullName });
+          errs.push(msg);
+          errRows.push({ lineNo: r.lineNo, fullName: r.fullName, message: t("errRowNetworkShort") });
+        }
         setProgress({ total: rows.length, success, failed: errs.length });
         return;
       }
@@ -188,7 +282,10 @@ export function ImportForm() {
       if (perRow.length === 0) {
         // No field-level detail to act on (e.g. an auth/role failure, or a
         // malformed request) — report the whole chunk rather than guessing.
-        for (const r of chunk) errs.push(t("errRowSave", { lineNo: r.lineNo, fullName: r.fullName, message: resolvedErr.message }));
+        for (const r of chunk) {
+          errs.push(t("errRowSave", { lineNo: r.lineNo, fullName: r.fullName, message: resolvedErr.message }));
+          errRows.push({ lineNo: r.lineNo, fullName: r.fullName, message: resolvedErr.message });
+        }
         setProgress({ total: rows.length, success, failed: errs.length });
         return;
       }
@@ -196,6 +293,7 @@ export function ImportForm() {
       const badIdx = new Set(perRow.map((x) => x.idx));
       for (const { row, message } of perRow) {
         errs.push(t("errRowSave", { lineNo: row.lineNo, fullName: row.fullName, message }));
+        errRows.push({ lineNo: row.lineNo, fullName: row.fullName, message });
       }
       setProgress({ total: rows.length, success, failed: errs.length });
 
@@ -208,6 +306,7 @@ export function ImportForm() {
     }
 
     setErrors(errs);
+    setErrorRows(errRows);
     setStatus("done");
   }
 
@@ -227,6 +326,9 @@ export function ImportForm() {
         <p id="import-csv-hint" style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: 0 }}>
           {t("requiredColumnsHint", { columns: REQUIRED_COLUMNS.join(", ") })}
         </p>
+        <p style={{ fontSize: 12, color: "var(--mut, #64748b)", margin: 0 }}>
+          {t("optionalColumnsHint", { columns: OPTIONAL_COLUMNS.join(", ") })}
+        </p>
       </div>
       <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
         <Button type="submit" variant="primary" disabled={status === "uploading"} style={{ minHeight: 44 }}>
@@ -240,8 +342,25 @@ export function ImportForm() {
         )}
       </div>
       {errors.length > 0 && (
-        <div style={{ marginTop: 12, padding: "10px 14px", borderRadius: 8, background: "var(--badbg, #fef2f2)", border: "1px solid var(--badbd, #fecaca)", fontSize: 12.5, color: "var(--bad, #b91c1c)", maxHeight: 200, overflow: "auto" }}>
-          {errors.map((e, i) => <div key={i}>{e}</div>)}
+        <div style={{ marginTop: 12 }}>
+          <div style={{ padding: "10px 14px", borderRadius: 8, background: "var(--badbg, #fef2f2)", border: "1px solid var(--badbd, #fecaca)", fontSize: 12.5, color: "var(--bad, #b91c1c)", maxHeight: 200, overflow: "auto" }}>
+            {errors.map((e, i) => <div key={i}>{e}</div>)}
+          </div>
+          {/* GAP-HR-EMPLOYEES-IMPORT-06: errors only ever lived in local
+              component state -- a refresh (or just scrolling past a long
+              list) lost them for good, with no way to hand the failed rows
+              to someone else to fix. Generated client-side only; nothing
+              here is uploaded anywhere. */}
+          {errorRows.length > 0 && (
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={downloadErrorReport}
+              style={{ marginTop: 8, fontSize: 13 }}
+            >
+              {t("downloadErrorReport")}
+            </Button>
+          )}
         </div>
       )}
     </form>

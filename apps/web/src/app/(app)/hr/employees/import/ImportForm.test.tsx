@@ -71,7 +71,9 @@ describe("ImportForm — department/designation code resolution", () => {
     fireEvent.change(input, { target: { files: [csvFile()] } });
     fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
 
-    await waitFor(() => expect(screen.getByText(/imported/i)).toBeInTheDocument());
+    // GAP-HR-EMPLOYEES-IMPORT-02: reworded from "imported" to "submitted"
+    // -- a 202 here means queued, not yet confirmed written.
+    await waitFor(() => expect(screen.getByText(/submitted/i)).toBeInTheDocument());
 
     const posted = (fetchMock as unknown as { postedBodies: { employees: Record<string, unknown>[] }[] }).postedBodies;
     // FINDING-2: one bulk call (not one call per row) carrying only the row
@@ -176,10 +178,146 @@ describe("ImportForm — UX-016 clerk-safe errors", () => {
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
 
-    await waitFor(() => expect(screen.getByText(/imported/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/submitted/i)).toBeInTheDocument());
     expect(bulkCallCount).toBe(2);
     expect(screen.getByText(/Asha Rao.*Duplicate: EMP-003/i)).toBeInTheDocument();
     // The good row (Ravi Kumar / EMP-001) must not appear in the failure list.
     expect(screen.queryByText(/Ravi Kumar/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-EMPLOYEES-IMPORT-03: the previous naive `line.split(",")` shifted
+ * every later column whenever a value legitimately contained a comma.
+ */
+describe("ImportForm — RFC 4180 CSV parsing", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("parses a quoted field containing a comma as a single cell, not two", async () => {
+    const csv =
+      'employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender\n' +
+      'EMP-009,"Das, Rashmi Ranjan",das@office.gov.in,9876543211,FIN,JC,permanent,2024-01-15,44900,female\n';
+    const file = new File([csv], "employees.csv", { type: "text/csv" });
+    Object.defineProperty(file, "text", { value: async () => csv });
+
+    const fetchMock = mockBackend();
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+
+    const input = document.getElementById("import-csv-file") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
+
+    await waitFor(() => expect(screen.getByText(/submitted/i)).toBeInTheDocument());
+    const posted = (fetchMock as unknown as { postedBodies: { employees: Record<string, unknown>[] }[] }).postedBodies;
+    expect(posted[0].employees[0]).toMatchObject({ fullName: "Das, Rashmi Ranjan", employeeNo: "EMP-009" });
+  });
+});
+
+/**
+ * GAP-HR-EMPLOYEES-IMPORT-03: basicPay used to become NaN -> null on any
+ * non-numeric input, silently. Validated client-side now, using the same
+ * decimal-safe rupeesToMinorString every money input in this app uses (no
+ * `Number(x) * 100` float rounding).
+ */
+describe("ImportForm — client-side row validation", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("flags a non-numeric basicPay and never posts that row", async () => {
+    const csv =
+      "employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender\n" +
+      "EMP-010,Bad Pay,,9876543212,FIN,JC,permanent,2024-01-15,abc,male\n";
+    const file = new File([csv], "employees.csv", { type: "text/csv" });
+    Object.defineProperty(file, "text", { value: async () => csv });
+
+    const fetchMock = mockBackend();
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+
+    const input = document.getElementById("import-csv-file") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
+
+    await waitFor(() => expect(screen.getByText(/invalid basic pay/i)).toBeInTheDocument());
+    const posted = (fetchMock as unknown as { postedBodies: unknown[] }).postedBodies;
+    expect(posted).toHaveLength(0);
+  });
+
+  it("converts a valid decimal basicPay to paise without float rounding error", async () => {
+    const csv =
+      "employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender\n" +
+      "EMP-011,Good Pay,,9876543213,FIN,JC,permanent,2024-01-15,44900.50,male\n";
+    const file = new File([csv], "employees.csv", { type: "text/csv" });
+    Object.defineProperty(file, "text", { value: async () => csv });
+
+    const fetchMock = mockBackend();
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+
+    const input = document.getElementById("import-csv-file") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
+
+    await waitFor(() => expect(screen.getByText(/submitted/i)).toBeInTheDocument());
+    const posted = (fetchMock as unknown as { postedBodies: { employees: Record<string, unknown>[] }[] }).postedBodies;
+    expect(posted[0].employees[0]).toMatchObject({ basicMinor: 4490050 });
+  });
+
+  it("flags an invalid date format and never posts that row", async () => {
+    const csv =
+      "employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender\n" +
+      "EMP-012,Bad Date,,9876543214,FIN,JC,permanent,15/01/2024,44900,male\n";
+    const file = new File([csv], "employees.csv", { type: "text/csv" });
+    Object.defineProperty(file, "text", { value: async () => csv });
+
+    vi.stubGlobal("fetch", mockBackend());
+    renderForm();
+
+    const input = document.getElementById("import-csv-file") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
+
+    await waitFor(() => expect(screen.getByText(/invalid date/i)).toBeInTheDocument());
+  });
+});
+
+/** GAP-HR-EMPLOYEES-IMPORT-05 */
+describe("ImportForm — optional managerEmployeeNo column", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("passes managerEmployeeNo through to the bulk payload when present", async () => {
+    const csv =
+      "employeeNo,fullName,email,mobile,departmentCode,designationCode,employeeType,dateOfJoining,basicPay,gender,managerEmployeeNo\n" +
+      "EMP-013,New Hire,,9876543215,FIN,JC,permanent,2024-01-15,44900,male,EMP-999\n";
+    const file = new File([csv], "employees.csv", { type: "text/csv" });
+    Object.defineProperty(file, "text", { value: async () => csv });
+
+    const fetchMock = mockBackend();
+    vi.stubGlobal("fetch", fetchMock);
+    renderForm();
+
+    const input = document.getElementById("import-csv-file") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [file] } });
+    fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
+
+    await waitFor(() => expect(screen.getByText(/submitted/i)).toBeInTheDocument());
+    const posted = (fetchMock as unknown as { postedBodies: { employees: Record<string, unknown>[] }[] }).postedBodies;
+    expect(posted[0].employees[0]).toMatchObject({ managerEmployeeNo: "EMP-999" });
+  });
+});
+
+/** GAP-HR-EMPLOYEES-IMPORT-06 */
+describe("ImportForm — error report download", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("offers a Download error report button once there is at least one failed row", async () => {
+    vi.stubGlobal("fetch", mockBackend());
+    renderForm();
+
+    const input = document.getElementById("import-csv-file") as HTMLInputElement;
+    fireEvent.change(input, { target: { files: [csvFile()] } });
+    fireEvent.click(screen.getByRole("button", { name: /upload & import/i }));
+
+    expect(await screen.findByRole("button", { name: /download error report/i })).toBeInTheDocument();
   });
 });
