@@ -14,6 +14,7 @@ import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { scopedRead } from "../../shared/db.js";
+import { batchEmployees } from "../../shared/batch-resolve.js";
 import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { eq, and, desc, inArray } from "drizzle-orm";
@@ -382,6 +383,35 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     // IDOR guard: employees may only submit OT requests for themselves
     await assertSelfOrHr(ctx, body.employeeId, "create overtime requests");
+
+    // GAP-HR-OVERTIME-NEW-04: overtime is logged for hours already worked,
+    // not planned in advance -- a future-dated request has no legitimate
+    // reading. Coarse (UTC calendar-day) comparison, not IST-precise: this
+    // is a conservative "don't let this slip through" guard, not a
+    // display-facing date computation (see GAP-HR-ADVANCES-06's own note on
+    // why the shared IST-aware date helper itself is left to open PR #1653
+    // / GAP-HR-SF-07 rather than duplicated here).
+    const todayUtc = new Date().toISOString().slice(0, 10);
+    if (body.requestDate > todayUtc) {
+      throw new HttpError(422, "FUTURE_DATE_NOT_ALLOWED", "overtime cannot be requested for a future date");
+    }
+
+    // GAP-HR-OVERTIME-NEW-04: reject a second pending/approved request for
+    // the same employee+date instead of silently allowing duplicates (a
+    // rejected prior request for the same day is not a duplicate -- the
+    // employee is entitled to re-request).
+    const dup = await scopedRead((tx) => tx.select({ id: hrmsOvertimeRequests.id }).from(hrmsOvertimeRequests)
+      .where(and(
+        eq(hrmsOvertimeRequests.tenantId, ctx.tenantId),
+        eq(hrmsOvertimeRequests.employeeId, body.employeeId),
+        eq(hrmsOvertimeRequests.requestDate, body.requestDate),
+        inArray(hrmsOvertimeRequests.status, ["pending", "approved"]),
+      ))
+      .limit(1));
+    if (dup.length > 0) {
+      throw new HttpError(409, "DUPLICATE_REQUEST", "an overtime request already exists for this employee on this date");
+    }
+
     const id = randomUUID();
     await publishF3Write(ctx, "attendance_routes__2", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "pending" }) as any;
@@ -410,7 +440,16 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       ))
       .orderBy(desc(hrmsOvertimeRequests.requestDate))
       .limit(200));
-    return reply.send({ data: rows });
+    // GAP-HR-OVERTIME-02: resolve employeeName/employeeNo via the shared
+    // batch-resolution helper (same building block GAP-HR-ADVANCES-01/
+    // GAP-HR-LOANS-01 already adopted) instead of the web layer showing the
+    // raw employeeId.
+    const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
+    return reply.send({ data: rows.map((r) => ({
+      ...r,
+      employeeName: empMap.get(r.employeeId)?.fullName,
+      employeeNo: empMap.get(r.employeeId)?.employeeNo,
+    })) });
   });
 
   app.patch("/v1/hrms/overtime-requests/:id/approve", async (req, reply) => {
@@ -428,12 +467,20 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // repo.updateOvertimeStatus apply the same guard atomically as part of
     // the write itself (see f3-consumer.ts's attendance_routes__3).
     const existing = await scopedRead((tx) =>
-      tx.select({ id: hrmsOvertimeRequests.id, status: hrmsOvertimeRequests.status }).from(hrmsOvertimeRequests)
+      tx.select({ id: hrmsOvertimeRequests.id, status: hrmsOvertimeRequests.status, employeeId: hrmsOvertimeRequests.employeeId }).from(hrmsOvertimeRequests)
         .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
         .limit(1),
     );
     if (!existing[0] || existing[0].status !== "pending") {
       return reply.code(404).send({ error: "Overtime request not found or already decided" });
+    }
+    // GAP-HR-OVERTIME-01 (risk note: "must not allow the requester to
+    // approve their own request" -- HR_ROLES alone doesn't prevent an
+    // hr_admin who also filed for themselves via assertSelfOrHr's isHrActor
+    // branch above). Reuses the isSelfApproval helper already defined in
+    // this file for the WFH approve route below.
+    if (await isSelfApproval(ctx, existing[0].employeeId)) {
+      throw new HttpError(403, "FORBIDDEN", "you may not approve an overtime request you created yourself");
     }
 
     await publishF3Write(ctx, "attendance_routes__3", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
@@ -450,12 +497,16 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // approve route above: a decided request (approved or rejected) must
     // not be re-decided in the other direction.
     const existing = await scopedRead((tx) =>
-      tx.select({ id: hrmsOvertimeRequests.id, status: hrmsOvertimeRequests.status }).from(hrmsOvertimeRequests)
+      tx.select({ id: hrmsOvertimeRequests.id, status: hrmsOvertimeRequests.status, employeeId: hrmsOvertimeRequests.employeeId }).from(hrmsOvertimeRequests)
         .where(and(eq(hrmsOvertimeRequests.id, id), eq(hrmsOvertimeRequests.tenantId, ctx.tenantId)))
         .limit(1),
     );
     if (!existing[0] || existing[0].status !== "pending") {
       return reply.code(404).send({ error: "Overtime request not found or already decided" });
+    }
+    // GAP-HR-OVERTIME-01: same self-decision guard as approve above.
+    if (await isSelfApproval(ctx, existing[0].employeeId)) {
+      throw new HttpError(403, "FORBIDDEN", "you may not reject an overtime request you created yourself");
     }
 
     await publishF3Write(ctx, "attendance_routes__4", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
