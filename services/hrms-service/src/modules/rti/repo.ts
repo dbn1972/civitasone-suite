@@ -8,11 +8,43 @@ export async function insertRti(tx: Writer, row: typeof hrmsRtiRequests.$inferIn
   await tx.insert(hrmsRtiRequests).values(row);
 }
 
-export async function listRti(tenantId: string, limit = 200): Promise<RtiRow[]> {
+/**
+ * GAP-HR-RTI-05: `offset` added (was always 0 -- a hardcoded LIMIT 200 with
+ * no way to reach an older request past that cap) so the register can page
+ * through the full tenant history instead of silently dropping its tail.
+ */
+export async function listRti(tenantId: string, limit = 200, offset = 0): Promise<RtiRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsRtiRequests)
     .where(eq(hrmsRtiRequests.tenantId, tenantId))
     .orderBy(desc(hrmsRtiRequests.receivedDate))
-    .limit(limit));
+    .limit(limit)
+    .offset(offset));
+}
+
+/**
+ * GAP-HR-RTI-02/05: whole-tenant counts by status plus an overdue count,
+ * computed in SQL against every row (not just whatever page `listRti`
+ * happens to have loaded) -- so the stat cards, and specifically the
+ * "Under appeal" count (RTI-02), can never again silently cap at 200.
+ * `overdue` mirrors `withSla`'s own open/overdue definition exactly: only
+ * filed|assigned requests are ever "overdue" (a responded/appealed request
+ * past its original due date is handled by its own SLA label, not counted
+ * here -- see routes.ts's withSla).
+ */
+export async function getRtiSummary(tenantId: string, todayIso: string): Promise<{
+  total: number; pending: number; overdue: number; disposed: number; appealed: number;
+}> {
+  const [row] = await scopedRead((tx) => tx
+    .select({
+      total: sql<number>`count(*)`.mapWith(Number),
+      pending: sql<number>`count(*) filter (where ${hrmsRtiRequests.status} in ('filed', 'assigned'))`.mapWith(Number),
+      overdue: sql<number>`count(*) filter (where ${hrmsRtiRequests.status} in ('filed', 'assigned') and ${hrmsRtiRequests.dueDate} < ${todayIso})`.mapWith(Number),
+      disposed: sql<number>`count(*) filter (where ${hrmsRtiRequests.status} in ('responded', 'closed'))`.mapWith(Number),
+      appealed: sql<number>`count(*) filter (where ${hrmsRtiRequests.status} = 'appealed')`.mapWith(Number),
+    })
+    .from(hrmsRtiRequests)
+    .where(eq(hrmsRtiRequests.tenantId, tenantId)));
+  return row ?? { total: 0, pending: 0, overdue: 0, disposed: 0, appealed: 0 };
 }
 
 export async function getRti(tenantId: string, id: string): Promise<RtiRow | undefined> {

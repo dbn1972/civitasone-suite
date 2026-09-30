@@ -1,6 +1,19 @@
 import Link from "next/link";
 
-type Props = { module?: string; requiredRoles?: string[]; reason?: string };
+type Props = {
+  module?: string;
+  requiredRoles?: string[];
+  reason?: string;
+  /**
+   * GAP-HR-ID-CARDS-07: the CTA was hard-wired to /dashboard, so a denied
+   * user browsing within e.g. /hr always left the HR area entirely instead
+   * of going back to where they came from. Optional and additive -- every
+   * existing caller (no backHref passed) keeps today's exact "Return to
+   * command center" -> /dashboard behavior.
+   */
+  backHref?: string;
+  backLabel?: string;
+};
 
 function sentence(text: string): string {
   const trimmed = text.trim();
@@ -9,7 +22,7 @@ function sentence(text: string): string {
   return /[.!?]$/.test(capitalized) ? capitalized : `${capitalized}.`;
 }
 
-export function PermissionDenied({ module, requiredRoles, reason }: Props) {
+export function PermissionDenied({ module, requiredRoles, reason, backHref = "/dashboard", backLabel = "Return to command center" }: Props) {
   return (
     <div className="card" style={{ maxWidth: 480, margin: "40px auto" }}>
       <div className="pad" style={{ textAlign: "center" }}>
@@ -34,7 +47,7 @@ export function PermissionDenied({ module, requiredRoles, reason }: Props) {
             </>
           )}
         </p>
-        <Link href="/dashboard" className="btn primary">Return to command center</Link>
+        <Link href={backHref} className="btn primary">{backLabel}</Link>
       </div>
     </div>
   );
