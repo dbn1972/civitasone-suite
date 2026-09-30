@@ -53,7 +53,13 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
     window.print()
   }, [])
 
-  const roots = useMemo(() => data.filter((n) => !n.reportsTo), [data])
+  // GAP-HR-ORG-CHART-02/05: the API (orgchart/queries.ts) already returns
+  // only root nodes -- re-filtering by `!reportsTo` here duplicated that,
+  // and (before the backend GAP-05 fix) could disagree with it: a node
+  // whose manager had separated still carried that stale, no-longer-active
+  // managerId, so this filter silently dropped it instead of showing it as
+  // a root.
+  const roots = data
 
   // Roving tabindex (WAI-ARIA tree pattern): exactly one treeitem in the
   // whole tree — `activeId` — has tabIndex 0 at a time; everything else is
@@ -181,20 +187,6 @@ export function OrgChartClient({ data }: { data: OrgChartNode[] }) {
           No organisational hierarchy data available.
         </p>
       )}
-
-      {/* GFR note */}
-      <p
-        style={{
-          fontSize: 11,
-          color: 'var(--muted, #64748b)',
-          borderTop: '1px solid var(--border, #e2e8f0)',
-          paddingTop: 8,
-          marginTop: 8,
-        }}
-      >
-        Reporting structure reflects sanctioned posts per service records. Vacant
-        positions are shown as pending assignment.
-      </p>
     </div>
   )
 }
