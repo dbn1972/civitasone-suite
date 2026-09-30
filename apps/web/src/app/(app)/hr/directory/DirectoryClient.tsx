@@ -1,26 +1,32 @@
 'use client'
-import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { Avatar, Button } from '@/app/_components/ds'
+import { useState, useCallback, useEffect, useRef } from 'react'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
+import { useTranslations } from 'next-intl'
+import Link from 'next/link'
+import { Avatar, Button, DataTable } from '@/app/_components/ds'
 
 type Employee = {
   id: string
   name: string
   department: string
-  designation: string
+  designation?: string
   grade?: string
-  extension?: string
   email?: string
-  location?: string
 } & Record<string, unknown>
 
 interface DirectoryClientProps {
   employees: Employee[]
+  /** Current server-side search term (URL `q`), so the box reflects it on load/back-nav. */
+  initialQuery: string
+  /** GAP-HR-DIRECTORY-03: session may open a full profile from the dialog. */
+  canViewProfiles: boolean
 }
 
-const PAGE_SIZE = 20
+const GRID_PAGE_SIZE = 20
 const ASHOKA_BLUE = '#00439C'
+const SEARCH_DEBOUNCE_MS = 350
 
-function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: (id: string) => void }) {
+function EmployeeCard({ emp, onClick, t }: { emp: Employee; onClick: (id: string) => void; t: (key: string) => string }) {
   const avatarColors = [ASHOKA_BLUE, '#1a6d3c', '#7c2d12', '#4c1d95', '#064e3b', '#831843', '#92400e']
   const color = avatarColors[(emp.name.charCodeAt(0) ?? 0) % avatarColors.length]
 
@@ -30,7 +36,11 @@ function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: (id: string) =
       onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onClick(emp.id)}
       role="button"
       tabIndex={0}
-      aria-label={`View details for ${emp.name}, ${emp.designation}`}
+      // GAP-HR-DIRECTORY-02: only append the designation when one exists --
+      // it is now genuinely populated for most rows (DIRECTORY-01), but an
+      // employee with no resolvable designation must never announce the
+      // literal string "undefined" to a screen reader.
+      aria-label={emp.designation ? `${t('viewDetailsFor')} ${emp.name}, ${emp.designation}` : `${t('viewDetailsFor')} ${emp.name}`}
       style={{
         background: 'var(--surface, #fff)',
         border: '1.5px solid var(--border, #e2e8f0)',
@@ -67,18 +77,20 @@ function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: (id: string) =
           >
             {emp.name}
           </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: ASHOKA_BLUE,
-              fontWeight: 600,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {emp.designation}
-          </div>
+          {emp.designation && (
+            <div
+              style={{
+                fontSize: 11,
+                color: ASHOKA_BLUE,
+                fontWeight: 600,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {emp.designation}
+            </div>
+          )}
         </div>
       </div>
       <div style={{ fontSize: 12, color: 'var(--muted, #64748b)', display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -88,18 +100,6 @@ function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: (id: string) =
             <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {emp.department}
             </span>
-          </div>
-        )}
-        {emp.location && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span aria-hidden>📍</span>
-            <span>{emp.location}</span>
-          </div>
-        )}
-        {emp.extension && (
-          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-            <span aria-hidden>📞</span>
-            <span>Ext: {emp.extension}</span>
           </div>
         )}
         {emp.grade && (
@@ -116,9 +116,13 @@ function EmployeeCard({ emp, onClick }: { emp: Employee; onClick: (id: string) =
 function EmployeeDetailModal({
   emp,
   onClose,
+  canViewProfiles,
+  t,
 }: {
   emp: Employee
   onClose: () => void
+  canViewProfiles: boolean
+  t: (key: string) => string
 }) {
   const closeRef = useRef<HTMLButtonElement>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
@@ -150,7 +154,7 @@ function EmployeeDetailModal({
       ref={dialogRef}
       role="dialog"
       aria-modal="true"
-      aria-label={`Employee details: ${emp.name}`}
+      aria-label={`${t('employeeDetailsFor')} ${emp.name}`}
       style={{
         position: 'fixed',
         inset: 0,
@@ -178,25 +182,27 @@ function EmployeeDetailModal({
             <h2 style={{ fontSize: 18, fontWeight: 800, margin: 0, color: 'var(--fg, #0f172a)' }}>
               {emp.name}
             </h2>
-            <div style={{ fontSize: 13, color: ASHOKA_BLUE, fontWeight: 600, marginTop: 2 }}>
-              {emp.designation}
-            </div>
+            {emp.designation && (
+              <div style={{ fontSize: 13, color: ASHOKA_BLUE, fontWeight: 600, marginTop: 2 }}>
+                {emp.designation}
+              </div>
+            )}
           </div>
         </div>
         <dl style={{ fontSize: 13, display: 'flex', flexDirection: 'column', gap: 8 }}>
           {[
-            { label: 'Department', value: emp.department },
-            { label: 'Grade', value: emp.grade },
-            { label: 'Location', value: emp.location },
-            { label: 'Extension', value: emp.extension },
-            { label: 'Email', value: emp.email },
+            { label: t('fieldDepartment'), value: emp.department },
+            { label: t('fieldGrade'), value: emp.grade },
+            // GAP-HR-DIRECTORY-04 (DPDP decision, applied): work email only --
+            // never mobile/PAN/bank. See docs/SECURITY.md's Directory Fields note.
+            { label: t('fieldEmail'), value: emp.email },
           ]
             .filter((f) => f.value)
             .map(({ label, value }) => (
               <div key={label} style={{ display: 'flex', gap: 8 }}>
                 <dt style={{ fontWeight: 700, color: 'var(--muted, #64748b)', minWidth: 90 }}>{label}</dt>
                 <dd style={{ margin: 0, color: 'var(--fg, #0f172a)', wordBreak: 'break-word' }}>
-                  {label === 'Email' ? (
+                  {label === t('fieldEmail') ? (
                     <a href={`mailto:${value}`} style={{ color: ASHOKA_BLUE }}>
                       {value}
                     </a>
@@ -207,45 +213,77 @@ function EmployeeDetailModal({
               </div>
             ))}
         </dl>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+          {/* GAP-HR-DIRECTORY-03: a full profile link (session-role gated --
+              the destination's own manager-scope check is the real
+              boundary, see page.tsx's PROFILE_LINK_ROLES comment) and an
+              org-chart link (open to everyone who reaches the directory). */}
+          {canViewProfiles && (
+            <Link href={`/hr/employees/${emp.id}`} className="btn ghost" style={{ minHeight: 44, textAlign: 'center' }}>
+              {t('viewProfile')}
+            </Link>
+          )}
+          <Link href="/hr/org-chart" className="btn ghost" style={{ minHeight: 44, textAlign: 'center' }}>
+            {t('viewOrgChart')}
+          </Link>
+        </div>
         <Button
           ref={closeRef}
           onClick={onClose}
-          aria-label="Close employee details"
-          style={{ marginTop: 20, width: '100%', minHeight: 44 }}
+          aria-label={t('closeDetails')}
+          style={{ marginTop: 8, width: '100%', minHeight: 44 }}
         >
-          Close
+          {t('close')}
         </Button>
       </div>
     </div>
   )
 }
 
-export function DirectoryClient({ employees }: DirectoryClientProps) {
-  const [search, setSearch] = useState('')
-  const [page, setPage] = useState(1)
+export function DirectoryClient({ employees, initialQuery, canViewProfiles }: DirectoryClientProps) {
+  const t = useTranslations('directory')
+  const tCommon = useTranslations('common')
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const [searchInput, setSearchInput] = useState(initialQuery)
+  const [gridPage, setGridPage] = useState(1)
   const [selected, setSelected] = useState<Employee | null>(null)
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid')
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const filtered = useMemo(() => {
-    const q = search.toLowerCase().trim()
-    if (!q) return employees
-    return employees.filter(
-      (e) =>
-        e.name.toLowerCase().includes(q) ||
-        (e.department ?? '').toLowerCase().includes(q) ||
-        (e.designation ?? '').toLowerCase().includes(q) ||
-        (e.extension ?? '').toLowerCase().includes(q) ||
-        (e.location ?? '').toLowerCase().includes(q),
-    )
-  }, [employees, search])
+  // GAP-HR-DIRECTORY-03: search is now server-driven (reaches the whole
+  // directory, not just this page's loaded rows) -- debounce keystrokes into
+  // a URL navigation (?q=...&page=1) rather than filtering the already-
+  // loaded array client-side.
+  const pushQuery = useCallback(
+    (value: string) => {
+      const params = new URLSearchParams(searchParams?.toString() ?? '')
+      if (value.trim()) params.set('q', value.trim())
+      else params.delete('q')
+      params.delete('page')
+      router.replace(`${pathname}?${params.toString()}`)
+    },
+    [router, pathname, searchParams],
+  )
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
-  const paginated = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+  const handleSearchChange = useCallback(
+    (v: string) => {
+      setSearchInput(v)
+      setGridPage(1)
+      if (debounceRef.current) clearTimeout(debounceRef.current)
+      debounceRef.current = setTimeout(() => pushQuery(v), SEARCH_DEBOUNCE_MS)
+    },
+    [pushQuery],
+  )
 
-  const handleSearch = useCallback((v: string) => {
-    setSearch(v)
-    setPage(1)
+  useEffect(() => () => {
+    if (debounceRef.current) clearTimeout(debounceRef.current)
   }, [])
+
+  const totalGridPages = Math.max(1, Math.ceil(employees.length / GRID_PAGE_SIZE))
+  const gridPaginated = employees.slice((gridPage - 1) * GRID_PAGE_SIZE, gridPage * GRID_PAGE_SIZE)
 
   const handleSelect = useCallback(
     (id: string) => {
@@ -255,22 +293,58 @@ export function DirectoryClient({ employees }: DirectoryClientProps) {
     [employees],
   )
 
+  const columns: { key: keyof Employee & string; label: string; render?: (row: Employee) => React.ReactNode }[] = [
+    {
+      key: 'name',
+      label: t('colName'),
+      render: (row) => (
+        <button
+          type="button"
+          onClick={() => handleSelect(row.id)}
+          aria-label={`${t('viewDetailsFor')} ${row.name}`}
+          style={{
+            background: 'none',
+            border: 'none',
+            padding: 0,
+            font: 'inherit',
+            fontWeight: 600,
+            color: 'var(--fg, #0f172a)',
+            cursor: 'pointer',
+            textAlign: 'left',
+            minHeight: 44,
+          }}
+        >
+          {row.name}
+        </button>
+      ),
+    },
+    { key: 'department', label: t('colDepartment') },
+    { key: 'designation', label: t('colDesignation') },
+    { key: 'grade', label: t('colGrade') },
+  ]
+
   return (
     <div>
+      {/* GAP-HR-DIRECTORY-04: visible DPDP purpose notice (was previously
+          undocumented -- see docs/SECURITY.md's Directory Fields policy). */}
+      <p role="note" style={{ fontSize: 12, color: 'var(--muted, #64748b)', marginBottom: 12 }}>
+        {t('dpdpNotice')}
+      </p>
+
       {/* Toolbar */}
       <div
         style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center' }}
         role="toolbar"
-        aria-label="Directory controls"
+        aria-label={t('toolbarLabel')}
       >
         <label style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 2 }}>
-          <span className="sr-only">Search employees</span>
+          <span className="sr-only">{t('searchAriaLabel')}</span>
           <input
             type="search"
-            placeholder="Search by name, dept, designation, extension or location…"
-            value={search}
-            onChange={(e) => handleSearch(e.target.value)}
-            aria-label="Search employee directory"
+            placeholder={t('searchPlaceholder')}
+            value={searchInput}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            aria-label={t('searchAriaLabel')}
             style={{
               border: '1.5px solid var(--border, #e2e8f0)',
               borderRadius: 6,
@@ -282,13 +356,13 @@ export function DirectoryClient({ employees }: DirectoryClientProps) {
             }}
           />
         </label>
-        <div role="group" aria-label="View mode" style={{ display: 'flex', gap: 4 }}>
+        <div role="group" aria-label={t('viewModeGroupLabel')} style={{ display: 'flex', gap: 4 }}>
           {(['grid', 'table'] as const).map((mode) => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
               aria-pressed={viewMode === mode}
-              aria-label={`${mode === 'grid' ? 'Card grid' : 'Table'} view`}
+              aria-label={mode === 'grid' ? t('viewCards') : t('viewTable')}
               style={{
                 border: '1.5px solid',
                 borderColor: viewMode === mode ? ASHOKA_BLUE : 'var(--border, #e2e8f0)',
@@ -302,7 +376,8 @@ export function DirectoryClient({ employees }: DirectoryClientProps) {
                 minHeight: 44,
               }}
             >
-              {mode === 'grid' ? '⊞ Cards' : '☰ Table'}
+              <span aria-hidden>{mode === 'grid' ? '⊞ ' : '☰ '}</span>
+              {mode === 'grid' ? t('viewCards') : t('viewTable')}
             </button>
           ))}
         </div>
@@ -314,124 +389,84 @@ export function DirectoryClient({ employees }: DirectoryClientProps) {
         aria-atomic="true"
         style={{ fontSize: 12, color: 'var(--muted, #64748b)', marginBottom: 12 }}
       >
-        {filtered.length === employees.length
-          ? `${employees.length} employees`
-          : `${filtered.length} of ${employees.length} employees`}
-        {totalPages > 1 && ` — page ${page} of ${totalPages}`}
+        {t('employeeCount', { count: employees.length })}
+        {viewMode === 'grid' && totalGridPages > 1 && ` — ${tCommon('page')} ${gridPage} ${tCommon('of')} ${totalGridPages}`}
       </p>
 
-      {paginated.length === 0 ? (
+      {employees.length === 0 ? (
         <div
           role="status"
           style={{ textAlign: 'center', padding: '32px 0', color: 'var(--muted, #64748b)', fontSize: 14 }}
         >
-          <div style={{ fontSize: 32, marginBottom: 8 }}>👥</div>
-          <div style={{ fontWeight: 600 }}>No employees found</div>
-          <div style={{ fontSize: 12, marginTop: 4 }}>Try a different search term.</div>
+          <div style={{ fontSize: 32, marginBottom: 8 }} aria-hidden>👥</div>
+          <div style={{ fontWeight: 600 }}>{t('noResultsTitle')}</div>
+          <div style={{ fontSize: 12, marginTop: 4 }}>{t('noResultsHint')}</div>
         </div>
       ) : viewMode === 'grid' ? (
         <div
           role="list"
-          aria-label="Employee cards"
+          aria-label={t('cardsListLabel')}
           style={{
             display: 'grid',
             gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))',
             gap: 14,
           }}
         >
-          {paginated.map((emp) => (
+          {gridPaginated.map((emp) => (
             <div key={emp.id} role="listitem">
-              <EmployeeCard emp={emp} onClick={handleSelect} />
+              <EmployeeCard emp={emp} onClick={handleSelect} t={t} />
             </div>
           ))}
         </div>
       ) : (
-        /* Table view */
-        <div style={{ overflowX: 'auto' }}>
-          <table
-            style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}
-            aria-label="Employee directory table"
-          >
-            <thead>
-              <tr>
-                {['Name', 'Department', 'Designation', 'Grade', 'Extension', 'Location'].map((h) => (
-                  <th
-                    key={h}
-                    scope="col"
-                    style={{
-                      padding: '10px 12px',
-                      textAlign: 'start',
-                      borderBottom: '2px solid var(--border, #e2e8f0)',
-                      fontWeight: 700,
-                      fontSize: 11,
-                      textTransform: 'uppercase',
-                      letterSpacing: 0.5,
-                      color: 'var(--muted, #64748b)',
-                      background: 'var(--table-head-bg, #f8fafc)',
-                      whiteSpace: 'nowrap',
-                    }}
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {paginated.map((emp) => (
-                <tr
-                  key={emp.id}
-                  onClick={() => handleSelect(emp.id)}
-                  onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && handleSelect(emp.id)}
-                  tabIndex={0}
-                  role="button"
-                  aria-label={`View details for ${emp.name}`}
-                  style={{
-                    borderBottom: '1px solid var(--border, #e2e8f0)',
-                    cursor: 'pointer',
-                  }}
-                >
-                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>{emp.name}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--muted, #64748b)' }}>{emp.department || '—'}</td>
-                  <td style={{ padding: '10px 12px', color: ASHOKA_BLUE, fontSize: 12 }}>{emp.designation || '—'}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--muted, #64748b)' }}>{emp.grade || '—'}</td>
-                  <td style={{ padding: '10px 12px' }}>{emp.extension || '—'}</td>
-                  <td style={{ padding: '10px 12px', color: 'var(--muted, #64748b)' }}>{emp.location || '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        // GAP-HR-DIRECTORY-05: shared DataTable instead of a hand-rolled
+        // <table role=button tr onClick>, which dropped native row/AT
+        // semantics and had no responsive mobile transform. The name cell's
+        // own <button> (columns above) keeps the row-open affordance without
+        // borrowing DataTable's href-based row-link (there is no href here,
+        // this opens a modal). `mobileStack` opts this table (only) into the
+        // new stacked-row layout below 768px -- every other DataTable
+        // consumer is unaffected by default.
+        <DataTable<Employee>
+          columns={columns}
+          rows={gridPaginated}
+          sortable
+          mobileStack
+          caption={t('tableAriaLabel')}
+        />
       )}
 
-      {/* Pagination */}
-      {totalPages > 1 && (
+      {/* Grid-view pagination (client-side chunking of this server page's
+          rows -- unrelated to the server-side `page` param below, same as
+          every other DataTable consumer's own `pageSize` chunking). */}
+      {viewMode === 'grid' && totalGridPages > 1 && (
         <nav
-          aria-label="Directory pagination"
+          aria-label={t('paginationLabel')}
           style={{ display: 'flex', gap: 6, justifyContent: 'center', marginTop: 16, flexWrap: 'wrap' }}
         >
           <Button
             variant="ghost"
-            onClick={() => setPage((p) => Math.max(1, p - 1))}
-            disabled={page === 1}
-            aria-label="Previous page"
+            onClick={() => setGridPage((p) => Math.max(1, p - 1))}
+            disabled={gridPage === 1}
+            aria-label={t('prevPageAriaLabel')}
           >
-            ← Prev
+            ← {tCommon('back')}
           </Button>
-          {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => {
-            const pg = totalPages <= 7 ? i + 1 : page <= 4 ? i + 1 : page + i - 3
-            if (pg < 1 || pg > totalPages) return null
+          {Array.from({ length: Math.min(totalGridPages, 7) }, (_, i) => {
+            const pg = totalGridPages <= 7 ? i + 1 : gridPage <= 4 ? i + 1 : gridPage + i - 3
+            if (pg < 1 || pg > totalGridPages) return null
             return (
               <button
                 key={pg}
-                onClick={() => setPage(pg)}
-                aria-current={pg === page ? 'page' : undefined}
-                aria-label={`Page ${pg}`}
+                onClick={() => setGridPage(pg)}
+                aria-current={pg === gridPage ? 'page' : undefined}
+                aria-label={`${t('pageNumberAriaLabel')} ${pg}`}
                 style={{
                   ...paginationBtn(false),
-                  background: pg === page ? ASHOKA_BLUE : undefined,
-                  color: pg === page ? '#fff' : undefined,
-                  borderColor: pg === page ? ASHOKA_BLUE : undefined,
-                  fontWeight: pg === page ? 700 : undefined,
+                  background: pg === gridPage ? ASHOKA_BLUE : undefined,
+                  color: pg === gridPage ? '#fff' : undefined,
+                  borderColor: pg === gridPage ? ASHOKA_BLUE : undefined,
+                  fontWeight: pg === gridPage ? 700 : undefined,
                 }}
               >
                 {pg}
@@ -440,16 +475,18 @@ export function DirectoryClient({ employees }: DirectoryClientProps) {
           })}
           <Button
             variant="ghost"
-            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages}
-            aria-label="Next page"
+            onClick={() => setGridPage((p) => Math.min(totalGridPages, p + 1))}
+            disabled={gridPage === totalGridPages}
+            aria-label={t('nextPageAriaLabel')}
           >
-            Next →
+            {tCommon('next')} →
           </Button>
         </nav>
       )}
 
-      {selected && <EmployeeDetailModal emp={selected} onClose={() => setSelected(null)} />}
+      {selected && (
+        <EmployeeDetailModal emp={selected} onClose={() => setSelected(null)} canViewProfiles={canViewProfiles} t={t} />
+      )}
     </div>
   )
 }
