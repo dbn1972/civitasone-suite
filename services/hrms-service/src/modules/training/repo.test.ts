@@ -13,6 +13,7 @@
  */
 import { describe, it, expect, beforeAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import { hrmsTrainings } from "./schema.js";
@@ -26,7 +27,8 @@ const EMPLOYEE = randomUUID();
 const TRAINING = randomUUID();
 
 async function insertNominations(count: number) {
-  await db.transaction(async (tx) => {
+  await runWithTenant(TENANT, () =>
+    db.transaction(async (tx) => {
     await tx.insert(hrmsDepartments).values({
       id: DEPARTMENT, tenantId: TENANT, code: "CNT", name: "Count Test Dept",
       createdBy: ACTOR, updatedBy: ACTOR,
@@ -56,7 +58,8 @@ async function insertNominations(count: number) {
         createdBy: ACTOR, updatedBy: ACTOR,
       });
     }
-  });
+    }),
+  );
 }
 
 describe("countNominationsForAdmin", () => {
@@ -65,12 +68,15 @@ describe("countNominationsForAdmin", () => {
   }, 20_000);
 
   it("returns the real row count for the tenant", async () => {
-    const total = await repo.countNominationsForAdmin(TENANT);
+    const total = await runWithTenant(TENANT, () => repo.countNominationsForAdmin(TENANT));
     expect(total).toBe(3);
   });
 
   it("is scoped per tenant (a different tenant's rows never count)", async () => {
-    const otherTenantTotal = await repo.countNominationsForAdmin(randomUUID());
+    const otherTenant = randomUUID();
+    const otherTenantTotal = await runWithTenant(otherTenant, () =>
+      repo.countNominationsForAdmin(otherTenant),
+    );
     expect(otherTenantTotal).toBe(0);
   });
 });
