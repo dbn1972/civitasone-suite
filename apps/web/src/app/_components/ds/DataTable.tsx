@@ -115,6 +115,15 @@ interface DataTableProps<T extends Record<string, unknown>> {
   /** Screen-reader-only <caption> describing the table's purpose/scope. */
   caption?: string;
   /**
+   * Opt-in: stack each row into a label/value list below 768px instead of
+   * horizontally scrolling a shrunk table (GAP-HR-DIRECTORY-05). Off by
+   * default -- zero visual change for the ~80 existing DataTable call sites
+   * that don't pass this; every `<td>` already carries the `data-label`
+   * attribute the CSS rule (civitas-ds.css's `.tbl--stack`) keys off of, so
+   * turning this on is a one-line, purely additive opt-in per consumer.
+   */
+  mobileStack?: boolean;
+  /**
    * Opt-in: derive each row's React key from the row's own identity rather
    * than the row shape's default `id` field — e.g. when a row's real
    * identity lives at a different field, or is composite. Only needed when
@@ -246,6 +255,7 @@ export function DataTable<T extends Record<string, unknown>>({
   exportable = false,
   exportFilename = "export",
   caption,
+  mobileStack = false,
   rowKey,
 }: DataTableProps<T>) {
   const router = useRouter();
@@ -381,7 +391,7 @@ export function DataTable<T extends Record<string, unknown>>({
         <EmptyState icon={emptyIcon} title={emptyTitle} message={emptyMessage} action={emptyAction} />
       ) : (
         <div className="tbl-wrap">
-        <table className="tbl">
+        <table className={mobileStack ? "tbl tbl--stack" : "tbl"}>
           {caption ? <caption className="sr-only">{caption}</caption> : null}
           <thead>
             <tr>
@@ -438,7 +448,16 @@ export function DataTable<T extends Record<string, unknown>>({
                   {columns.map((col, colIndex) => {
                     const cellContent = cellValue(col, row);
                     return (
-                      <td key={col.key} className={col.align === "right" ? "num" : undefined}>
+                      <td
+                        key={col.key}
+                        className={col.align === "right" ? "num" : undefined}
+                        // Always present (harmless when unstyled): the CSS
+                        // attribute selector that turns this into a visible
+                        // label only fires under .tbl--stack (mobileStack),
+                        // so every other DataTable consumer's markup grows
+                        // this attribute but renders pixel-identical.
+                        data-label={col.label}
+                      >
                         {colIndex === 0 && href ? (
                           <a
                             href={href}

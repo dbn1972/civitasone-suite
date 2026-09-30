@@ -20,31 +20,69 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 const findByIdMock = vi.fn();
-vi.mock("./repo.js", () => ({ findById: (...args: unknown[]) => findByIdMock(...args) }));
+const listByTenantMock = vi.fn();
+const listByIdsMock = vi.fn();
+vi.mock("./repo.js", () => ({
+  findById: (...args: unknown[]) => findByIdMock(...args),
+  listByTenant: (...args: unknown[]) => listByTenantMock(...args),
+  listByIds: (...args: unknown[]) => listByIdsMock(...args),
+}));
 
 vi.mock("../../shared/infra.js", () => ({
   cache: {
     getOrLoad: (_key: string, loader: () => unknown) => loader(),
+    // GAP-HR-DIRECTORY-01: listEmployees's non-`ids` path goes through
+    // cache.listOrLoad, not getOrLoad -- bypass straight to the loader, same
+    // as getOrLoad above, so these tests exercise real query-building logic
+    // without a cache dependency.
+    listOrLoad: (_tenantId: string, _kind: string, _key: string, loader: () => unknown) => loader(),
     makeKey: (...parts: string[]) => parts.join(":"),
   },
 }));
 
-// getEmployeeDetail's department/designation lookups both resolve to their
-// "—" / omitted fallback when scopedRead returns no rows -- irrelevant to
-// what this test asserts, so one generic empty-result mock covers both.
-vi.mock("../../shared/db.js", () => ({
-  scopedRead: (fn: (tx: unknown) => unknown) => {
-    const empty = { then: (res: (v: unknown[]) => unknown) => Promise.resolve(res([])) };
-    // getEmployeeDetail's dept/designation lookups both chain
-    // .select().from().where().limit(1) -- .where() must itself yield
-    // something with a .limit() (which resolves to the empty fallback), not
-    // just a bare thenable, or the real chain 4 levels deep throws.
-    const tx = { select: () => ({ from: () => ({ ...empty, where: () => ({ ...empty, limit: () => empty }) }) }) };
-    return Promise.resolve(fn(tx));
-  },
+// Fixture rows for the department/designation lookup tables, keyed by which
+// Drizzle table object `.from(...)` was called with -- `vi.hoisted` so the
+// mock factory below (hoisted above these `const`s) and each `it()` block
+// (which mutates them) share the same object.
+const dbFixtures = vi.hoisted(() => ({
+  departmentRows: [] as unknown[],
+  designationRows: [] as unknown[],
 }));
 
-import { getEmployeeDetail } from "./queries.js";
+// getEmployeeDetail's department/designation lookups chain
+// .select().from(table).where(...).limit(1); listEmployees's chain
+// .select().from(table).where(...) with no .limit(). One chainable stub
+// covers both shapes and both tables: it inspects which schema object
+// `.from()` was called with and resolves to that table's current fixture
+// rows (empty by default, i.e. today's existing getEmployeeDetail tests'
+// "-- / omitted" behavior, unless a test opts in via dbFixtures above).
+vi.mock("../../shared/db.js", async () => {
+  const schema = await import("./schema.js");
+  function chain(rows: unknown[]): any {
+    return {
+      where: () => chain(rows),
+      limit: () => chain(rows),
+      then: (resolve: (v: unknown) => unknown, reject?: (e: unknown) => unknown) =>
+        Promise.resolve(rows).then(resolve, reject),
+    };
+  }
+  return {
+    scopedRead: (fn: (tx: unknown) => unknown) => {
+      const tx = {
+        select: () => ({
+          from: (table: unknown) => {
+            if (table === schema.hrmsDepartments) return chain(dbFixtures.departmentRows);
+            if (table === schema.hrmsDesignations) return chain(dbFixtures.designationRows);
+            return chain([]);
+          },
+        }),
+      };
+      return Promise.resolve(fn(tx));
+    },
+  };
+});
+
+import { getEmployeeDetail, listEmployees } from "./queries.js";
 
 const TENANT = "aaaaaaaa-0001-4000-8000-000000000011";
 
@@ -72,6 +110,83 @@ const BASE_EMPLOYEE = {
 
 beforeEach(() => {
   findByIdMock.mockReset();
+  listByTenantMock.mockReset();
+  listByIdsMock.mockReset();
+  dbFixtures.departmentRows = [];
+  dbFixtures.designationRows = [];
+});
+
+// GAP-HR-DIRECTORY-01: designation/grade were promised by the directory UI
+// (and its own i18n subtitle) but listEmployees never resolved them, so
+// every card's designation line rendered blank (or the literal "undefined"
+// once concatenated into an aria-label -- GAP-HR-DIRECTORY-02) and the
+// Designations stat card always read 0. GAP-HR-DIRECTORY-04: `email` is
+// added at the same time (a non-masked column, per the published decision
+// packet's default -- work email only, never mobile/PAN/bank).
+describe("listEmployees — designation/grade/email (GAP-HR-DIRECTORY-01/04)", () => {
+  const ROW = {
+    id: "emp-1",
+    employeeNo: "E001",
+    fullName: "Asha Rao",
+    departmentId: "dept-1",
+    designationId: "desig-1",
+    employeeType: "permanent",
+    status: "confirmed",
+    email: "asha.rao@example.gov.in",
+  };
+
+  it("includes designation, grade, and email for a seeded employee with a designation", async () => {
+    listByTenantMock.mockResolvedValue([ROW]);
+    dbFixtures.departmentRows = [{ id: "dept-1", name: "Finance" }];
+    dbFixtures.designationRows = [{ id: "desig-1", name: "Under Secretary", payGrade: "Grade-3" }];
+
+    const result = await listEmployees(TENANT, 200, 0);
+
+    expect(result.data).toEqual([
+      {
+        id: "emp-1",
+        employeeNo: "E001",
+        name: "Asha Rao",
+        department: "Finance",
+        employeeType: "permanent",
+        status: "confirmed",
+        designation: "Under Secretary",
+        grade: "Grade-3",
+        email: "asha.rao@example.gov.in",
+      },
+    ]);
+  });
+
+  it("omits designation/grade/email (not a placeholder) when unresolvable or absent", async () => {
+    listByTenantMock.mockResolvedValue([{ ...ROW, email: null }]);
+    dbFixtures.departmentRows = [{ id: "dept-1", name: "Finance" }];
+    dbFixtures.designationRows = []; // no matching designation row
+
+    const result = await listEmployees(TENANT, 200, 0);
+
+    expect(result.data[0]?.designation).toBeUndefined();
+    expect(result.data[0]?.grade).toBeUndefined();
+    expect(result.data[0]?.email).toBeUndefined();
+    expect(result.data[0] && "location" in result.data[0]).toBe(false);
+    expect(result.data[0] && "extension" in result.data[0]).toBe(false);
+  });
+
+  it("never includes mobile, PAN, or bank fields regardless of what repo.listByTenant returns", async () => {
+    // repo.listByTenant's real row shape (EmployeeRow) does carry these
+    // columns -- this asserts listEmployees's own mapping never spreads the
+    // raw row, so a future change to that mapping can't accidentally widen
+    // the directory response to leak them (GAP-HR-DIRECTORY-04's decision).
+    listByTenantMock.mockResolvedValue([{ ...ROW, mobile: "9876543210", pan: "ABCDE1234F", bankAccountNo: "1234567890" }]);
+    dbFixtures.departmentRows = [{ id: "dept-1", name: "Finance" }];
+    dbFixtures.designationRows = [{ id: "desig-1", name: "Under Secretary", payGrade: "Grade-3" }];
+
+    const result = await listEmployees(TENANT, 200, 0);
+
+    const row = result.data[0] as Record<string, unknown>;
+    expect(row.mobile).toBeUndefined();
+    expect(row.pan).toBeUndefined();
+    expect(row.bankAccountNo).toBeUndefined();
+  });
 });
 
 describe("getEmployeeDetail — statutory identifiers (UAN / ESIC IP / PRAN)", () => {
