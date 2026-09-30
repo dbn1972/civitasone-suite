@@ -111,6 +111,9 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
       }
 
       setTone("success");
+      // GAP-HR-DESIGNATIONS-NEW-02: this is a 202 (queued, not yet
+      // persisted) -- "added successfully" overstated what had actually
+      // happened at this point.
       setMessage(t("successMsg", { name: trimName }));
       reset();
       onSuccess?.();
@@ -198,32 +201,42 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
           </Field>
 
           {/* Level */}
-          <Field label={t("levelLabel")} error={formError.fieldError("level") || fields.level.error}>
-            <Input
-              type="number"
-              min={MIN_PAY_LEVEL}
-              max={MAX_PAY_LEVEL}
-              step={1}
-              value={fields.level.value}
-              onChange={fields.level.onChange}
-              onBlur={fields.level.onBlur}
-              placeholder={t("levelPlaceholder")}
-            />
-          </Field>
+          {/* Level */}
+          <div>
+            <Field label={t("levelLabel")} error={formError.fieldError("level") || fields.level.error}>
+              <Input
+                type="number"
+                min={MIN_PAY_LEVEL}
+                max={MAX_PAY_LEVEL}
+                step={1}
+                value={fields.level.value}
+                onChange={fields.level.onChange}
+                onBlur={fields.level.onBlur}
+                placeholder={t("levelPlaceholder")}
+              />
+            </Field>
+            {/* GAP-HR-DESIGNATIONS-NEW-03: blank used to silently become
+                level 0 ("unclassified" everywhere it's read back) with
+                nothing on this form saying so. */}
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut, #64748b)" }}>{t("levelHint")}</p>
+          </div>
 
           {/* Pay Grade */}
-          <Field
-            label={t("payGradeLabel")}
-            error={formError.fieldError("payGrade") || fields.payGrade.error}
-          >
-            <Input
-              value={fields.payGrade.value}
-              onChange={fields.payGrade.onChange}
-              onBlur={fields.payGrade.onBlur}
-              placeholder={t("payGradePlaceholder")}
-              maxLength={30}
-            />
-          </Field>
+          <div>
+            <Field
+              label={t("payGradeLabel")}
+              error={formError.fieldError("payGrade") || fields.payGrade.error}
+            >
+              <Input
+                value={fields.payGrade.value}
+                onChange={fields.payGrade.onChange}
+                onBlur={fields.payGrade.onBlur}
+                placeholder={t("payGradePlaceholder")}
+                maxLength={30}
+              />
+            </Field>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--mut, #64748b)" }}>{t("payGradeHint")}</p>
+          </div>
         </div>
 
         {/* Actions */}

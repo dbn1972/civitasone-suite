@@ -22,7 +22,8 @@ export type MessageKind =
   | "offline"
   | "unknownStatus"
   | "accepted"
-  | "forbidden";
+  | "forbidden"
+  | "conflict";
 
 /**
  * Build a clerk-safe message for a known situation. `area` is an optional plain
@@ -78,6 +79,20 @@ export function toHumanError(kind: MessageKind, ctx?: { area?: string }): HumanE
       return {
         what: "You don't have permission to do this.",
         next: "Contact your administrator if you think this is a mistake.",
+        actions: ["back", "help"],
+      };
+    case "conflict":
+      // GAP-HR-DESIGNATIONS-02: a blocked-by-a-business-rule response (e.g.
+      // "still referenced elsewhere, can't delete") is not a transient
+      // failure -- like "forbidden", retrying with nothing changed will
+      // just fail again the same way, so no "retry" here either. No
+      // `thing` interpolation (unlike "load"/"unknownStatus"): the exact
+      // dependency varies by caller and the backend's own detail is never
+      // echoed to the user (see useFormError.ts's CODE_TO_KIND comment), so
+      // this stays generic on purpose.
+      return {
+        what: "This can't be done while it's still in use elsewhere.",
+        next: "Update or reassign whatever depends on it first, then try again.",
         actions: ["back", "help"],
       };
     default:

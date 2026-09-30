@@ -31,7 +31,7 @@ describe("DesignationsTable — UX-016 clerk-safe errors", () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
     renderTable();
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: /^edit/i }));
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
     await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
@@ -42,11 +42,50 @@ describe("DesignationsTable — UX-016 clerk-safe errors", () => {
     fetchMock.mockResolvedValue(new Response("", { status: 500 }));
     renderTable();
 
-    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+    fireEvent.click(screen.getByRole("button", { name: /^delete/i }));
     fireEvent.click(await screen.findByRole("button", { name: /delete designation/i }));
 
     await waitFor(() => expect(screen.getByRole("alertdialog")).toHaveTextContent(/couldn't save/i));
     expect(screen.getByRole("alertdialog").textContent).not.toMatch(/^Delete failed/);
+  });
+
+  /**
+   * GAP-HR-DESIGNATIONS-02: the backend now 409s (DESIGNATION_IN_USE) when
+   * employees still hold the designation -- the row must stay and a
+   * clerk-safe "still in use" message must reach the confirm dialog, not
+   * silently disappear like a successful delete would. Per useFormError's
+   * CODE_TO_KIND contract, the backend's own dynamic `message` text (row
+   * count etc.) is never echoed verbatim -- the catalogued "conflict" kind
+   * copy is what actually renders (see lib/messages.ts, lib/useFormError.ts).
+   */
+  it("keeps the row and surfaces the catalogued message on a 409 DESIGNATION_IN_USE response", async () => {
+    fetchMock.mockResolvedValue(
+      new Response(JSON.stringify({ code: "DESIGNATION_IN_USE", message: "2 employees still hold this designation — reassign them before deleting it.", count: 2 }), { status: 409 }),
+    );
+    renderTable();
+
+    fireEvent.click(screen.getByRole("button", { name: /delete section officer/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /delete designation/i }));
+
+    await waitFor(() => expect(screen.getByRole("alertdialog")).toHaveTextContent(/still in use elsewhere/i));
+    // The backend's own message text is never echoed to the user.
+    expect(screen.getByRole("alertdialog").textContent).not.toMatch(/2 employees/i);
+    // The row is still in the table (not removed as it would be on success).
+    expect(screen.getByText("Section Officer")).toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-DESIGNATIONS-06: Edit/Delete were unlabelled icon-less text
+ * buttons -- every row's pair announced as identical "Edit"/"Delete" to
+ * assistive tech, with nothing distinguishing which designation a given
+ * button acts on.
+ */
+describe("DesignationsTable — GAP-HR-DESIGNATIONS-06 per-row accessible names", () => {
+  it("gives the Edit and Delete buttons an accessible name that includes the designation", () => {
+    renderTable();
+    expect(screen.getByRole("button", { name: "Edit Section Officer" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Delete Section Officer" })).toBeInTheDocument();
   });
 });
 

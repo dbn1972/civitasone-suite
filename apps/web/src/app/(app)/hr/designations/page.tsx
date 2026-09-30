@@ -51,7 +51,10 @@ export default async function DesignationsPage() {
 
   const withPayGrade    = errored ? null : items.filter((d) => !!d.payGrade).length;
   const withoutPayGrade = errored ? null : items.filter((d) => !d.payGrade).length;
-  const uniqueLevels    = errored ? null : new Set(items.map((d) => String(d.level))).size;
+  // GAP-HR-DESIGNATIONS-05: level 0 means "unclassified" everywhere else in
+  // this screen (DesignationsTable renders it as "—"), so it must not count
+  // as a real level here either -- items [0,4,4,6] should read 2, not 3.
+  const uniqueLevels    = errored ? null : new Set(items.filter((d) => d.level > 0).map((d) => String(d.level))).size;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -64,6 +67,7 @@ export default async function DesignationsPage() {
         actions={
           canEdit ? (
             <Link href="/hr/designations/new" style={newBtnStyle}>
+              <span aria-hidden="true" style={{ marginInlineEnd: 6 }}>+</span>
               {t("newBtn")}
             </Link>
           ) : undefined
@@ -72,7 +76,10 @@ export default async function DesignationsPage() {
       <StatGrid>
         <StatCard icon="🏅" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
         <StatCard icon="💰" iconBg="var(--goodbg, #e6f7f0)" label={t("statWithPayGradeLabel")}     value={withPayGrade ?? "—"} />
-        <StatCard icon="—" iconBg="var(--warnbg, #fff7e6)" label={t("statWithoutPayGradeLabel")}  value={withoutPayGrade ?? "—"} />
+        {/* GAP-HR-DESIGNATIONS-05: "—" as an icon read as if the stat itself
+            had failed to load; a real icon distinguishes "0 rows" from "no
+            data". */}
+        <StatCard icon="⚠️" iconBg="var(--warnbg, #fff7e6)" label={t("statWithoutPayGradeLabel")}  value={withoutPayGrade ?? "—"} />
         <StatCard icon="🎚️" iconBg="var(--bg, #f5f5f5)" label={t("statUniqueLevelsLabel")}      value={uniqueLevels ?? "—"} />
       </StatGrid>
 

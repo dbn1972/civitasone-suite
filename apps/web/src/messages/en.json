@@ -70,10 +70,14 @@
     "addingBtn": "Adding…",
     "addBtn": "Add Designation",
     "cancelBtn": "Cancel",
-    "successMsg": "Designation \"{name}\" added successfully.",
+    "successMsg": "Designation \"{name}\" submitted — it will appear shortly.",
     "pageTitle": "Add Designation",
     "pageSubtitle": "Add a new job title or pay level to use across your office.",
-    "pageBackLabel": "Designations"
+    "pageBackLabel": "Designations",
+    "levelHint": "Optional. Leave blank if this role isn't on the pay matrix; it will show as \"—\" (unclassified).",
+    "payGradeHint": "Optional free-text reference (e.g. an old grade-pay code) — not validated against the pay matrix.",
+    "addAnother": "Add another",
+    "viewList": "Back to designations"
   },
   "addLocationForm": {
     "statusFixFields": "Please fix the highlighted fields.",
@@ -1238,7 +1242,7 @@
     "title": "Designations",
     "subtitle": "Job titles and pay levels used across your office — Clerk, Officer, DDO, etc.",
     "backLabel": "HR",
-    "newBtn": "+ New Designation",
+    "newBtn": "New Designation",
     "statTotalLabel": "Total Designations",
     "statWithPayGradeLabel": "With Pay Grade",
     "statWithoutPayGradeLabel": "Without Pay Grade",
@@ -1266,6 +1270,8 @@
     "levelPrefix": "Level {level}",
     "editBtn": "Edit",
     "deleteBtn": "Delete",
+    "editAria": "Edit {name}",
+    "deleteAria": "Delete {name}",
     "deleteConfirmTitle": "Delete \"{name}\"?",
     "deleteConfirmDesc": "This designation will be permanently removed. This action cannot be undone.",
     "deleteConfirmBtn": "Delete designation"
