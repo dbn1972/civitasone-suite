@@ -5,25 +5,19 @@
 
 import Link from "next/link";
 import { ProgressBar, StatusPill } from "../../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 export interface JoineeCardData {
   id: string;
   employee: string;
   department: string;
-  joiningDate: string;
+  /** ISO date string, or null when the backend couldn't resolve one (GAP-HR-ONBOARDING-04). */
+  joiningDate: string | null;
   stepsCompleted: number;
   totalSteps: number;
   overdue: number;
   progress: number;   // 0–100
   status: string;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" });
-  } catch {
-    return iso;
-  }
 }
 
 function initials(name: string): string {
@@ -97,7 +91,7 @@ export function JoineeCard({
           flexWrap: "wrap",
         }}
       >
-        <span>Joining: <strong style={{ color: "var(--body, #334155)" }}>{formatDate(joiningDate)}</strong></span>
+        <span>Joining: <strong style={{ color: "var(--body, #334155)" }}>{formatIndianDate(joiningDate)}</strong></span>
         <span>Steps: <strong style={{ color: "var(--body, #334155)" }}>{stepsCompleted}/{totalSteps}</strong></span>
         {isOverdue && (
           <span
