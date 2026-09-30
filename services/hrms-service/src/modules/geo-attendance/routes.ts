@@ -73,6 +73,49 @@ async function resolveSelfEmployeeOrThrow(
   return { id: self.id };
 }
 
+/**
+ * GAP-HR-ATTENDANCE-05 (SEC): GET .../attendance/geo-history used to default
+ * an omitted `employeeId` to `ctx.actorId` (the auth-account id, not
+ * hrms_employees.id -- see GeoCheckInCard.tsx's doc comment for why those two
+ * id spaces differ) AND placed no restriction at all on an *explicit*
+ * `employeeId` query param -- any authenticated caller under ALL_ROLES
+ * (which includes bare "employee") could read another employee's geo
+ * check-in/out history, including a selfie file key and precise location
+ * data, by simply naming a different uuid. Pure decision function (no DB
+ * access) so the authorization rule itself is directly unit-testable without
+ * a Fastify/DB harness -- mirrors attendance/routes.ts's
+ * resolveSelfScopedEmployeeId / isSelfApproval / assertSelfOrHr style of
+ * extracting the IDOR guard out of the handler body.
+ *
+ * Rules:
+ *  - no employeeId given -> self (from the caller's own resolved employee
+ *    record); 403 if the caller has no linked employee record at all.
+ *  - employeeId given and it IS the caller's own id -> self, no role check
+ *    needed.
+ *  - employeeId given and it's SOMEONE ELSE's (or the caller has no linked
+ *    employee record to compare against) -> requires this module's own
+ *    HR_ROLES (the same admin tier already gating office-locations POST
+ *    just above), else 403.
+ */
+export function resolveGeoHistoryScope(
+  roles: string[],
+  selfEmployeeId: string | null,
+  requestedEmployeeId: string | undefined,
+): string {
+  if (requestedEmployeeId && requestedEmployeeId !== selfEmployeeId) {
+    if (!HR_ROLES.some((r) => roles.includes(r))) {
+      throw new HttpError(403, "FORBIDDEN", "you may only view your own geo-attendance history");
+    }
+    return requestedEmployeeId;
+  }
+  if (selfEmployeeId) return selfEmployeeId;
+  throw new HttpError(
+    403,
+    "NO_EMPLOYEE_RECORD",
+    "no employee record is linked to this account; pass employeeId to look up another employee's history",
+  );
+}
+
 export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
   // ── Office Locations CRUD ──
   app.get("/v1/hrms/office-locations", async (req, reply) => {
@@ -173,7 +216,8 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
     const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
-    const empId = q.employeeId ?? ctx.actorId;
+    const self = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+    const empId = resolveGeoHistoryScope(ctx.roles, self?.id ?? null, q.employeeId);
     const rows = await scopedRead((tx) => tx.select().from(hrmsGeoAttendance)
       .where(and(eq(hrmsGeoAttendance.tenantId, ctx.tenantId), eq(hrmsGeoAttendance.employeeId, empId))));
     return reply.send({ data: rows.slice(0, 60).map(r => ({ id: r.id, date: r.attendanceDate, checkType: r.checkType, withinGeofence: r.withinGeofence, distanceMeters: r.distanceFromOffice ? Math.round(r.distanceFromOffice) : null, markedAt: r.markedAt, selfieFileKey: r.selfieFileKey })) });

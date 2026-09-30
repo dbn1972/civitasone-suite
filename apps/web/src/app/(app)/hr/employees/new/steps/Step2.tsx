@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { useTranslations } from "next-intl";
 import type { WizardData, FieldErrors } from "../wizardTypes";
 import {
@@ -9,9 +10,10 @@ import {
   fieldWrap,
   grid2,
 } from "../wizardTypes";
+import { serviceGroup, type ServiceGroup } from "@/lib/payLevels";
 
 type Dept = { id: string; name: string };
-type Desig = { id: string; name: string };
+type Desig = { id: string; name: string; level?: number | null };
 
 interface Props {
   data: WizardData;
@@ -22,31 +24,40 @@ interface Props {
   onBlur: (field: keyof WizardData) => void;
 }
 
-// Canonical values persisted to the backend — must stay the original English
-// strings regardless of locale (grade has no separate code/value pair, unlike
-// gender/maritalStatus/employeeType, so the submitted `value` and the
-// displayed label are deliberately decoupled here to avoid sending a
-// translated string as the stored grade).
-const GRADE_VALUES = [
-  "Group A — Grade 1 (Pay Level 15–18)",
-  "Group A — Grade 2 (Pay Level 12–14)",
-  "Group B (Pay Level 6–11)",
-  "Group C (Pay Level 1–5)",
-  "MTS",
-  "Contractual",
-];
+// GAP-HR-EMPLOYEES-NEW-05: this used to be its own free-text picklist
+// (GRADE_VALUES) with level ranges hand-typed into the option labels, which
+// silently disagreed with DesignationsTable.tsx's boundaries (level 1-3 and
+// 10-11 landed in a different group depending on which screen you looked
+// at). Group A/B/C are now derived from the selected designation's pay level
+// via the one shared `serviceGroup()` helper (apps/web/src/lib/payLevels.ts)
+// instead. MTS and Contractual aren't pay-matrix groups at all (MTS is
+// technically Level 1 / Group C, and a contractual hire may have no formal
+// level yet), so those two stay a manual pick — only shown when no
+// designation with a classifiable level is selected, so they can never be
+// chosen alongside, or silently override, a computed Group A/B/C.
+const GROUP_LABEL_KEY: Record<ServiceGroup, "gradeGroupA" | "gradeGroupB" | "gradeGroupC"> = {
+  "Group-A": "gradeGroupA",
+  "Group-B": "gradeGroupB",
+  "Group-C": "gradeGroupC",
+};
 
 export function Step2({ data, errors, departments, designations, onChange, onBlur }: Props) {
   const t = useTranslations("employeeWizard");
 
-  const GRADE_LABELS: Record<string, string> = {
-    "Group A — Grade 1 (Pay Level 15–18)": t("gradeGroupA1"),
-    "Group A — Grade 2 (Pay Level 12–14)": t("gradeGroupA2"),
-    "Group B (Pay Level 6–11)": t("gradeGroupB"),
-    "Group C (Pay Level 1–5)": t("gradeGroupC"),
-    "MTS": t("gradeMts"),
-    "Contractual": t("gradeContractual"),
-  };
+  const selectedLevel = designations.find((d) => d.id === data.designationId)?.level ?? null;
+  const computedGroup = serviceGroup(selectedLevel);
+
+  // Keep data.grade in sync with the computed group as the designation
+  // selection changes (including on restoring an in-progress draft) — but
+  // never clobber a manual MTS/Contractual pick with a stale computed value.
+  useEffect(() => {
+    if (computedGroup) {
+      if (data.grade !== computedGroup) onChange("grade", computedGroup);
+    } else if (data.grade === "Group-A" || data.grade === "Group-B" || data.grade === "Group-C") {
+      onChange("grade", "");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [computedGroup]);
 
   return (
     <>
@@ -155,20 +166,33 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
           )}
         </div>
 
-        {/* Grade */}
+        {/* Grade / Service Group */}
         <div style={fieldWrap}>
-          <label htmlFor="w-grade" style={labelStyle}>{t("payGradeLabel")}</label>
-          <select
-            id="w-grade"
-            value={data.grade}
-            onChange={(e) => onChange("grade", e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">{t("selectGrade")}</option>
-            {GRADE_VALUES.map((g) => (
-              <option key={g} value={g}>{GRADE_LABELS[g]}</option>
-            ))}
-          </select>
+          <span id="w-grade-label" style={labelStyle}>{t("payGradeLabel")}</span>
+          {computedGroup ? (
+            <>
+              <div
+                id="w-grade"
+                aria-labelledby="w-grade-label"
+                style={{ ...inputStyle, display: "flex", alignItems: "center", background: "var(--bg, #f8fafc)" }}
+              >
+                {t(GROUP_LABEL_KEY[computedGroup])}
+              </div>
+              <span style={{ fontSize: 11, color: "var(--mut, #94a3b8)" }}>{t("gradeComputedNote")}</span>
+            </>
+          ) : (
+            <select
+              id="w-grade"
+              aria-labelledby="w-grade-label"
+              value={data.grade}
+              onChange={(e) => onChange("grade", e.target.value)}
+              style={inputStyle}
+            >
+              <option value="">{t("selectGrade")}</option>
+              <option value="MTS">{t("gradeMts")}</option>
+              <option value="Contractual">{t("gradeContractual")}</option>
+            </select>
+          )}
         </div>
 
         {/* Employment Type */}

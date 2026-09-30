@@ -28,7 +28,9 @@ import {
 } from "./wizardTypes";
 
 type Dept = { id: string; name: string };
-type Desig = { id: string; name: string };
+// `level` feeds Step2's computed Service Group (GAP-HR-EMPLOYEES-NEW-05).
+type Desig = { id: string; name: string; level?: number | null };
+type EmpSummary = { id: string; name: string; designationName?: string };
 
 interface Props {
   departments: Dept[];

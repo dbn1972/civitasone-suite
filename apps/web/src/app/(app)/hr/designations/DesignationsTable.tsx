@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { serviceGroup, payLevelSchema, type ServiceGroup } from "@/lib/payLevels";
 
 type Designation = {
   id: string;
@@ -14,32 +15,21 @@ type Designation = {
   payGrade: string | null;
 };
 
-// ── 7th CPC Pay Matrix helpers ─────────────────────────────────────────────
+// ── Service Group badge ─────────────────────────────────────────────────────
+// GAP-HR-DESIGNATIONS-01: Grade Pay is a 6th-CPC concept and has no place
+// beside 7th-CPC pay-matrix levels, so it's gone (no CPC7_GRADE_PAY, no
+// column). Service Group classification now comes from the single shared
+// `serviceGroup()` helper (apps/web/src/lib/payLevels.ts) instead of a local
+// heuristic, so this screen and the add-employee wizard can't disagree again.
 
-const CPC7_GRADE_PAY: Record<number, number> = {
-  1: 1800, 2: 1900, 3: 2000, 4: 2400, 5: 2800,
-  6: 4200, 7: 4600, 8: 4800, 9: 5400,
-  10: 5400, 11: 6600, 12: 7600, 13: 8700, 14: 10000,
-};
-
-function serviceGroup(level: number): string {
-  if (level <= 0)  return "—";
-  if (level <= 3)  return "Group-D";
-  if (level <= 5)  return "Group-C";
-  if (level <= 9)  return "Group-B";
-  return "Group-A";
-}
-
-function groupBadgeStyle(level: number): React.CSSProperties {
-  const g = serviceGroup(level);
-  const colors: Record<string, { bg: string; color: string }> = {
+function groupBadgeStyle(group: ServiceGroup | null): React.CSSProperties {
+  const colors: Record<ServiceGroup | "none", { bg: string; color: string }> = {
     "Group-A": { bg: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)" },
     "Group-B": { bg: "var(--goodbg, #f0fdf4)", color: "var(--good, #15803d)" },
     "Group-C": { bg: "var(--warnbg, #fff7ed)", color: "var(--warn, #c2410c)" },
-    "Group-D": { bg: "var(--bg, #f5f5f5)", color: "var(--mut, #525252)" },
-    "—":       { bg: "var(--bg, #f5f5f5)", color: "var(--mut)" },
+    none:      { bg: "var(--bg, #f5f5f5)", color: "var(--mut, #525252)" },
   };
-  const { bg, color } = colors[g] ?? colors["—"];
+  const { bg, color } = colors[group ?? "none"];
   return {
     display: "inline-flex",
     alignItems: "center",
@@ -113,7 +103,10 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
       setRowError(t("rowErrorRequired"));
       return;
     }
-    if (editLevel !== 0 && (isNaN(editLevel) || editLevel < 1 || !Number.isInteger(editLevel))) {
+    // 0 is this row's "no level set" sentinel (see editLevel's initial state);
+    // any other value must satisfy the same 1-18 rule as the create form and
+    // the backend (GAP-HR-DESIGNATIONS-01).
+    if (editLevel !== 0 && !payLevelSchema.safeParse(editLevel).success) {
       setRowError(t("rowErrorLevelInteger"));
       return;
     }
@@ -176,7 +169,6 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
             <th style={thStyle}>{t("colCode")}</th>
             <th style={thStyle}>{t("colDesignation")}</th>
             <th style={{ ...thStyle, textAlign: "end" }}>{t("colPayLevel")}</th>
-            <th style={thStyle}>{t("colGradePay")}</th>
             <th style={thStyle}>{t("colServiceGroup")}</th>
             <th style={thStyle}>{t("colPayGrade")}</th>
             {canEdit && <th style={{ ...thStyle, width: 1 }}></th>}
@@ -184,8 +176,7 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
         </thead>
         <tbody>
           {localItems.map((item) => {
-            const gp  = item.level > 0 ? CPC7_GRADE_PAY[item.level] : null;
-            const grp = item.level > 0 ? serviceGroup(item.level) : "—";
+            const grp = serviceGroup(item.level);
 
             return (
               <tr key={item.id} style={{ borderBottom: "1px solid var(--line,#f1f5f9)" }}>
@@ -223,8 +214,11 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                         style={{ ...inputStyle, textAlign: "end", maxWidth: 70 }}
                       />
                     </td>
-                    <td colSpan={2} style={{ padding: "10px 12px", color: "var(--mut,#94a3b8)", fontSize: 12 }}>
-                      {t("computedOnSave")}
+                    <td style={{ padding: "10px 12px" }}>
+                      {(() => {
+                        const editGrp = payLevelSchema.safeParse(editLevel).success ? serviceGroup(editLevel) : null;
+                        return <span style={groupBadgeStyle(editGrp)}>{editGrp ?? "—"}</span>;
+                      })()}
                     </td>
                     <td style={{ padding: "10px 12px" }}>
                       <input
@@ -262,17 +256,8 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                         </span>
                       ) : "—"}
                     </td>
-                    <td style={{ padding: "10px 12px", fontVariantNumeric: "tabular-nums" }}>
-                      {gp != null ? (
-                        <span style={{ fontWeight: 600, color: "var(--fg,#0f172a)" }}>
-                          ₹{gp.toLocaleString("en-IN")}
-                        </span>
-                      ) : "—"}
-                    </td>
                     <td style={{ padding: "10px 12px" }}>
-                      {item.level > 0 ? (
-                        <span style={groupBadgeStyle(item.level)}>{grp}</span>
-                      ) : "—"}
+                      <span style={groupBadgeStyle(grp)}>{grp ?? "—"}</span>
                     </td>
                     <td style={{ padding: "10px 12px", color: "var(--mut,#64748b)" }}>
                       {item.payGrade ?? "—"}

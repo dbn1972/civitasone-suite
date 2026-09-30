@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { z } from "zod";
 import { useFormError } from "@/lib/useFormError";
 import { useZodFieldValidation } from "@/lib/form-validation";
+import { MAX_PAY_LEVEL, MIN_PAY_LEVEL, payLevelSchema } from "@/lib/payLevels";
 import { Button, Field, Input } from "../../../../_components/ds";
 
 interface Props {
@@ -45,6 +46,12 @@ const designationSchema = z.object({
     .trim()
     .refine((v) => v === "" || /^[1-9]\d*$/.test(v), {
       message: "Enter a whole number of 1 or more.",
+    })
+    // GAP-HR-DESIGNATIONS-01: the 7th CPC pay matrix only defines levels
+    // 1-18 (payLevels.ts) — previously unbounded, so e.g. "40" saved
+    // successfully and rendered as an unclassifiable "—" everywhere.
+    .refine((v) => v === "" || payLevelSchema.safeParse(Number(v)).success, {
+      message: `Enter a level between ${MIN_PAY_LEVEL} and ${MAX_PAY_LEVEL}.`,
     }),
   payGrade: z.string().trim().max(30, "Must be at most 30 characters."),
 });
@@ -194,7 +201,8 @@ export function AddDesignationForm({ onCancel, onSuccess }: Props) {
           <Field label={t("levelLabel")} error={formError.fieldError("level") || fields.level.error}>
             <Input
               type="number"
-              min={1}
+              min={MIN_PAY_LEVEL}
+              max={MAX_PAY_LEVEL}
               step={1}
               value={fields.level.value}
               onChange={fields.level.onChange}

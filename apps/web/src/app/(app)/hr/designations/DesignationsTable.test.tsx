@@ -49,3 +49,43 @@ describe("DesignationsTable — UX-016 clerk-safe errors", () => {
     expect(screen.getByRole("alertdialog").textContent).not.toMatch(/^Delete failed/);
   });
 });
+
+/**
+ * GAP-HR-DESIGNATIONS-01: the inline edit path used to accept any level >= 1
+ * with no upper bound (a level of 40 saved and rendered as an unclassifiable
+ * "—" everywhere) — now bounded to 1-18, same rule as the create form and
+ * hrms-service's createDesignationBody.
+ */
+describe("DesignationsTable — GAP-HR-DESIGNATIONS-01 pay level bounded 1-18", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("rejects an edited level above 18 and never calls the API", async () => {
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText(/pay level/i), { target: { value: "40" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    expect(await screen.findByText(/between 1 and 18/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("accepts an edited level at the top of the real range (18) and shows it classified as Group A", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 200 }));
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.change(screen.getByLabelText(/pay level/i), { target: { value: "18" } });
+
+    // Live-computed Service Group preview while editing (no more "computed
+    // on save" placeholder — it's shown immediately, same function as the
+    // read-only row and Step2 use).
+    expect(screen.getByText("Group-A")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+  });
+});

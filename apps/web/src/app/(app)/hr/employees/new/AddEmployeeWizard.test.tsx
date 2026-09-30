@@ -6,6 +6,10 @@ import { AddEmployeeWizard } from "./AddEmployeeWizard";
 
 const DEPARTMENTS = [{ id: "dep1", name: "Finance" }];
 const DESIGNATIONS = [{ id: "des1", name: "Section Officer" }];
+const DESIGNATIONS_WITH_LEVEL = [
+  { id: "des-lvl11", name: "Under Secretary", level: 11 },
+  { id: "des-no-level", name: "Contract Hire" },
+];
 
 /**
  * UX-016: this used to show the raw backend `message` (falling back to
@@ -259,6 +263,52 @@ describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-02 Basic Pay", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalled());
     const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
     expect(body.basicMinor).toBe(4490050);
+  });
+});
+
+/**
+ * GAP-HR-EMPLOYEES-NEW-05: Step2's Grade field used to be a free picklist
+ * with hand-typed level ranges that disagreed with DesignationsTable.tsx's
+ * boundaries. It's now computed from the selected designation's pay level
+ * via the one shared serviceGroup() helper both screens import — this is
+ * the wizard-side half of the acceptance check ("selecting a designation
+ * with level 11 shows Group-A in Step 2 and on /hr/designations").
+ */
+describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-05 computed Service Group", () => {
+  async function goToStep2() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS_WITH_LEVEL} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByLabelText(/employee id/i);
+  }
+
+  it("shows the computed group (Group A, matching the GAP-HR-EMPLOYEES-NEW-05 acceptance example) for a designation at level 11", async () => {
+    await goToStep2();
+    fireEvent.change(screen.getByLabelText(/^designation/i), { target: { value: "des-lvl11" } });
+
+    // Step2 shows the localized label ("Group A"); the underlying stored
+    // token both screens actually share is the hyphenated "Group-A" from
+    // serviceGroup() — asserted directly in payLevels.test.ts. Level 11 is
+    // the catalog's own worked example: "level 11 shows Group-A in Step 2
+    // and on /hr/designations" (10-18 is Group A per DoPT S.O. 3964(F)).
+    expect(await screen.findByText("Group A")).toBeInTheDocument();
+    // The old free picklist (with its own, disagreeing level ranges) must
+    // not still be there once a level is classifiable.
+    expect(screen.queryByRole("combobox", { name: /pay grade/i })).not.toBeInTheDocument();
+  });
+
+  it("falls back to the manual MTS/Contractual picklist when the designation has no pay level", async () => {
+    await goToStep2();
+    fireEvent.change(screen.getByLabelText(/^designation/i), { target: { value: "des-no-level" } });
+
+    const gradeSelect = await screen.findByRole("combobox", { name: /pay grade/i });
+    expect(screen.queryByText("Group A")).not.toBeInTheDocument();
+    fireEvent.change(gradeSelect, { target: { value: "Contractual" } });
+    expect(gradeSelect).toHaveValue("Contractual");
   });
 });
 

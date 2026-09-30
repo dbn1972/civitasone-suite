@@ -1,16 +1,21 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { EmployeeDetail } from "@civitasone/types";
 import { useFormError } from "@/lib/useFormError";
-import { Button, EntityPicker, Field } from "@/app/_components/ds";
+import { Button, ConfirmDialog, EntityPicker, Field } from "@/app/_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { searchPayStructures, resolvePayStructures } from "@/lib/entityAdapters/payStructure";
 import { useTranslations } from "next-intl";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
+
+// GAP-HR-EMPLOYEES-DETAIL-EDIT-03: kept in sync with hrms-service's
+// validators.ts SENSITIVE_UPDATE_FIELDS (can't import across the service
+// boundary). Any patch touching one of these needs a typed reason.
+const SENSITIVE_FIELDS = ["bankAccountNo", "bankIfsc", "uanNumber", "esicIpNumber", "pran"] as const;
 
 interface Props {
   employee: EmployeeDetail;
@@ -61,10 +66,31 @@ export function EditEmployeeForm({ employee }: Props) {
   const [pran, setPran] = useState((employee as Record<string,unknown>).pran as string ?? "");
 
   const [busy, setBusy] = useState(false);
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-06: distinct from `busy` -- true from the
+  // moment a save succeeds until the redirect actually fires, so Save/Cancel
+  // stay disabled through the whole "Update submitted..." window instead of
+  // re-enabling immediately (the old `finally { setBusy(false) }` did this
+  // regardless of outcome), which let a second submit go out mid-redirect.
+  const [submitted, setSubmitted] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("error");
   const [invalidFields, setInvalidFields] = useState<Set<string>>(new Set());
   const formError = useFormError("employee record");
+  const redirectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-06: the redirect timeout was never cleared
+  // on unmount (e.g. the user navigates away during the 1.2s window) --
+  // harmless with router.push alone, but paired with router.refresh() it
+  // could refresh a route the user is no longer on.
+  useEffect(() => () => { if (redirectTimer.current) clearTimeout(redirectTimer.current); }, []);
+
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: pending patch + confirm-dialog state
+  // for the sensitive-field reason prompt (maker-checker per the published
+  // decision packet's recommendation: reason + masked audit; a second-
+  // approver step was left an open question there, not made a hard
+  // requirement, so this is audit-only, no separate approver hop).
+  const [pendingPatch, setPendingPatch] = useState<Record<string, string> | null>(null);
+  const [reasonError, setReasonError] = useState<string | undefined>();
 
   const ids = {
     mobile: `${formId}-mobile`,
@@ -83,24 +109,25 @@ export function EditEmployeeForm({ employee }: Props) {
     e.preventDefault();
     setMessage(null);
 
-    const errs = new Set<string>();
     const trimmedEmail = email.trim();
     const trimmedMobile = mobile.trim();
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-02: mobile is seeded from the API's
+    // already-masked value (pii-mask.ts, e.g. "******3210"); PHONE_RE has no
+    // '*' in its character class, so an untouched masked phone failed this
+    // check on EVERY save (even one only changing email), permanently
+    // blocking the form with "fix highlighted fields" for any employee who
+    // has a mobile on file. Only validate mobile when it was actually
+    // changed -- exactly the same "don't re-validate what you're not
+    // submitting" logic already applied to the masked bank/UAN/ESIC/PRAN
+    // fields below.
+    const mobileChanged = trimmedMobile !== (employee.phone ?? "");
 
+    const errs = new Set<string>();
     if (trimmedEmail && !EMAIL_RE.test(trimmedEmail)) errs.add("email");
-    if (trimmedMobile && !PHONE_RE.test(trimmedMobile)) errs.add("mobile");
-
-    if (errs.size > 0) {
-      setInvalidFields(errs);
-      setTone("error");
-      setMessage(t("fixHighlightedFields"));
-      return;
-    }
-
-    setInvalidFields(new Set());
+    if (mobileChanged && trimmedMobile && !PHONE_RE.test(trimmedMobile)) errs.add("mobile");
 
     const patch: Record<string, string> = {};
-    if (trimmedMobile !== (employee.phone ?? "")) patch.mobile = trimmedMobile;
+    if (mobileChanged) patch.mobile = trimmedMobile;
     if (trimmedEmail !== (employee.email ?? "")) patch.email = trimmedEmail;
     // Clearing a manager/pay-structure back to "none" is not sent: both are
     // z.string().uuid().optional() server-side, which rejects an empty
@@ -123,14 +150,45 @@ export function EditEmployeeForm({ employee }: Props) {
     // is never submitted.
     const initialBankAccountNo = (employee as Record<string, unknown>).bankAccountNo as string ?? "";
     const initialBankIfsc = (employee as Record<string, unknown>).bankIfsc as string ?? "";
-    if (bankAccountNo.trim() !== initialBankAccountNo) patch.bankAccountNo = bankAccountNo.trim();
-    if (bankIfsc.trim().toUpperCase() !== initialBankIfsc.toUpperCase()) patch.bankIfsc = bankIfsc.trim().toUpperCase();
     const initialUan = (employee as Record<string, unknown>).uanNumber as string ?? "";
     const initialEsic = (employee as Record<string, unknown>).esicIpNumber as string ?? "";
     const initialPran = (employee as Record<string, unknown>).pran as string ?? "";
-    if (uanNumber.trim() !== initialUan) patch.uanNumber = uanNumber.trim();
-    if (esicIpNumber.trim() !== initialEsic) patch.esicIpNumber = esicIpNumber.trim();
-    if (pran.trim() !== initialPran) patch.pran = pran.trim();
+    const bankAccountChanged = bankAccountNo.trim() !== initialBankAccountNo;
+    const bankIfscChanged = bankIfsc.trim().toUpperCase() !== initialBankIfsc.toUpperCase();
+    const uanChanged = uanNumber.trim() !== initialUan;
+    const esicChanged = esicIpNumber.trim() !== initialEsic;
+    const pranChanged = pran.trim() !== initialPran;
+    if (bankAccountChanged) patch.bankAccountNo = bankAccountNo.trim();
+    if (bankIfscChanged) patch.bankIfsc = bankIfsc.trim().toUpperCase();
+    if (uanChanged) patch.uanNumber = uanNumber.trim();
+    if (esicChanged) patch.esicIpNumber = esicIpNumber.trim();
+    if (pranChanged) patch.pran = pran.trim();
+
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-02: the backend's isMaskedValue guard
+    // (commands.ts) only catches a value that is FULLY the masked shape
+    // ("*******1234") -- a partially-edited string that still contains a
+    // leftover '*' (e.g. editing "******7890" down to "1234*7890") does not
+    // match that shape and would round-trip through as a real value,
+    // corrupting the stored account number with a literal asterisk. Catch
+    // any '*' in a CHANGED sensitive field here, client-side, before it's
+    // ever sent.
+    for (const [field, changed, value] of [
+      ["bankAccountNo", bankAccountChanged, bankAccountNo] as const,
+      ["bankIfsc", bankIfscChanged, bankIfsc] as const,
+      ["uanNumber", uanChanged, uanNumber] as const,
+      ["esicIpNumber", esicChanged, esicIpNumber] as const,
+      ["pran", pranChanged, pran] as const,
+    ]) {
+      if (changed && value.includes("*")) errs.add(field);
+    }
+
+    if (errs.size > 0) {
+      setInvalidFields(errs);
+      setTone("error");
+      setMessage(t("fixHighlightedFields"));
+      return;
+    }
+    setInvalidFields(new Set());
 
     if (Object.keys(patch).length === 0) {
       setTone("error");
@@ -138,33 +196,51 @@ export function EditEmployeeForm({ employee }: Props) {
       return;
     }
 
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: bank account/IFSC/UAN/ESIC/PRAN route
+    // salary and statutory credits -- require a typed reason (maker-checker,
+    // audit-only per the published decision) before submitting, same as any
+    // other sensitive-field change in this app.
+    if (SENSITIVE_FIELDS.some((f) => patch[f] !== undefined)) {
+      setPendingPatch(patch);
+      setReasonError(undefined);
+      return;
+    }
+
+    await doSubmit(patch);
+  }
+
+  async function doSubmit(patch: Record<string, string>, reason?: string) {
     setBusy(true);
     try {
       const res = await fetch(`/api/proxy/v1/hrms/employees/${employee.id}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(patch),
+        body: JSON.stringify(reason ? { ...patch, reason } : patch),
       });
 
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
         setTone("error");
         setMessage(resolved.message);
+        setBusy(false);
         return;
       }
 
       // PATCH /v1/hrms/employees/:id returns 202 (queued command) -- the
-      // update is being applied, not already confirmed done.
+      // update is being applied, not already confirmed done. `submitted`
+      // (distinct from `busy`) keeps Save/Cancel disabled for the whole
+      // window instead of re-enabling them immediately, which used to let a
+      // second submit go out while the first was still "being applied".
+      setSubmitted(true);
       setTone("success");
       setMessage(t("updateSubmitted"));
-      setTimeout(() => {
+      redirectTimer.current = setTimeout(() => {
         router.push(`/hr/employees/${employee.id}`);
         router.refresh();
       }, 1200);
     } catch {
       setTone("error");
       setMessage(formError.fromException("save").message);
-    } finally {
       setBusy(false);
     }
   }
@@ -296,7 +372,19 @@ export function EditEmployeeForm({ employee }: Props) {
             <EntityPicker
               value={managerId}
               onChange={(v) => setManagerId(Array.isArray(v) ? (v[0] ?? null) : v)}
-              search={searchEmployees}
+              // GAP-HR-EMPLOYEES-DETAIL-EDIT-05 (backend-verify, confirmed
+              // still real against current code): GET /v1/hrms/employees
+              // (repo.listByTenant) has no status filter and no self-
+              // exclusion, so the manager picker could return a separated/
+              // terminated employee or the employee themself as an option.
+              // The separated-employee half needs a backend status filter
+              // whose blast radius on this generic, multi-caller directory
+              // endpoint I did not want to change under time pressure (left
+              // `[~]`, see PR description) -- self-exclusion is safe to do
+              // here, client-side, with no backend change at all.
+              search={(q, signal) =>
+                searchEmployees(q, signal).then((opts) => opts.filter((o) => o.id !== employee.id))
+              }
               resolve={resolveEmployees}
               initialOptions={
                 employee.managerId && employee.reportingTo
@@ -334,35 +422,69 @@ export function EditEmployeeForm({ employee }: Props) {
               <input id={ids.bankAccountNo} type="text" value={bankAccountNo}
                 onChange={(e) => setBankAccountNo(e.target.value)}
                 placeholder={t("bankAccountPlaceholder")}
-                style={inputStyle} autoComplete="off" />
+                aria-invalid={invalidFields.has("bankAccountNo")}
+                style={{ ...inputStyle, borderColor: invalidFields.has("bankAccountNo") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
+                autoComplete="off" />
+              {/* GAP-HR-EMPLOYEES-DETAIL-EDIT-02: a leftover '*' means the
+                  field still contains part of the masked placeholder it was
+                  seeded with, not a real edited value -- caught client-side
+                  before it's ever sent (the backend's isMaskedValue guard
+                  only catches a FULLY-masked string, not a partial one). */}
+              {invalidFields.has("bankAccountNo") && (
+                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.bankIfsc} style={labelStyle}>{t("bankIfscLabel")}</label>
+              {/* GAP-HR-EMPLOYEES-DETAIL-EDIT-07: IFSC used to display
+                  lowercase exactly as typed and only get uppercased in the
+                  submit diff -- uppercase as-you-type instead, so what's
+                  displayed always matches what gets sent. */}
               <input id={ids.bankIfsc} type="text" value={bankIfsc}
-                onChange={(e) => setBankIfsc(e.target.value)}
+                onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
                 placeholder={t("bankIfscPlaceholder")} maxLength={11}
-                style={inputStyle} autoComplete="off" />
+                aria-invalid={invalidFields.has("bankIfsc")}
+                style={{ ...inputStyle, textTransform: "uppercase", borderColor: invalidFields.has("bankIfsc") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
+                autoComplete="off" />
+              {invalidFields.has("bankIfsc") && (
+                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.uanNumber} style={labelStyle}>{t("uanLabel")}</label>
               <input id={ids.uanNumber} type="text" value={uanNumber}
                 onChange={(e) => setUanNumber(e.target.value)}
                 placeholder={t("uanPlaceholder")} maxLength={12}
-                style={inputStyle} autoComplete="off" />
+                aria-invalid={invalidFields.has("uanNumber")}
+                style={{ ...inputStyle, borderColor: invalidFields.has("uanNumber") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
+                autoComplete="off" />
+              {invalidFields.has("uanNumber") && (
+                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.esicIpNumber} style={labelStyle}>{t("esicLabel")}</label>
               <input id={ids.esicIpNumber} type="text" value={esicIpNumber}
                 onChange={(e) => setEsicIpNumber(e.target.value)}
                 placeholder={t("esicPlaceholder")}
-                style={inputStyle} autoComplete="off" />
+                aria-invalid={invalidFields.has("esicIpNumber")}
+                style={{ ...inputStyle, borderColor: invalidFields.has("esicIpNumber") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
+                autoComplete="off" />
+              {invalidFields.has("esicIpNumber") && (
+                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={ids.pran} style={labelStyle}>{t("pranLabel")}</label>
               <input id={ids.pran} type="text" value={pran}
                 onChange={(e) => setPran(e.target.value)}
                 placeholder={t("pranPlaceholder")} maxLength={12}
-                style={inputStyle} autoComplete="off" />
+                aria-invalid={invalidFields.has("pran")}
+                style={{ ...inputStyle, borderColor: invalidFields.has("pran") ? "var(--bad, #ef4444)" : "var(--line, #cbd5e1)" }}
+                autoComplete="off" />
+              {invalidFields.has("pran") && (
+                <span style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>{t("noAsteriskError")}</span>
+              )}
             </div>
           </div>
           <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 12 }}>
@@ -376,6 +498,7 @@ export function EditEmployeeForm({ employee }: Props) {
             type="submit"
             variant="primary"
             loading={busy}
+            disabled={submitted}
             style={{ minHeight: 44, minWidth: 140 }}
           >
             {busy ? t("savingBtn") : t("saveChangesBtn")}
@@ -383,13 +506,38 @@ export function EditEmployeeForm({ employee }: Props) {
           <Button
             variant="ghost"
             onClick={() => router.push(`/hr/employees/${employee.id}`)}
-            disabled={busy}
+            disabled={busy || submitted}
             style={{ minHeight: 44 }}
           >
             {t("cancelBtn")}
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingPatch !== null}
+        title={t("sensitiveConfirmTitle")}
+        description={t("sensitiveConfirmDesc")}
+        requireReason
+        reasonLabel={t("sensitiveReasonLabel")}
+        minReasonLength={10}
+        confirmLabel={t("sensitiveConfirmBtn")}
+        cancelLabel={t("cancelBtn")}
+        busy={busy}
+        errorMessage={reasonError}
+        onConfirm={(reason) => {
+          if (!pendingPatch) return;
+          const patch = pendingPatch;
+          setPendingPatch(null);
+          void doSubmit(patch, reason);
+        }}
+        onCancel={() => {
+          if (!busy) {
+            setPendingPatch(null);
+            setReasonError(undefined);
+          }
+        }}
+      />
     </form>
   );
 }

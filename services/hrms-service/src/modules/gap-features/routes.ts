@@ -7,9 +7,11 @@ import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { sqlClient } from "../../shared/db.js";
+import { sqlClient, db } from "../../shared/db.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import * as employeeRepo from "../employee/repo.js";
+import { emitAudit } from "../recruitment/audit-emit.js";
+import { captureError } from "@civitasone/observability";
 
 const HR_ROLES = ["hr_admin", "super_admin", "hr_officer"];
 const READER_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -600,7 +602,14 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(`
         SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
-               c.proceeding_type, c.allegation AS charges,
+               c.proceeding_type,
+               -- GAP-HR-DISCIPLINARY-01 (PII/DPDP): full allegation text used to be
+               -- shipped to every caller of this list; only a short summary crosses
+               -- the wire here now, full text stays behind the existing per-case
+               -- detail route's own role gate (disciplinary/routes.ts).
+               CASE WHEN length(c.allegation) > 80
+                 THEN LEFT(c.allegation, 80) || '…'
+                 ELSE c.allegation END AS charges_summary,
                c.charge_memo_date AS filed_date,
                COALESCE(c.inquiry_officer_name,'Unassigned') AS inquiry_officer,
                c.status
@@ -611,6 +620,23 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
       `, [ctx.tenantId]);
     });
+    // GAP-HR-DISCIPLINARY-01: per-view read audit. Best-effort — a failure to
+    // record the audit event must not take down the list read itself. Must
+    // go through db.transaction() (not a bare db.insert()) — that's the only
+    // thing wrapWithTenantGuc() actually intercepts to inject app.tenant_id;
+    // _outbox.messages enforces RLS on this deployment despite the package's
+    // own "deliberately no RLS on this table" doc comment, so a bare call
+    // fails with "new row violates row-level security policy".
+    try {
+      await db.transaction(async (tx) => {
+        await emitAudit(
+          tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId },
+          "hrms.disciplinary.list_viewed", "disciplinary_case_list", ctx.tenantId, { count: rows.length },
+        );
+      });
+    } catch (err) {
+      captureError(err, { service: "hrms", event: "audit_emit_failed", action: "hrms.disciplinary.list_viewed" });
+    }
     return reply.send({ data: rows });
   });
 
@@ -718,20 +744,50 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // missing app.tenant_id gap, silently returning zero rows for every caller.
   app.get("/v1/hrms/vigilance", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    // GAP-HR-VIGILANCE-01 (PII/DPDP decision packet, interim containment):
+    // a case that ended 'dropped' (exonerated/discontinued) is hidden from
+    // this list by default — not deleted or redacted at the DB layer, just
+    // excluded from THIS response — so it stops surfacing indefinitely to
+    // every hr_officer. A caller who genuinely needs it (e.g. re-opening,
+    // audit review) can still retrieve it with includeDropped=true; this is
+    // a stopgap ahead of a real retention/purge rule, which needs separate
+    // legal sign-off (see decision packet).
+    const { includeDropped } = z.object({
+      includeDropped: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
+    }).parse(req.query);
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(`
         SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
-               c.allegation AS charges, c.charge_memo_date AS "filedDate",
+               -- GAP-HR-VIGILANCE-01 (PII/DPDP): same list-view truncation as
+               -- GAP-HR-DISCIPLINARY-01 — full text stays on the detail route.
+               CASE WHEN length(c.allegation) > 80
+                 THEN LEFT(c.allegation, 80) || '…'
+                 ELSE c.allegation END AS charges_summary,
+               c.charge_memo_date AS "filedDate",
                COALESCE(c.inquiry_officer_name,'Not Appointed') AS "inquiryOfficer",
                c.inquiry_appointed_date AS "nextHearing", c.status
         FROM disciplinary.hrms_disciplinary_cases c
         JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
         LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
         WHERE c.tenant_id = $1 AND c.proceeding_type = 'major'
+          ${includeDropped ? "" : "AND c.status <> 'dropped'"}
         ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
       `, [ctx.tenantId]);
     });
+    // GAP-HR-VIGILANCE-01: per-view read audit, same best-effort shape (and
+    // same db.transaction() requirement — see the disciplinary list above)
+    // as the disciplinary list.
+    try {
+      await db.transaction(async (tx) => {
+        await emitAudit(
+          tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId },
+          "hrms.vigilance.list_viewed", "vigilance_case_list", ctx.tenantId, { count: rows.length, includeDropped },
+        );
+      });
+    } catch (err) {
+      captureError(err, { service: "hrms", event: "audit_emit_failed", action: "hrms.vigilance.list_viewed" });
+    }
     return reply.send({ data: rows });
   });
 
