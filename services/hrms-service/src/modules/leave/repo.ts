@@ -125,8 +125,19 @@ export async function insertLeaveType(tx: Writer, row: typeof hrmsLeaveTypes.$in
   await tx.insert(hrmsLeaveTypes).values(row);
 }
 
+/**
+ * GAP-HR-LEAVE-ALLOCATE-02: onConflictDoNothing against the new
+ * (tenant_id, employee_id, leave_type_id, fy) unique index (migration 0163)
+ * -- defense in depth alongside commands.ts's synchronous 409 pre-check,
+ * which alone cannot close the race between two concurrent requests both
+ * passing that check before either's consumer-side INSERT commits. A
+ * losing race is now a silent no-op (the winner's row stands), not a
+ * unique-constraint-violation crash in this async consumer.
+ */
 export async function insertLeaveAlloc(tx: Writer, row: typeof hrmsLeaveAllocs.$inferInsert): Promise<void> {
-  await tx.insert(hrmsLeaveAllocs).values(row);
+  await tx.insert(hrmsLeaveAllocs).values(row).onConflictDoNothing({
+    target: [hrmsLeaveAllocs.tenantId, hrmsLeaveAllocs.employeeId, hrmsLeaveAllocs.leaveTypeId, hrmsLeaveAllocs.fy],
+  });
 }
 
 export async function insertLeaveApp(tx: Writer, row: typeof hrmsLeaveApps.$inferInsert): Promise<void> {

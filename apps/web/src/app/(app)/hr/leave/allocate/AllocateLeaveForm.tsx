@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "../../../../_components/ds";
+import { fiscalYearLabel, financialYearOf } from "@/lib/fiscalYear";
+import { Button, ConfirmDialog, EntityPicker } from "../../../../_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
-type EmployeeOption = { id: string; name: string; employeeNo: string };
 type LeaveTypeOption = { id: string; code: string; name: string };
+type ContextAlloc = { id: string; leaveTypeId: string; leaveTypeCode: string; leaveTypeName: string; fy: string; totalDays: number; balanceDays: number };
+type LeaveContext = { leaveTypes: Array<{ id: string; code: string; name: string; maxDays: number }>; allocations: ContextAlloc[] };
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -17,28 +21,48 @@ const inputStyle: CSSProperties = {
 const inputErrStyle: CSSProperties = { ...inputStyle, border: "1px solid var(--badbd, #ef4444)" };
 const fieldErrStyle: CSSProperties = { color: "var(--bad, #b91c1c)", fontSize: 12, margin: "3px 0 0" };
 
-function getCurrentFY(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const start = month >= 4 ? year : year - 1;
-  const end = (start + 1) % 100;
-  return `${start}-${String(end).padStart(2, "0")}`;
+/**
+ * GAP-HR-LEAVE-ALLOCATE-05: three real FYs (current-1/current/current+1),
+ * IST-resolved via financialYearOf, replacing the free-text input a bare
+ * /^\d{4}-\d{2}$/ regex validated (accepted '2026-99'). Local getCurrentFY
+ * (naive process-timezone month math) removed in favour of the shared,
+ * IST-aware helper.
+ */
+function fyOptions(): string[] {
+  const currentStart = Number(financialYearOf(new Date()).slice(0, 4));
+  return [currentStart - 1, currentStart, currentStart + 1].map(fiscalYearLabel);
 }
 
 export function AllocateLeaveForm() {
   const t = useTranslations("leaveAllocate");
   const router = useRouter();
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
   const [leaveTypes, setLeaveTypes] = useState<LeaveTypeOption[]>([]);
-  const [employeeId, setEmployeeId] = useState("");
+  // GAP-HR-LEAVE-ALLOCATE-01: no default selection — was silently
+  // preselected to empRows[0]/ltRows[0] (an HR clerk who only typed a day
+  // count would allocate to whichever employee/type happened to sort
+  // first). null = nothing chosen yet.
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [leaveTypeId, setLeaveTypeId] = useState("");
-  const [fy, setFy] = useState(getCurrentFY);
+  const fyChoices = useMemo(fyOptions, []);
+  const [fy, setFy] = useState(fyChoices[1]!); // current FY
   const [totalDays, setTotalDays] = useState("");
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  // Shown INSIDE the still-open ConfirmDialog on a failed submit (same
+  // pattern as LeavePoliciesClient's saveError) — `message` above renders
+  // above the form itself, which is hidden behind the dialog overlay while
+  // it's open, so a submit failure must surface here instead or the user
+  // never sees it.
+  const [submitError, setSubmitError] = useState<string | undefined>();
   const formError = useFormError("leave allocation");
+
+  // GAP-HR-LEAVE-ALLOCATE-03: the chosen employee's existing allocations —
+  // shown so a clerk isn't allocating blind — plus the selected leave
+  // type's policy maxDays, for a soft (non-blocking) over-cap warning.
+  const [context, setContext] = useState<LeaveContext | null>(null);
+  const [contextLoading, setContextLoading] = useState(false);
 
   const empId = useId();
   const ltId = useId();
@@ -47,17 +71,11 @@ export function AllocateLeaveForm() {
 
   useEffect(() => {
     const controller = new AbortController();
-    Promise.all([
-      fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
-      fetch("/api/proxy/v1/hrms/leave-types", { signal: controller.signal }).then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); }),
-    ])
-      .then(([empBody, ltBody]) => {
-        const empRows: EmployeeOption[] = Array.isArray(empBody) ? empBody : (empBody.data ?? []);
-        const ltRows: LeaveTypeOption[] = Array.isArray(ltBody) ? ltBody : (ltBody.data ?? []);
-        setEmployees(empRows);
-        setLeaveTypes(ltRows);
-        if (empRows[0]) setEmployeeId(empRows[0].id);
-        if (ltRows[0]) setLeaveTypeId(ltRows[0].id);
+    fetch("/api/proxy/v1/hrms/leave-types", { signal: controller.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((ltBody: unknown) => {
+        const arr = Array.isArray(ltBody) ? ltBody : ((ltBody as { data?: LeaveTypeOption[] })?.data ?? []);
+        setLeaveTypes(arr);
       })
       .catch((err) => {
         if (err instanceof Error && err.name === "AbortError") return;
@@ -67,6 +85,25 @@ export function AllocateLeaveForm() {
     return () => controller.abort();
   }, [t]);
 
+  // GAP-HR-LEAVE-ALLOCATE-03: fetch the chosen employee's leave context
+  // (existing allocations + policy maxDays) whenever the employee changes.
+  // Read-only, IDOR-guarded on the backend (context-routes.ts) same as
+  // every other caller of this endpoint.
+  useEffect(() => {
+    if (!employeeId) { setContext(null); return; }
+    const controller = new AbortController();
+    setContextLoading(true);
+    fetch(`/api/proxy/v1/hrms/leave-context?employeeId=${employeeId}`, { signal: controller.signal })
+      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+      .then((body: LeaveContext) => setContext(body))
+      .catch((err) => {
+        if (err instanceof Error && err.name === "AbortError") return;
+        setContext(null);
+      })
+      .finally(() => setContextLoading(false));
+    return () => controller.abort();
+  }, [employeeId]);
+
   function clearErr(field: string) {
     setInvalid((s) => { const n = new Set(s); n.delete(field); return n; });
   }
@@ -75,18 +112,23 @@ export function AllocateLeaveForm() {
     const errs = new Set<string>();
     if (!employeeId) errs.add("employee");
     if (!leaveTypeId) errs.add("leaveType");
-    if (!fy || !/^\d{4}-\d{2}$/.test(fy)) errs.add("fy");
     const days = parseInt(totalDays, 10);
     if (!totalDays || isNaN(days) || days <= 0 || days > 365) errs.add("days");
     setInvalid(errs);
     return errs.size === 0;
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function openConfirm(e: React.FormEvent) {
     e.preventDefault();
     if (!validate()) return;
-    setStatus("submitting");
     setMessage("");
+    setSubmitError(undefined);
+    setConfirmOpen(true);
+  }
+
+  async function submitAllocation() {
+    setStatus("submitting");
+    setSubmitError(undefined);
     const days = parseInt(totalDays, 10);
     try {
       const res = await fetch("/api/proxy/v1/hrms/leave-allocations", {
@@ -97,127 +139,187 @@ export function AllocateLeaveForm() {
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(resolved.message);
+        setSubmitError(resolved.message);
         return;
       }
-      // POST /v1/hrms/leave-allocations returns 202 (queued command), not a
-      // completed allocation — say so honestly rather than claiming it's done.
+      setConfirmOpen(false);
       setStatus("success");
       setMessage(t("allocationSuccess"));
+      // GAP-HR-LEAVE-ALLOCATE-05: reset employeeId too, not just totalDays —
+      // a repeat allocation used to be one number away with everything else
+      // still selected.
       setTotalDays("");
+      setEmployeeId(null);
     } catch {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setSubmitError(formError.fromException("save").message);
     }
   }
 
+  const selectedLeaveType = leaveTypes.find((lt) => lt.id === leaveTypeId);
+  const selectedTypeMaxDays = context?.leaveTypes.find((lt) => lt.id === leaveTypeId)?.maxDays ?? 0;
+  const daysNum = parseInt(totalDays, 10);
+  const overCap = selectedTypeMaxDays > 0 && !isNaN(daysNum) && daysNum > selectedTypeMaxDays;
+
   return (
-    <form onSubmit={handleSubmit} noValidate style={{ display: "grid", gap: 14 }}>
-      {message && (
-        <p role={status === "error" ? "alert" : "status"} aria-live={status === "error" ? "assertive" : "polite"}
-          className={`pill ${status === "error" ? "bad" : "good"}`} style={{ margin: 0 }}>
-          {message}
-        </p>
-      )}
-
-      <div>
-        <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 500 }}>
-          {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-        </label>
-        <select
-          id={empId}
-          value={employeeId}
-          onChange={(e) => { setEmployeeId(e.target.value); clearErr("employee"); }}
-          style={invalid.has("employee") ? inputErrStyle : inputStyle}
-          aria-invalid={invalid.has("employee")}
-          aria-describedby={invalid.has("employee") ? `${empId}-err` : undefined}
-        >
-          {employees.length === 0
-            ? <option value="">{status === "error" ? t("unableToLoadEmployees") : t("loadingOption")}</option>
-            : employees.map((emp) => (
-                <option key={emp.id} value={emp.id}>{emp.name} ({emp.employeeNo})</option>
-              ))}
-        </select>
-        {invalid.has("employee") && (
-          <p id={`${empId}-err`} role="alert" style={fieldErrStyle}>{t("employeeRequired")}</p>
+    <>
+      <form onSubmit={openConfirm} noValidate style={{ display: "grid", gap: 14 }}>
+        {message && (
+          <p role={status === "error" ? "alert" : "status"} aria-live={status === "error" ? "assertive" : "polite"}
+            className={`pill ${status === "error" ? "bad" : "good"}`} style={{ margin: 0 }}>
+            {message}
+          </p>
         )}
-      </div>
 
-      <div>
-        <label htmlFor={ltId} style={{ fontSize: 13, fontWeight: 500 }}>
-          {t("leaveTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
-        </label>
-        <select
-          id={ltId}
-          value={leaveTypeId}
-          onChange={(e) => { setLeaveTypeId(e.target.value); clearErr("leaveType"); }}
-          style={invalid.has("leaveType") ? inputErrStyle : inputStyle}
-          aria-invalid={invalid.has("leaveType")}
-          aria-describedby={invalid.has("leaveType") ? `${ltId}-err` : undefined}
-        >
-          {leaveTypes.length === 0
-            ? <option value="">{status === "error" ? t("unableToLoadLeaveTypes") : t("loadingOption")}</option>
-            : leaveTypes.map((lt) => (
-                <option key={lt.id} value={lt.id}>{lt.name} ({lt.code})</option>
-              ))}
-        </select>
-        {invalid.has("leaveType") && (
-          <p id={`${ltId}-err`} role="alert" style={fieldErrStyle}>{t("leaveTypeRequired")}</p>
-        )}
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
         <div>
-          <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 500 }}>
-            {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+          <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 500, display: "block", marginBottom: 4 }}>
+            {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
           </label>
-          <input
-            id={fyId}
-            type="text"
-            value={fy}
-            onChange={(e) => { setFy(e.target.value); clearErr("fy"); }}
-            placeholder={getCurrentFY()}
-            maxLength={7}
-            style={invalid.has("fy") ? inputErrStyle : inputStyle}
-            aria-invalid={invalid.has("fy")}
-            aria-describedby={invalid.has("fy") ? `${fyId}-err` : `${fyId}-hint`}
+          {/* GAP-HR-LEAVE-ALLOCATE-04: EntityPicker (GAP-HR-SF-06) replaces a
+              <select> that fetched up to 500 employees in one uncached call
+              with a debounced, cancellable, server-side search. */}
+          <EntityPicker
+            id={empId}
+            value={employeeId}
+            onChange={(v) => { setEmployeeId(Array.isArray(v) ? (v[0] ?? null) : v); clearErr("employee"); }}
+            search={searchEmployees}
+            resolve={resolveEmployees}
+            placeholder={t("employeeSearchPlaceholder")}
           />
-          {invalid.has("fy") ? (
-            <p id={`${fyId}-err`} role="alert" style={fieldErrStyle}>{t("fyFormatError", { fy: getCurrentFY() })}</p>
-          ) : (
-            <p id={`${fyId}-hint`} style={{ fontSize: 11, color: "var(--mut)", margin: "3px 0 0" }}>{t("fyFormatHint")}</p>
+          {invalid.has("employee") && (
+            <p id={`${empId}-err`} role="alert" style={fieldErrStyle}>{t("employeeRequired")}</p>
           )}
         </div>
+
+        {employeeId && (
+          <div style={{ padding: "10px 12px", background: "var(--bg)", border: "1px solid var(--line)", borderRadius: 8, fontSize: 12 }}>
+            {contextLoading ? (
+              <span style={{ color: "var(--mut)" }}>{t("loadingContext")}</span>
+            ) : context && context.allocations.length > 0 ? (
+              <>
+                <div style={{ fontWeight: 600, marginBottom: 6 }}>{t("existingAllocationsTitle")}</div>
+                <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                  <thead>
+                    <tr style={{ textAlign: "left", color: "var(--mut)" }}>
+                      <th style={{ fontWeight: 500, padding: "2px 6px 2px 0" }}>{t("contextColType")}</th>
+                      <th style={{ fontWeight: 500, padding: "2px 6px" }}>{t("contextColFy")}</th>
+                      <th style={{ fontWeight: 500, padding: "2px 6px", textAlign: "right" }}>{t("contextColTotal")}</th>
+                      <th style={{ fontWeight: 500, padding: "2px 0 2px 6px", textAlign: "right" }}>{t("contextColBalance")}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {context.allocations.map((a) => (
+                      <tr key={a.id} style={a.leaveTypeId === leaveTypeId && a.fy === fy ? { fontWeight: 700 } : undefined}>
+                        <td style={{ padding: "2px 6px 2px 0" }}>{a.leaveTypeCode}</td>
+                        <td style={{ padding: "2px 6px" }}>{a.fy}</td>
+                        <td style={{ padding: "2px 6px", textAlign: "right" }}>{a.totalDays}</td>
+                        <td style={{ padding: "2px 0 2px 6px", textAlign: "right" }}>{a.balanceDays}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            ) : (
+              <span style={{ color: "var(--mut)" }}>{t("noExistingAllocations")}</span>
+            )}
+            {/* Deep-link preselect (?empId=) lands on GAP-HR-LEAVE-BALANCE-02's
+                own page changes — until that merges this link still opens the
+                balance page, just without preselecting the employee yet. */}
+            <div style={{ marginTop: 6 }}>
+              <Link href={`/hr/leave/balance?empId=${employeeId}`} style={{ color: "var(--primary-d)" }}>
+                {t("viewFullBalanceLink")}
+              </Link>
+            </div>
+          </div>
+        )}
+
         <div>
-          <label htmlFor={daysId} style={{ fontSize: 13, fontWeight: 500 }}>
-            {t("totalDaysLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+          <label htmlFor={ltId} style={{ fontSize: 13, fontWeight: 500 }}>
+            {t("leaveTypeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
           </label>
-          <input
-            id={daysId}
-            type="number"
-            min={1}
-            max={365}
-            value={totalDays}
-            onChange={(e) => { setTotalDays(e.target.value); clearErr("days"); }}
-            placeholder={t("daysPlaceholder")}
-            style={invalid.has("days") ? inputErrStyle : inputStyle}
-            aria-invalid={invalid.has("days")}
-            aria-describedby={invalid.has("days") ? `${daysId}-err` : undefined}
-          />
-          {invalid.has("days") && (
-            <p id={`${daysId}-err`} role="alert" style={fieldErrStyle}>{t("daysRangeError")}</p>
+          <select
+            id={ltId}
+            value={leaveTypeId}
+            onChange={(e) => { setLeaveTypeId(e.target.value); clearErr("leaveType"); }}
+            style={invalid.has("leaveType") ? inputErrStyle : inputStyle}
+            aria-invalid={invalid.has("leaveType")}
+            aria-describedby={invalid.has("leaveType") ? `${ltId}-err` : undefined}
+          >
+            <option value="">{leaveTypes.length === 0 ? (status === "error" ? t("unableToLoadLeaveTypes") : t("loadingOption")) : t("selectLeaveTypePlaceholder")}</option>
+            {leaveTypes.map((lt) => (
+              <option key={lt.id} value={lt.id}>{lt.name} ({lt.code})</option>
+            ))}
+          </select>
+          {invalid.has("leaveType") && (
+            <p id={`${ltId}-err`} role="alert" style={fieldErrStyle}>{t("leaveTypeRequired")}</p>
           )}
         </div>
-      </div>
 
-      <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
-        <Button type="submit" disabled={status === "submitting" || employees.length === 0} style={{ minHeight: 44, minWidth: 140 }}>
-          {status === "submitting" ? t("submitAllocating") : t("submitLabel")}
-        </Button>
-        <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => router.push("/hr/leave")}>
-          {t("cancel")}
-        </Button>
-      </div>
-    </form>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+          <div>
+            <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 500 }}>
+              {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+            </label>
+            <select
+              id={fyId}
+              value={fy}
+              onChange={(e) => setFy(e.target.value)}
+              style={inputStyle}
+            >
+              {fyChoices.map((f) => <option key={f} value={f}>{f}</option>)}
+            </select>
+          </div>
+          <div>
+            <label htmlFor={daysId} style={{ fontSize: 13, fontWeight: 500 }}>
+              {t("totalDaysLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+            </label>
+            <input
+              id={daysId}
+              type="number"
+              min={1}
+              max={365}
+              value={totalDays}
+              onChange={(e) => { setTotalDays(e.target.value); clearErr("days"); }}
+              placeholder={t("daysPlaceholder")}
+              style={invalid.has("days") ? inputErrStyle : inputStyle}
+              aria-invalid={invalid.has("days")}
+              aria-describedby={invalid.has("days") ? `${daysId}-err` : overCap ? `${daysId}-cap-warn` : undefined}
+            />
+            {invalid.has("days") && (
+              <p id={`${daysId}-err`} role="alert" style={fieldErrStyle}>{t("daysRangeError")}</p>
+            )}
+            {!invalid.has("days") && overCap && (
+              <p id={`${daysId}-cap-warn`} role="status" style={{ color: "var(--warn-d, #92620a)", fontSize: 12, margin: "3px 0 0" }}>
+                {t("overCapWarning", { maxDays: selectedTypeMaxDays, typeName: selectedLeaveType?.name ?? "" })}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div style={{ display: "flex", gap: 10, marginTop: 4 }}>
+          <Button type="submit" disabled={status === "submitting"} style={{ minHeight: 44, minWidth: 140 }}>
+            {t("submitLabel")}
+          </Button>
+          <Button type="button" variant="ghost" style={{ minHeight: 44 }} onClick={() => router.push("/hr/leave")}>
+            {t("cancel")}
+          </Button>
+        </div>
+      </form>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t("confirmAllocateTitle")}
+        confirmLabel={t("confirmAllocateLabel")}
+        busy={status === "submitting"}
+        errorMessage={submitError}
+        description={t("confirmAllocateDescription", {
+          days: totalDays,
+          typeName: selectedLeaveType?.name ?? "",
+          fy,
+        })}
+        onConfirm={() => void submitAllocation()}
+        onCancel={() => { if (status !== "submitting") { setConfirmOpen(false); setSubmitError(undefined); } }}
+      />
+    </>
   );
 }
