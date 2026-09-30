@@ -2,7 +2,7 @@
 /**
  * TransferOrderCard — Sprint 13 / Lifecycle Phase 1
  * Shows: from-office, to-office, joining date, order no., order date (Indian format).
- * Status chip: Initiated/HOD Approved/Admin Approved/Relieved/Joined.
+ * Status chip + pipeline position from the shared, real-enum transferStatus module.
  * Action buttons per stage. Horizontal progress timeline.
  */
 import { useState } from "react";
@@ -11,6 +11,7 @@ import { StatusPill, ConfirmDialog, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
+import { transferStatusLabel, isEofficeStatus, DIRECT_PIPELINE, directPipelineIndex } from "@/lib/hr/transferStatus";
 
 export type TransferRow = {
   id: string;
@@ -31,40 +32,6 @@ export type TransferRow = {
   createdAt?: string;
 } & Record<string, unknown>;
 
-const STAGE_LABEL: Record<string, string> = {
-  pending: "Initiated",
-  initiated: "Initiated",
-  hod_approved: "HOD Approved",
-  admin_approved: "Admin Approved",
-  order_issued: "Order Issued",
-  approved: "Order Issued",
-  relieved: "Relieved",
-  joined: "Joined",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-const PIPELINE: Array<{ key: string; label: string }> = [
-  { key: "pending",        label: "Initiated"      },
-  { key: "hod_approved",   label: "HOD Approved"   },
-  { key: "admin_approved", label: "Admin Approved" },
-  { key: "order_issued",   label: "Order Issued"   },
-  { key: "relieved",       label: "Relieved"       },
-  { key: "joined",         label: "Joined"         },
-];
-
-function stageIndex(status: string): number {
-  const map: Record<string, number> = {
-    pending: 0, initiated: 0,
-    hod_approved: 1,
-    admin_approved: 2,
-    order_issued: 3, approved: 3,
-    relieved: 4,
-    joined: 5, completed: 5,
-  };
-  return map[status] ?? 0;
-}
-
 interface Props {
   transfer: TransferRow;
   onAction?: () => void;
@@ -78,6 +45,17 @@ type PendingStage = {
   description: string;
 };
 
+/** IST calendar date as YYYY-MM-DD -- GAP-HR-TRANSFER-02: `new
+ * Date().toISOString().split("T")[0]` is the UTC date, one day behind IST
+ * between 00:00 and 05:30 IST. The fabricated-order-number question itself
+ * (manual entry vs. a real server-generated series) is a real open product
+ * decision the gap catalog explicitly says not to guess at -- left as-is
+ * pending that decision -- but the date computation underneath it was a
+ * plain, independently-fixable bug. */
+function todayIST(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
+
 export function TransferOrderCard({ transfer, onAction }: Props) {
   const { toast } = useToast();
   const router = useRouter();
@@ -85,11 +63,12 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
   const [pending, setPending] = useState<PendingStage | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const formError = useFormError("transfer order");
-  const statusLabel = STAGE_LABEL[transfer.status] ?? transfer.status;
-  const currentIdx = stageIndex(transfer.status);
-  const today = new Date().toISOString().split("T")[0] ?? "";
+  const statusLabel = transferStatusLabel(transfer.status);
+  const currentIdx = directPipelineIndex(transfer.status);
+  const today = todayIST();
   const isClosed = ["joined", "completed", "cancelled"].includes(transfer.status);
   const isCancelled = transfer.status === "cancelled";
+  const isEoffice = isEofficeStatus(transfer.status);
   const empLabel = transfer.employee ?? transfer.employeeId ?? "Unknown";
 
   const postAction = async (path: string, body: Record<string, string>) => {
@@ -164,24 +143,43 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
           )}
         </div>
 
-        {/* Stage progress timeline */}
+        {/* Stage progress -- GAP-HR-TRANSFER-08: previously showed a fixed
+            4-step "Initiated/HOD Approved/Admin Approved/Order Issued..."
+            timeline with no corresponding backend transitions for the
+            middle two steps at all, and defaulted an unrecognised status
+            (e.g. "cancelled") to index 0, contradicting the status pill
+            shown right next to it (see the cancelled branch below, which
+            predates this fix and is unchanged). An eOffice-path transfer
+            (pending_approval/pending_effective/completed) has its own
+            simpler shape and doesn't belong on the direct 4-step pipeline
+            at all -- shown as plain status text instead. */}
         {isCancelled ? (
           <p style={{ margin: "16px 0 6px", fontSize: "0.8125rem", color: "var(--ink2)" }}>
             This transfer order was cancelled before completing the pipeline below.
           </p>
+        ) : isEoffice ? (
+          <p style={{ margin: "16px 0 6px", fontSize: "0.8125rem", color: "var(--ink2)" }}>
+            {transfer.status === "pending_approval"
+              ? "Awaiting eOffice decision."
+              : "Approved by eOffice — effective on the recorded date; the posting will be applied automatically."}
+          </p>
         ) : (
-        <div
+        <ol
           aria-label="Transfer status timeline"
-          style={{ display: "flex", alignItems: "flex-start", margin: "16px 0 6px", overflowX: "auto", paddingBottom: 4 }}
+          style={{ display: "flex", alignItems: "flex-start", margin: "16px 0 6px", overflowX: "auto", paddingBottom: 4, paddingInlineStart: 0, listStyle: "none" }}
         >
-          {PIPELINE.map(({ key, label }, i) => {
+          {DIRECT_PIPELINE.map(({ key, label }, i) => {
             const done   = i < currentIdx;
             const active = i === currentIdx;
             const bg  = done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--line, #e2e8f0)";
             const fg  = done || active ? "var(--panel, #fff)" : "var(--mut)";
             const connBg = done ? "var(--good, #16a34a)" : "var(--line, #e2e8f0)";
             return (
-              <div key={key} style={{ display: "flex", alignItems: "center", flexShrink: 0 }}>
+              <li
+                key={key}
+                aria-current={active ? "step" : undefined}
+                style={{ display: "flex", alignItems: "center", flexShrink: 0 }}
+              >
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
                   <div
                     title={label}
@@ -189,6 +187,10 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                       width: 26, height: 26, borderRadius: "50%",
                       display: "flex", alignItems: "center", justifyContent: "center",
                       fontSize: 11, fontWeight: 700, background: bg, color: fg,
+                      // GAP-HR-TRANSFER-11: a non-colour cue for the active
+                      // step (colour alone previously distinguished active
+                      // from upcoming; done steps already had a check mark).
+                      boxShadow: active ? "0 0 0 2px var(--panel, #fff), 0 0 0 4px var(--info, #2563eb)" : undefined,
                     }}
                   >
                     {done ? "✓" : i + 1}
@@ -200,25 +202,33 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                     whiteSpace: "nowrap", maxWidth: 56, textAlign: "center",
                   }}>
                     {label}
+                    <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+                      {done ? " — completed" : active ? " — current" : " — upcoming"}
+                    </span>
                   </span>
                 </div>
-                {i < PIPELINE.length - 1 && (
+                {i < DIRECT_PIPELINE.length - 1 && (
                   <div style={{ width: 20, height: 2, background: connBg, flexShrink: 0, margin: "0 2px", marginBottom: 16 }} />
                 )}
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ol>
         )}
 
         {/* Action buttons per stage -- each is a real, hard-to-reverse
             lifecycle transition (an issued order number, an official
             relieving date, a join date), so each is gated by a
             ConfirmDialog naming the employee and the exact effective date
-            rather than firing on a bare click. */}
-        {!isClosed && (
+            rather than firing on a bare click. Gates now match the REAL
+            backend statuses (requested/ordered/relieved) -- GAP-HR-
+            TRANSFER-08's evidence: the previous gates (pending/initiated,
+            order_issued/approved) never matched what POST /transfers or
+            issue-order actually set, so "Issue Order" never appeared on a
+            freshly-created transfer. */}
+        {!isClosed && !isEoffice && (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-            {(transfer.status === "pending" || transfer.status === "initiated") && (
+            {transfer.status === "requested" && (
               <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
                 onClick={() => setPending({
                   path: "issue-order",
@@ -230,7 +240,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                 {acting ? "Processing…" : "Issue Order"}
               </Button>
             )}
-            {(transfer.status === "order_issued" || transfer.status === "approved") && !transfer.relievedDate && (
+            {transfer.status === "ordered" && !transfer.relievedDate && (
               <Button style={{ fontSize: 13 }} disabled={acting} loading={acting}
                 onClick={() => setPending({
                   path: "relieve",

@@ -176,4 +176,43 @@ describe("TransferWithApproval", () => {
     expect(body).toMatchObject({ fromDeptId: "dept-1", toDeptId: "dept-2", effectiveDate: "2026-09-01" });
     expect(Object.prototype.hasOwnProperty.call(body, "payStructureId")).toBe(false);
   });
+
+  // GAP-HR-TRANSFER-09: employee detail's "Initiate Transfer" quick action
+  // previously opened this wizard closed and blank regardless of ?empId=.
+  it("opens pre-selected and pre-filled for a prefilled employee, department resolved once the list loads", async () => {
+    mockFetchRouting({
+      submitApproval: () => jsonResponse({ id: "transfer-prefill", status: "accepted" }),
+      fromModule: () => jsonResponse({ fileNo: "HR/2026/004" }),
+    });
+
+    render(<TransferWithApproval prefillEmployee={{ id: "emp-1", name: "Asha Verma" }} />);
+
+    // Opens already expanded -- no click on "+ Transfer with approval" needed.
+    expect(screen.getByRole("heading", { name: "Raise a transfer for eOffice approval" })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText("Employee")).toHaveValue("emp-1"));
+    await waitFor(() => expect(screen.getByLabelText("Current department (auto-filled)")).toHaveValue("Finance"));
+  });
+
+  // GAP-HR-TRANSFER-06: a failed departments/officers fetch used to silently
+  // fall back to a raw "Department ID" / "Officer ID" text input -- asking a
+  // clerk to type a UUID with no guidance on where to find one.
+  describe("lookup failure no longer falls back to raw-id text inputs (GAP-HR-TRANSFER-06)", () => {
+    it("shows an error + retry for the destination department select instead of a raw-id input", async () => {
+      vi.spyOn(globalThis, "fetch").mockImplementation(((input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.includes("/hrms/employees?")) return Promise.resolve(jsonResponse({ data: EMPLOYEES }));
+        if (url.includes("/hrms/departments?")) return Promise.resolve(new Response("", { status: 500 }));
+        if (url.includes("/identity/users?")) return Promise.resolve(jsonResponse({ data: OFFICERS }));
+        if (url.includes("/payroll/structures?")) return Promise.resolve(jsonResponse({ data: PAY_STRUCTURES }));
+        return Promise.reject(new Error(`Unexpected fetch call: ${url}`));
+      }) as typeof fetch);
+
+      render(<TransferWithApproval />);
+      fireEvent.click(screen.getByRole("button", { name: "+ Transfer with approval" }));
+
+      await waitFor(() => expect(screen.getByText("Couldn't load departments.")).toBeInTheDocument());
+      expect(screen.queryByPlaceholderText(/Department ID/)).not.toBeInTheDocument();
+      expect(screen.getByText("Retry")).toBeInTheDocument();
+    });
+  });
 });
