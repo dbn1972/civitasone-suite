@@ -6229,7 +6229,9 @@
     "colStatus": "Status",
     "filterPlaceholder": "Filter by destination or purpose…",
     "emptyTitle": "No travel requests",
-    "emptyMessage": "Official travel requests submitted via the form above appear here for tracking and approval. Requests are reviewed by the reporting manager before booking."
+    "emptyMessage": "Official travel requests submitted via the form above appear here for tracking and approval. Requests are reviewed by the reporting manager before booking.",
+    "colAdvance": "Advance",
+    "dataSourceErrorMessage": "Could not load the travel requests list."
   },
   "jdTemplates": {
     "title": "JD Template Library",
@@ -6681,5 +6683,30 @@
     "rejectionReasonLabel": "Reason for rejection",
     "confirmDescRich": "{verb} the shift-change request from <strongName>{employeeName}</strongName>: {currentShift} → {requestedShift}, effective {date}.",
     "reasonLine": "Reason: {reason}"
+  },
+  "travelForm": {
+    "heading": "Submit Travel Request",
+    "cancelToggle": "✕ Cancel",
+    "newRequestToggle": "+ New Request",
+    "successMessage": "Travel request submitted.",
+    "labelPurpose": "Purpose",
+    "placeholderPurpose": "e.g. Field inspection — Pune",
+    "purposeInvalid": "Purpose must be at least 5 characters.",
+    "labelDestination": "Destination",
+    "placeholderDestination": "e.g. Pune, Maharashtra",
+    "destinationInvalid": "Destination must be at least 2 characters.",
+    "labelFromDate": "From Date",
+    "fromDateRequired": "From date required.",
+    "labelToDate": "To Date",
+    "toDateInvalid": "To date must be on or after From date.",
+    "labelMode": "Mode",
+    "modeRoad": "Road",
+    "modeRail": "Rail",
+    "modeAir": "Air",
+    "modeOwnVehicle": "Own vehicle",
+    "labelAdvance": "Advance Required (₹)",
+    "advanceInvalid": "Enter a valid amount (up to 2 decimals).",
+    "submitting": "Submitting…",
+    "submitRequest": "Submit Request"
   }
 }
