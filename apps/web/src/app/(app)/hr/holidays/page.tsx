@@ -1,8 +1,10 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { AddHolidayForm } from "./AddHolidayForm";
+import { HolidaysTableClient } from "./HolidaysTableClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
 
@@ -13,17 +15,15 @@ type ApiHoliday = {
   name: string;
   type: string;
   applicableTo?: string;
-  status?: string;
 };
 
-type Row = {
+export type Row = {
   id: string;
   date: string;
   day: string;
   name: string;
   type: string;
   applicableTo: string;
-  status: string;
 } & Record<string, unknown>;
 
 function getDayName(dateStr: string): string {
@@ -42,21 +42,22 @@ function mapHolidays(apiHolidays: ApiHoliday[]): Row[] {
     date: h.date,
     day: h.day ?? getDayName(h.date),
     name: h.name,
-    type: h.type ?? "Gazetted",
-    applicableTo: h.applicableTo ?? "All",
-    status: h.status ?? "active",
+    // GAP-HR-HOLIDAYS-04: render the raw API code through an i18n label map
+    // in the client table (typed union, unknown codes fall back to the raw
+    // string) rather than printing "gazetted"/"all" verbatim.
+    type: h.type ?? "gazetted",
+    applicableTo: h.applicableTo ?? "all",
   }));
 }
 
-async function getHolidays(): Promise<LoaderResult<Row[]>> {
-  const res = await fetchJson<unknown, Row[]>("/api/v1/hrms/holidays", [], {
+async function getHolidays(year: number): Promise<LoaderResult<Row[]>> {
+  return fetchJson<unknown, Row[]>(`/api/v1/hrms/holidays?year=${year}`, [], {
     telemetryKey: "hr.holidays",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: ApiHoliday[] })?.data;
       return Array.isArray(arr) ? mapHolidays(arr as ApiHoliday[]) : null;
     },
   });
-  return res;
 }
 
 /**
@@ -65,33 +66,22 @@ async function getHolidays(): Promise<LoaderResult<Row[]>> {
  */
 const HOLIDAY_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
-const CURRENT_YEAR = new Date().getFullYear();
-
-export default async function HolidaysPage() {
+export default async function HolidaysPage({ searchParams }: { searchParams?: { year?: string } }) {
   const t = await getTranslations("holidays");
-  const { data: items, source } = await getHolidays();
+  const currentYear = new Date().getFullYear();
+  // GAP-HR-HOLIDAYS-02: the backend already accepts ?year= (defaulting to
+  // the current year) -- nothing on this page ever sent it, so next
+  // year's gazetted list (usually notified in December) was unreachable.
+  const yearParam = searchParams?.year;
+  const year = yearParam && /^\d{4}$/.test(yearParam) ? Number(yearParam) : currentYear;
+
+  const { data: items, source } = await getHolidays(year);
   const errored = source === "error";
   const roles = getSessionRoles();
   const canManage = roles.some((r: string) => HOLIDAY_ADMIN_ROLES.includes(r));
 
-  const gazetted = items.filter((i) => i.type === "gazetted" || i.type === "Gazetted").length;
-  const restricted = items.filter((i) => i.type === "restricted" || i.type === "Restricted").length;
-
-  // GAP-HR-HOLIDAYS-DATE (SF-08): this is a Server Component (no "use client")
-  // -- a `render` function prop can't cross the RSC boundary into DataTable
-  // ("use client") and would throw at runtime on every load, the same crash
-  // class as GAP-HR-EXPENSES-01 / PR #1647. DataTable's own `cellType: "date"`
-  // is server-safe: it formats via the shared formatIndianDate() helper, which
-  // produces the exact same dd/MM/yyyy output this file's own (now removed)
-  // local formatDate() did.
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date" }[] = [
-    { key: "date", label: t("colDate"), cellType: "date" },
-    { key: "day", label: t("colDay") },
-    { key: "name", label: t("colHoliday") },
-    { key: "type", label: t("colType") },
-    { key: "applicableTo", label: t("colApplicableTo") },
-    { key: "status", label: t("colStatus"), cellType: "status" },
-  ];
+  const gazetted = items.filter((i) => i.type === "gazetted").length;
+  const restricted = items.filter((i) => i.type === "restricted").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -105,11 +95,21 @@ export default async function HolidaysPage() {
         <StatCard icon="📅" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
         <StatCard icon="🏛️" iconBg="var(--goodbg, #e6f7f0)" label={t("statGazetted")} value={errored ? null : gazetted} />
         <StatCard icon="📋" iconBg="var(--warnbg, #fffbe6)" label={t("statRestricted")} value={errored ? null : restricted} />
-        <StatCard icon="🗓️" iconBg="var(--bg, #f5f5f5)" label={t("statYear")} value={errored ? null : CURRENT_YEAR} />
+        <StatCard icon="🗓️" iconBg="var(--bg, #f5f5f5)" label={t("statYear")} value={year} />
       </StatGrid>
 
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16 }}>
+        <Link href={`/hr/holidays?year=${year - 1}`} className="btn" aria-label={t("prevYear", { year: year - 1 })}>
+          ← {year - 1}
+        </Link>
+        <span style={{ fontWeight: 600, fontSize: 14 }}>{year}</span>
+        <Link href={`/hr/holidays?year=${year + 1}`} className="btn" aria-label={t("nextYear", { year: year + 1 })}>
+          {year + 1} →
+        </Link>
+      </div>
+
       {/* Add-holiday form: visible only to admin roles (mirrors backend POST gate) */}
-      {canManage && <AddHolidayForm />}
+      {canManage && <AddHolidayForm year={year} />}
 
       <Card title={t("cardTitle")}>
         {errored ? (
@@ -118,18 +118,8 @@ export default async function HolidaysPage() {
           </div>
         ) : (
           <>
-          <div className="card-h"><h3>{t("listTitle", { year: CURRENT_YEAR })}</h3></div>
-        <DataTable<Row>
-          columns={columns}
-          rows={items}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="📅"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+            <div className="card-h"><h3>{t("listTitle", { year })}</h3></div>
+            <HolidaysTableClient rows={items} canManage={canManage} />
           </>
         )}
       </Card>

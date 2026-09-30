@@ -11,7 +11,12 @@ import { hrmsHolidays } from "./schema.js";
 import { queue } from "../../shared/infra.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
-const ALL_ROLES = [...HR_ROLES, "hr_officer", "officer", "employee"];
+// GAP-HR-HOLIDAYS-01: hr/layout.tsx admits "manager" into /hr, but this route
+// (the ONLY thing gating the holiday calendar) never did -- a manager-only
+// session hit a bare 403 on every load, rendered as a generic retryable
+// error with no explanation. hr_officer/officer/employee were already
+// correctly admitted; manager was the one real gap.
+const ALL_ROLES = [...HR_ROLES, "hr_officer", "officer", "employee", "manager"];
 
 const createHolidayBody = z.object({
   name: z.string().min(1).max(256),

@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { Button } from "../../../_components/ds";
 
@@ -15,7 +16,13 @@ const fieldErrStyle: React.CSSProperties = { color: "var(--bad, #b91c1c)", fontS
 type Fields = { name: string; date: string; type: string; applicableTo: string };
 const INITIAL: Fields = { name: "", date: "", type: "gazetted", applicableTo: "all" };
 
-export function AddHolidayForm() {
+interface Props {
+  /** GAP-HR-HOLIDAYS-02: default the date input to the year currently being viewed. */
+  year: number;
+}
+
+export function AddHolidayForm({ year }: Props) {
+  const t = useTranslations("holidays");
   const ids = { name: useId(), date: useId(), type: useId(), applicableTo: useId() };
   const [open, setOpen] = useState(false);
   const [fields, setFields] = useState<Fields>(INITIAL);
@@ -61,10 +68,16 @@ export function AddHolidayForm() {
         setMessage({ tone: "bad", text: resolved.message });
         return;
       }
-      setMessage({ tone: "good", text: `Holiday "${fields.name.trim()}" added.` });
+      // GAP-HR-HOLIDAYS-05: POST is queued (F3 write, 202) not applied
+      // synchronously -- an immediate router.refresh() usually ran before the
+      // consumer had inserted the row, so the new holiday silently failed to
+      // appear with no cue that anything was still in flight. Say so
+      // honestly, then refresh once more after the queue has had a moment.
+      setMessage({ tone: "good", text: t("holidaySubmitted", { name: fields.name.trim() }) });
       setFields(INITIAL);
       setOpen(false);
       router.refresh();
+      setTimeout(() => router.refresh(), 1500);
     } catch {
       setMessage({ tone: "bad", text: formError.fromException("save").message });
     } finally {
@@ -75,35 +88,39 @@ export function AddHolidayForm() {
   return (
     <div className="card" style={{ marginBottom: 0 }}>
       <div className="card-h" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-        <h3>Add Holiday</h3>
+        <h3>{t("addHoliday")}</h3>
         <Button
           type="button"
           size="sm"
           style={{ minHeight: 36 }}
-          onClick={() => { setOpen((o) => !o); setMessage(null); }}
+          onClick={() => { setOpen((o) => !o); }}
           aria-expanded={open}
         >
-          {open ? "✕ Cancel" : "+ Add Holiday"}
+          {open ? t("cancel") : t("addHolidayAction")}
         </Button>
       </div>
 
-      {open && (
-        <form onSubmit={handleSubmit} noValidate style={{ padding: "16px 20px 20px", display: "grid", gap: 14 }}>
-          {message && (
-            <p role="alert" className={`pill ${message.tone}`} style={{ margin: 0 }}>
-              {message.text}
-            </p>
-          )}
+      {/* GAP-HR-HOLIDAYS-05: rendered outside the {open && ...} block below so
+          the success/error message survives the form closing on submit --
+          previously it lived inside that block and was unmounted the instant
+          setOpen(false) ran, so it was never actually visible. */}
+      {message && (
+        <p role="alert" className={`pill ${message.tone}`} style={{ margin: "0 20px 12px" }}>
+          {message.text}
+        </p>
+      )}
 
+      {open && (
+        <form onSubmit={handleSubmit} noValidate style={{ padding: "0 20px 20px", display: "grid", gap: 14 }}>
           <div>
             <label htmlFor={ids.name} style={{ fontSize: 13, fontWeight: 500 }}>
-              Holiday Name <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+              {t("fieldName")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
             </label>
             <input
               id={ids.name}
               ref={nameRef}
               type="text"
-              placeholder="e.g. Republic Day"
+              placeholder={t("fieldNamePlaceholder")}
               value={fields.name}
               onChange={(e) => set("name", e.target.value)}
               style={invalid.has("name") ? inputErrStyle : inputStyle}
@@ -113,7 +130,7 @@ export function AddHolidayForm() {
             />
             {invalid.has("name") && (
               <p id={`${ids.name}-err`} role="alert" style={fieldErrStyle}>
-                Holiday name is required.
+                {t("fieldNameError")}
               </p>
             )}
           </div>
@@ -121,11 +138,13 @@ export function AddHolidayForm() {
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
             <div>
               <label htmlFor={ids.date} style={{ fontSize: 13, fontWeight: 500 }}>
-                Date <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+                {t("fieldDate")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
               </label>
               <input
                 id={ids.date}
                 type="date"
+                min={`${year}-01-01`}
+                max={`${year}-12-31`}
                 value={fields.date}
                 onChange={(e) => set("date", e.target.value)}
                 style={invalid.has("date") ? inputErrStyle : inputStyle}
@@ -134,29 +153,29 @@ export function AddHolidayForm() {
               />
               {invalid.has("date") && (
                 <p id={`${ids.date}-err`} role="alert" style={fieldErrStyle}>
-                  Date is required.
+                  {t("fieldDateError")}
                 </p>
               )}
             </div>
 
             <div>
-              <label htmlFor={ids.type} style={{ fontSize: 13, fontWeight: 500 }}>Type</label>
+              <label htmlFor={ids.type} style={{ fontSize: 13, fontWeight: 500 }}>{t("fieldType")}</label>
               <select
                 id={ids.type}
                 value={fields.type}
                 onChange={(e) => set("type", e.target.value)}
                 style={inputStyle}
               >
-                <option value="gazetted">Gazetted</option>
-                <option value="restricted">Restricted</option>
-                <option value="optional">Optional</option>
-                <option value="weekly_off">Weekly Off</option>
+                <option value="gazetted">{t("type.gazetted")}</option>
+                <option value="restricted">{t("type.restricted")}</option>
+                <option value="optional">{t("type.optional")}</option>
+                <option value="weekly_off">{t("type.weekly_off")}</option>
               </select>
             </div>
           </div>
 
           <div>
-            <label htmlFor={ids.applicableTo} style={{ fontSize: 13, fontWeight: 500 }}>Applicable To</label>
+            <label htmlFor={ids.applicableTo} style={{ fontSize: 13, fontWeight: 500 }}>{t("fieldApplicableTo")}</label>
             <input
               id={ids.applicableTo}
               type="text"
@@ -173,7 +192,7 @@ export function AddHolidayForm() {
               disabled={busy}
               style={{ minHeight: 44, minWidth: 140 }}
             >
-              {busy ? "Saving…" : "Add Holiday"}
+              {busy ? t("saving") : t("addHoliday")}
             </Button>
           </div>
         </form>
