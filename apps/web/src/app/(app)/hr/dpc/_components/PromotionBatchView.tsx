@@ -3,6 +3,11 @@
  * PromotionBatchView — Sprint 13 / Lifecycle Phase 1
  * DPC batch promotions: shows all employees in the DPC with individual
  * promotion status. Summary counts at top.
+ *
+ * GAP-HR-DPC-07: the Cancelled StatCard now always renders (value 0 when
+ * there are none) instead of appearing only when count>0 — a stat grid
+ * that silently changes its own column count between 4 and 5 depending on
+ * data is a layout-stability bug, not a feature.
  */
 import { useTranslations } from "next-intl";
 import type { PromotionRow } from "../../promotion/_components/PromotionCard";
@@ -39,9 +44,7 @@ export function PromotionBatchView({ promotions }: Props) {
         <StatCard icon="⏳" iconBg="var(--warnbg, #fef9c3)" label={t("statInitiated")}      value={initiated} />
         <StatCard icon="🔄" iconBg="var(--primary-soft, #ede9fe)"                 label={t("statInApproval")}     value={inProgress} />
         <StatCard icon="✅" iconBg="var(--goodbg, #dcfce7)"  label={t("statSignedIssued")}  value={signed} />
-        {cancelled > 0 && (
-          <StatCard icon="❌" iconBg="var(--badbg, #fee2e2)" label={t("statCancelled")} value={cancelled} />
-        )}
+        <StatCard icon="❌" iconBg="var(--badbg, #fee2e2)" label={t("statCancelled")} value={cancelled} />
       </StatGrid>
       <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", marginTop: 16 }}>
         {promotions.map((p) => (

@@ -1306,7 +1306,7 @@
   },
   "dpc": {
     "title": "DPC — विभागीय पदोन्नति समिति",
-    "subtitle": "{asOf} तक वरिष्ठता सूची। न्यूनतम अर्हकारी सेवा: 5 वर्ष।",
+    "subtitle": "{asOf} तक वरिष्ठता सूची। न्यूनतम अर्हकारी सेवा: {years} वर्ष।",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
     "statEligible": "पात्र अधिकारी",
     "statNotYetEligible": "अभी पात्र नहीं",
@@ -1317,7 +1317,10 @@
     "noEligibleTitle": "कोई पात्र अधिकारी नहीं",
     "noEligibleMessage": "न्यूनतम अर्हकारी सेवा अवधि पूर्ण करने वाले अधिकारी DPC विचार हेतु यहाँ वरिष्ठता क्रम में दिखाई देते हैं।",
     "batchPromotionsTitle": "DPC बैच पदोन्नति",
+    "notYetEligibleTitle": "अभी पात्र नहीं — न्यूनतम से कम सेवा",
     "allEligibleTitle": "सभी अधिकारी पात्र हैं",
+    "allEligibleMessage": "इस सूची का प्रत्येक अधिकारी वर्तमान में न्यूनतम अर्हकारी सेवा को पूरा करता है।",
+    "qualifyingYearsValue": "{years} वर्ष",
     "colRank": "क्रम",
     "colOfficerName": "अधिकारी का नाम",
     "colDepartment": "विभाग",
@@ -1353,7 +1356,10 @@
     "approveConfirmTitle": "इस वरिष्ठता सूची को स्वीकृत करें?",
     "approveConfirmLabel": "स्वीकृत करें",
     "approveReasonLabel": "टिप्पणी (वैकल्पिक)",
-    "approveConfirmDescription": "वरिष्ठता सूची {id} को स्वीकृत करें। यह पदोन्नति हेतु विचार के लिए DPC स्नैपशॉट को अंतिम रूप देता है।"
+    "approveConfirmDescription": "वरिष्ठता सूची {id} को स्वीकृत करें। यह पदोन्नति हेतु विचार के लिए DPC स्नैपशॉट को अंतिम रूप देता है।",
+    "colAsOf": "दिनांक के अनुसार",
+    "colStatus": "स्थिति",
+    "colGeneratedAt": "निर्मित"
   },
   "dscConfigForm": {
     "subjectCnLabel": "विषय CN",
@@ -4530,8 +4536,9 @@
     "newBasicLabel": "नया मूल वेतन",
     "orderNoLabel": "आदेश संख्या",
     "effectiveDateLabel": "प्रभावी तिथि",
-    "dpcMeetingDateLabel": "DPC बैठक तिथि",
     "approvalChainLabel": "स्वीकृति श्रृंखला",
+    "unknownEmployee": "अज्ञात कर्मचारी",
+    "cancelledMessage": "स्वीकृति श्रृंखला पूरी होने से पहले यह पदोन्नति रद्द कर दी गई थी।",
     "statusInitiated": "प्रारंभ किया गया",
     "statusDeptApproved": "विभागाध्यक्ष स्वीकृत",
     "statusHrApproved": "HR स्वीकृत",
