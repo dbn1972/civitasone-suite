@@ -1,12 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { randomUUID } from "node:crypto";
 import { isKnownEngagementType, resolveKnownEngagementTypeSets } from "../employee/engagement-policy.js";
+import { hrmsEmployees } from "../employee/schema.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
@@ -29,6 +31,16 @@ const bulkImportBody = z.object({
     // uncoerced -- so every bulk-imported employee was silently getting
     // employeeType: undefined. Default matches createEmployeeBody's.
     employeeType: z.string().min(1).max(32).default("permanent"),
+    // GAP-HR-EMPLOYEES-IMPORT-05: per the published decision packet's
+    // recommendation ("managerEmployeeNo... keep PAN/Aadhaar/bank out of
+    // CSV"). Resolved to managerId server-side below (same tenant, same
+    // pattern as the client's own department/designation code resolution)
+    // rather than requiring the caller to already know a UUID. payStructure
+    // is deliberately NOT added here yet -- unlike department/designation,
+    // there is no verified code->id lookup for pay structures in this
+    // snapshot (payroll-service's response shape is not confirmable from
+    // hrms-service), so guessing at one risked silently mis-assigning pay.
+    managerEmployeeNo: z.string().min(1).max(32).optional(),
   })).min(1).max(500),
 });
 
@@ -53,11 +65,43 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
     const fieldErrors: Array<{ field: string; message: string }> = [];
     const seen = new Set<string>();
     const { canonical, tenant } = await resolveKnownEngagementTypeSets(ctx.tenantId);
+
+    // GAP-HR-EMPLOYEES-IMPORT-02: this only ever checked for a duplicate
+    // employeeNo WITHIN the file being uploaded -- an employeeNo that
+    // already belongs to an existing employee in this tenant sailed
+    // straight through (no unique index on employee_no either, per the
+    // catalog's own finding), silently creating a second row HR would only
+    // discover much later (payroll/service-book lookups keyed on
+    // employeeNo would then be ambiguous). Checked synchronously, before
+    // anything is queued, same as the within-file check below.
+    const existingNos = await scopedRead((tx) => tx.select({ employeeNo: hrmsEmployees.employeeNo }).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.employeeNo, body.employees.map((e) => e.employeeNo)))));
+    const existingNoSet = new Set(existingNos.map((r) => r.employeeNo));
+
+    // GAP-HR-EMPLOYEES-IMPORT-05: resolve managerEmployeeNo -> managerId
+    // within this same tenant/file, same "code the caller can actually
+    // read" pattern as the client's department/designation resolution.
+    // Also detects a self-reference (a row naming its own employeeNo as
+    // its manager) up front -- wouldCreateCycle (manager-domain.ts) guards
+    // the single-row/edit paths but isn't wired into this bulk path, so
+    // this stays a narrower, explicit check rather than silently skipping
+    // cycle detection here.
+    const managerNos = body.employees.map((e) => e.managerEmployeeNo).filter((v): v is string => !!v);
+    const managerRows = managerNos.length > 0
+      ? await scopedRead((tx) => tx.select({ id: hrmsEmployees.id, employeeNo: hrmsEmployees.employeeNo }).from(hrmsEmployees)
+          .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.employeeNo, managerNos))))
+      : [];
+    const managerIdByNo = new Map(managerRows.map((r) => [r.employeeNo, r.id]));
+    const fileNos = new Set(body.employees.map((e) => e.employeeNo));
+
     body.employees.forEach((emp, idx) => {
       if (seen.has(emp.employeeNo)) {
         fieldErrors.push({ field: `employees.${idx}.employeeNo`, message: `Duplicate: ${emp.employeeNo}` });
       }
       seen.add(emp.employeeNo);
+      if (existingNoSet.has(emp.employeeNo)) {
+        fieldErrors.push({ field: `employees.${idx}.employeeNo`, message: `Already exists in this tenant: ${emp.employeeNo}` });
+      }
       // The single-row path enforces this via assertKnownEngagementType
       // (employee/routes.ts's POST /v1/hrms/employees) -- the bulk path
       // queued straight past it with no check at all until this fix, so a
@@ -66,6 +110,19 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
       // at runtime, it only satisfies the compiler).
       if (!isKnownEngagementType(emp.employeeType, canonical, tenant)) {
         fieldErrors.push({ field: `employees.${idx}.employeeType`, message: `unknown employee type '${emp.employeeType}'` });
+      }
+      if (emp.managerEmployeeNo) {
+        if (emp.managerEmployeeNo === emp.employeeNo) {
+          fieldErrors.push({ field: `employees.${idx}.managerEmployeeNo`, message: `An employee cannot be their own manager: ${emp.managerEmployeeNo}` });
+        } else if (!managerIdByNo.has(emp.managerEmployeeNo) && !fileNos.has(emp.managerEmployeeNo)) {
+          fieldErrors.push({ field: `employees.${idx}.managerEmployeeNo`, message: `Unknown manager employee number: ${emp.managerEmployeeNo}` });
+        } else if (!managerIdByNo.has(emp.managerEmployeeNo)) {
+          // Named row is elsewhere in the SAME file, not yet an existing
+          // employee -- this endpoint queues rows independently (no
+          // ordering/dependency guarantee between them), so a same-file
+          // manager reference cannot be resolved to a real id here.
+          fieldErrors.push({ field: `employees.${idx}.managerEmployeeNo`, message: `${emp.managerEmployeeNo} is in this same file, not an existing employee -- import managers first, then re-import with this column.` });
+        }
       }
     });
 
@@ -76,10 +133,14 @@ export async function bulkImportRoutes(app: FastifyInstance): Promise<void> {
     // Queue each employee creation
     for (const emp of body.employees) {
       const id = randomUUID();
+      const { managerEmployeeNo, ...rest } = emp;
       await queue.publish("hrms.employee.create", {
         messageId: id, type: "hrms.employee.create",
         tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-        payload: { id, tenantId: ctx.tenantId, ...emp, currency: "INR" },
+        payload: {
+          id, tenantId: ctx.tenantId, ...rest, currency: "INR",
+          ...(managerEmployeeNo ? { managerId: managerIdByNo.get(managerEmployeeNo) } : {}),
+        },
       });
     }
 
