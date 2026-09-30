@@ -24,6 +24,7 @@ import {
   cardStyle,
   validateStep,
   validateField,
+  rupeesToMinorString,
 } from "./wizardTypes";
 
 type Dept = { id: string; name: string };
@@ -34,7 +35,6 @@ type EmpSummary = { id: string; name: string; designationName?: string };
 interface Props {
   departments: Dept[];
   designations: Desig[];
-  managers?: EmpSummary[];
 }
 
 const TOTAL_STEPS = 5;
@@ -93,11 +93,11 @@ function clearDraft() {
 function buildPayload(data: WizardData): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   const stringKeys: (keyof WizardData)[] = [
-    "fullName", "dateOfBirth", "gender", "maritalStatus", "bloodGroup",
+    "fullName", "dateOfBirth", "gender",
     "mobile", "email",
-    "employeeNo", "departmentId", "designationId", "grade",
+    "employeeNo", "departmentId", "designationId",
     "dateOfJoining", "employeeType",
-    "managerId", "shift", "costCenter",
+    "managerId",
     "pan", "aadhaarRef", "bankAccountNo", "bankIfsc",
   ];
   for (const k of stringKeys) {
@@ -108,28 +108,43 @@ function buildPayload(data: WizardData): Record<string, unknown> {
   // createEmployeeBody) -- sent under its real key so it actually persists,
   // instead of the "workLocation" key the API silently discards (HR-A finding).
   if (data.workLocation.trim() !== "") body.station = data.workLocation.trim();
-  body.pfEnrolled = data.pfEnrolled;
-  body.esiEnrolled = data.esiEnrolled;
-  body.ptApplicable = data.ptApplicable;
-  // NOTE: grade / shift / costCenter / maritalStatus / bloodGroup / pfEnrolled /
-  // esiEnrolled / ptApplicable are collected above but have no corresponding field
-  // in createEmployeeBody today, so the API silently strips them (unknown Zod
-  // keys) -- same "collected but not persisted" defect class as workLocation was,
-  // but each needs a real product/schema decision (new columns, or a different
-  // module e.g. shift assignment) rather than a one-line key rename. Flagged as a
-  // follow-up, out of scope for this fix.
+  // GAP-HR-EMPLOYEES-NEW-02: basicMinor is a real createEmployeeBody field
+  // (paise integer) -- every new employee used to be created at basicMinor
+  // 0 with no way to set it anywhere in this wizard. rupeesToMinorString
+  // returns null for blank/invalid input (also enforced in validateStep),
+  // so this only ever sends a real, decimal-safe integer.
+  if (data.basicPay.trim()) {
+    const minor = rupeesToMinorString(data.basicPay.trim());
+    if (minor) body.basicMinor = Number(minor);
+  }
+  // GAP-HR-EMPLOYEES-NEW-01: grade / shift / costCenter / maritalStatus /
+  // bloodGroup are still collected (Step5's review screen now marks each
+  // one "not saved yet" instead of implying they persisted) but have no
+  // corresponding field in createEmployeeBody today, so the API would
+  // silently strip them as unknown Zod keys if sent -- deliberately never
+  // added to `body` here. Each needs its own product/schema decision (grade
+  // in particular is being resolved separately alongside
+  // GAP-HR-DESIGNATIONS-01/GAP-HR-EMPLOYEES-NEW-05's pay-matrix work,
+  // costCenter needs a real costCenterId picker against the cost-centre
+  // master, not free text) -- flagged as a follow-up, out of scope here.
+  // pfEnrolled/esiEnrolled/ptApplicable were REMOVED from the wizard
+  // entirely (not just left unsent): they're already derived from the
+  // selected engagement type's policy (engagement-policy.ts
+  // statutoryPf/statutoryEsi) server-side, so a form toggle here could only
+  // ever silently disagree with -- and never actually override -- that
+  // computed value.
   return body;
 }
 
 // ── Wizard component ─────────────────────────────────────────────────────────
-export function AddEmployeeWizard({ departments, designations, managers }: Props) {
+export function AddEmployeeWizard({ departments, designations }: Props) {
   const t = useTranslations("employeeWizard");
   const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>(WIZARD_INIT);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [globalError, setGlobalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [success, setSuccess] = useState<{ id: string } | null>(null);
+  const [success, setSuccess] = useState<{ id: string; employeeNo: string } | null>(null);
   const [draftRestored, setDraftRestored] = useState(false);
   const formError = useFormError("employee");
 
@@ -241,7 +256,16 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
         return;
       }
 
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+      // GAP-HR-EMPLOYEES-NEW-07: commands.createEmployee returns the
+      // database uuid as `id` -- it never carried the Employee ID
+      // (employeeNo) HR actually typed in Step 2, so the success screen
+      // showed "Employee ID: <uuid>", the wrong identifier, and fell back
+      // to the literal string "unknown" whenever a response happened to
+      // omit `id` (which the current backend never does, but nothing
+      // guarantees that). Use the value this form itself collected for the
+      // human-readable id; only use the response's `id` (a real uuid) for
+      // the "View employee" link, and only render that link when the
+      // response actually included one.
       const result = await res.json();
       const id =
         typeof result === "object" &&
@@ -249,10 +273,10 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
         "id" in result &&
         typeof (result as Record<string, unknown>).id === "string"
           ? ((result as Record<string, unknown>).id as string)
-          : "unknown";
+          : null;
 
       clearDraft();
-      setSuccess({ id });
+      setSuccess({ id: id ?? "", employeeNo: data.employeeNo });
     } catch {
       setGlobalError(formError.fromException("save").message);
     } finally {
@@ -277,14 +301,24 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
           {t("successMessage")}
         </p>
         <p style={{ margin: "8px 0 16px", fontSize: 14 }}>
-          {t("employeeIdColonLabel")} <strong>{success.id}</strong>
+          {t("employeeIdColonLabel")} <strong>{success.employeeNo}</strong>
         </p>
-        <Link
-          href="/hr/employees"
-          style={{ color: ACCENT, fontWeight: 600, fontSize: 14, textDecoration: "none" }}
-        >
-          {t("viewDirectoryLink")}
-        </Link>
+        <div style={{ display: "flex", gap: 16 }}>
+          {success.id && (
+            <Link
+              href={`/hr/employees/${success.id}`}
+              style={{ color: ACCENT, fontWeight: 600, fontSize: 14, textDecoration: "none" }}
+            >
+              {t("viewEmployeeLink")}
+            </Link>
+          )}
+          <Link
+            href="/hr/employees"
+            style={{ color: ACCENT, fontWeight: 600, fontSize: 14, textDecoration: "none" }}
+          >
+            {t("viewDirectoryLink")}
+          </Link>
+        </div>
       </div>
     );
   }
@@ -374,7 +408,6 @@ export function AddEmployeeWizard({ departments, designations, managers }: Props
           <Step3
             data={data}
             errors={errors}
-            managers={managers}
             onChange={onChange}
             onBlur={onBlur}
           />

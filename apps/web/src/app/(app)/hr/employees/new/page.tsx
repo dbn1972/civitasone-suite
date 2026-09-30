@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
@@ -36,13 +37,6 @@ async function getDesignations(): Promise<LoaderResult<Desig[]>> {
   });
 }
 
-async function getManagers(): Promise<LoaderResult<EmpSummary[]>> {
-  return fetchJson<unknown, EmpSummary[]>("/api/v1/hrms/employees?role=manager&limit=200", [], {
-    telemetryKey: "hr.new-employee.managers",
-    mapResponse: (p) => (p as { data: EmpSummary[] })?.data ?? null,
-  });
-}
-
 export default async function NewEmployeePage() {
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
@@ -52,20 +46,17 @@ export default async function NewEmployeePage() {
   }
 
   const t = await getTranslations("employeeWizard");
-  const [deptResult, desigResult, managerResult] = await Promise.all([
+  const [deptResult, desigResult] = await Promise.all([
     getDepartments(),
     getDesignations(),
-    getManagers(),
   ]);
 
   const departments = deptResult.data ?? [];
   const designations = desigResult.data ?? [];
-  const managers = managerResult.data ?? [];
 
   const hasError =
     deptResult.source === "error" ||
-    desigResult.source === "error" ||
-    managerResult.source === "error";
+    desigResult.source === "error";
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -74,12 +65,15 @@ export default async function NewEmployeePage() {
         subtitle={t("pageSubtitle")}
         back="/hr/employees"
         backLabel={t("backLabel")}
+        // GAP-HR-EMPLOYEES-NEW-08: bulk import existed but had no link from
+        // this page (or, until the employees-list cluster's fix, from the
+        // employee directory either).
+        actions={<Link href="/hr/employees/import" className="btn ghost">{t("importLink")}</Link>}
       />
       <DataSourceBadge source={hasError ? "error" : "api"} />
       <AddEmployeeWizard
         departments={departments}
         designations={designations}
-        managers={managers}
       />
     </div>
   );

@@ -8,18 +8,17 @@ import {
   fieldWrap,
   grid2,
 } from "../wizardTypes";
-
-type EmpSummary = { id: string; name: string; designationName?: string };
+import { Field, EntityPicker } from "@/app/_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 interface Props {
   data: WizardData;
   errors: FieldErrors;
-  managers?: EmpSummary[];
   onChange: <K extends keyof WizardData>(key: K, value: WizardData[K]) => void;
   onBlur: (field: keyof WizardData) => void;
 }
 
-export function Step3({ data, errors: _errors, managers, onChange, onBlur: _onBlur }: Props) {
+export function Step3({ data, errors: _errors, onChange, onBlur: _onBlur }: Props) {
   const t = useTranslations("employeeWizard");
 
   const SHIFTS: { value: WizardData["shift"]; label: string }[] = [
@@ -35,23 +34,27 @@ export function Step3({ data, errors: _errors, managers, onChange, onBlur: _onBl
         {t("step3Heading")}
       </h2>
       <div style={grid2}>
-        {/* Reporting Manager */}
-        <div style={fieldWrap}>
-          <label htmlFor="w-manager" style={labelStyle}>{t("reportingManagerLabel")}</label>
-          <select
-            id="w-manager"
-            value={data.managerId}
-            onChange={(e) => onChange("managerId", e.target.value)}
-            style={inputStyle}
-          >
-            <option value="">{t("selectManager")}</option>
-            {(managers ?? []).map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}{m.designationName ? ` — ${m.designationName}` : ""}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* GAP-HR-EMPLOYEES-NEW-04: this used to preload the first 200
+            employees via a `?role=manager` param the backend silently
+            ignores (employeeListQuery has no `role` field), with no
+            designationName ever populated -- so on a tenant with >200
+            employees, employee #250 could never be picked, and every
+            option showed just a bare name. Swapped for the same
+            EntityPicker + searchEmployees adapter EditEmployeeForm.tsx
+            already uses for this exact "pick an employee" case (GAP-HR-SF-06)
+            -- searches the real GET /v1/hrms/employees?q= as the user
+            types, no preload, no row cap. */}
+        <Field label={t("reportingManagerLabel")}>
+          <EntityPicker
+            value={data.managerId || null}
+            onChange={(v) => onChange("managerId", (Array.isArray(v) ? v[0] : v) ?? "")}
+            search={searchEmployees}
+            resolve={resolveEmployees}
+            placeholder={t("selectManagerSearchPlaceholder")}
+            searchingText={t("pickerSearching")}
+            noResultsText={t("pickerNoResults")}
+          />
+        </Field>
 
         {/* Work Location */}
         <div style={fieldWrap}>

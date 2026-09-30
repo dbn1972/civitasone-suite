@@ -197,6 +197,76 @@ describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-03 draft never carries stat
 });
 
 /**
+ * GAP-HR-EMPLOYEES-NEW-01: PF/ESI/PT toggles are already derived from the
+ * selected engagement type's policy server-side (engagement-policy.ts) --
+ * a form toggle here could only ever silently disagree with, and never
+ * actually override, that computed value. Removed from the wizard
+ * entirely, per the published decision packet's own example for this item.
+ */
+describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-01 PF/ESI/PT removed", () => {
+  it("does not render PF / ESI / PT toggles anywhere in Step 4", async () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    fireEvent.change(await screen.findByLabelText(/employee id/i), { target: { value: "NIC/2026/0001" } });
+    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/^department/i), { target: { value: "dep1" } });
+    fireEvent.change(screen.getByLabelText(/^designation/i), { target: { value: "des1" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 3 of/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 4 of/i);
+
+    expect(screen.queryByLabelText(/pf enrolled/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/esi opt-in/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/pt applicable/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-EMPLOYEES-NEW-02: every new employee used to be created at
+ * basicMinor 0 with no way to set it anywhere in this wizard.
+ */
+describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-02 Basic Pay", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("converts a decimal Basic Pay to paise (no float rounding) in the create payload", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "uuid-1" }), { status: 202 }));
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    fireEvent.change(await screen.findByLabelText(/employee id/i), { target: { value: "NIC/2026/0001" } });
+    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/^department/i), { target: { value: "dep1" } });
+    fireEvent.change(screen.getByLabelText(/^designation/i), { target: { value: "des1" } });
+    fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "44900.50" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 3 of/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 4 of/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /create employee record/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse(fetchMock.mock.calls[0]![1].body as string);
+    expect(body.basicMinor).toBe(4490050);
+  });
+});
+
+/**
  * GAP-HR-EMPLOYEES-NEW-05: Step2's Grade field used to be a free picklist
  * with hand-typed level ranges that disagreed with DesignationsTable.tsx's
  * boundaries. It's now computed from the selected designation's pay level
@@ -239,5 +309,93 @@ describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-05 computed Service Group",
     expect(screen.queryByText("Group A")).not.toBeInTheDocument();
     fireEvent.change(gradeSelect, { target: { value: "Contractual" } });
     expect(gradeSelect).toHaveValue("Contractual");
+  });
+});
+
+/**
+ * GAP-HR-EMPLOYEES-NEW-07: commands.createEmployee returns the database
+ * uuid as `id` -- the success screen used to show that uuid labelled
+ * "Employee ID", not the employeeNo HR actually typed, with a literal
+ * "unknown" fallback whenever `id` happened to be absent.
+ */
+describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-07 success screen", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function driveToFinalStepAndSubmit() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    fireEvent.change(await screen.findByLabelText(/employee id/i), { target: { value: "NIC/2026/0001" } });
+    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-01-01" } });
+    fireEvent.change(screen.getByLabelText(/^department/i), { target: { value: "dep1" } });
+    fireEvent.change(screen.getByLabelText(/^designation/i), { target: { value: "des1" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 3 of/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByText(/step 4 of/i);
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /create employee record/i }));
+  }
+
+  it("shows the entered employeeNo (not the response uuid) as the Employee ID, and links to the new profile", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "aaaa-uuid" }), { status: 202 }));
+    await driveToFinalStepAndSubmit();
+
+    await screen.findByText(/created successfully/i);
+    expect(screen.getByText("NIC/2026/0001")).toBeInTheDocument();
+    expect(screen.queryByText("aaaa-uuid")).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "View employee →" })).toHaveAttribute("href", "/hr/employees/aaaa-uuid");
+  });
+
+  it("never renders the literal 'unknown' when the response has no id", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
+    await driveToFinalStepAndSubmit();
+
+    await screen.findByText(/created successfully/i);
+    expect(screen.queryByText(/unknown/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View employee →" })).not.toBeInTheDocument();
+  });
+});
+
+/** GAP-HR-EMPLOYEES-NEW-08 */
+describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-08 date-of-birth age check", () => {
+  it("blocks a date of birth under 18 years old from advancing past Step 1", async () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />
+      </NextIntlClientProvider>,
+    );
+    const tenYearsAgo = new Date();
+    tenYearsAgo.setFullYear(tenYearsAgo.getFullYear() - 10);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });
+    fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: tenYearsAgo.toISOString().slice(0, 10) } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    expect(await screen.findByText(/at least 18 years old/i)).toBeInTheDocument();
+    expect(screen.queryByText(/step 2 of/i)).not.toBeInTheDocument();
+  });
+
+  it("allows a date of birth over 18 years old to advance normally", async () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} />
+      </NextIntlClientProvider>,
+    );
+    const thirtyYearsAgo = new Date();
+    thirtyYearsAgo.setFullYear(thirtyYearsAgo.getFullYear() - 30);
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });
+    fireEvent.change(screen.getByLabelText(/date of birth/i), { target: { value: thirtyYearsAgo.toISOString().slice(0, 10) } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+
+    expect(await screen.findByText(/step 2 of/i)).toBeInTheDocument();
   });
 });

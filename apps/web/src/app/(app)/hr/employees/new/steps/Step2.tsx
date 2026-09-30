@@ -210,6 +210,38 @@ export function Step2({ data, errors, departments, designations, onChange, onBlu
             <option value="apprentice">{t("empTypeApprenticeTrainee")}</option>
           </select>
         </div>
+
+        {/* GAP-HR-EMPLOYEES-NEW-02: Basic Pay -- every new employee used to
+            be created at basicMinor 0 with no way to set it anywhere in
+            this wizard. Optional here (pay may instead be fixed via a
+            pay-structure assignment on the profile after creation, see
+            EditEmployeeForm.tsx's EntityPicker) -- but if entered, must be
+            a valid decimal-safe rupee amount (validateStep). */}
+        <div style={fieldWrap}>
+          <label htmlFor="w-basicPay" style={labelStyle}>
+            {t("basicPayLabel")}
+            <span style={{ fontWeight: 400, color: "var(--mut, #64748b)", marginInlineStart: 6, fontSize: 11 }}>
+              {t("basicPayHint")}
+            </span>
+          </label>
+          <input
+            id="w-basicPay"
+            type="text"
+            inputMode="decimal"
+            value={data.basicPay}
+            onChange={(e) => onChange("basicPay", e.target.value)}
+            onBlur={() => onBlur("basicPay")}
+            placeholder={t("basicPayPlaceholder")}
+            aria-invalid={!!errors.basicPay}
+            aria-describedby={errors.basicPay ? "w-basicPay-err" : undefined}
+            style={errors.basicPay ? inputErrorStyle : inputStyle}
+          />
+          {errors.basicPay && (
+            <span id="w-basicPay-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
+              {errors.basicPay}
+            </span>
+          )}
+        </div>
       </div>
     </>
   );
