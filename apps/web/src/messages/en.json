@@ -4768,8 +4768,8 @@
     "statInProgress": "In Progress",
     "statCompleted": "Completed",
     "statOverdue": "Overdue Tasks",
-    "emptyTitle": "No joiners this month",
-    "emptyMessage": "New joinee onboarding checklists appear here once a joining is initiated. Checklists track document collection, IT access setup, workstation assignment, ID card issuance, and induction completion.",
+    "emptyTitle": "No onboarding in progress",
+    "emptyMessage": "New joinee onboarding checklists appear here once onboarding tasks are assigned — search for an employee above to add their first task, or add a brand-new joinee.",
     "addJoinee": "+ Add New Joinee"
   },
   "onboardingDetail": {

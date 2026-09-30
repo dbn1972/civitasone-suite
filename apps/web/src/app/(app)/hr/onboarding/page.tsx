@@ -5,6 +5,7 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { JoineeCard, type JoineeCardData } from "./_components/JoineeCard";
+import { StartOnboardingPicker } from "./_components/StartOnboardingPicker";
 import { getTranslations } from "next-intl/server";
 
 // Mirrors HR_ROLES in services/hrms-service/src/modules/lifecycle/onboarding-routes.ts
@@ -94,6 +95,13 @@ export default async function OnboardingPage() {
           </Link>
         }
       />
+
+      {/* GAP-HR-ONBOARDING-02: this tracker only ever lists employees who
+          already have >=1 task -- there was previously no way to reach an
+          EXISTING employee's onboarding page to give them their first one
+          ("+ Add New Joinee" above only creates a brand-new employee
+          record). */}
+      <StartOnboardingPicker />
 
       <DataSourceBadge source={source} />
 

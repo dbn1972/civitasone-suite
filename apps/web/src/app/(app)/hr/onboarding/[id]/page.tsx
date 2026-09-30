@@ -1,11 +1,16 @@
 import { notFound } from "next/navigation";
-import { PageHeader, EmptyState, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, EmptyState, RefreshErrorState, Card } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { getEmployeeById } from "@/app/_data/loaders";
 import { fetchJson } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
-import { OnboardingChecklist, type ChecklistStep } from "../_components/OnboardingChecklist";
+import { type ChecklistStep } from "../_components/OnboardingChecklist";
+import { ChecklistWithActions } from "../_components/ChecklistWithActions";
+import { AddTaskForm } from "../_components/AddTaskForm";
 import { DocumentUploadCard, type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
 import { getTranslations } from "next-intl/server";
@@ -16,22 +21,6 @@ const ONBOARDING_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 // Types
 // ---------------------------------------------------------------------------
 
-// Matches the real shape of GET /v1/hrms/onboarding (hrms-service
-// modules/lifecycle/onboarding-routes.ts) — it returns exactly these fields.
-// There is no checklist/documents/tasks/reportingManager/officeLocation in
-// the response; a previous version of this page invented those and always
-// rendered fabricated placeholder progress for every joinee (see PR notes).
-type ApiRow = {
-  id: string;
-  employee: string;
-  department: string;
-  joiningDate: string;
-  stepsCompleted: string | number;
-  totalSteps: string | number;
-  progress: string | number;
-  status: string;
-};
-
 // Matches GET /v1/hrms/employees/:id/onboarding-tasks (hrms_onboarding_tasks
 // table: id, employeeId, title, dueByDay, status, completedAt, ...).
 type OnboardingTaskRow = {
@@ -41,15 +30,10 @@ type OnboardingTaskRow = {
   status: string; // only ever "pending" or "completed" — the backend never writes "in_progress"/"overdue"
 };
 
-const CALENDAR_MILESTONES = [1, 3, 7, 30] as const;
-
-function nearestMilestone(day: number): (typeof CALENDAR_MILESTONES)[number] {
-  return CALENDAR_MILESTONES.reduce((best, m) => (Math.abs(m - day) < Math.abs(best - day) ? m : best));
-}
-
 /** A "pending" task becomes "overdue" once its due date (joining date + dueByDay) has passed. */
-function deriveStatus(task: OnboardingTaskRow, joiningDate: string): ChecklistStep["status"] {
+function deriveStatus(task: OnboardingTaskRow, joiningDate: string | null | undefined): ChecklistStep["status"] {
   if (task.status === "completed") return "completed";
+  if (!joiningDate) return "pending";
   const join = new Date(`${joiningDate}T00:00:00Z`);
   if (Number.isNaN(join.getTime())) return "pending";
   const due = new Date(join);
@@ -61,11 +45,7 @@ function deriveStatus(task: OnboardingTaskRow, joiningDate: string): ChecklistSt
 // modules/lifecycle/onboarding-routes.ts's mergeOnboardingDocuments()): this
 // employee's own real document checklist -- required doc types for their
 // tenant/employeeType, merged with what THEY have actually submitted/had
-// verified. Previously this page ignored the backend entirely and rendered
-// DEFAULT_DOCUMENTS, a fixed 6-item array with every status hardcoded
-// "pending", for every employee (COMP-015) -- there was no fetch, no
-// per-employee state, and no way for a document to ever show as
-// received/verified for anyone.
+// verified.
 type DocumentApiRow = {
   docType: string;
   required: boolean;
@@ -99,26 +79,23 @@ function humanizeDocType(docType: string): string {
 // ---------------------------------------------------------------------------
 
 interface Props {
-  params: Promise<{ id: string }>;
+  // GAP-HR-ONBOARDING-DETAIL-07: plain params object, matching every sibling
+  // HR detail page's Next 14 convention (e.g. disciplinary/[id]/page.tsx) --
+  // Promise<{id}> is a Next 15 convention; awaiting a non-Promise value is
+  // legal JS and happened to work, but was needlessly inconsistent here.
+  params: { id: string };
 }
 
 export default async function OnboardingDetailPage({ params }: Props) {
   const t = await getTranslations("onboardingDetail");
-  const { id } = await params;
+  const { id } = params;
 
-  const { data: rows, source: summarySource, status: summaryStatus } = await fetchJson<unknown, ApiRow[]>(
-    "/api/v1/hrms/onboarding",
-    [],
-    {
-      telemetryKey: "hr.onboarding.detail",
-      mapResponse: (p) => {
-        const arr = Array.isArray(p) ? p : (p as { data?: ApiRow[] })?.data;
-        return Array.isArray(arr) ? arr : null;
-      },
-    },
-  );
-
-  if (summaryStatus === 403) {
+  // Explicit role gate, independent of whichever backend endpoint we
+  // happen to call below -- keeps this page's access boundary (HR only)
+  // stable regardless of what role set GET /v1/hrms/employees/:id itself
+  // enforces for other callers (e.g. it may also serve "manager").
+  const roles = getSessionRoles();
+  if (!roles.some((r) => ONBOARDING_ROLES.includes(r))) {
     return (
       <div className="page-main wrap">
         <PageHeader title={t("title")} back="/hr/onboarding" backLabel="Back to Onboarding" />
@@ -127,57 +104,68 @@ export default async function OnboardingDetailPage({ params }: Props) {
     );
   }
 
-  const row = rows.find((r) => r.id === id);
-  if (!row) notFound();
+  // GAP-HR-ONBOARDING-DETAIL-05: fetch this one employee directly instead of
+  // fetching the entire tenant-wide /onboarding summary (up to 2000 task
+  // rows) just to .find() this id in it. The old approach 404'd for any
+  // joinee with zero tasks (absent from a tasks-driven summary) and, more
+  // seriously, ALSO 404'd on a genuine fetch failure (source:"error" ->
+  // rows:[] -> also "not found") -- conflating "doesn't exist" with
+  // "couldn't load".
+  const { data: employee, source: employeeSource, status: employeeStatus } = await getEmployeeById(id);
 
-  // Real per-employee tasks — the only genuine source for checklist/calendar
-  // content. `id` here IS the employee id (the summary route keys rows by
-  // employeeId, confirmed against hrms-service onboarding-routes.ts).
-  const { data: taskRows, source: tasksSource } = await fetchJson<unknown, OnboardingTaskRow[]>(
-    `/api/v1/hrms/employees/${id}/onboarding-tasks`,
-    [],
-    {
+  if (employeeSource === "error") {
+    if (employeeStatus === 404) notFound();
+    return (
+      <div className="page-main wrap">
+        <PageHeader title={t("title")} back="/hr/onboarding" backLabel="Back to Onboarding" />
+        <Card style={{ padding: 20 }}>
+          <RefreshErrorState error={toHumanError("load", { area: "onboarding details" })} />
+        </Card>
+      </div>
+    );
+  }
+  // employeeSource === "api" guarantees a non-null mapped value: fetchJson
+  // treats a mapResponse() result of null as source:"error" itself (see
+  // apiClient.ts), never as a successful null -- safe to assert.
+  const emp = employee!;
+
+  const [{ data: taskRows, source: tasksSource }, { data: documentRows, source: documentsSource }] = await Promise.all([
+    // Real per-employee tasks — the only genuine source for checklist/calendar content.
+    fetchJson<unknown, OnboardingTaskRow[]>(`/api/v1/hrms/employees/${id}/onboarding-tasks`, [], {
       telemetryKey: "hr.onboarding.detail.tasks",
       mapResponse: (p) => {
         const arr = Array.isArray(p) ? p : (p as { data?: OnboardingTaskRow[] })?.data;
         return Array.isArray(arr) ? arr : null;
       },
-    },
-  );
-  // Real per-employee document checklist -- same rationale as the tasks
-  // fetch above (`id` is the employee id). Replaces the DEFAULT_DOCUMENTS
-  // placeholder that used to show the same 6 documents, always "pending",
-  // for every employee regardless of what HR had actually collected or
-  // verified (COMP-015).
-  const { data: documentRows, source: documentsSource } = await fetchJson<unknown, DocumentApiRow[]>(
-    `/api/v1/hrms/employees/${id}/onboarding-documents`,
-    [],
-    {
+    }),
+    // Real per-employee document checklist (COMP-015).
+    fetchJson<unknown, DocumentApiRow[]>(`/api/v1/hrms/employees/${id}/onboarding-documents`, [], {
       telemetryKey: "hr.onboarding.detail.documents",
       mapResponse: (p) => {
         const arr = Array.isArray(p) ? p : (p as { data?: DocumentApiRow[] })?.data;
         return Array.isArray(arr) ? arr : null;
       },
-    },
-  );
+    }),
+  ]);
 
-  const source =
-    summarySource === "error" || tasksSource === "error" || documentsSource === "error" ? "error" : "api";
+  const source = tasksSource === "error" || documentsSource === "error" ? "error" : "api";
 
-  const pct = Math.min(100, Math.max(0, Number(String(row.progress).replace("%", ""))));
+  const totalTasks = taskRows.length;
+  const completedTasks = taskRows.filter((row) => row.status === "completed").length;
+  const pct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 0;
 
-  const checklist: ChecklistStep[] = taskRows.map((t) => ({
-    id: t.id,
-    label: t.title,
-    status: deriveStatus(t, row.joiningDate),
-    dueDay: t.dueByDay,
+  const checklist: ChecklistStep[] = taskRows.map((row) => ({
+    id: row.id,
+    label: row.title,
+    status: deriveStatus(row, emp.joiningDate),
+    dueDay: row.dueByDay,
   }));
 
-  const tasks: CalendarTask[] = taskRows.map((t) => ({
-    id: t.id,
-    title: t.title,
-    milestoneDay: nearestMilestone(t.dueByDay),
-    status: deriveStatus(t, row.joiningDate),
+  const calendarTasks: CalendarTask[] = taskRows.map((row) => ({
+    id: row.id,
+    title: row.title,
+    dueByDay: row.dueByDay,
+    status: deriveStatus(row, emp.joiningDate),
   }));
 
   const documents: OnboardingDocument[] = documentRows
@@ -194,8 +182,8 @@ export default async function OnboardingDetailPage({ params }: Props) {
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={`Onboarding — ${row.employee}`}
-        subtitle={`${row.department} · Joining ${row.joiningDate}`}
+        title={`Onboarding — ${emp.name}`}
+        subtitle={`${emp.department} · Joining ${formatIndianDate(emp.joiningDate)}`}
         back="/hr/onboarding"
         backLabel="Onboarding Tracker"
       />
@@ -203,97 +191,54 @@ export default async function OnboardingDetailPage({ params }: Props) {
 
       {/* Welcome banner */}
       <JoineeWelcomeHeader
-        name={row.employee}
-        startDate={row.joiningDate}
-        department={row.department}
-        reportingManager="Not yet assigned"
-        officeLocation="Not specified"
+        name={emp.name}
+        startDate={emp.joiningDate}
+        department={emp.department}
+        // GAP-HR-ONBOARDING-DETAIL-04: real manager/location when the API has
+        // them (GET /v1/hrms/employees/:id already resolves reportingTo/
+        // postingLocation); the previous literals were honest placeholders
+        // for the "not on file" case, not fabricated data, but were shown
+        // unconditionally even when a manager/location genuinely existed.
+        reportingManager={emp.reportingTo ?? "Not yet assigned"}
+        officeLocation={emp.postingLocation ?? "Not specified"}
         overallProgress={pct}
       />
 
       {/* Two-column: checklist | task calendar */}
       {source === "error" ? (
-        <div
-          style={{
-            border: "1px solid var(--border, #e2e8f0)",
-            borderRadius: 12,
-            padding: 20,
-            background: "var(--card-bg, #fff)",
-            marginBottom: 24,
-          }}
-        >
+        <Card style={{ padding: 20, marginBottom: 24 }}>
           <RefreshErrorState error={toHumanError("load", { area: "onboarding checklist" })} />
-        </div>
+        </Card>
       ) : checklist.length === 0 ? (
-        <div
-          style={{
-            border: "1px solid var(--border, #e2e8f0)",
-            borderRadius: 12,
-            padding: 20,
-            background: "var(--card-bg, #fff)",
-            marginBottom: 24,
-          }}
-        >
+        <Card style={{ padding: 20, marginBottom: 24 }}>
           <EmptyState
             icon="🗒️"
             title={t("emptyTasksTitle")}
             message={t("emptyTasksMessage")}
           />
-        </div>
+          {/* GAP-HR-ONBOARDING-02: a joinee with zero tasks used to be
+              unreachable at all (404, fixed by DETAIL-05 above) -- now that
+              this page can open for them, HR needs a way to actually start
+              onboarding instead of a dead end. */}
+          <AddTaskForm employeeId={id} />
+        </Card>
       ) : (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            gap: 20,
-            marginBottom: 24,
-          }}
-          className="onboarding-grid"
-        >
-          {/* Checklist */}
-          <div
-            style={{
-              border: "1px solid var(--border, #e2e8f0)",
-              borderRadius: 12,
-              padding: 20,
-              background: "var(--card-bg, #fff)",
-            }}
-          >
-            <OnboardingChecklist steps={checklist} />
-          </div>
-
-          {/* Task calendar */}
-          <div
-            style={{
-              border: "1px solid var(--border, #e2e8f0)",
-              borderRadius: 12,
-              padding: 20,
-              background: "var(--card-bg, #fff)",
-            }}
-          >
-            <TaskCalendar tasks={tasks} joiningDate={row.joiningDate} />
-          </div>
+        // GAP-HR-ONBOARDING-DETAIL-07: Tailwind responsive utilities instead
+        // of a bespoke inline style + a raw <style> tag for one media query.
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-6">
+          <Card style={{ padding: 20 }}>
+            <ChecklistWithActions steps={checklist} />
+          </Card>
+          <Card style={{ padding: 20 }}>
+            <TaskCalendar tasks={calendarTasks} joiningDate={emp.joiningDate} />
+          </Card>
         </div>
       )}
 
       {/* Document upload section */}
-      <div
-        style={{
-          border: "1px solid var(--border, #e2e8f0)",
-          borderRadius: 12,
-          padding: 20,
-          background: "var(--card-bg, #fff)",
-        }}
-      >
+      <Card style={{ padding: 20 }}>
         <DocumentUploadCard documents={documents} />
-      </div>
-
-      {/* Responsive stacking */}
-      <style>{`
-        @media (max-width: 720px) {
-          .onboarding-grid { grid-template-columns: 1fr !important; }
-        }
-      `}</style>
+      </Card>
     </div>
   );
 }

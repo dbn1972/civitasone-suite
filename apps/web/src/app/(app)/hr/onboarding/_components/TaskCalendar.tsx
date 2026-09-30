@@ -1,6 +1,5 @@
 /**
- * TaskCalendar — week-view showing onboarding tasks by milestone day.
- * Columns: Day 1 · Day 3 · Day 7 · Day 30 (standard onboarding milestones).
+ * TaskCalendar — column-per-due-day view of a joinee's onboarding tasks.
  * Tasks in past due columns that are not completed are highlighted amber.
  */
 
@@ -8,7 +7,8 @@ export type CalendarTask = {
   id: string;
   title: string;
   description?: string;
-  milestoneDay: 1 | 3 | 7 | 30;
+  /** Real day-from-joining this task is due (hrms_onboarding_tasks.due_by_day). */
+  dueByDay: number;
   status: "pending" | "in_progress" | "completed" | "overdue";
   category?: string;
 };
@@ -17,13 +17,6 @@ interface TaskCalendarProps {
   tasks: CalendarTask[];
   joiningDate?: string;   // ISO string — used to label columns with actual dates
 }
-
-const MILESTONES: { day: 1 | 3 | 7 | 30; label: string; sub: string }[] = [
-  { day: 1, label: "Day 1", sub: "First day" },
-  { day: 3, label: "Day 3", sub: "Early setup" },
-  { day: 7, label: "Day 7", sub: "First week" },
-  { day: 30, label: "Day 30", sub: "First month" },
-];
 
 function addDays(iso: string, days: number): string {
   try {
@@ -43,68 +36,77 @@ const STATUS_DOT: Partial<Record<CalendarTask["status"], { color: string; label:
 };
 
 export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
+  // GAP-HR-ONBOARDING-DETAIL-06: columns are the tasks' own real due days,
+  // not snapped to the nearest of 4 fixed milestones (1/3/7/30) -- the old
+  // approach put a Day 14 task under the "Day 7" column (|14-7|=7 is closer
+  // than |30-14|=16), silently misrepresenting when it's actually due. A
+  // tenant whose tasks land on [1, 3, 7, 14, 30] now gets 5 real columns
+  // instead of losing day 14 into day 7.
+  const days = [...new Set(tasks.map((t) => t.dueByDay))].sort((a, b) => a - b);
+
   return (
     <div data-testid="task-calendar">
       <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700, color: "var(--heading, #1e293b)" }}>
         Onboarding Task Calendar
       </h3>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(4, 1fr)",
-          gap: 10,
-        }}
-        role="list"
-        aria-label="Onboarding milestone columns"
-      >
-        {MILESTONES.map(({ day, label, sub }) => {
-          const colTasks = tasks.filter((t) => t.milestoneDay === day);
-          const hasOverdue = colTasks.some((t) => t.status === "overdue");
-          const actualDate = joiningDate ? addDays(joiningDate, day) : null;
+      {days.length === 0 ? (
+        <p style={{ fontSize: 12, color: "var(--muted, #94a3b8)", fontStyle: "italic" }}>No tasks</p>
+      ) : (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: `repeat(${days.length}, minmax(120px, 1fr))`,
+            gap: 10,
+            overflowX: "auto",
+          }}
+          role="list"
+          aria-label="Onboarding due-day columns"
+        >
+          {days.map((day) => {
+            const colTasks = tasks.filter((t) => t.dueByDay === day);
+            const hasOverdue = colTasks.some((t) => t.status === "overdue");
+            const actualDate = joiningDate ? addDays(joiningDate, day) : null;
 
-          return (
-            <div
-              key={day}
-              role="listitem"
-              style={{
-                border: `1px solid ${hasOverdue ? "var(--warnbd, #fde68a)" : "var(--border, #e2e8f0)"}`,
-                borderRadius: 10,
-                padding: 12,
-                background: hasOverdue ? "var(--warnbg, #fffbeb)" : "var(--card-bg, #fff)",
-              }}
-            >
-              {/* Column header */}
-              <div style={{ marginBottom: 10 }}>
-                <div
-                  style={{
-                    fontSize: 13,
-                    fontWeight: 700,
-                    color: hasOverdue ? "var(--warn, #92400e)" : "var(--heading, #1e293b)",
-                  }}
-                >
-                  {label}
-                  {hasOverdue && (
-                    <span
-                      aria-label="has overdue tasks"
-                      style={{ marginInlineStart: 4, fontSize: 11 }}
-                    >
-                      ⚠
-                    </span>
+            return (
+              <div
+                key={day}
+                role="listitem"
+                style={{
+                  border: `1px solid ${hasOverdue ? "var(--warnbd, #fde68a)" : "var(--border, #e2e8f0)"}`,
+                  borderRadius: 10,
+                  padding: 12,
+                  background: hasOverdue ? "var(--warnbg, #fffbeb)" : "var(--card-bg, #fff)",
+                }}
+              >
+                {/* Column header */}
+                <div style={{ marginBottom: 10 }}>
+                  <div
+                    style={{
+                      fontSize: 13,
+                      fontWeight: 700,
+                      color: hasOverdue ? "var(--warn, #92400e)" : "var(--heading, #1e293b)",
+                    }}
+                  >
+                    {`Day ${day}`}
+                    {hasOverdue && (
+                      <span
+                        aria-label="has overdue tasks"
+                        style={{ marginInlineStart: 4, fontSize: 11 }}
+                      >
+                        ⚠
+                      </span>
+                    )}
+                  </div>
+                  {actualDate && (
+                    <div style={{ fontSize: 10, color: "var(--muted, #64748b)", marginTop: 1 }}>
+                      {actualDate}
+                    </div>
                   )}
                 </div>
-                <div style={{ fontSize: 10, color: "var(--muted, #64748b)", marginTop: 1 }}>
-                  {actualDate ? actualDate : sub}
-                </div>
-              </div>
 
-              {/* Task pills */}
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {colTasks.length === 0 ? (
-                  <span style={{ fontSize: 11, color: "var(--muted, #94a3b8)", fontStyle: "italic" }}>
-                    No tasks
-                  </span>
-                ) : (
-                  colTasks.map((task) => {
+                {/* Task pills */}
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {colTasks.map((task) => {
                     const dot = STATUS_DOT[task.status] ?? { color: "var(--mut, #94a3b8)", label: "Pending" };
                     return (
                       <div
@@ -163,13 +165,13 @@ export function TaskCalendar({ tasks, joiningDate }: TaskCalendarProps) {
                         </div>
                       </div>
                     );
-                  })
-                )}
+                  })}
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
