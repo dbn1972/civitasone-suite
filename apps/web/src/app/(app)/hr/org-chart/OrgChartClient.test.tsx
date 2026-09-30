@@ -145,3 +145,20 @@ describe("org-chart/OrgChartClient keyboard tree navigation", () => {
     expect(document.activeElement).toBe(treeitem(/Dave/));
   });
 });
+
+// GAP-HR-ORG-CHART-04: the footer used to claim "Reporting structure
+// reflects sanctioned posts per service records. Vacant positions are shown
+// as pending assignment." -- no vacancy/sanctioned-post data exists anywhere
+// in the OrgNode shape or this tree (it renders only actual employees), so
+// the note was fabricated. Removed entirely rather than reworded.
+describe("org-chart/OrgChartClient footer", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("no longer shows the fabricated vacant-positions/sanctioned-posts note", () => {
+    render(<OrgChartClient data={DATA} />);
+    expect(screen.queryByText(/sanctioned posts/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/vacant/i)).not.toBeInTheDocument();
+  });
+});

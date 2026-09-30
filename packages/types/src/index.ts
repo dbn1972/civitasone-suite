@@ -511,6 +511,11 @@ export interface EmployeeSummary {
   employeeNo?: string;
   name: string;
   department: string;
+  // GAP-HR-EMPLOYEES-05: already validated by @civitasone/schemas/web's
+  // employeeSummarySchema and already returned by hrms-service's
+  // queries.listEmployees -- just never declared on this type, so
+  // apps/web's mapEmployees() dropped it while re-mapping the row.
+  employeeType?: string;
   status: string;
 }
 

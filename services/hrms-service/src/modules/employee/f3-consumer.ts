@@ -3,6 +3,7 @@ import { pino } from "pino";
 import { and, eq, desc, asc, sql, inArray, isNull, isNotNull, ne, or, gt, lt, gte, lte } from "drizzle-orm";
 import { pgSchema, uuid, varchar, integer, boolean } from "drizzle-orm/pg-core";
 import { db } from "../../shared/db.js";
+import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
@@ -385,6 +386,15 @@ export function registerF3_employee_Consumers(queue: Queue): void {
           }
         }
       });
+      // GAP-HR-ORG-CHART-01: department/designation names are read into the
+      // org chart's cached tree (orgchart/queries.ts, cache resource
+      // "org_chart") -- invalidate it whenever this sibling-table write
+      // commits, same "invalidate after the tx commits, outside the
+      // transaction" pattern every other consumer in this service follows
+      // (see e.g. orgchart/consumer.ts).
+      if (op.startsWith("employee_masters_routes__")) {
+        await cache.invalidateResource(p.tenantId, "org_chart");
+      }
     } catch (err) {
       log.error({ err, op, messageId: msg.messageId }, "f3RouteWrite failed");
       throw err;

@@ -8,6 +8,27 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 const PAGE_SIZE = 50;
 
 /**
+ * GAP-HR-EMPLOYEES-05: known, translated tab labels for the four legacy
+ * employee-type codes this tenant is most likely to have. Any other code
+ * (a tenant-defined type, or a legacy code like "intern") still gets a tab
+ * -- just with a humanized label instead of a translated one -- rather
+ * than being invisible until someone edits this file (the previous
+ * hard-coded 4-tab array's actual bug).
+ */
+const KNOWN_TYPE_TAB_KEYS: Record<string, string> = {
+  permanent: "tabPermanentCount",
+  contractual: "tabContractualCount",
+  deputation: "tabDeputationCount",
+  consultant: "tabConsultantCount",
+};
+
+function humanizeTypeCode(code: string): string {
+  return code
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/**
  * Mirrors hr/employees/new/page.tsx's EMPLOYEE_ADMIN_ROLES exactly (that
  * page's own POST /v1/hrms/employees gate). Without this, a role that can
  * view this directory but isn't in the list (e.g. "manager") saw a fully
@@ -32,7 +53,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   // (see loaders.ts's getEmployees) instead of only ever filtering whatever
   // 50 rows happened to be on the current server page.
   const q = (searchParams?.q ?? "").trim();
-  const [{ data: rawEmployees, source }, { data: hrDashboard }] = await Promise.all([
+  const [{ data: rawEmployees, source }, { data: hrDashboard, source: dashboardSource }] = await Promise.all([
     getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter, q || undefined),
     getHRDashboard(),
   ]);
@@ -87,12 +108,22 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
     hrDashboard.employeeTypeBreakdown.map((b) => [b.name, b.count]),
   );
 
+  // GAP-HR-EMPLOYEES-05: built from the tenant's actual employeeTypeBreakdown
+  // (a tenant-defined type -- intern, volunteer, a custom code -- now gets a
+  // tab with its real count) instead of a fixed 4-entry array that silently
+  // couldn't represent anything else. Sorted by count desc, per the
+  // acceptance list, so the tab order doesn't jump around between renders.
   const TYPE_TABS = [
     { key: "all", label: t("tabAll", { count: total }) },
-    { key: "permanent", label: countByType.permanent ? t("tabPermanentCount", { count: countByType.permanent }) : t("tabPermanent") },
-    { key: "contractual", label: countByType.contractual ? t("tabContractualCount", { count: countByType.contractual }) : t("tabContractual") },
-    { key: "deputation", label: countByType.deputation ? t("tabDeputationCount", { count: countByType.deputation }) : t("tabDeputation") },
-    { key: "consultant", label: countByType.consultant ? t("tabConsultantCount", { count: countByType.consultant }) : t("tabConsultant") },
+    ...hrDashboard.employeeTypeBreakdown
+      .slice()
+      .sort((a, b) => b.count - a.count)
+      .map((b) => ({
+        key: b.name,
+        label: KNOWN_TYPE_TAB_KEYS[b.name]
+          ? t(KNOWN_TYPE_TAB_KEYS[b.name], { count: b.count })
+          : `${humanizeTypeCode(b.name)} (${b.count})`,
+      })),
   ];
 
   // The backend now applies the type filter itself (see getEmployees' employeeType
@@ -114,18 +145,42 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         back="/hr" backLabel="Back to HR"
         help="hr"
         actions={
-          canCreate ? <Link href="/hr/employees/new" className="btn primary">{t("add")}</Link> : undefined
+          canCreate ? (
+            <div style={{ display: "flex", gap: 8 }}>
+              {/* GAP-HR-EMPLOYEES-03 / GAP-HR-EMPLOYEES-IMPORT-06: the bulk
+                  import page (role-gated identically to this button) existed
+                  but had no link to it anywhere in the app. */}
+              <Link href="/hr/employees/import" className="btn ghost">{t("import")}</Link>
+              <Link href="/hr/employees/new" className="btn primary">{t("add")}</Link>
+            </div>
+          ) : undefined
         }
       />
       {/* UX-012: the data-source badge now lives inside EmployeesTable, driven
           by the same useSeededResource call that produces its rows — not a
           second, independent read of `source` here that could disagree with
           the table's own cache state (UX-002's pattern). */}
+      {/* GAP-HR-EMPLOYEES-02: a load failure must not render as "0 of
+          everything" -- that reads exactly like a genuinely empty tenant,
+          and (see EmployeesTable below) used to invite an HR admin to
+          "add your first employee" into a workforce that's actually just
+          unreachable right now, risking duplicate records once it recovers.
+          Two independent fetches feed this grid -- getEmployees (`source`)
+          and getHRDashboard (`dashboardSource`) -- and each stat is only as
+          trustworthy as the fetch(es) it actually derives from. Gating every
+          card on `source` alone left a dashboard-only failure completely
+          unindicated: `total`/`others` would silently fall back to the
+          current page's row count (hrDashboard.headcount defaults to 0 on
+          error, so `hrDashboard.headcount || employees.length` resolves to
+          `employees.length`) and `onLeave` would silently show 0 -- both
+          rendered as if they were real tenant-wide numbers. Total/Others mix
+          both fetches, so either failing blanks them; Active is derived only
+          from the employees page; OnLeave only from the dashboard. */}
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statTotal")} value={total} />
-        <StatCard icon="✅" iconBg="var(--infobg, #e6f0ff)" label={t("statActiveShown")} value={active} />
-        <StatCard icon="🌴" iconBg="var(--warnbg, #fffbe6)" label={t("statOnLeave")} value={onLeave} />
-        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOthersShown")} value={others} />
+        <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statTotal")} value={source === "error" || dashboardSource === "error" ? "—" : total} />
+        <StatCard icon="✅" iconBg="var(--infobg, #e6f0ff)" label={t("statActiveShown")} value={source === "error" ? "—" : active} />
+        <StatCard icon="🌴" iconBg="var(--warnbg, #fffbe6)" label={t("statOnLeave")} value={dashboardSource === "error" ? "—" : onLeave} />
+        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOthersShown")} value={source === "error" || dashboardSource === "error" ? "—" : others} />
       </StatGrid>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         {TYPE_TABS.map((tab) => (
@@ -133,6 +188,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
             key={tab.key}
             href={tab.key === "all" ? "/hr/employees" : `/hr/employees?type=${tab.key}`}
             className={typeFilter === tab.key ? "chip chip-active" : "chip"}
+            aria-current={typeFilter === tab.key ? "page" : undefined}
             style={{
               fontSize: 13, padding: "5px 12px", borderRadius: 20,
               background: typeFilter === tab.key ? "var(--primary)" : "var(--bg2)",

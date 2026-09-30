@@ -1817,8 +1817,6 @@
     "prevLabel": "Previous",
     "nextLabel": "Next",
     "showingRange": "Showing {from}–{to} of {total} employees",
-    "loadingTitle": "Employee Directory",
-    "loadingSubtitle": "All staff, grades and posting locations.",
     "statActiveShown": "Active (Shown)",
     "statOthersShown": "Others (Shown)"
   },
@@ -1826,12 +1824,16 @@
     "colEmpCode": "Emp Code",
     "colName": "Name",
     "colDepartment": "Department",
+    "colType": "Type",
     "colJoiningDate": "Joining Date",
     "colStatus": "Status",
+    "caption": "Employee roster with name, department, type, and status",
     "filterPlaceholder": "Search by name, code or department…",
     "emptyTitle": "Your team starts here",
     "emptyMessage": "Add your first employee to unlock leave management, attendance tracking, and payroll processing.",
-    "addFirstEmployee": "Add first employee"
+    "addFirstEmployee": "Add first employee",
+    "emptyErrorTitle": "Couldn't load your team",
+    "emptyErrorMessage": "This is usually temporary. Try refreshing in a moment — your existing employee records are safe."
   },
   "error": {
     "load": {
@@ -3043,13 +3045,14 @@
   },
   "locations": {
     "title": "Locations",
-    "subtitle": "Offices, branches, and facilities registered in the system. Add locations so employees and operations can be correctly assigned.",
+    "subtitle": "Offices, branches, and facilities registered in the system.",
     "backLabel": "HR",
     "newBtn": "+ New Location",
     "statTotalLabel": "Total Locations",
     "statStateLabel": "State-level",
     "statDistrictLabel": "District-level",
     "statBlockLabel": "Block / Other",
+    "cardTitle": "Locations",
     "cardTitleWithCount": "Locations ({count})",
     "emptyTitle": "No locations yet",
     "emptyMessage": "Register your first office, branch, or facility.",
@@ -3059,6 +3062,8 @@
     "colDistrict": "District",
     "colCity": "City",
     "colPostalCode": "Postal Code",
+    "colLgdCode": "LGD Code",
+    "colStatus": "Status",
     "filterPlaceholder": "Search locations…",
     "noMatchTitle": "No match",
     "noMatchMessage": "Try a different search."
@@ -3328,7 +3333,7 @@
   },
   "orgChart": {
     "title": "Organisation Chart",
-    "subtitle": "Ministry → Department → Division → Section — GoI reporting hierarchy.",
+    "subtitle": "Reporting lines — who reports to whom",
     "statTotalEmployees": "Total Employees",
     "statDepartments": "Departments",
     "statManagers": "Managers",
