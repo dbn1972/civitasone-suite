@@ -1458,9 +1458,15 @@
     "pranLabel": "PRAN (NPS खाता)",
     "pranPlaceholder": "12-अंकीय PRAN",
     "statutoryNote": "वेतन संवितरण के लिए बैंक खाता और IFSC आवश्यक हैं। EPFO क्रेडिट के लिए UAN आवश्यक है।",
+    "noAsteriskError": "इसमें अभी भी पहले दिखाए गए मास्क किए गए मान का हिस्सा है — कृपया इसे साफ़ करें और वास्तविक संख्या टाइप करें।",
+    "sensitiveConfirmTitle": "बैंक/सांविधिक परिवर्तन की पुष्टि करें",
+    "sensitiveConfirmDesc": "आप बैंक खाता, IFSC, UAN, ESIC, या PRAN संख्या बदल रहे हैं। इसका ऑडिट कारण सहित किया जाता है।",
+    "sensitiveReasonLabel": "परिवर्तन का कारण",
+    "sensitiveConfirmBtn": "परिवर्तन की पुष्टि करें",
     "savingBtn": "सहेजा जा रहा है…",
     "saveChangesBtn": "परिवर्तन सहेजें",
-    "cancelBtn": "रद्द करें"
+    "cancelBtn": "रद्द करें",
+    "loadingLabel": "संपादन फ़ॉर्म लोड हो रहा है…"
   },
   "employeeFyLookup": {
     "formTitle": "फॉर्म 12BA खोजें",

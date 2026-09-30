@@ -6,6 +6,7 @@ import { HttpError } from "../../shared/context.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
+import { maskValue } from "../../shared/pii-mask.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -323,6 +324,8 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       bankAccountNo?: string; bankIfsc?: string;
       basicMinor?: string; payStructureId?: string; managerId?: string;
       esicIpNumber?: string; uanNumber?: string; pran?: string; gstin?: string; sacCode?: string; agencyRef?: string; napsId?: string;
+      // GAP-HR-EMPLOYEES-DETAIL-EDIT-03
+      reason?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -384,7 +387,30 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { employeeId: p.id, tenantId: p.tenantId, changedFields },
       });
-      await audit(tx, msg, "update", "employee", p.id);
+      // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: the audit trail for this route used
+      // to carry only {service,action,resourceType,resourceId,outcome} -- no
+      // record of WHAT changed, let alone the old/new values, for a route
+      // that can move salary bank details. changedFields was already
+      // computed above (for the domain event) but never reached the audit
+      // payload. Sensitive fields (bank/UAN/ESIC/PRAN) get masked old->new
+      // (last 4 digits only, via the same maskValue used on every read path
+      // -- the full number is never written to the audit log); non-sensitive
+      // changed fields (mobile/email/managerId/...) are named but not
+      // valued, since audit readers don't need the old value for those and
+      // this keeps the payload small. `reason` is routes.ts-enforced
+      // whenever a sensitive field is present, so it's always here when it
+      // matters and simply omitted otherwise.
+      const sensitiveOldNew: Record<string, { old: string | undefined; new: string | undefined }> = {};
+      if (p.bankAccountNo !== undefined) sensitiveOldNew.bankAccountNo = { old: maskValue(emp.bankAccountNo ?? undefined), new: maskValue(p.bankAccountNo) };
+      if (p.bankIfsc !== undefined) sensitiveOldNew.bankIfsc = { old: maskValue(emp.bankIfsc ?? undefined), new: maskValue(p.bankIfsc) };
+      if (p.uanNumber !== undefined) sensitiveOldNew.uanNumber = { old: maskValue(emp.uanNumber ?? undefined), new: maskValue(p.uanNumber) };
+      if (p.esicIpNumber !== undefined) sensitiveOldNew.esicIpNumber = { old: maskValue(emp.esicIpNumber ?? undefined), new: maskValue(p.esicIpNumber) };
+      if (p.pran !== undefined) sensitiveOldNew.pran = { old: maskValue(emp.pran ?? undefined), new: maskValue(p.pran) };
+      await audit(tx, msg, "update", "employee", p.id, {
+        changedFields,
+        ...(p.reason ? { reason: p.reason } : {}),
+        ...(Object.keys(sensitiveOldNew).length > 0 ? { sensitiveOldNew } : {}),
+      });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
     // M1: any field change may affect list display (name, email, status-derived fields)
@@ -392,10 +418,15 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(
+  tx: any, msg: any, action: string, resourceType: string, resourceId: string,
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: optional so every pre-existing caller
+  // (which passed exactly 5 args) keeps compiling and behaving identically.
+  extra?: Record<string, unknown>,
+): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "hrms", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "hrms", action, resourceType, resourceId, outcome: "success", ...extra },
   });
 }
