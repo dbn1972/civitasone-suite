@@ -1,13 +1,25 @@
 import { z } from "zod";
 
 export const createTrainingBody = z.object({
-  title:           z.string().min(1).max(256),
-  venue:           z.string().max(256).optional(),
-  fromDate:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  toDate:          z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  facilitator:     z.string().max(256).optional(),
-  maxParticipants: z.number().int().positive().default(30),
-});
+  title:              z.string().min(1).max(256),
+  venue:               z.string().max(256).optional(),
+  fromDate:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  toDate:              z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  facilitator:         z.string().max(256).optional(),
+  maxParticipants:     z.number().int().positive().default(30),
+  // GAP-HR-TRAINING-NEW-02 (migration 0162): real category/mode/deadline.
+  // All optional -- an omitted category/mode renders no badge on the web
+  // side (GAP-HR-TRAINING-02/03) rather than a guessed one.
+  category:            z.enum(["mandatory", "optional", "leadership"]).optional(),
+  mode:                z.enum(["online", "classroom", "blended"]).optional(),
+  enrollmentDeadline:  z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+}).refine(
+  (body) => !body.enrollmentDeadline || body.enrollmentDeadline <= body.fromDate,
+  {
+    message: "enrollment deadline must be on or before the training's start date",
+    path: ["enrollmentDeadline"],
+  },
+);
 export type CreateTrainingBody = z.infer<typeof createTrainingBody>;
 
 export const createNominationBody = z.object({

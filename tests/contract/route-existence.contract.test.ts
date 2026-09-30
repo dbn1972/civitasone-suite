@@ -16,7 +16,7 @@
  * ever catch, because these are plain navigation, not data fetches or auth.
  *
  * This is NOT a fix-everything gate, same spirit as hr-role-matrix's own
- * allowlist: 4 currently-existing dead links this analyzer found are
+ * allowlist: 3 currently-existing dead links this analyzer found are
  * genuinely missing destination pages (a product/feature gap, not a link
  * typo) and are named, with a reason, in KNOWN_EXCEPTIONS below -- this
  * test passes today BECAUSE of that ledger, not despite it. What it
@@ -110,13 +110,6 @@ describe("route-existence contract", () => {
       target: "/citizen/grievances/",
       reason:
         "citizen/grievances/ only has a list page and a \"new\" page; no [id] detail page exists yet for a single grievance.",
-    },
-    {
-      id: "GAP-HR-SF18-004",
-      file: "apps/web/src/app/(app)/hr/training/_components/UpcomingPrograms.tsx",
-      target: "/hr/training/${p.id}",
-      reason:
-        "hr/training/ only has feedback, new and nominations sub-pages; no [id] detail page exists yet for a single training programme.",
     },
   ];
 

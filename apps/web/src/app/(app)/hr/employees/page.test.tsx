@@ -17,6 +17,10 @@ vi.mock("@/lib/auth/roleGuard", () => ({
 
 import EmployeeDirectoryPage from "./page";
 
+const DASHBOARD_EMPTY = {
+  headcount: 0, onLeave: 0, employeeTypeBreakdown: [] as Array<{ name: string; count: number }>,
+};
+
 const DASH_OK = {
   headcount: 3,
   onLeave: 1,
@@ -25,8 +29,11 @@ const DASH_OK = {
 
 // Non-empty so page.tsx's page-0-empty-roster special case (total forced to
 // 0 regardless of headcount) doesn't apply -- that's a different, existing
-// behaviour this file isn't testing.
-const ONE_EMPLOYEE = [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent" }];
+// behaviour this file isn't testing. dateOfJoining is set so this row
+// doesn't also trip GAP-HR-EMPLOYEES-06's Joining Date column into its own
+// (unrelated, legitimate) dash for a missing date -- these dash-count
+// assertions are about dashboard/employees-fetch error gating only.
+const ONE_EMPLOYEE = [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent", dateOfJoining: "2021-06-15" }];
 
 async function renderPage(searchParams?: Record<string, string>) {
   return render(
@@ -40,7 +47,54 @@ describe("EmployeeDirectoryPage", () => {
   beforeEach(() => {
     getEmployeesMock.mockReset();
     getHRDashboardMock.mockReset();
+    getHRDashboardMock.mockResolvedValue({ data: DASHBOARD_EMPTY, source: "api" });
     mockRoles = ["hr_admin"];
+  });
+
+  // GAP-HR-EMPLOYEES-04: search must reach the backend across the whole
+  // tenant, not just whatever 50 rows happen to be on the current page.
+  describe("server-side search (GAP-HR-EMPLOYEES-04)", () => {
+    it("forwards ?q= to getEmployees", async () => {
+      getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
+      await renderPage({ q: "Rashmi" });
+      expect(getEmployeesMock).toHaveBeenCalledWith(50, 0, undefined, "Rashmi");
+    });
+
+    it("does not forward an empty search string as a real query", async () => {
+      getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
+      await renderPage({});
+      expect(getEmployeesMock).toHaveBeenCalledWith(50, 0, undefined, undefined);
+    });
+
+    it("finds an employee whose row is on a later server page when searching (regression: used to only ever see the current 50-row page)", async () => {
+      getEmployeesMock.mockResolvedValue({
+        data: [{ id: "e1", name: "Rashmi Ranjan Das", department: "Finance", status: "confirmed" }],
+        source: "api",
+      });
+      await renderPage({ q: "Rashmi", page: "3" });
+      expect(getEmployeesMock).toHaveBeenCalledWith(50, 150, undefined, "Rashmi");
+      expect(screen.getByText("Rashmi Ranjan Das")).toBeInTheDocument();
+    });
+
+    it("renders a Clear link only when a search is active", async () => {
+      getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
+      await renderPage({ q: "Rashmi" });
+      expect(screen.getByRole("link", { name: "Clear" })).toBeInTheDocument();
+    });
+  });
+
+  it("shows the honest empty state (Total: 0) for a genuinely empty, un-searched roster", async () => {
+    getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
+    await renderPage({});
+    expect(screen.getAllByText("0").length).toBeGreaterThan(0);
+  });
+
+  it("does not zero out the total for an empty search result (a real, narrow match set, not an empty roster)", async () => {
+    getHRDashboardMock.mockResolvedValue({ data: { ...DASHBOARD_EMPTY, headcount: 214 }, source: "api" });
+    getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
+    await renderPage({ q: "Nobody Matches This" });
+    // "214" appears both in the Total stat card and the "All (214)" tab label.
+    expect(screen.getAllByText("214").length).toBeGreaterThan(0);
   });
 
   /**
@@ -91,7 +145,11 @@ describe("EmployeeDirectoryPage", () => {
 
   it("does not show dash stats on a genuine successful load", async () => {
     getEmployeesMock.mockResolvedValue({
-      data: [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent" }],
+      // dateOfJoining is set so this row doesn't also trip GAP-HR-EMPLOYEES-06's
+      // Joining Date column into its own (unrelated, legitimate) dash for a
+      // missing date -- this test is about dashboard/employees-fetch error
+      // gating only.
+      data: [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent", dateOfJoining: "2021-06-15" }],
       source: "api",
     });
     getHRDashboardMock.mockResolvedValue({ data: DASH_OK, source: "api" });

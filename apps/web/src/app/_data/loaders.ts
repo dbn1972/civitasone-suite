@@ -1124,9 +1124,17 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
   );
 }
 
-export async function getEmployees(limit = 50, offset = 0, employeeType?: string): Promise<LoaderResult<EmployeeSummary[]>> {
+// GAP-HR-EMPLOYEES-04: `q` was never threaded through here even though the
+// backend (employeeListQuery/listEmployees) has supported it for a while
+// (built for GAP-HR-SF-06's EntityPicker) -- so the employee list page's
+// only "search" was EmployeesTable's client-side DataTable filter, which
+// can only ever see the current 50-row server page. An employee on page 3
+// was simply unreachable by name from page 1's search box. Now forwards a
+// real server-side search across the whole tenant.
+export async function getEmployees(limit = 50, offset = 0, employeeType?: string, q?: string): Promise<LoaderResult<EmployeeSummary[]>> {
   const typeQs = employeeType ? `&employeeType=${encodeURIComponent(employeeType)}` : "";
-  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}${typeQs}`, [] as EmployeeSummary[], {
+  const qQs = q ? `&q=${encodeURIComponent(q)}` : "";
+  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}${typeQs}${qQs}`, [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,
@@ -2366,8 +2374,17 @@ export async function getAppraisals(): Promise<LoaderResult<AppraisalSummary[]>>
 }
 
 export async function getTrainingPrograms(): Promise<LoaderResult<TrainingProgramSummary[]>> {
+  // GAP-HR-TRAINING-NEW-01: was revalidateSeconds: 300 -- a newly-created
+  // programme could stay invisible on /hr/training for up to 5 minutes
+  // after the create actually committed, since apiClient maps
+  // revalidateSeconds straight onto Next's own fetch({next:{revalidate}})
+  // data cache (a time-based cache, not one `router.refresh()` alone can
+  // bust early). Paired with training/consumer.ts's new
+  // cache.invalidateResource call (the separate, hrms-service-side list
+  // cache), this list is now always fetched fresh; the training-programs
+  // endpoint is a low-traffic HR-admin list, so the caching trade-off this
+  // gives up is small next to the correctness bug it was causing.
   return fetchJson<unknown, TrainingProgramSummary[]>("/api/v1/hrms/training-programs", [], {
-    revalidateSeconds: 300,
     telemetryKey: "hr.training",
     responseSchema: TrainingProgramSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as TrainingProgramSummary[] | null,
