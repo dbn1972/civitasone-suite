@@ -25,6 +25,11 @@ export interface CriticalPost {
   retirementDate?: string | null;
   riskLevel?: "high" | "medium" | "low" | null;
   successors: Successor[];
+  /** GAP-HR-SUCCESSION-01: the API's aggregate nominee_count, kept alongside
+   * `successors` so a plan with nominees but (for whatever reason) no
+   * successor detail rows can show real counts instead of either
+   * fabricating people or claiming "no successors" when some exist. */
+  nomineeCount?: number;
 }
 
 type Translator = Awaited<ReturnType<typeof getTranslations>>;
@@ -32,15 +37,25 @@ type Translator = Awaited<ReturnType<typeof getTranslations>>;
 function readinessConfig(t: Translator): Record<Readiness, { label: string; color: string; bg: string; order: number }> {
   return {
     ready_now:        { label: t("readyNow"),       color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", order: 0 },
-    one_two_years:    { label: t("oneTwoYears"),     color: "var(--warn, #d97706)", bg: "#fffbeb", order: 1 },
+    one_two_years:    { label: t("oneTwoYears"),     color: "var(--warn, #d97706)", bg: "var(--warnbg, #fffbeb)", order: 1 },
     three_five_years: { label: t("threeFiveYears"),  color: "var(--mut, #6b7280)", bg: "var(--bg, #f3f4f6)", order: 2 },
   };
+}
+
+// GAP-HR-SUCCESSION-06: `s.name ?? s.employeeId` printed a raw UUID as the
+// avatar initial and the visible name whenever name was missing -- never
+// reachable while synthesise() always set a name (GAP-HR-SUCCESSION-01
+// deleted that fabrication), but real data can still lack a linked
+// employee's full_name, so this stays a real, translated fallback rather
+// than an id.
+function displayName(s: Successor, t: Translator): string {
+  return s.name && s.name.trim().length > 0 ? s.name : t("unnamedNominee");
 }
 
 function riskConfig(t: Translator): Record<string, { label: string; color: string; bg: string }> {
   return {
     high:   { label: t("highRisk"),   color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)" },
-    medium: { label: t("mediumRisk"), color: "var(--warn, #b45309)", bg: "#fffbeb" },
+    medium: { label: t("mediumRisk"), color: "var(--warn, #b45309)", bg: "var(--warnbg, #fffbeb)" },
     low:    { label: t("lowRisk"),    color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)" },
   };
 }
@@ -147,7 +162,14 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
 
       {/* Successor list */}
       <div style={{ marginTop: 10 }}>
-        {sorted.length === 0 ? (
+        {sorted.length === 0 && (post.nomineeCount ?? 0) > 0 ? (
+          // GAP-HR-SUCCESSION-01: nominees exist (aggregate count > 0) but
+          // no per-nominee detail came back -- show the real counts rather
+          // than either "no successors" (false) or fabricated names.
+          <div style={{ padding: "14px 16px", fontSize: "0.875rem", color: "var(--ink2)", margin: "8px 16px" }}>
+            {t("nomineeCountSummary", { count: post.nomineeCount ?? 0, readyCount: readyNow })}
+          </div>
+        ) : sorted.length === 0 ? (
           <div
             style={{
               padding: "14px 16px", fontSize: "0.875rem",
@@ -161,7 +183,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
           <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
             {sorted.map((s) => {
               const rc       = readinessCfg[s.readiness];
-              const initials = (s.name ?? s.employeeId).charAt(0).toUpperCase();
+              const initials = (displayName(s, t)).charAt(0).toUpperCase();
               return (
                 <li
                   key={s.employeeId}
@@ -193,7 +215,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                       }}
                     >
                       <span style={{ fontWeight: 500, fontSize: "0.875rem" }}>
-                        {s.name ?? s.employeeId}
+                        {displayName(s, t)}
                       </span>
                       <span
                         style={{
@@ -222,7 +244,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                             key={g}
                             style={{
                               padding: "1px 7px", borderRadius: 10,
-                              background: "#fef3c7", color: "var(--warn, #92400e)",
+                              background: "var(--warnbg, #fef3c7)", color: "var(--warn, #92400e)",
                               fontSize: "0.6875rem",
                             }}
                           >
@@ -243,7 +265,7 @@ export function SuccessionPlanCard({ post, t }: CardProps) {
                         padding: "3px 9px", borderRadius: 5,
                         background: "var(--infobg, #eff6ff)", whiteSpace: "nowrap",
                       }}
-                      aria-label={t("devPlanAriaLabel", { name: s.name ?? s.employeeId })}
+                      aria-label={t("devPlanAriaLabel", { name: displayName(s, t) })}
                     >
                       {t("devPlanLinkText")}
                     </a>

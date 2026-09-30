@@ -274,7 +274,16 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     const id = randomUUID();
     await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-      await sql.unsafe(`INSERT INTO employee.succession_plans (id, tenant_id, role_ref, department_id, created_by) VALUES ($1,$2,$3,$4,$5) ON CONFLICT (tenant_id, role_ref) DO NOTHING`, [id, ctx.tenantId, body.roleRef, body.departmentId ?? null, ctx.actorId]);
+      // GAP-HR-SUCCESSION-03: is_critical already defaults to TRUE at the
+      // schema level (employee.succession_plans, migration 0033) and this is
+      // the only place a plan is ever created, so this was not actually
+      // reachable as false before -- set explicitly anyway so the intent is
+      // visible at the write site and the column's meaning can't silently
+      // drift if a future insert path is added. The real fix for this GAP
+      // id is below: the pipeline query previously had no is_critical
+      // filter at all while the risk query already did, so the two could
+      // in principle disagree; both now filter identically.
+      await sql.unsafe(`INSERT INTO employee.succession_plans (id, tenant_id, role_ref, department_id, is_critical, created_by) VALUES ($1,$2,$3,$4,true,$5) ON CONFLICT (tenant_id, role_ref) DO NOTHING`, [id, ctx.tenantId, body.roleRef, body.departmentId ?? null, ctx.actorId]);
     });
     return reply.code(201).send({ data: { id, roleRef: body.roleRef, isCritical: true } });
   });
@@ -290,22 +299,90 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ data: { id, ...body } });
   });
 
+  // GAP-HR-SUCCESSION-03: single source of truth for the API's readiness
+  // vocabulary (now/1yr/2yr/3yr) -> the UI's three-band model. The item's
+  // own stated default (fix step 1) puts "2yr" in the same band as "1yr"
+  // ("one_two_years"), which is what this maps.
+  function mapReadiness(apiReadiness: string): "ready_now" | "one_two_years" | "three_five_years" {
+    if (apiReadiness === "now") return "ready_now";
+    if (apiReadiness === "1yr" || apiReadiness === "2yr") return "one_two_years";
+    return "three_five_years";
+  }
+
   app.get("/v1/hrms/succession/pipeline", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
-    const rows = await sqlClient.begin(async (sql) => {
+    const [roleRows, nomineeRows] = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-      return sql.unsafe(
-        `SELECT sp.role_ref, sp.department_id, COUNT(sn.id) AS nominee_count, COUNT(sn.id) FILTER (WHERE sn.readiness = 'now') AS ready_now FROM employee.succession_plans sp LEFT JOIN employee.succession_nominees sn ON sn.plan_id = sp.id AND sn.tenant_id = sp.tenant_id WHERE sp.tenant_id = $1 GROUP BY sp.role_ref, sp.department_id ORDER BY sp.role_ref`, [ctx.tenantId]);
+      const roles = await sql.unsafe(`
+        SELECT sp.id AS "planId", sp.role_ref, sp.department_id, d.name AS department,
+               COUNT(sn.id) AS nominee_count, COUNT(sn.id) FILTER (WHERE sn.readiness = 'now') AS ready_now
+        FROM employee.succession_plans sp
+        LEFT JOIN employee.succession_nominees sn ON sn.plan_id = sp.id AND sn.tenant_id = sp.tenant_id
+        LEFT JOIN employee.hrms_departments d ON d.id = sp.department_id AND d.tenant_id = sp.tenant_id
+        WHERE sp.tenant_id = $1 AND sp.is_critical = true
+        GROUP BY sp.id, sp.role_ref, sp.department_id, d.name
+        ORDER BY sp.role_ref
+      `, [ctx.tenantId]);
+      // GAP-HR-SUCCESSION-01: real per-nominee rows -- the pipeline endpoint
+      // never returned names/readiness per nominee at all, only aggregate
+      // counts, so the web page invented placeholder "Nominee N" people to
+      // have something to render.
+      const nominees = await sql.unsafe(`
+        SELECT sp.id AS "planId", sn.employee_id AS "employeeId", e.full_name AS name,
+               sn.readiness, sn.development_plan AS "developmentPlan"
+        FROM employee.succession_plans sp
+        JOIN employee.succession_nominees sn ON sn.plan_id = sp.id AND sn.tenant_id = sp.tenant_id
+        JOIN employee.hrms_employees e ON e.id = sn.employee_id AND e.tenant_id = sp.tenant_id
+        WHERE sp.tenant_id = $1 AND sp.is_critical = true
+      `, [ctx.tenantId]);
+      return [roles, nominees] as const;
     });
-    return reply.send({ data: rows });
+    const byPlan = new Map<string, Array<{ employeeId: string; name: string; readiness: string; developmentPlan: string | null }>>();
+    for (const n of nomineeRows) {
+      const list = byPlan.get(n.planId as string) ?? [];
+      list.push(n as unknown as { employeeId: string; name: string; readiness: string; developmentPlan: string | null });
+      byPlan.set(n.planId as string, list);
+    }
+    const data = roleRows.map((r) => {
+      const readyNow = Number(r.ready_now ?? 0);
+      // GAP-HR-SUCCESSION-03: computed from real data instead of a
+      // ready_now===0 ? high : medium default that could never produce
+      // "low" (the item's own stated rule).
+      const riskLevel = readyNow === 0 ? "high" : readyNow === 1 ? "medium" : "low";
+      const successors = (byPlan.get(r.planId as string) ?? []).map((n) => ({
+        employeeId: n.employeeId,
+        name: n.name,
+        readiness: mapReadiness(n.readiness),
+        developmentPlan: n.developmentPlan ?? undefined,
+      }));
+      return {
+        planId: r.planId,
+        role_ref: r.role_ref,
+        department_id: r.department_id,
+        department: r.department ?? undefined,
+        nominee_count: r.nominee_count,
+        ready_now: r.ready_now,
+        riskLevel,
+        successors,
+      };
+    });
+    return reply.send({ data });
   });
 
   app.get("/v1/hrms/succession/risk", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      // GAP-HR-SUCCESSION-02: department NAME, not the raw department_id
+      // UUID the web page was falling back to display.
       return sql.unsafe(
-        `SELECT sp.role_ref, sp.department_id FROM employee.succession_plans sp LEFT JOIN employee.succession_nominees sn ON sn.plan_id = sp.id AND sn.tenant_id = sp.tenant_id AND sn.readiness = 'now' WHERE sp.tenant_id = $1 AND sp.is_critical = true GROUP BY sp.role_ref, sp.department_id HAVING COUNT(sn.id) = 0`, [ctx.tenantId]);
+        `SELECT sp.role_ref, sp.department_id, d.name AS department
+         FROM employee.succession_plans sp
+         LEFT JOIN employee.succession_nominees sn ON sn.plan_id = sp.id AND sn.tenant_id = sp.tenant_id AND sn.readiness = 'now'
+         LEFT JOIN employee.hrms_departments d ON d.id = sp.department_id AND d.tenant_id = sp.tenant_id
+         WHERE sp.tenant_id = $1 AND sp.is_critical = true
+         GROUP BY sp.role_ref, sp.department_id, d.name
+         HAVING COUNT(sn.id) = 0`, [ctx.tenantId]);
     });
     return reply.send({ data: rows });
   });
