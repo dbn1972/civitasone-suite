@@ -18,6 +18,8 @@ export interface OnboardingDocument {
   required: boolean;
   status: DocStatus;
   uploadedFileName?: string;
+  /** Object-storage key of the uploaded file, if any (GAP-HR-ONBOARDING-DETAIL-02). */
+  storageKey?: string | null;
   /** FileUpload DS category */
   category?: "resume" | "attachment" | "document" | "photo";
 }
@@ -54,16 +56,20 @@ function StatusChip({ status }: { status: DocStatus }) {
 
 interface SingleCardProps {
   doc: OnboardingDocument;
-  onUploaded?: (docId: string, fileName: string) => void;
+  onUploaded?: (docId: string, fileName: string, key: string) => void;
+  onVerify?: (docId: string) => void;
+  onReject?: (docId: string) => void;
 }
 
-function DocCard({ doc, onUploaded }: SingleCardProps) {
+function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
   const [localFile, setLocalFile] = useState<string | null>(doc.uploadedFileName ?? null);
   const [localStatus, setLocalStatus] = useState<DocStatus>(doc.status);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [viewing, setViewing] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
   // Success is announced the same way failure already is: a conditionally
   // rendered, role-bearing <p> right in this component (see the role="alert"
   // paragraph below). A screen-reader user otherwise has no way to know an
@@ -80,10 +86,16 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
 
   async function handleFile(file: File) {
     if (file.size > 10 * 1024 * 1024) {
-      alert("File too large — maximum 10 MB.");
+      // GAP-HR-ONBOARDING-DETAIL-03: a real inline, role=alert message
+      // instead of a browser alert() -- consistent with every other error
+      // in this component, and not a blocking modal dialog for something
+      // as routine as picking too large a file.
+      setUploadSuccessMessage(null);
+      setUploadError("File too large — maximum 10 MB.");
       return;
     }
     setUploading(true);
+    setUploadError(null);
     try {
       const res = await fetch("/api/proxy/v1/admin/uploads/presign", {
         method: "POST",
@@ -102,7 +114,7 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
         setLocalFile(file.name);
         setLocalStatus("uploaded");
         setUploadSuccessMessage(`${file.name} uploaded successfully.`);
-        onUploaded?.(doc.id, key);
+        onUploaded?.(doc.id, file.name, key);
       } else {
         setUploadSuccessMessage(null);
         setUploadError((await formError.fromResponse(res, "save")).message);
@@ -115,6 +127,25 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
     }
   }
 
+  async function handleView() {
+    if (!doc.storageKey) return;
+    setViewing(true);
+    setViewError(null);
+    try {
+      const res = await fetch(`/api/proxy/v1/admin/uploads/${encodeURIComponent(doc.storageKey)}`);
+      if (!res.ok) {
+        setViewError((await formError.fromResponse(res, "load")).message);
+        return;
+      }
+      const { downloadUrl } = await res.json() as { downloadUrl: string };
+      window.open(downloadUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      setViewError(formError.fromException("load").message);
+    } finally {
+      setViewing(false);
+    }
+  }
+
   function onDrop(e: DragEvent<HTMLDivElement>) {
     e.preventDefault();
     setDragging(false);
@@ -123,7 +154,6 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
   }
 
   const canUpload = localStatus !== "verified";
-  const cfg = STATUS_CONFIG[localStatus];
 
   return (
     <div
@@ -180,6 +210,47 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
           </span>
           {localStatus === "verified" && (
             <span style={{ fontSize: 11, color: "var(--good, #166534)" }}>✓ Verified</span>
+          )}
+          {/* GAP-HR-ONBOARDING-DETAIL-02: HR can now actually open what was
+              uploaded, via the same presigned-download route the platform's
+              admin-service already exposes (GET /v1/admin/uploads/:key) --
+              nothing new to build server-side for this. */}
+          {doc.storageKey && (
+            <button
+              type="button"
+              onClick={() => void handleView()}
+              disabled={viewing}
+              className="btn"
+              style={{ fontSize: 11, padding: "3px 8px" }}
+            >
+              {viewing ? "Opening…" : "View"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* HR verify/reject actions, once a document has been uploaded */}
+      {localStatus === "uploaded" && (onVerify || onReject) && (
+        <div style={{ display: "flex", gap: 8 }}>
+          {onVerify && (
+            <button
+              type="button"
+              onClick={() => onVerify(doc.id)}
+              className="btn"
+              style={{ fontSize: 11, padding: "4px 10px", color: "var(--good, #166534)", borderColor: "var(--goodbd, #bbf7d0)" }}
+            >
+              Verify
+            </button>
+          )}
+          {onReject && (
+            <button
+              type="button"
+              onClick={() => onReject(doc.id)}
+              className="btn"
+              style={{ fontSize: 11, padding: "4px 10px", color: "var(--bad, #991b1b)", borderColor: "var(--badbd, #fecaca)" }}
+            >
+              Reject
+            </button>
           )}
         </div>
       )}
@@ -249,21 +320,62 @@ function DocCard({ doc, onUploaded }: SingleCardProps) {
           {uploadError}
         </p>
       )}
+
+      {/* View (download) error */}
+      {viewError && (
+        <p role="alert" style={{ margin: 0, fontSize: 12, color: "var(--bad, #dc2626)", fontWeight: 500 }}>
+          {viewError}
+        </p>
+      )}
     </div>
   );
 }
 
 interface DocumentUploadCardProps {
   documents: OnboardingDocument[];
-  onUploaded?: (docId: string, fileName: string) => void;
+  onUploaded?: (docId: string, fileName: string, key: string) => void;
+  onVerify?: (docId: string) => void;
+  onReject?: (docId: string) => void;
+  /** i18n-sourced notice text (onboardingDetail.dpdpNoticeText); falls back to a default so this component still renders sensibly without it (e.g. in isolation/tests). */
+  dpdpNotice?: string;
 }
 
-export function DocumentUploadCard({ documents, onUploaded }: DocumentUploadCardProps) {
+const DEFAULT_DPDP_NOTICE =
+  "These documents (including identity and bank proofs) are visible only to HR, and are retained per your organization's records-retention policy.";
+
+export function DocumentUploadCard({ documents, onUploaded, onVerify, onReject, dpdpNotice }: DocumentUploadCardProps) {
   return (
     <div data-testid="document-upload-section">
-      <h3 style={{ margin: "0 0 14px", fontSize: 15, fontWeight: 700, color: "var(--heading, #1e293b)" }}>
+      <h3 style={{ margin: "0 0 10px", fontSize: 15, fontWeight: 700, color: "var(--heading, #1e293b)" }}>
         Required Documents
       </h3>
+      {/* GAP-HR-ONBOARDING-DETAIL-03: purpose/visibility notice, shown before
+          any upload control. The exact retention period and final legal
+          wording still need compliance/legal sign-off (flagged in this PR's
+          description as a human-review item) -- this deliberately makes no
+          specific claim about a retention duration or a named regulation,
+          only the two things already true of this page today: HR-only
+          visibility (this whole page is gated to hr_admin/hr_officer/
+          super_admin) and that retention is governed by the organisation's
+          own policy, not by this screen. */}
+      <div
+        role="note"
+        style={{
+          display: "flex",
+          gap: 8,
+          alignItems: "flex-start",
+          padding: "10px 12px",
+          marginBottom: 14,
+          background: "var(--infobg, #eff6ff)",
+          border: "1px solid var(--infobd, #bfdbfe)",
+          borderRadius: 8,
+          fontSize: 12,
+          color: "var(--info, #1e40af)",
+        }}
+      >
+        <span aria-hidden style={{ fontSize: 14 }}>ℹ️</span>
+        <span>{dpdpNotice ?? DEFAULT_DPDP_NOTICE}</span>
+      </div>
       <div
         style={{
           display: "grid",
@@ -272,7 +384,7 @@ export function DocumentUploadCard({ documents, onUploaded }: DocumentUploadCard
         }}
       >
         {documents.map((doc) => (
-          <DocCard key={doc.id} doc={doc} onUploaded={onUploaded} />
+          <DocCard key={doc.id} doc={doc} onUploaded={onUploaded} onVerify={onVerify} onReject={onReject} />
         ))}
       </div>
     </div>

@@ -4775,7 +4775,8 @@
   "onboardingDetail": {
     "title": "Onboarding Details",
     "emptyTasksTitle": "No onboarding tasks set up yet",
-    "emptyTasksMessage": "HR hasn't added any onboarding tasks for this joinee. Once tasks are added, their checklist and due-date calendar will appear here."
+    "emptyTasksMessage": "HR hasn't added any onboarding tasks for this joinee. Once tasks are added, their checklist and due-date calendar will appear here.",
+    "dpdpNoticeText": "These documents (including identity and bank proofs) are visible only to HR, and are retained per your organization’s records-retention policy."
   },
   "certifications": {
     "title": "Certifications",

@@ -11,7 +11,8 @@ import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
 import { type ChecklistStep } from "../_components/OnboardingChecklist";
 import { ChecklistWithActions } from "../_components/ChecklistWithActions";
 import { AddTaskForm } from "../_components/AddTaskForm";
-import { DocumentUploadCard, type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
+import { type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
+import { DocumentsPanel } from "../_components/DocumentsPanel";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
 import { getTranslations } from "next-intl/server";
 
@@ -53,6 +54,10 @@ type DocumentApiRow = {
   receivedAt: string | null;
   verifiedBy: string | null;
   verifiedAt: string | null;
+  // GAP-HR-ONBOARDING-DETAIL-02 (0155 migration): present once a document
+  // has actually been uploaded through this page; absent/null before then.
+  storageKey?: string | null;
+  fileName?: string | null;
 };
 
 // Presentation-only copy for known document-type codes the backend returns.
@@ -176,6 +181,8 @@ export default async function OnboardingDetailPage({ params }: Props) {
       description: docTypeDisplay[d.docType]?.description,
       required: d.required,
       status: d.status,
+      storageKey: d.storageKey ?? null,
+      uploadedFileName: d.fileName ?? undefined,
       category: "document",
     }));
 
@@ -237,7 +244,7 @@ export default async function OnboardingDetailPage({ params }: Props) {
 
       {/* Document upload section */}
       <Card style={{ padding: 20 }}>
-        <DocumentUploadCard documents={documents} />
+        <DocumentsPanel employeeId={id} documents={documents} dpdpNotice={t("dpdpNoticeText")} />
       </Card>
     </div>
   );

@@ -241,4 +241,35 @@ describe("OnboardingDetailPage", () => {
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
+
+  describe("GAP-HR-ONBOARDING-DETAIL-02/03: document wiring", () => {
+    it("shows a DPDP notice above the document upload list", async () => {
+      fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
+      render(await OnboardingDetailPage({ params: { id: "emp-1" } }));
+      expect(screen.getByRole("note")).toHaveTextContent(/visible only to hr/i);
+    });
+
+    it("offers a View action for a document the API reports a storage key for, previously unrecoverable once uploaded", async () => {
+      fetchJsonMock.mockImplementation((path: string) => {
+        if (path.includes("/onboarding-documents")) {
+          return Promise.resolve({
+            data: [{ docType: "pan_card", required: true, status: "uploaded", receivedAt: "2026-08-02T00:00:00Z", verifiedBy: null, verifiedAt: null, storageKey: "uploads/t1/document/x.pdf", fileName: "pan.pdf" }],
+            source: "api",
+          });
+        }
+        return Promise.resolve(mockFor(path));
+      });
+      render(await OnboardingDetailPage({ params: { id: "emp-1" } }));
+      expect(screen.getByRole("button", { name: "View" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Verify" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Reject" })).toBeInTheDocument();
+    });
+
+    it("does not offer View/Verify/Reject for a document nobody has uploaded yet", async () => {
+      fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
+      render(await OnboardingDetailPage({ params: { id: "emp-1" } }));
+      expect(screen.queryByRole("button", { name: "View" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+    });
+  });
 });
