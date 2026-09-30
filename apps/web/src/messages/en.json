@@ -1825,6 +1825,7 @@
     "colName": "Name",
     "colDepartment": "Department",
     "colType": "Type",
+    "colJoiningDate": "Joining Date",
     "colStatus": "Status",
     "caption": "Employee roster with name, department, type, and status",
     "filterPlaceholder": "Search by name, code or department…",

@@ -16,7 +16,7 @@ const ROWS: EmpRow[] = [
   { id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent" },
 ];
 
-function renderTable(employees: EmpRow[], source: "api" | "error", canCreate = true) {
+function renderTable(employees: EmpRow[], source: "api" | "error" = "api", canCreate = true) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
       <EmployeesTable employees={employees} source={source} canCreate={canCreate} />
@@ -30,11 +30,30 @@ describe("EmployeesTable", () => {
     writeCacheMock.mockReset();
   });
 
+  it("renders the roster with a Joining Date column", () => {
+    renderTable([{ id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", status: "confirmed", dateOfJoining: "2020-04-01" }]);
+    expect(screen.getByText("Asha Rao")).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: "Joining Date" })).toBeInTheDocument();
+  });
+
+  // GAP-HR-EMPLOYEES-06 (partial): the backend doesn't return dateOfJoining
+  // on origin/main yet (lands via a separate, already-open PR) -- this
+  // column must degrade to a dash, not blow up or show "undefined".
+  it("shows a dash for Joining Date when the backend hasn't supplied it yet", () => {
+    renderTable([{ id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", status: "confirmed" }]);
+    expect(screen.getByText("—")).toBeInTheDocument();
+  });
+
   /** GAP-HR-EMPLOYEES-05: employeeType was returned by the API but never rendered. */
   it("renders an Employee Type column", async () => {
     renderTable(ROWS, "api");
     expect(screen.getByRole("columnheader", { name: "Type" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByText("permanent")).toBeInTheDocument());
+  });
+
+  it("shows the honest empty state for a genuinely empty roster", () => {
+    renderTable([]);
+    expect(screen.getByText("Your team starts here")).toBeInTheDocument();
   });
 
   /**
