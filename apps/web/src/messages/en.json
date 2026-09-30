@@ -1335,7 +1335,7 @@
   },
   "dpc": {
     "title": "DPC — Departmental Promotion Committee",
-    "subtitle": "Seniority list as of {asOf}. Minimum qualifying service: 5 years.",
+    "subtitle": "Seniority list as of {asOf}. Minimum qualifying service: {years} years.",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "statEligible": "Eligible Officers",
     "statNotYetEligible": "Not Yet Eligible",
@@ -1346,7 +1346,10 @@
     "noEligibleTitle": "No eligible officers",
     "noEligibleMessage": "Officers who complete the minimum qualifying service period appear here in seniority order for DPC consideration.",
     "batchPromotionsTitle": "DPC Batch Promotions",
+    "notYetEligibleTitle": "Not Yet Eligible — Service Below Minimum",
     "allEligibleTitle": "All officers are eligible",
+    "allEligibleMessage": "Every officer in this list currently meets the minimum qualifying service.",
+    "qualifyingYearsValue": "{years} yrs",
     "colRank": "Rank",
     "colOfficerName": "Officer Name",
     "colDepartment": "Department",
@@ -1382,7 +1385,10 @@
     "approveConfirmTitle": "Approve this seniority list?",
     "approveConfirmLabel": "Approve",
     "approveReasonLabel": "Remarks (optional)",
-    "approveConfirmDescription": "Approve seniority list {id}. This finalizes the DPC snapshot for promotion consideration."
+    "approveConfirmDescription": "Approve seniority list {id}. This finalizes the DPC snapshot for promotion consideration.",
+    "colAsOf": "As Of",
+    "colStatus": "Status",
+    "colGeneratedAt": "Generated"
   },
   "dscConfigForm": {
     "subjectCnLabel": "Subject CN",
@@ -3802,8 +3808,9 @@
     "newBasicLabel": "New Basic",
     "orderNoLabel": "Order No.",
     "effectiveDateLabel": "Effective Date",
-    "dpcMeetingDateLabel": "DPC Meeting Date",
     "approvalChainLabel": "Approval Chain",
+    "unknownEmployee": "Unknown employee",
+    "cancelledMessage": "This promotion was cancelled before completing the approval chain.",
     "statusInitiated": "Initiated",
     "statusDeptApproved": "Dept Head Approved",
     "statusHrApproved": "HR Approved",

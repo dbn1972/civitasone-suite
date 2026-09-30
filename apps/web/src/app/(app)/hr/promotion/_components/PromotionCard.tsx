@@ -2,8 +2,34 @@
 /**
  * PromotionCard — Sprint 13 / Lifecycle Phase 1
  * Shows: current designation → new designation (with arrow), effective date,
- * DPC meeting date, order number, increment in pay. Approval chain:
- * Dept Head → HR → Finance → Signed.
+ * order number, increment in pay. Approval chain: Dept Head → HR → Finance → Signed.
+ *
+ * GAP-HR-DPC-02: GET /v1/hrms/lifecycle/promotions (services/hrms-service/
+ * .../lifecycle/routes.ts) already batch-resolves employeeName / department /
+ * fromDesignationName / toDesignationName server-side (GAP-HR-SF-17) — this
+ * component's own field names (`fromDesignation`, `toDesignation`) just
+ * never matched what THAT API actually sends, so every card still fell
+ * through to the raw-UUID fallback despite the backend enrichment already
+ * existing. Field names below now match that real response; the UUID
+ * fallbacks stay (never remove them — see GAP-HR-DPC-02's own fix step 3:
+ * "remove the UUID fallbacks: show '—' ... instead") except they now render
+ * "—", never the raw id.
+ *
+ * This component is ALSO used by /hr/promotion/page.tsx (unrelated to this
+ * GAP, not touched here), which falls back to a SECOND, differently-shaped
+ * endpoint — lifecycle/m7-list-routes.ts's un-prefixed GET /v1/hrms/
+ * promotions — when the primary one returns zero rows. That route's own
+ * field names are `employee` (not `employeeName`) and `fromGrade`/`toGrade`
+ * for the designation text (no `fromDesignationName`/`toDesignationName` at
+ * all). `employee` and `fromGrade`/`toGrade` stay in the fallback chains
+ * below for that reason — this is genuinely two backends' worth of field
+ * names converging on one shared card, not leftover dead code.
+ *
+ * GAP-HR-DPC-02: "DPC Meeting Date" is removed — `dpcDate` has no backing
+ * column on hrms_promotions and no DPC-batch concept exists in the schema to
+ * populate it from (see this GAP's own two options: add a migration + decide
+ * who sets it, or drop the field; dropping is the safe default here, see PR
+ * description).
  */
 import { useTranslations } from "next-intl";
 import { StatusPill } from "@/app/_components/ds";
@@ -11,17 +37,18 @@ import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
 export type PromotionRow = {
   id: string;
+  employeeName?: string;
+  /** m7-list-routes.ts's GET /v1/hrms/promotions fallback shape (see doc comment above) — not this GAP's own endpoint. */
   employee?: string;
   employeeId?: string;
   department?: string;
   fromGrade?: string;
   toGrade?: string;
-  fromDesignation?: string;
-  toDesignation?: string;
+  fromDesignationName?: string;
+  toDesignationName?: string;
   fromDesigId?: string;
   toDesigId?: string;
   effectiveDate?: string | null;
-  dpcDate?: string | null;
   orderNo?: string | null;
   orderRef?: string | null;
   newBasicMinor?: number | null;
@@ -69,9 +96,14 @@ export function PromotionCard({ promotion }: Props) {
   const statusLabel = statusKey ? t(statusKey) : promotion.status;
   const chainIdx    = chainIndex(promotion.status);
   const isCancelled  = promotion.status === "cancelled";
-  const empLabel    = promotion.employee ?? promotion.employeeId ?? "Unknown";
-  const fromLabel   = promotion.fromDesignation ?? promotion.fromGrade ?? promotion.fromDesigId ?? "—";
-  const toLabel     = promotion.toDesignation   ?? promotion.toGrade   ?? promotion.toDesigId   ?? "—";
+  // GAP-HR-DPC-02/07: "—" for a genuinely unnamed employee, never the raw
+  // UUID and never a hard-coded English "Unknown". `employeeName` is this
+  // GAP's own endpoint; `employee` is the OTHER endpoint /hr/promotion can
+  // fall back to (see this file's top doc comment) — both are real,
+  // current field names, not one live one dead.
+  const empLabel    = promotion.employeeName ?? promotion.employee ?? t("unknownEmployee");
+  const fromLabel   = promotion.fromDesignationName ?? promotion.fromGrade ?? "—";
+  const toLabel     = promotion.toDesignationName   ?? promotion.toGrade   ?? "—";
   const payStr      = promotion.newBasicMinor != null
     ? formatMoney(Number(promotion.newBasicMinor))
     : null;
@@ -128,12 +160,6 @@ export function PromotionCard({ promotion }: Props) {
               <span className="v">{formatIndianDate(promotion.effectiveDate)}</span>
             </div>
           )}
-          {promotion.dpcDate && (
-            <div className="fld">
-              <span className="l">{t("dpcMeetingDateLabel")}</span>
-              <span className="v">{formatIndianDate(promotion.dpcDate)}</span>
-            </div>
-          )}
         </div>
 
         {/* Approval chain */}
@@ -143,7 +169,7 @@ export function PromotionCard({ promotion }: Props) {
           </p>
           {isCancelled ? (
             <p style={{ margin: "0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
-              This promotion was cancelled before completing the approval chain.
+              {t("cancelledMessage")}
             </p>
           ) : (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>

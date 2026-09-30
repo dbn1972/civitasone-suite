@@ -21,6 +21,16 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
   // lifecycle/m7-list-routes.ts pattern, but resolved through employee/repo.ts's
   // in-process interface rather than importing employee/schema.js directly
   // (CLAUDE.md rule 4: module isolation).
+  //
+  // GAP-HR-DPC-02: also resolves each row's `department` (the employee's own
+  // department, via the same batchEmployees lookup already needed for the
+  // name — hrms_promotions itself carries no department column) — the DPC
+  // page's PromotionCard already had an optional `department` field it
+  // rendered when present, just never received. Also accepts an optional
+  // `?status=` filter so a caller (the DPC batch view) can scope to
+  // still-in-flight promotions instead of the whole tenant's history; there
+  // is no DPC-batch id in this schema to scope more precisely than that
+  // (see this GAP's own note on the missing dpcDate/batch linkage).
   app.get("/v1/hrms/lifecycle/promotions", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
@@ -36,13 +46,15 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     // route's body from a pre-#1651 copy without the filter -- same bug,
     // back from a different commit. Mirrors #1651's m7-list-routes.ts
     // pattern exactly, folded in with SF-17's batch name-resolution.
-    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
+    const q = z.object({
+      employeeId: z.string().uuid().optional(),
+      status: z.string().max(24).optional(),
+    }).parse(req.query);
+    const conditions = [eq(hrmsPromotions.tenantId, ctx.tenantId)];
+    if (q.employeeId) conditions.push(eq(hrmsPromotions.employeeId, q.employeeId));
+    if (q.status) conditions.push(eq(hrmsPromotions.status, q.status));
     const rows = await scopedRead((tx) => tx.select().from(hrmsPromotions)
-      .where(
-        q.employeeId
-          ? and(eq(hrmsPromotions.tenantId, ctx.tenantId), eq(hrmsPromotions.employeeId, q.employeeId))
-          : eq(hrmsPromotions.tenantId, ctx.tenantId),
-      )
+      .where(and(...conditions))
       .orderBy(desc(hrmsPromotions.effectiveDate)));
     if (rows.length === 0) return reply.send({ data: [] });
     const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
@@ -50,9 +62,11 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
       ...rows.map((r) => r.fromDesigId),
       ...rows.map((r) => r.toDesigId),
     ]);
+    const deptMap = await batchDepartments(ctx.tenantId, rows.map((r) => empMap.get(r.employeeId)?.departmentId));
     const data = rows.map((r) => ({
       ...r,
       employeeName: empMap.get(r.employeeId)?.fullName ?? "—",
+      department: deptMap.get(empMap.get(r.employeeId)?.departmentId ?? "") ?? "—",
       fromDesignationName: desigMap.get(r.fromDesigId) ?? "—",
       toDesignationName: desigMap.get(r.toDesigId) ?? "—",
     }));
