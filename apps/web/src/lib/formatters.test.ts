@@ -336,3 +336,43 @@ describe("formatPercent (already-computed 0-100 percentage, e.g. Budget Utilisat
     expect(formatPercent(45, 0)).toBe("45%");
   });
 });
+
+
+import { vi, afterEach } from "vitest";
+import { daysUntilIST } from "./formatters";
+describe("daysUntilIST (GAP-HR-CONFIRMATION-06: calendar-day diff, Asia/Kolkata)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("returns null for a missing or unparseable date", () => {
+    expect(daysUntilIST(null)).toBeNull();
+    expect(daysUntilIST(undefined)).toBeNull();
+    expect(daysUntilIST("not-a-date")).toBeNull();
+  });
+
+  it("a bare calendar-date string is compared literally, no timezone shift", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T10:00:00.000Z")); // 15:30 IST, same calendar day
+    expect(daysUntilIST("2026-03-01")).toBe(0);
+    expect(daysUntilIST("2026-03-02")).toBe(1);
+    expect(daysUntilIST("2026-02-28")).toBe(-1);
+  });
+
+  it("at 2026-03-01T19:00Z (00:30 IST on 2026-03-02), a dueDate of 2026-03-01 is one day overdue", () => {
+    // The exact scenario GAP-HR-CONFIRMATION-06's acceptance criteria names:
+    // a UTC-string compare of dueDate against a UTC "today" would say this
+    // dueDate is NOT overdue yet (both still read "2026-03-01" in UTC);
+    // the real IST wall-clock day has already moved to 2026-03-02.
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T19:00:00.000Z"));
+    expect(daysUntilIST("2026-03-01")).toBe(-1);
+  });
+
+  it("a full ISO timestamp is resolved to its Asia/Kolkata calendar day first", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-03-01T10:00:00.000Z"));
+    // 2026-01-15T19:00Z is 00:30 IST on 2026-01-16.
+    expect(daysUntilIST("2026-01-15T19:00:00.000Z")).toBe(daysUntilIST("2026-01-16"));
+  });
+});

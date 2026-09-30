@@ -9,7 +9,7 @@ import { ZodError, z } from "zod";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../employee/schema.js";
+import { hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions } from "../employee/schema.js";
 import { hrmsTransfers, hrmsPromotions, hrmsSeparations } from "../lifecycle/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { SERVICE_BOOK_TRANSFER_TYPES, SERVICE_BOOK_PROMOTION_TYPES } from "../service-book/constants.js";
@@ -51,6 +51,31 @@ async function batchDesignations(tenantId: string, desigIds: string[]): Promise<
       .where(and(eq(hrmsDesignations.tenantId, tenantId), inArray(hrmsDesignations.id, desigIds))),
   );
   return new Map(rows.map((d) => [d.id, d.name]));
+}
+
+/**
+ * GAP-HR-CONFIRMATION-05: batch-resolve each employee's CURRENT probation end
+ * to the newEndDate of their most recently recorded extension, when one
+ * exists. Mirrors employee/repo.ts's findCurrentProbationEnd (single-
+ * employee version, used by the extension route's pre-check) -- see that
+ * function's own comment for why the +2y default formula is duplicated
+ * rather than shared across the module boundary instead of migrating this
+ * file's existing local batch* pattern.
+ */
+async function batchLatestProbationExtensions(tenantId: string, employeeIds: string[]): Promise<Map<string, string>> {
+  if (employeeIds.length === 0) return new Map();
+  const rows = await scopedRead((tx) =>
+    tx
+      .select({ employeeId: hrmsProbationExtensions.employeeId, newEndDate: hrmsProbationExtensions.newEndDate, createdAt: hrmsProbationExtensions.createdAt })
+      .from(hrmsProbationExtensions)
+      .where(and(eq(hrmsProbationExtensions.tenantId, tenantId), inArray(hrmsProbationExtensions.employeeId, employeeIds)))
+      .orderBy(desc(hrmsProbationExtensions.createdAt)),
+  );
+  const map = new Map<string, string>();
+  for (const r of rows) {
+    if (!map.has(r.employeeId)) map.set(r.employeeId, r.newEndDate); // first seen per id, in desc order, is the latest
+  }
+  return map;
 }
 
 export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
@@ -233,6 +258,7 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
           id: hrmsEmployees.id,
           fullName: hrmsEmployees.fullName,
           departmentId: hrmsEmployees.departmentId,
+          designationId: hrmsEmployees.designationId,
           dateOfJoining: hrmsEmployees.dateOfJoining,
           confirmationDate: hrmsEmployees.confirmationDate,
           status: hrmsEmployees.status,
@@ -245,18 +271,34 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
     if (employees.length === 0) return reply.send({ data: [] });
     const deptIds = [...new Set(employees.map((e) => e.departmentId))];
     const deptMap = await batchDepartments(ctx.tenantId, deptIds);
+    // GAP-HR-CONFIRMATION-01 (partial): designation was never resolved
+    // before, so every card showed "—"; batch-resolve it the same way
+    // department already is. The separate manager-recommendation workflow
+    // (who records it, whether it's mandatory before Confirm) has no
+    // default in the Day-0 decision packet and stays undecided -- see this
+    // GAP's own PR description. managerRecommendation is deliberately still
+    // omitted below (the web card already defaults an absent value to
+    // "pending" / "Awaiting Manager", so this is a no-op, not a regression).
+    const desigIds = [...new Set(employees.map((e) => e.designationId))];
+    const desigMap = await batchDesignations(ctx.tenantId, desigIds);
+    // GAP-HR-CONFIRMATION-05: an employee's probation end is the default
+    // (joining + 2y) unless a later extension was recorded for them.
+    const extensionMap = await batchLatestProbationExtensions(ctx.tenantId, employees.map((e) => e.id));
     const data = employees.map((e) => {
-      // Probation period: 2 years from joining date
+      // Probation period: 2 years from joining date (default; overridden by
+      // the latest recorded extension, if any -- GAP-HR-CONFIRMATION-05).
       const join = e.dateOfJoining;
-      const probationEnd = join
+      const defaultEnd = join
         ? new Date(new Date(join + "T00:00:00Z").setUTCFullYear(new Date(join + "T00:00:00Z").getUTCFullYear() + 2))
             .toISOString()
             .slice(0, 10)
         : "—";
+      const probationEnd = extensionMap.get(e.id) ?? defaultEnd;
       return {
         id: e.id,
         employee: e.fullName,
         department: deptMap.get(e.departmentId) ?? "—",
+        designation: desigMap.get(e.designationId) ?? "—",
         joiningDate: e.dateOfJoining ?? "—",
         probationEnd,
         dueDate: e.confirmationDate ?? probationEnd,

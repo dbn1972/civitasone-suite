@@ -158,6 +158,47 @@ export function addDaysIST(date: string | Date | null | undefined, days: number)
   return `${yyyy}-${mm}-${dd}`;
 }
 
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+/**
+ * GAP-HR-CONFIRMATION-06: whole calendar days from today (Asia/Kolkata)
+ * until `isoDate`, comparing calendar DATES rather than a raw clock-time
+ * diff. The bug this replaces: several call sites independently computed
+ * `Math.ceil((new Date(dueDate).getTime() - Date.now()) / 86_400_000)` --
+ * a moving-clock-time diff that silently shifts by a day depending on what
+ * time of day the request runs, and disagreed with a separate UTC
+ * string-compare (`dueDate < todayIsoString`) done elsewhere for the exact
+ * same date. A bare "YYYY-MM-DD" calendar-date string (what every API in
+ * this codebase sends for a due/effective date) needs no timezone
+ * conversion at all -- it already names one specific day; only a full ISO
+ * timestamp is resolved to its Asia/Kolkata calendar day first.
+ *
+ * Returns null for a missing/unparseable date so callers can render an
+ * explicit "Date not set" bucket instead of miscounting it as some number
+ * of days away (previously: silently counted as "Timely").
+ *
+ *   daysUntilIST("2026-03-01") when "now" is 2026-03-01T19:00:00.000Z
+ *   (00:30 IST on 2026-03-02) -> -1 (one day overdue)
+ *   daysUntilIST(null) -> null
+ */
+export function daysUntilIST(isoDate: string | null | undefined): number | null {
+  if (!isoDate) return null;
+  const isBareDate = /^\d{4}-\d{2}-\d{2}$/.test(isoDate);
+  let targetDateOnly: string;
+  if (isBareDate) {
+    targetDateOnly = isoDate;
+  } else {
+    const parsed = new Date(isoDate);
+    if (isNaN(parsed.getTime())) return null;
+    targetDateOnly = new Date(parsed.getTime() + IST_OFFSET_MS).toISOString().slice(0, 10);
+  }
+  const todayDateOnly = new Date(Date.now() + IST_OFFSET_MS).toISOString().slice(0, 10);
+  const targetMs = new Date(`${targetDateOnly}T00:00:00.000Z`).getTime();
+  const todayMs = new Date(`${todayDateOnly}T00:00:00.000Z`).getTime();
+  if (isNaN(targetMs)) return null;
+  return Math.round((targetMs - todayMs) / 86_400_000);
+}
+
 /**
  * Format an internal cross-service reference (e.g. financeBills.poRef, of the
  * shape "procurement_po:<uuid>") for display, or "—" when genuinely absent.

@@ -145,6 +145,7 @@ describe("2. Employee Lifecycle — Employer Side", () => {
     const id = createdEmployees[0] || EMP_A;
     const { status } = await PATCH(HRMS, `/v1/hrms/employees/${id}/confirm`, {
       confirmationDate: "2026-08-01",
+      orderRef: "CONFIRM/TEST/ATDIC-001",
     });
     expect([200, 202]).toContain(status);
   });

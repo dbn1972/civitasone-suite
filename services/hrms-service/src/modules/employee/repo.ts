@@ -1,8 +1,11 @@
-import { eq, and, or, ilike, sql, inArray } from "drizzle-orm";
+import { eq, and, or, ilike, sql, inArray, desc } from "drizzle-orm";
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
-import { hrmsEmployees, hrmsDepartments, hrmsDesignations, type EmployeeRow, type EmployeeInsert } from "./schema.js";
+import {
+  hrmsEmployees, hrmsDepartments, hrmsDesignations, hrmsProbationExtensions,
+  type EmployeeRow, type EmployeeInsert, type ProbationExtensionInsert,
+} from "./schema.js";
 
 const log = pino({ name: "employee-repo" });
 
@@ -107,6 +110,37 @@ export async function listEmployeeTenantIds(tx: Writer): Promise<string[]> {
 
 export async function insertEmployee(tx: Writer, row: EmployeeInsert): Promise<void> {
   await tx.insert(hrmsEmployees).values(row);
+}
+
+// GAP-HR-CONFIRMATION-05
+export async function insertProbationExtension(tx: Writer, row: ProbationExtensionInsert): Promise<void> {
+  await tx.insert(hrmsProbationExtensions).values(row);
+}
+
+/**
+ * An employee's current probation end: the newEndDate of their most
+ * recently recorded extension, if any, else the default of dateOfJoining +
+ * 2 years. NOTE: this default formula is duplicated (not imported) in
+ * lifecycle/m7-list-routes.ts's confirmations list handler, which needs the
+ * same computation for every row in a batch rather than one employee at a
+ * time -- module boundaries (CLAUDE.md rule 4) make a single shared helper
+ * awkward without a larger refactor of that file's existing local batch*
+ * pattern, which is unrelated to this fix and out of scope. Keep both in
+ * sync if the default ever changes.
+ */
+export async function findCurrentProbationEnd(id: string, tenantId: string): Promise<string | null> {
+  const emp = await findById(id, tenantId);
+  if (!emp?.dateOfJoining) return null;
+  const latest = await scopedRead((tx) => tx
+    .select({ newEndDate: hrmsProbationExtensions.newEndDate })
+    .from(hrmsProbationExtensions)
+    .where(and(eq(hrmsProbationExtensions.tenantId, tenantId), eq(hrmsProbationExtensions.employeeId, id)))
+    .orderBy(desc(hrmsProbationExtensions.createdAt))
+    .limit(1));
+  if (latest[0]) return latest[0].newEndDate;
+  const join = new Date(`${emp.dateOfJoining}T00:00:00Z`);
+  join.setUTCFullYear(join.getUTCFullYear() + 2);
+  return join.toISOString().slice(0, 10);
 }
 
 /**

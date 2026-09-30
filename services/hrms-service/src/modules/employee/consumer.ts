@@ -8,6 +8,7 @@ import * as repo from "./repo.js";
 import { isExitedStatus } from "./status.js";
 import { maskValue } from "../../shared/pii-mask.js";
 import * as lifecycleRepo from "../lifecycle/repo.js";
+import * as serviceBookRepo from "../service-book/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 
@@ -72,7 +73,10 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.employeeConfirm, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; confirmationDate: string };
+    const p = msg.payload as {
+      id: string; tenantId: string; confirmationDate: string;
+      orderRef: string; authority?: string; remark?: string;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // SEC CRITICAL (status-integrity fix): confirmEmployee used to write
@@ -103,11 +107,52 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
       if (!applied) {
         throw new HttpError(409, "EMPLOYEE_STATUS_CONFLICT", `employee ${p.id} status changed since it was read; refusing to confirm`);
       }
-      await audit(tx, msg, "confirm", "employee", p.id);
+      // GAP-HR-CONFIRMATION-02: the confirmation itself is now a service-book
+      // entry (Acceptance: "shows in the service book and audit log"), not
+      // just an audit line -- documentRef carries orderRef so it's visible
+      // and searchable the same way every other service-book entry is.
+      const description = [
+        "Service confirmed on completion of probation.",
+        p.authority ? `Authority: ${p.authority}.` : null,
+        p.remark ? `Remark: ${p.remark}` : null,
+      ].filter(Boolean).join(" ");
+      await serviceBookRepo.insertServiceBookEntry(tx, {
+        tenantId: p.tenantId,
+        employeeId: p.id,
+        entryType: "confirmation",
+        effectiveDate: p.confirmationDate,
+        description,
+        recordedBy: msg.actorId,
+        documentRef: p.orderRef,
+      });
+      await audit(tx, msg, "confirm", "employee", p.id, { orderRef: p.orderRef, authority: p.authority, remark: p.remark });
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
     // M1: status change visible in list
     await cache.invalidateResource(msg.tenantId, "employee");
+  });
+
+  // GAP-HR-CONFIRMATION-05: probation-extension record. previousEndDate is
+  // computed here (server-side, from the same source of truth the route's
+  // pre-check used), never trusted from the message payload.
+  queue.subscribe(COMMANDS.employeeProbationExtend, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; newEndDate: string; reason: string; orderRef?: string };
+    const previousEndDate = (await repo.findCurrentProbationEnd(p.id, p.tenantId)) ?? p.newEndDate;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.insertProbationExtension(tx, {
+        tenantId: p.tenantId,
+        employeeId: p.id,
+        previousEndDate,
+        newEndDate: p.newEndDate,
+        reason: p.reason,
+        orderRef: p.orderRef ?? null,
+        createdBy: msg.actorId,
+        updatedBy: msg.actorId,
+      });
+      await audit(tx, msg, "probation_extend", "employee", p.id, { previousEndDate, newEndDate: p.newEndDate });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.id));
   });
 
   queue.subscribe(COMMANDS.employeeTransfer, async (msg) => {

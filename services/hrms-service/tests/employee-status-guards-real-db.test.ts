@@ -107,7 +107,7 @@ describe("PATCH /v1/hrms/employees/:id/confirm — status precondition", () => {
     const id = await seedEmployee("probation");
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/employees/${id}/confirm`,
-      headers: auth(), payload: { confirmationDate: "2026-01-15" },
+      headers: auth(), payload: { confirmationDate: "2026-01-15", orderRef: "CONFIRM/TEST/001" },
     });
     expect(r.statusCode).toBe(202);
     await drain();
@@ -121,7 +121,7 @@ describe("PATCH /v1/hrms/employees/:id/confirm — status precondition", () => {
       const id = await seedEmployee(status);
       const r = await app.inject({
         method: "PATCH", url: `/v1/hrms/employees/${id}/confirm`,
-        headers: auth(), payload: { confirmationDate: "2026-01-15" },
+        headers: auth(), payload: { confirmationDate: "2026-01-15", orderRef: "CONFIRM/TEST/001" },
       });
       expect(r.statusCode).toBe(409);
       expect(r.json().code).toBe("INVALID_STATUS_TRANSITION");
@@ -137,7 +137,7 @@ describe("PATCH /v1/hrms/employees/:id/confirm — status precondition", () => {
   it("returns 404 for an unknown employee id", async () => {
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/employees/${randomUUID()}/confirm`,
-      headers: auth(), payload: { confirmationDate: "2026-01-15" },
+      headers: auth(), payload: { confirmationDate: "2026-01-15", orderRef: "CONFIRM/TEST/001" },
     });
     expect(r.statusCode).toBe(404);
   });
