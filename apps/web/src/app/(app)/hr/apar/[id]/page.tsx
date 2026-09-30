@@ -81,7 +81,7 @@ const GRADE_BAND_SCALE = "Outstanding ≥9 · Very Good ≥7 · Good ≥5 · Ave
  */
 function provisionalWeightedScore(scores: Score[]): number | null {
   const scored = scores.filter((s) => s.score != null && s.score !== "");
-  if (scored.length === 0) return null;
+  if (scored.length === 0) return null; // ux-001-ok: `scores` is only reachable past the earlier `if (!detail) return` guard above (source==="error" implies a null detail per the loader contract) -- an empty `scored` array here means no attribute has been scored yet in the workflow (e.g. still at self_pending), never a masked fetch failure
   let weightedSum = 0;
   let totalWeight = 0;
   for (const s of scored) {
