@@ -91,6 +91,10 @@ export const COMMANDS = {
   // geo-attendance
   geoCheckIn:           "hrms.geo_attendance.check_in",
   geoCheckOut:          "hrms.geo_attendance.check_out",
+  // GAP-HR-ATTENDANCE-REPORTEES-01 (DPDP): audit-on-read for a privileged
+  // bulk read of other employees' geo-attendance via GET .../reportees —
+  // see geo-attendance/routes.ts's auditReporteesListRead doc comment.
+  geoAttendanceReporteesRead: "hrms.geo_attendance.reportees_read",
 
   // holidays
   holidayCreate:        "hrms.holiday.create",

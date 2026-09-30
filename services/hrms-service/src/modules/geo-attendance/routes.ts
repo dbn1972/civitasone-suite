@@ -2,13 +2,16 @@ import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsGeoAttendance, hrmsOfficeLocations } from "./schema.js";
 import { hrmsHolidays } from "../holidays/schema.js";
+import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import { isExitedStatus } from "../employee/status.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import type { RequestContext } from "@civitasone/types";
 
 const ALL_ROLES = ["super_admin", "admin", "hr_admin", "hr_officer", "officer", "employee"];
@@ -114,6 +117,93 @@ export function resolveGeoHistoryScope(
     "NO_EMPLOYEE_RECORD",
     "no employee record is linked to this account; pass employeeId to look up another employee's history",
   );
+}
+
+/**
+ * GAP-HR-ATTENDANCE-REPORTEES-01 (SEC/DPDP): GET .../attendance/reportees
+ * was a never-finished stub — `requireRole(ctx, ALL_ROLES)` (which includes
+ * bare "employee") gated entry, but the query itself had no employeeId/
+ * manager filter at all ("For now return geo attendance for all employees
+ * (HR admin view)"), so ANY authenticated caller in this tenant, of any
+ * role, got the first 100 geo-attendance rows tenant-wide: every employee's
+ * check-in/out location and geofence status. Found as a direct sibling of
+ * GAP-HR-ATTENDANCE-05 (this same file's geo-history fix, see
+ * resolveGeoHistoryScope-equivalent reasoning below) while fixing that PR;
+ * deliberately not folded into it there to keep that PR narrowly scoped to
+ * the single-employee history endpoint.
+ *
+ * Scoping decision: this module's own role vocabulary (ALL_ROLES/HR_ROLES
+ * above) has no "manager" string at all — it uses "officer" for what other
+ * modules (leave/routes.ts, employee/routes.ts, medical/routes.ts's
+ * GAP-HR-MEDICAL-01 fix) call "manager". Gating on a specific non-HR role
+ * name here would just be one more inconsistent, drift-prone convention (see
+ * this campaign's own "verify relayed identifiers" lesson — re-derive from
+ * source rather than trust a role string carried over from a sibling
+ * module). Instead this resolves "my reportees" from the actual data
+ * relationship, hrms_employees.managerId, the same column leave/routes.ts's
+ * resolveNonHrEmployeeScope and GAP-HR-MEDICAL-01's manager-scope fix both
+ * use — so it is correct regardless of which specific role name a reporting
+ * officer happens to hold.
+ *
+ * Rules:
+ *  - HR_ROLES (this module's existing admin tier, already used above for
+ *    office-locations POST): unchanged tenant-wide view — the route's
+ *    original "HR admin view" intent, now actually gated to HR instead of
+ *    everyone.
+ *  - everyone else: resolved via resolveEmployeeForActor, then their real
+ *    direct reports (hrms_employees.managerId = their own id). No linked
+ *    employee record, or a linked one with zero direct reports, returns an
+ *    empty employeeIds array — the handler must treat that as "nothing to
+ *    show" and never fall back to an unscoped query (fails CLOSED, mirrors
+ *    resolveGeoHistoryScope's NO_EMPLOYEE_RECORD case just above and
+ *    GAP-HR-MEDICAL-01's identical fail-closed manager branch — the
+ *    difference here is an empty list rather than a 403, since "you have no
+ *    reportees" is not a forbidden request, just an empty one).
+ */
+async function resolveReporteesScope(
+  ctx: RequestContext,
+): Promise<{ employeeIds: string[] | null; scopedToManagerId: string | null }> {
+  if (HR_ROLES.some((r) => ctx.roles.includes(r))) {
+    return { employeeIds: null, scopedToManagerId: null }; // null = tenant-wide (HR admin view, unchanged)
+  }
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) return { employeeIds: [], scopedToManagerId: null };
+  const reports = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
+    .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), eq(hrmsEmployees.managerId, actorEmp.id))));
+  return { employeeIds: reports.map((r) => r.id), scopedToManagerId: actorEmp.id };
+}
+
+/**
+ * DPDP: audits a privileged bulk read of other employees' geo-attendance
+ * (precise location + geofence status) — HR's tenant-wide view, or a
+ * reporting officer's real-direct-reports view. Never called for the
+ * fail-closed empty-list case (nothing was actually disclosed there).
+ * Fire-and-forget via the async outbox, same shape as GAP-HR-MEDICAL-01's
+ * auditMedicalClaimsListRead: this route must not write to Postgres
+ * directly, so the actual insert happens in this module's own consumer.ts,
+ * in its new geoAttendanceReporteesRead subscriber.
+ */
+async function auditReporteesListRead(
+  ctx: RequestContext,
+  details: { scopedToManagerId: string | null; tenantWide: boolean; rowCount: number },
+): Promise<void> {
+  await queue.publish(COMMANDS.geoAttendanceReporteesRead, {
+    messageId: randomUUID(),
+    type: COMMANDS.geoAttendanceReporteesRead,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      service: "hrms",
+      action: "list",
+      resourceType: "geo_attendance_reportees",
+      resourceId: details.scopedToManagerId ?? "tenant_list",
+      outcome: "success",
+      rowCount: details.rowCount,
+      filter: { tenantWide: details.tenantWide },
+    },
+  });
 }
 
 export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
@@ -227,11 +317,26 @@ export async function geoAttendanceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/attendance/reportees", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    // In real system: query employees where reporting_officer_id = ctx.actorId
-    // For now return geo attendance for all employees (HR admin view)
+    const scope = await resolveReporteesScope(ctx);
+    // Fail CLOSED: no linked employee record, or a linked one with zero
+    // real direct reports — never fall back to the old unscoped query.
+    if (scope.employeeIds !== null && scope.employeeIds.length === 0) {
+      return reply.send({ data: [] });
+    }
     const rows = await scopedRead((tx) => tx.select().from(hrmsGeoAttendance)
-      .where(eq(hrmsGeoAttendance.tenantId, ctx.tenantId)));
-    return reply.send({ data: rows.slice(0, 100).map(r => ({ employeeId: r.employeeId, date: r.attendanceDate, checkType: r.checkType, withinGeofence: r.withinGeofence, distanceMeters: r.distanceFromOffice ? Math.round(r.distanceFromOffice) : null })) });
+      .where(scope.employeeIds === null
+        ? eq(hrmsGeoAttendance.tenantId, ctx.tenantId)
+        : and(eq(hrmsGeoAttendance.tenantId, ctx.tenantId), inArray(hrmsGeoAttendance.employeeId, scope.employeeIds))));
+    // Field list deliberately excludes selfieFileKey — unlike geo-history
+    // (a self-or-HR single-employee "detail" view), this is a multi-employee
+    // "list" view, and this campaign's own list-vs-detail convention
+    // (GAP-HR-MEDICAL-01's list route dropping diagnosis/documents/remarks)
+    // is that a bulk list stays minimal even for a caller allowed to see the
+    // rows at all — a reporting officer has no need to see a report's selfie
+    // just to confirm they attended.
+    const data = rows.slice(0, 100).map(r => ({ employeeId: r.employeeId, date: r.attendanceDate, checkType: r.checkType, withinGeofence: r.withinGeofence, distanceMeters: r.distanceFromOffice ? Math.round(r.distanceFromOffice) : null }));
+    await auditReporteesListRead(ctx, { scopedToManagerId: scope.scopedToManagerId, tenantWide: scope.employeeIds === null, rowCount: data.length });
+    return reply.send({ data });
   });
 
   app.setErrorHandler((err, req, reply) => {
