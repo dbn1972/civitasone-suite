@@ -2,20 +2,24 @@
 /**
  * ServiceBookView — Sprint 14 / Lifecycle Phase 2
  * Paginated read-only chronological table of a complete service record.
- * Columns: date, event type badge, employee, from, to/detail, order ref.
- * Client-side filter by employee name and event type; 15 rows per page.
+ * Columns: date, event type badge, employee, details, order ref, attested.
+ * Client-side filter by employee name, event type and attested status;
+ * 15 rows per page.
  */
 import { useState, useMemo } from "react";
 import { useTranslations } from "next-intl";
 import { formatIndianDate } from "@/lib/formatters";
-import { Button } from "@/app/_components/ds";
+import { humanizeStatus } from "@/lib/formatters";
+import { Button, StatusPill } from "@/app/_components/ds";
 
 export type ServiceEntry = {
   id: string;
   employee?: string;
   employeeId?: string;
   eventType: string;
+  /** @deprecated the API never populated this (always "—"); kept optional for old cached responses. */
   fromPosting?: string;
+  /** @deprecated superseded by `detail` (GAP-HR-SERVICE-BOOK-02). */
   toPosting?: string;
   effectiveDate: string;
   orderNo?: string;
@@ -27,32 +31,50 @@ type Translator = ReturnType<typeof useTranslations>;
 
 function eventConfig(t: Translator): Record<string, { icon: string; color: string; bg: string; label: string }> {
   return {
-    join:        { icon: "🎉", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventJoining") },
-    transfer:    { icon: "🔄", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)", label: t("eventTransfer") },
-    posting:     { icon: "📍", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)", label: t("eventPosting") },
-    promotion:   { icon: "⬆️", color: "var(--violet, #7c3aed)", bg: "var(--primary-soft, #f5f3ff)", label: t("eventPromotion") },
-    increment:   { icon: "💹", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventIncrement") },
-    leave:       { icon: "🌴", color: "var(--warn, #d97706)", bg: "#fffbeb", label: t("eventLeave") },
-    deputation:  { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputation") },
-    confirmation:{ icon: "✅", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventConfirmation") },
-    suspension:  { icon: "⛔", color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)", label: t("eventSuspension") },
-    retirement:  { icon: "📤", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventRetirement") },
-    other:       { icon: "📌", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventOther") },
+    join:                 { icon: "🎉", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventJoining") },
+    transfer:             { icon: "🔄", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)", label: t("eventTransfer") },
+    posting:              { icon: "📍", color: "var(--info, #2563eb)", bg: "var(--infobg, #eff6ff)", label: t("eventPosting") },
+    promotion:            { icon: "⬆️", color: "var(--violet, #7c3aed)", bg: "var(--primary-soft, #f5f3ff)", label: t("eventPromotion") },
+    increment:            { icon: "💹", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventIncrement") },
+    leave:                { icon: "🌴", color: "var(--warn, #d97706)", bg: "#fffbeb", label: t("eventLeave") },
+    deputation:           { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputation") },
+    // GAP-HR-SERVICE-BOOK-03: these six types are actually written by real
+    // consumers (lifecycle, deputation, training, pay-matrix) but had no
+    // badge config at all -- every one of them rendered as the generic
+    // "Other" badge while the filter dropdown showed the raw code instead.
+    deputation_out:       { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputationOut") },
+    repatriation:         { icon: "🏠", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventRepatriation") },
+    deputation_cancelled: { icon: "🚫", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventDeputationCancelled") },
+    separation:           { icon: "📤", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventSeparation") },
+    reinstatement:        { icon: "🔁", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventReinstatement") },
+    training:             { icon: "🎓", color: "var(--violet, #7c3aed)", bg: "var(--primary-soft, #f5f3ff)", label: t("eventTraining") },
+    confirmation:         { icon: "✅", color: "var(--good, #16a34a)", bg: "var(--goodbg, #f0fdf4)", label: t("eventConfirmation") },
+    suspension:           { icon: "⛔", color: "var(--bad, #dc2626)", bg: "var(--badbg, #fef2f2)", label: t("eventSuspension") },
+    retirement:           { icon: "📤", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventRetirement") },
+    other:                { icon: "📌", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventOther") },
   };
 }
 
 function EventBadge({ type, eventCfg }: { type: string; eventCfg: Record<string, { icon: string; color: string; bg: string; label: string }> }) {
-  const cfg = eventCfg[type] ?? eventCfg.other;
+  const cfg = eventCfg[type];
+  const label = cfg?.label ?? humanizeStatus(type);
+  const icon = cfg?.icon ?? "📌";
+  const color = cfg?.color ?? "var(--mut, #64748b)";
+  const bg = cfg?.bg ?? "var(--bg, #f8fafc)";
   return (
     <span
       style={{
         display: "inline-flex", alignItems: "center", gap: 5,
         padding: "2px 10px", borderRadius: 12,
-        background: cfg.bg, color: cfg.color,
+        background: bg, color,
         fontSize: "0.75rem", fontWeight: 500, whiteSpace: "nowrap",
       }}
     >
-      {cfg.icon} {cfg.label}
+      {/* GAP-HR-SERVICE-BOOK-07: the label is always real text (never
+          emoji-only), but the emoji itself carries no separate meaning --
+          hidden from assistive tech so a screen reader reads "Transfer",
+          not "arrows counterclockwise Transfer". */}
+      <span aria-hidden="true">{icon}</span> {label}
     </span>
   );
 }
@@ -63,14 +85,21 @@ interface Props {
   entries: ServiceEntry[];
   /** Pre-filter to a single employee — supplied by parent when rendering a per-employee view */
   employeeId?: string;
+  /** Self-service view (GAP-HR-SERVICE-BOOK-06): the caller already sees only
+   * their own entries server-side, so a name filter box would only ever
+   * filter within their own single-employee data — hidden as noise. */
+  hideEmployeeFilter?: boolean;
 }
 
-export function ServiceBookView({ entries, employeeId }: Props) {
+export function ServiceBookView({ entries, employeeId, hideEmployeeFilter }: Props) {
   const t = useTranslations("serviceBookView");
   const eventCfg = eventConfig(t);
   const [page, setPage]           = useState(0);
   const [empFilter, setEmpFilter] = useState(employeeId ?? "");
   const [typeFilter, setTypeFilter] = useState("all");
+  // GAP-HR-SERVICE-BOOK-01: lets HR jump straight to entries still awaiting
+  // competent-authority sign-off.
+  const [unattestedOnly, setUnattestedOnly] = useState(false);
 
   const eventTypes = useMemo(
     () => ["all", ...Array.from(new Set(entries.map((e) => e.eventType)))],
@@ -92,8 +121,9 @@ export function ServiceBookView({ entries, employeeId }: Props) {
       );
     }
     if (typeFilter !== "all") r = r.filter((e) => e.eventType === typeFilter);
+    if (unattestedOnly) r = r.filter((e) => e.status !== "attested");
     return r;
-  }, [entries, empFilter, typeFilter]);
+  }, [entries, empFilter, typeFilter, unattestedOnly]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   // Clamp current page if filter reduced results
@@ -108,7 +138,7 @@ export function ServiceBookView({ entries, employeeId }: Props) {
   const start = Math.max(0, Math.min(safePage - 2, totalPages - 5));
   for (let i = start; i < Math.min(start + 5, totalPages); i++) pageNumbers.push(i);
 
-  const COLUMNS = [t("colNum"), t("colDate"), t("colEvent"), t("colEmployee"), t("colFrom"), t("colToDetail"), t("colOrderRef")];
+  const COLUMNS = [t("colNum"), t("colDate"), t("colEvent"), t("colEmployee"), t("colDetails"), t("colOrderRef"), t("colAttested")];
 
   return (
     <div>
@@ -119,19 +149,21 @@ export function ServiceBookView({ entries, employeeId }: Props) {
           flexWrap: "wrap", alignItems: "center",
         }}
       >
-        <input
-          type="search"
-          placeholder={t("searchEmployeePlaceholder")}
-          value={empFilter}
-          onChange={(e) => { setEmpFilter(e.target.value); setPage(0); }}
-          style={{
-            padding: "7px 12px", borderRadius: 6,
-            border: "1px solid var(--line, #e2e8f0)",
-            fontSize: "0.875rem", background: "var(--bg, #fff)",
-            color: "var(--ink)", flex: "1 1 180px", minWidth: 160,
-          }}
-          aria-label={t("filterByEmployeeAriaLabel")}
-        />
+        {!hideEmployeeFilter && (
+          <input
+            type="search"
+            placeholder={t("searchEmployeePlaceholder")}
+            value={empFilter}
+            onChange={(e) => { setEmpFilter(e.target.value); setPage(0); }}
+            style={{
+              padding: "7px 12px", borderRadius: 6,
+              border: "1px solid var(--line, #e2e8f0)",
+              fontSize: "0.875rem", background: "var(--bg, #fff)",
+              color: "var(--ink)", flex: "1 1 180px", minWidth: 160,
+            }}
+            aria-label={t("filterByEmployeeAriaLabel")}
+          />
+        )}
         <select
           value={typeFilter}
           onChange={(e) => { setTypeFilter(e.target.value); setPage(0); }}
@@ -145,10 +177,18 @@ export function ServiceBookView({ entries, employeeId }: Props) {
         >
           {eventTypes.map((ty) => (
             <option key={ty} value={ty}>
-              {ty === "all" ? t("allEventTypes") : (eventCfg[ty]?.label ?? ty)}
+              {ty === "all" ? t("allEventTypes") : (eventCfg[ty]?.label ?? humanizeStatus(ty))}
             </option>
           ))}
         </select>
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "0.8125rem", color: "var(--ink2)" }}>
+          <input
+            type="checkbox"
+            checked={unattestedOnly}
+            onChange={(e) => { setUnattestedOnly(e.target.checked); setPage(0); }}
+          />
+          {t("unattestedOnlyLabel")}
+        </label>
         <span style={{ fontSize: "0.8125rem", color: "var(--mut)", marginInlineStart: "auto" }}>
           {t("entryCount", { count: filtered.length })}
         </span>
@@ -223,23 +263,19 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                     <td style={{ padding: "10px 12px", fontWeight: 500 }}>
                       {entry.employee ?? entry.employeeId ?? "—"}
                     </td>
+                    {/* GAP-HR-SERVICE-BOOK-02: "From" dropped -- the data
+                        model never had a from-posting field, so the column
+                        was always "—"; "detail" (was toPosting) renamed to
+                        a plain "Details" header since it is the only content
+                        column. */}
                     <td
                       style={{
                         padding: "10px 12px", color: "var(--ink2)",
-                        maxWidth: 160, overflow: "hidden",
+                        maxWidth: 260, overflow: "hidden",
                         textOverflow: "ellipsis", whiteSpace: "nowrap",
                       }}
                     >
-                      {entry.fromPosting ?? "—"}
-                    </td>
-                    <td
-                      style={{
-                        padding: "10px 12px", color: "var(--ink2)",
-                        maxWidth: 180, overflow: "hidden",
-                        textOverflow: "ellipsis", whiteSpace: "nowrap",
-                      }}
-                    >
-                      {entry.toPosting ?? entry.detail ?? "—"}
+                      {entry.detail ?? entry.toPosting ?? "—"}
                     </td>
                     <td
                       style={{
@@ -250,6 +286,9 @@ export function ServiceBookView({ entries, employeeId }: Props) {
                       }}
                     >
                       {entry.orderNo ?? "—"}
+                    </td>
+                    <td style={{ padding: "10px 12px" }}>
+                      {entry.status && <StatusPill status={entry.status} />}
                     </td>
                   </tr>
                 );

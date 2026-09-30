@@ -6,12 +6,13 @@
  */
 import type { FastifyInstance } from "fastify";
 import { ZodError, z } from "zod";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { hrmsEmployees, hrmsDepartments, hrmsDesignations } from "../employee/schema.js";
 import { hrmsTransfers, hrmsPromotions, hrmsSeparations } from "../lifecycle/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
+import { SERVICE_BOOK_TRANSFER_TYPES, SERVICE_BOOK_PROMOTION_TYPES } from "../service-book/constants.js";
 import { hrmsDeputations } from "../deputation/schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -135,27 +136,55 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/service-book", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
-    const rows = await scopedRead((tx) =>
-      tx.select().from(hrmsServiceBookEntries).where(
-        q.employeeId
-          ? and(eq(hrmsServiceBookEntries.tenantId, ctx.tenantId), eq(hrmsServiceBookEntries.employeeId, q.employeeId))
-          : eq(hrmsServiceBookEntries.tenantId, ctx.tenantId),
-      ).orderBy(hrmsServiceBookEntries.effectiveDate, hrmsServiceBookEntries.id).limit(1000),
-    );
-    if (rows.length === 0) return reply.send({ data: [] });
+    // GAP-HR-SERVICE-BOOK-04: limit/offset are new (was a hard, unpaged
+    // LIMIT 1000); GAP-HR-SERVICE-BOOK-02: fromPosting was always "—" with
+    // no such field in the data model -- dropped in favour of the existing
+    // "detail" field (see -02 below).
+    const q = z.object({
+      employeeId: z.string().uuid().optional(),
+      limit: z.coerce.number().int().min(1).max(1000).default(1000),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
+    const whereClause = q.employeeId
+      ? and(eq(hrmsServiceBookEntries.tenantId, ctx.tenantId), eq(hrmsServiceBookEntries.employeeId, q.employeeId))
+      : eq(hrmsServiceBookEntries.tenantId, ctx.tenantId);
+    // GAP-HR-SERVICE-BOOK-04: was ORDER BY effectiveDate ASC -- once a scope
+    // held >1000 entries, the OLDEST 1000 were returned and the newest
+    // silently dropped with no signal to the caller. DESC + limit/offset now,
+    // and the stat counts below come from full-scope aggregates (not the
+    // loaded page), per GAP-HR-SERVICE-BOOK-05's shared type-bucket constants.
+    const [rows, totalRows, transferRows, promotionRows] = await Promise.all([
+      scopedRead((tx) =>
+        tx.select().from(hrmsServiceBookEntries).where(whereClause)
+          .orderBy(desc(hrmsServiceBookEntries.effectiveDate), desc(hrmsServiceBookEntries.id))
+          .limit(q.limit).offset(q.offset),
+      ),
+      scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsServiceBookEntries).where(whereClause)),
+      scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsServiceBookEntries)
+        .where(and(whereClause, inArray(hrmsServiceBookEntries.entryType, [...SERVICE_BOOK_TRANSFER_TYPES])))),
+      scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsServiceBookEntries)
+        .where(and(whereClause, inArray(hrmsServiceBookEntries.entryType, [...SERVICE_BOOK_PROMOTION_TYPES])))),
+    ]);
+    const total = totalRows[0]?.count ?? 0;
+    const meta = {
+      total,
+      hasMore: q.offset + rows.length < total,
+      transfersTotal: transferRows[0]?.count ?? 0,
+      promotionsTotal: promotionRows[0]?.count ?? 0,
+    };
+    if (rows.length === 0) return reply.send({ data: [], meta });
     const empMap = await batchEmployees(ctx.tenantId, [...new Set(rows.map((r) => r.employeeId))]);
     const data = rows.map((r) => ({
       id: r.id,
+      employeeId: r.employeeId,
       employee: empMap.get(r.employeeId)?.fullName ?? "—",
       eventType: r.entryType,
-      fromPosting: "—",
-      toPosting: r.description,
+      detail: r.description,
       effectiveDate: r.effectiveDate,
       orderNo: r.documentRef ?? "—",
       status: r.attested ? "attested" : "recorded",
     }));
-    return reply.send({ data, hasMore: rows.length === 1000 });
+    return reply.send({ data, meta });
   });
 
   // Deputation list — frontend calls GET /api/v1/hrms/deputation (singular, no employee scope)
