@@ -1,8 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState, Button } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, ConfirmDialog, EmptyState, ErrorState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { formatIndianDate } from "@/lib/formatters";
 import { useTranslations } from "next-intl";
@@ -48,12 +47,19 @@ type Decision = "approve" | "reject";
 
 export function LeaveApprovalsPanel() {
   const t = useTranslations("leaveApprovals");
-  const router = useRouter();
   const [tasks, setTasks] = useState<WorkflowTask[]>([]);
   const [leaveById, setLeaveById] = useState<Record<string, LeaveDetail>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<"api" | "error">("api");
+  // GAP-HR-LEAVE-APPROVALS-01: distinct from the main task-load `error` above
+  // — the TASKS load can succeed while the leave-detail ENRICHMENT call
+  // fails (it was always a separate, best-effort fetch). Previously that
+  // failure was invisible: every row silently fell back to "Unknown
+  // employee" with (now, since the disabled-button fix already in place)
+  // no way for the approver to tell "nobody applied" apart from "the
+  // context just failed to load, retry".
+  const [enrichError, setEnrichError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
 
   // Dialog state
@@ -62,15 +68,17 @@ export function LeaveApprovalsPanel() {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const formError = useFormError("leave application");
 
-  const loadTasks = useCallback(async (signal?: AbortSignal) => {
-    setLoading(true);
+  const loadTasks = useCallback(async (signal?: AbortSignal, silent = false) => {
+    if (!silent) setLoading(true);
     setError(null);
+    setEnrichError(null);
     try {
-      const [taskRes, leaveRes] = await Promise.all([
-        fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50", { signal }),
-        fetch("/api/proxy/v1/hrms/leave-requests", { signal }).catch(() => null),
-      ]);
-
+      // GAP-HR-LEAVE-APPROVALS-02: ask the server to filter by refType too —
+      // client-side filtering below stays as a safety net (workflow-service
+      // isn't in this repo snapshot, so whether it actually honours this
+      // param can't be verified here; this is a safe, additive request that
+      // changes nothing if it's ignored).
+      const taskRes = await fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50&refType=leave_app", { signal });
       if (!taskRes.ok) {
         const resolved = await formError.fromResponse(taskRes, "load");
         setSource("error");
@@ -78,15 +86,33 @@ export function LeaveApprovalsPanel() {
       }
       const taskBody = (await taskRes.json()) as { data?: WorkflowTask[] } | WorkflowTask[];
       const taskRows = Array.isArray(taskBody) ? taskBody : taskBody.data ?? [];
-      setTasks(taskRows.filter((wt) => wt.refType === "leave_app" && wt.status === "pending"));
+      const leaveTasks = taskRows.filter((wt) => wt.refType === "leave_app" && wt.status === "pending");
+      setTasks(leaveTasks);
 
-      // Leave context is best-effort: a failure here still shows tasks (with IDs).
+      // GAP-HR-LEAVE-APPROVALS-04: fetch exactly the applications these
+      // visible tasks reference (ids=...) instead of the caller's entire
+      // tenant/manager-scoped page — narrows what this panel ever
+      // requests, on top of (not instead of) the role-based scope GET
+      // /leave-requests already enforces server-side.
+      const ids = Array.from(new Set(leaveTasks.map((wt) => wt.refId).filter((id): id is string => !!id)));
+      if (ids.length === 0) {
+        setLeaveById({});
+        return;
+      }
+      const leaveRes = await fetch(`/api/proxy/v1/hrms/leave-requests?ids=${ids.map(encodeURIComponent).join(",")}`, { signal }).catch(() => null);
+      // Leave context is best-effort: a failure here still shows tasks (with
+      // IDs) — Approve/Reject are disabled per-row instead (hasLeaveDetail).
       if (leaveRes && leaveRes.ok) {
         const leaveBody = (await leaveRes.json()) as { data?: LeaveDetail[] } | LeaveDetail[];
         const leaveRows = Array.isArray(leaveBody) ? leaveBody : leaveBody.data ?? [];
         const map: Record<string, LeaveDetail> = {};
         for (const l of leaveRows) if (l?.id) map[l.id] = l;
         setLeaveById(map);
+      } else if (leaveRes) {
+        const resolved = await formError.fromResponse(leaveRes, "load");
+        setEnrichError(resolved.message);
+      } else {
+        setEnrichError(formError.fromException("load").message);
       }
     } catch (e) {
       // A signal abort (component unmounted, e.g. the user navigated away
@@ -98,7 +124,7 @@ export function LeaveApprovalsPanel() {
       setSource("error");
       setError(formError.fromException("load").message);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
     // formError.fromResponse/fromException/clear are stable (useCallback'd on
     // a fixed `area` string inside useFormError) even though the wrapping
@@ -119,7 +145,7 @@ export function LeaveApprovalsPanel() {
         const l = wt.refId ? leaveById[wt.refId] : undefined;
         return {
           ...wt,
-          employeeName: l?.employeeName ?? "Unknown employee",
+          employeeName: l?.employeeName ?? t("unknownEmployee"),
           leaveType: l?.leaveType ?? wt.name ?? "—",
           dates: l ? `${formatIndianDate(l.fromDate)} – ${formatIndianDate(l.toDate)}` : "—",
           days: l?.days ?? "—",
@@ -127,7 +153,7 @@ export function LeaveApprovalsPanel() {
           hasLeaveDetail: l != null,
         };
       }),
-    [tasks, leaveById],
+    [tasks, leaveById, t],
   );
 
   async function complete(task: EnrichedTask, decision: Decision, reason?: string) {
@@ -143,6 +169,12 @@ export function LeaveApprovalsPanel() {
         // services/workflow-service/src/modules/tasks/{validators,commands}.ts).
         // The reason is instead recorded as a comment on the leave application
         // below, via the task/comments module that already exists for this.
+        // GAP-HR-LEAVE-APPROVALS-03: that second POST is genuinely
+        // non-atomic and "internal"-only (the applicant never sees it) —
+        // fixing this needs workflow-service (completeTaskBody accepting
+        // and persisting `reason`, emitted on the decision event), which
+        // isn't in this repo snapshot. Not fixed here; see this cluster's
+        // PR description.
         body: JSON.stringify({ decision }),
       });
       if (!res.ok) {
@@ -181,8 +213,18 @@ export function LeaveApprovalsPanel() {
               }),
             },
       );
-      await loadTasks();
-      router.refresh();
+      // GAP-HR-LEAVE-APPROVALS-06: remove the decided row immediately
+      // instead of waiting on a full refetch, drop the unconditional
+      // router.refresh() (this route has no server-rendered data depending
+      // on it — approvals/page.tsx does no data fetching of its own), and
+      // don't re-request /leave-requests at all (reuse leaveById; the
+      // decided task is gone from `tasks`, so its detail row is simply
+      // never rendered again). Re-sync `tasks` from the server in the
+      // background (silent=true: no full-page loading flicker) only to
+      // pick up any newly-arrived pending task — if the server later
+      // rejects the decision, this background refresh restores the row.
+      setTasks((prev) => prev.filter((wt) => wt.id !== task.id));
+      void loadTasks(undefined, true);
     } catch {
       setDialogError(formError.fromException("save").message);
     } finally {
@@ -212,6 +254,7 @@ export function LeaveApprovalsPanel() {
             size="sm"
             style={{ minHeight: 44 }}
             disabled={!row.hasLeaveDetail}
+            title={!row.hasLeaveDetail ? t("cannotDecideTitle") : undefined}
             onClick={() => {
               setDialogError(undefined);
               setPending({ task: row, decision: "approve" });
@@ -224,6 +267,7 @@ export function LeaveApprovalsPanel() {
             size="sm"
             style={{ minHeight: 44 }}
             disabled={!row.hasLeaveDetail}
+            title={!row.hasLeaveDetail ? t("cannotDecideTitle") : undefined}
             onClick={() => {
               setDialogError(undefined);
               setPending({ task: row, decision: "reject" });
@@ -245,21 +289,28 @@ export function LeaveApprovalsPanel() {
       )}
 
       <DataSourceBadge source={source} />
+      {/* GAP-HR-LEAVE-APPROVALS-01: the enrichment call is separate from the
+          task load above (it can fail on its own) — shown as its own
+          dismissable-by-retry banner, not silently absorbed into "Unknown
+          employee" text with no indication anything went wrong. */}
+      {enrichError && (
+        <div style={{ padding: "10px 14px", marginBottom: 12, borderRadius: 8, background: "var(--warnbg)", border: "1px solid var(--warn)", fontSize: 13, display: "flex", alignItems: "center", gap: 8 }} role="alert">
+          <span aria-hidden="true">⚠️</span>
+          <span>{t("enrichErrorMessage")}</span>
+          <Button variant="ghost" size="sm" style={{ marginInlineStart: "auto" }} onClick={() => void loadTasks()}>
+            {t("retry")}
+          </Button>
+        </div>
+      )}
       <Card title={t("panelTitle")}>
         {loading ? (
           <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }} aria-live="polite">
             {t("loadingTasks")}
           </div>
         ) : error ? (
-          <EmptyState
-            icon="⚠️"
-            title={t("loadErrorTitle")}
-            message={error}
-            action={
-              <Button variant="ghost" onClick={() => void loadTasks()}>
-                {t("retry")}
-              </Button>
-            }
+          <ErrorState
+            error={{ what: t("loadErrorTitle"), next: error, actions: ["retry"] }}
+            onRetry={() => void loadTasks()}
           />
         ) : enriched.length === 0 ? (
           <EmptyState
@@ -283,7 +334,11 @@ export function LeaveApprovalsPanel() {
         open={pending !== null}
         title={pending?.decision === "approve" ? t("approveDialogTitle") : t("rejectDialogTitle")}
         danger={pending?.decision === "reject"}
-        requireReason
+        // GAP-HR-LEAVE-APPROVALS-05 (decision): approve's remark is friction
+        // for a routine, low-risk decision — only reject (which needs a
+        // reason the applicant/audit trail can point to) requires one.
+        requireReason={pending?.decision === "reject"}
+        optionalReason={pending?.decision === "approve"}
         reasonLabel={pending?.decision === "approve" ? t("approveRemarksLabel") : t("rejectReasonLabel")}
         confirmLabel={pending?.decision === "approve" ? t("approveConfirmLabel") : t("rejectConfirmLabel")}
         busy={busy}
