@@ -16,24 +16,47 @@
 import { useCallback, useEffect, useState } from "react";
 import { useToast } from "@/app/_components/ds/Toast";
 import { Button } from "@/app/_components/ds";
+import { useFormError } from "@/lib/useFormError";
 
 type Employee = { id: string; name?: string; designation?: string; departmentId?: string; department?: string };
 type Department = { id: string; name: string };
 type Officer = { id: string; name: string; designation?: string };
 type PayStructureOption = { id: string; name?: string; code?: string };
+type LookupStatus = "loading" | "ok" | "error";
 
-export function TransferWithApproval() {
-  const [open, setOpen] = useState(false);
+interface Props {
+  /**
+   * GAP-HR-TRANSFER-09: employee detail's "Initiate Transfer" quick action
+   * links to `/hr/transfer?empId=...`, but nothing here ever read it -- the
+   * wizard always opened closed and blank regardless. transfer/page.tsx
+   * resolves the id to a real employee record server-side (name only --
+   * EmployeeDetailSchema has no departmentId, only a department NAME) and
+   * passes it down; validated as a real, existing employee before use,
+   * never trusted as a raw pass-through id. The department is filled in
+   * here once the employees list loads, via the exact same
+   * departmentId/department resolution the manual employee <select>'s
+   * onChange already does below -- not re-derived a second way.
+   */
+  prefillEmployee?: { id: string; name: string } | null;
+}
+
+export function TransferWithApproval({ prefillEmployee }: Props = {}) {
+  const [open, setOpen] = useState(Boolean(prefillEmployee));
   const [step, setStep] = useState<1 | 2>(1);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [officers, setOfficers] = useState<Officer[]>([]);
   const [payStructures, setPayStructures] = useState<PayStructureOption[]>([]);
+  const [deptStatus, setDeptStatus] = useState<LookupStatus>("loading");
+  const [officerStatus, setOfficerStatus] = useState<LookupStatus>("loading");
+  const [payStructureStatus, setPayStructureStatus] = useState<LookupStatus>("loading");
+  const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const { toast } = useToast();
+  const formError = useFormError("transfer request");
 
-  const [employeeId, setEmployeeId] = useState("");
+  const [employeeId, setEmployeeId] = useState(prefillEmployee?.id ?? "");
   const [fromDeptId, setFromDeptId] = useState("");
   const [fromDeptName, setFromDeptName] = useState("");
   const [toDeptId, setToDeptId] = useState("");
@@ -58,6 +81,7 @@ export function TransferWithApproval() {
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
+    setDeptStatus("loading"); setOfficerStatus("loading"); setPayStructureStatus("loading");
     void (async () => {
       try {
         const [empRes, deptRes, offRes, psRes] = await Promise.all([
@@ -74,32 +98,62 @@ export function TransferWithApproval() {
         if (deptRes.ok) {
           const body = (await deptRes.json()) as { data?: Department[] } | Department[];
           setDepartments(Array.isArray(body) ? body : (body.data ?? []));
+          setDeptStatus("ok");
+        } else {
+          setDeptStatus("error");
         }
         if (offRes.ok) {
           const body = (await offRes.json()) as { data?: Officer[] } | Officer[];
           setOfficers(Array.isArray(body) ? body : (body.data ?? []));
+          setOfficerStatus("ok");
+        } else {
+          setOfficerStatus("error");
         }
         if (psRes.ok) {
           const body = (await psRes.json()) as { data?: PayStructureOption[] } | PayStructureOption[];
           setPayStructures(Array.isArray(body) ? body : (body.data ?? []));
+          setPayStructureStatus("ok");
+        } else {
+          // Pay structure is optional -- a failed fetch just means "no
+          // change" stays the only option, not a hard error state.
+          setPayStructureStatus("ok");
         }
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") return;
-        /* graceful fallback to text inputs */
+        setDeptStatus((s) => (s === "loading" ? "error" : s));
+        setOfficerStatus((s) => (s === "loading" ? "error" : s));
+        // Pay structure is optional; never leave its select stuck disabled.
+        setPayStructureStatus((s) => (s === "loading" ? "ok" : s));
       }
     })();
     return () => controller.abort();
-  }, [open]);
+  }, [open, reloadKey]);
+
+  // GAP-HR-TRANSFER-09: once the employees list loads, fill in the
+  // prefilled employee's current department -- the exact same resolution
+  // the Employee <select>'s own onChange uses below, just triggered by data
+  // arriving instead of a user pick.
+  useEffect(() => {
+    if (!prefillEmployee || employeeId !== prefillEmployee.id || fromDeptId) return;
+    const emp = employees.find((x) => x.id === prefillEmployee.id);
+    if (emp?.departmentId) {
+      setFromDeptId(emp.departmentId);
+      setFromDeptName(emp.department ?? departments.find((d) => d.id === emp.departmentId)?.name ?? "");
+    }
+  }, [employees, departments, prefillEmployee, employeeId, fromDeptId]);
 
   const reset = () => {
-    setEmployeeId(""); setFromDeptId(""); setFromDeptName(""); setToDeptId("");
+    setEmployeeId(prefillEmployee?.id ?? "");
+    setFromDeptId("");
+    setFromDeptName("");
+    setToDeptId("");
     setPayStructureId("");
     setEffectiveDate(""); setInitiatedBy(""); setCurrentWith(""); setNote("");
     setSubmittedTransferId(null);
     setStep(1);
   };
 
-  const selectedEmployee = employees.find((e) => e.id === employeeId);
+  const selectedEmployee = employees.find((e) => e.id === employeeId) ?? (prefillEmployee && prefillEmployee.id === employeeId ? { id: prefillEmployee.id, name: prefillEmployee.name } : undefined);
 
   const validateStep1 = (): boolean => {
     if (!employeeId) { setError("Select an employee."); return false; }
@@ -140,7 +194,15 @@ export function TransferWithApproval() {
             payStructureId: payStructureId || undefined,
           }),
         });
-        if (!subRes.ok) throw new Error((await subRes.text()) || "Could not create transfer request");
+        if (!subRes.ok) {
+          // GAP-HR-TRANSFER-03: this used to be `throw new Error((await
+          // subRes.text()) || "...")` -- the raw response body (which can be
+          // an unstyled JSON envelope or an internal error string) shown
+          // directly to the user. Route it through the same clerk-safe
+          // useFormError path TransferOrderCard.tsx already uses.
+          const resolved = await formError.fromResponse(subRes, "save");
+          throw new Error(resolved.message);
+        }
         const sub = (await subRes.json()) as { id?: string };
         if (!sub.id) throw new Error("Transfer request id missing in response");
         transferId = sub.id;
@@ -165,9 +227,9 @@ export function TransferWithApproval() {
         }),
       });
       if (!raiseRes.ok) {
+        const resolved = await formError.fromResponse(raiseRes, "save");
         throw new Error(
-          (await raiseRes.text()) ||
-          "Transfer request created, but raising the eFile failed. It is safe to click Submit again — it will retry only the eFile step, not create another transfer request.",
+          `Transfer request created, but raising the eFile failed (${resolved.message}). It is safe to click Submit again — it will retry only the eFile step, not create another transfer request.`,
         );
       }
       const file = (await raiseRes.json()) as { fileNo?: string };
@@ -175,12 +237,12 @@ export function TransferWithApproval() {
       reset();
       setOpen(false);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed");
+      setError(err instanceof Error ? err.message : formError.fromException("save").message);
     } finally {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- validateStep2 is redefined each render but only closes over values already listed in this array (initiatedBy, currentWith, note[, t]).
-  }, [employeeId, fromDeptId, toDeptId, payStructureId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, submittedTransferId, toast]);
+  }, [employeeId, fromDeptId, toDeptId, payStructureId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, submittedTransferId, toast, formError]);
 
   return (
     <>
@@ -223,6 +285,12 @@ export function TransferWithApproval() {
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   >
                     <option value="">Select employee…</option>
+                    {/* GAP-HR-TRANSFER-09: the prefilled employee must always
+                        be selectable even if they fall outside this
+                        unsearched limit=200 list. */}
+                    {prefillEmployee && !employees.some((e) => e.id === prefillEmployee.id) && (
+                      <option value={prefillEmployee.id}>{prefillEmployee.name}</option>
+                    )}
                     {employees.map((e) => (
                       <option key={e.id} value={e.id}>
                         {e.name ?? e.id}{e.designation ? ` · ${e.designation}` : ""}{e.department ? ` (${e.department})` : ""}
@@ -243,23 +311,29 @@ export function TransferWithApproval() {
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
                   <span style={{ fontWeight: 600 }}>Transfer to (department)</span>
-                  <select
-                    value={toDeptId}
-                    onChange={(e) => setToDeptId(e.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                  >
-                    <option value="">Select destination department…</option>
-                    {departments.filter((d) => d.id !== fromDeptId).map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                  </select>
-                  {departments.length === 0 && (
-                    <input
+                  {/* GAP-HR-TRANSFER-06: a failed departments fetch used to
+                      silently swap in a raw "Department ID" text box --
+                      asking a clerk to type a UUID with no guidance on
+                      where to find one. Shows an honest error + retry
+                      instead; Next already can't proceed without a real
+                      selection (validateStep1). */}
+                  {deptStatus === "error" ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>Couldn't load departments.</span>
+                      <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>Retry</Button>
+                    </div>
+                  ) : (
+                    <select
                       value={toDeptId}
-                      placeholder="Department ID (loading departments…)"
                       onChange={(e) => setToDeptId(e.target.value)}
+                      disabled={deptStatus === "loading"}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                    />
+                    >
+                      <option value="">{deptStatus === "loading" ? "Loading departments…" : "Select destination department…"}</option>
+                      {departments.filter((d) => d.id !== fromDeptId).map((d) => (
+                        <option key={d.id} value={d.id}>{d.name}</option>
+                      ))}
+                    </select>
                   )}
                 </label>
 
@@ -275,25 +349,17 @@ export function TransferWithApproval() {
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
                   <span style={{ fontWeight: 600 }}>New pay structure (optional)</span>
-                  {payStructures.length > 0 ? (
-                    <select
-                      value={payStructureId}
-                      onChange={(e) => setPayStructureId(e.target.value)}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                    >
-                      <option value="">No change</option>
-                      {payStructures.map((ps) => (
-                        <option key={ps.id} value={ps.id}>{ps.name ?? ps.code ?? ps.id}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input
-                      value={payStructureId}
-                      placeholder="Pay structure ID (optional)"
-                      onChange={(e) => setPayStructureId(e.target.value)}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                    />
-                  )}
+                  <select
+                    value={payStructureId}
+                    onChange={(e) => setPayStructureId(e.target.value)}
+                    disabled={payStructureStatus === "loading"}
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
+                  >
+                    <option value="">No change</option>
+                    {payStructures.map((ps) => (
+                      <option key={ps.id} value={ps.id}>{ps.name ?? ps.code ?? ps.id}</option>
+                    ))}
+                  </select>
                 </label>
               </div>
 
@@ -327,47 +393,42 @@ export function TransferWithApproval() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
                   <span style={{ fontWeight: 600 }}>Initiating officer</span>
-                  {officers.length > 0 ? (
+                  {officerStatus === "error" ? (
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>Couldn't load officers.</span>
+                      <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>Retry</Button>
+                    </div>
+                  ) : (
                     <select
                       value={initiatedBy}
                       onChange={(e) => setInitiatedBy(e.target.value)}
+                      disabled={officerStatus === "loading"}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
-                      <option value="">Select initiating officer…</option>
+                      <option value="">{officerStatus === "loading" ? "Loading officers…" : "Select initiating officer…"}</option>
                       {officers.map((o) => (
                         <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
                       ))}
                     </select>
-                  ) : (
-                    <input
-                      value={initiatedBy}
-                      placeholder="Officer ID"
-                      onChange={(e) => setInitiatedBy(e.target.value)}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                    />
                   )}
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
                   <span style={{ fontWeight: 600 }}>Forward to (approving officer)</span>
-                  {officers.length > 0 ? (
+                  {officerStatus === "error" ? (
+                    <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>Couldn't load officers.</span>
+                  ) : (
                     <select
                       value={currentWith}
                       onChange={(e) => setCurrentWith(e.target.value)}
+                      disabled={officerStatus === "loading"}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
-                      <option value="">Select approving officer…</option>
+                      <option value="">{officerStatus === "loading" ? "Loading officers…" : "Select approving officer…"}</option>
                       {officers.filter((o) => o.id !== initiatedBy).map((o) => (
                         <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
                       ))}
                     </select>
-                  ) : (
-                    <input
-                      value={currentWith}
-                      placeholder="Officer ID"
-                      onChange={(e) => setCurrentWith(e.target.value)}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                    />
                   )}
                 </label>
               </div>

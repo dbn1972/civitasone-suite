@@ -17,7 +17,10 @@ function row(overrides: Partial<TransferRow> = {}): TransferRow {
     employee: "Ramesh Kumar",
     fromOffice: "Collectorate, Pune",
     toOffice: "DM Office, Nashik",
-    status: "pending",
+    // GAP-HR-TRANSFER-07/08: "pending" was never a real backend status --
+    // POST /transfers actually creates "requested" (lifecycle/consumer.ts);
+    // the button gates below now match the real enum.
+    status: "requested",
     ...overrides,
   };
 }
@@ -62,7 +65,7 @@ describe("TransferOrderCard", () => {
   });
 
   it("lets the officer back out via Cancel without calling the API", () => {
-    render(<TransferOrderCard transfer={row({ status: "order_issued" })} />);
+    render(<TransferOrderCard transfer={row({ status: "ordered" })} />);
 
     fireEvent.click(screen.getByText("Mark Relieved"));
     expect(screen.getByRole("alertdialog")).toBeInTheDocument();
@@ -74,15 +77,35 @@ describe("TransferOrderCard", () => {
   });
 
   it("does not render the pipeline as actively progressing for a cancelled transfer", () => {
-    // Regression test: stageIndex() has no "cancelled" entry and defaulted to
-    // 0, so the timeline highlighted "Initiated" as the current/active stage
-    // for a cancelled transfer -- directly contradicting the "Cancelled"
-    // status pill shown right next to it.
+    // Regression test: the pipeline previously had no "cancelled" entry and
+    // defaulted to index 0, so the timeline highlighted "Requested" as the
+    // current/active stage for a cancelled transfer -- directly
+    // contradicting the "Cancelled" status pill shown right next to it.
     render(<TransferOrderCard transfer={row({ status: "cancelled" })} />);
 
     expect(screen.getByText("Cancelled")).toBeInTheDocument();
     expect(screen.queryByLabelText("Transfer status timeline")).not.toBeInTheDocument();
     expect(screen.getByText(/cancelled before completing the pipeline/)).toBeInTheDocument();
+  });
+
+  // GAP-HR-TRANSFER-08: an eOffice-path transfer (pending_approval/
+  // pending_effective) doesn't advance through the direct 4-step pipeline
+  // at all (no "Issue Order"/"Mark Relieved" backend transition applies to
+  // it) -- shown as plain status text instead, with no action buttons that
+  // would 409 if clicked.
+  describe("eOffice-path statuses", () => {
+    it("shows plain status text (no pipeline, no action buttons) while pending_approval", () => {
+      render(<TransferOrderCard transfer={row({ status: "pending_approval" })} />);
+      expect(screen.getByText(/Awaiting eOffice decision/)).toBeInTheDocument();
+      expect(screen.queryByLabelText("Transfer status timeline")).not.toBeInTheDocument();
+      expect(screen.queryByText("Issue Order")).not.toBeInTheDocument();
+    });
+
+    it("shows plain status text while pending_effective", () => {
+      render(<TransferOrderCard transfer={row({ status: "pending_effective" })} />);
+      expect(screen.getByText(/effective on the recorded date/)).toBeInTheDocument();
+      expect(screen.queryByLabelText("Transfer status timeline")).not.toBeInTheDocument();
+    });
   });
 
   it("falls back to the employee id when no resolved employee name is present", () => {
