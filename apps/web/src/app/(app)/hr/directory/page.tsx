@@ -82,9 +82,17 @@ export default async function DirectoryPage({ searchParams }: { searchParams?: R
       />
       <DataSourceBadge source={source} />
       {hasMore && (
+        // CI a11y ratchet fix: this used to be a non-interactive <span
+        // role="status"> (a passive live-region notice); turning it into a
+        // real "load next page" link kept the old role="status" along for
+        // the ride, but role="status" is a non-interactive live-region role
+        // and <a href> is inherently interactive -- jsx-a11y's
+        // no-interactive-element-to-noninteractive-role rightly flags that
+        // combination. <a href> already has the correct native "link"
+        // semantics (and an accessible name from its own text), so no
+        // explicit role is needed at all.
         <a
           href={`/hr/directory?${new URLSearchParams({ ...(q ? { q } : {}), page: String(page + 1) }).toString()}`}
-          role="status"
           className="inline-flex items-center rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800"
           style={{ marginBottom: 12, textDecoration: 'underline' }}
         >
