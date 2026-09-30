@@ -189,6 +189,14 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         toDate: r.tenureTo,
         period: months > 0 ? `${months} mo` : "—",
         status: r.status,
+        // GAP-HR-DEPUTATION-03: the card already rendered a "Revised
+        // Compensation" field, but this route never sent it (there is no
+        // such column) -- the field was permanently dead. The real stored
+        // value is deputationAllowanceMinor (paise/month); serialize as a
+        // string, never a JS number, since it is a bigint column (money
+        // precision rule). recallStatus is dropped from the response and
+        // the web card entirely: no such concept exists on this schema.
+        deputationAllowanceMinor: r.deputationAllowanceMinor?.toString() ?? null,
       };
     });
     return reply.send({ data, hasMore: rows.length === 500 });
