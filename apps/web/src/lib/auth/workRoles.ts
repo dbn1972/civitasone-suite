@@ -85,6 +85,56 @@ export const FINANCE_ROLES = [
  * passed straight into `requireAnyRole(allowed: string[])`, and this
  * extraction keeps that exact type so the call site needs no cast or
  * spread — a smaller diff for a change that must not alter behavior.
+ *
+ * GAP-HR-SF-09b widened this list by four roles, resolving the largest
+ * cluster of tests/contract/hr-role-matrix.allowlist.json's drift entries
+ * (GAP-HR-SF09A-001/002/003/011/012/014, ~149 of the ~186 tracked drifts).
+ * This is the SAME reciprocal-widening move FINANCE_ROLES's own doc comment
+ * above already describes making in the mirror-image direction ("a
+ * payroll_admin hitting the PFMS salary-bill bridge"); this side of that
+ * exchange had never been made:
+ *
+ *  - "finance_officer", "finance_admin": already named directly in >120
+ *    hrms-service/payroll-service routes this layout gates (gpf, nps,
+ *    pension, cpf, pay-matrix, payroll-config, apprentice-stipend,
+ *    consultant-invoice, contractor-bill, contracts, loans, salary-slips) --
+ *    HR-hosted but finance-owned statutory/benefit/vendor-payment modules.
+ *    Confirmed intended (not just backend-reachable-by-accident) by
+ *    redesign/gaps/hr.md GAP-HR-ADVANCES-04 and GAP-HR-LOANS-04, both of
+ *    which independently arrive at "add finance_admin ... to HR_ROLES" as
+ *    the fix once finance access is confirmed intentional. Every route
+ *    these two roles reach still enforces its OWN `requireRole(ctx, ...)`
+ *    check first -- this list only stops the layout from turning them away
+ *    before that real check ever runs; it grants no new backend access.
+ *  - "admin": bare "admin" was already admitted by FOUR of this same /hr
+ *    tree's own page-level gates (departments/new, designations/new,
+ *    leave-policies, locations/new -- see hrTileAccess.ts) and by several
+ *    backend files, but rejected at this outer layout gate first -- the
+ *    single most internally-inconsistent finding in the SF-09a sweep
+ *    (GAP-HR-SF09A-002): the web layer disagreed with itself.
+ *  - "officer": a real, if legacy, platform role -- confirmed via
+ *    services/policy-service/src/modules/roles/keycloak-catalog.ts's own
+ *    "7 role names the real Keycloak realm actually issues" list, and via
+ *    apps/web/src/app/api/auth/dev-login/route.ts's `officer` persona --
+ *    used consistently by 4 hrms-service files (employee-types-routes.ts,
+ *    engagement-policy.ts, loans-routes.ts, face-verification/routes.ts)
+ *    for years, but never reachable through /hr at all (GAP-HR-SF09A-003/
+ *    011/014; redesign/gaps/hr.md's own EMPLOYEE-TYPES-04 speculates this
+ *    role "cannot be verified" -- the keycloak catalog resolves that doubt).
+ *
+ * NOTE for reviewers: this is the one entry in GAP-HR-SF-09b's fix set that
+ * genuinely widens access at the single outermost gate for the entire /hr,
+ * /hr/payroll and /hr/recruitment tree, rather than correcting an
+ * already-narrow page-level gate -- flagged for explicit sign-off per the
+ * campaign's security-change convention, even though every one of these
+ * four roles already had real, intentional backend access this list was
+ * simply failing to let them reach. Deliberately NOT adding here (left
+ * allowlisted, see hr-role-matrix.allowlist.json): "dept_head" (also a real
+ * keycloak-catalog role, but zero existing web-side precedent anywhere in
+ * apps/web, unlike the four above -- a first-time grant, not a reconciled
+ * drift; needs its own product decision) and the ad hoc recruitment/audit/
+ * device-trust panel roles (hiring_manager, audit_admin, it_admin,
+ * interviewer, vigilance_officer), none of which any web page references.
  */
 export const HR_ROLES = [
   "hr_admin",
@@ -103,6 +153,10 @@ export const HR_ROLES = [
   // HOME-01), so the hub already filters correctly once this layout admits
   // the role at all.
   "icc_member",
+  "admin",
+  "officer",
+  "finance_officer",
+  "finance_admin",
 ];
 
 /**
