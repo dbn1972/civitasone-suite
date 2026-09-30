@@ -105,7 +105,7 @@ describe("DesignationsTable — GAP-HR-DESIGNATIONS-01 pay level bounded 1-18", 
 
   it("rejects an edited level above 18 and never calls the API", async () => {
     renderTable();
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: /^edit/i }));
     fireEvent.change(screen.getByLabelText(/pay level/i), { target: { value: "40" } });
     fireEvent.click(screen.getByRole("button", { name: /save/i }));
 
@@ -116,7 +116,7 @@ describe("DesignationsTable — GAP-HR-DESIGNATIONS-01 pay level bounded 1-18", 
   it("accepts an edited level at the top of the real range (18) and shows it classified as Group A", async () => {
     fetchMock.mockResolvedValue(new Response("", { status: 200 }));
     renderTable();
-    fireEvent.click(screen.getByRole("button", { name: "Edit" }));
+    fireEvent.click(screen.getByRole("button", { name: /^edit/i }));
     fireEvent.change(screen.getByLabelText(/pay level/i), { target: { value: "18" } });
 
     // Live-computed Service Group preview while editing (no more "computed
