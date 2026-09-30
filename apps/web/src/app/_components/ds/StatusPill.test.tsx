@@ -248,3 +248,20 @@ describe("StatusPill", () => {
     });
   });
 });
+
+// --- GAP-HR-TRAINING-NOMINATIONS-01: nominated/waitlisted/attended are real
+// hrms_nominations.status values (training/schema.ts's CHECK constraint,
+// training-admin/routes.ts's approve/reject logic) that had no STATUS_MAP
+// entry at all before this change, so they fell back to the neutral "info"
+// tone -- "nominated" (awaiting HR review) reads as an actionable "warn",
+// matching how this same file already treats other awaiting-review states
+// ("pending", "submitted", "under review").
+describe("GAP-HR-TRAINING-NOMINATIONS-01: training nomination status keys", () => {
+  it.each([
+    ["nominated", "warn"],
+    ["waitlisted", "info"],
+    ["attended", "info"],
+  ])("%s -> %s", (status, tone) => {
+    expect(pillTone(status)).toBe(tone);
+  });
+});
