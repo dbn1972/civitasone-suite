@@ -88,11 +88,27 @@ export async function listLeaveApplications(tenantId: string, limit: number, off
   };
 }
 
-export async function listLeaveRequestDetails(tenantId: string, limit: number, offset = 0) {
-  return cache.listOrLoad(tenantId, "leave_request_detail", `list:${limit}:${offset}`, async () => {
-    const rows = await repo.findLeaveAppsByTenant(tenantId, limit, offset);
+/**
+ * GAP-HR-LEAVE-03/04: `employeeIds` now flows straight into the SQL query
+ * (repo.findLeaveAppsByTenant) instead of being applied by the caller as a
+ * post-fetch filter on an already limit/offset-truncated tenant-wide page
+ * (which could silently hide a scoped caller's own rows if they fell outside
+ * that page). The cache key includes a scope fingerprint so an HR (unscoped)
+ * read and a manager/employee (scoped) read of the "same" limit/offset never
+ * collide. Employee-name resolution now looks up exactly the employees
+ * referenced by the returned rows (`listByIds`) instead of the first 500 in
+ * the tenant, so a request from employee #550 of 600 still resolves a real
+ * name; a genuinely missing employee falls back to "Unknown employee", not a
+ * UUID fragment.
+ */
+export async function listLeaveRequestDetails(tenantId: string, limit: number, offset = 0, employeeIds?: string[]) {
+  if (employeeIds && employeeIds.length === 0) return [];
+  const scopeKey = employeeIds ? [...employeeIds].sort().join(",") : "all";
+  return cache.listOrLoad(tenantId, "leave_request_detail", `list:${limit}:${offset}:${scopeKey}`, async () => {
+    const rows = await repo.findLeaveAppsByTenant(tenantId, limit, offset, employeeIds);
+    const distinctEmployeeIds = Array.from(new Set(rows.map((r) => r.employeeId)));
     const [employees, leaveTypes] = await Promise.all([
-      employeeRepo.listByTenant(tenantId, 500, 0),
+      employeeRepo.listByIds(tenantId, distinctEmployeeIds),
       repo.listLeaveTypesByTenant(tenantId),
     ]);
     const empMap = new Map(employees.map((e) => [e.id, e]));
@@ -100,7 +116,7 @@ export async function listLeaveRequestDetails(tenantId: string, limit: number, o
     return rows.map((r) => ({
       id: r.id,
       employeeId: r.employeeId,
-      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
+      employeeName: empMap.get(r.employeeId)?.fullName ?? "Unknown employee",
       leaveType: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
       fromDate: r.fromDate,
       toDate: r.toDate,

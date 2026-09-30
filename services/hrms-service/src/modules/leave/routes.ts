@@ -357,17 +357,18 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     // full tenant view (unchanged); a manager is scoped to their direct
     // reports (never themselves -- "my team" = direct reports, not self,
     // same convention as the sibling routes' own regression tests); a bare
-    // employee is scoped to just their own linked record. Filtering happens
-    // after the existing cached tenant-wide fetch rather than adding a new
-    // query variant, so HR's behavior/cache-key is byte-for-byte unchanged.
+    // employee is scoped to just their own linked record.
+    //
+    // GAP-HR-LEAVE-03/04 follow-up: scoping used to be a post-fetch filter
+    // applied on top of an already limit/offset-truncated tenant-wide query
+    // (with no ORDER BY) — a manager/employee's own rows could fall outside
+    // that page and be silently dropped even though they existed. Scoping
+    // now happens in the WHERE clause itself (repo.findLeaveAppsByTenant's
+    // employeeIds param) with a deterministic ORDER BY, so limit/offset
+    // paginate the caller's own visible set, not the tenant's.
     const employeeIds = await resolveLeaveReadScope(ctx, req, q.empId);
-    const rows = await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset);
-    if (employeeIds === undefined) {
-      sendValidated(reply, LeaveRequestDetailListSchema, rows);
-      return;
-    }
-    const scoped = new Set(employeeIds);
-    sendValidated(reply, LeaveRequestDetailListSchema, rows.filter((r) => scoped.has(r.employeeId)));
+    const rows = await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset, employeeIds);
+    sendValidated(reply, LeaveRequestDetailListSchema, rows);
   });
 
   app.setErrorHandler(errorHandler);

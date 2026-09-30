@@ -42,6 +42,12 @@ const OUTSIDER_ALLOC = "facade00-0f16-4000-8000-0000000000a4";
 const MANAGER_APP  = "facade00-0f16-4000-8000-0000000000b1";
 const REPORT1_APP  = "facade00-0f16-4000-8000-0000000000b2";
 const OUTSIDER_APP = "facade00-0f16-4000-8000-0000000000b4";
+// GAP-HR-LEAVE-03/04: two more requests for OUTSIDER with explicit,
+// far-apart created_at values (set directly in the INSERT below, not left to
+// wall-clock insertion order) to prove ORDER BY is real and deterministic —
+// not an accident of insertion sequence.
+const OLDER_APP = "facade00-0f16-4000-8000-0000000000b5";
+const NEWER_APP = "facade00-0f16-4000-8000-0000000000b6";
 
 const MANAGER_SUB      = "leave-requests-mgr-f16";
 const REPORT1_SUB      = "leave-requests-report1-f16";
@@ -128,6 +134,16 @@ beforeAll(async () => {
       VALUES (${appId}, ${TENANT}, ${empId}, ${LEAVE_TYPE_ID}, ${allocId}, '2026-11-01', '2026-11-01', 1, 'pending', ${SEED_ACTOR}, ${SEED_ACTOR})
     `);
   }
+  // GAP-HR-LEAVE-03/04: explicit, far-apart created_at values so ordering
+  // assertions below don't depend on wall-clock insertion timing.
+  await asTenant((tx) => tx`
+    INSERT INTO leave.hrms_leave_apps (id, tenant_id, employee_id, leave_type_id, alloc_id, from_date, to_date, days_applied, status, created_at, created_by, updated_by)
+    VALUES (${OLDER_APP}, ${TENANT}, ${OUTSIDER_ID}, ${LEAVE_TYPE_ID}, ${OUTSIDER_ALLOC}, '2025-01-10', '2025-01-10', 1, 'pending', '2025-01-01T00:00:00Z', ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO leave.hrms_leave_apps (id, tenant_id, employee_id, leave_type_id, alloc_id, from_date, to_date, days_applied, status, created_at, created_by, updated_by)
+    VALUES (${NEWER_APP}, ${TENANT}, ${OUTSIDER_ID}, ${LEAVE_TYPE_ID}, ${OUTSIDER_ALLOC}, '2026-12-20', '2026-12-20', 1, 'pending', '2026-12-01T00:00:00Z', ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
 
   app = await buildApp();
 });
@@ -170,13 +186,61 @@ describe("GET /v1/hrms/leave-requests — read scope (GAP-HR-SF-16 item 1)", () 
     expect(ids).not.toContain(OUTSIDER_APP);
   });
 
-  it("HR: full tenant-wide access is preserved (unchanged)", async () => {
+  it("HR: full tenant-wide access is preserved (unchanged), with real employee names resolved", async () => {
+    const r = await app.inject({
+      method: "GET", url: "/v1/hrms/leave-requests",
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const rows = JSON.parse(r.body) as Array<{ id: string; employeeName: string }>;
+    const ids = rows.map((a) => a.id);
+    expect(ids).toEqual(expect.arrayContaining([MANAGER_APP, REPORT1_APP, OUTSIDER_APP]));
+    // GAP-HR-LEAVE-03: employee-name resolution now looks up exactly the
+    // employees referenced by the returned rows (not "the first 500 in the
+    // tenant"), so every seeded row gets a real name, never a UUID fragment
+    // or the "Unknown employee" fallback.
+    const byId = new Map(rows.map((r) => [r.id, r.employeeName]));
+    expect(byId.get(MANAGER_APP)).toBe("Leave Req Manager");
+    expect(byId.get(REPORT1_APP)).toBe("Leave Req Report One");
+    expect(byId.get(OUTSIDER_APP)).toBe("Leave Req Outsider");
+  });
+
+  // GAP-HR-LEAVE-03/04: scoping used to be a post-fetch filter applied on
+  // top of an already limit/offset-truncated, UNORDERED tenant-wide query —
+  // a scoped caller's own rows could fall outside that page and be silently
+  // dropped. Scoping is now in the SQL WHERE clause itself, with a real
+  // ORDER BY, so limit/offset paginate the caller's own visible set.
+  it("results are ordered newest-first and deterministic — not insertion/wall-clock order", async () => {
     const r = await app.inject({
       method: "GET", url: "/v1/hrms/leave-requests",
       headers: { authorization: `Bearer ${hrToken}` },
     });
     expect(r.statusCode).toBe(200);
     const ids = (JSON.parse(r.body) as Array<{ id: string }>).map((a) => a.id);
-    expect(ids).toEqual(expect.arrayContaining([MANAGER_APP, REPORT1_APP, OUTSIDER_APP]));
+    // NEWER_APP (created_at 2026-12-01) must sort strictly before OLDER_APP
+    // (created_at 2025-01-01) regardless of insertion order.
+    expect(ids.indexOf(NEWER_APP)).toBeGreaterThanOrEqual(0);
+    expect(ids.indexOf(OLDER_APP)).toBeGreaterThanOrEqual(0);
+    expect(ids.indexOf(NEWER_APP)).toBeLessThan(ids.indexOf(OLDER_APP));
+  });
+
+  it("a scoped caller's own row is still returned even with a small limit that would truncate an unordered tenant-wide page first (regression for the pagination/scope interaction bug)", async () => {
+    // With limit=1 pre-fix behaviour (fetch tenant-wide page of 1, THEN
+    // filter to the caller's scope) would almost always return zero rows
+    // for OUTSIDER unless their single row happened to be the very newest
+    // in the whole tenant. Scoping in SQL means limit=1 instead returns
+    // exactly OUTSIDER's own newest row.
+    // HR passing `empId` collapses resolveLeaveReadScope to a single-element
+    // scope ([OUTSIDER_ID]) — the same code path a manager/employee token
+    // would hit, without needing a second seeded actor for this assertion.
+    const r2 = await app.inject({
+      method: "GET", url: `/v1/hrms/leave-requests?limit=1&empId=${OUTSIDER_ID}`,
+      headers: { authorization: `Bearer ${hrToken}` },
+    });
+    expect(r2.statusCode).toBe(200);
+    const rows2 = JSON.parse(r2.body) as Array<{ id: string; employeeId: string }>;
+    expect(rows2).toHaveLength(1);
+    expect(rows2[0]!.employeeId).toBe(OUTSIDER_ID);
+    expect(rows2[0]!.id).toBe(NEWER_APP); // newest of OUTSIDER's 3 rows
   });
 });

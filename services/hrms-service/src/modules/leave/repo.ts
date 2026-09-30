@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, inArray, ne, sql } from "drizzle-orm";
+import { eq, and, gte, lte, inArray, ne, sql, desc } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps,
@@ -54,9 +54,26 @@ export async function findLeaveAppsByEmp(tenantId: string, employeeId: string, l
     .limit(limit));
 }
 
-export async function findLeaveAppsByTenant(tenantId: string, limit = 100, offset = 0): Promise<LeaveAppRow[]> {
+/**
+ * GAP-HR-LEAVE-03/04: added `employeeIds` (SQL-level scoping, replacing a
+ * post-fetch filter applied on top of an already limit/offset-truncated
+ * tenant-wide page -- see leave/routes.ts's GET /leave-requests) and an
+ * ORDER BY for deterministic, newest-first pages. `employeeIds`: `undefined`
+ * = unscoped (HR, unchanged); an explicit empty array short-circuits to no
+ * rows without a DB round-trip (mirrors listLeaveAllocations' convention).
+ */
+export async function findLeaveAppsByTenant(
+  tenantId: string,
+  limit = 100,
+  offset = 0,
+  employeeIds?: string[],
+): Promise<LeaveAppRow[]> {
+  if (employeeIds && employeeIds.length === 0) return [];
+  const conditions = [eq(hrmsLeaveApps.tenantId, tenantId)];
+  if (employeeIds) conditions.push(inArray(hrmsLeaveApps.employeeId, employeeIds));
   return scopedRead((tx) => tx.select().from(hrmsLeaveApps)
-    .where(eq(hrmsLeaveApps.tenantId, tenantId))
+    .where(and(...conditions))
+    .orderBy(desc(hrmsLeaveApps.createdAt), desc(hrmsLeaveApps.id))
     .limit(limit).offset(offset));
 }
 
