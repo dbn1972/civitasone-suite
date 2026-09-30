@@ -30,6 +30,17 @@ export interface ConfirmDialogProps {
   danger?: boolean;
   /** Require the user to type a reason before confirming (maker-checker). */
   requireReason?: boolean;
+  /**
+   * GAP-HR-LEAVE-APPROVALS-05: shows the same reason textarea as
+   * `requireReason`, but never gates Confirm on it — for a decision where a
+   * remark is welcome but shouldn't add friction to the common case (e.g. a
+   * routine approval, unlike a rejection). Ignored when `requireReason` is
+   * also true (that already shows the field). Confirm still passes the
+   * trimmed reason through to `onConfirm` when the user typed one, empty
+   * string dropped to `undefined` the same way an untouched required field
+   * would never be.
+   */
+  optionalReason?: boolean;
   reasonLabel?: string;
   /**
    * Minimum trimmed-reason length required before Confirm enables. Defaults to
@@ -66,6 +77,7 @@ export function ConfirmDialog({
   cancelLabel = "Cancel",
   danger = false,
   requireReason = false,
+  optionalReason = false,
   reasonLabel = "Reason",
   minReasonLength = 1,
   maxReasonLength,
@@ -116,7 +128,7 @@ export function ConfirmDialog({
         </div>
       )}
 
-      {requireReason && (
+      {(requireReason || optionalReason) && (
         <div className="cd-field">
           <label htmlFor={reasonFieldId}>{reasonLabel}</label>
           <textarea
@@ -124,11 +136,11 @@ export function ConfirmDialog({
             rows={3}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            aria-required="true"
+            aria-required={requireReason}
             {...(maxReasonLength !== undefined ? { maxLength: maxReasonLength } : {})}
-            aria-describedby={minReasonLength > 1 || maxReasonLength !== undefined ? reasonHintId : undefined}
+            aria-describedby={requireReason && (minReasonLength > 1 || maxReasonLength !== undefined) ? reasonHintId : undefined}
           />
-          {(minReasonLength > 1 || maxReasonLength !== undefined) && (
+          {requireReason && (minReasonLength > 1 || maxReasonLength !== undefined) && (
             <p
               id={reasonHintId}
               style={{
@@ -157,7 +169,7 @@ export function ConfirmDialog({
         </Button>
         <Button
           variant={danger ? "danger" : "primary"}
-          onClick={() => onConfirm(requireReason ? reason.trim() : undefined)}
+          onClick={() => onConfirm((requireReason || optionalReason) ? (reason.trim() || undefined) : undefined)}
           disabled={confirmDisabled}
           aria-busy={busy}
         >

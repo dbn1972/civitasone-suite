@@ -261,4 +261,107 @@ describe("LeaveApprovalsPanel — fail-open containment (GAP-HR-SF-16 item 4)", 
     expect(within(row).getByRole("button", { name: "Approve" })).toBeDisabled();
     expect(within(row).getByRole("button", { name: "Reject" })).toBeDisabled();
   });
+
+  // GAP-HR-LEAVE-APPROVALS-01: the enrichment failure must be visible on its
+  // own terms, not just inferred from every row silently showing "Unknown
+  // employee" with no explanation and no way to retry just that part.
+  it("shows a distinct, retryable banner when only the enrichment fetch fails (tasks themselves loaded fine)", async () => {
+    let leaveCallCount = 0;
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) return { ok: true, status: 200, json: async () => ({ data: [TASK_OK] }) } as Response;
+      if (url.includes("/hrms/leave-requests")) {
+        leaveCallCount++;
+        if (leaveCallCount === 1) throw new TypeError("Failed to fetch");
+        return { ok: true, status: 200, json: async () => ({ data: [LEAVE_OK] }) } as Response;
+      }
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    const banner = await screen.findByRole("alert"); // the enrichError banner — no other alert-role element exists at this point
+    expect(banner).toHaveTextContent(/employee details couldn't be loaded/i);
+    // The task itself is NOT reported as failed — this is a distinct concern.
+    expect(screen.queryByText("Could not load approvals")).not.toBeInTheDocument();
+
+    fireEvent.click(within(banner).getByRole("button", { name: /retry/i }));
+    await waitFor(() => expect(screen.getByText("Asha Verma")).toBeInTheDocument());
+    expect(screen.queryByText(/employee details couldn't be loaded/i)).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-APPROVALS-04: the panel now asks for exactly the
+ * applications its own visible tasks reference, instead of its entire
+ * tenant/manager-scoped page.
+ */
+describe("LeaveApprovalsPanel — scoped enrichment request (GAP-HR-LEAVE-APPROVALS-04)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("requests refType=leave_app on the tasks call and ids=<visible refIds> on the enrichment call", async () => {
+    const fetchMock = mockFetch();
+    vi.stubGlobal("fetch", fetchMock);
+    renderPanel();
+    await screen.findByText("Asha Verma");
+
+    const calls = (fetchMock as unknown as { calls: { url: string }[] }).calls;
+    expect(calls.some((c) => c.url.includes("/workflow/tasks?") && c.url.includes("refType=leave_app"))).toBe(true);
+    expect(calls.some((c) => c.url.includes("/hrms/leave-requests?ids=leave-1"))).toBe(true);
+  });
+
+  it("makes no enrichment call at all when there are no pending leave tasks", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) return { ok: true, status: 200, json: async () => ({ data: [] }) } as Response;
+      return { ok: false, status: 404, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    await screen.findByText(/no pending approvals/i);
+    expect(fn.mock.calls.some(([u]) => typeof u === "string" && u.includes("/hrms/leave-requests"))).toBe(false);
+  });
+});
+
+/**
+ * GAP-HR-LEAVE-APPROVALS-06: a decided row disappears immediately, without
+ * waiting on a full task-list refetch — and the (redundant) tenant-wide
+ * /leave-requests re-fetch after every decision is gone.
+ */
+describe("LeaveApprovalsPanel — optimistic decision (GAP-HR-LEAVE-APPROVALS-06)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("removes the decided row before any refetch resolves, and does not re-request /leave-requests after the decision", async () => {
+    let tasksCallCount = 0;
+    let leaveCallCount = 0;
+    let resolveComplete: (() => void) | undefined;
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("/workflow/tasks?")) {
+        tasksCallCount++;
+        return { ok: true, status: 200, json: async () => ({ data: tasksCallCount === 1 ? [TASK] : [] }) } as Response;
+      }
+      if (url.includes("/hrms/leave-requests")) {
+        leaveCallCount++;
+        return { ok: true, status: 200, json: async () => ({ data: [LEAVE] }) } as Response;
+      }
+      if (url.endsWith("/complete")) {
+        return new Promise<Response>((resolve) => {
+          resolveComplete = () => resolve({ ok: true, status: 202, text: async () => "{}" } as Response);
+        });
+      }
+      return { ok: true, status: 202, text: async () => "{}" } as Response;
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPanel();
+
+    fireEvent.click(await screen.findByRole("button", { name: "Approve" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Approve leave" }));
+    await waitFor(() => expect(resolveComplete).toBeDefined());
+    const leaveCallsBeforeResolve = leaveCallCount;
+    resolveComplete!();
+
+    await waitFor(() => expect(screen.queryByText("Asha Verma")).not.toBeInTheDocument());
+    // The background re-sync only re-requests /workflow/tasks — not another
+    // /leave-requests round trip (no new task appeared needing enrichment).
+    expect(leaveCallCount).toBe(leaveCallsBeforeResolve);
+  });
 });

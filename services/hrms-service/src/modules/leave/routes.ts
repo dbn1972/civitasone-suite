@@ -373,7 +373,17 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/leave-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const q = listQuerySchema.extend({ empId: z.string().uuid().optional() }).parse(req.query);
+    const q = listQuerySchema.extend({
+      empId: z.string().uuid().optional(),
+      // GAP-HR-LEAVE-APPROVALS-04: lets a caller (the approvals panel) ask
+      // for exactly the applications it already knows it needs (the refIds
+      // of its own visible pending tasks) instead of loading its entire
+      // tenant/manager-scoped page just to label a handful of rows. This is
+      // a NARROWING on top of the existing role-based scope below, never a
+      // widening one -- an id outside that scope is silently dropped, same
+      // as any other row that scope excludes today.
+      ids: z.string().optional().transform((v) => (v ? v.split(",").filter(Boolean) : undefined)),
+    }).parse(req.query);
     // IDOR fix (GAP-HR-SF-16): this route returned every employee's leave
     // request detail tenant-wide to ANY ALL_ROLES-holding caller (including
     // a bare "employee"), with zero scoping -- unlike its siblings
@@ -393,7 +403,13 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     // paginate the caller's own visible set, not the tenant's.
     const employeeIds = await resolveLeaveReadScope(ctx, req, q.empId);
     const rows = await queries.listLeaveRequestDetails(ctx.tenantId, q.limit, q.offset, employeeIds);
-    sendValidated(reply, LeaveRequestDetailListSchema, rows);
+    // GAP-HR-LEAVE-APPROVALS-04: `ids` narrows further on top of the
+    // role-based scope above (never instead of it) -- `rows` here is
+    // already scoped to `employeeIds` at the DB level (GAP-HR-LEAVE-03/04
+    // above), so an id outside that scope can never appear here even if a
+    // caller names it explicitly.
+    const idsScoped = q.ids ? rows.filter((r) => q.ids!.includes(r.id)) : rows;
+    sendValidated(reply, LeaveRequestDetailListSchema, idsScoped);
   });
 
   app.setErrorHandler(errorHandler);
