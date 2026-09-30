@@ -118,9 +118,17 @@
     "statTotal": "Total APARs",
     "statSelfAppraisal": "Self-Appraisal",
     "statUnderReview": "Under Review",
-    "statDisputed": "Disputed",
-    "statClosed": "Closed / Accepted",
-    "flowCardTitle": "APAR Flow — Active Records"
+    "statAwaitingClosure": "Awaiting Closure",
+    "statFinalised": "Finalised",
+    "flowCardTitle": "APAR Flow — Active Records",
+    "loadingAriaLabel": "Loading APAR…",
+    "filterStatusLabel": "Status",
+    "filterAllStatuses": "All statuses",
+    "filterPeriodLabel": "Appraisal period",
+    "filterPeriodPlaceholder": "e.g. 2025-26",
+    "filterApplyBtn": "Apply",
+    "filterClearBtn": "Clear",
+    "showingOfTotal": "Showing {shown} of {total} — narrow with a filter to see more"
   },
   "aparDetail": {
     "detailPageTitle": "APAR Detail",
@@ -167,7 +175,15 @@
     "stageAcceptingAuthority": "4. Accepting Authority finalisation",
     "stageDisclosed": "5. Disclosed — representation window",
     "stageRepresentation": "6. Representation filed",
-    "stageFinalised": "7. Finalised"
+    "stageFinalised": "7. Finalised",
+    "reviewingRemarksLabel": "Reviewing Officer — Remarks",
+    "acceptingRemarksLabel": "Accepting Authority — Remarks",
+    "colActorRole": "Actor Role",
+    "colOverride": "Override",
+    "overrideYes": "Yes — privileged override",
+    "statProvisionalScore": "Provisional Score",
+    "confidentialBanner": "Confidential — APAR. This appraisal contains statutory confidential performance data.",
+    "printedByLine": "Printed by {name} on {date}"
   },
   "aparFlowCard": {
     "emptyText": "No APAR records found",
@@ -181,11 +197,12 @@
     "statePending": "pending",
     "stageSelf": "Self-Appraisal",
     "stageRo": "Reporting Officer",
-    "stageCso": "Counter-signing Officer",
-    "stageAccept": "Acceptance / Dispute",
+    "stageReviewing": "Reviewing Officer",
+    "stageAccepting": "Accepting Authority",
+    "stageClosure": "Disclosure / Final",
     "stagePrefix": "Stage:",
-    "statusDisputed": "⚠️ Disputed",
-    "statusClosed": "✅ Closed",
+    "statusRepresentation": "⚠️ Representation filed",
+    "statusFinalised": "✅ Finalised",
     "updatedPrefix": "Updated {date}"
   },
   "aparNew": {

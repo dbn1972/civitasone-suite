@@ -23,12 +23,16 @@ const H = vi.hoisted(() => ({
   listScores: vi.fn(),
   listHistory: vi.fn(),
   listAppraisals: vi.fn(),
+  // GAP-HR-APAR-06: GET /v1/hrms/apar now runs this alongside listAppraisals
+  // (Promise.all) for the list page's server-computed stat-card counts.
+  countAparsByStatusGroup: vi.fn(),
   listDirectReportEmployeeIds: vi.fn(),
   resolveEmployeeForActor: vi.fn(),
 }));
 
 vi.mock("../src/modules/apar/repo.js", () => ({
   listAppraisals: (...a: unknown[]) => H.listAppraisals(...a),
+  countAparsByStatusGroup: (...a: unknown[]) => H.countAparsByStatusGroup(...a),
   findAppraisal: (...a: unknown[]) => H.findAppraisal(...a),
   updateAppraisal: (...a: unknown[]) => H.updateAppraisal(...a),
   appendHistory: (...a: unknown[]) => H.appendHistory(...a),
@@ -88,7 +92,13 @@ beforeEach(() => {
   H.updateAppraisal.mockResolvedValue(undefined);
   H.appendHistory.mockResolvedValue(undefined);
   H.upsertScore.mockResolvedValue(undefined);
-  H.listAppraisals.mockResolvedValue([]);
+  // GAP-HR-APAR-06: listAppraisals now returns {rows, total} (was a bare
+  // array) so the list route can report an honest total/hasMore instead of
+  // silently capping at `limit`. countAparsByStatusGroup is a sibling call
+  // the same route makes for its stat-card counts -- both must be mocked or
+  // the route's `Promise.all([...])` throws before either resolves.
+  H.listAppraisals.mockResolvedValue({ rows: [], total: 0 });
+  H.countAparsByStatusGroup.mockResolvedValue({ selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 });
   H.listDirectReportEmployeeIds.mockResolvedValue([]);
   H.resolveEmployeeForActor.mockResolvedValue(undefined);
 });
@@ -540,17 +550,23 @@ const MANAGER = "aaaaaaaa-6666-4000-8000-000000000001";
 const MANAGER_EMP_ROW_ID = "dddddddd-0001-4000-8000-000000000001";
 
 describe("APAR — GET /v1/hrms/apar (list) — read-scope regression", () => {
+  // GAP-HR-APAR-06: the route now passes a third `opts` argument
+  // ({limit, offset}, plus status/period only when the request supplied
+  // them) alongside tenantId/scope. None of these requests set ?status=/
+  // ?period=, so the zod defaults are the only keys present.
+  const DEFAULT_LIST_OPTS = { limit: 100, offset: 0 };
+
   it("200 — employee role: only the caller's own appraisal(s) come back, repo scoped to [EMP]", async () => {
-    H.listAppraisals.mockResolvedValue([baseAppraisal({ employeeId: EMP })]);
+    H.listAppraisals.mockResolvedValue({ rows: [baseAppraisal({ employeeId: EMP })], total: 1 });
     H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth(EMP, ["employee"]) });
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(1);
     expect(r.json().data[0].employeeId).toBe(EMP);
-    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, [EMP]);
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, [EMP], DEFAULT_LIST_OPTS);
     // never falls back to unrestricted access for a bare employee caller
-    expect(H.listAppraisals).not.toHaveBeenCalledWith(TENANT, null);
+    expect(H.listAppraisals).not.toHaveBeenCalledWith(TENANT, null, expect.anything());
     await app.close();
   });
 
@@ -559,32 +575,35 @@ describe("APAR — GET /v1/hrms/apar (list) — read-scope regression", () => {
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth(MANAGER, ["manager"]) });
     expect(r.statusCode).toBe(200);
-    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, []);
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, [], DEFAULT_LIST_OPTS);
     await app.close();
   });
 
   it("200 — manager role: repo scoped to direct reports' employeeIds only", async () => {
     H.resolveEmployeeForActor.mockResolvedValue({ id: MANAGER_EMP_ROW_ID });
     H.listDirectReportEmployeeIds.mockResolvedValue([EMP]);
-    H.listAppraisals.mockResolvedValue([baseAppraisal({ employeeId: EMP })]);
+    H.listAppraisals.mockResolvedValue({ rows: [baseAppraisal({ employeeId: EMP })], total: 1 });
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth(MANAGER, ["manager"]) });
     expect(r.statusCode).toBe(200);
     expect(H.listDirectReportEmployeeIds).toHaveBeenCalledWith(TENANT, MANAGER_EMP_ROW_ID);
-    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, [EMP]);
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, [EMP], DEFAULT_LIST_OPTS);
     await app.close();
   });
 
   it("200 — hr_admin: unrestricted tenant-wide access (scope null)", async () => {
-    H.listAppraisals.mockResolvedValue([
-      baseAppraisal({ employeeId: EMP }),
-      baseAppraisal({ id: "cccccccc-0002-4000-8000-000000000001", employeeId: OTHER_EMP }),
-    ]);
+    H.listAppraisals.mockResolvedValue({
+      rows: [
+        baseAppraisal({ employeeId: EMP }),
+        baseAppraisal({ id: "cccccccc-0002-4000-8000-000000000001", employeeId: OTHER_EMP }),
+      ],
+      total: 2,
+    });
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth() }); // default hr_admin
     expect(r.statusCode).toBe(200);
     expect(r.json().data).toHaveLength(2);
-    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, null);
+    expect(H.listAppraisals).toHaveBeenCalledWith(TENANT, null, DEFAULT_LIST_OPTS);
     await app.close();
   });
 });

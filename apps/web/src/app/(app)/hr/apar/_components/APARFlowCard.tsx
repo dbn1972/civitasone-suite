@@ -1,12 +1,31 @@
 "use client";
 /**
  * APARFlowCard / APARFlowList — Sprint 14 / Lifecycle Phase 2
- * SPARROW-style 4-stage APAR pipeline:
- * Self-Appraisal → Reporting Officer → Counter-signing Officer → Acceptance / Dispute.
- * Active stage highlighted, deadline countdown shown on each card.
+ *
+ * GAP-HR-APAR-01: this used to carry its own local `STAGES` array matching
+ * a status vocabulary (initiated/pending/self_submitted, ro_review/…,
+ * rv_submitted/…, accepted/disputed/closed) the backend never writes, so
+ * every card's pipeline rendered "stage 1 active" regardless of the
+ * record's real status. Stage data now comes from the shared
+ * `@/lib/apar/stages` module, which is keyed on the seven statuses the
+ * backend actually uses (self_pending … finalised) — see that module's
+ * doc comment for the full history.
+ *
+ * GAP-HR-APAR-03: the deadline countdown (`deadlineMeta`, the `dl` badge)
+ * is removed. `AparRecord.deadline` was never computed by the backend (no
+ * `deadline` column on hrms_appraisals, nothing in apar/routes.ts sets one)
+ * so this block never rendered for a single real record — see the decision
+ * packet's "everything else" bucket: no per-stage deadline policy exists to
+ * adopt, so the item's own stated safe default (delete the dead code
+ * instead of inventing statutory due-dates) applies here.
+ *
+ * GAP-HR-APAR-05: stage labels now use DoPT/SPARROW terminology throughout
+ * (Reporting Officer, Reviewing Officer, Accepting Authority) instead of
+ * the old "Counter-signing Officer" / "Under Review" mix — see stages.ts.
  */
 import { useTranslations } from "next-intl";
 import { formatIndianDate } from "@/lib/formatters";
+import { APAR_STAGE_GROUPS, stageIndex, isFinal, isRepresentationFiled } from "@/lib/apar/stages";
 
 export type AparRecord = {
   id: string;
@@ -16,75 +35,20 @@ export type AparRecord = {
   status: string;
   overallBand?: string | null;
   overallGrade?: string | null;
-  deadline?: string | null;
   updatedAt: string;
 } & Record<string, unknown>;
 
-interface Stage {
-  key: string;
-  labelKey: string;
-  icon: string;
-  matchStatuses: string[];
-}
-
-// UX-017: display labels are looked up through t(stage.labelKey) at render
-// time (see APARCard below) so the pipeline stays in the active locale;
-// this array only carries structural/lookup data.
-const STAGES: Stage[] = [
-  {
-    key: "self",
-    labelKey: "stageSelf",
-    icon: "✍️",
-    matchStatuses: ["initiated", "pending", "self_submitted"],
-  },
-  {
-    key: "ro",
-    labelKey: "stageRo",
-    icon: "📋",
-    matchStatuses: ["ro_review", "ro_submitted"],
-  },
-  {
-    key: "cso",
-    labelKey: "stageCso",
-    icon: "🔍",
-    matchStatuses: ["rv_submitted", "under_review", "cso_review"],
-  },
-  {
-    key: "accept",
-    labelKey: "stageAccept",
-    icon: "✅",
-    matchStatuses: ["accepted", "disputed", "closed"],
-  },
-];
-
-function stageIndex(status: string): number {
-  for (let i = 0; i < STAGES.length; i++) {
-    if (STAGES[i].matchStatuses.includes(status)) return i;
-  }
-  return 0;
-}
-
-type Translate = ReturnType<typeof useTranslations>;
-
-function deadlineMeta(
-  dl: string | null | undefined,
-  t: Translate,
-): { text: string; color: string } | null {
-  if (!dl) return null;
-  const days = Math.ceil((new Date(dl).getTime() - Date.now()) / 86_400_000);
-  if (days < 0)  return { text: t("overdueDays", { days: Math.abs(days) }), color: "var(--bad, #dc2626)" };
-  if (days === 0) return { text: t("dueToday"),                            color: "var(--bad, #dc2626)" };
-  if (days <= 7)  return { text: t("daysLeft", { days }),                  color: "var(--warn, #b45309)" };
-  return { text: t("daysLeft", { days }),                                  color: "var(--info, #2563eb)" };
-}
-
 function APARCard({ record }: { record: AparRecord }) {
-  const t          = useTranslations("aparFlowCard");
-  const si         = stageIndex(record.status);
-  const dl         = deadlineMeta(record.deadline, t);
-  const empLabel   = record.employeeName ?? record.employeeId ?? "Unknown";
-  const isDisputed = record.status === "disputed";
-  const isClosed   = record.status === "closed" || record.status === "accepted";
+  const t = useTranslations("aparFlowCard");
+  const si = stageIndex(record.status);
+  // GAP-HR-APAR-02 (deferred — see PR description): employeeName is not yet
+  // populated by the backend, so this still falls back to the raw
+  // employeeId. Left unchanged here deliberately; fixing it needs the
+  // shared employee-name-enrichment helper tracked under GAP-HR-ADVANCES-01
+  // (cross-lane, not yet dispatched).
+  const empLabel = record.employeeName ?? record.employeeId ?? "Unknown";
+  const isRepresentation = isRepresentationFiled(record.status);
+  const isClosed = isFinal(record.status);
 
   return (
     <article
@@ -100,24 +64,17 @@ function APARCard({ record }: { record: AparRecord }) {
             {t("periodPrefix")} <strong>{record.appraisalPeriod}</strong>
           </p>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          {record.overallBand && (
-            <span
-              style={{
-                padding: "2px 10px", borderRadius: 12,
-                background: "var(--infobg, #e6f0ff)", color: "var(--info, #1d4ed8)",
-                fontSize: "0.75rem", fontWeight: 700,
-              }}
-            >
-              {t("bandPrefix", { band: record.overallBand })}
-            </span>
-          )}
-          {dl && (
-            <span style={{ fontSize: "0.75rem", fontWeight: 600, color: dl.color }}>
-              ⏰ {dl.text}
-            </span>
-          )}
-        </div>
+        {record.overallBand && (
+          <span
+            style={{
+              padding: "2px 10px", borderRadius: 12,
+              background: "var(--infobg, #e6f0ff)", color: "var(--info, #1d4ed8)",
+              fontSize: "0.75rem", fontWeight: 700,
+            }}
+          >
+            {t("bandPrefix", { band: record.overallBand })}
+          </span>
+        )}
       </div>
 
       {/* Stage pipeline */}
@@ -135,20 +92,24 @@ function APARCard({ record }: { record: AparRecord }) {
           aria-hidden
           style={{
             position: "absolute", top: 16,
-            insetInlineStart: "calc(50% / 4)", insetInlineEnd: "calc(50% / 4)",
+            insetInlineStart: "calc(50% / 5)", insetInlineEnd: "calc(50% / 5)",
             height: 2, background: "var(--line, #e2e8f0)", zIndex: 0,
           }}
         />
 
-        {STAGES.map((stage, i) => {
-          const isDone    = i < si || isClosed;
-          const isActive  = i === si && !isClosed;
-          const isDisp    = isDisputed && i === STAGES.length - 1;
+        {APAR_STAGE_GROUPS.map((group, i) => {
+          const isDone = i < si || isClosed;
+          const isActive = i === si && !isClosed;
+          // The closure group (i === last) carries two attention states of
+          // its own, distinct from the generic "active": representation
+          // filed (needs HR to finalise) is flagged the same way "disputed"
+          // used to be, rather than dropped silently (GAP-HR-APAR-05).
+          const isAttention = isRepresentation && i === APAR_STAGE_GROUPS.length - 1;
           const stageState = isDone ? t("stateDone") : isActive ? t("stateActive") : t("statePending");
 
           return (
             <div
-              key={stage.key}
+              key={group.key}
               role="listitem"
               style={{
                 flex: 1, display: "flex", flexDirection: "column",
@@ -160,24 +121,24 @@ function APARCard({ record }: { record: AparRecord }) {
               <div
                 style={{
                   width: 34, height: 34, borderRadius: "50%",
-                  background: isDisp
-                    ? "var(--badbg, #fef2f2)"
+                  background: isAttention
+                    ? "var(--warnbg, #fffbeb)"
                     : isDone
                     ? "var(--goodbg, #f0fdf4)"
                     : isActive
                     ? "var(--primary, #2563eb)"
                     : "var(--bg2, #f1f5f9)",
                   border: `2px solid ${
-                    isDisp
-                      ? "var(--bad, #dc2626)"
+                    isAttention
+                      ? "var(--warn, #b45309)"
                       : isDone
                       ? "var(--good, #16a34a)"
                       : isActive
                       ? "var(--primary, #2563eb)"
                       : "var(--line, #e2e8f0)"
                   }`,
-                  color: isDisp
-                    ? "var(--bad, #dc2626)"
+                  color: isAttention
+                    ? "var(--warn, #b45309)"
                     : isDone
                     ? "var(--good, #16a34a)"
                     : isActive
@@ -188,9 +149,9 @@ function APARCard({ record }: { record: AparRecord }) {
                   boxShadow: isActive ? "0 0 0 4px var(--infobg, #dbeafe)" : "none",
                   transition: "all 0.2s",
                 }}
-                aria-label={t("stageBubbleAriaLabel", { stage: t(stage.labelKey), state: stageState })}
+                aria-label={t("stageBubbleAriaLabel", { stage: t(group.labelKey), state: stageState })}
               >
-                {isDisp ? "⚠" : isDone ? "✓" : stage.icon}
+                {isAttention ? "⚠" : isDone ? "✓" : group.icon}
               </div>
 
               {/* Stage label */}
@@ -206,7 +167,7 @@ function APARCard({ record }: { record: AparRecord }) {
                   maxWidth: 66,
                 }}
               >
-                {t(stage.labelKey)}
+                {t(group.labelKey)}
               </span>
             </div>
           );
@@ -224,12 +185,12 @@ function APARCard({ record }: { record: AparRecord }) {
       >
         <span>
           {t("stagePrefix")}&nbsp;
-          <strong style={{ color: isDisputed ? "var(--bad, #dc2626)" : "var(--ink)" }}>
-            {isDisputed
-              ? t("statusDisputed")
+          <strong style={{ color: isRepresentation ? "var(--warn, #b45309)" : "var(--ink)" }}>
+            {isRepresentation
+              ? t("statusRepresentation")
               : isClosed
-              ? t("statusClosed")
-              : (STAGES[si] ? t(STAGES[si].labelKey) : record.status)}
+              ? t("statusFinalised")
+              : t(APAR_STAGE_GROUPS[si].labelKey)}
           </strong>
         </span>
         <span>{t("updatedPrefix", { date: formatIndianDate(record.updatedAt) })}</span>

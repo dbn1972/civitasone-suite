@@ -21,9 +21,11 @@ import { z, ZodError } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
+import { writeAuditLog } from "../../shared/audit.js";
 import * as repo from "./repo.js";
 import { computeOverallGrade, type ScoreInput } from "./engine.js";
 import type { AppraisalRow } from "../appraisals/schema.js";
+import type { AparScoreRow } from "./schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -172,14 +174,78 @@ function assertReadable(scope: string[] | null, a: AppraisalRow): void {
   throw new HttpError(404, "NOT_FOUND", "appraisal not found");
 }
 
+/** Statuses reached before the grade/pen-picture/remarks are disclosed to the appraisee. */
+const PRE_DISCLOSURE_STATUSES = new Set(["self_pending", "reporting_officer", "reviewing_officer", "accepting_authority"]);
+
+/**
+ * GAP-HR-APAR-DETAIL-03: the appraisee must not see the Reporting Officer's
+ * pen-picture, the Reviewing/Accepting officers' remarks, the computed
+ * grade/band, or any score's freetext remarks until the record is actually
+ * disclosed to them — that is the whole point of the DoPT confidential
+ * report process (disclosure is its own stage transition). Every other
+ * reader (an officer party to the case, or an HR role) sees the row in
+ * full; `assertReadable` above already keeps an unrelated employee/manager
+ * from reaching this appraisal at all, so the only redaction case left is
+ * "the appraisee, reading their own not-yet-disclosed record".
+ */
+function redactForAppraiseePreDisclosure(
+  a: AppraisalRow,
+  scores: AparScoreRow[],
+  isAppraisee: boolean,
+): { appraisal: AppraisalRow; scores: AparScoreRow[] } {
+  if (!isAppraisee || !PRE_DISCLOSURE_STATUSES.has(a.status)) {
+    return { appraisal: a, scores };
+  }
+  return {
+    appraisal: {
+      ...a,
+      reportingPenPicture: null,
+      reviewingRemarks: null,
+      acceptingRemarks: null,
+      overallGrade: null,
+      overallBand: null,
+    },
+    scores: scores.map((s) => ({ ...s, remarks: null })),
+  };
+}
+
 export async function aparRoutes(app: FastifyInstance): Promise<void> {
   // --- list APARs for tenant (HR sees all; employee sees own) -----------------
+  // GAP-HR-APAR-06: optional ?status=/?period= exact-match filters, and a
+  // `limit`/`offset` pair (default 100/0, same default as before when
+  // omitted). Response now also carries `total` (matching rows regardless
+  // of limit/offset), `hasMore`, and server-side `counts` for the list
+  // page's stat cards — see repo.ts's countAparsByStatusGroup doc comment
+  // for why `counts` ignores status/period (it describes the whole scoped
+  // population, not the current filter's result).
   app.get("/v1/hrms/apar", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ACTOR_ROLES);
+    const q = z.object({
+      status: z.string().max(24).optional(),
+      period: z.string().min(1).max(16).optional(),
+      limit: z.coerce.number().int().min(1).max(500).default(100),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
     const scope = await resolveAparReadScope(ctx, req);
-    const rows = await repo.listAppraisals(ctx.tenantId, scope);
-    return reply.send({ data: rows });
+    // exactOptionalPropertyTypes: only assign status/period when actually
+    // present -- ListAppraisalsOptions' fields are optional (key may be
+    // omitted) but not nullable-to-undefined (an explicit `status: undefined`
+    // is a type error under this tsconfig, same convention already used by
+    // seniority/routes.ts's resolveManagerDepartmentScope filter object).
+    const listOpts: repo.ListAppraisalsOptions = { limit: q.limit, offset: q.offset };
+    if (q.status) listOpts.status = q.status;
+    if (q.period) listOpts.period = q.period;
+    const [{ rows, total }, counts] = await Promise.all([
+      repo.listAppraisals(ctx.tenantId, scope, listOpts),
+      repo.countAparsByStatusGroup(ctx.tenantId, scope),
+    ]);
+    return reply.send({
+      data: rows,
+      total,
+      hasMore: q.offset + rows.length < total,
+      counts,
+    });
   });
 
   // --- create APAR with the full officer chain assigned ---------------------
@@ -319,7 +385,34 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
       repo.listScores(ctx.tenantId, id),
       repo.listHistory(ctx.tenantId, id),
     ]);
-    return reply.send({ appraisal: a, scores, history });
+
+    // GAP-HR-APAR-DETAIL-03: redact officer-only fields from the appraisee's
+    // own view until disclosure. HR/officers (anyone resolveAparReadScope
+    // gave unrestricted `null` scope to) always see the full record.
+    let isAppraisee = false;
+    if (scope !== null) {
+      const ownEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      isAppraisee = ownEmp?.id === a.employeeId;
+    }
+    const redacted = redactForAppraiseePreDisclosure(a, scores, isAppraisee);
+
+    // GAP-HR-APAR-DETAIL-07 (DPDP): data-access audit event on every read of
+    // a named appraisal record. writeAuditLog is fire-and-forget and never
+    // throws (see shared/audit.ts) -- a logging failure must never turn a
+    // successful read into a 500.
+    await writeAuditLog({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorType: null,
+      actorRoles: ctx.roles,
+      method: req.method,
+      path: req.url,
+      statusCode: 200,
+      requestId: (req.headers["x-correlation-id"] as string) ?? req.id,
+      ipAddr: req.ip,
+    });
+
+    return reply.send({ appraisal: redacted.appraisal, scores: redacted.scores, history });
   });
 
   app.setErrorHandler((err, req, reply) => {

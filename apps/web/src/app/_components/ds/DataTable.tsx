@@ -27,14 +27,31 @@ import { formatMoney, formatRupees, formatIndianDate } from "@/lib/formatters";
  */
 function useSafeTranslations(namespace: string, fallback: Record<string, string>): (key: string) => string {
   try {
-    // eslint-disable-next-line react-hooks/rules-of-hooks -- see comment above: the
-    // missing-provider condition is constant for a given render tree, so this
-    // still calls the same hooks in the same order on every render of a given
-    // mounted instance; it never conditionally skips a hook based on state.
     return useTranslations(namespace);
   } catch {
     return (key: string) => fallback[key] ?? key;
   }
+}
+
+/**
+ * GAP-HR-APAR-DETAIL-04: date-only `formatIndianDate` (dd/MM/yyyy) has no
+ * time component, so a stage-history "At" column showing a real timestamp
+ * (e.g. two transitions on the same day) needs its own formatter. Kept
+ * local rather than added to `@/lib/formatters` deliberately: an unrelated,
+ * already-open PR (GAP-HR-SF-07, "formatIndianDateTime + todayIST/
+ * addDaysIST") adds a shared export of that exact name to that exact file;
+ * adding a second one here now would guarantee a same-name-same-file merge
+ * conflict between the two PRs. This is a narrow, private helper for the
+ * one cellType below; once SF-07 lands, a follow-up can delete this and
+ * switch to the shared helper.
+ */
+function formatDateTimeIST(iso: string | null | undefined): string {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  const datePart = d.toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "Asia/Kolkata" });
+  const timePart = d.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: "Asia/Kolkata" });
+  return `${datePart} ${timePart}`;
 }
 
 interface Column<T> {
@@ -60,8 +77,8 @@ interface Column<T> {
    * bad value reaches a mounted client tree without ever hitting that CI guard.
    */
   render?: (row: T) => ReactNode;
-  /** Server-safe: renders StatusPill/formatMoney/formatRupees/formatIndianDate from the row value at `key` */
-  cellType?: "status" | "amount" | "rupees" | "date";
+  /** Server-safe: renders StatusPill/formatMoney/formatRupees/formatIndianDate/a date+time stamp from the row value at `key` */
+  cellType?: "status" | "amount" | "rupees" | "date" | "datetime";
   /** Opt-in: set false to exclude a column from sorting when the table is sortable. */
   sortable?: boolean;
 }
@@ -181,8 +198,8 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
           `DataTable: column "${col.key}" (label "${col.label}") has a "render" prop that isn't a ` +
           `function (got ${typeof col.render}). This usually means a Server Component tried to pass a ` +
           `render function to DataTable ("use client") -- functions can't cross that boundary. Use a ` +
-          `built-in cellType ("status" | "amount" | "rupees" | "date") instead, or move this column's ` +
-          `custom rendering into a Client Component. Falling back to this column's cellType/default ` +
+          `built-in cellType ("status" | "amount" | "rupees" | "date" | "datetime") instead, or move this ` +
+          `column's custom rendering into a Client Component. Falling back to this column's cellType/default ` +
           `rendering for now.`,
         );
       }
@@ -201,6 +218,9 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
   }
   if (col.cellType === "date") {
     return formatIndianDate(row[col.key] as string | null | undefined);
+  }
+  if (col.cellType === "datetime") {
+    return formatDateTimeIST(row[col.key] as string | null | undefined);
   }
   return String(row[col.key] ?? "");
 }
@@ -338,6 +358,7 @@ export function DataTable<T extends Record<string, unknown>>({
     if (col.cellType === "amount") return String(formatMoney(row[col.key] as number | null) ?? "");
     if (col.cellType === "rupees") return String(formatRupees(row[col.key] as number | string | null) ?? "");
     if (col.cellType === "date") return formatIndianDate(row[col.key] as string | null | undefined);
+    if (col.cellType === "datetime") return formatDateTimeIST(row[col.key] as string | null | undefined);
     if (col.cellType === "status") return String(row[col.key] ?? "");
     return String(row[col.key] ?? "");
   }
