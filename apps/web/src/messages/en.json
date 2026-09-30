@@ -2325,7 +2325,9 @@
     "cardTitle": "Grievance Cases",
     "filterPlaceholder": "Filter by employee, category or assigned officer…",
     "emptyTitle": "No grievances on record",
-    "emptyMessage": "Grievance cases appear here when employees file formal complaints under CCS (Conduct) Rules. Cases are assigned to an HR officer and tracked through inquiry to disposal."
+    "emptyMessage": "Grievance cases appear here when employees file formal complaints under CCS (Conduct) Rules. Cases are assigned to an HR officer and tracked through inquiry to disposal.",
+    "notBuiltTitle": "Grievance register is not yet available",
+    "notBuiltMessage": "This register hasn't been built yet. Check back later, or contact HR directly for an urgent grievance."
   },
   "grievances": {
     "title": "Grievances",

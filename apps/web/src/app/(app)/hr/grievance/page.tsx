@@ -1,8 +1,16 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState, EmptyState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
-import { toHumanError } from "@/lib/messages";
+
+/**
+ * Mirrors services/hrms-service/src/modules/gap-features/routes.ts's own
+ * HR_ROLES on GET /v1/hrms/grievances exactly (requireRole(ctx, HR_ROLES),
+ * HR_ROLES = ["hr_admin", "super_admin", "hr_officer"]).
+ */
+const GRIEVANCE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 type RawRow = {
   id: string;
@@ -17,14 +25,35 @@ type RawRow = {
 
 type Row = RawRow & { caseRef: string };
 
-async function getData(): Promise<LoaderResult<RawRow[]>> {
-  return fetchJson<unknown, RawRow[]>("/api/v1/hrms/grievances", [], {
-    telemetryKey: "hr.grievances",
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: RawRow[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+// GAP-HR-GRIEVANCE-01: GET /v1/hrms/grievances is a permanent stub today
+// (gap-features/routes.ts:718-722) -- it always returns
+// `{ data: [], meta: { note: "Grievance table pending..." } }`. The old
+// mapResponse discarded `meta` entirely, so this looked identical to "zero
+// real grievances on file" (a normal, good outcome) instead of "this
+// register was never built" -- an officer had no way to tell the two apart.
+// Whether to actually build the register (a real hrms_grievances table +
+// GET/POST/PATCH) is this ticket's own formal_decision, and the published
+// decision packet explicitly leaves it to a product call ("Needs your
+// call": build now or park?) with no stated default for that half -- so
+// this only ships the packet's *other*, unconditional half ("Ships either
+// way: replace the misleading zeros with an honest 'not yet available'
+// state"), carried through as `notBuilt` here instead of collapsing straight
+// to an empty array.
+type GrievanceListResult = { items: RawRow[]; notBuilt: boolean };
+
+async function getData(): Promise<LoaderResult<GrievanceListResult>> {
+  return fetchJson<unknown, GrievanceListResult>(
+    "/api/v1/hrms/grievances",
+    { items: [], notBuilt: false },
+    {
+      telemetryKey: "hr.grievances",
+      mapResponse: (p) => {
+        const body = p as { data?: RawRow[]; meta?: { note?: string } } | null;
+        if (!body || !Array.isArray(body.data)) return null;
+        return { items: body.data, notBuilt: !!body.meta?.note };
+      },
     },
-  });
+  );
 }
 
 function shortId(id: string): string {
@@ -33,9 +62,28 @@ function shortId(id: string): string {
 
 export default async function GrievancePage() {
   const t = await getTranslations("grievance");
-  const { data: rawItems, source } = await getData();
+
+  // GAP-HR-GRIEVANCE-04/05: this page had no role gate of its own at all
+  // (relied entirely on the API's own 403) even though hr/layout.tsx admits
+  // "manager" and "employee" into /hr -- an unauthorized viewer got the
+  // generic retryable "couldn't load" error instead of an honest
+  // PermissionDenied, and (once real data exists behind GRIEVANCE-01) would
+  // have made a doomed fetch for a register whose rows include employee
+  // name/department/category -- fields DPDP-sensitive enough (category can
+  // reveal health, caste, or harassment context) to gate client-side too,
+  // defense-in-depth alongside the server's own check, same pattern
+  // hr/disciplinary/page.tsx already uses.
+  const roles = getSessionRoles();
+  const canAccess = roles.some((r: string) => GRIEVANCE_ROLES.includes(r));
+  if (!canAccess) {
+    return <PermissionDenied module="grievances" requiredRoles={GRIEVANCE_ROLES} />;
+  }
+
+  const result = await getData();
+  const { data, source } = result;
   const errored = source === "error";
-  const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
+  const notBuilt = !errored && data.notBuilt;
+  const items: Row[] = data.items.map((r) => ({ ...r, caseRef: shortId(r.id) }));
 
   const opened = items.filter((i) => i.status === "opened" || i.status === "registered").length;
   const inquiry = items.filter((i) => i.status === "under_inquiry" || i.status === "in_progress").length;
@@ -51,6 +99,12 @@ export default async function GrievancePage() {
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
+  // GAP-HR-GRIEVANCE-01: stat cards show a dash (not a real "0") whenever
+  // the register is a stub or the fetch itself failed -- `0` is a claim
+  // about real data ("we checked, there are none"); neither of those two
+  // states is that.
+  const statValue = (n: number) => (errored || notBuilt ? null : n);
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -61,15 +115,23 @@ export default async function GrievancePage() {
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCasesLabel")} value={errored ? null : items.length} />
-        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statOpenLabel")} value={errored ? null : opened} />
-        <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={errored ? null : inquiry} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedLabel")} value={errored ? null : closed} />
+        <StatCard icon="📋" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCasesLabel")} value={statValue(items.length)} />
+        <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statOpenLabel")} value={statValue(opened)} />
+        <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={statValue(inquiry)} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedLabel")} value={statValue(closed)} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "grievances" })} backHref="/hr" />
+            <LoadErrorState result={result} area="grievances" backHref="/hr" requiredRoles={GRIEVANCE_ROLES} />
+          </div>
+        ) : notBuilt ? (
+          <div className="pad">
+            <EmptyState
+              icon="🏗️"
+              title={t("notBuiltTitle")}
+              message={t("notBuiltMessage")}
+            />
           </div>
         ) : (
           <DataTable<Row>
