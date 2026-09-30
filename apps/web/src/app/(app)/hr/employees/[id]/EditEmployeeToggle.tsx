@@ -19,11 +19,20 @@ import { useTranslations } from "next-intl";
 
 interface EditEmployeeToggleProps {
   employee: EmployeeDetail;
+  /**
+   * GAP-HR-EMPLOYEES-DETAIL-02: PATCH /v1/hrms/employees/:id is HR_ROLES-
+   * gated server-side already -- this just stops a manager (or, before
+   * self-scoping is decided, an "employee") viewing a profile they can
+   * open from being offered an Edit control that can only ever 403.
+   */
+  canAdminister: boolean;
 }
 
-export function EditEmployeeToggle({ employee }: EditEmployeeToggleProps) {
+export function EditEmployeeToggle({ employee, canAdminister }: EditEmployeeToggleProps) {
   const t = useTranslations("employeeEdit");
   const [open, setOpen] = useState(false);
+
+  if (!canAdminister) return null;
 
   if (!open) {
     return (

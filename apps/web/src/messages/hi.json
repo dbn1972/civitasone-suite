@@ -1396,9 +1396,13 @@
   "employeeDetail": {
     "notFoundTitle": "कर्मचारी प्रोफ़ाइल",
     "notFoundMessage": "कर्मचारी नहीं मिला।",
+    "errorTitle": "प्रोफ़ाइल लोड नहीं हो सकी",
     "loadingTitle": "कर्मचारी प्रोफ़ाइल",
     "loadingSubtitle": "प्रोफ़ाइल लोड हो रही है…",
     "quickActionsTitle": "त्वरित कार्रवाइयाँ",
+    "lifecycleActionsTitle": "जीवनचक्र (केवल मानव संसाधन)",
+    "actionsUnavailableExited": "जीवनचक्र कार्रवाइयाँ उपलब्ध नहीं हैं — यह कर्मचारी संगठन छोड़ चुका है।",
+    "actionsUnavailableOther": "कर्मचारी के {status} होने के दौरान कार्रवाइयाँ उपलब्ध नहीं हैं।",
     "actionApplyLeave": "🌴 अवकाश हेतु आवेदन करें",
     "actionSalarySlips": "🧾 वेतन पर्चियाँ",
     "actionInitiateTransfer": "🔄 स्थानांतरण आरंभ करें",
@@ -1417,6 +1421,11 @@
     "fieldReportsTo": "रिपोर्टिंग प्रबंधक",
     "fieldEmail": "ईमेल",
     "fieldPhone": "फ़ोन",
+    "statutoryBankTitle": "सांविधिक एवं बैंक विवरण",
+    "fieldPan": "पैन",
+    "fieldBankAccount": "बैंक खाता",
+    "fieldBankIfsc": "बैंक IFSC",
+    "maskedAriaLabel": "मास्क किया गया — केवल अंतिम चार अंक दिखाए गए",
     "lifecycleTitle": "सेवा इतिहास / जीवनचक्र समयरेखा"
   },
   "employeeEdit": {

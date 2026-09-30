@@ -1397,9 +1397,13 @@
   "employeeDetail": {
     "notFoundTitle": "Employee Profile",
     "notFoundMessage": "Employee not found.",
+    "errorTitle": "Couldn't load profile",
     "loadingTitle": "Employee Profile",
     "loadingSubtitle": "Loading profile…",
     "quickActionsTitle": "Quick Actions",
+    "lifecycleActionsTitle": "Lifecycle (HR only)",
+    "actionsUnavailableExited": "Lifecycle actions are unavailable — this employee has left the organisation.",
+    "actionsUnavailableOther": "Actions are unavailable while the employee is {status}.",
     "actionApplyLeave": "🌴 Apply Leave",
     "actionSalarySlips": "🧾 Salary Slips",
     "actionInitiateTransfer": "🔄 Initiate Transfer",
@@ -1418,6 +1422,11 @@
     "fieldReportsTo": "Reports To",
     "fieldEmail": "Email",
     "fieldPhone": "Phone",
+    "statutoryBankTitle": "Statutory & Bank",
+    "fieldPan": "PAN",
+    "fieldBankAccount": "Bank Account",
+    "fieldBankIfsc": "Bank IFSC",
+    "maskedAriaLabel": "Masked — last four digits shown",
     "lifecycleTitle": "Service History / Lifecycle Timeline"
   },
   "employeeEdit": {
