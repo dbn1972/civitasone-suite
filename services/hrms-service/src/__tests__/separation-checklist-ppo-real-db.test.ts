@@ -53,6 +53,31 @@ function asTenant<T>(fn: (tx: typeof sqlClient) => Promise<T>): Promise<T> {
   return withRawTenantGuc(sqlClient, TENANT, fn);
 }
 
+/**
+ * Polls `check()` every `intervalMs` until it returns a truthy value, or
+ * returns the last (falsy) result once `timeoutMs` elapses.
+ *
+ * Replaces a fixed `setTimeout` wait for the async consumer (F3/queue) to
+ * catch up: a hardcoded 300ms delay here was confirmed flaky (~25% failure
+ * rate across 5 runs) because the GET sometimes fired before the consumer
+ * had processed the preceding PUT, leaving `row?.done` `undefined`. Polling
+ * asserts the condition becomes true rather than gambling on a fixed sleep.
+ */
+async function pollUntil<T>(
+  check: () => Promise<T | null | undefined>,
+  opts: { timeoutMs?: number; intervalMs?: number } = {},
+): Promise<T | null | undefined> {
+  const { timeoutMs = 2000, intervalMs = 50 } = opts;
+  const deadline = Date.now() + timeoutMs;
+  let result: T | null | undefined;
+  for (;;) {
+    result = await check();
+    if (result) return result;
+    if (Date.now() >= deadline) return result;
+    await new Promise((r) => setTimeout(r, intervalMs));
+  }
+}
+
 async function cleanup(): Promise<void> {
   await asTenant((tx) => tx`DELETE FROM lifecycle.hrms_separation_checklist WHERE tenant_id = ${TENANT}`);
   await asTenant((tx) => tx`DELETE FROM lifecycle.hrms_separations WHERE tenant_id = ${TENANT}`);
@@ -107,18 +132,39 @@ describe("PUT /v1/hrms/separations/:id/checklist", () => {
     });
     expect(put.statusCode).toBe(202);
 
-    // The write is async (F3/queue) -- wait briefly for the consumer, same
-    // tolerance this repo's other real-DB tests use for eventual writes.
-    await new Promise((r) => setTimeout(r, 300));
-
-    const get = await app.inject({
-      method: "GET", url: `/v1/hrms/separations/${SEPARATION_ID}/checklist`,
-      headers: { authorization: `Bearer ${hrOfficerToken}` },
+    // The write is async (F3/queue) -- poll for the consumer to catch up
+    // instead of sleeping a fixed duration (see pollUntil's doc comment).
+    const row = await pollUntil(async () => {
+      const get = await app.inject({
+        method: "GET", url: `/v1/hrms/separations/${SEPARATION_ID}/checklist`,
+        headers: { authorization: `Bearer ${hrOfficerToken}` },
+      });
+      expect(get.statusCode).toBe(200);
+      const body = JSON.parse(get.body) as { data: Array<{ stepId: string; checkIndex: number; done: boolean }> };
+      return body.data.find((r) => r.stepId === "1" && r.checkIndex === 0 && r.done === true);
     });
-    expect(get.statusCode).toBe(200);
-    const body = JSON.parse(get.body) as { data: Array<{ stepId: string; checkIndex: number; done: boolean }> };
-    const row = body.data.find((r) => r.stepId === "1" && r.checkIndex === 0);
     expect(row?.done).toBe(true);
+
+    // Audit-emission coverage (PR #1715 review note): this test previously
+    // asserted HTTP status + the GET-reflected row only, never that the
+    // toggle actually produced a real audit event. Poll _outbox.messages
+    // for the same reason the GET above polls: the audit enqueue() happens
+    // in the same async consumer transaction as the checklist write.
+    const auditRows = await pollUntil(() =>
+      asTenant((tx) => tx`
+        SELECT actor_id, payload FROM _outbox.messages
+        WHERE tenant_id = ${TENANT}
+          AND topic = 'audit.event.record'
+          AND payload ->> 'action' = 'separation_checklist_check'
+          AND payload ->> 'resourceId' = ${SEPARATION_ID}
+      `).then((r) => (r.length > 0 ? r : null)),
+    );
+    expect(auditRows).not.toBeNull();
+    expect(auditRows![0]?.actor_id).toBe(HR_OFFICER_SUB);
+    expect(auditRows![0]?.payload).toMatchObject({
+      service: "hrms", action: "separation_checklist_check",
+      resourceType: "separation", resourceId: SEPARATION_ID, outcome: "success",
+    });
   });
 });
 
@@ -165,6 +211,25 @@ describe("POST /v1/hrms/separations/:id/issue-ppo (GAP-HR-RETIREMENT-01)", () =>
 
     const rows = await asTenant((tx) => tx`SELECT ppo_issued_at, ppo_issued_by FROM lifecycle.hrms_separations WHERE id = ${SEPARATION_ID}`);
     expect(rows[0]?.ppo_issued_at).not.toBeNull();
+
+    // Audit-emission coverage (PR #1715 review note): issue-ppo must also
+    // record a real audit event, same gap as the checklist-toggle test
+    // above. Polled for the same async-consumer reason.
+    const ppoAuditRows = await pollUntil(() =>
+      asTenant((tx) => tx`
+        SELECT actor_id, payload FROM _outbox.messages
+        WHERE tenant_id = ${TENANT}
+          AND topic = 'audit.event.record'
+          AND payload ->> 'action' = 'issue_ppo'
+          AND payload ->> 'resourceId' = ${SEPARATION_ID}
+      `).then((r) => (r.length > 0 ? r : null)),
+    );
+    expect(ppoAuditRows).not.toBeNull();
+    expect(ppoAuditRows![0]?.actor_id).toBe(HR_ADMIN_SUB);
+    expect(ppoAuditRows![0]?.payload).toMatchObject({
+      service: "hrms", action: "issue_ppo",
+      resourceType: "separation", resourceId: SEPARATION_ID, outcome: "success",
+    });
 
     // Re-issuing is refused (irreversible, one-time action).
     const again = await app.inject({
