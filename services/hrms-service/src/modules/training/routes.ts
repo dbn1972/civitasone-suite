@@ -11,7 +11,7 @@ import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { and, eq, inArray } from "drizzle-orm";
-import { hrmsTrainings } from "./schema.js";
+import { hrmsTrainings, type NominationRow } from "./schema.js";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
@@ -60,6 +60,97 @@ async function resolveOwnEmployeeIdIfNonHr(
   if (HR_ROLES.some((r) => ctx.roles.includes(r))) return requested;
   const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
   return actorEmp ? actorEmp.id : null;
+}
+
+/**
+ * GAP-HR-TRAINING-NOMINATIONS-03: resolve each distinct `nominatedBy` actor
+ * id to a display name, reusing the same actor->employee resolver every
+ * self-service route already relies on (rather than inventing a second
+ * "user directory" lookup) -- an actorId with no linked employee record
+ * (e.g. a since-removed account) resolves to null, never the raw id.
+ */
+async function resolveNominatorNames(tenantId: string, actorIds: string[]): Promise<Map<string, string>> {
+  const distinct = [...new Set(actorIds)];
+  const resolved = await Promise.all(
+    distinct.map(async (actorId) => [actorId, await resolveEmployeeForActor(tenantId, actorId)] as const),
+  );
+  const map = new Map<string, string>();
+  for (const [actorId, emp] of resolved) {
+    if (emp?.fullName) map.set(actorId, emp.fullName);
+  }
+  return map;
+}
+
+export interface NominationAdminRow {
+  id: string;
+  trainingId: string;
+  employee: string;
+  department: string;
+  program: string;
+  nominatedBy: string;
+  nominationDate: string;
+  programDate: string;
+  status: string;
+}
+
+/**
+ * Pure projection, exported specifically so GAP-HR-TRAINING-NOMINATIONS-02/
+ * 03's row shape is unit-tested directly rather than only indirectly via a
+ * full route/DB integration test -- see rti/routes.test.ts's own doc
+ * comment for the established rationale this mirrors.
+ */
+export function projectNominationAdminRow(
+  n: NominationRow,
+  trainingMap: Map<string, { title: string; fromDate: string }>,
+  employeeMap: Map<string, { fullName: string; departmentId: string }>,
+  deptMap: Map<string, { name: string }>,
+  nominatorNames: Map<string, string>,
+): NominationAdminRow {
+  const emp = employeeMap.get(n.employeeId);
+  const dept = emp ? deptMap.get(emp.departmentId) : undefined;
+  const training = trainingMap.get(n.trainingId);
+  return {
+    id: n.id,
+    // GAP-HR-TRAINING-NOMINATIONS-02: the admin actions (approve/reject/
+    // complete) all need the training id -- approve in particular needs
+    // it to look up that programme's sessions.
+    trainingId: n.trainingId,
+    employee: emp?.fullName ?? "—",
+    department: dept?.name ?? "—",
+    program: training?.title ?? "—",
+    // GAP-HR-TRAINING-NOMINATIONS-03: a resolved person name, never the
+    // raw actor id; "—" only when genuinely unresolvable.
+    nominatedBy: (n.nominatedBy && nominatorNames.get(n.nominatedBy)) || "—",
+    nominationDate: n.createdAt.toISOString().slice(0, 10),
+    programDate: training?.fromDate ?? "—",
+    status: n.status,
+  };
+}
+
+export interface FeedbackAdminRow {
+  id: string;
+  employee: string;
+  program: string;
+  score: number | null;
+  submittedOn: string;
+}
+
+/** Pure projection -- see projectNominationAdminRow's doc comment. */
+export function projectFeedbackRow(
+  n: NominationRow,
+  trainingMap: Map<string, { title: string }>,
+  employeeMap: Map<string, { fullName: string }>,
+): FeedbackAdminRow {
+  return {
+    id: n.id,
+    employee: employeeMap.get(n.employeeId)?.fullName ?? "—",
+    program: trainingMap.get(n.trainingId)?.title ?? "—",
+    // GAP-HR-TRAINING-FEEDBACK-02: a real number|null -- never the string
+    // "—" a client-side `parseFloat(...) || 0` used to silently coerce to
+    // a fabricated zero. null means "not yet assessed".
+    score: n.score ?? null,
+    submittedOn: (n.completedDate ?? n.updatedAt.toISOString()).slice(0, 10),
+  };
 }
 
 export async function trainingRoutes(app: FastifyInstance): Promise<void> {
@@ -124,13 +215,21 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
 
-    const nominations = await repo.listNominationsForAdmin(ctx.tenantId);
-    if (nominations.length === 0) return reply.send({ data: [] });
+    const [nominations, total] = await Promise.all([
+      repo.listNominationsForAdmin(ctx.tenantId),
+      // GAP-HR-TRAINING-NOMINATIONS-04: a genuine COUNT(*), not the length of
+      // the (LIMIT 500) rows array -- the old `total: data.length` was always
+      // identical to the capped row count, so a truncated list silently
+      // reported its own cap as "the total" instead of the real count.
+      repo.countNominationsForAdmin(ctx.tenantId),
+    ]);
+    if (nominations.length === 0) return reply.send({ data: [], total: 0, truncated: false });
 
     const trainingIds = [...new Set(nominations.map((n) => n.trainingId))];
     const employeeIds = [...new Set(nominations.map((n) => n.employeeId))];
+    const nominatorIds = nominations.map((n) => n.nominatedBy).filter((id): id is string => !!id);
 
-    const [trainings, employees] = await Promise.all([
+    const [trainings, employees, nominatorNames] = await Promise.all([
       scopedRead((tx) => tx
         .select({ id: hrmsTrainings.id, title: hrmsTrainings.title, fromDate: hrmsTrainings.fromDate })
         .from(hrmsTrainings)
@@ -139,6 +238,7 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
         .select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, departmentId: hrmsEmployees.departmentId })
         .from(hrmsEmployees)
         .where(and(eq(hrmsEmployees.tenantId, ctx.tenantId), inArray(hrmsEmployees.id, employeeIds)))),
+      resolveNominatorNames(ctx.tenantId, nominatorIds),
     ]);
 
     const deptIds = [...new Set(employees.map((e) => e.departmentId))];
@@ -153,23 +253,9 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     const employeeMap = new Map(employees.map((e) => [e.id, e]));
     const deptMap = new Map(departments.map((d) => [d.id, d]));
 
-    const data = nominations.map((n) => {
-      const emp = employeeMap.get(n.employeeId);
-      const dept = emp ? deptMap.get(emp.departmentId) : undefined;
-      const training = trainingMap.get(n.trainingId);
-      return {
-        id: n.id,
-        employee: emp?.fullName ?? "—",
-        department: dept?.name ?? "—",
-        program: training?.title ?? "—",
-        nominatedBy: n.nominatedBy ?? "—",
-        nominationDate: n.createdAt.toISOString().slice(0, 10),
-        programDate: training?.fromDate ?? "—",
-        status: n.status,
-      };
-    });
+    const data = nominations.map((n) => projectNominationAdminRow(n, trainingMap, employeeMap, deptMap, nominatorNames));
 
-    return reply.send({ data, total: data.length, truncated: nominations.length === 500 });
+    return reply.send({ data, total, truncated: nominations.length === 500 });
   });
 
   // HR admin: completed nominations shaped as post-training feedback records
@@ -178,7 +264,7 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
 
     const nominations = await repo.listCompletedNominationsForAdmin(ctx.tenantId);
-    if (nominations.length === 0) return reply.send({ data: [] });
+    if (nominations.length === 0) return reply.send({ data: [], total: 0, truncated: false });
 
     const trainingIds = [...new Set(nominations.map((n) => n.trainingId))];
     const employeeIds = [...new Set(nominations.map((n) => n.employeeId))];
@@ -197,13 +283,7 @@ export async function trainingRoutes(app: FastifyInstance): Promise<void> {
     const trainingMap = new Map(trainings.map((t) => [t.id, t]));
     const employeeMap = new Map(employees.map((e) => [e.id, e]));
 
-    const data = nominations.map((n) => ({
-      id: n.id,
-      employee: employeeMap.get(n.employeeId)?.fullName ?? "—",
-      program: trainingMap.get(n.trainingId)?.title ?? "—",
-      rating: n.score != null ? String(n.score) : "—",
-      submittedOn: (n.completedDate ?? n.updatedAt.toISOString()).slice(0, 10),
-    }));
+    const data = nominations.map((n) => projectFeedbackRow(n, trainingMap, employeeMap));
 
     return reply.send({ data, total: data.length, truncated: nominations.length === 500 });
   });

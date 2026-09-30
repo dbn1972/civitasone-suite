@@ -72,6 +72,20 @@ export async function listNominationsForAdmin(tenantId: string, limit = 500): Pr
     .limit(limit));
 }
 
+/**
+ * GAP-HR-TRAINING-NOMINATIONS-04: the real count of nominations for this
+ * tenant, independent of listNominationsForAdmin's LIMIT 500 -- so the admin
+ * page's "Total" stat (and its "showing latest 500 of N" banner when
+ * truncated) reflect the actual number of rows, not the row cap.
+ */
+export async function countNominationsForAdmin(tenantId: string): Promise<number> {
+  const rows = await scopedRead((tx) => tx
+    .select({ count: sql<number>`count(*)::int` })
+    .from(hrmsNominations)
+    .where(eq(hrmsNominations.tenantId, tenantId)));
+  return rows[0]?.count ?? 0;
+}
+
 export async function listCompletedNominationsForAdmin(tenantId: string, limit = 500): Promise<NominationRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsNominations)
     .where(and(eq(hrmsNominations.tenantId, tenantId), eq(hrmsNominations.status, "completed")))

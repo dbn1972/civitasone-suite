@@ -113,8 +113,14 @@ const STATUS_MAP: Record<string, PillVariant> = {
   disputed: "bad",
   accepted: "good", // apar record accepted by the accepting authority -- final positive sign-off
 
-  // Training
+  // Training (queries.ts training/routes.ts; nominated/waitlisted/attended
+  // are real hrms_nominations.status values -- see training/schema.ts and
+  // training-admin/routes.ts's approve/reject CHECK-constraint comments,
+  // GAP-HR-TRAINING-NOMINATIONS-01)
   upcoming: "info",
+  nominated: "warn",
+  waitlisted: "info",
+  attended: "info",
 
   // Leave-routing engine failure (a technical failure, not a human rejection)
   "routing failed": "bad",
