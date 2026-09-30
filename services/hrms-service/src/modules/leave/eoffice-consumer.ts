@@ -60,7 +60,11 @@ export function registerLeaveSpecialEOfficeConsumers(queue: Queue): void {
 
     await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", cb.refId));
     if (employeeId) {
-      await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", employeeId));
+      // GAP-HR-LEAVE-HISTORY-01: see leave/consumer.ts's matching comment --
+      // getLeaveApplicationsByEmp now caches per (employeeId, limit, offset)
+      // via listOrLoad, so a single-key invalidate(makeKey(...)) no longer
+      // matches any of these entries.
+      await cache.invalidateResource(msg.tenantId, "leave_apps_emp");
     }
   });
 }

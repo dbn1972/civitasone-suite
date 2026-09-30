@@ -2853,7 +2853,7 @@
   "leaveBalance": {
     "title": "अवकाश शेष",
     "subtitle": "किसी कर्मचारी की अवकाश पात्रता और शेष राशि देखें।",
-    "downloadButton": "अवकाश शेष डाउनलोड करें",
+    "downloadButton": "प्रिंट करें / PDF के रूप में सहेजें",
     "statLeaveTypes": "अवकाश प्रकार",
     "statTotalEntitlement": "कुल पात्रता",
     "statTotalUsed": "कुल उपयोग",
@@ -2871,13 +2871,18 @@
     "fyCode": "वित्तीय वर्ष {fy} · कोड: {code}",
     "usedSuffix": "{count} उपयोग किए गए",
     "remainingSuffix": "{count} शेष",
-    "ofTotalDays": "/ {total} दिन"
+    "ofTotalDays": "/ {total} दिन",
+    "selectEmployeePrompt": "शेष देखने के लिए एक कर्मचारी चुनें।",
+    "viewMyBalanceLink": "अपना शेष देखें",
+    "contactHrToAllocateMessage": "अवकाश आवंटित करवाने हेतु HR से संपर्क करें।",
+    "noLinkedProfileTitle": "कोई कर्मचारी रिकॉर्ड लिंक नहीं है",
+    "noLinkedProfileMessage": "आपके खाते से कोई कर्मचारी रिकॉर्ड लिंक नहीं है, इसलिए आप अभी अवकाश शेष नहीं देख सकते। अपने खाते को अपने कर्मचारी रिकॉर्ड से लिंक करवाने हेतु HR से संपर्क करें।"
   },
   "leaveHistory": {
     "title": "अवकाश इतिहास",
     "subtitle": "कर्मचारी अनुसार अवकाश आवेदन देखें और प्रबंधित करें।",
     "applyLeaveAction": "+ छुट्टी हेतु आवेदन करें",
-    "statTotalApplications": "कुल आवेदन",
+    "statTotalApplications": "सक्रिय आवेदन",
     "statApproved": "स्वीकृत",
     "statPending": "लंबित",
     "statRejected": "अस्वीकृत",
@@ -2911,7 +2916,14 @@
     "confirmCancelDescription": "यह <b>{leaveType}</b> अनुरोध ({fromDate} – {toDate}){approvedSuffix} को वापस लेता है। यह पूर्ववत नहीं किया जा सकता — नए सिरे से एक नया अनुरोध सबमिट करना होगा।",
     "reversesApprovalSuffix": " और अनुमोदन को पूर्ववत करता है",
     "confirmCancelLabel": "अवकाश रद्द करें",
-    "keepItLabel": "रहने दें"
+    "keepItLabel": "रहने दें",
+    "selectEmployeePrompt": "अवकाश इतिहास देखने के लिए एक कर्मचारी चुनें।",
+    "viewMyHistoryLink": "अपना इतिहास देखें",
+    "chipDraft": "प्रारूप",
+    "showingOfTotal": "{total} में से {shown} दिखाए जा रहे हैं",
+    "cancelReasonLabel": "कारण (अनुमोदन वापस लेने या किसी और की ओर से रद्द करने पर आवश्यक, अन्यथा वैकल्पिक)",
+    "noLinkedProfileTitle": "कोई कर्मचारी रिकॉर्ड लिंक नहीं है",
+    "noLinkedProfileMessage": "आपके खाते से कोई कर्मचारी रिकॉर्ड लिंक नहीं है, इसलिए आप अभी अवकाश इतिहास नहीं देख सकते। अपने खाते को अपने कर्मचारी रिकॉर्ड से लिंक करवाने हेतु HR से संपर्क करें।"
   },
   "leavePolicies": {
     "title": "अवकाश नीति कॉन्फ़िगरेशन",

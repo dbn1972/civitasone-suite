@@ -133,6 +133,16 @@ vi.mock("./repo.js", () => ({
 vi.mock("../../shared/infra.js", () => ({
   cache: {
     invalidate: vi.fn(async () => undefined),
+    // GAP-HR-LEAVE-HISTORY-01: added so getLeaveApplicationsByEmp's cache
+    // entries (one per employeeId+limit+offset, via listOrLoad) can all be
+    // cleared together -- see queries.ts's own doc comment. Every handler
+    // that used to call `cache.invalidate(cache.makeKey(tenantId,
+    // "leave_apps_emp", employeeId))` now calls this instead; without this
+    // mock entry those handlers throw (cache.invalidateResource is not a
+    // function), which the queue's retry-on-error path then redelivers --
+    // masquerading as "insertLeaveAppMock/updateLeaveAppMock called 3 times"
+    // in totally unrelated tests rather than a clear "not a function" error.
+    invalidateResource: vi.fn(async () => undefined),
     makeKey: vi.fn((...parts: string[]) => parts.join(":")),
   },
 }));

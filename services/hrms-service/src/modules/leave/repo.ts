@@ -48,10 +48,46 @@ export async function findLeaveAppByIdTx(tx: Writer, id: string, tenantId: strin
   return rows[0] ?? null;
 }
 
-export async function findLeaveAppsByEmp(tenantId: string, employeeId: string, limit = 100): Promise<LeaveAppRow[]> {
+/**
+ * GAP-HR-LEAVE-HISTORY-01: this used to take no offset and no ORDER BY at
+ * all, so which rows came back beyond `limit` was arbitrary (DB physical
+ * order) and the caller's own `limit` query param was silently never even
+ * threaded through to it (see queries.getLeaveApplicationsByEmp). Newest
+ * first, with a tie-break on id for a fully deterministic order across
+ * pages when createdAt collides (same-transaction inserts can share a
+ * timestamp).
+ */
+export async function findLeaveAppsByEmp(tenantId: string, employeeId: string, limit = 100, offset = 0): Promise<LeaveAppRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.employeeId, employeeId)))
-    .limit(limit));
+    .orderBy(desc(hrmsLeaveApps.createdAt), desc(hrmsLeaveApps.id))
+    .limit(limit).offset(offset));
+}
+
+/**
+ * GAP-HR-LEAVE-HISTORY-01: real total for the employee-scoped history read —
+ * replaces the previous `meta.total = data.length`, which silently
+ * under-reported once an employee had more applications than the (ignored)
+ * page size.
+ */
+export async function countLeaveAppsByEmp(tenantId: string, employeeId: string): Promise<number> {
+  const rows = await scopedRead((tx) => tx.select({ count: sql<number>`count(*)::int` }).from(hrmsLeaveApps)
+    .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.employeeId, employeeId))));
+  return rows[0]?.count ?? 0;
+}
+
+/**
+ * GAP-HR-LEAVE-HISTORY-01 (fix step 3): per-status counts over the FULL set
+ * (not just the current page) so the history page's stat tiles never
+ * under-report once real pagination replaces "fetch up to N and count what
+ * came back".
+ */
+export async function countLeaveAppsByEmpByStatus(tenantId: string, employeeId: string): Promise<Record<string, number>> {
+  const rows = await scopedRead((tx) => tx.select({ status: hrmsLeaveApps.status, count: sql<number>`count(*)::int` })
+    .from(hrmsLeaveApps)
+    .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.employeeId, employeeId)))
+    .groupBy(hrmsLeaveApps.status));
+  return Object.fromEntries(rows.map((r) => [r.status, r.count]));
 }
 
 /**

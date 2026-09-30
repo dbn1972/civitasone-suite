@@ -2,12 +2,13 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { PageHeader, StatGrid, StatCard, Card, ErrorState } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, ErrorState, EmptyState, EntityPicker } from "../../../../_components/ds";
+import { DataSourceBadge, type DataSource } from "../../../../_components/DataSourceBadge";
 import { PrintButton } from "../../../../_components/PrintButton";
 import { useTranslations } from "next-intl";
 import { toHumanError } from "@/lib/messages";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
-type EmployeeOption = { id: string; name: string; employeeNo: string };
 type Allocation = {
   id: string;
   leaveTypeId: string;
@@ -30,7 +31,7 @@ type LeaveContext = {
 };
 
 /**
- * Mirrors leave/routes.ts HR_ROLES — the roles that may view ANY employee's
+ * Mirrors leave/routes.ts HR_ROLES -- the roles that may view ANY employee's
  * leave balance. Others see only their own.
  */
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -41,37 +42,36 @@ interface Props {
   roles: string[];
   /** The current user's linked employee-record id (null when unlinked). */
   myEmployeeId: string | null;
+  /**
+   * GAP-HR-LEAVE-BALANCE-02: `?empId=` deep-link support, e.g. the leave
+   * allocation form's "View full balance" link (AllocateLeaveForm.tsx).
+   */
+  initialEmployeeId?: string;
+  /**
+   * GAP-HR-LEAVE-BALANCE-04: true when the session has NO linked employee
+   * record (a genuine, expected 404 from /me/profile, not a fetch failure) --
+   * shown as an honest "contact HR" empty state instead of a silently blank
+   * page.
+   */
+  noLinkedProfile: boolean;
+  /** GAP-HR-LEAVE-BALANCE-05: surfaced via DataSourceBadge near the header. */
+  profileSource: DataSource;
 }
 
-export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
+export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmployeeId, noLinkedProfile, profileSource }: Props) {
   const t = useTranslations("leaveBalance");
   const isAdminOrManager = roles.some((r) => ADMIN_OR_MANAGER_ROLES.includes(r));
+  const canAllocate = roles.some((r) => HR_ROLES.includes(r));
 
-  const [employees, setEmployees] = useState<EmployeeOption[]>([]);
-  const [empId, setEmpId]         = useState("");
+  // GAP-HR-LEAVE-BALANCE-02: initialise to the deep-linked id, else the
+  // caller's own record, else '' (prompt) -- for EVERY role, not just
+  // managers. Replaces the old setEmpId(rows[0].id) auto-select, which
+  // silently showed an arbitrary employee's balance by default.
+  const [empId, setEmpId] = useState(initialEmployeeId ?? myEmployeeId ?? "");
   const [ctx, setCtx]             = useState<LeaveContext | null>(null);
   const [loading, setLoading]     = useState(false);
   const [source, setSource]       = useState<"api" | "error">("api");
   const [reloadTick, setReloadTick] = useState(0);
-
-  useEffect(() => {
-    if (isAdminOrManager) {
-      // Admins/managers: load the full employee picker.
-      const controller = new AbortController();
-      fetch("/api/proxy/v1/hrms/employees?limit=500", { signal: controller.signal })
-        .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
-        .then((body) => {
-          const rows: EmployeeOption[] = Array.isArray(body) ? body : (body.data ?? []);
-          setEmployees(rows);
-          if (rows[0]) setEmpId(rows[0].id);
-        })
-        .catch((e) => { if (e.name !== "AbortError") { setSource("error"); } });
-      return () => controller.abort();
-    } else if (myEmployeeId) {
-      // Regular employees: show only their own balance.
-      setEmpId(myEmployeeId);
-    }
-  }, [t, isAdminOrManager, myEmployeeId]);
 
   useEffect(() => {
     if (!empId) return;
@@ -105,10 +105,32 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
   const pct = (used: number, total: number) =>
     total > 0 ? Math.min(100, Math.round((used / total) * 100)) : 0;
 
-  const totalTypes       = ctx?.allocations.length ?? 0;
-  const totalEntitlement = ctx?.allocations.reduce((s, a) => s + a.totalDays, 0) ?? 0;
-  const totalBalance  = ctx?.allocations.reduce((s, a) => s + a.balanceDays, 0) ?? 0;
-  const totalUsed     = totalEntitlement - totalBalance;
+  const totalTypes = ctx?.allocations.length ?? 0;
+
+  // GAP-HR-LEAVE-BALANCE-04: a plain employee with no linked record gets an
+  // honest explanation instead of a page that renders nothing beyond the
+  // header once `empId` never resolves. Checked before any leave-context
+  // fetch would even fire (empId stays '' in that case).
+  if (!isAdminOrManager && noLinkedProfile) {
+    return (
+      <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel="Back to Leave" />
+        <Card title={t("entitlementCard")}>
+          <EmptyState icon="🪪" title={t("noLinkedProfileTitle")} message={t("noLinkedProfileMessage")} />
+        </Card>
+      </div>
+    );
+  }
+  if (!isAdminOrManager && profileSource === "error") {
+    return (
+      <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel="Back to Leave" />
+        <Card title={t("entitlementCard")}>
+          <ErrorState error={toHumanError("load", { area: "your profile" })} onRetry={() => setReloadTick((n) => n + 1)} />
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
@@ -117,48 +139,48 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
         subtitle={t("subtitle")}
         back="/hr/leave" backLabel="Back to Leave"
       />
-      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }} className="no-print">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }} className="no-print">
+        <DataSourceBadge source={profileSource} />
         <PrintButton label={t("downloadButton")} />
       </div>
 
       {ctx && (
         <StatGrid>
-          <StatCard icon="🌴" iconBg="var(--goodbg)" label={t("statLeaveTypes")}     value={totalTypes} />
-          <StatCard icon="📅" iconBg="var(--infobg)" label={t("statTotalEntitlement")} value={`${totalEntitlement}d`} />
-          <StatCard icon="✅"       iconBg="var(--warnbg)" label={t("statTotalUsed")}      value={`${totalUsed}d`} />
-          <StatCard icon="⏳"       iconBg="var(--panel)" label={t("statTotalRemaining")} value={`${totalBalance}d`} />
+          <StatCard icon="🌴" iconBg="var(--goodbg)" label={t("statLeaveTypes")} value={totalTypes} />
         </StatGrid>
       )}
 
       {/* Employee picker: visible only to admin/manager roles */}
       {isAdminOrManager && (
         <Card title={t("selectEmployeeCard")}>
-          <div style={{ padding: "16px 20px" }}>
+          <div style={{ padding: "16px 20px", display: "flex", flexDirection: "column", gap: 10 }}>
             <label
-              htmlFor="emp-select"
-              style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--ink2)", marginBottom: 6 }}
+              htmlFor="emp-picker"
+              style={{ display: "block", fontSize: 13, fontWeight: 500, color: "var(--ink2)" }}
             >
               {t("employeeLabel")}
             </label>
-            <select
-              id="emp-select"
-              value={empId}
-              onChange={(e) => setEmpId(e.target.value)}
-              style={{
-                width: "100%",
-                maxWidth: 400,
-                padding: "8px 12px",
-                borderRadius: 6,
-                border: "1px solid var(--line)",
-                fontSize: 14,
-                background: "var(--bg)",
-                color: "var(--ink)",
-              }}
-            >
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>{e.name} ({e.employeeNo})</option>
-              ))}
-            </select>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+              <div style={{ minWidth: 260, maxWidth: 400, flex: "1 1 260px" }}>
+                <EntityPicker
+                  id="emp-picker"
+                  value={empId || null}
+                  onChange={(v) => setEmpId(typeof v === "string" ? v : "")}
+                  search={searchEmployees}
+                  resolve={resolveEmployees}
+                  placeholder={t("employeeLabel")}
+                  aria-label={t("employeeLabel")}
+                />
+              </div>
+              {myEmployeeId && empId !== myEmployeeId && (
+                <button type="button" className="btn ghost" onClick={() => setEmpId(myEmployeeId)}>
+                  {t("viewMyBalanceLink")}
+                </button>
+              )}
+            </div>
+            {!empId && (
+              <p style={{ fontSize: 13, color: "var(--mut)", margin: 0 }}>{t("selectEmployeePrompt")}</p>
+            )}
           </div>
         </Card>
       )}
@@ -169,7 +191,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
         </p>
       )}
 
-      {!loading && (
+      {!loading && empId && (
         source === "error" ? (
           <Card title={t("entitlementCard")}>
             <ErrorState
@@ -183,7 +205,14 @@ export default function LeaveBalanceClient({ roles, myEmployeeId }: Props) {
               <div style={{ fontSize: 40, marginBottom: 12 }}>🌴</div>
               <p style={{ fontWeight: 600, marginBottom: 4, color: "var(--ink)" }}>{t("noLeaveAllocatedTitle")}</p>
               <p style={{ fontSize: 14, marginBottom: 16 }}>{t("noLeaveAllocatedMessage")}</p>
-              <Link href="/hr/leave/allocate" className="btn primary">{t("allocateLeaveLink")}</Link>
+              {/* GAP-HR-LEAVE-BALANCE-03: this link used to render for every
+                  role, including managers/employees who are denied on
+                  /hr/leave/allocate (PermissionDenied). */}
+              {canAllocate ? (
+                <Link href="/hr/leave/allocate" className="btn primary">{t("allocateLeaveLink")}</Link>
+              ) : (
+                <p style={{ fontSize: 13, color: "var(--mut)" }}>{t("contactHrToAllocateMessage")}</p>
+              )}
             </div>
           </Card>
         ) : (

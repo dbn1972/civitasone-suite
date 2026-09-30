@@ -8,14 +8,25 @@ import LeaveHistoryClient from "./LeaveHistoryClient";
  * accordingly (employees see only their own history; admins/managers
  * get the full employee picker).
  */
-export default async function LeaveHistoryPage() {
+export default async function LeaveHistoryPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string>;
+}) {
   const roles = getSessionRoles();
   const profile = await getMyProfile();
+  // GAP-HR-LEAVE-BALANCE-04 (applies to history too, per that item's own
+  // fix steps): same noLinkedProfile rule as balance/page.tsx and
+  // leave/apply/page.tsx.
+  const noLinkedProfile = !profile.data && profile.source !== "error";
 
   return (
     <LeaveHistoryClient
       roles={roles}
       myEmployeeId={profile.data?.id ?? null}
+      initialEmployeeId={searchParams?.empId}
+      noLinkedProfile={noLinkedProfile}
+      profileSource={profile.source}
     />
   );
 }

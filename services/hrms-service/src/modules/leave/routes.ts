@@ -343,10 +343,34 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     // IDOR guard: empId used to be taken raw with no ownership check.
     const employeeIds = await resolveLeaveReadScope(ctx, req, q.empId);
     if (employeeIds !== undefined) {
-      const data = employeeIds.length > 0
-        ? (await Promise.all(employeeIds.map((id) => queries.getLeaveApplicationsByEmp(ctx.tenantId, id)))).flat()
-        : [];
-      return reply.send({ data, meta: { page: 1, pageSize: q.limit, total: data.length } });
+      if (employeeIds.length === 0) {
+        return reply.send({ data: [], meta: { page: 1, pageSize: q.limit, offset: q.offset, total: 0, hasMore: false, statusCounts: {} } });
+      }
+      // GAP-HR-LEAVE-HISTORY-01: real limit/offset + a real total, replacing
+      // the previous `meta.total = data.length` (silently under-reported
+      // beyond the first ~100 rows regardless of what the caller asked
+      // for). The web caller of this route (LeaveHistoryClient.tsx) always
+      // resolves and sends a single `empId` once known, so `employeeIds`
+      // here is a multi-element array only when a manager's request omits
+      // `empId` entirely — a shape this page's own UI never produces.
+      // Page/total math is exact for the single-id case that matters; a
+      // multi-id caller gets each employee's own page concatenated (still
+      // correctly ordered/limited per employee, just not one globally
+      // merged page across employees — true cross-employee merge
+      // pagination is out of scope here).
+      const results = await Promise.all(
+        employeeIds.map((id) => queries.getLeaveApplicationsByEmp(ctx.tenantId, id, q.limit, q.offset)),
+      );
+      const data = results.flatMap((r) => r.data);
+      const total = results.reduce((sum, r) => sum + r.total, 0);
+      const statusCounts = results.reduce<Record<string, number>>((acc, r) => {
+        for (const [status, count] of Object.entries(r.statusCounts)) acc[status] = (acc[status] ?? 0) + count;
+        return acc;
+      }, {});
+      return reply.send({
+        data,
+        meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, offset: q.offset, total, hasMore: data.length === q.limit, statusCounts },
+      });
     }
     const result = await queries.listLeaveApplications(ctx.tenantId, q.limit, q.offset);
     return reply.send({ data: result.data, meta: { page: Math.floor(q.offset / q.limit) + 1, pageSize: q.limit, offset: q.offset, hasMore: result.data.length === q.limit } });
