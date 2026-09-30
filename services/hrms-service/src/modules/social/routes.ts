@@ -257,7 +257,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       // "today" is now computed in Asia/Kolkata server-side (a server
       // running in a different zone/DST offset used to disagree with what
       // an IST viewer considers "today"), and the query now requires
-      // e.share_birthday = true (added by migration 0158, default false) —
+      // e.share_birthday = true (added by migration 0159, default false) —
       // per the decision packet's recommended default ("add an opt-in flag,
       // default off; only show birthdays for employees who've actively
       // opted in"), an employee's birthday, department and designation are

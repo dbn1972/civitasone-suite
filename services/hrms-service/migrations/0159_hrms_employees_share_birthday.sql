@@ -1,4 +1,4 @@
--- 0158_hrms_employees_share_birthday.sql
+-- 0159_hrms_employees_share_birthday.sql
 -- GAP-HR-SOCIAL-FEED-01: GET /v1/hrms/social/feed's "today's birthdays"
 -- block listed any employee whose date_of_birth matched today (full name,
 -- department, designation) to every authenticated HR/manager/employee
@@ -23,6 +23,14 @@
 -- classification backfill): every existing row correctly becomes `false`
 -- via the column default alone, which is exactly the safe, no-consent-yet
 -- state this fix requires.
+--
+-- Renumbered from 0158 -> 0159: 0158 was independently claimed by two OTHER
+-- open PRs at the time this was written (#1698 salary_advance_reject,
+-- #1704 hrms_probation_extensions) -- a 3-way collision, not caught before
+-- initial push because each lane only checked origin/main + its own prior
+-- gh pr list snapshot, not every other lane's claim at push time in a
+-- fast-moving multi-agent campaign. Verified against a fresh gh pr list
+-- (all open PRs' actual claimed migration files) before picking 0159.
 --
 -- Rollback:
 --   ALTER TABLE employee.hrms_employees DROP COLUMN IF EXISTS share_birthday;
