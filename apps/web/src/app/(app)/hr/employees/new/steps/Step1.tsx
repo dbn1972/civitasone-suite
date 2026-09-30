@@ -53,14 +53,28 @@ export function Step1({ data, errors, onChange, onBlur }: Props) {
         {/* Date of Birth */}
         <div style={fieldWrap}>
           <label htmlFor="w-dob" style={labelStyle}>{t("dobLabel")}</label>
+          {/* GAP-HR-EMPLOYEES-NEW-08: `max` is an HTML-only guard -- it
+              constrains the native date picker but a typed/pasted date
+              bypassed it entirely, since nothing here re-checked it in JS.
+              validateStep(1, ...) now enforces the same 18-year minimum
+              server-side of this component (see wizardTypes.ts); this is
+              just wiring its result up to a visible, announced error. */}
           <input
             id="w-dob"
             type="date"
             value={data.dateOfBirth}
             onChange={(e) => onChange("dateOfBirth", e.target.value)}
-            style={inputStyle}
+            onBlur={() => onBlur("dateOfBirth")}
+            aria-invalid={!!errors.dateOfBirth}
+            aria-describedby={errors.dateOfBirth ? "w-dob-err" : undefined}
+            style={errors.dateOfBirth ? inputErrorStyle : inputStyle}
             max={new Date(Date.now() - 18 * 365.25 * 24 * 3600 * 1000).toISOString().split("T")[0]}
           />
+          {errors.dateOfBirth && (
+            <span id="w-dob-err" role="alert" style={{ fontSize: 12, color: "var(--bad, #b91c1c)" }}>
+              {errors.dateOfBirth}
+            </span>
+          )}
         </div>
 
         {/* Gender */}

@@ -91,51 +91,6 @@ function MaskedInput({
   );
 }
 
-function Toggle({
-  id,
-  checked,
-  label,
-  hint,
-  onChange,
-}: {
-  id: string;
-  checked: boolean;
-  label: string;
-  hint?: string;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <label
-      htmlFor={id}
-      style={{
-        display: "flex",
-        alignItems: "center",
-        gap: 10,
-        cursor: "pointer",
-        fontSize: 14,
-        color: "var(--ink, #0f172a)",
-        padding: "10px 0",
-      }}
-    >
-      <input
-        id={id}
-        type="checkbox"
-        checked={checked}
-        onChange={(e) => onChange(e.target.checked)}
-        style={{ width: 18, height: 18, cursor: "pointer", flexShrink: 0, accentColor: "var(--good, #047857)" }}
-      />
-      <span>
-        {label}
-        {hint && (
-          <span style={{ display: "block", fontSize: 11, color: "var(--mut, #64748b)", fontWeight: 400 }}>
-            {hint}
-          </span>
-        )}
-      </span>
-    </label>
-  );
-}
-
 export function Step4({ data, errors, onChange, onBlur }: Props) {
   const t = useTranslations("employeeWizard");
   return (
@@ -237,44 +192,13 @@ export function Step4({ data, errors, onChange, onBlur }: Props) {
             </span>
           )}
         </div>
-
-        {/* Statutory opt-ins — full width */}
-        <div
-          style={{
-            gridColumn: "span 2",
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: "0 24px",
-            marginTop: 8,
-            padding: "12px 16px",
-            background: "var(--bg, #f8fafc)",
-            borderRadius: 8,
-            border: "1px solid var(--line, #e2e8f0)",
-          }}
-        >
-          <Toggle
-            id="w-pf"
-            checked={data.pfEnrolled}
-            onChange={(v) => onChange("pfEnrolled", v)}
-            label={t("pfEnrolledLabel")}
-            hint={t("pfEnrolledHint")}
-          />
-          <Toggle
-            id="w-esi"
-            checked={data.esiEnrolled}
-            onChange={(v) => onChange("esiEnrolled", v)}
-            label={t("esiOptInLabel")}
-            hint={t("esiHint")}
-          />
-          <Toggle
-            id="w-pt"
-            checked={data.ptApplicable}
-            onChange={(v) => onChange("ptApplicable", v)}
-            label={t("ptApplicableLabel")}
-            hint={t("ptHint")}
-          />
-        </div>
       </div>
+      {/* GAP-HR-EMPLOYEES-NEW-01: the PF/ESI/PT opt-in toggles that used to
+          sit here were removed, not just left unsent -- they're already
+          derived from the selected engagement type's policy
+          (engagement-policy.ts statutoryPf/statutoryEsi) server-side, so a
+          form toggle here could only ever silently disagree with, and never
+          actually override, that computed value. */}
     </>
   );
 }
