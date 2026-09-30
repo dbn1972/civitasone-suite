@@ -25,6 +25,9 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // key existed here before, so both fell back to the generic "info" tone.
   attested: "good",
   recorded: "warn",
+  // GAP-HR-RETIREMENT-03: "initiated" (below, pre-existing) already covers
+  // hrms_separations.status's default value with the "warn" tone this GAP
+  // needed -- confirmed before assuming a fix was required here.
   probation: "warn",
   retired: "mut",
   resigned: "mut",

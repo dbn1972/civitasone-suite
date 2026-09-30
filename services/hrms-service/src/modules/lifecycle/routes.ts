@@ -7,10 +7,15 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import { batchEmployees, batchDepartments, batchDesignations } from "../../shared/batch-resolve.js";
 import { hrmsPromotions, hrmsTransfers } from "./schema.js";
-import { createTransferBody, createPromotionBody, issueOrderBody, relieveBody, joinBody, idParam } from "./validators.js";
+import { createTransferBody, createPromotionBody, issueOrderBody, relieveBody, joinBody, idParam, checklistToggleBody, TOTAL_CHECKLIST_ITEMS } from "./validators.js";
 import * as commands from "./commands.js";
+import * as repo from "./repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+// GAP-HR-RETIREMENT-01: decision packet's recommendation is explicitly
+// "gated to HR admin" for issuing a PPO (a statutory, irreversible pension
+// action) -- narrower than HR_ROLES above, which also admits hr_officer.
+const HR_ADMIN_ROLES = ["hr_admin", "super_admin"];
 
 export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
   // GAP-HR-SF-17: this list previously returned raw employeeId/fromDesigId/
@@ -174,6 +179,64 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.joinTransfer(ctx, id, body as unknown as Record<string, unknown>));
+  });
+
+  // GAP-HR-RETIREMENT-01 ---------------------------------------------------
+  app.get("/v1/hrms/separations/:id/checklist", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    // GAP-HR-RETIREMENT-01: reads outside an existing transaction must go
+    // through scopedRead -- the tenant-isolation GUC is only set for the
+    // lifetime of that transaction (see this file's own relieve/join
+    // handlers above); a bare repo.getX(...) call (defaulting to plain
+    // `db`) silently returns zero rows under RLS instead of erroring.
+    const [separation, rows] = await scopedRead(async (tx) => [
+      await repo.getSeparation(ctx.tenantId, id, tx),
+      await repo.getChecklistRows(ctx.tenantId, id, tx),
+    ]);
+    if (!separation) throw new HttpError(404, "NOT_FOUND", "separation not found");
+    return reply.send({
+      data: rows.map((r) => ({ stepId: r.stepId, checkIndex: r.checkIndex, done: r.done, doneBy: r.doneBy, doneAt: r.doneAt })),
+      ppoIssuedAt: separation.ppoIssuedAt,
+      ppoIssuedBy: separation.ppoIssuedBy,
+    });
+  });
+
+  app.put("/v1/hrms/separations/:id/checklist", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = checklistToggleBody.parse(req.body);
+    const separation = await scopedRead((tx) => repo.getSeparation(ctx.tenantId, id, tx));
+    if (!separation) throw new HttpError(404, "NOT_FOUND", "separation not found");
+    // A PPO already issued makes the checklist an immutable historical
+    // record -- same "irreversible once issued" rule as the action itself.
+    if (separation.ppoIssuedAt) {
+      throw new HttpError(409, "PPO_ALREADY_ISSUED", "PPO has already been issued; the checklist is now read-only");
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.toggleChecklistItem(ctx, id, body));
+  });
+
+  app.post("/v1/hrms/separations/:id/issue-ppo", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ADMIN_ROLES);
+    const { id } = idParam.parse(req.params);
+    const [separation, complete] = await scopedRead(async (tx) => [
+      await repo.getSeparation(ctx.tenantId, id, tx),
+      await repo.isChecklistComplete(ctx.tenantId, id, tx),
+    ]);
+    if (!separation) throw new HttpError(404, "NOT_FOUND", "separation not found");
+    if (separation.ppoIssuedAt) {
+      throw new HttpError(409, "PPO_ALREADY_ISSUED", "PPO has already been issued for this separation");
+    }
+    // Synchronous pre-check (same pattern as transfers' relieve/join above):
+    // refuse before publishing, not just inside the async consumer, so the
+    // caller never gets a fake-success 202 for an incomplete checklist.
+    if (!complete) {
+      throw new HttpError(409, "CHECKLIST_INCOMPLETE", `all ${TOTAL_CHECKLIST_ITEMS} checklist items must be done before a PPO can be issued`);
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.issuePpo(ctx, id));
   });
 
   app.setErrorHandler((err, req, reply) => {

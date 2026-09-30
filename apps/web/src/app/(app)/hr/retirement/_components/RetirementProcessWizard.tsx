@@ -4,170 +4,164 @@
  * 5-step interactive checklist wizard for processing a retirement:
  * NOC from Departments → Final Pay Certificate → GPF/NPS Settlement →
  * Gratuity Calculation → Pension Order Generation.
- * Pure client-side step tracker — no API mutation in Phase 2.
+ *
+ * GAP-HR-RETIREMENT-01: now backed by GET/PUT /v1/hrms/separations/:id/checklist
+ * and POST .../issue-ppo (see lifecycle/routes.ts) -- previously pure
+ * client-side useState with no persistence at all, and "Issue PPO" was a
+ * styled <span>, not a working action.
  */
-import { useState } from "react";
-import { Button } from "@/app/_components/ds";
+import { useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
+import { Button, ConfirmDialog, useToast } from "@/app/_components/ds";
 
-const STEPS = [
-  {
-    id: 1,
-    icon: "🏢",
-    title: "NOC from Departments",
-    subtitle:
-      "Obtain No-Objection Certificates from all holding departments before last working day.",
-    checks: [
-      "Library clearance certificate obtained",
-      "Store / Equipment / Furniture clearance obtained",
-      "IT / Laptop / Mobile / SIM card assets returned and cleared",
-      "Finance / TA advance / LTC advance adjusted and cleared",
-      "Official accommodation / government quarters vacated (if applicable)",
-    ],
-  },
-  {
-    id: 2,
-    icon: "📄",
-    title: "Final Pay Certificate",
-    subtitle:
-      "Generate FPC for last drawn pay, leave encashment, and all pending dues.",
-    checks: [
-      "Last working day officially confirmed",
-      "Leave encashment computed (max 300 days EL per Rule 39 CCS Leave Rules)",
-      "Salary arrears / increment due cleared",
-      "LTC advance / HBA advance fully adjusted",
-      "Final Pay Certificate (Form-9) issued and signed by DDO",
-    ],
-  },
-  {
-    id: 3,
-    icon: "🏦",
-    title: "GPF / NPS Settlement",
-    subtitle:
-      "Close the GPF account or initiate NPS exit as applicable for the retiree.",
-    checks: [
-      "GPF final balance verified with Pay & Accounts Office (PAO)",
-      "Nomination details confirmed in GPF records",
-      "GPF withdrawal application (Form-G / 7D) submitted to PAO",
-      "NPS subscriber ID closure notified to PFRDA (for NPS optees)",
-      "Final settlement amount credited to nominee / beneficiary account",
-    ],
-  },
-  {
-    id: 4,
-    icon: "💰",
-    title: "Gratuity Calculation",
-    subtitle:
-      "Compute DCRG (Death-cum-Retirement Gratuity) under CCS (Pension) Rules, 2021.",
-    checks: [
-      "Qualifying service (QS) years verified from service book",
-      "Last pay drawn (emoluments) confirmed from FPC",
-      "DCRG computed: Emoluments × ½ × QS (max ₹25 lakh w.e.f. 01.01.2024)",
-      "Gratuity claim Form-6 submitted to PAO with service book",
-      "Sanction order for DCRG issued by PAO and copy sent to retiree",
-    ],
-  },
-  {
-    id: 5,
-    icon: "📜",
-    title: "Pension Order (PPO)",
-    subtitle:
-      "Issue Pension Payment Order and forward to CPPC / Treasury / Bank.",
-    checks: [
-      "Pension computation sheet (emoluments, QS, commutation) prepared",
-      "Pension application Form-5 with forwarding letter signed by HoO",
-      "PPO generated in Bhavishya / SPARSH and verified",
-      "PPO along with Form-14 forwarded to CPPC / nominated bank branch",
-      "Acknowledgement of PPO receipt obtained from CPPC",
-    ],
-  },
-] as const;
+const STEP_IDS = ["1", "2", "3", "4", "5"] as const;
+const STEP_ICONS = ["🏢", "📄", "🏦", "💰", "📜"];
+const CHECKS_PER_STEP = 5;
+const TOTAL_CHECKS = STEP_IDS.length * CHECKS_PER_STEP;
 
-type CheckedState = Record<number, Record<number, boolean>>;
+type ChecklistState = Record<string, Record<number, boolean>>;
 
 interface Props {
   employeeName?: string;
+  /** The hrms_separations row id this wizard tracks. Undefined until a
+   * retiree is selected (see RetirementCaseWorkspace). */
+  separationId?: string;
 }
 
-export function RetirementProcessWizard({ employeeName }: Props) {
-  const [activeStep, setActiveStep] = useState(0);
-  const [checked, setChecked] = useState<CheckedState>({});
+export function RetirementProcessWizard({ employeeName, separationId }: Props) {
+  const t = useTranslations("retirementWizard");
+  const { toast } = useToast();
 
-  function toggle(si: number, ci: number) {
-    setChecked((prev) => ({
-      ...prev,
-      [si]: { ...(prev[si] ?? {}), [ci]: !(prev[si]?.[ci] ?? false) },
-    }));
+  const steps = STEP_IDS.map((id, i) => ({
+    id,
+    icon: STEP_ICONS[i],
+    title: t(`step${id}Title`),
+    subtitle: t(`step${id}Subtitle`),
+    checks: Array.from({ length: CHECKS_PER_STEP }, (_, ci) => t(`step${id}Check${ci}`)),
+  }));
+
+  const [activeStep, setActiveStep] = useState(0);
+  const [checked, setChecked] = useState<ChecklistState>({});
+  const [ppoIssuedAt, setPpoIssuedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [issuing, setIssuing] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
+  useEffect(() => {
+    setActiveStep(0);
+    if (!separationId) {
+      setChecked({});
+      setPpoIssuedAt(null);
+      return;
+    }
+    const controller = new AbortController();
+    setLoading(true);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/proxy/v1/hrms/separations/${separationId}/checklist`, {
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const body = (await res.json()) as {
+          data: Array<{ stepId: string; checkIndex: number; done: boolean }>;
+          ppoIssuedAt?: string | null;
+        };
+        const next: ChecklistState = {};
+        for (const row of body.data) {
+          next[row.stepId] = { ...(next[row.stepId] ?? {}), [row.checkIndex]: row.done };
+        }
+        setChecked(next);
+        setPpoIssuedAt(body.ppoIssuedAt ?? null);
+      } catch (err) {
+        if (err instanceof Error && err.name === "AbortError") return;
+      } finally {
+        setLoading(false);
+      }
+    })();
+    return () => controller.abort();
+  }, [separationId]);
+
+  const readOnly = Boolean(ppoIssuedAt);
+
+  async function toggle(stepId: string, checkIndex: number) {
+    if (!separationId || readOnly) return;
+    const prevValue = checked[stepId]?.[checkIndex] ?? false;
+    const nextValue = !prevValue;
+    // Optimistic update, rolled back on a failed PUT.
+    setChecked((prev) => ({ ...prev, [stepId]: { ...(prev[stepId] ?? {}), [checkIndex]: nextValue } }));
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/separations/${separationId}/checklist`, {
+        method: "PUT",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ stepId, checkIndex, done: nextValue }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+    } catch {
+      setChecked((prev) => ({ ...prev, [stepId]: { ...(prev[stepId] ?? {}), [checkIndex]: prevValue } }));
+      toast.error(t("toggleErrorToast"));
+    }
+  }
+
+  async function confirmIssuePpo() {
+    if (!separationId) return;
+    setIssuing(true);
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/separations/${separationId}/issue-ppo`, { method: "POST" });
+      if (!res.ok) throw new Error(String(res.status));
+      setPpoIssuedAt(new Date().toISOString());
+      setConfirmOpen(false);
+      toast.success(t("ppoIssuedToast"));
+    } catch {
+      toast.error(t("issuePpoErrorToast"));
+    } finally {
+      setIssuing(false);
+    }
   }
 
   function stepDone(si: number): boolean {
-    const m = checked[si] ?? {};
-    return STEPS[si].checks.every((_, ci) => m[ci] === true);
+    const m = checked[steps[si].id] ?? {};
+    return steps[si].checks.every((_, ci) => m[ci] === true);
   }
 
-  const totalChecks = STEPS.reduce((t, s) => t + s.checks.length, 0);
-  const doneChecks  = Object.entries(checked).reduce(
-    (t, [, cmap]) => t + Object.values(cmap).filter(Boolean).length,
+  const doneChecks = STEP_IDS.reduce(
+    (t2, id) => t2 + Object.values(checked[id] ?? {}).filter(Boolean).length,
     0,
   );
-  const overallPct = Math.round((doneChecks / totalChecks) * 100);
-
-  const allDone = STEPS.every((_, i) => stepDone(i));
+  const overallPct = Math.round((doneChecks / TOTAL_CHECKS) * 100);
+  const allDone = steps.every((_, i) => stepDone(i));
 
   return (
     <div>
       {employeeName ? (
         <p style={{ margin: "0 0 10px", fontSize: "0.875rem", color: "var(--ink2)" }}>
-          Processing retirement for: <strong>{employeeName}</strong>
+          {t("processingFor", { name: employeeName })}
         </p>
       ) : (
-        <p style={{ margin: "0 0 10px", fontSize: "0.875rem", color: "var(--ink2)" }}>
-          No retiree selected — pick one from &quot;Retiring in Next 6 Months&quot; above to track their case.
-        </p>
+        <p style={{ margin: "0 0 10px", fontSize: "0.875rem", color: "var(--ink2)" }}>{t("noRetireeSelected")}</p>
       )}
 
-      {/* Honest disclaimer: this checklist has no backend yet (Sprint 14 /
-          Lifecycle Phase 2 is a client-side-only prototype). Without this,
-          the progress bar and green checkmarks look exactly like a real,
-          saved case tracker -- an officer could reasonably believe ticking
-          every box here has recorded the retirement processing, when a
-          refresh (or simply opening the same case on another machine)
-          silently discards everything. */}
-      <div
-        role="status"
-        style={{
-          display: "flex", gap: 8, alignItems: "flex-start",
-          padding: "10px 14px", marginBottom: 16, borderRadius: 8,
-          background: "var(--warnbg, #fffbe6)", border: "1px solid #f5d97a",
-          fontSize: "0.8125rem", color: "var(--warn, #8a6416)",
-        }}
-      >
-        <span aria-hidden="true">⚠️</span>
-        <span>
-          This checklist is a local processing aid only. Checked items are <strong>not saved</strong> —
-          they reset if you reload this page, navigate away, or another officer opens the same case.
-          Record completed steps in the physical/service-book file until a saved case tracker ships.
-        </span>
-      </div>
+      {readOnly && (
+        <div
+          role="status"
+          style={{
+            display: "flex", gap: 8, alignItems: "flex-start",
+            padding: "10px 14px", marginBottom: 16, borderRadius: 8,
+            background: "var(--goodbg, #f0fdf4)", border: "1px solid var(--goodbd, #bbf7d0)",
+            fontSize: "0.8125rem", color: "var(--good, #16a34a)",
+          }}
+        >
+          <span aria-hidden="true">✅</span>
+          <span>{t("ppoIssuedNotice", { date: new Date(ppoIssuedAt as string).toLocaleDateString("en-IN") })}</span>
+        </div>
+      )}
 
       {/* Overall progress bar */}
       <div style={{ marginBottom: 20 }}>
-        <div
-          style={{
-            display: "flex", justifyContent: "space-between",
-            marginBottom: 6, fontSize: "0.8125rem", color: "var(--mut)",
-          }}
-        >
-          <span>Overall progress</span>
-          <span style={{ fontWeight: 600, color: allDone ? "var(--good, #16a34a)" : "var(--ink)" }}>
-            {overallPct}%
-          </span>
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, fontSize: "0.8125rem", color: "var(--mut)" }}>
+          <span>{t("overallProgress")}</span>
+          <span style={{ fontWeight: 600, color: allDone ? "var(--good, #16a34a)" : "var(--ink)" }}>{overallPct}%</span>
         </div>
-        <div
-          style={{
-            height: 8, background: "var(--bg2, #f1f5f9)",
-            borderRadius: 99, overflow: "hidden",
-          }}
-        >
+        <div style={{ height: 8, background: "var(--bg2, #f1f5f9)", borderRadius: 99, overflow: "hidden" }}>
           <div
             style={{
               height: "100%",
@@ -181,13 +175,9 @@ export function RetirementProcessWizard({ employeeName }: Props) {
       </div>
 
       {/* Step tab bar */}
-      <div
-        role="tablist"
-        aria-label="Retirement processing steps"
-        style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}
-      >
-        {STEPS.map((step, i) => {
-          const done   = stepDone(i);
+      <div role="tablist" aria-label={t("stepTabsAriaLabel")} style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+        {steps.map((step, i) => {
+          const done = stepDone(i);
           const active = i === activeStep;
           return (
             <button
@@ -199,35 +189,28 @@ export function RetirementProcessWizard({ employeeName }: Props) {
               onClick={() => setActiveStep(i)}
               style={{
                 display: "flex", alignItems: "center", gap: 7,
-                padding: "8px 14px", borderRadius: 8, border: "none",
-                cursor: "pointer",
-                background: active
-                  ? "var(--primary, #2563eb)"
-                  : done
-                  ? "var(--goodbg, #f0fdf4)"
-                  : "var(--bg2, #f1f5f9)",
+                padding: "8px 14px", borderRadius: 8, border: "none", cursor: "pointer",
+                background: active ? "var(--primary, #2563eb)" : done ? "var(--goodbg, #f0fdf4)" : "var(--bg2, #f1f5f9)",
                 color: active ? "var(--panel, #fff)" : done ? "var(--good, #16a34a)" : "var(--ink)",
                 fontWeight: active ? 600 : 400,
                 fontSize: "0.8125rem",
                 transition: "background 0.2s, color 0.2s",
               }}
             >
-              <span>{done ? "✅" : step.icon}</span>
-              <span>
-                {i + 1}. {step.title}
-              </span>
+              <span aria-hidden="true">{done ? "✅" : step.icon}</span>
+              <span>{i + 1}. {step.title}</span>
             </button>
           );
         })}
       </div>
 
       {/* Active step panel */}
-      {STEPS.map((step, si) => {
+      {steps.map((step, si) => {
         if (si !== activeStep) return null;
-        const stepMap      = checked[si] ?? {};
-        const done         = stepDone(si);
+        const stepMap = checked[step.id] ?? {};
+        const done = stepDone(si);
         const completedCnt = step.checks.filter((_, ci) => stepMap[ci]).length;
-        const stepPct      = Math.round((completedCnt / step.checks.length) * 100);
+        const stepPct = Math.round((completedCnt / step.checks.length) * 100);
 
         return (
           <div
@@ -236,16 +219,14 @@ export function RetirementProcessWizard({ employeeName }: Props) {
             role="tabpanel"
             aria-labelledby={`wizard-step-tab-${si}`}
             style={{
-              border: "1px solid var(--line, #e2e8f0)",
-              borderRadius: 10,
-              padding: 20,
+              border: "1px solid var(--line, #e2e8f0)", borderRadius: 10, padding: 20,
               background: done ? "var(--goodbg, #f0fdf4)" : "var(--bg, #fff)",
               transition: "background 0.3s",
             }}
           >
-            {/* Step header */}
             <div style={{ display: "flex", gap: 14, marginBottom: 14, alignItems: "flex-start" }}>
               <div
+                aria-hidden="true"
                 style={{
                   width: 48, height: 48, borderRadius: 10,
                   background: done ? "var(--goodbg, #dcfce7)" : "#e6f0ff",
@@ -257,47 +238,27 @@ export function RetirementProcessWizard({ employeeName }: Props) {
               </div>
               <div>
                 <h3 style={{ margin: 0, fontSize: "1rem", fontWeight: 600 }}>
-                  Step {step.id} — {step.title}
+                  {t("stepHeading", { num: step.id, title: step.title })}
                 </h3>
-                <p style={{ margin: "4px 0 0", fontSize: "0.8125rem", color: "var(--ink2)" }}>
-                  {step.subtitle}
-                </p>
+                <p style={{ margin: "4px 0 0", fontSize: "0.8125rem", color: "var(--ink2)" }}>{step.subtitle}</p>
               </div>
             </div>
 
-            {/* Per-step progress */}
             <div style={{ marginBottom: 14 }}>
-              <div
-                style={{
-                  height: 4, background: "var(--bg2, #f1f5f9)",
-                  borderRadius: 99, overflow: "hidden",
-                }}
-              >
+              <div style={{ height: 4, background: "var(--bg2, #f1f5f9)", borderRadius: 99, overflow: "hidden" }}>
                 <div
                   style={{
-                    height: "100%",
-                    background: done ? "var(--good, #16a34a)" : "#2563eb",
-                    width: `${stepPct}%`,
-                    transition: "width 0.3s",
+                    height: "100%", background: done ? "var(--good, #16a34a)" : "#2563eb",
+                    width: `${stepPct}%`, transition: "width 0.3s",
                   }}
                 />
               </div>
-              <p
-                style={{
-                  margin: "4px 0 0", fontSize: "0.75rem", color: "var(--mut)",
-                }}
-              >
-                {completedCnt} of {step.checks.length} tasks completed
+              <p style={{ margin: "4px 0 0", fontSize: "0.75rem", color: "var(--mut)" }}>
+                {t("taskCompletedCount", { completed: completedCnt, total: step.checks.length })}
               </p>
             </div>
 
-            {/* Checklist */}
-            <ul
-              style={{
-                listStyle: "none", margin: 0, padding: 0,
-                display: "flex", flexDirection: "column", gap: 8,
-              }}
-            >
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
               {step.checks.map((check, ci) => {
                 const isChecked = stepMap[ci] ?? false;
                 return (
@@ -305,17 +266,16 @@ export function RetirementProcessWizard({ employeeName }: Props) {
                     <label
                       style={{
                         display: "flex", alignItems: "flex-start", gap: 12,
-                        cursor: "pointer", padding: "10px 14px", borderRadius: 8,
-                        background: isChecked
-                          ? "var(--goodbg, #f0fdf4)"
-                          : "var(--bg2, #f8fafc)",
+                        cursor: readOnly ? "default" : "pointer", padding: "10px 14px", borderRadius: 8,
+                        background: isChecked ? "var(--goodbg, #f0fdf4)" : "var(--bg2, #f8fafc)",
                         transition: "background 0.2s",
                       }}
                     >
                       <input
                         type="checkbox"
                         checked={isChecked}
-                        onChange={() => toggle(si, ci)}
+                        disabled={!separationId || readOnly || loading}
+                        onChange={() => toggle(step.id, ci)}
                         style={{ marginTop: 2, flexShrink: 0, accentColor: "var(--good, #16a34a)" }}
                         aria-label={check}
                       />
@@ -335,45 +295,38 @@ export function RetirementProcessWizard({ employeeName }: Props) {
               })}
             </ul>
 
-            {/* Navigation */}
-            <div
-              style={{
-                display: "flex", justifyContent: "space-between",
-                alignItems: "center", marginTop: 20, gap: 8,
-              }}
-            >
-              <Button
-                variant="ghost"
-                onClick={() => setActiveStep(Math.max(0, si - 1))}
-                disabled={si === 0}
-              >
-                ← Previous
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 20, gap: 8 }}>
+              <Button variant="ghost" onClick={() => setActiveStep(Math.max(0, si - 1))} disabled={si === 0}>
+                {t("prevButton")}
               </Button>
-              {si < STEPS.length - 1 ? (
-                <Button onClick={() => setActiveStep(si + 1)}>
-                  Next Step →
-                </Button>
-              ) : allDone ? (
-                <span
-                  style={{
-                    padding: "8px 20px", borderRadius: 6,
-                    background: "var(--good, #16a34a)", color: "#fff",
-                    fontSize: "0.875rem", fontWeight: 600,
-                  }}
-                >
-                  ✅ All Steps Complete — Issue PPO
+              {si < steps.length - 1 ? (
+                <Button onClick={() => setActiveStep(si + 1)}>{t("nextButton")}</Button>
+              ) : readOnly ? (
+                <span style={{ fontSize: "0.8125rem", color: "var(--good, #16a34a)", fontWeight: 600 }}>
+                  {t("ppoAlreadyIssued")}
                 </span>
               ) : (
-                <span
-                  style={{ fontSize: "0.8125rem", color: "var(--mut)" }}
-                >
-                  Complete all steps to generate PPO
-                </span>
+                <Button onClick={() => setConfirmOpen(true)} disabled={!allDone || !separationId} variant="primary">
+                  {t("issuePpoButton")}
+                </Button>
               )}
             </div>
+            {!readOnly && !allDone && si === steps.length - 1 && (
+              <p style={{ marginTop: 10, fontSize: "0.8125rem", color: "var(--mut)" }}>{t("completeAllToGeneratePpo")}</p>
+            )}
           </div>
         );
       })}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t("issuePpoConfirmTitle")}
+        description={t("issuePpoConfirmDescription")}
+        confirmLabel={t("issuePpoButton")}
+        busy={issuing}
+        onConfirm={() => void confirmIssuePpo()}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   );
 }

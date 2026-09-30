@@ -1,6 +1,7 @@
 import { eq, and, inArray, lte, sql } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { hrmsTransfers, hrmsPromotions, hrmsSeparations, type TransferRow, type PromotionRow } from "./schema.js";
+import { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsSeparationChecklist, type TransferRow, type PromotionRow, type SeparationRow } from "./schema.js";
+import { TOTAL_CHECKLIST_ITEMS } from "./validators.js";
 import * as employeeRepo from "../employee/repo.js";
 import { HttpError } from "../../shared/context.js";
 
@@ -80,6 +81,89 @@ export async function transitionPromotion(
 
 export async function insertSeparation(tx: Writer, row: typeof hrmsSeparations.$inferInsert): Promise<void> {
   await tx.insert(hrmsSeparations).values(row);
+}
+
+// GAP-HR-RETIREMENT-01 ────────────────────────────────────────────────────
+
+export async function getSeparation(tenantId: string, id: string, tx: Writer = db): Promise<SeparationRow | undefined> {
+  const rows = await tx.select().from(hrmsSeparations)
+    .where(and(eq(hrmsSeparations.id, id), eq(hrmsSeparations.tenantId, tenantId)))
+    .limit(1);
+  return rows[0];
+}
+
+export async function getChecklistRows(tenantId: string, separationId: string, tx: Writer = db) {
+  return tx.select().from(hrmsSeparationChecklist)
+    .where(and(
+      eq(hrmsSeparationChecklist.tenantId, tenantId),
+      eq(hrmsSeparationChecklist.separationId, separationId),
+    ));
+}
+
+/**
+ * Upsert one checklist item. `stepId`/`checkIndex` are validated against the
+ * fixed 5x5 shape (validators.ts's checklistToggleBody) before this is ever
+ * called, so isChecklistComplete below can safely count "done" rows without
+ * separately verifying which slots exist.
+ */
+export async function upsertChecklistItem(
+  tx: Writer,
+  row: { tenantId: string; separationId: string; stepId: string; checkIndex: number; done: boolean; actorId: string },
+): Promise<void> {
+  const existing = await tx.select().from(hrmsSeparationChecklist)
+    .where(and(
+      eq(hrmsSeparationChecklist.tenantId, row.tenantId),
+      eq(hrmsSeparationChecklist.separationId, row.separationId),
+      eq(hrmsSeparationChecklist.stepId, row.stepId),
+      eq(hrmsSeparationChecklist.checkIndex, row.checkIndex),
+    ))
+    .limit(1);
+  const doneFields = row.done
+    ? { done: true, doneBy: row.actorId, doneAt: new Date() }
+    : { done: false, doneBy: null, doneAt: null };
+  if (existing[0]) {
+    await tx.update(hrmsSeparationChecklist)
+      .set({ ...doneFields, updatedAt: new Date() })
+      .where(eq(hrmsSeparationChecklist.id, existing[0].id));
+  } else {
+    await tx.insert(hrmsSeparationChecklist).values({
+      tenantId: row.tenantId, separationId: row.separationId,
+      stepId: row.stepId, checkIndex: row.checkIndex, ...doneFields,
+    });
+  }
+}
+
+export async function isChecklistComplete(tenantId: string, separationId: string, tx: Writer = db): Promise<boolean> {
+  const rows = await tx.select({ count: sql<number>`count(*)::int` }).from(hrmsSeparationChecklist)
+    .where(and(
+      eq(hrmsSeparationChecklist.tenantId, tenantId),
+      eq(hrmsSeparationChecklist.separationId, separationId),
+      eq(hrmsSeparationChecklist.done, true),
+    ));
+  return (rows[0]?.count ?? 0) >= TOTAL_CHECKLIST_ITEMS;
+}
+
+/**
+ * Statutory pension action -- irreversible, refused unless every checklist
+ * item is already done (checked again here, inside the same transaction,
+ * not just at the route layer, so a race between two toggles and an issue
+ * request cannot slip through). Returns null when already issued (no-op,
+ * not an error) or when the completeness guard fails.
+ */
+export async function issuePpoTx(
+  tx: Writer, tenantId: string, separationId: string, actorId: string,
+): Promise<SeparationRow | null> {
+  const complete = await isChecklistComplete(tenantId, separationId, tx);
+  if (!complete) return null;
+  const rows = await (tx as typeof db).update(hrmsSeparations)
+    .set({ ppoIssuedAt: new Date(), ppoIssuedBy: actorId, updatedBy: actorId, version: sql`${hrmsSeparations.version} + 1` })
+    .where(and(
+      eq(hrmsSeparations.id, separationId),
+      eq(hrmsSeparations.tenantId, tenantId),
+      sql`${hrmsSeparations.ppoIssuedAt} IS NULL`,
+    ))
+    .returning();
+  return rows[0] ?? null;
 }
 
 /**

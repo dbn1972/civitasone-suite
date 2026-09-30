@@ -38,6 +38,9 @@ export const COMMANDS = {
   lifecycleTransferIssue:   "hrms.lifecycle.transfer.issue",
   lifecycleTransferRelieve: "hrms.lifecycle.transfer.relieve",
   lifecycleTransferJoin:    "hrms.lifecycle.transfer.join",
+  // GAP-HR-RETIREMENT-01
+  lifecycleChecklistToggle: "hrms.lifecycle.separation.checklist_toggle",
+  lifecycleIssuePpo:        "hrms.lifecycle.separation.issue_ppo",
   nominationComplete:       "hrms.nomination.complete",
   loanCreate:               "hrms.loan.create",
   loanEmiPaid:              "hrms.loan.emi_paid",
