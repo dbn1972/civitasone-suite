@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { PageHeader, Card, DataTable, EmptyState, ConfirmDialog, StatGrid, StatCard, Button } from "../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, ErrorState, ConfirmDialog, StatGrid, StatCard, StatusPill, SkeletonTable, Button } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { CreateLeavePolicyForm } from "./CreateLeavePolicyForm";
 import { useFormError } from "@/lib/useFormError";
@@ -52,6 +52,10 @@ type LoadState = "loading" | "ready" | "error";
 
 export default function LeavePoliciesClient() {
   const t = useTranslations("leavePolicies");
+  // GAP-HR-LEAVE-POLICIES-07: employeeTypes i18n map lives in the
+  // leavePolicyForm namespace (shared with CreateLeavePolicyForm's own
+  // <select> options), not leavePolicies.
+  const tf = useTranslations("leavePolicyForm");
   const [policies, setPolicies] = useState<Policy[]>([]);
   const [filter, setFilter] = useState<string>("all");
   const [state, setState] = useState<LoadState>("loading");
@@ -64,6 +68,22 @@ export default function LeavePoliciesClient() {
   const [saveError, setSaveError] = useState<string | undefined>();
   const [toast, setToast] = useState<{ tone: "good" | "bad"; text: string } | null>(null);
   const formError = useFormError("leave policy");
+
+  // GAP-HR-LEAVE-POLICIES-05: startEdit used to unconditionally overwrite
+  // editId/editValues, so clicking Edit on row B while row A had unsaved
+  // changes silently discarded A's edit with no warning. pendingEditTarget
+  // holds the row the user just clicked Edit on while a DIFFERENT row is
+  // dirty; discardConfirmOpen gates a "Discard changes?" prompt before
+  // switching.
+  const [pendingEditTarget, setPendingEditTarget] = useState<Policy | null>(null);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+
+  // GAP-HR-LEAVE-POLICIES-04: policies whose Deactivate/Reactivate request
+  // is in flight — used to disable that row's own action button only
+  // (independent of `saving`, which is the inline-edit Save/Cancel state).
+  const [statusBusyId, setStatusBusyId] = useState<string | null>(null);
+  const [deactivateTarget, setDeactivateTarget] = useState<Policy | null>(null);
+  const [deactivateError, setDeactivateError] = useState<string | undefined>();
 
   async function fetchPolicies(signal?: AbortSignal) {
     setState("loading");
@@ -98,6 +118,13 @@ export default function LeavePoliciesClient() {
   // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchPolicies is redefined each render but only closes over values already listed in this array; nothing else it reads can change independently.
   }, [filter]);
 
+  // GAP-HR-LEAVE-POLICIES-05: does `values` differ from `original` on any
+  // field the edit form actually exposes?
+  function isDirty(original: Policy | null, values: Partial<Policy>): boolean {
+    if (!original) return false;
+    return (Object.keys(values) as (keyof Policy)[]).some((k) => values[k] !== original[k]);
+  }
+
   function startEdit(p: Policy) {
     setEditId(p.id);
     setSaveError(undefined);
@@ -117,12 +144,36 @@ export default function LeavePoliciesClient() {
     });
   }
 
+  // GAP-HR-LEAVE-POLICIES-05: the Edit button's actual onClick target now.
+  // Only prompts when switching away from a DIFFERENT row that has unsaved
+  // changes; clicking Edit again on the row already being edited, or on any
+  // row when nothing is dirty, behaves exactly as before.
+  function requestEdit(p: Policy) {
+    if (editId && editId !== p.id) {
+      const current = policies.find((x) => x.id === editId) ?? null;
+      if (isDirty(current, editValues)) {
+        setPendingEditTarget(p);
+        setDiscardConfirmOpen(true);
+        return;
+      }
+    }
+    startEdit(p);
+  }
+
+  function confirmDiscardAndSwitch() {
+    setDiscardConfirmOpen(false);
+    if (pendingEditTarget) startEdit(pendingEditTarget);
+    setPendingEditTarget(null);
+  }
+
   async function saveEdit() {
     if (!editId) return;
+    const editedId = editId;
+    const snapshot = editValues;
     setSaving(true);
     setSaveError(undefined);
     try {
-      const res = await fetch(`/api/proxy/v1/hrms/admin/leave-policies/${editId}`, {
+      const res = await fetch(`/api/proxy/v1/hrms/admin/leave-policies/${editedId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editValues),
@@ -132,11 +183,23 @@ export default function LeavePoliciesClient() {
         setSaveError(resolved.message);
         return;
       }
+      // GAP-HR-LEAVE-POLICIES-03: PATCH is a queued write (202, applied
+      // later by f3-consumer.ts) — an immediate refetch can still return the
+      // pre-write row. Apply the edited values to local state right away
+      // (optimistic) instead of waiting on that refetch, and say "submitted"
+      // rather than "updated" since the change may not be visible to a
+      // fresh GET for a moment yet.
+      setPolicies((prev) => prev.map((p) => (p.id === editedId ? { ...p, ...snapshot } : p)));
       setConfirmOpen(false);
       setEditId(null);
       setToast({ tone: "good", text: t("toastUpdated") });
-      await fetchPolicies();
       setTimeout(() => setToast(null), 4000);
+      // Background reconcile: confirm the optimistic view against the real,
+      // by-then-likely-consistent server state without re-entering the
+      // full-page loading state (fetchPolicies() itself doesn't toggle
+      // `state` back to "loading" mid-session since `state` is already
+      // "ready" here, so this is already a quiet background refresh).
+      setTimeout(() => { void fetchPolicies(); }, 1500);
     } catch {
       setSaveError(formError.fromException("save").message);
     } finally {
@@ -144,10 +207,54 @@ export default function LeavePoliciesClient() {
     }
   }
 
+  // GAP-HR-LEAVE-POLICIES-04: the DELETE endpoint (deactivate) already
+  // existed server-side (policy-admin-routes.ts) but had no caller in the
+  // web app; PATCH {isActive:true} reactivates (updatePolicyBody now
+  // accepts isActive). Both are queued writes (202) — same optimistic +
+  // delayed-reconcile pattern as saveEdit above, and both go through a
+  // reason-collecting ConfirmDialog since either one changes an employee
+  // type's leave entitlement.
+  async function submitStatusChange(p: Policy, nextActive: boolean, reason?: string) {
+    setStatusBusyId(p.id);
+    setDeactivateError(undefined);
+    try {
+      const res = nextActive
+        ? await fetch(`/api/proxy/v1/hrms/admin/leave-policies/${p.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ isActive: true }),
+          })
+        : await fetch(`/api/proxy/v1/hrms/admin/leave-policies/${p.id}`, {
+            method: "DELETE",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason }),
+          });
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        setDeactivateError(resolved.message);
+        return;
+      }
+      setPolicies((prev) => prev.map((x) => (x.id === p.id ? { ...x, isActive: nextActive } : x)));
+      setDeactivateTarget(null);
+      // Reuses toastUpdated's copy ("Change submitted…") rather than adding
+      // toastDeactivated/toastReactivated keys — same queued-write shape as
+      // an ordinary field edit, so the same message applies.
+      setToast({ tone: "good", text: t("toastUpdated") });
+      setTimeout(() => setToast(null), 4000);
+      setTimeout(() => { void fetchPolicies(); }, 1500);
+    } catch {
+      setDeactivateError(formError.fromException("save").message);
+    } finally {
+      setStatusBusyId(null);
+    }
+  }
+
   async function handlePolicyCreated() {
+    // GAP-HR-LEAVE-POLICIES-03: same queued-write timing issue as saveEdit
+    // — "submitted", not "created", and a short delay before reconciling.
     setToast({ tone: "good", text: t("toastCreated") });
-    await fetchPolicies();
     setTimeout(() => setToast(null), 4000);
+    setTimeout(() => { void fetchPolicies(); }, 1500);
   }
 
   const editingPolicy = policies.find((p) => p.id === editId) ?? null;
@@ -171,7 +278,7 @@ export default function LeavePoliciesClient() {
       )}
 
       <div role="group" aria-label={t("filterGroupLabel")} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 16 }}>
-        {[{ value: "all", label: t("allTypes") }, ...EMPLOYEE_TYPES.map((type) => ({ value: type, label: type.replace("_", " ") }))].map((o) => (
+        {[{ value: "all", label: t("allTypes") }, ...EMPLOYEE_TYPES.map((type) => ({ value: type, label: tf(`employeeTypes.${type}`) }))].map((o) => (
           <Button
             key={o.value}
             variant={filter === o.value ? "primary" : "ghost"}
@@ -195,19 +302,19 @@ export default function LeavePoliciesClient() {
 
       <Card title={t("cardTitle")}>
         {state === "loading" ? (
-          <div style={{ padding: "40px 0", textAlign: "center", color: "var(--mut)" }} aria-live="polite">
-            {t("loadingPolicies")}
-          </div>
+          // GAP-HR-LEAVE-POLICIES-06: was plain "Loading policies…" text —
+          // every sibling HR loading treatment uses SkeletonTable.
+          <SkeletonTable rows={6} />
         ) : state === "error" ? (
-          <EmptyState
-            icon="⚠️"
-            title={t("errorTitle")}
-            message={loadError ?? t("errorFallback")}
-            action={
-              <Button variant="ghost" onClick={() => void fetchPolicies()}>
-                {t("retry")}
-              </Button>
-            }
+          // GAP-HR-LEAVE-POLICIES-06: EmptyState was being used as the error
+          // surface. Switched to ErrorState, keeping the same two pieces of
+          // text the old EmptyState(icon/title/message) showed — errorTitle
+          // as the heading, `loadError` (UX-016's already clerk-safe,
+          // formError-derived message) as the detail — rather than
+          // discarding either.
+          <ErrorState
+            error={{ what: t("errorTitle"), next: loadError ?? t("errorFallback"), actions: ["retry"] }}
+            onRetry={() => void fetchPolicies()}
           />
         ) : policies.length === 0 ? ( // ux-001-ok: gated by `state === "error"` above (a real distinct branch with its own message + retry button, just spelled "state" not "source"/"status" so the guard's regex misses it)
           <EmptyState
@@ -222,10 +329,16 @@ export default function LeavePoliciesClient() {
                 key: "employeeType",
                 label: t("colEmployeeType"),
                 render: (p) => (
-                  <span className={`pill ${TYPE_VARIANT[p.employeeType as string] ?? "mut"}`} style={{ textTransform: "capitalize" }}>
-                    {(p.employeeType as string).replace("_", " ")}
+                  <span className={`pill ${TYPE_VARIANT[p.employeeType as string] ?? "mut"}`}>
+                    {tf(`employeeTypes.${p.employeeType as string}`)}
                   </span>
                 ),
+              },
+              {
+                key: "isActive",
+                label: t("colStatus"),
+                align: "center",
+                render: (p) => <StatusPill status={p.isActive ? "active" : "inactive"} />,
               },
               {
                 key: "leaveTypeName",
@@ -429,9 +542,32 @@ export default function LeavePoliciesClient() {
                     );
                   }
                   return (
-                    <Button variant="ghost" size="sm" onClick={() => startEdit(p as Policy)}>
-                      {t("editBtn")}
-                    </Button>
+                    <div style={{ display: "inline-flex", gap: 6 }}>
+                      <Button variant="ghost" size="sm" onClick={() => requestEdit(p as Policy)}>
+                        {t("editBtn")}
+                      </Button>
+                      {/* GAP-HR-LEAVE-POLICIES-04: DELETE (deactivate) already existed
+                          server-side with no web caller; PATCH {isActive:true} reactivates. */}
+                      {(p as Policy).isActive ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={statusBusyId === (p.id as string)}
+                          onClick={() => { setDeactivateError(undefined); setDeactivateTarget(p as Policy); }}
+                        >
+                          {t("deactivateBtn")}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          disabled={statusBusyId === (p.id as string)}
+                          onClick={() => void submitStatusChange(p as Policy, true)}
+                        >
+                          {t("reactivateBtn")}
+                        </Button>
+                      )}
+                    </div>
                   );
                 },
               },
@@ -460,9 +596,9 @@ export default function LeavePoliciesClient() {
           editingPolicy ? (
             t.rich("confirmDescRich", {
               leaveType: editingPolicy.leaveTypeName,
-              employeeType: editingPolicy.employeeType.replace("_", " "),
+              employeeType: tf(`employeeTypes.${editingPolicy.employeeType}`),
               strongType: (chunks) => <strong>{chunks}</strong>,
-              strongEmp: (chunks) => <strong style={{ textTransform: "capitalize" }}>{chunks}</strong>,
+              strongEmp: (chunks) => <strong>{chunks}</strong>,
             })
           ) : (
             t("confirmDescDefault")
@@ -470,6 +606,41 @@ export default function LeavePoliciesClient() {
         }
         onConfirm={() => void saveEdit()}
         onCancel={() => !saving && setConfirmOpen(false)}
+      />
+
+      {/* GAP-HR-LEAVE-POLICIES-05: discard-unsaved-edit guard */}
+      <ConfirmDialog
+        open={discardConfirmOpen}
+        title={t("discardTitle")}
+        confirmLabel={t("discardConfirmLabel")}
+        description={t("discardDescription")}
+        onConfirm={confirmDiscardAndSwitch}
+        onCancel={() => { setDiscardConfirmOpen(false); setPendingEditTarget(null); }}
+      />
+
+      {/* GAP-HR-LEAVE-POLICIES-04: deactivate requires a reason (changes a
+          live employee type's leave entitlement); reactivate does not. */}
+      <ConfirmDialog
+        open={deactivateTarget !== null}
+        title={t("confirmDeactivateTitle")}
+        confirmLabel={t("deactivateBtn")}
+        danger
+        requireReason
+        reasonLabel={t("deactivateReasonLabel")}
+        busy={statusBusyId === deactivateTarget?.id}
+        errorMessage={deactivateError}
+        description={
+          deactivateTarget
+            ? t.rich("confirmDeactivateDescRich", {
+                leaveType: deactivateTarget.leaveTypeName,
+                employeeType: tf(`employeeTypes.${deactivateTarget.employeeType}`),
+                strongType: (chunks) => <strong>{chunks}</strong>,
+                strongEmp: (chunks) => <strong>{chunks}</strong>,
+              })
+            : ""
+        }
+        onConfirm={(reason) => void submitStatusChange(deactivateTarget as Policy, false, reason)}
+        onCancel={() => !statusBusyId && setDeactivateTarget(null)}
       />
     </div>
   );

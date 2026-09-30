@@ -1,16 +1,19 @@
-export default function HRLeavePoliciesLoading() {
+import { PageHeader, SkeletonTable } from "../../../_components/ds";
+import { getTranslations } from "next-intl/server";
+
+/**
+ * GAP-HR-LEAVE-POLICIES-06: this used hard-coded Tailwind slate classes
+ * (bg-slate-50/bg-slate-200) — an untokenised, one-off loading treatment
+ * that doesn't match the shimmer/SkeletonTable every other HR loading.tsx
+ * uses (e.g. hr/leave/loading.tsx). Rebuilt on the same PageHeader +
+ * SkeletonTable shell.
+ */
+export default async function HRLeavePoliciesLoading() {
+  const t = await getTranslations("leavePolicies");
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-56 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
-        </div>
-        <div className="h-80 rounded-xl bg-slate-200" />
-      </div>
+    <div className="page-main wrap" aria-labelledby="page-heading">
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
+      <SkeletonTable rows={6} />
     </div>
   );
 }
