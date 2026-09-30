@@ -29,8 +29,11 @@ const DASH_OK = {
 
 // Non-empty so page.tsx's page-0-empty-roster special case (total forced to
 // 0 regardless of headcount) doesn't apply -- that's a different, existing
-// behaviour this file isn't testing.
-const ONE_EMPLOYEE = [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent" }];
+// behaviour this file isn't testing. dateOfJoining is set so this row
+// doesn't also trip GAP-HR-EMPLOYEES-06's Joining Date column into its own
+// (unrelated, legitimate) dash for a missing date -- these dash-count
+// assertions are about dashboard/employees-fetch error gating only.
+const ONE_EMPLOYEE = [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent", dateOfJoining: "2021-06-15" }];
 
 async function renderPage(searchParams?: Record<string, string>) {
   return render(
@@ -142,7 +145,11 @@ describe("EmployeeDirectoryPage", () => {
 
   it("does not show dash stats on a genuine successful load", async () => {
     getEmployeesMock.mockResolvedValue({
-      data: [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent" }],
+      // dateOfJoining is set so this row doesn't also trip GAP-HR-EMPLOYEES-06's
+      // Joining Date column into its own (unrelated, legitimate) dash for a
+      // missing date -- this test is about dashboard/employees-fetch error
+      // gating only.
+      data: [{ id: "e1", employeeNo: "E1", name: "Priya Sharma", department: "Finance", status: "confirmed", employeeType: "permanent", dateOfJoining: "2021-06-15" }],
       source: "api",
     });
     getHRDashboardMock.mockResolvedValue({ data: DASH_OK, source: "api" });
