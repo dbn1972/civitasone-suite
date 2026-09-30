@@ -52,6 +52,32 @@ export function humanizeStatus(status: string): string {
 }
 
 /**
+ * GAP-HR-ATTENDANCE-CONFIG-02: formats a 24h "HH:mm" time (the shape
+ * attendance policy defaults are now stored in, lib/attendanceDefaults.ts)
+ * as a 12h clock string for display, e.g. for the attendance-rules
+ * reference page's "Office start time" / "Late mark trigger" rows -- moves
+ * this formatting out of hand-written *Val strings in messages/*.json (a
+ * translator could previously change "09:30 AM" to any other time with no
+ * code review) so the source of truth is the typed constant, not a
+ * translatable string.
+ *
+ *   formatClockTime12h("09:30") -> "09:30 AM"
+ *   formatClockTime12h("18:00") -> "06:00 PM"
+ *   formatClockTime12h("00:05") -> "12:05 AM"
+ *   formatClockTime12h("bad")   -> "bad" (unparseable input passed through, not hidden)
+ */
+export function formatClockTime12h(hhmm: string): string {
+  const match = /^(\d{1,2}):(\d{2})$/.exec(hhmm);
+  if (!match) return hhmm;
+  const hour24 = Number(match[1]);
+  const minute = match[2];
+  if (hour24 > 23) return hhmm;
+  const period = hour24 < 12 ? "AM" : "PM";
+  const hour12 = hour24 % 12 === 0 ? 12 : hour24 % 12;
+  return `${String(hour12).padStart(2, "0")}:${minute} ${period}`;
+}
+
+/**
  * Format money already expressed in RUPEES (not paise) as a ₹ string with en-IN
  * (lakh/crore) grouping and 2 decimals. Use this for the few API fields that return
  * rupees rather than minor units (e.g. payroll-runs grossAmount/netAmount). Do NOT
