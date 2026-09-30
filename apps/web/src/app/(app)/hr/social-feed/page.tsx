@@ -1,7 +1,7 @@
-import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
 
 type FeedItem = {
@@ -23,77 +23,122 @@ type FeedItem = {
   joiningDate?: string;
 } & Record<string, unknown>;
 
+type FeedCounts = { kudos7d: number; birthdaysToday: number; joinees30d: number; announcementsActive: number };
+type FeedData = { items: FeedItem[]; counts: FeedCounts };
+
+// GAP-HR-SOCIAL-FEED-04: this used to be indexed with `item.badge ?? "star"`
+// directly, so any badge value outside these 7 keys (a legacy/stored value,
+// or the map going stale relative to the API's own enum) rendered an empty
+// 28px slot instead of falling back visibly. `badgeEmoji()` below always
+// returns a real emoji.
 const BADGE_EMOJI: Record<string, string> = {
   star: "⭐", rocket: "🚀", heart: "❤️", trophy: "🏆", fire: "🔥", lightning: "⚡", thumbsup: "👍",
 };
+function badgeEmoji(badge: string | undefined): string {
+  return (badge && BADGE_EMOJI[badge]) || BADGE_EMOJI.star;
+}
 
-async function getData(): Promise<LoaderResult<FeedItem[]>> {
-  const r = await fetchJson<unknown, FeedItem[]>("/api/v1/hrms/social/feed", [], {
-    telemetryKey: "hr.social-feed",
-    mapResponse: (p) => {
-      const arr = (p as { data?: FeedItem[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+async function getData(): Promise<LoaderResult<FeedData>> {
+  return fetchJson<unknown, FeedData>(
+    "/api/v1/hrms/social/feed",
+    { items: [], counts: { kudos7d: 0, birthdaysToday: 0, joinees30d: 0, announcementsActive: 0 } },
+    {
+      telemetryKey: "hr.social-feed",
+      mapResponse: (p) => {
+        const body = p as { data?: FeedItem[]; counts?: Partial<FeedCounts> };
+        if (!Array.isArray(body?.data)) return null;
+        const c = body.counts ?? {};
+        return {
+          items: body.data,
+          // GAP-HR-SOCIAL-FEED-02: these used to be computed client-side by
+          // filtering the already-truncated feed array (capped at 10/5/10/30
+          // server-side), so e.g. "New Joinees" could never read above 5.
+          // Now real COUNT(*) totals from the backend, independent of the
+          // feed's own display caps.
+          counts: {
+            kudos7d: Number(c.kudos7d ?? 0),
+            birthdaysToday: Number(c.birthdaysToday ?? 0),
+            joinees30d: Number(c.joinees30d ?? 0),
+            announcementsActive: Number(c.announcementsActive ?? 0),
+          },
+        };
+      },
     },
-  });
-  return r;
+  );
 }
 
 export default async function SocialFeedPage() {
   const t = await getTranslations("socialFeed");
-  const { data: feed, source } = await getData();
+  const { data: page, source, status, errorMessage } = await getData();
+  const feed = page.items;
+  const counts = page.counts;
 
   const errored = source === "error";
-  const kudosCount        = feed.filter((f) => f.type === "kudos").length;
-  const birthdayCount     = feed.filter((f) => f.type === "birthday").length;
-  const newJoineeCount    = feed.filter((f) => f.type === "new_joinee").length;
-  const announcementCount = feed.filter((f) => f.type === "announcement").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr" backLabel="Back to HR"
+        back="/hr" backLabel={t("backToHr")}
       />
-      <DataSourceBadge source={source} />
+      {!errored ? <DataSourceBadge source={source} /> : null}
       <StatGrid>
-        <StatCard icon="🌟" iconBg="var(--warnbg, #fffbe6)" label={t("statKudosLabel")}         value={errored ? "—" : kudosCount} />
-        <StatCard icon="🎂" iconBg="var(--badbg, #fff0f6)" label={t("statBirthdaysLabel")}    value={errored ? "—" : birthdayCount} />
-        <StatCard icon="👋" iconBg="var(--goodbg, #e6f7f0)" label={t("statNewJoineesLabel")}   value={errored ? "—" : newJoineeCount} />
-        <StatCard icon="📢" iconBg="var(--infobg, #e6f0ff)" label={t("statAnnouncementsLabel")} value={errored ? "—" : announcementCount} />
+        <StatCard icon="🌟" iconBg="var(--warnbg, #fffbe6)" label={t("statKudosLabel")}         value={errored ? "—" : counts.kudos7d} />
+        <StatCard icon="🎂" iconBg="var(--badbg, #fff0f6)" label={t("statBirthdaysLabel")}    value={errored ? "—" : counts.birthdaysToday} />
+        <StatCard icon="👋" iconBg="var(--goodbg, #e6f7f0)" label={t("statNewJoineesLabel")}   value={errored ? "—" : counts.joinees30d} />
+        <StatCard icon="📢" iconBg="var(--infobg, #e6f0ff)" label={t("statAnnouncementsLabel")} value={errored ? "—" : counts.announcementsActive} />
       </StatGrid>
 
-      {source === "error" ? (
-        <Card title={t("cardTitleEmpty")}>
-          <RefreshErrorState error={toHumanError("load", { area: "social feed" })} backHref="/hr" />
+      {/* GAP-HR-SOCIAL-FEED-06: card title used to switch between
+          "Feed" (error AND empty) and "Latest Updates" (filled) -- now one
+          constant title in all three states. */}
+      {errored ? (
+        <Card title={t("cardTitle")}>
+          <LoadErrorState result={{ status, errorMessage }} area="social feed" backHref="/hr" />
         </Card>
       ) : feed.length === 0 ? (
-        <Card title={t("cardTitleEmpty")}>
+        <Card title={t("cardTitle")}>
           <div style={{ padding: "48px 24px", textAlign: "center", color: "var(--mut)" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
             <p style={{ fontWeight: 600, marginBottom: 4 }}>{t("emptyTitle")}</p>
+            {/* GAP-HR-SOCIAL-FEED-03: this used to promise a "Give kudos"
+                action ("Give kudos to a colleague to start the feed!") that
+                doesn't exist anywhere on this page. A real give-kudos flow
+                needs a receiver picker, which this campaign's shared
+                EntityPicker component (still Phase-2 build, not yet
+                adopted anywhere) is meant to provide -- adding an ad hoc
+                one here would pre-empt that shared design, so the honest
+                fix for now is copy that doesn't promise a missing action. */}
             <p style={{ fontSize: 14 }}>{t("emptyMessage")}</p>
           </div>
         </Card>
       ) : (
-        <Card title={t("cardTitleLatest")}>
+        <Card title={t("cardTitle")}>
           <div style={{ display: "flex", flexDirection: "column", gap: 12, padding: "12px 0" }}>
             {feed.map((item) => {
               if (item.type === "kudos") {
                 return (
                   <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)" }}>
-                    <span style={{ fontSize: 28, flexShrink: 0 }}>{BADGE_EMOJI[item.badge ?? "star"]}</span>
-                    <div>
-                      <p style={{ fontSize: 14, lineHeight: 1.5 }}>
-                        {t.rich("kudosLine", {
-                          giver: item.giver_name ?? "",
-                          receiver: item.receiver_name ?? "",
-                          strongGiver: (chunks) => <strong>{chunks}</strong>,
-                          strongReceiver: (chunks) => <strong>{chunks}</strong>,
-                        })}
-                      </p>
+                    <span style={{ fontSize: 28, flexShrink: 0 }} aria-hidden="true">{badgeEmoji(item.badge)}</span>
+                    <span className="sr-only">{t("kudosTypeLabel")}</span>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <p style={{ fontSize: 14, lineHeight: 1.5 }}>
+                          {t.rich("kudosLine", {
+                            giver: item.giver_name ?? "",
+                            receiver: item.receiver_name ?? "",
+                            strongGiver: (chunks) => <strong>{chunks}</strong>,
+                            strongReceiver: (chunks) => <strong>{chunks}</strong>,
+                          })}
+                        </p>
+                        {/* GAP-HR-SOCIAL-FEED-03: every feed item already
+                            carries createdAt; it was never rendered, so a
+                            7-day-old kudos and a today one looked the same. */}
+                        <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
+                      </div>
                       {item.message && (
-                        <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink2)", background: "var(--bg2)", borderRadius: 8, padding: "8px 12px", fontStyle: "italic" }}>
+                        <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink2)", background: "var(--bg2, #f5f5f5)", borderRadius: 8, padding: "8px 12px", fontStyle: "italic" }}>
                           {item.message}
                         </p>
                       )}
@@ -104,7 +149,8 @@ export default async function SocialFeedPage() {
               if (item.type === "birthday") {
                 return (
                   <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--warnbg, #fff9f0)", borderBottom: "1px solid var(--line)" }}>
-                    <span style={{ fontSize: 32 }}>🎂</span>
+                    <span style={{ fontSize: 32 }} aria-hidden="true">🎂</span>
+                    <span className="sr-only">{t("birthdayTypeLabel")}</span>
                     <div>
                       <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("birthdayGreeting", { name: item.name ?? "" })}</p>
                       <p style={{ fontSize: 12, color: "var(--mut)" }}>{item.designation} · {item.department}</p>
@@ -115,7 +161,8 @@ export default async function SocialFeedPage() {
               if (item.type === "new_joinee") {
                 return (
                   <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--goodbg, #f0fff8)", borderBottom: "1px solid var(--line)" }}>
-                    <span style={{ fontSize: 32 }}>👋</span>
+                    <span style={{ fontSize: 32 }} aria-hidden="true">👋</span>
+                    <span className="sr-only">{t("newJoineeTypeLabel")}</span>
                     <div>
                       <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("newJoineeGreeting", { name: item.name ?? "" })}</p>
                       <p style={{ fontSize: 12, color: "var(--mut)" }}>{t("joinedAsLine", { designation: item.designation ?? "", department: item.department ?? "" })}</p>
@@ -126,13 +173,17 @@ export default async function SocialFeedPage() {
               if (item.type === "announcement") {
                 return (
                   <div key={item.id} style={{ display: "flex", gap: 14, padding: "14px 20px", borderBottom: "1px solid var(--line)", background: item.pinned ? "var(--infobg, #f5f8ff)" : "transparent" }}>
-                    <span style={{ fontSize: 24 }}>{item.pinned ? "📌" : "📢"}</span>
+                    <span style={{ fontSize: 24 }} aria-hidden="true">{item.pinned ? "📌" : "📢"}</span>
+                    <span className="sr-only">{t("announcementTypeLabel")}</span>
                     <div style={{ flex: 1 }}>
-                      <p style={{ fontWeight: 600, fontSize: 14 }}>{item.title}</p>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <p style={{ fontWeight: 600, fontSize: 14 }}>{item.title}</p>
+                        <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
+                      </div>
                       <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 4 }}>{item.body}</p>
                       <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                         {item.category && (
-                          <span style={{ fontSize: 11, background: "var(--primary-l)", color: "var(--primary-d)", padding: "2px 8px", borderRadius: 20 }}>
+                          <span style={{ fontSize: 11, background: "var(--primary-l, #dbeafe)", color: "var(--primary-d, #1e40af)", padding: "2px 8px", borderRadius: 20 }}>
                             {item.category}
                           </span>
                         )}
