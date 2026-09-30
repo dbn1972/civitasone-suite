@@ -4465,13 +4465,35 @@ export async function getNpsStatements(): Promise<LoaderResult<StatutoryRow[]>> 
   });
 }
 
-export type PayMatrixLevel = { level: number; payGrade: string; cells: Array<{ cell: number; basicDisplay: string }> };
+// GAP-HR-PAY-MATRIX-03/06: `cells` now also carries `basicMinor` (paise, as
+// the backend already sends it) so the page can format/compare/sort real
+// money instead of the server-formatted `basicDisplay` string.
+// GAP-HR-PAY-MATRIX-04: `designations` (per-level posts) was already
+// returned by the backend but dropped here before it ever reached the page.
+export type PayMatrixLevel = {
+  level: number;
+  payGrade: string;
+  cells: Array<{ cell: number; basicMinor: string; basicDisplay: string }>;
+  designations: Array<{ id: string; code: string; name: string }>;
+};
+// GAP-HR-PAY-MATRIX-01: `official` says whether the pay data below is the
+// real notified 7th CPC table or (today, always) a computed approximation
+// -- see the long comment on isPayMatrixOfficial() in
+// services/hrms-service/src/modules/pay-matrix/routes.ts. Threaded through
+// here (rather than hardcoding the "not official" label on the page) so the
+// label automatically stops once the backend genuinely has real data.
+export type PayMatrixData = { levels: PayMatrixLevel[]; official: boolean };
 
-export async function getPayMatrix(): Promise<LoaderResult<PayMatrixLevel[]>> {
-  return fetchJson<unknown, PayMatrixLevel[]>("/api/v1/hrms/pay-matrix", [], {
+export async function getPayMatrix(level?: number): Promise<LoaderResult<PayMatrixData>> {
+  const qs = level ? `?level=${level}` : "";
+  return fetchJson<unknown, PayMatrixData>(`/api/v1/hrms/pay-matrix${qs}`, { levels: [], official: false }, {
     revalidateSeconds: 300,
     telemetryKey: "hrms.payMatrix",
-    mapResponse: (p) => (p as { data?: PayMatrixLevel[] })?.data ?? [],
+    mapResponse: (p) => {
+      const body = p as { data?: PayMatrixLevel[]; official?: boolean };
+      if (!Array.isArray(body?.data)) return null;
+      return { levels: body.data, official: body.official ?? false };
+    },
   });
 }
 

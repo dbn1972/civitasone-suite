@@ -37,6 +37,19 @@ import { hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps } from "../src/modules/l
 import { hrmsRtiRequests } from "../src/modules/rti/schema.js";
 import { hrmsTrainings, hrmsNominations } from "../src/modules/training/schema.js";
 
+// GAP-HR-PAY-MATRIX-01: POST /pay-matrix/annual-increment now refuses a
+// live (non-dry-run) run with 409 PAY_MATRIX_NOT_OFFICIAL unless
+// PAY_MATRIX_OFFICIAL=true, since the pay matrix in this codebase is a
+// computed approximation, not the notified 7th CPC table. The annual
+// increment tests below (idempotency, optimistic-concurrency, the double-
+// submit race) verify a genuinely separate concern -- the write-path
+// mechanics and hrms_employees.basicMinor concurrency guard -- not the pay
+// data's provenance, so this test process opts back into the live path.
+// Read fresh per-request (see isPayMatrixOfficial() in pay-matrix/routes.ts),
+// so setting it here, before any test body runs, is sufficient regardless
+// of module import order.
+process.env.PAY_MATRIX_OFFICIAL = "true";
+
 // These routes now write via publishF3Write/queue.publish + an async F3
 // consumer (CQRS) instead of mutating synchronously — see individual `it`s
 // below. Only worker.ts wires consumers + the tenant-aware subscribe wrapper

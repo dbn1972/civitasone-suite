@@ -2,18 +2,50 @@ import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsDesignations, hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import { eq, and } from "drizzle-orm";
 
 /**
+ * GAP-HR-PAY-MATRIX-01 (HIGH, statutory pay risk): this table is a COMPUTED
+ * APPROXIMATION, not the notified 7th CPC pay matrix. It seeds cell 1 per
+ * level from ENTRY_PAY_PAISE and multiplies each subsequent cell by 1.03,
+ * rounded up to the next Rs 100 -- a generic reconstruction of the
+ * statutory 3% annual-increment rule, not a transcription of the actual
+ * gazette-notified cell values or per-level cell counts. It has never been
+ * verified against the official table (not available in this snapshot).
+ *
+ * Decision packet's recommended default (applied here, pay-matrix/routes.ts
+ * further down): block the LIVE (non-dry-run) annual-increment endpoint --
+ * the one write path this table feeds, which persists basicMinor onto real
+ * employee/service-book records -- until the real table is loaded. Read
+ * endpoints (this GET and /pay-matrix/lookup) stay open; blocking reads too
+ * would break every other legitimate consumer (e.g. designation-level
+ * validation) for no safety benefit, since nothing here writes from a read.
+ * isPayMatrixOfficial() below drives both the block and the page's own
+ * "computed, not official" label -- flip its default only once the real
+ * notified table (all 18 levels x cells, HR/finance-sourced) replaces the
+ * generator below.
+ *
+ * Read from process.env on every call (not a module-load-time constant) so
+ * a test that specifically needs to exercise the real write path -- the
+ * annual-increment concurrency/idempotency suite (tests/write-paths.test.ts),
+ * which predates this gate and verifies a genuinely separate concern (the
+ * optimistic-concurrency guard on hrms_employees.basicMinor, not the pay
+ * data's provenance) -- can set PAY_MATRIX_OFFICIAL=true for its own process
+ * without fighting ES module import/evaluation order. Unset (every real
+ * deployment today) is the safe default: false.
+ *
  * 7th CPC pay matrix — generated from the official cell-1 entry pay per level
  * using the statutory annual-increment rule: each subsequent cell = previous
  * x 1.03, rounded UP to the next Rs 100. Cell (index-point) counts per the
  * 7th CPC matrix. All values in paise (Rs x 100).
  */
+export function isPayMatrixOfficial(): boolean {
+  return process.env.PAY_MATRIX_OFFICIAL === "true";
+}
 const ENTRY_PAY_PAISE: Record<number, number> = {
   1: 1800000, 2: 1990000, 3: 2170000, 4: 2550000, 5: 2920000, 6: 3540000,
   7: 4490000, 8: 4760000, 9: 5310000, 10: 5610000, 11: 6770000, 12: 7880000,
@@ -79,7 +111,7 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       designations: designations.filter((d) => d.level === level).map((d) => ({ id: d.id, code: d.code, name: d.name })),
     }));
 
-    return reply.send({ data: matrix, cpc: "7th", currency: "INR" });
+    return reply.send({ data: matrix, cpc: "7th", currency: "INR", official: isPayMatrixOfficial() });
   });
 
   app.get("/v1/hrms/pay-matrix/lookup", async (req, reply) => {
@@ -150,6 +182,23 @@ export async function payMatrixRoutes(app: FastifyInstance): Promise<void> {
       effectiveDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
       dryRun: z.boolean().default(false),
     }).parse(req.body ?? {});
+
+    // GAP-HR-PAY-MATRIX-01: PAY_MATRIX above is a computed approximation,
+    // not the notified 7th CPC table (see the long comment on
+    // isPayMatrixOfficial()). A live run would write that approximation's
+    // basicMinor onto real employee and service-book records -- a payroll
+    // change that can't be quietly undone once payslips are cut against it.
+    // Per the HR gap decision packet's recommended default, only the
+    // *live* run is blocked; dryRun stays available so the flow can still
+    // be previewed/tested end-to-end.
+    if (!isPayMatrixOfficial() && !body.dryRun) {
+      throw new HttpError(
+        409,
+        "PAY_MATRIX_NOT_OFFICIAL",
+        "Live annual increments are blocked: this system's 7th CPC pay matrix is a computed approximation (entry pay x 1.03 per cell, rounded up to the next Rs 100), not the notified table, and has not been confirmed against the official gazette values (GAP-HR-PAY-MATRIX-01). Run with dryRun: true to preview, or have HR/finance load the official matrix before running a live increment.",
+      );
+    }
+
     const effectiveDate = body.effectiveDate ?? `${new Date().getFullYear()}-07-01`;
 
     const emps = await scopedRead((tx) => tx.select().from(hrmsEmployees).where(and(
