@@ -88,7 +88,7 @@ export const hrmsIccComplaints = disciplinarySchema.table("hrms_icc_complaints",
   iccMembersOnly: boolean("icc_members_only").notNull().default(true),
   createdBy:     uuid("created_by").notNull(),
   version:       integer("version").notNull().default(1),
-  // GAP-HR-ICC-04 (migration 0154_hrms_icc_case_no.sql): a stable, citable
+  // GAP-HR-ICC-04 (migration 0157_hrms_icc_case_no.sql): a stable, citable
   // case number (ICC/YYYY/NNN, per-tenant-per-year sequence) -- the case
   // register previously showed only a truncated UUID prefixed "ICC/", which
   // is neither stable nor sequential and can't be quoted in a report or

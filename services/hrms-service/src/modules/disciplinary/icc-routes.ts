@@ -90,7 +90,7 @@ export async function iccRoutes(app: FastifyInstance): Promise<void> {
     const total = rows[0]?.totalCount ?? 0;
     const data = rows.map((r) => ({
       id: r.id,
-      // Fallback for any pre-migration-0154 row a backfill somehow missed --
+      // Fallback for any pre-migration-0157 row a backfill somehow missed --
       // never a bare null the web would render as "ICC/null".
       caseNo: r.caseNo ?? `ICC/${r.id.slice(0, 8).toUpperCase()}`,
       filedAt: r.filedAt,

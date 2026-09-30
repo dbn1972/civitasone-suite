@@ -1,6 +1,14 @@
--- 0154_hrms_icc_case_no.sql
+-- 0157_hrms_icc_case_no.sql
 -- GAP-HR-ICC-04: a stable, citable case number for the ICC register.
 -- Additive + idempotent.
+--
+-- Renumbered from 0154 -> 0157 (review feedback): 0154 collided with PR
+-- #1669's 0154_designation_unique_code.sql. 0155/0156 turned out to already
+-- be claimed by other in-flight PRs too (#1691's
+-- 0155_hrms_onboarding_documents_storage_key.sql, #1696's
+-- 0156_medical_claim_no.sql) -- re-checked against every currently-open
+-- PR's own migrations/ diff, not just the one collision reported, before
+-- picking 0157.
 --
 -- Rollback: ALTER TABLE disciplinary.hrms_icc_complaints DROP COLUMN IF EXISTS case_no;
 
