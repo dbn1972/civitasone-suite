@@ -44,6 +44,10 @@ describe("mapEmployees", () => {
         employeeNo: "HRDASH-001",
         name: "Regression Test Employee",
         department: "HR Dashboard Test Dept",
+        // GAP-HR-EMPLOYEES-05 (PR #1675): mapEmployees now forwards
+        // employeeType from the validated payload -- this expectation
+        // predates that change.
+        employeeType: "permanent",
         status: "probation",
       },
     ]);
