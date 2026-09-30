@@ -6,6 +6,15 @@
  * hr/advances/ApproveAdvanceButton.tsx's pattern exactly. The backend now
  * also rejects the case where the deciding HR actor is the request's own
  * creator (server-enforced; this is UX only).
+ *
+ * Bug fix (caught after this file first shipped, before merge): the reject
+ * dialog originally set maxReasonLength without requireReason --
+ * ConfirmDialog's reason textarea only renders at all when requireReason
+ * is set (there is no "optional but visible" mode in its API), so the
+ * dialog's own description text ("...and the reason below") pointed at a
+ * field that never appeared, and reject always sent reason: undefined.
+ * Requiring one here is also a reasonable diligence nudge regardless --
+ * the backend's own z.string().max(500).optional() stays unchanged.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -67,6 +76,8 @@ export function OvertimeActions({ id }: { id: string }) {
         description="The employee will be notified of the rejection and the reason below."
         confirmLabel="Reject"
         danger
+        requireReason
+        reasonLabel="Reason for rejection"
         maxReasonLength={500}
         busy={busy}
         errorMessage={error}
