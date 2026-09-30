@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 
 export interface CompetencyScore {
   label: string;
@@ -39,6 +40,7 @@ export function CompetencyRadarChart({
   title,
   size = 340,
 }: CompetencyRadarChartProps) {
+  const t = useTranslations("competency");
   const cx = size / 2;
   const cy = size / 2;
   const maxR = size * 0.34;
@@ -75,12 +77,29 @@ export function CompetencyRadarChart({
     return "middle";
   }
 
+  // GAP-HR-COMPETENCY-05: this chart's own summary, built from the same data
+  // driving the SVG, doubles as the accessible name (role="img" + aria-label
+  // below) so a screen-reader user gets the actual values, not just "chart".
+  const ariaSummary = t("radarAriaLabel", {
+    items: scores.map((s) => `${s.label} ${s.current}/${s.required}`).join(", "),
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12, width: "100%" }}>
       {title && (
         <p style={{ margin: 0, fontWeight: 700, fontSize: 14, color: "var(--ink, #1e293b)" }}>{title}</p>
       )}
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} aria-label="Competency radar chart">
+      {/* GAP-HR-COMPETENCY-03: width/height used to be fixed SVG attributes
+          (340x340), which never shrank below that on a narrow phone
+          viewport -- only the score TABLE below had its own overflow
+          wrapper. Switching to a CSS-driven width (viewBox unchanged) lets
+          the whole chart scale down instead. */}
+      <svg
+        style={{ width: "100%", maxWidth: size, height: "auto" }}
+        viewBox={`0 0 ${size} ${size}`}
+        role="img"
+        aria-label={ariaSummary}
+      >
         {/* Concentric rings */}
         {levels.map((lvl) => {
           const pts = Array.from({ length: n }, (_, i) =>
@@ -108,7 +127,7 @@ export function CompetencyRadarChart({
             // score this (short single-digit text content), but the margin is
             // genuinely too thin. `--ink2` (#475569, ~6.9:1 here) matches what
             // the axis category labels below already use.
-            <text key={lvl} x={pt.x + 4} y={pt.y} style={{ fontSize: 9, fill: "var(--ink2)" }}>
+            <text key={lvl} x={pt.x + 4} y={pt.y} style={{ fontSize: 9, fill: "var(--ink2)" }} aria-hidden="true">
               {lvl}
             </text>
           );
@@ -154,6 +173,7 @@ export function CompetencyRadarChart({
             x={pt.x}
             y={pt.y + 4}
             textAnchor={textAnchor(pt)}
+            aria-hidden="true"
             style={{ fontSize: 11, fontWeight: 600, fill: "var(--ink2, #475569)" }}
           >
             {scores[i].label}
@@ -164,12 +184,12 @@ export function CompetencyRadarChart({
       {/* Legend + score table */}
       <div style={{ display: "flex", gap: 20, justifyContent: "center", flexWrap: "wrap" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <svg width={20} height={4}><line x1={0} y1={2} x2={20} y2={2} stroke="var(--good, #10b981)" strokeWidth={2.5} /></svg>
-          <span style={{ fontSize: 12, color: "var(--good)", fontWeight: 600 }}>Current</span>
+          <svg width={20} height={4} aria-hidden="true"><line x1={0} y1={2} x2={20} y2={2} stroke="var(--good, #10b981)" strokeWidth={2.5} /></svg>
+          <span style={{ fontSize: 12, color: "var(--good)", fontWeight: 600 }}>{t("radarLegendCurrent")}</span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <svg width={20} height={4}><line x1={0} y1={2} x2={20} y2={2} stroke="var(--info, #3b82f6)" strokeWidth={2} strokeDasharray="5 3" /></svg>
-          <span style={{ fontSize: 12, color: "var(--info)", fontWeight: 600 }}>Required</span>
+          <svg width={20} height={4} aria-hidden="true"><line x1={0} y1={2} x2={20} y2={2} stroke="var(--info, #3b82f6)" strokeWidth={2} strokeDasharray="5 3" /></svg>
+          <span style={{ fontSize: 12, color: "var(--info)", fontWeight: 600 }}>{t("radarLegendRequired")}</span>
         </div>
       </div>
 
@@ -178,18 +198,24 @@ export function CompetencyRadarChart({
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
           <thead>
             <tr style={{ background: "var(--bg, #f8fafc)" }}>
-              <th style={{ textAlign: "start", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--ink, #1e293b)" }}>Competency</th>
-              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--good)" }}>Current</th>
-              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--info)" }}>Required</th>
-              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--ink, #1e293b)" }}>Gap</th>
+              <th style={{ textAlign: "start", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--ink, #1e293b)" }}>{t("colCompetency")}</th>
+              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--good)" }}>{t("radarLegendCurrent")}</th>
+              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--info)" }}>{t("radarLegendRequired")}</th>
+              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--ink, #1e293b)" }}>{t("radarColGap")}</th>
             </tr>
           </thead>
           <tbody>
             {scores.map((s, i) => {
               const gap = s.required - s.current;
-              const gapColor = gap <= 0 ? "var(--good, #15803d)" : gap === 1 ? "var(--warn, #d97706)" : "#dc2626";
+              // GAP-HR-COMPETENCY-03: both bare-hex fallbacks replaced with
+              // the same token+fallback pattern already used a few lines
+              // above (var(--good,...) etc.) -- `#dc2626`/odd-row `#f8fafc`
+              // were the only two colour values in this file with no token
+              // at all, so they didn't move with the rest of the page in
+              // dark mode.
+              const gapColor = gap <= 0 ? "var(--good, #15803d)" : gap === 1 ? "var(--warn, #d97706)" : "var(--bad, #dc2626)";
               return (
-                <tr key={i} style={{ background: i % 2 === 0 ? "var(--panel, #fff)" : "#f8fafc" }}>
+                <tr key={i} style={{ background: i % 2 === 0 ? "var(--panel, #fff)" : "var(--bg, #f8fafc)" }}>
                   <td style={{ padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", fontWeight: 500 }}>{s.label}</td>
                   <td style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--good)", fontWeight: 700 }}>{s.current}</td>
                   <td style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--info)", fontWeight: 700 }}>{s.required}</td>
