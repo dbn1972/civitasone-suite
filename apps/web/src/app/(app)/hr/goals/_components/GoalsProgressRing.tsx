@@ -1,9 +1,16 @@
 "use client";
 
 import React from "react";
+import { useTranslations } from "next-intl";
 
 export interface CategoryScore {
-  label: "Performance" | "Development" | "Behavioural" | "Organisational";
+  // GAP-HR-GOALS-03: was a closed union of the four made-up display buckets
+  // (Performance/Development/Behavioural/Organisational) that never matched
+  // the real API category enum (individual|team|organization,
+  // pulse-routes.ts's goalCreateSchema) -- goals/page.tsx now builds these
+  // from the real enum and passes an already-translated label string, so
+  // this just needs to be a string.
+  label: string;
   total: number;
   achieved: number;
   color: string;
@@ -14,19 +21,14 @@ export interface GoalsProgressRingProps {
   overallScore: number; // 0–100
 }
 
-const R = 36;
-const CX = 44;
-const CY = 44;
-const CIRCUMFERENCE = 2 * Math.PI * R;
-
-function Ring({ pct, color, size = 88 }: { pct: number; color: string; size?: number }) {
+function Ring({ pct, color, label, size = 88 }: { pct: number; color: string; label: string; size?: number }) {
   const r  = (size / 2) - 8;
   const cx = size / 2;
   const cy = size / 2;
   const c  = 2 * Math.PI * r;
   const dash = Math.min(pct / 100, 1) * c;
   return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label={`${label}: ${pct}%`}>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--line, #e2e8f0)" strokeWidth={7} />
       <circle
         cx={cx} cy={cy} r={r}
@@ -42,6 +44,7 @@ function Ring({ pct, color, size = 88 }: { pct: number; color: string; size?: nu
         x={cx} y={cy + 1}
         textAnchor="middle"
         dominantBaseline="middle"
+        aria-hidden="true"
         style={{ fontSize: 13, fontWeight: 700, fill: color }}
       >
         {pct}%
@@ -50,15 +53,19 @@ function Ring({ pct, color, size = 88 }: { pct: number; color: string; size?: nu
   );
 }
 
-function OverallRing({ score }: { score: number }) {
+function OverallRing({ score, overallLabel, scoreLabel }: { score: number; overallLabel: string; scoreLabel: string }) {
   const r  = 52;
   const cx = 68;
   const cy = 68;
   const c  = 2 * Math.PI * r;
   const dash = Math.min(score / 100, 1) * c;
-  const color = score >= 80 ? "var(--good, #15803d)" : score >= 60 ? "var(--warn, #d97706)" : "#dc2626";
+  // GAP-HR-GOALS-05: this was the one bare hex value in the file (every
+  // other colour already went through var(--token, #fallback)) -- the "bad"
+  // tone token used everywhere else in this same HR tree (e.g.
+  // GoalTrackerCard's own "behind" status colour) is `--bad`.
+  const color = score >= 80 ? "var(--good, #15803d)" : score >= 60 ? "var(--warn, #d97706)" : "var(--bad, #dc2626)";
   return (
-    <svg width={136} height={136} viewBox="0 0 136 136">
+    <svg width={136} height={136} viewBox="0 0 136 136" role="img" aria-label={`${overallLabel}: ${score}%`}>
       <circle cx={cx} cy={cy} r={r} fill="none" stroke="var(--line, #e2e8f0)" strokeWidth={10} />
       <circle
         cx={cx} cy={cy} r={r}
@@ -69,14 +76,15 @@ function OverallRing({ score }: { score: number }) {
         strokeLinecap="round"
         transform={`rotate(-90 ${cx} ${cy})`}
       />
-      <text x={cx} y={cy - 8} textAnchor="middle" style={{ fontSize: 26, fontWeight: 800, fill: color }}>{score}%</text>
-      <text x={cx} y={cy + 12} textAnchor="middle" style={{ fontSize: 11, fill: "var(--mut, #64748b)", fontWeight: 500 }}>Overall</text>
-      <text x={cx} y={cy + 24} textAnchor="middle" style={{ fontSize: 11, fill: "var(--mut, #64748b)", fontWeight: 500 }}>Score</text>
+      <text x={cx} y={cy - 8} textAnchor="middle" aria-hidden="true" style={{ fontSize: 26, fontWeight: 800, fill: color }}>{score}%</text>
+      <text x={cx} y={cy + 12} textAnchor="middle" aria-hidden="true" style={{ fontSize: 11, fill: "var(--mut, #64748b)", fontWeight: 500 }}>{overallLabel}</text>
+      <text x={cx} y={cy + 24} textAnchor="middle" aria-hidden="true" style={{ fontSize: 11, fill: "var(--mut, #64748b)", fontWeight: 500 }}>{scoreLabel}</text>
     </svg>
   );
 }
 
 export function GoalsProgressRing({ categories, overallScore }: GoalsProgressRingProps) {
+  const t = useTranslations("goals");
   return (
     <div
       style={{
@@ -93,7 +101,7 @@ export function GoalsProgressRing({ categories, overallScore }: GoalsProgressRin
     >
       {/* Overall ring */}
       <div style={{ flexShrink: 0 }}>
-        <OverallRing score={overallScore} />
+        <OverallRing score={overallScore} overallLabel={t("ringOverallLabel")} scoreLabel={t("ringScoreLabel")} />
       </div>
 
       {/* Divider */}
@@ -105,12 +113,12 @@ export function GoalsProgressRing({ categories, overallScore }: GoalsProgressRin
           const pct = cat.total === 0 ? 0 : Math.round((cat.achieved / cat.total) * 100);
           return (
             <div key={cat.label} style={{ textAlign: "center", minWidth: 80 }}>
-              <Ring pct={pct} color={cat.color} />
+              <Ring pct={pct} color={cat.color} label={cat.label} />
               <p style={{ margin: "4px 0 0", fontSize: 12, fontWeight: 600, color: "var(--ink2, #475569)" }}>
                 {cat.label}
               </p>
               <p style={{ margin: 0, fontSize: 11, color: "var(--mut)" }}>
-                {cat.achieved}/{cat.total} goals
+                {t("ringGoalsCount", { achieved: cat.achieved, total: cat.total })}
               </p>
             </div>
           );

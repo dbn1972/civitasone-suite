@@ -3,25 +3,27 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { GoalsProgressRing, type CategoryScore } from "./_components/GoalsProgressRing";
-import { GoalTrackerCard } from "./_components/GoalTrackerCard";
+import { GoalTrackerCard, type GoalStatus } from "./_components/GoalTrackerCard";
 import { DevelopmentPlanTimeline, type DevActivity } from "./_components/DevelopmentPlanTimeline";
 import type { CascadeLevel } from "./_components/GoalTrackerCard";
 import { getTranslations } from "next-intl/server";
 
+type KeyResult = { title?: string; targetValue?: number; currentValue?: number; unit?: string };
+
+// GAP-HR-GOALS-02: this used to be a made-up shape (kra/target/actual/
+// employee/goal) that GET /v1/hrms/goals (pulse-routes.ts) never actually
+// returns -- it returns id, title, description, category, keyResults,
+// progress, status, dueDate, period. Aligned to the real response.
 type GoalRow = {
   id: string;
-  employee: string;
-  goal: string;
-  title?: string;
-  kra: string;
-  target: string;
-  actual: string;
-  cycle: string;
-  status: string;
-  progress?: number;
-  category?: string;
-  due_date?: string | null;
+  title: string;
   description?: string;
+  category?: string; // "individual" | "team" | "organization" (goalCreateSchema)
+  keyResults?: KeyResult[];
+  progress?: number;
+  status: string;
+  dueDate?: string | null;
+  period?: string | null;
 } & Record<string, unknown>;
 
 type DevPlan = {
@@ -37,7 +39,12 @@ type DevPlan = {
 } & Record<string, unknown>;
 
 async function getGoals(): Promise<LoaderResult<GoalRow[]>> {
-  return fetchJson<unknown, GoalRow[]>("/api/v1/hrms/goals", [], {
+  // GAP-HR-GOALS-02: GET /v1/hrms/goals defaults to `status=active`
+  // server-side (pulse-routes.ts) when no query param is sent at all --
+  // completed goals were silently excluded from every stat/ring on this
+  // page. `status=all` is the documented bypass the backend already
+  // supports.
+  return fetchJson<unknown, GoalRow[]>("/api/v1/hrms/goals?status=all", [], {
     telemetryKey: "hr.goals",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: GoalRow[] })?.data;
@@ -56,30 +63,43 @@ async function getDevPlans(): Promise<LoaderResult<DevPlan[]>> {
   });
 }
 
-function buildCategoryScores(items: GoalRow[]): CategoryScore[] {
-  const cats: Array<{ label: CategoryScore["label"]; color: string; keys: string[] }> = [
-    { label: "Performance",   color: "var(--info, #3b82f6)", keys: ["performance","kra","kpi"] },
-    { label: "Development",   color: "var(--good, #10b981)", keys: ["development","learning","training"] },
-    { label: "Behavioural",   color: "var(--warn, #f59e0b)", keys: ["behavioural","behavioral","soft"] },
-    { label: "Organisational",color: "var(--violet, #8b5cf6)", keys: ["org","organisational","organizational","strategic"] },
+/**
+ * GAP-HR-GOALS-03: rebuilt against the real category enum (individual/team/
+ * organization) instead of the four invented buckets (Performance/
+ * Development/Behavioural/Organisational) that never matched it -- the old
+ * version's `|| label === "Organisational"` fallback silently routed every
+ * single goal into the Organisational ring regardless of its real category,
+ * so that one ring always showed 100% of goals and the other three always
+ * showed 0/0. Buckets with zero goals are dropped rather than shown as a
+ * misleading 0%.
+ */
+function buildCategoryScores(
+  items: GoalRow[],
+  labels: { individual: string; team: string; organization: string },
+): CategoryScore[] {
+  const buckets: Array<{ key: string; label: string; color: string }> = [
+    { key: "individual",   label: labels.individual,   color: "var(--info, #3b82f6)" },
+    { key: "team",         label: labels.team,         color: "var(--good, #10b981)" },
+    { key: "organization", label: labels.organization, color: "var(--violet, #8b5cf6)" },
   ];
 
-  return cats.map(({ label, color, keys }) => {
-    const catItems = items.filter((i) => {
-      const cat = (i.category ?? i.kra ?? "").toLowerCase();
-      return keys.some((k) => cat.includes(k)) || label === "Organisational"; // fallback bucket
-    });
-    const achieved = catItems.filter((i) =>
-      ["achieved","completed","on_track","on track"].includes((i.status ?? "").toLowerCase())
-    ).length;
-    return { label, total: catItems.length, achieved, color };
-  });
+  return buckets
+    .map(({ key, label, color }) => {
+      const catItems = items.filter((i) => (i.category ?? "individual") === key);
+      // GAP-HR-GOALS-03: "achieved" now means completed/achieved only -- the
+      // old version also counted on_track/active here, which is what the
+      // separate "On Track" dashboard stat means, not "done".
+      const achieved = catItems.filter((i) =>
+        ["achieved", "completed"].includes((i.status ?? "").toLowerCase())
+      ).length;
+      return { label, total: catItems.length, achieved, color };
+    })
+    .filter((c) => c.total > 0);
 }
 
-function inferCascade(item: GoalRow): CascadeLevel {
-  const cat = (item.category ?? "").toLowerCase();
-  if (cat.includes("org") || cat.includes("strategic")) return "org";
-  if (cat.includes("dept") || cat.includes("team")) return "dept";
+function inferCascade(category: string | undefined): CascadeLevel {
+  if (category === "organization") return "org";
+  if (category === "team") return "dept";
   return "individual";
 }
 
@@ -104,8 +124,18 @@ export default async function GoalsPage() {
   const atRisk    = items.filter((i) => ["at_risk","behind","at risk"].includes((i.status ?? "").toLowerCase())).length;
   const completed = items.filter((i) => ["completed","achieved","closed"].includes((i.status ?? "").toLowerCase())).length;
 
-  const categoryScores = buildCategoryScores(items);
+  const categoryScores = buildCategoryScores(items, {
+    individual: t("categoryIndividual"),
+    team: t("categoryTeam"),
+    organization: t("categoryOrganisation"),
+  });
   const overallScore   = items.length === 0 ? 0 : Math.round((completed / items.length) * 100); // ux-001-ok: divide-by-zero guard for a ratio, not a rendered empty-state
+
+  const categoryLabel: Record<string, string> = {
+    individual: t("categoryIndividual"),
+    team: t("categoryTeam"),
+    organization: t("categoryOrganisation"),
+  };
 
   const activities: DevActivity[] = devPlans.map((d) => ({
     id:           d.id,
@@ -136,7 +166,7 @@ export default async function GoalsPage() {
       </StatGrid>
 
       {/* Progress rings summary */}
-      {items.length > 0 && (
+      {categoryScores.length > 0 && (
         <div style={{ marginTop: 4 }}>
           <Card title={t("achievementCardTitle")}>
             <div style={{ padding: "12px 0" }}>
@@ -167,20 +197,31 @@ export default async function GoalsPage() {
               gap: 14,
             }}
           >
-            {items.map((item) => (
-              <GoalTrackerCard
-                key={item.id}
-                id={item.id}
-                title={item.title ?? item.goal}
-                description={item.description as string | undefined}
-                targetMetric={item.target}
-                progress={item.progress ?? 0}
-                status={(item.status ?? "active") as any}
-                category={item.kra ?? item.category ?? "General"}
-                dueDate={item.due_date as string | null}
-                cascadeLevel={inferCascade(item)}
-              />
-            ))}
+            {items.map((item) => {
+              // GAP-HR-GOALS-02: "Target:" used to read item.target, a field
+              // the API never sends -- built from the goal's first key
+              // result (keyResults[], the field the API actually returns)
+              // instead. Hidden (undefined) when a goal has none, same as
+              // before.
+              const kr = (item.keyResults ?? [])[0];
+              const targetMetric = kr && kr.targetValue != null
+                ? `${kr.title ?? ""}${kr.title ? ": " : ""}${kr.currentValue ?? 0}/${kr.targetValue}${kr.unit ? ` ${kr.unit}` : ""}`
+                : undefined;
+              return (
+                <GoalTrackerCard
+                  key={item.id}
+                  id={item.id}
+                  title={item.title}
+                  description={item.description as string | undefined}
+                  targetMetric={targetMetric}
+                  progress={item.progress ?? 0}
+                  status={(item.status ?? "active") as GoalStatus}
+                  category={categoryLabel[item.category ?? "individual"] ?? item.category ?? t("categoryIndividual")}
+                  dueDate={(item.dueDate as string | null) ?? null}
+                  cascadeLevel={inferCascade(item.category)}
+                />
+              );
+            })}
           </div>
         )}
       </Card>
