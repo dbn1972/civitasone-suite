@@ -17,8 +17,8 @@
     "tenant_admin"
   ],
   "counts": {
-    "DRIFT": 44,
-    "MATCH": 700,
+    "DRIFT": 41,
+    "MATCH": 703,
     "NO_ROLE_CHECK": 28,
     "OUT_OF_SCOPE": 18,
     "DYNAMIC": 5
@@ -468,20 +468,15 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "page:apar (APAR_ROLES)",
+      "comparator": "page:apar/new (initiate + finalise) (APAR_INITIATE_ROLES)",
       "comparatorRoles": [
-        "employee",
         "hr_admin",
         "hr_officer",
-        "manager",
         "super_admin"
       ],
       "extraInBackend": [],
-      "extraInWeb": [
-        "employee",
-        "manager"
-      ],
-      "status": "DRIFT"
+      "extraInWeb": [],
+      "status": "MATCH"
     },
     {
       "service": "hrms-service",
@@ -655,20 +650,15 @@
       ],
       "errors": null,
       "dynamic": false,
-      "comparator": "page:apar (APAR_ROLES)",
+      "comparator": "page:apar/new (initiate + finalise) (APAR_INITIATE_ROLES)",
       "comparatorRoles": [
-        "employee",
         "hr_admin",
         "hr_officer",
-        "manager",
         "super_admin"
       ],
       "extraInBackend": [],
-      "extraInWeb": [
-        "employee",
-        "manager"
-      ],
-      "status": "DRIFT"
+      "extraInWeb": [],
+      "status": "MATCH"
     },
     {
       "service": "hrms-service",
@@ -10065,16 +10055,15 @@
       "dynamic": false,
       "comparator": "page:work-summary (WORK_SUMMARY_ROLES)",
       "comparatorRoles": [
+        "employee",
         "hr_admin",
         "hr_officer",
         "manager",
         "super_admin"
       ],
-      "extraInBackend": [
-        "employee"
-      ],
+      "extraInBackend": [],
       "extraInWeb": [],
-      "status": "DRIFT"
+      "status": "MATCH"
     },
     {
       "service": "hrms-service",
@@ -23275,7 +23264,7 @@
       "permKeys": [],
       "roles": [],
       "errors": [
-        "(READER_ROLES) identifier READER_ROLES not found in /home/ec2-user/civitasone-worktrees/rebase-pr1671-role-matrix/services/hrms-service/src/modules/service-book/routes.js"
+        "(READER_ROLES) identifier READER_ROLES not found in /home/ec2-user/civitasone-worktrees/rebase-pr1672-apar-worksummary/services/hrms-service/src/modules/service-book/routes.js"
       ],
       "dynamic": true,
       "comparator": null,

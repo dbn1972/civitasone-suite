@@ -12,7 +12,7 @@
         ]
       },
       "routeCount": 7,
-      "reason": "hr_officer can open the disciplinary list/detail pages (DISCIPLINARY_ROLES admits it) but the 7 highest-stakes actions -- impose penalty, submit-approval, appeal-decision, close, drop, create suspension, revoke suspension -- narrow to hr_admin/super_admin only on the backend. Very plausibly an intentional authorization tier (hr_officer runs routine casework, hr_admin/super_admin signs off on the irreversible/severe steps), but it is a real DISCIPLINARY_ROLES-vs-specific-action mismatch and SF-09b should confirm it is deliberate rather than accidental, since nothing on the web page currently tells an hr_officer which specific buttons will 403 for them."
+      "reason": "CONFIRMED INTENTIONAL by GAP-HR-SF-09b (no code change needed): hr_officer can open the disciplinary list/detail pages (DISCIPLINARY_ROLES admits it) but the 7 highest-stakes actions -- impose penalty, submit-approval, appeal-decision, close, drop, create suspension, revoke suspension -- narrow to hr_admin/super_admin only on the backend (hr_officer runs routine casework, hr_admin/super_admin signs off on the irreversible/severe steps). redesign/gaps/hr.md has no ROLEGATE (or any other) gap filed against this behavior, and services/hrms-service/tests/disciplinary-routes.test.ts ALREADY has an explicit, passing `it(\"returns 403 for hr_officer (needs hr_admin)\", ...)` test for all 7 of these exact routes (penalty ~L513, submit-approval ~L575, appeal-decision ~L671, close ~L721, drop ~L780, suspension-create ~L835, suspension-revoke ~L940) -- the regression coverage this entry asked for already existed; GAP-HR-SF-09b just found and cited it. Left allowlisted because the drift is real and by design, not because it is unverified."
     },
     {
       "id": "GAP-HR-SF09A-005",
@@ -60,7 +60,7 @@
         "extraInWeb": []
       },
       "routeCount": 5,
-      "reason": "device-trust/routes.ts's block/unblock/policy-update endpoints admit it_admin, absent from HR_ROLES and every page gate. This module's device-trust dashboard route itself (GET /v1/hrms/devices/admin) has NO role check at all -- see GAP-HR-SF09A-019 -- so this whole module's access story needs a look together, not just this one list entry. routeCount corrected 3->5 on 2026-10-01 rebase onto current main: device-trust/routes.ts grew two more it_admin-gated endpoints (now 5 call sites of the identical requireRole([\"hr_admin\",\"it_admin\",\"super_admin\"]) pattern at lines 203/255/286/303/329) since this entry was last written; same reasoning applies to all five."
+      "reason": "AMBIGUOUS, flagged for a product decision -- GAP-HR-SF-09b deliberately did not add this role. device-trust/routes.ts's block/unblock/policy-update endpoints admit it_admin, absent from HR_ROLES and every page gate, with no reference anywhere in apps/web. This module's device-trust dashboard route itself (GET /v1/hrms/devices/admin) has NO role check at all -- see GAP-HR-SF09A-019, deliberately out of GAP-HR-SF-09b's scope (a missing-guard security question, not a role-list drift) -- so this whole module's access story needs a combined security + product look, not a role-matrix side-fix. routeCount corrected 3->5 on 2026-10-01's rebase onto current main: device-trust/routes.ts grew two more it_admin-gated endpoints (now 5 call sites of the identical requireRole([\"hr_admin\",\"it_admin\",\"super_admin\"]) pattern at lines 203/255/286/303/329) since GAP-HR-SF-09b (this PR's first commit) wrote the reason above; same AMBIGUOUS/product-decision framing applies to all five."
     },
     {
       "id": "GAP-HR-SF09A-009",
@@ -72,20 +72,7 @@
         "extraInWeb": []
       },
       "routeCount": 3,
-      "reason": "recruitment/interview-scoring-routes.ts admits a dedicated \"interviewer\" panel role, same shape as GAP-HR-SF09A-005 (hiring_manager) and GAP-HR-SF09A-007 (dept_head) -- three different ad hoc recruitment-panel roles, none reachable via /hr nav today."
-    },
-    {
-      "id": "GAP-HR-SF09A-010",
-      "match": {
-        "comparator": "page:apar (APAR_ROLES)",
-        "extraInBackend": [],
-        "extraInWeb": [
-          "employee",
-          "manager"
-        ]
-      },
-      "routeCount": 2,
-      "reason": "Same action-tiering shape as GAP-HR-SF09A-004: APAR_ROLES admits employee/manager to view and to work their own self-appraisal/reporting/reviewing/accept/representation steps, but raw create (POST /v1/hrms/apar) and finalise narrow to hr_admin/hr_officer/super_admin on the backend -- plausibly intentional, worth SF-09b's explicit confirmation."
+      "reason": "AMBIGUOUS, flagged for a product decision -- GAP-HR-SF-09b deliberately did not add this role. recruitment/interview-scoring-routes.ts admits a dedicated \"interviewer\" panel role, same ad hoc-panel shape as GAP-HR-SF09A-005 (hiring_manager) and GAP-HR-SF09A-007 (dept_head). Note: apps/web/src/app/(app)/hr/recruitment/[id]/page.tsx and InterviewCard.tsx DO reference \"interviewer\" -- but only as a display label/free-text id field (who a slot's interviewer is), never as an auth-role check; that page has no role-matrix-tracked gate of its own (not in scripts/contract/hr-role-matrix.mjs's PAGE_GATES) and relies on the layout default. Genuinely unclear whether an interviewer-role *account* is meant to use recruitment/[id] directly (vs. HR staff recording interviewer names on their behalf) -- needs a product decision, not a guess."
     },
     {
       "id": "GAP-HR-SF09A-013",
@@ -98,18 +85,6 @@
       },
       "routeCount": 1,
       "reason": "POST /v1/hrms/declarations/:declId/revoke (disciplinary/coi-routes.ts, Conflict-of-Interest declarations) admits a \"vigilance_officer\" role. This is UNRELATED to the /hr/vigilance page (that page covers a different backend concept, gap-features.ts's \"vigilance cases\", and its own VIGILANCE_ROLES cleanly matches gap-features.ts already -- see hr-role-matrix.json). \"vigilance_officer\" itself appears nowhere else in either service and has no web-side representation anywhere (not HR_ROLES, not any page gate, not even the /hr/vigilance page's own list) -- if this role is meant to have any web-facing capability, it currently has none at all."
-    },
-    {
-      "id": "GAP-HR-SF09A-016",
-      "match": {
-        "comparator": "page:work-summary (WORK_SUMMARY_ROLES)",
-        "extraInBackend": [
-          "employee"
-        ],
-        "extraInWeb": []
-      },
-      "routeCount": 1,
-      "reason": "GET /v1/hrms/work-summaries accepts \"employee\" (self-service: an employee viewing their own work summary), but the web page's WORK_SUMMARY_ROLES omits employee entirely -- so a plain employee is shown \"Access Restricted\" by hr/work-summary/page.tsx before the backend call that would have actually worked for them ever runs. Same shape as this codebase's own already-fixed salary-slip employee-access bug (see the payroll/slips/[id] comment history) -- a strong candidate for SF-09b to fix first."
     },
     {
       "id": "GAP-HR-ICC-02",
@@ -136,7 +111,7 @@
         ]
       },
       "routeCount": 2,
-      "reason": "Same action-tiering shape as GAP-HR-SF09A-004/010: ADVANCE_ROLES admits manager/officer (and now also employee) to view and request salary advances, but PATCH .../approve and PATCH .../reject narrow to finance_admin/hr_admin/hr_officer/super_admin on the backend -- an approval/rejection step correctly excluding the requester's own tier, most likely intentional. Corrected on 2026-10-01's rebase onto current main: extraInWeb was [manager,officer] (routeCount 1, approve only); employee was added to ADVANCE_ROLES by an unrelated already-merged change since this entry was first written, and reject carries the identical backend role list to approve -- both now extraInWeb=[employee,manager,officer], routeCount 2. Caught only because this rebase re-ran the analyzer against current main, same as GAP-HR-SF-16/GAP-HR-SF09A-019's precedent."
+      "reason": "CONFIRMED INTENTIONAL by GAP-HR-SF-09b (no source change needed): ADVANCE_ROLES admits manager/officer (and now also employee) to view and request salary advances, but PATCH .../approve and PATCH .../reject narrow to finance_admin/hr_admin/hr_officer/super_admin on the backend (loans-routes.ts HR_ROLES) -- an approval/rejection step correctly excluding the requester's own tier. Two regression tests in services/hrms-service/src/__tests__/loans-advances-manager-scope-real-db.test.ts (\"GAP-HR-SF09A-015: manager ... cannot approve\" / \"... finance_admin ... can approve\") lock the approve half of this in. Corrected on 2026-10-01's rebase onto current main: extraInWeb was [manager,officer] (routeCount 1, approve only) when GAP-HR-SF-09b first wrote this entry; employee was added to ADVANCE_ROLES by an unrelated already-merged change since then, and reject carries the identical backend role list to approve -- both now extraInWeb=[employee,manager,officer], routeCount 2. Caught only because this rebase re-ran the analyzer against current main, same as GAP-HR-SF-16/GAP-HR-SF09A-019's precedent. Left allowlisted because the drift is real and by design, not unverified."
     },
     {
       "id": "GAP-HR-SF09A-021",
