@@ -1,3 +1,19 @@
+/**
+ * GAP-HR-EMPLOYEES-DETAIL-02: the narrower role list actually allowed to
+ * administer an employee record -- PATCH /v1/hrms/employees/:id and the
+ * Initiate Transfer/Promotion/Separation lifecycle actions are all
+ * HR_ROLES-gated on the backend (employee/routes.ts), but the profile page
+ * and its edit toggle used to render those controls for ANYONE who could
+ * open the page at all (HR_ROLES above, which also admits "manager" and
+ * "employee"). Named "hrRoles.ts" in the original gap catalog's fix step;
+ * placed here instead, alongside FINANCE_ROLES/HR_ROLES/
+ * PROPOSAL_WRITE_ROLES, to follow this file's own established convention
+ * rather than add a second, competing home for the same kind of constant.
+ * Mirrors employee/routes.ts's own HR_ROLES exactly -- keep in sync if
+ * that list ever changes.
+ */
+export const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 export const PROPOSAL_WRITE_ROLES = [
   "works_admin",
   "works_operator",

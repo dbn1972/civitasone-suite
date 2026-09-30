@@ -3,18 +3,30 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, LoadErrorState } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { isServingStatus, isExitedStatus } from "@/lib/employeeStatus";
 import { EditEmployeeToggle } from "./EditEmployeeToggle";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 
+// GAP-HR-EMPLOYEES-DETAIL-04: GAP-HR-SF-17 (#1658) added batch name
+// resolution to GET /v1/hrms/lifecycle/transfers|promotions -- real,
+// human-readable names instead of raw ids -- but under toDepartmentName/
+// fromDepartmentName/toDesignationName, not the toOffice/fromOffice/
+// toDesignation/toGrade field names this page was still reading. Every
+// title rendered "Transfer -> --" / "Promoted to --" regardless, even
+// after that backend fix landed, because the two sides never agreed on a
+// field name. Typed against the *current* real response shape.
 type TransferItem = {
-  id: string; status: string; toOffice?: string; fromOffice?: string;
+  id: string; status: string;
+  toDepartmentName?: string; fromDepartmentName?: string;
   toDeptId?: string; effectiveDate?: string; joinedDate?: string; createdAt?: string;
 } & Record<string, unknown>;
 
 type PromotionItem = {
-  id: string; status: string; toDesignation?: string; toGrade?: string;
+  id: string; status: string; toDesignationName?: string;
   toDesigId?: string; effectiveDate?: string; createdAt?: string;
 } & Record<string, unknown>;
 
@@ -57,8 +69,8 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
         id: `t-${t.id}`,
         type: "transfer",
         date: t.joinedDate ?? t.effectiveDate ?? t.createdAt ?? new Date().toISOString(),
-        title: `Transfer → ${t.toOffice ?? "—"}`,
-        detail: t.fromOffice ? `From ${t.fromOffice}` : undefined,
+        title: `Transfer → ${t.toDepartmentName ?? "—"}`,
+        detail: t.fromDepartmentName ? `From ${t.fromDepartmentName}` : undefined,
         status: t.status,
       });
     }
@@ -70,7 +82,7 @@ async function getLifecycleEvents(employeeId: string): Promise<LifecycleEvent[]>
         id: `p-${p.id}`,
         type: "promotion",
         date: p.effectiveDate ?? p.createdAt ?? new Date().toISOString(),
-        title: `Promoted to ${p.toDesignation ?? p.toGrade ?? "—"}`,
+        title: `Promoted to ${p.toDesignationName ?? "—"}`,
         status: p.status,
       });
     }
@@ -96,13 +108,34 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   const errored = source === "error";
   const t = await getTranslations("employeeDetail");
 
+  // GAP-HR-EMPLOYEES-DETAIL-07: a real 404 (nonexistent/deleted id) used to
+  // fall into the same branch as a 500/network failure, showing "We
+  // couldn't load employee... try again" -- misleading for an id that will
+  // never succeed no matter how many times it's retried. Route it to the
+  // same honest not-found Card as the "API returned 200 with null" case
+  // below instead. 403 still goes through LoadErrorState, which already
+  // special-cases it with the backend's own reason (see page.test.tsx).
+  if (errored && status === 404) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title={t("notFoundTitle")} back="/hr/employees" backLabel="Back to Employees" />
+        <Card padding>
+          <p className="text-center text-slate-600">{t("notFoundMessage")}</p>
+        </Card>
+      </div>
+    );
+  }
+
   if (errored) {
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title={t("notFoundTitle")} back="/hr/employees" />
-        <div className="pad">
+        {/* Distinct title from the not-found branch below (was the same
+            "Employee Profile" in both, per GAP-HR-EMPLOYEES-DETAIL-07) and
+            a consistent back label. */}
+        <PageHeader title={t("errorTitle")} back="/hr/employees" backLabel="Back to Employees" />
+        <Card padding>
           <LoadErrorState result={{ status, errorMessage }} area="employee" backHref="/hr/employees" />
-        </div>
+        </Card>
       </div>
     );
   }
@@ -119,10 +152,26 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
     );
   }
 
-  const isActive =
-    employee.status?.toLowerCase() === "active" ||
-    employee.status?.toLowerCase() === "probation" ||
-    employee.status?.toLowerCase() === "confirmed";
+  // GAP-HR-EMPLOYEES-DETAIL-06: "active" is not a real employee status
+  // (employee/status.ts's canonical set is probation/confirmed/on_leave/
+  // suspended/deputation/retired/separated/terminated/no_show) -- checking
+  // for it here was always false, and deputation (a real, currently-
+  // serving status) was missing entirely, so a deputed employee's profile
+  // silently lost the whole Quick Actions card with no explanation.
+  const serving = isServingStatus(employee.status);
+  const exited = isExitedStatus(employee.status);
+  const onLeave = employee.status === "on_leave";
+
+  // GAP-HR-EMPLOYEES-DETAIL-02: Edit and the Transfer/Promotion/Separation
+  // lifecycle actions are all HR_ROLES-gated on the backend already
+  // (employee/routes.ts) -- this just stops the UI from offering a manager
+  // (or, before self-scoping is decided, an "employee") a button that can
+  // only ever 403. Apply Leave / Attendance / Service Book / Salary Slips
+  // stay available to whoever can already open this page -- those targets
+  // enforce their own, different scope (e.g. a manager acting for a direct
+  // report), unrelated to *administering the employee record itself*.
+  const roles = getSessionRoles();
+  const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
 
   // Build base lifecycle events from known fields
   const baseEvents: LifecycleEvent[] = [];
@@ -153,12 +202,12 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       <PageHeader
         title={employee.name}
         back="/hr/employees" backLabel="Back to Employees"
-        actions={<EditEmployeeToggle employee={employee} />}
+        actions={<EditEmployeeToggle employee={employee} canAdminister={canAdminister} />}
       />
       <DataSourceBadge source={source} />
 
       {/* Quick Actions */}
-      {isActive && (
+      {(serving || onLeave) && (
         <Card title={t("quickActionsTitle")} padding>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
             <Link href={`/hr/leave/apply?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
@@ -167,37 +216,60 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
             <Link href={`/hr/payroll/salary-slips?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
               {t("actionSalarySlips")}
             </Link>
-            <Link href={`/hr/transfer?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              {t("actionInitiateTransfer")}
-            </Link>
-            <Link href={`/hr/promotion?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              {t("actionInitiatePromotion")}
-            </Link>
             <Link href={`/hr/attendance?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
               {t("actionViewAttendance")}
             </Link>
             <Link href={`/hr/service-book?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
               {t("actionServiceBook")}
             </Link>
-            {/*
-              HIGH fix: separation (resignation/termination/VRS/death) had no
-              reachable UI anywhere, despite PATCH /v1/hrms/employees/:id/separate
-              already working (HR_ROLES-gated). Same shape as Initiate Transfer/
-              Initiate Promotion above -- an HR-initiated action on this specific
-              employee, landing on the existing /hr/retirement page (which already
-              lists every separation but had no create action either) via ?empId=,
-              the same convention TransferPage/PromotionPage already use.
-              isActive already gates this whole card to non-exited employees, so
-              an already-separated/terminated/retired employee never sees this
-              link -- separate/routes.ts has no server-side guard against
-              re-separating an already-exited employee (unlike its sibling routes),
-              so this client-side gate is the one thing standing between a normal
-              user and that gap; see this change's PR description.
-            */}
-            <Link href={`/hr/retirement?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
-              {t("actionInitiateSeparation")}
-            </Link>
+            {/* GAP-HR-EMPLOYEES-DETAIL-02: Transfer/Promotion initiation
+                administers the employee record (backend HR_ROLES-gated) --
+                a manager viewing their own direct report's profile should
+                not see a button that can only 403. Also withheld while
+                on_leave: an HR-initiated lifecycle change for someone
+                currently away is unusual enough to route through the
+                dedicated /hr/transfer, /hr/promotion pages deliberately,
+                not this quick-actions row. */}
+            {canAdminister && serving && (
+              <>
+                <Link href={`/hr/transfer?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
+                  {t("actionInitiateTransfer")}
+                </Link>
+                <Link href={`/hr/promotion?empId=${params.id}`} className="btn ghost" style={{ fontSize: 13 }}>
+                  {t("actionInitiatePromotion")}
+                </Link>
+              </>
+            )}
           </div>
+        </Card>
+      )}
+
+      {/* GAP-HR-EMPLOYEES-DETAIL-03: Initiate Separation is the most
+          destructive lifecycle action here -- it used to sit in the same
+          button row as "Apply Leave", styled identically, with no role
+          gate on this page at all (separate/routes.ts is HR_ROLES-gated
+          server-side, but has no guard against re-separating an already-
+          exited employee, so `serving` here -- excluding on_leave too,
+          unlike the row above -- is the only thing standing between a
+          manager and that gap until the backend adds one). Visually and
+          semantically separated into its own "HR only" group. */}
+      {canAdminister && serving && (
+        <Card title={t("lifecycleActionsTitle")} padding>
+          <Link
+            href={`/hr/retirement?empId=${params.id}`}
+            className="btn ghost"
+            style={{ fontSize: 13, color: "var(--bad, #b91c1c)", borderColor: "var(--bad, #b91c1c)" }}
+          >
+            {t("actionInitiateSeparation")}
+          </Link>
+        </Card>
+      )}
+
+      {!serving && !onLeave && (
+        <Card padding>
+          <p style={{ margin: 0, color: "var(--mut, #64748b)", fontSize: 13 }}>
+            {exited ? t("actionsUnavailableExited") : t("actionsUnavailableOther", { status: employee.status })}
+          </p>
         </Card>
       )}
 
@@ -228,10 +300,15 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           <div className="fld">
             <span className="l">{t("fieldStatus")}</span>
             <span className="v">
-              <StatusPill
-                status={employee.status}
-                label={employee.status ? employee.status.charAt(0).toUpperCase() + employee.status.slice(1) : "—"}
-              />
+              {/* GAP-HR-EMPLOYEES-DETAIL-06: this custom label bypassed
+                  StatusPill's own humanizeStatus fallback, so e.g. the raw
+                  "on_leave" rendered as "On_leave" (visible underscore,
+                  wrong casing) instead of "On leave". StatusPill's
+                  STATUS_MAP already has real variants for every canonical
+                  employee status (probation/confirmed/deputation/on_leave/
+                  suspended/separated/terminated/retired/no_show) -- no
+                  label override needed at all. */}
+              <StatusPill status={employee.status} />
             </span>
           </div>
           {employee.postingLocation && (
@@ -243,7 +320,18 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           {employee.reportingTo && (
             <div className="fld">
               <span className="l">{t("fieldReportsTo")}</span>
-              <span className="v">{employee.reportingTo}</span>
+              <span className="v">
+                {/* GAP-HR-EMPLOYEES-DETAIL-05: reportingTo was plain text --
+                    the manager's name with no way to actually get to their
+                    profile. managerId (the real FK) is already in the
+                    EmployeeDetail response (queries.ts), just never used
+                    here. */}
+                {employee.managerId ? (
+                  <Link href={`/hr/employees/${employee.managerId}`}>{employee.reportingTo}</Link>
+                ) : (
+                  employee.reportingTo
+                )}
+              </span>
             </div>
           )}
           {employee.email && (
@@ -260,6 +348,38 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           )}
         </div>
       </Card>
+
+      {/* GAP-HR-EMPLOYEES-DETAIL-05: PAN/bank account/IFSC are already
+          returned by GET /v1/hrms/employees/:id, already masked server-side
+          (queries.ts's maskValue -- this API never sends the unmasked
+          value to begin with, so there is no reveal control here, ever) --
+          they just weren't shown anywhere on this page. Admin-only: an
+          employee's own bank details are not something a manager viewing
+          a direct report needs to see. */}
+      {canAdminister && (employee.pan || employee.bankAccountNo || employee.bankIfsc) && (
+        <Card title={t("statutoryBankTitle")} padding>
+          <div className="fields">
+            {employee.pan && (
+              <div className="fld">
+                <span className="l">{t("fieldPan")}</span>
+                <span className="v" style={{ fontFamily: "monospace" }} aria-label={t("maskedAriaLabel")}>{employee.pan}</span>
+              </div>
+            )}
+            {employee.bankAccountNo && (
+              <div className="fld">
+                <span className="l">{t("fieldBankAccount")}</span>
+                <span className="v" style={{ fontFamily: "monospace" }} aria-label={t("maskedAriaLabel")}>{employee.bankAccountNo}</span>
+              </div>
+            )}
+            {employee.bankIfsc && (
+              <div className="fld">
+                <span className="l">{t("fieldBankIfsc")}</span>
+                <span className="v" style={{ fontFamily: "monospace" }} aria-label={t("maskedAriaLabel")}>{employee.bankIfsc}</span>
+              </div>
+            )}
+          </div>
+        </Card>
+      )}
 
       {/* Lifecycle Timeline */}
       <Card title={t("lifecycleTitle")}>

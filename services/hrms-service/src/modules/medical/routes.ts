@@ -19,6 +19,8 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer"];
@@ -98,6 +100,53 @@ function withTenantGuc<T>(
   return withRawTenantGuc(sqlClient, tenantId, fn);
 }
 
+/**
+ * GAP-HR-MEDICAL-01 (DPDP): audits a bulk read of medical claims by a
+ * privileged (HR or manager) caller — this module has no existing
+ * read-audit precedent of its own (medical/consumer.ts's own AUDIT topic,
+ * and recruitment/audit-emit.ts's emitAudit, are both write-path-only:
+ * enqueue() runs from inside the SAME db.transaction as the business write
+ * it accompanies). A bare "employee" viewing their own claims is
+ * intentionally NOT audited here — only reads that expose OTHER people's
+ * health data are DPDP-sensitive in the way this event exists to record.
+ *
+ * Routes must not write to Postgres directly (CLAUDE.md rule 6; CI's
+ * f3-leftover-hrms-cqrs.test.ts greps every *routes.ts file for a
+ * synchronous `db.transaction`/Drizzle write) — there is also no business
+ * write here to piggyback a transaction on for a GET. So this publishes a
+ * lightweight command instead, the same async CQRS shape as every other
+ * mutation in this service (see loans-commands.ts's `pub()`); the actual
+ * outbox insert happens in medical/consumer.ts's medicalClaimsListRead
+ * subscriber. queue.publish() resolves before its consumer runs (see that
+ * subscriber's own comment) — deliberately not awaited-through: an audit
+ * log landing microseconds after the response is not the same "decide and
+ * durable write must be one atomic step" problem this codebase's few
+ * disclosed synchronous-write exceptions solve (nothing here needs the
+ * audit event's outcome reflected back in the HTTP response).
+ */
+async function auditMedicalClaimsListRead(
+  ctx: RequestContext,
+  details: { employeeIdFilter: string | null; statusFilter: string | null; rowCount: number },
+): Promise<void> {
+  await queue.publish(COMMANDS.medicalClaimsListRead, {
+    messageId: randomUUID(),
+    type: COMMANDS.medicalClaimsListRead,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      service: "hrms",
+      action: "list",
+      resourceType: "medical_claim",
+      resourceId: details.employeeIdFilter ?? "tenant_list",
+      outcome: "success",
+      rowCount: details.rowCount,
+      filter: { employeeId: details.employeeIdFilter, status: details.statusFilter },
+    },
+  });
+}
+
 const submitClaimBody = z.object({
   employeeId: z.string().uuid(),
   // Must match migration 0040_medical_claims.sql's hrms_medical_claims_type_check
@@ -174,25 +223,66 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
 
-    // IDOR guard: a bare "employee" caller is forced onto their own linked
-    // employeeId regardless of what (if anything) they requested — closes
-    // the default-tenant-wide leak (omitting employeeId used to return
-    // every claim in the tenant to any SELF_ROLES-holding caller).
-    const effectiveEmployeeId = await resolveSelfScopedEmployeeId(ctx, req, query.employeeId);
+    // GAP-HR-MEDICAL-01: manager gets its OWN list-scope resolution here —
+    // direct reports ONLY, never including the manager's own record ("my
+    // team" is direct reports, not self — the same convention employee/
+    // routes.ts's, loans-routes.ts's and leave/routes.ts's own manager
+    // read-scope helpers all use; see manager-employee-read-scope-real-db.
+    // test.ts:146 and leave/routes.ts's resolveNonHrEmployeeScope doc
+    // comment). Deliberately NOT routed through resolveSelfScopedEmployeeId
+    // below (used by submit/insurance/history) — that helper's manager
+    // branch stays unchanged on purpose (see tests/medical-routes.test.ts's
+    // "managers can submit claims" and "managers' access by employeeId is
+    // preserved (unaffected...)" specs, which lock in today's manager
+    // behavior for those three routes); this fix is scoped to the list
+    // route only, matching GAP-HR-MEDICAL-01's own verified evidence and
+    // acceptance criteria.
+    const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+    const isManagerActor = !isHrActor && ctx.roles.includes("manager");
+    let managerId: string | null = null;
+    if (isManagerActor) {
+      const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+      if (!actorEmp) return reply.send({ data: [] }); // fail CLOSED — no resolvable link, never tenant-wide
+      managerId = actorEmp.id;
+    }
+
+    // IDOR guard (bare employee, unchanged): a bare "employee" caller is
+    // forced onto their own linked employeeId regardless of what (if
+    // anything) they requested. For a manager, this call still returns
+    // `requested` unchanged (today's behavior for that role from this
+    // helper) — but `effectiveEmployeeId` is never used as a manager's
+    // filter below (managerId's own IN-subquery is), so it can't
+    // reintroduce the tenant-wide leak this fix closes.
+    const effectiveEmployeeId = isManagerActor
+      ? undefined
+      : await resolveSelfScopedEmployeeId(ctx, req, query.employeeId);
     if (effectiveEmployeeId === null) return reply.send({ data: [] });
 
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
       SELECT id, employee_id, claim_type, amount_minor::text, hospital_name,
-             hospital_id, diagnosis, documents, status, dependant_name,
-             dependant_relation, approved_amount_minor::text, remarks,
-             created_at, updated_at
+             hospital_id, status, dependant_name, dependant_relation,
+             approved_amount_minor::text, created_at, updated_at
       FROM medical.hrms_medical_claims
       WHERE tenant_id = ${ctx.tenantId}
+        ${managerId ? tx`AND employee_id IN (
+            SELECT id FROM employee.hrms_employees
+            WHERE tenant_id = ${ctx.tenantId} AND manager_id = ${managerId}
+          )` : tx``}
         ${effectiveEmployeeId ? tx`AND employee_id = ${effectiveEmployeeId}` : tx``}
         ${query.status ? tx`AND status = ${query.status}` : tx``}
       ORDER BY created_at DESC
       LIMIT ${query.limit} OFFSET ${query.offset}
     `);
+
+    // DPDP: audit bulk reads of other people's health data by HR/manager —
+    // never for a bare employee viewing only their own claims.
+    if (isHrActor || isManagerActor) {
+      await auditMedicalClaimsListRead(ctx, {
+        employeeIdFilter: query.employeeId ?? null,
+        statusFilter: query.status ?? null,
+        rowCount: rows.length,
+      });
+    }
 
     return reply.send({ data: rows });
   });

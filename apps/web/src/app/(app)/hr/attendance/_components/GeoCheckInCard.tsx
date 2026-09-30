@@ -31,6 +31,15 @@
  * resolution, so relying on it would silently return zero rows for a real
  * employee. Flagged in this change's PR description as a backend
  * follow-up; worked around here by simply never relying on the default.
+ *
+ * GAP-HR-ATTENDANCE-05 follow-up (resolved): that backend follow-up has
+ * since landed -- geo-history now resolves the caller's own employee id
+ * server-side and requires this module's HR_ROLES to pass a *different*
+ * employeeId (previously any authenticated caller, including bare
+ * "employee", could read anyone's geo-history by naming their uuid).
+ * Keeping this component's explicit `employeeId` param is still correct and
+ * still harmless: it always resolves to the caller's own id here, which the
+ * backend now also verifies independently rather than trusting.
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";

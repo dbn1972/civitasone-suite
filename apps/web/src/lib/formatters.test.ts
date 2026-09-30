@@ -1,5 +1,30 @@
 import { describe, it, expect } from "vitest";
-import { formatMoney, formatIndianDate, minorToRupeesOrNull } from "./formatters";
+import { formatMoney, formatIndianDate, minorToRupeesOrNull, formatClockTime12h } from "./formatters";
+
+// ---------------------------------------------------------------------------
+// formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
+// ---------------------------------------------------------------------------
+describe("formatClockTime12h", () => {
+  it("formats a morning time", () => {
+    expect(formatClockTime12h("09:30")).toBe("09:30 AM");
+  });
+
+  it("formats an afternoon/evening time (hour > 12)", () => {
+    expect(formatClockTime12h("18:00")).toBe("06:00 PM");
+  });
+
+  it("formats noon as 12 PM", () => {
+    expect(formatClockTime12h("12:30")).toBe("12:30 PM");
+  });
+
+  it("formats midnight as 12 AM", () => {
+    expect(formatClockTime12h("00:05")).toBe("12:05 AM");
+  });
+
+  it("passes through unparseable input rather than hiding it", () => {
+    expect(formatClockTime12h("not-a-time")).toBe("not-a-time");
+  });
+});
 
 // ---------------------------------------------------------------------------
 // formatMoney -- converts minor units (paise) to INR string with Indian grouping

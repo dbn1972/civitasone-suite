@@ -50,8 +50,14 @@ export const COMMANDS = {
   deputationRevert:     "hrms.deputation.revert",
 
   // medical
-  medicalClaimCreate:   "hrms.medical_claim.create",
-  medicalClaimApprove:  "hrms.medical_claim.approve",
+  medicalClaimCreate:    "hrms.medical_claim.create",
+  medicalClaimApprove:   "hrms.medical_claim.approve",
+  // GAP-HR-MEDICAL-01: DPDP audit-on-read for a privileged (HR/manager)
+  // bulk list read of others' medical claims — published (fire-and-forget)
+  // from the route, recorded to the audit outbox by the consumer below,
+  // same async CQRS shape as every other command in this file (routes must
+  // not write to Postgres directly; see f3-leftover-hrms-cqrs.test.ts).
+  medicalClaimsListRead: "hrms.medical_claims.list_read",
 
   // claims (LTC / CEA)
   claimCreate:          "hrms.claim.create",

@@ -897,6 +897,15 @@ export type EmployeeDetail = {
   status: string;
   reportingTo?: string;
   postingLocation?: string;
+  // GAP-HR-EMPLOYEES-DETAIL-05: already validated by EmployeeDetailSchema
+  // (packages/schemas/src/web.ts, `.nullable()` -- always present, masked
+  // at source by hrms-service's queries.ts, never omitted) and already
+  // returned end-to-end, but never declared on this convenience type, so
+  // employees/[id]/page.tsx could not read them without an `as
+  // Record<string, unknown>` cast (same class of gap as managerId below).
+  bankAccountNo: string | null;
+  bankIfsc: string | null;
+  pan: string | null;
   // Real FK (hrms_employees.manager_id) -- already returned by
   // getEmployeeDetail and declared on EmployeeDetailSchema (packages/
   // schemas/src/web.ts), but never added here; EditEmployeeForm.tsx had to

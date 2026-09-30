@@ -1,7 +1,10 @@
+import type { ReactNode } from "react";
 import { PageHeader, Card } from "../../../../_components/ds";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
+import { ATTENDANCE_DEFAULTS } from "@/lib/attendanceDefaults";
+import { formatClockTime12h } from "@/lib/formatters";
 
 /**
  * No backend endpoint serves or accepts attendance-config values (nothing
@@ -17,6 +20,29 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 const ATTENDANCE_CONFIG_ROLES = ["hr_admin", "super_admin"];
 
 /**
+ * GAP-HR-ATTENDANCE-CONFIG-04: shared row renderer so every card gets the
+ * same <th scope="row"> + <caption> structure and the same value weight --
+ * previously only the Working Hours card wrapped its values in <strong>,
+ * the other three didn't, and none had a <caption> or real header cells (a
+ * screen reader announced only the bare cell text, not "<label>: <value>").
+ */
+function KeyValueTable({ caption, rows }: { caption: string; rows: Array<{ label: string; value: ReactNode }> }) {
+  return (
+    <table className="tbl" style={{ fontSize: 13 }}>
+      <caption className="sr-only">{caption}</caption>
+      <tbody>
+        {rows.map((row) => (
+          <tr key={row.label}>
+            <th scope="row" style={{ fontWeight: 400, textAlign: "left", padding: "4px 8px 4px 0" }}>{row.label}</th>
+            <td style={{ fontWeight: 600 }}>{row.value}</td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
+/**
  * Attendance Rules Configuration — defines how the system marks attendance:
  * late, half-day, overtime, weekly-off, flexi-time.
  */
@@ -29,15 +55,23 @@ export default async function AttendanceConfigPage() {
     return <PermissionDenied module="attendance configuration" requiredRoles={ATTENDANCE_CONFIG_ROLES} />;
   }
 
+  const d = ATTENDANCE_DEFAULTS;
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/attendance" backLabel={t("backLabel")} />
 
       {/*
-        No backend config endpoint exists (see role-gate comment above) --
-        these are compiled-in engine defaults, not this tenant's actual
-        configuration. Say so plainly instead of presenting them as live
-        settings.
+        GAP-HR-ATTENDANCE-CONFIG-01 (HR decision packet, theme 5: "Keep it
+        read-only for now, but reword the banner honestly... rather than
+        build a full config-editor screen in this campaign") and
+        GAP-HR-ATTENDANCE-CONFIG-03 (the old copy told even an hr_admin --
+        the actual administrator, with nowhere else to customize this --
+        to "contact your administrator to customize"). One notice now
+        covers both: no backend config endpoint exists (see role-gate
+        comment above), these are compiled-in engine defaults that may not
+        match this tenant's real policy, and there is nothing to configure
+        from this screen at all -- not even for the roles gated in here.
       */}
       <div
         role="note"
@@ -49,51 +83,55 @@ export default async function AttendanceConfigPage() {
 
       <div className="grid g-2">
         <Card title={t("cardWorkingHours")} padding>
-          <table className="tbl" style={{ fontSize: 13 }}>
-            <tbody>
-              <tr><td>{t("whOfficeStart")}</td><td><strong>{t("whOfficeStartVal")}</strong></td></tr>
-              <tr><td>{t("whOfficeEnd")}</td><td><strong>{t("whOfficeEndVal")}</strong></td></tr>
-              <tr><td>{t("whGracePeriod")}</td><td><strong>{t("whGracePeriodVal")}</strong></td></tr>
-              <tr><td>{t("whHalfDayCutoff")}</td><td><strong>{t("whHalfDayCutoffVal")}</strong></td></tr>
-              <tr><td>{t("whMinHours")}</td><td><strong>{t("whMinHoursVal")}</strong></td></tr>
-              <tr><td>{t("whWeeklyOff")}</td><td><strong>{t("whWeeklyOffVal")}</strong></td></tr>
-            </tbody>
-          </table>
+          <KeyValueTable
+            caption={t("cardWorkingHours")}
+            rows={[
+              { label: t("whOfficeStart"), value: t("whOfficeStartVal", { value: formatClockTime12h(d.officeStartTime) }) },
+              { label: t("whOfficeEnd"), value: t("whOfficeEndVal", { value: formatClockTime12h(d.officeEndTime) }) },
+              { label: t("whGracePeriod"), value: t("whGracePeriodVal", { mins: d.graceMinutes }) },
+              { label: t("whHalfDayCutoff"), value: t("whHalfDayCutoffVal", { value: formatClockTime12h(d.halfDayCutoffTime) }) },
+              { label: t("whMinHours"), value: t("whMinHoursVal", { hours: d.minHoursForFullDay }) },
+              { label: t("whWeeklyOff"), value: t("whWeeklyOffVal", { value: d.weeklyOffDays }) },
+            ]}
+          />
         </Card>
 
         <Card title={t("cardLateMarkRules")} padding>
-          <table className="tbl" style={{ fontSize: 13 }}>
-            <tbody>
-              <tr><td>{t("lmGracePeriod")}</td><td>{t("lmGracePeriodVal")}</td></tr>
-              <tr><td>{t("lmTrigger")}</td><td>{t("lmTriggerVal")}</td></tr>
-              <tr><td>{t("lmHalfDayIf")}</td><td>{t("lmHalfDayIfVal")}</td></tr>
-              <tr><td>{t("lmAbsentIf")}</td><td>{t("lmAbsentIfVal")}</td></tr>
-              <tr><td>{t("lmDeduction")}</td><td>{t("lmDeductionVal")}</td></tr>
-            </tbody>
-          </table>
+          <KeyValueTable
+            caption={t("cardLateMarkRules")}
+            rows={[
+              { label: t("lmGracePeriod"), value: t("lmGracePeriodVal", { mins: d.lateMarkGraceMinutes }) },
+              { label: t("lmTrigger"), value: t("lmTriggerVal", { value: formatClockTime12h(d.lateMarkTriggerTime) }) },
+              { label: t("lmHalfDayIf"), value: t("lmHalfDayIfVal", { value: formatClockTime12h(d.halfDayIfAfterTime) }) },
+              { label: t("lmAbsentIf"), value: t("lmAbsentIfVal", { value: formatClockTime12h(d.absentIfNoCheckInAfterTime) }) },
+              { label: t("lmDeduction"), value: t("lmDeductionVal", { marks: d.lateMarksPerClDeducted }) },
+            ]}
+          />
         </Card>
 
         <Card title={t("cardOvertimeRules")} padding>
-          <table className="tbl" style={{ fontSize: 13 }}>
-            <tbody>
-              <tr><td>{t("otEligible")}</td><td>{t("otEligibleVal")}</td></tr>
-              <tr><td>{t("otRateWeekday")}</td><td>{t("otRateWeekdayVal")}</td></tr>
-              <tr><td>{t("otRateWeeklyOff")}</td><td>{t("otRateWeeklyOffVal")}</td></tr>
-              <tr><td>{t("otMaxPerDay")}</td><td>{t("otMaxPerDayVal")}</td></tr>
-              <tr><td>{t("otRequiresApproval")}</td><td>{t("otRequiresApprovalVal")}</td></tr>
-            </tbody>
-          </table>
+          <KeyValueTable
+            caption={t("cardOvertimeRules")}
+            rows={[
+              { label: t("otEligible"), value: t("otEligibleVal", { hours: d.otEligibleAfterHours }) },
+              { label: t("otRateWeekday"), value: t("otRateWeekdayVal", { multiplier: d.otRateWeekdayMultiplier }) },
+              { label: t("otRateWeeklyOff"), value: t("otRateWeeklyOffVal", { multiplier: d.otRateWeeklyOffMultiplier }) },
+              { label: t("otMaxPerDay"), value: t("otMaxPerDayVal", { hours: d.otMaxHoursPerDay }) },
+              { label: t("otRequiresApproval"), value: t("otRequiresApprovalVal", { value: d.otApprovalText }) },
+            ]}
+          />
         </Card>
 
         <Card title={t("cardCompOff")} padding>
-          <table className="tbl" style={{ fontSize: 13 }}>
-            <tbody>
-              <tr><td>{t("coEarnedWhen")}</td><td>{t("coEarnedWhenVal")}</td></tr>
-              <tr><td>{t("coMustAvail")}</td><td>{t("coMustAvailVal")}</td></tr>
-              <tr><td>{t("coMaxAccumulation")}</td><td>{t("coMaxAccumulationVal")}</td></tr>
-              <tr><td>{t("coApprovalRequired")}</td><td>{t("coApprovalRequiredVal")}</td></tr>
-            </tbody>
-          </table>
+          <KeyValueTable
+            caption={t("cardCompOff")}
+            rows={[
+              { label: t("coEarnedWhen"), value: t("coEarnedWhenVal", { value: d.coEarnedWhen }) },
+              { label: t("coMustAvail"), value: t("coMustAvailVal", { days: d.coMustAvailWithinDays }) },
+              { label: t("coMaxAccumulation"), value: t("coMaxAccumulationVal", { count: d.coMaxAccumulation }) },
+              { label: t("coApprovalRequired"), value: t("coApprovalRequiredVal", { value: d.coApprovalText }) },
+            ]}
+          />
         </Card>
       </div>
 
