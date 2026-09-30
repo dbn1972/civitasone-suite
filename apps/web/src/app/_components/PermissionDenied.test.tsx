@@ -65,4 +65,18 @@ describe("PermissionDenied", () => {
     expect(screen.queryByText(/Required:/)).not.toBeInTheDocument();
     expect(screen.queryByText(/permission to view employee/)).not.toBeInTheDocument();
   });
+
+  // GAP-HR-ID-CARDS-07: an optional back destination for pages nested
+  // within an area (e.g. /hr) so a denied user returns there instead of
+  // always leaving for /dashboard.
+  it("uses a custom backHref/backLabel when provided", () => {
+    render(<PermissionDenied backHref="/hr" backLabel="Back to HR" />);
+    const link = screen.getByRole("link", { name: "Back to HR" });
+    expect(link).toHaveAttribute("href", "/hr");
+  });
+
+  it("still defaults to /dashboard when backHref is not provided", () => {
+    render(<PermissionDenied module="ID cards" />);
+    expect(screen.getByRole("link", { name: "Return to command center" })).toHaveAttribute("href", "/dashboard");
+  });
 });
