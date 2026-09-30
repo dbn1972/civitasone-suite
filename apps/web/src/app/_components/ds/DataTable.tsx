@@ -89,6 +89,15 @@ interface DataTableProps<T extends Record<string, unknown>> {
   filterable?: boolean;
   /** Placeholder for the filter input. */
   filterPlaceholder?: string;
+  /**
+   * Opt-in: restrict the client-side text filter to these column keys instead
+   * of every column in `columns` (the default when omitted — every existing
+   * consumer keeps today's exact behavior unless it opts in). Use this to
+   * keep a sensitive/free-text column visible in the table without making it
+   * searchable — see hr/disciplinary and hr/vigilance's charges_summary
+   * column (GAP-HR-DISCIPLINARY-01 / GAP-HR-VIGILANCE-01).
+   */
+  filterKeys?: (keyof T & string)[];
   /** Opt-in: enable pagination at the given page size. */
   pageSize?: number;
   /** Guided empty state: icon shown when there are no rows. */
@@ -228,6 +237,7 @@ export function DataTable<T extends Record<string, unknown>>({
   sortable = false,
   filterable = false,
   filterPlaceholder = "Filter…",
+  filterKeys,
   pageSize,
   emptyIcon = "📋",
   emptyTitle = "No records found",
@@ -266,10 +276,11 @@ export function DataTable<T extends Record<string, unknown>>({
   const filtered = useMemo(() => {
     if (!filterable || !filter.trim()) return rows;
     const q = filter.trim().toLowerCase();
+    const searchKeys: (keyof T & string)[] = filterKeys ?? columns.map((col) => col.key);
     return rows.filter((row) =>
-      columns.some((col) => String(row[col.key] ?? "").toLowerCase().includes(q)),
+      searchKeys.some((key) => String(row[key] ?? "").toLowerCase().includes(q)),
     );
-  }, [rows, columns, filter, filterable]);
+  }, [rows, columns, filter, filterable, filterKeys]);
 
   // 2) sort
   const sorted = useMemo(() => {

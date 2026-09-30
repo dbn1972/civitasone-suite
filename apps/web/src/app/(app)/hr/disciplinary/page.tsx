@@ -18,7 +18,12 @@ type RawRow = {
   employee: string;
   department: string;
   proceeding_type: string;
-  charges: string;
+  // GAP-HR-DISCIPLINARY-01 (PII/DPDP): the backend now returns a truncated
+  // summary in the list response, not the full allegation text — that stays
+  // on the case detail page (disciplinary/[id]/page.tsx), which has its own
+  // role gate. Field renamed to match so a stale client build can't silently
+  // keep treating this as the full text.
+  charges_summary: string;
   filed_date: string;
   inquiry_officer: string;
   status: string;
@@ -66,11 +71,19 @@ export default async function DisciplinaryListPage() {
     { key: "employee", label: t("colEmployee") },
     { key: "department", label: t("colDepartment") },
     { key: "type", label: t("colType") },
-    { key: "charges", label: t("colCharge") },
+    { key: "charges_summary", label: t("colCharge") },
     { key: "inquiry_officer", label: t("colOfficer") },
     { key: "filed_date", label: t("colFiled") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
+
+  // GAP-HR-DISCIPLINARY-01 (PII/DPDP): charges_summary still shows in the
+  // table (as a truncated summary) but is out of the client-side search
+  // scope, so filtering never has to scan allegation text — searching still
+  // works over every other column (case ref, employee, department, type,
+  // officer, filed date, status), matching the catalog's own acceptance
+  // criterion ("table still filters by employee and status").
+  const filterKeys = columns.filter((c) => c.key !== "charges_summary").map((c) => c.key);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -87,6 +100,30 @@ export default async function DisciplinaryListPage() {
         <StatCard icon="🟡" iconBg="var(--warnbg, #fffbe6)" label={t("statMinor")} value={errored ? null : minor} />
         <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOpen")} value={errored ? null : open} />
       </StatGrid>
+      {/* GAP-HR-DISCIPLINARY-01 (PII/DPDP): purpose/confidentiality notice
+          above the table — mirrors the styling of the existing DPDP notice
+          in citizen/grievances/new/page.tsx. */}
+      <div
+        role="note"
+        aria-labelledby="disciplinary-confidential-heading"
+        style={{
+          marginTop: 20,
+          padding: "14px 16px",
+          borderRadius: 8,
+          border: "1px solid #d1a700",
+          background: "#fffbea",
+        }}
+      >
+        <p
+          id="disciplinary-confidential-heading"
+          style={{ margin: "0 0 6px 0", fontWeight: 600, fontSize: "0.875rem", color: "#7a5200" }}
+        >
+          {t("confidentialBannerTitle")}
+        </p>
+        <p style={{ margin: 0, fontSize: "0.8125rem", color: "#5c4000", lineHeight: 1.5 }}>
+          {t("confidentialBannerBody")}
+        </p>
+      </div>
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
@@ -105,6 +142,7 @@ export default async function DisciplinaryListPage() {
           rowLinkPrefix="/hr/disciplinary/"
           sortable
           filterable
+          filterKeys={filterKeys}
           filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="⚖️"

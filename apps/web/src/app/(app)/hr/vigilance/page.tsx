@@ -16,7 +16,12 @@ type RawRow = {
   id: string;
   employee: string;
   department: string;
-  charges: string;
+  // GAP-HR-VIGILANCE-01 (PII/DPDP): the backend now returns a truncated
+  // summary in the list response (same shape as GAP-HR-DISCIPLINARY-01), not
+  // the full allegation text, and — by default — omits cases whose status is
+  // 'dropped' (exonerated/discontinued) entirely. Full text and dropped
+  // cases both remain reachable from the case detail page.
+  charges_summary: string;
   filedDate: string;
   inquiryOfficer: string;
   nextHearing: string;
@@ -48,6 +53,11 @@ export default async function VigilancePage() {
   }
 
   const t = await getTranslations("vigilance");
+  // GAP-HR-VIGILANCE-01 (PII/DPDP decision packet): this page intentionally
+  // does NOT pass includeDropped=true — a dropped/exonerated case should not
+  // reach the browser by default at all (truncated summary or not), so the
+  // stat cards below are computed from whatever the default-filtered
+  // response returns, same as before.
   const { data: rawItems, source } = await getData();
   const errored = source === "error";
   const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
@@ -66,6 +76,14 @@ export default async function VigilancePage() {
   // jointly exhaustive over all 10 (2 + 6 + 2 = every case, exactly once),
   // preserving each existing card's original intent/label rather than
   // introducing new ones.
+  //
+  // GAP-HR-VIGILANCE-01 note: since the backend now hides 'dropped' cases
+  // from this response by default (see above), "closed" here in practice
+  // now counts only genuinely closed cases, not dropped ones — an accepted,
+  // intentional undercount for as long as the interim "hide by default"
+  // containment is in effect. A caller who needs the true disposed+dropped
+  // total should use the detail/audit views, not this card, until a real
+  // retention rule lands.
   const chargeMemoStage = items.filter((i) => ["opened", "charge_memo_issued"].includes(i.status)).length;
   const underInquiry = items.filter((i) => [
     "inquiry_appointed", "finding_recorded", "pending_approval",
@@ -77,7 +95,7 @@ export default async function VigilancePage() {
     { key: "caseRef", label: t("colCaseRef") },
     { key: "employee", label: t("colEmployee") },
     { key: "department", label: t("colDepartment") },
-    { key: "charges", label: t("colChargeSummary") },
+    { key: "charges_summary", label: t("colChargeSummary") },
     { key: "inquiryOfficer", label: t("colInquiryOfficer") },
     // Backend aliases inquiry_appointed_date (a one-time event) as
     // "nextHearing" -- it is not a recurring hearing schedule, so a case
@@ -87,6 +105,11 @@ export default async function VigilancePage() {
     { key: "nextHearing", label: t("colInquiryOfficerAppointed") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
+
+  // GAP-HR-VIGILANCE-01 (PII/DPDP): same rationale as hr/disciplinary —
+  // charges_summary stays visible in the table but out of client-side
+  // search scope, so filtering never scans allegation text.
+  const filterKeys = columns.filter((c) => c.key !== "charges_summary").map((c) => c.key);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -103,6 +126,30 @@ export default async function VigilancePage() {
         <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={errored ? null : underInquiry} />
         <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedClosedLabel")} value={errored ? null : closed} />
       </StatGrid>
+      {/* GAP-HR-VIGILANCE-01 (PII/DPDP): purpose/confidentiality notice above
+          the table — mirrors the styling of the existing DPDP notice in
+          citizen/grievances/new/page.tsx. */}
+      <div
+        role="note"
+        aria-labelledby="vigilance-confidential-heading"
+        style={{
+          marginTop: 20,
+          padding: "14px 16px",
+          borderRadius: 8,
+          border: "1px solid #d1a700",
+          background: "#fffbea",
+        }}
+      >
+        <p
+          id="vigilance-confidential-heading"
+          style={{ margin: "0 0 6px 0", fontWeight: 600, fontSize: "0.875rem", color: "#7a5200" }}
+        >
+          {t("confidentialBannerTitle")}
+        </p>
+        <p style={{ margin: 0, fontSize: "0.8125rem", color: "#5c4000", lineHeight: 1.5 }}>
+          {t("confidentialBannerBody")}
+        </p>
+      </div>
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
@@ -126,6 +173,7 @@ export default async function VigilancePage() {
           rowLinkPrefix="/hr/disciplinary/"
           sortable
           filterable
+          filterKeys={filterKeys}
           filterPlaceholder={t("filterPlaceholder")}
           pageSize={15}
           emptyIcon="⚖️"
