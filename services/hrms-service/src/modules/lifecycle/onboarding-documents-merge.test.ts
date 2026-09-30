@@ -75,4 +75,22 @@ describe("mergeOnboardingDocuments", () => {
     );
     expect(merged[0]!.required).toBe(false);
   });
+
+  // GAP-HR-ONBOARDING-DETAIL-02 (0155 migration): storageKey/fileName pass
+  // through so HR can actually open what was uploaded, instead of the
+  // object being unrecoverable once mark-received only wrote status/receivedAt.
+  it("GAP-HR-ONBOARDING-DETAIL-02: passes through the uploaded file's storage key and filename", () => {
+    const merged = mergeOnboardingDocuments(
+      [{ docType: "pan_card", required: true }],
+      [{ docType: "pan_card", status: "uploaded", receivedAt: "2026-08-01T00:00:00Z", verifiedBy: null, verifiedAt: null, storageKey: "uploads/t1/document/abc.pdf", fileName: "pan.pdf" }],
+    );
+    expect(merged[0]!.storageKey).toBe("uploads/t1/document/abc.pdf");
+    expect(merged[0]!.fileName).toBe("pan.pdf");
+  });
+
+  it("GAP-HR-ONBOARDING-DETAIL-02: a document with no upload yet has a null storage key, not a missing field", () => {
+    const merged = mergeOnboardingDocuments([{ docType: "pan_card", required: true }], []);
+    expect(merged[0]!.storageKey).toBeNull();
+    expect(merged[0]!.fileName).toBeNull();
+  });
 });

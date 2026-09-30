@@ -102,5 +102,81 @@ describe("DocumentUploadCard", () => {
       await screen.findByRole("alert");
       expect(screen.queryByRole("status")).not.toBeInTheDocument();
     });
+
+    // GAP-HR-ONBOARDING-DETAIL-03 regression: an oversize file used to call
+    // window.alert(), a blocking modal with no accessible role and no
+    // useFormError-mediated copy -- now a plain inline role=alert message,
+    // consistent with every other failure in this component.
+    it("GAP-HR-ONBOARDING-DETAIL-03: shows an inline alert for an oversize file instead of a browser alert()", () => {
+      const alertSpy = vi.spyOn(window, "alert").mockImplementation(() => {});
+      render(<DocumentUploadCard documents={[REQUIRED_DOC]} />);
+      const input = screen.getByLabelText("Choose file for PAN Card (required)");
+      const bigFile = new File([new Uint8Array(11 * 1024 * 1024)], "big.pdf", { type: "application/pdf" });
+
+      fireEvent.change(input, { target: { files: [bigFile] } });
+
+      expect(screen.getByRole("alert")).toHaveTextContent(/too large/i);
+      expect(alertSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("DPDP notice", () => {
+    it("GAP-HR-ONBOARDING-DETAIL-03: shows a purpose/visibility notice above the upload list", () => {
+      render(<DocumentUploadCard documents={[REQUIRED_DOC]} />);
+      expect(screen.getByRole("note")).toHaveTextContent(/visible only to hr/i);
+    });
+
+    it("uses the caller's i18n-sourced notice text when provided", () => {
+      render(<DocumentUploadCard documents={[REQUIRED_DOC]} dpdpNotice="Custom compliance copy for this tenant." />);
+      expect(screen.getByRole("note")).toHaveTextContent("Custom compliance copy for this tenant.");
+    });
+  });
+
+  describe("view/verify/reject actions (GAP-HR-ONBOARDING-DETAIL-02)", () => {
+    const UPLOADED_DOC: OnboardingDocument = {
+      id: "pan",
+      name: "PAN Card",
+      required: true,
+      status: "uploaded",
+      uploadedFileName: "pan.pdf",
+      storageKey: "uploads/t1/document/abc.pdf",
+    };
+
+    it("offers a View action once a document has a storage key, and opens the presigned download URL", async () => {
+      global.fetch = vi.fn().mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ downloadUrl: "https://cdn.example/signed" }),
+      } as Response);
+      const openSpy = vi.spyOn(window, "open").mockImplementation(() => null);
+
+      render(<DocumentUploadCard documents={[UPLOADED_DOC]} />);
+      fireEvent.click(screen.getByRole("button", { name: "View" }));
+
+      await vi.waitFor(() => expect(openSpy).toHaveBeenCalledWith("https://cdn.example/signed", "_blank", "noopener,noreferrer"));
+      expect(global.fetch).toHaveBeenCalledWith("/api/proxy/v1/admin/uploads/uploads%2Ft1%2Fdocument%2Fabc.pdf");
+    });
+
+    it("does not offer a View action before anything has been uploaded (no storage key yet)", () => {
+      render(<DocumentUploadCard documents={[REQUIRED_DOC]} />);
+      expect(screen.queryByRole("button", { name: "View" })).not.toBeInTheDocument();
+    });
+
+    it("offers Verify/Reject once a document is uploaded, and calls back with its id", () => {
+      const onVerify = vi.fn();
+      const onReject = vi.fn();
+      render(<DocumentUploadCard documents={[UPLOADED_DOC]} onVerify={onVerify} onReject={onReject} />);
+
+      fireEvent.click(screen.getByRole("button", { name: "Verify" }));
+      expect(onVerify).toHaveBeenCalledWith("pan");
+
+      fireEvent.click(screen.getByRole("button", { name: "Reject" }));
+      expect(onReject).toHaveBeenCalledWith("pan");
+    });
+
+    it("does not offer Verify/Reject for a document that is still pending", () => {
+      render(<DocumentUploadCard documents={[REQUIRED_DOC]} onVerify={vi.fn()} onReject={vi.fn()} />);
+      expect(screen.queryByRole("button", { name: "Verify" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: "Reject" })).not.toBeInTheDocument();
+    });
   });
 });
