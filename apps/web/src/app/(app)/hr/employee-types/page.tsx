@@ -1,14 +1,16 @@
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { toResourceState } from "@/app/_data/useResource";
-import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 
 type EmpType = {
   id: string; code: string; name: string; description: string | null;
   eligibleForLeave: boolean; eligibleForPayroll: boolean; eligibleForAppraisal: boolean;
   defaultProbationMonths: number; maxContractMonths: number | null;
-  payMode: string; isActive: boolean; sortOrder: number;
+  payMode: string; category: string; paymentRoute: string; taxSection: string;
+  statutoryPf: boolean; statutoryEsi: boolean; statutoryNps: boolean;
+  eligibleForGratuity: boolean; eligibleForBonus: boolean; leaveEncashment: boolean;
+  isActive: boolean; sortOrder: number;
 } & Record<string, unknown>;
 
 async function getTypes(): Promise<LoaderResult<EmpType[]>> {
@@ -19,13 +21,20 @@ async function getTypes(): Promise<LoaderResult<EmpType[]>> {
   return r;
 }
 
+/**
+ * Mirrors employee-types-routes.ts's own HR_ROLES for POST/PATCH -- these
+ * gate the "new"/"edit" actions added here (GAP-HR-EMPLOYEE-TYPES-01), not
+ * who may view the list. The separate, still-open question of who may READ
+ * the list (GAP-HR-EMPLOYEE-TYPES-04 -- the backend GET route additionally
+ * allows "manager"/"officer" but not "hr_officer", and hr/layout.tsx admits
+ * several more roles again) is a real access-policy call with no default
+ * given in the campaign's decision packet, so it is deliberately left alone
+ * here; only the LoadErrorState swap below (an honest 403 render, not a role
+ * change) addresses that item.
+ */
+const EMPLOYEE_TYPE_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
+
 export default async function EmployeeTypesPage() {
-  // Namespaced translator scoped to this page's copy only (UX-017). Note: the
-  // row-mapping callbacks below use `et` (employee type), not `t`, for their
-  // loop variable -- `t` here is this translator, and shadowing it inside
-  // .filter()/.map() would silently break every t("...") call further down
-  // the same closure chain (the exact class of bug tranche 2 found in
-  // LeaveApprovalsPanel.tsx/balance/page.tsx).
   const t = await getTranslations("employeeTypes");
   const PAY_MODE_LABELS: Record<string, string> = {
     monthly: t("payModeMonthly"),
@@ -34,25 +43,63 @@ export default async function EmployeeTypesPage() {
     stipend: t("payModeStipend"),
     none: t("payModeNone"),
   };
+  const CATEGORY_LABELS: Record<string, string> = {
+    pay_scale: t("category.pay_scale"),
+    contractual: t("category.contractual"),
+    consultant: t("category.consultant"),
+    third_party: t("category.third_party"),
+    apprentice: t("category.apprentice"),
+    other: t("category.other"),
+  };
+  const PAYMENT_ROUTE_LABELS: Record<string, string> = {
+    payroll: t("paymentRoute.payroll"),
+    invoice: t("paymentRoute.invoice"),
+    agency: t("paymentRoute.agency"),
+    stipend: t("paymentRoute.stipend"),
+    none: t("paymentRoute.none"),
+  };
 
   const result = await getTypes();
   const { data: types } = result;
-  const resource = toResourceState(result);
-  const errored = resource.status === "error";
+  const errored = result.source === "error";
+  const roles = getSessionRoles();
+  const canManage = roles.some((r: string) => EMPLOYEE_TYPE_ADMIN_ROLES.includes(r));
 
   const active = errored ? null : types.filter((et) => et.isActive).length;
   const withPayroll = errored ? null : types.filter((et) => et.eligibleForPayroll).length;
   const inactive = errored ? null : types.filter((et) => !et.isActive).length;
 
-  const rows = types.map((et) => ({
-    ...et,
-    payModeLabel: PAY_MODE_LABELS[et.payMode] ?? et.payMode,
-    probation: et.defaultProbationMonths > 0 ? t("probationMonths", { months: et.defaultProbationMonths }) : t("probationNone"),
-    contract: et.maxContractMonths ? t("contractMaxMonths", { months: et.maxContractMonths }) : t("contractUnlimited"),
-    leave: et.eligibleForLeave ? "✅" : "—",
-    payroll: et.eligibleForPayroll ? "✅" : "—",
-    appraisal: et.eligibleForAppraisal ? "✅" : "—",
-  }));
+  const rows = types
+    // GAP-HR-EMPLOYEE-TYPES-02: inactive types used to sort in wherever they
+    // fell in the API's own order, indistinguishable from active ones in the
+    // table. Pushing them last (stable within each group) makes the register
+    // read as "current roster, then retired types" without hiding either.
+    .slice()
+    .sort((a, b) => Number(a.isActive === false) - Number(b.isActive === false) || a.sortOrder - b.sortOrder)
+    .map((et) => {
+      const statutory = [
+        et.statutoryPf ? "PF" : null,
+        et.statutoryEsi ? "ESI" : null,
+        et.statutoryNps ? "NPS" : null,
+      ].filter(Boolean).join(", ") || t("none");
+      return {
+        ...et,
+        payModeLabel: PAY_MODE_LABELS[et.payMode] ?? et.payMode,
+        categoryLabel: CATEGORY_LABELS[et.category] ?? et.category,
+        paymentRouteLabel: PAYMENT_ROUTE_LABELS[et.paymentRoute] ?? et.paymentRoute,
+        taxSectionLabel: et.taxSection === "none" ? t("none") : et.taxSection,
+        statutoryLabel: statutory,
+        probation: et.defaultProbationMonths > 0 ? t("probationMonths", { months: et.defaultProbationMonths }) : t("probationNone"),
+        contract: et.maxContractMonths ? t("contractMaxMonths", { months: et.maxContractMonths }) : t("contractUnlimited"),
+        // GAP-HR-EMPLOYEE-TYPES-05: "✅"/"—" glyphs read to a screen reader as
+        // "white heavy check mark"/"em dash" with no textual meaning. Plain
+        // Yes/No carries the same information and is announced sensibly.
+        leave: et.eligibleForLeave ? t("yes") : t("no"),
+        payroll: et.eligibleForPayroll ? t("yes") : t("no"),
+        appraisal: et.eligibleForAppraisal ? t("yes") : t("no"),
+        statusLabel: et.isActive ? t("statusActive") : t("statusInactive"),
+      };
+    });
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -62,6 +109,9 @@ export default async function EmployeeTypesPage() {
         back="/hr"
         backLabel="HR"
         help="hr"
+        actions={canManage ? (
+          <a href="/hr/employee-types/new" className="btn primary">{t("addTypeAction")}</a>
+        ) : undefined}
       />
 
       <StatGrid>
@@ -74,7 +124,7 @@ export default async function EmployeeTypesPage() {
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "employee types" })} backHref="/hr" />
+            <LoadErrorState result={result} area="employee types" backHref="/hr" />
           </div>
         ) : types.length === 0 ? (
           <EmptyState
@@ -87,7 +137,12 @@ export default async function EmployeeTypesPage() {
             columns={[
               { key: "code", label: t("colCode") },
               { key: "name", label: t("colName") },
+              { key: "statusLabel", label: t("colStatus") },
               { key: "payModeLabel", label: t("colPayMode") },
+              { key: "categoryLabel", label: t("colCategory") },
+              { key: "paymentRouteLabel", label: t("colPaymentRoute") },
+              { key: "taxSectionLabel", label: t("colTaxSection") },
+              { key: "statutoryLabel", label: t("colStatutory") },
               { key: "probation", label: t("colProbation") },
               { key: "contract", label: t("colMaxDuration") },
               { key: "leave", label: t("colLeave") },
@@ -95,9 +150,11 @@ export default async function EmployeeTypesPage() {
               { key: "appraisal", label: t("colAppraisal") },
             ]}
             rows={rows}
+            rowHref={canManage ? (r) => `/hr/employee-types/${r.id}/edit` : undefined}
             sortable
             filterable
             filterPlaceholder={t("filterPlaceholder")}
+            pageSize={25}
             emptyIcon="👥"
             emptyTitle={t("emptyFilteredTitle")}
             emptyMessage={t("emptyFilteredMessage")}
@@ -119,7 +176,7 @@ export default async function EmployeeTypesPage() {
             <li><strong>{t("termMaxDuration")}</strong> {t("descMaxDuration")}</li>
           </ul>
           <p style={{ margin: "12px 0 0", color: "var(--mut)", fontSize: 12.5 }}>
-            {t.rich("addTypesNoteRich", { code: (chunks) => <code>{chunks}</code> })}
+            {t("addTypesNote")}
           </p>
         </Card>
       </div>
