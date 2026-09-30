@@ -10,7 +10,7 @@ import type { AttendanceSummaryItem } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 import { formatIndianDate } from "@/lib/formatters";
 
-export function AttendanceTable({ attendance, source = "api" }: { attendance: AttendanceSummaryItem[]; source?: "api" | "error" }) {
+export function AttendanceTable({ attendance, source = "api", canConfigure = false }: { attendance: AttendanceSummaryItem[]; source?: "api" | "error"; canConfigure?: boolean }) {
   const t = useTranslations("attendance");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<AttendanceSummaryItem[]>(
     "hr.attendance",
@@ -25,7 +25,13 @@ export function AttendanceTable({ attendance, source = "api" }: { attendance: At
     { key: "date", label: t("colDate"), render: (r) => formatIndianDate(r.date) },
     { key: "checkIn", label: t("colCheckIn"), render: (r) => r.checkIn ?? "—" },
     { key: "checkOut", label: t("colCheckOut"), render: (r) => r.checkOut ?? "—" },
-    { key: "status", label: t("colStatus"), render: (r) => <StatusPill status={r.status} label={r.status.replace("_", " ")} /> },
+    // GAP-HR-ATTENDANCE-06: passing an explicit `label` bypassed StatusPill's
+    // own humanizeStatus fallback, so "on_leave"/"half_day" rendered as raw
+    // lowercase "on leave"/"half day" instead of "On Leave"/"Half Day". (The
+    // STATUS_MAP tone/color entries this item's catalog text also asked for
+    // already exist in ds/StatusPill.tsx -- GAP-SF-04 added them separately;
+    // only the label was still wrong.)
+    { key: "status", label: t("colStatus"), render: (r) => <StatusPill status={r.status} /> },
     { key: "hoursWorked", label: t("colHours"), align: "right", render: (r) => (r.hoursWorked != null ? r.hoursWorked.toFixed(1) : "—") },
   ];
 
@@ -60,10 +66,19 @@ export function AttendanceTable({ attendance, source = "api" }: { attendance: At
         emptyIcon="🕐"
         emptyTitle={t("emptyTitle")}
         emptyMessage={t("emptyMessage")}
+        // GAP-HR-ATTENDANCE-04: this used to link to /hr/attendance/config
+        // unconditionally, including for roles (hr_officer, manager) that
+        // pass this page's own view gate but can't open that admin-only
+        // page -- and the label "Configure check-in" implied an action that
+        // page can't actually perform (it's a read-only rules reference,
+        // GAP-HR-ATTENDANCE-CONFIG-01/03). Relabeled honestly and shown only
+        // to the roles that can actually open the target.
         emptyAction={
-          <Link href="/hr/attendance/config" className="btn primary" style={{ marginTop: 10 }}>
-            {t("configureCheckIn")}
-          </Link>
+          canConfigure ? (
+            <Link href="/hr/attendance/config" className="btn primary" style={{ marginTop: 10 }}>
+              {t("configureCheckIn")}
+            </Link>
+          ) : undefined
         }
       />
     </>

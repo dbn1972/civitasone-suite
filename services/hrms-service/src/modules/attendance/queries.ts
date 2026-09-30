@@ -13,6 +13,27 @@ function mapStatus(status: string): "present" | "absent" | "half_day" | "on_leav
   return "present";
 }
 
+/**
+ * GAP-HR-ATTENDANCE-01: hoursWorked used to be hard-coded `undefined` even
+ * though inTime/outTime (HH:MM:SS `time` columns, per schema.ts) are already
+ * loaded on every row. Same decimal-hours-from-HH:MM:SS derivation
+ * repo.ts's listCheckinLog already uses for its own (string-formatted)
+ * totalHours column, rounded to 2dp per the catalog's acceptance criteria --
+ * but returns a plain number, and deliberately does NOT wrap a
+ * negative/zero diff as a cross-midnight shift the way that column's own
+ * "h/m" display convention does: this field's contract (per the catalog's
+ * own acceptance list) is undefined for missing-or-bad data, not a modeled
+ * overnight shift.
+ */
+function computeHoursWorked(inTime: string | null, outTime: string | null): number | undefined {
+  if (!inTime || !outTime) return undefined;
+  const [inH, inM] = inTime.split(":").map(Number) as [number, number];
+  const [outH, outM] = outTime.split(":").map(Number) as [number, number];
+  const minutes = (outH * 60 + outM) - (inH * 60 + inM);
+  if (minutes <= 0) return undefined;
+  return Math.round((minutes / 60) * 100) / 100;
+}
+
 export async function getAttendanceByEmpAndMonth(tenantId: string, employeeId: string, month: string): Promise<AttendanceRow[]> {
   return cache.getOrLoad<AttendanceRow[]>(
     cache.makeKey(tenantId, "attendance_emp_month", `${employeeId}:${month}`),
@@ -44,17 +65,30 @@ export async function listAttendance(tenantId: string, limit: number) {
     const rows = await repo.listByTenant(tenantId, limit);
     const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
     const empMap = new Map(employees.map((e) => [e.id, e]));
-    return rows.map((r) => ({
-      id: r.id,
-      employeeId: r.employeeId,
-      employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeId.slice(0, 8),
-      department: empMap.get(r.employeeId)?.departmentId.slice(0, 8) ?? "",
-      date: r.attendanceDate,
-      checkIn: r.inTime ?? undefined,
-      checkOut: r.outTime ?? undefined,
-      status: mapStatus(r.status),
-      hoursWorked: undefined,
-    }));
+    // GAP-HR-ATTENDANCE-01: department used to be the first 8 chars of the
+    // raw departmentId uuid (a permanent-looking id fragment, never a real
+    // department name). employee/repo.ts already exposes a cross-module-safe
+    // name lookup (findDepartmentsByIds) for exactly this -- one batched
+    // query, not N+1, and via the employee module's own repo rather than
+    // importing hrms_departments directly (CLAUDE.md rule 4: module
+    // isolation).
+    const departmentIds = [...new Set(employees.map((e) => e.departmentId))];
+    const departments = await employeeRepo.findDepartmentsByIds(tenantId, departmentIds);
+    const deptNameById = new Map(departments.map((d) => [d.id, d.name]));
+    return rows.map((r) => {
+      const emp = empMap.get(r.employeeId);
+      return {
+        id: r.id,
+        employeeId: r.employeeId,
+        employeeName: emp?.fullName ?? r.employeeId.slice(0, 8),
+        department: (emp && deptNameById.get(emp.departmentId)) ?? "",
+        date: r.attendanceDate,
+        checkIn: r.inTime ?? undefined,
+        checkOut: r.outTime ?? undefined,
+        status: mapStatus(r.status),
+        hoursWorked: computeHoursWorked(r.inTime, r.outTime),
+      };
+    });
   });
 }
 

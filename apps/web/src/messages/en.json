@@ -271,8 +271,9 @@
     "colHours": "Hours",
     "filterPlaceholder": "Filter by employee, department or status…",
     "emptyTitle": "No attendance records yet",
-    "emptyMessage": "Attendance records appear here once the check-in feed is active and employees start marking presence.",
-    "configureCheckIn": "Configure check-in",
+    "emptyMessage": "Attendance records appear here once employees check in or HR marks attendance.",
+    "configureCheckIn": "View attendance rules",
+    "selfOnlyNote": "You can check yourself in and out above. Viewing the full attendance list needs an HR or manager role.",
     "cacheNoteShowingSaved": "Showing saved data",
     "cacheNoteFrom": " from {date}",
     "cacheNoteOffline": " — you're offline"
