@@ -17,19 +17,28 @@ export async function findTemplateById(id: string, tenantId: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * GAP-HR-JD-TEMPLATES-02: `vacancyType` used to be applied as a JS `.filter()`
+ * AFTER `.limit(opts.limit ?? 100)` had already truncated the result set --
+ * with more than `limit` templates total, a filtered view could silently
+ * miss matches that existed past row 100. Moved into the SQL WHERE clause
+ * (drizzle `and(...)`, conditionally including the vacancyType predicate)
+ * so the limit applies to the already-filtered set, same as every other
+ * filter in this repo.
+ */
 export async function listTemplates(tenantId: string, opts: { vacancyType?: string; limit?: number }) {
-  const base = scopedRead((tx) =>
+  const conditions = [
+    eq(hrmsJdTemplates.tenantId, tenantId),
+    eq(hrmsJdTemplates.isArchived, false),
+  ];
+  if (opts.vacancyType) conditions.push(eq(hrmsJdTemplates.vacancyType, opts.vacancyType));
+
+  return scopedRead((tx) =>
     tx.select().from(hrmsJdTemplates)
-      .where(and(
-        eq(hrmsJdTemplates.tenantId, tenantId),
-        eq(hrmsJdTemplates.isArchived, false),
-      ))
+      .where(and(...conditions))
       .orderBy(desc(hrmsJdTemplates.useCount), desc(hrmsJdTemplates.createdAt))
       .limit(opts.limit ?? 100)
   );
-  const rows = await base;
-  if (opts.vacancyType) return rows.filter((r) => r.vacancyType === opts.vacancyType);
-  return rows;
 }
 
 export async function updateTemplate(tx: Writer, id: string, patch: Partial<JdTemplateInsert>): Promise<void> {
