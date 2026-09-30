@@ -2589,6 +2589,24 @@ export const DisciplinaryCaseDetailSchema = z.object({
   version: z.number(),
 });
 
+// GAP-HR-DISCIPLINARY-DETAIL-03: state-transition history for the case
+// detail page's status-history timeline (backend: GET /v1/hrms/
+// disciplinary-cases/:caseId/events, already-existing route, not newly
+// added -- see disciplinary/routes.ts and disciplinary/repo.ts's
+// listEvents, which was built but never called from the web app).
+export const DisciplinaryCaseEventSchema = z.object({
+  id: z.string(),
+  tenantId: z.string(),
+  caseId: z.string(),
+  fromStatus: z.string().nullable(),
+  toStatus: z.string(),
+  action: z.string(),
+  notes: z.string().nullable(),
+  occurredAt: z.string(),
+  actorId: z.string(),
+});
+export const DisciplinaryCaseEventListSchema = z.array(DisciplinaryCaseEventSchema);
+
 export const FinanceVendorBillHistoryEntrySchema = z.object({
   id: z.string(),
   billNo: z.string(),

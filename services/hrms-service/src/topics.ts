@@ -5,6 +5,12 @@ export const COMMANDS = {
   employeeTransferSubmitApproval: "hrms.employee.transfer.submit_approval",
   employeePromotionSubmitApproval: "hrms.employee.promotion.submit_approval",
   disciplinarySubmitApproval: "hrms.disciplinary.submit_approval",
+  // GAP-HR-DISCIPLINARY-DETAIL-01: DPDP audit-on-read for the per-case
+  // detail GET — published (fire-and-forget) from the route, recorded to
+  // the audit outbox by disciplinary/consumer.ts, same async CQRS shape as
+  // GAP-HR-MEDICAL-01's medicalClaimsListRead (routes must not write to
+  // Postgres directly; see f3-leftover-hrms-cqrs.test.ts).
+  disciplinaryCaseViewed: "hrms.disciplinary_case.viewed",
   employeeSeparate:     "hrms.employee.separate",
   employeeUpdate:       "hrms.employee.update",
   leaveTypeCreate:      "hrms.leave_type.create",
