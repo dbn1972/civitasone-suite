@@ -6,7 +6,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { useTranslations } from "next-intl";
 
-export type EmpRow = { id: string; employeeNo?: string; name: string; department: string; status: string } & Record<string, unknown>;
+export type EmpRow = { id: string; employeeNo?: string; name: string; department: string; status: string; dateOfJoining?: string } & Record<string, unknown>;
 
 export function EmployeesTable({ employees, source = "api", canCreate = false }: { employees: EmpRow[]; source?: "api" | "error"; canCreate?: boolean }) {
   const t = useTranslations("employeesTable");
@@ -17,10 +17,18 @@ export function EmployeesTable({ employees, source = "api", canCreate = false }:
     (d) => d.length === 0,
   );
 
-  const columns: { key: keyof EmpRow & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof EmpRow & string; label: string; cellType?: "status" | "date" }[] = [
     { key: "employeeNo", label: t("colEmpCode") },
     { key: "name", label: t("colName") },
     { key: "department", label: t("colDepartment") },
+    // GAP-HR-EMPLOYEES-06: reads dateOfJoining defensively -- the backend
+    // (employee/queries.ts listEmployees) does not return this field on
+    // origin/main yet, so this renders "—" for now (DataTable's cellType
+    // "date" already handles a missing/undefined value that way). Open PR
+    // #1702 (GAP-HR-DASHBOARD-04) already adds exactly this field to the
+    // same backend response; once it merges, this column starts showing
+    // real dates with no further web-side change needed.
+    { key: "dateOfJoining", label: t("colJoiningDate"), cellType: "date" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
@@ -40,9 +48,12 @@ export function EmployeesTable({ employees, source = "api", canCreate = false }:
         caption="Employee roster with name, department, designation, and status"
         identifyingColumnKey="name"
         sortable
-        filterable
-        filterPlaceholder={t("filterPlaceholder")}
-        pageSize={15}
+        // GAP-HR-EMPLOYEES-04: removed the client-side `filterable` text
+        // filter and `pageSize={15}` -- both operated only on whatever 50
+        // rows the server handed this page, giving two independent,
+        // disagreeing paginations and a search box that silently couldn't
+        // find anyone outside the current page. The page above now does
+        // real server-side search (?q=) and is the only pagination level.
         exportable
         emptyIcon="👥"
         emptyTitle={t("emptyTitle")}

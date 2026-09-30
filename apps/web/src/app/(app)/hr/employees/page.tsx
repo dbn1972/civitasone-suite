@@ -17,18 +17,23 @@ const PAGE_SIZE = 50;
  */
 const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
-function empPageHref(type: string, p: number): string {
+function empPageHref(type: string, p: number, q: string): string {
   const qs: string[] = [];
   if (type !== "all") qs.push("type=" + encodeURIComponent(type));
   if (p > 0) qs.push("page=" + p);
+  if (q) qs.push("q=" + encodeURIComponent(q));
   return "/hr/employees" + (qs.length ? "?" + qs.join("&") : "");
 }
 
 export default async function EmployeeDirectoryPage({ searchParams }: { searchParams?: Record<string, string> }) {
   const page = Math.max(0, parseInt(searchParams?.page ?? "0") || 0);
   const typeFilter = searchParams?.type ?? "all";
+  // GAP-HR-EMPLOYEES-04: real server-side search, forwarded to the backend
+  // (see loaders.ts's getEmployees) instead of only ever filtering whatever
+  // 50 rows happened to be on the current server page.
+  const q = (searchParams?.q ?? "").trim();
   const [{ data: rawEmployees, source }, { data: hrDashboard }] = await Promise.all([
-    getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter),
+    getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter, q || undefined),
     getHRDashboard(),
   ]);
   const t = await getTranslations("employees");
@@ -57,12 +62,22 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   // a genuine fetch failure must not collapse to the same "confirmed zero"
   // reading as a real empty roster, or a network blip would show "Total: 0"
   // as if that were trustworthy data instead of falling back to headcount.
-  const total = page === 0 && !(source === "error") && employees.length === 0 ? 0 : (hrDashboard.headcount || employees.length);
-  // NOTE: `active`/`others` below still derive from the current page only (same
-  // page-scoped-math class as the type-tabs bug this fix targets), because there is
-  // no existing tenant-wide "serving" aggregate to source them from without adding a
-  // new backend query -- flagged as a follow-up, out of scope for this fix. `onLeave`
-  // is fixed here since the dashboard already returns it tenant-wide.
+  // A search (`q`) legitimately narrows `employees` to far fewer rows than
+  // the tenant total on purpose -- must not be mistaken for "genuinely
+  // empty roster" the way an un-searched empty page 0 is.
+  const total = page === 0 && !q && !(source === "error") && employees.length === 0 ? 0 : (hrDashboard.headcount || employees.length);
+  // GAP-HR-EMPLOYEES-01: active/others below still derive from the current
+  // page only, same page-scoped-math class as the type-tabs bug fixed
+  // earlier -- there is no existing tenant-wide "serving" aggregate to
+  // source them from. NOT fixed in this pass: the natural backend home for
+  // that aggregate (dashboard/queries.ts's getDashboard, same transaction
+  // as headcount/onLeave) is being actively extended by open PR #1702
+  // (GAP-HR-DASHBOARD-06/07) in the exact same destructured-query-result
+  // pattern a new "servingCount" field would also need to touch --
+  // implementing it here now would create a near-certain merge conflict on
+  // shared lines. Deferring until #1702 lands, then this becomes a small,
+  // additive follow-up instead of a competing edit to code already under
+  // review. `onLeave` is unaffected (already tenant-wide via the dashboard).
   const active = employees.filter((e) => SERVING.has(e.status)).length;
   const onLeave = hrDashboard.onLeave;
   const others = total - active - onLeave;
@@ -85,7 +100,11 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   // `typeFilter` -- no client-side re-filtering needed (previously this incorrectly
   // re-filtered only the current 50-row page, using a field the API never returned).
   const filtered = employees;
-  const filteredTotal = typeFilter === "all" ? total : (countByType[typeFilter] ?? 0);
+  // A search narrows the true matching total to something this page cannot
+  // know without a dedicated count query -- rather than show a wrong
+  // "Showing 1-50 of <tenant total>" while searching, pagination controls
+  // are keyed off how many rows this page actually got back.
+  const filteredTotal = q ? undefined : (typeFilter === "all" ? total : (countByType[typeFilter] ?? 0));
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -126,15 +145,42 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           </Link>
         ))}
       </div>
+
+      {/* GAP-HR-EMPLOYEES-04: server-side search form -- preserves the
+          current type tab (page resets to 0, a new search is a new result
+          set). */}
+      <form
+        method="GET"
+        role="search"
+        style={{ display: "flex", gap: 8, marginBottom: 12, maxWidth: 420 }}
+      >
+        {typeFilter !== "all" && <input type="hidden" name="type" value={typeFilter} />}
+        <label htmlFor="employees-search" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
+          {t("search")}
+        </label>
+        <input
+          id="employees-search"
+          type="search"
+          name="q"
+          defaultValue={q}
+          placeholder={t("search")}
+          style={{ flex: 1, padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: 14 }}
+        />
+        <button type="submit" className="btn">{t("search")}</button>
+        {q && (
+          <Link href={empPageHref(typeFilter, 0, "")} className="btn ghost">Clear</Link>
+        )}
+      </form>
+
       <Card title={t("cardTitle")}>
         <EmployeesTable employees={filtered} source={source} canCreate={canCreate} />
       </Card>
 
-      {filteredTotal > PAGE_SIZE && (
+      {filteredTotal !== undefined && filteredTotal > PAGE_SIZE && (
         <nav aria-label={t("paginationAriaLabel")} style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
           {page > 0 && (
             <Link
-              href={empPageHref(typeFilter, page - 1)}
+              href={empPageHref(typeFilter, page - 1, q)}
               className="btn"
             >
               {"←"} {t("prevLabel")}
@@ -145,12 +191,22 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           </span>
           {(page + 1) * PAGE_SIZE < filteredTotal && (
             <Link
-              href={empPageHref(typeFilter, page + 1)}
+              href={empPageHref(typeFilter, page + 1, q)}
               className="btn"
             >
               {t("nextLabel")} {"→"}
             </Link>
           )}
+        </nav>
+      )}
+      {/* A search result set that fills a whole page (exactly PAGE_SIZE rows)
+          might have more matches beyond it -- filteredTotal is intentionally
+          unknown while searching (see above), so offer a plain "next page of
+          results" link rather than a false-precision total. */}
+      {q && filteredTotal === undefined && filtered.length === PAGE_SIZE && (
+        <nav aria-label={t("paginationAriaLabel")} style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
+          {page > 0 && <Link href={empPageHref(typeFilter, page - 1, q)} className="btn">{"←"} {t("prevLabel")}</Link>}
+          <Link href={empPageHref(typeFilter, page + 1, q)} className="btn">{t("nextLabel")} {"→"}</Link>
         </nav>
       )}
     </div>

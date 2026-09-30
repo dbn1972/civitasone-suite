@@ -1119,9 +1119,17 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
   );
 }
 
-export async function getEmployees(limit = 50, offset = 0, employeeType?: string): Promise<LoaderResult<EmployeeSummary[]>> {
+// GAP-HR-EMPLOYEES-04: `q` was never threaded through here even though the
+// backend (employeeListQuery/listEmployees) has supported it for a while
+// (built for GAP-HR-SF-06's EntityPicker) -- so the employee list page's
+// only "search" was EmployeesTable's client-side DataTable filter, which
+// can only ever see the current 50-row server page. An employee on page 3
+// was simply unreachable by name from page 1's search box. Now forwards a
+// real server-side search across the whole tenant.
+export async function getEmployees(limit = 50, offset = 0, employeeType?: string, q?: string): Promise<LoaderResult<EmployeeSummary[]>> {
   const typeQs = employeeType ? `&employeeType=${encodeURIComponent(employeeType)}` : "";
-  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}${typeQs}`, [] as EmployeeSummary[], {
+  const qQs = q ? `&q=${encodeURIComponent(q)}` : "";
+  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}${typeQs}${qQs}`, [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,

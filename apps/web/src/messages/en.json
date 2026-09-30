@@ -1826,6 +1826,7 @@
     "colEmpCode": "Emp Code",
     "colName": "Name",
     "colDepartment": "Department",
+    "colJoiningDate": "Joining Date",
     "colStatus": "Status",
     "filterPlaceholder": "Search by name, code or department…",
     "emptyTitle": "Your team starts here",
