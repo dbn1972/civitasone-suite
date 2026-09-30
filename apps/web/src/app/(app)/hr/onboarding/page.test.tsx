@@ -56,6 +56,32 @@ describe("OnboardingPage", () => {
     expect(screen.getByTestId("joinee-card-emp-1")).toBeInTheDocument();
   });
 
+  // GAP-HR-ONBOARDING-02: previously the only entry point into onboarding
+  // was "+ Add New Joinee" (creates a brand-new employee); this search
+  // control is the way to reach an EXISTING employee who has no tasks yet.
+  it("GAP-HR-ONBOARDING-02: offers a way to start onboarding for an existing employee, not just create a new one", async () => {
+    fetchJsonMock.mockResolvedValueOnce(apiResult([row({})]));
+
+    const ui = await OnboardingPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.getByLabelText("Find an employee to start onboarding")).toBeInTheDocument();
+  });
+
+  // GAP-HR-ONBOARDING-03: the old copy ("No joiners this month") implied a
+  // month filter that never existed; the new copy also now correctly
+  // describes a real mechanism (GAP-HR-ONBOARDING-02's picker + add-task
+  // form) instead of a dead end.
+  it("GAP-HR-ONBOARDING-03: shows honest empty-state copy that matches how onboarding is actually started", async () => {
+    fetchJsonMock.mockResolvedValueOnce(apiResult([]));
+
+    const ui = await OnboardingPage({ searchParams: {} });
+    render(ui);
+
+    expect(screen.queryByText("No joiners this month")).not.toBeInTheDocument();
+    expect(screen.getByText("No onboarding in progress")).toBeInTheDocument();
+  });
+
   // GAP-HR-ONBOARDING-01 regression: the real API sends stepsCompleted as
   // the string "2/6", not a number. Number("2/6") is NaN -- the bug this
   // fix closes.
@@ -133,7 +159,8 @@ describe("OnboardingPage", () => {
     const ui = await OnboardingPage({ searchParams: {} });
     render(ui);
 
-    expect(screen.getByText("No joiners this month")).toBeInTheDocument();
+    expect(screen.queryByText("No joiners this month")).not.toBeInTheDocument();
+    expect(screen.getByText("No onboarding in progress")).toBeInTheDocument();
   });
 
   it("shows the generic retry-suggesting error state when the fetch fails for a reason other than a permission denial", async () => {
@@ -163,7 +190,7 @@ describe("OnboardingPage", () => {
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
     expect(screen.queryByText(/try again/i)).not.toBeInTheDocument();
     // None of the (meaningless-with-zero-access) stat tiles render.
-    expect(screen.queryByText("No joiners this month")).not.toBeInTheDocument();
+    expect(screen.queryByText("No onboarding in progress")).not.toBeInTheDocument();
   });
 
   it("requests the 'active' status by default so a fresh visit doesn't need a manual filter to hide completed joinees", async () => {
