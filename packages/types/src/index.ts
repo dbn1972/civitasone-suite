@@ -2643,6 +2643,19 @@ export type DisciplinaryCaseDetail = {
   version: number;
 };
 
+// GAP-HR-DISCIPLINARY-DETAIL-03
+export type DisciplinaryCaseEvent = {
+  id: string;
+  tenantId: string;
+  caseId: string;
+  fromStatus: string | null;
+  toStatus: string;
+  action: string;
+  notes: string | null;
+  occurredAt: string;
+  actorId: string;
+};
+
 /**
  * Backed by GET /v1/finance/vendors/:id (services/finance-service/src/modules/masters/routes.ts),
  * added alongside the payments.finance_vendors table (services/finance-service/migrations/

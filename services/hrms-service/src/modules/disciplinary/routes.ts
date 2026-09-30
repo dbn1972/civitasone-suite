@@ -1,6 +1,8 @@
 import type { RequestContext } from "@civitasone/types";
 import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
 /**
  * Disciplinary / Vigilance (CCS (CCA) Rules) module.
  *
@@ -99,6 +101,31 @@ function assertCaseOwner(ctx: RequestContext, c: DisciplinaryCaseRow): void {
     "actor is neither the case's assigned inquiry officer nor its creator");
 }
 
+/**
+ * GAP-HR-DISCIPLINARY-DETAIL-01 (DPDP): audits a read of a single
+ * disciplinary/vigilance case — allegation text, finding and penalty for a
+ * named employee, shown with no read audit today. Routes must not write to
+ * Postgres directly (CLAUDE.md rule 6; CI's f3-leftover-hrms-cqrs.test.ts
+ * greps every *routes.ts for a synchronous `db.transaction`/Drizzle write),
+ * so this publishes a lightweight command instead — the actual outbox
+ * insert happens in disciplinary/consumer.ts's disciplinaryCaseViewed
+ * subscriber. Same async CQRS shape as GAP-HR-MEDICAL-01's
+ * auditMedicalClaimsListRead (medical/routes.ts); deliberately not
+ * awaited-through, since nothing here needs the audit event's outcome
+ * reflected back in the HTTP response.
+ */
+async function auditCaseViewed(ctx: RequestContext, caseId: string): Promise<void> {
+  await queue.publish(COMMANDS.disciplinaryCaseViewed, {
+    messageId: randomUUID(),
+    type: COMMANDS.disciplinaryCaseViewed,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: { caseId },
+  });
+}
+
 export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
   async function mustCase(tenantId: string, caseId: string): Promise<DisciplinaryCaseRow> {
     const c = await repo.findCase(tenantId, caseId);
@@ -153,7 +180,9 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, VIGILANCE_ROLES);
     const { caseId } = caseParam.parse(req.params);
-    return reply.send(await mustCase(ctx.tenantId, caseId));
+    const c = await mustCase(ctx.tenantId, caseId);
+    await auditCaseViewed(ctx, caseId);
+    return reply.send(c);
   });
 
   app.get("/v1/hrms/disciplinary-cases/:caseId/events", async (req, reply) => {

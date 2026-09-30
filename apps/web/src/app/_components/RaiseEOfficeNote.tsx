@@ -20,9 +20,8 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, StatusPill } from "./ds";
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+import { Button, EntityPicker, Field, StatusPill } from "./ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 export type RaiseEOfficeNoteProps = {
   refType: string;
@@ -68,8 +67,15 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
 
-  const [initiatedBy, setInitiatedBy] = useState("");
-  const [currentWith, setCurrentWith] = useState("");
+  // GAP-HR-DISCIPLINARY-DETAIL-05: these were raw free-text UUID inputs with
+  // no entity picker and no validation beyond "looks like a UUID" -- a
+  // clerk had to already know (or copy-paste from elsewhere) the exact id
+  // of the officer they meant. EntityPicker replaces both with a
+  // debounced, named search over the same employee directory used
+  // elsewhere in the app (GAP-HR-SF-06); `value`/`onChange` still carry a
+  // plain id string, so `submit` below is otherwise unchanged.
+  const [initiatedBy, setInitiatedBy] = useState<string | null>(null);
+  const [currentWith, setCurrentWith] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
   const loadStatus = useCallback(async (signal?: AbortSignal) => {
@@ -99,8 +105,8 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   const submit = useCallback(async () => {
     setError("");
     setMessage("");
-    if (!UUID_RE.test(initiatedBy)) { setError("Initiating officer must be a valid ID."); return; }
-    if (!UUID_RE.test(currentWith)) { setError("Forward-to officer must be a valid ID."); return; }
+    if (!initiatedBy) { setError("Choose the initiating officer."); return; }
+    if (!currentWith) { setError("Choose who to forward to."); return; }
     if (note.trim().length < 3) { setError("Add a note explaining the proposal."); return; }
     setSaving(true);
     try {
@@ -170,14 +176,34 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
             The approval chain is selected automatically by amount.
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Initiating officer ID</span>
-              <input value={initiatedBy} placeholder="employee UUID" onChange={(e) => setInitiatedBy(e.target.value)} />
-            </label>
-            <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-              <span>Forward to officer ID</span>
-              <input value={currentWith} placeholder="approver UUID" onChange={(e) => setCurrentWith(e.target.value)} />
-            </label>
+            <Field label="Initiating officer">
+              <EntityPicker
+                value={initiatedBy}
+                onChange={(v) => setInitiatedBy(Array.isArray(v) ? v[0] ?? null : v)}
+                search={searchEmployees}
+                resolve={resolveEmployees}
+                placeholder="Search by name or employee number…"
+              />
+            </Field>
+            {/* Known limitation, not fixed here: this component has no way
+                to know the current actor's own employee id (a client
+                component with no session/employee context threaded in), so
+                it cannot default "Initiating officer" to self or exclude
+                self from "Forward to officer" -- both were suggested
+                follow-ons for this gap. Threading that through would touch
+                this shared component's public API (used by 7 other modules
+                beyond HR: assets, contracts, finance x2, grants, legal,
+                procurement), so it's left as a separate, smaller follow-up
+                rather than folded in here. */}
+            <Field label="Forward to officer">
+              <EntityPicker
+                value={currentWith}
+                onChange={(v) => setCurrentWith(Array.isArray(v) ? v[0] ?? null : v)}
+                search={searchEmployees}
+                resolve={resolveEmployees}
+                placeholder="Search by name or employee number…"
+              />
+            </Field>
           </div>
           <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
             <span>Proposal note</span>

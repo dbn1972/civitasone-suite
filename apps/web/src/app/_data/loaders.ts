@@ -90,6 +90,7 @@ import type {
   FinanceDemandSummary,
   FinanceAuditParaSummary,
   DisciplinaryCaseDetail,
+  DisciplinaryCaseEvent,
   FinanceVendorDetail,
   FinanceVendorSummary,
   ProcurementDashboard,
@@ -257,6 +258,7 @@ import {
   FinanceAuditParaSummarySchema,
   FinanceAuditParaSummaryListSchema,
   DisciplinaryCaseDetailSchema,
+  DisciplinaryCaseEventListSchema,
   FinanceVendorDetailSchema,
   FinanceVendorSummaryListSchema,
   ProcurementDashboardSchema,
@@ -3654,6 +3656,22 @@ export async function getDisciplinaryCaseById(id: string): Promise<LoaderResult<
     telemetryKey: "hrms.disciplinary.detail",
     responseSchema: DisciplinaryCaseDetailSchema,
     mapResponse: (payload) => (isRecord(payload) ? (payload as DisciplinaryCaseDetail) : null),
+  });
+}
+
+// GAP-HR-DISCIPLINARY-DETAIL-03: the backend's GET .../events route already
+// existed (disciplinary/routes.ts, disciplinary/repo.ts's listEvents) but
+// had no web-side loader calling it, so the case detail page never showed
+// its own status-history timeline.
+export async function getDisciplinaryCaseEvents(caseId: string): Promise<LoaderResult<DisciplinaryCaseEvent[]>> {
+  return fetchJson<unknown, DisciplinaryCaseEvent[]>(`/api/v1/hrms/disciplinary-cases/${caseId}/events`, [], {
+    revalidateSeconds: 30,
+    telemetryKey: "hrms.disciplinary.events",
+    responseSchema: DisciplinaryCaseEventListSchema,
+    mapResponse: (payload) => {
+      const arr = Array.isArray(payload) ? payload : (payload as { data?: unknown })?.data;
+      return Array.isArray(arr) ? (arr as DisciplinaryCaseEvent[]) : null;
+    },
   });
 }
 

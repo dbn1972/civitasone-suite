@@ -48,6 +48,19 @@ export function registerDisciplinaryConsumers(queue: Queue): void {
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "disciplinary_case", p.caseId));
   });
+
+  // GAP-HR-DISCIPLINARY-DETAIL-01 (DPDP): the actual audit-outbox insert for
+  // a per-case detail read — published (fire-and-forget) by routes.ts's GET
+  // /v1/hrms/disciplinary-cases/:caseId handler, since a route may not write
+  // to Postgres directly (CLAUDE.md rule 6; f3-leftover-hrms-cqrs.test.ts).
+  // Same shape as medical/consumer.ts's medicalClaimsListRead subscriber.
+  queue.subscribe(COMMANDS.disciplinaryCaseViewed, async (msg) => {
+    const p = msg.payload as { caseId: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await audit(tx, msg, "viewed", p.caseId);
+    });
+  });
 }
 
 async function audit(
