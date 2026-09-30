@@ -74,10 +74,14 @@ export function LeaveApprovalsPanel() {
     setEnrichError(null);
     try {
       // GAP-HR-LEAVE-APPROVALS-02: ask the server to filter by refType too —
-      // client-side filtering below stays as a safety net (workflow-service
-      // isn't in this repo snapshot, so whether it actually honours this
-      // param can't be verified here; this is a safe, additive request that
-      // changes nothing if it's ignored).
+      // client-side filtering below stays as the real safety net.
+      // workflow-service DOES exist in this repo (services/workflow-
+      // service/); its GET /v1/workflow/tasks route (modules/tasks/
+      // routes.ts, backed by modules/tasks/queries.ts's listTasks) only
+      // honours status/instanceId as list filters today, not refType — so
+      // this query param is currently inert server-side, and the
+      // client-side filter below is doing all of the real narrowing.
+      // Harmless either way; worth wiring up server-side in a follow-up.
       const taskRes = await fetch("/api/proxy/v1/workflow/tasks?status=pending&limit=50&refType=leave_app", { signal });
       if (!taskRes.ok) {
         const resolved = await formError.fromResponse(taskRes, "load");
@@ -171,10 +175,14 @@ export function LeaveApprovalsPanel() {
         // below, via the task/comments module that already exists for this.
         // GAP-HR-LEAVE-APPROVALS-03: that second POST is genuinely
         // non-atomic and "internal"-only (the applicant never sees it) —
-        // fixing this needs workflow-service (completeTaskBody accepting
-        // and persisting `reason`, emitted on the decision event), which
-        // isn't in this repo snapshot. Not fixed here; see this cluster's
-        // PR description.
+        // fixing this needs workflow-service's completeTaskBody to accept
+        // and persist `reason`, emitted atomically with the decision event.
+        // workflow-service DOES exist in this repo (services/workflow-
+        // service/src/modules/tasks/{validators,routes,commands}.ts) — the
+        // gap is scope, not availability: this cluster is the web side of
+        // /hr/leave/approvals, and that schema/atomic-emit change belongs
+        // to workflow-service's own owners. Left for a follow-up; not
+        // fixed here.
         body: JSON.stringify({ decision }),
       });
       if (!res.ok) {
