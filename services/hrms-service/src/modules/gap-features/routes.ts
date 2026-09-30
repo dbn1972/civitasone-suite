@@ -564,6 +564,20 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(201).send({ data: { id, ...body, status: "active" } });
   });
 
+  // GAP-HR-BENEFITS-02: list route the web app needs to drive an election
+  // form (plan name/fy/components) -- POST existed above with nothing to
+  // read it back with, so no page could ever offer "make an election".
+  // ALL_ROLES (not HR_ROLES): every employee needs to see plans to elect
+  // into one, same role scope as the my-elections/elections routes below.
+  app.get("/v1/hrms/benefits/plans", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
+    const rows = await sqlClient.begin(async (sql) => {
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      return sql.unsafe(`SELECT id, name, fy, components FROM employee.benefit_plans WHERE tenant_id = $1 ORDER BY fy DESC, name ASC`, [ctx.tenantId]);
+    });
+    return reply.send({ data: rows });
+  });
+
   app.post("/v1/hrms/benefits/elections", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, ALL_ROLES);
     const body = z.object({ planId: z.string().uuid(), fy: z.string().regex(/^\d{4}-\d{2}$/), elections: z.array(z.object({ component: z.string(), electedMinor: z.number().int().min(0) })).min(1) }).parse(req.body);
