@@ -191,7 +191,10 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
-    await withTenantGuc(ctx.tenantId, (tx) => tx`
+    // GAP-HR-MEDICAL-04: claim_no is not in the column list above -- it
+    // self-assigns from migration 0156's IDENTITY column -- RETURNING reads
+    // back whatever value it was actually given.
+    const [inserted] = await withTenantGuc(ctx.tenantId, (tx) => tx`
       INSERT INTO medical.hrms_medical_claims (
         id, tenant_id, employee_id, claim_type, amount_minor, hospital_name,
         hospital_id, diagnosis, documents, status, dependant_name, dependant_relation,
@@ -203,10 +206,11 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
         ${body.dependantName ?? null}, ${body.dependantRelation ?? null},
         ${body.remarks ?? null}, ${ctx.actorId}, ${ctx.actorId}
       )
+      RETURNING claim_no
     `);
 
     return reply.code(201).send({
-      data: { id, employeeId: ownerEmployeeId, status: "pending", amountMinor: body.amountMinor },
+      data: { id, claimNo: inserted?.claim_no ?? null, employeeId: ownerEmployeeId, status: "pending", amountMinor: body.amountMinor },
     });
   });
 
@@ -219,6 +223,10 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
       employeeId: z.string().uuid().optional(),
       // Must match hrms_medical_claims_status_check in migration 0040 ("settled", not "paid").
       status: z.enum(["pending", "approved", "rejected", "settled"]).optional(),
+      // GAP-HR-MEDICAL-04: claim_no is now a real, DB-guaranteed-unique
+      // column (migration 0156) instead of a client-side slice of the row's
+      // opaque uuid, so it can be searched server-side.
+      claimNo: z.coerce.number().int().positive().optional(),
       limit: z.coerce.number().int().min(1).max(100).default(50),
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
@@ -259,7 +267,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
     if (effectiveEmployeeId === null) return reply.send({ data: [] });
 
     const rows = await withTenantGuc(ctx.tenantId, (tx) => tx`
-      SELECT id, employee_id, claim_type, amount_minor::text, hospital_name,
+      SELECT id, claim_no, employee_id, claim_type, amount_minor::text, hospital_name,
              hospital_id, status, dependant_name, dependant_relation,
              approved_amount_minor::text, created_at, updated_at
       FROM medical.hrms_medical_claims
@@ -270,6 +278,7 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
           )` : tx``}
         ${effectiveEmployeeId ? tx`AND employee_id = ${effectiveEmployeeId}` : tx``}
         ${query.status ? tx`AND status = ${query.status}` : tx``}
+        ${query.claimNo !== undefined ? tx`AND claim_no = ${query.claimNo}` : tx``}
       ORDER BY created_at DESC
       LIMIT ${query.limit} OFFSET ${query.offset}
     `);
