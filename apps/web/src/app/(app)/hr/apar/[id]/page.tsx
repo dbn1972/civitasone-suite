@@ -1,9 +1,11 @@
-import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, DataTable, EmptyState, RefreshErrorState, StatGrid, StatCard } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { formatIndianDate } from "@/lib/formatters";
+import { STAGE_LABEL_KEYS } from "@/lib/apar/stages";
+import { getSessionName } from "@/lib/auth/roleGuard";
 
 type Score = {
   id: string;
@@ -18,6 +20,11 @@ type StageHistory = {
   fromStage: string | null;
   toStage: string;
   actorId: string;
+  // GAP-HR-APAR-DETAIL-04: present on hrms_apar_stage_history and already
+  // returned by GET /apar/:id (repo.listHistory selects the whole row) —
+  // just never surfaced on this page before.
+  actorRole: string;
+  override: boolean;
   remarks: string | null;
   createdAt: string;
 } & Record<string, unknown>;
@@ -55,18 +62,36 @@ async function getApar(id: string): Promise<LoaderResult<AparDetail | null>> {
   });
 }
 
-// UX-017: stage labels are looked up by key through t() at render time so
-// they stay in the active locale — the record's `status` is the lookup key,
-// not display text itself.
-const STAGE_LABEL_KEYS: Record<string, string> = {
-  self_pending:        "stageSelfPending",
-  reporting_officer:   "stageReportingOfficer",
-  reviewing_officer:   "stageReviewingOfficer",
-  accepting_authority: "stageAcceptingAuthority",
-  disclosed:           "stageDisclosed",
-  representation:      "stageRepresentation",
-  finalised:           "stageFinalised",
-};
+/**
+ * GAP-HR-APAR-DETAIL-05: the DoPT/SPARROW grade bands (engine.ts's
+ * bandForGrade), duplicated here as a display-only constant rather than a
+ * shared package — this is the only web-side consumer, and the values are
+ * a fixed statutory scale, not business logic that changes independently
+ * on each side. Keep in sync with services/hrms-service/src/modules/apar/
+ * engine.ts's bandForGrade if that scale is ever revised (confirm with HR
+ * first — see this GAP's Risk note).
+ */
+const GRADE_BAND_SCALE = "Outstanding ≥9 · Very Good ≥7 · Good ≥5 · Average ≥4 · else Below Average";
+
+/**
+ * GAP-HR-APAR-DETAIL-05: the same weighted-mean formula as the backend's
+ * engine.ts computeOverallGrade, so a "provisional" score is available
+ * before Accept (when overallGrade is still null) instead of only ever
+ * showing the unweighted average scored count divides into.
+ */
+function provisionalWeightedScore(scores: Score[]): number | null {
+  const scored = scores.filter((s) => s.score != null && s.score !== "");
+  if (scored.length === 0) return null;
+  let weightedSum = 0;
+  let totalWeight = 0;
+  for (const s of scored) {
+    const w = Number(s.weight);
+    const weight = Number.isFinite(w) && w > 0 ? w : 1;
+    weightedSum += (parseFloat(String(s.score)) || 0) * weight;
+    totalWeight += weight;
+  }
+  return totalWeight > 0 ? Math.round((weightedSum / totalWeight) * 100) / 100 : null;
+}
 
 export default async function AparDetailPage({
   params,
@@ -121,12 +146,19 @@ export default async function AparDetailPage({
   }
 
   const { appraisal, scores, history } = detail;
-  const stageLabelKey = STAGE_LABEL_KEYS[appraisal.status];
-  const stageLabel  = stageLabelKey ? t(stageLabelKey) : appraisal.status;
+  const stageLabelKeyForStatus = STAGE_LABEL_KEYS[appraisal.status as keyof typeof STAGE_LABEL_KEYS];
+  const stageLabel = stageLabelKeyForStatus ? t(stageLabelKeyForStatus) : appraisal.status;
   const scoredCount = scores.filter((s) => !!s.score).length;
-  const avgScore    = scoredCount > 0
+  const avgScore = scoredCount > 0
     ? (scores.reduce((sum, s) => sum + (parseFloat(String(s.score ?? "0")) || 0), 0) / scoredCount).toFixed(1)
     : "—";
+  // GAP-HR-APAR-DETAIL-05: distinct from the plain average above — this is
+  // the same weighted formula the backend uses at Accept time, so HR can
+  // see a realistic provisional figure before that stage is reached. Once
+  // overallGrade exists (post-Accept) that server-computed, audited value
+  // is shown instead — this provisional figure is only ever a preview.
+  const provisionalScore = appraisal.overallGrade == null ? provisionalWeightedScore(scores) : null;
+  const viewerName = getSessionName();
 
   const SCORE_COLS = [
     { key: "attribute" as const, label: t("colAttribute") },
@@ -135,24 +167,83 @@ export default async function AparDetailPage({
     { key: "remarks" as const,   label: t("colRemarks") },
   ];
 
+  // GAP-HR-APAR-DETAIL-04: DataTable columns can only read a plain field off
+  // each row (a Server Component page cannot hand it a `render:` function —
+  // see ds/DataTable.tsx's Column<T> doc comment for the exact crash class
+  // that guards against), so the Override indicator is precomputed into the
+  // row data itself rather than derived at render time.
+  const historyRows = history.map((h) => ({
+    ...h,
+    overrideLabel: h.override ? t("overrideYes") : "",
+  }));
+
   const HISTORY_COLS = [
-    { key: "toStage" as const,  label: t("colStage"), cellType: "status" as const },
-    { key: "remarks" as const,  label: t("colRemarks") },
-    { key: "createdAt" as const, label: t("colAt") },
+    { key: "toStage" as const,      label: t("colStage"), cellType: "status" as const },
+    // GAP-HR-APAR-DETAIL-04: actorRole was already returned by GET /apar/:id
+    // (hrms_apar_stage_history has the column) but never shown. The actor's
+    // NAME is deliberately not added here yet — that needs the same
+    // employee-name-enrichment helper as GAP-HR-APAR-DETAIL-02, which is
+    // cross-lane blocked on GAP-HR-ADVANCES-01 (see this PR's description).
+    { key: "actorRole" as const,    label: t("colActorRole") },
+    { key: "overrideLabel" as const, label: t("colOverride") },
+    { key: "remarks" as const,      label: t("colRemarks") },
+    { key: "createdAt" as const,    label: t("colAt"), cellType: "datetime" as const },
   ];
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
+      {/* GAP-HR-APAR-DETAIL-07 (DPDP): this print-only block is invisible on
+          screen and only rendered by the browser's print stylesheet, so a
+          printed/PDF'd copy of a statutory confidential report always
+          carries who printed it and when — independent of anything the
+          printing app itself adds. */}
+      <div className="apar-print-only" aria-hidden="true">
+        {t("printedByLine", { name: viewerName ?? "—", date: formatIndianDate(new Date().toISOString()) })}
+      </div>
+      <style>{`
+        .apar-print-only { display: none; }
+        @media print {
+          .apar-print-only {
+            display: block;
+            font-size: 11px;
+            color: #000;
+            border-bottom: 1px solid #000;
+            padding-bottom: 6px;
+            margin-bottom: 12px;
+          }
+        }
+      `}</style>
+
       <PageHeader
         title={t("titleWithPeriod", { period: appraisal.appraisalPeriod })}
         subtitle={t("subtitleEmployeeStage", { employeeId: appraisal.employeeId, stageLabel })}
         back="/hr/apar" backLabel="Back to APAR"
       />
       <DataSourceBadge source={result.source} />
+
+      {/* GAP-HR-APAR-DETAIL-07 (DPDP): APAR carries statutory confidential
+          performance data (pen-picture, officer remarks, grade) — this
+          banner marks that on screen, not just via the API's own read-scope
+          enforcement (which stays the real access boundary). */}
+      <div
+        role="note"
+        style={{
+          margin: "12px 0", padding: "10px 14px", borderRadius: 8,
+          background: "var(--warnbg, #fffbeb)", border: "1px solid var(--warn, #b45309)",
+          color: "var(--warn, #92400e)", fontSize: 13, fontWeight: 600,
+        }}
+      >
+        🔒 {t("confidentialBanner")}
+      </div>
+
       <StatGrid>
         <StatCard icon="\U0001f4cb" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCriteria")} value={scores.length} />
         <StatCard icon="✅"       iconBg="var(--goodbg, #e6f7f0)" label={t("statScored")}         value={scoredCount} />
-        <StatCard icon="\U0001f4ca" iconBg="var(--warnbg, #fff7e6)" label={t("statAvgScore")}      value={avgScore} />
+        <StatCard
+          icon="\U0001f4ca" iconBg="var(--warnbg, #fff7e6)"
+          label={provisionalScore !== null ? t("statProvisionalScore") : t("statAvgScore")}
+          value={provisionalScore !== null ? provisionalScore.toFixed(1) : avgScore}
+        />
         <StatCard icon="\U0001f4dc" iconBg="var(--bg, #f5f5f5)" label={t("statStageChanges")}  value={history.length} />
       </StatGrid>
 
@@ -160,13 +251,19 @@ export default async function AparDetailPage({
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
           <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("periodLabel")}</span><strong>{appraisal.appraisalPeriod}</strong></div>
           <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("currentStageLabel")}</span><strong>{stageLabel}</strong></div>
-          {appraisal.overallGrade && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("gradeLabel")}</span><strong>{appraisal.overallGrade}</strong></div>}
+          <div>
+            <span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("gradeLabel")}</span>
+            <strong>{appraisal.overallGrade ?? "—"}</strong>
+            <span style={{ marginInlineStart: 8, fontSize: 11, color: "var(--mut)" }} title={GRADE_BAND_SCALE}>
+              ({GRADE_BAND_SCALE})
+            </span>
+          </div>
           {appraisal.overallBand && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("bandLabel")}</span><strong>{appraisal.overallBand}</strong></div>}
           {appraisal.reportingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reportingOfficerLabel")}</span>{appraisal.reportingOfficerId}</div>}
           {appraisal.reviewingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reviewingOfficerLabel")}</span>{appraisal.reviewingOfficerId}</div>}
           {appraisal.acceptingAuthorityId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("acceptingAuthorityLabel")}</span>{appraisal.acceptingAuthorityId}</div>}
-          {appraisal.disclosedAt && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("disclosedAtLabel")}</span>{new Date(appraisal.disclosedAt).toLocaleDateString("en-IN")}</div>}
-          {appraisal.representationDue && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("representationDueLabel")}</span>{appraisal.representationDue}</div>}
+          {appraisal.disclosedAt && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("disclosedAtLabel")}</span>{formatIndianDate(appraisal.disclosedAt)}</div>}
+          {appraisal.representationDue && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("representationDueLabel")}</span>{formatIndianDate(appraisal.representationDue)}</div>}
         </div>
         {appraisal.selfAppraisal && (
           <div style={{ padding: "0 20px 16px" }}>
@@ -178,6 +275,24 @@ export default async function AparDetailPage({
           <div style={{ padding: "0 20px 16px" }}>
             <p style={{ color: "var(--mut)", fontSize: 12, marginBottom: 4 }}>{t("reportingPenPictureLabel")}</p>
             <p style={{ fontSize: 14 }}>{appraisal.reportingPenPicture}</p>
+          </div>
+        )}
+        {/* GAP-HR-APAR-DETAIL-03: previously fetched by the API but never
+            rendered anywhere on this page. The API itself now omits both
+            fields from the appraisee's own pre-disclosure view (see
+            services/hrms-service/.../apar/routes.ts's
+            redactForAppraiseePreDisclosure), so simply rendering "if
+            present" is correct here — no extra client-side gating needed. */}
+        {appraisal.reviewingRemarks && (
+          <div style={{ padding: "0 20px 16px" }}>
+            <p style={{ color: "var(--mut)", fontSize: 12, marginBottom: 4 }}>{t("reviewingRemarksLabel")}</p>
+            <p style={{ fontSize: 14 }}>{appraisal.reviewingRemarks}</p>
+          </div>
+        )}
+        {appraisal.acceptingRemarks && (
+          <div style={{ padding: "0 20px 16px" }}>
+            <p style={{ color: "var(--mut)", fontSize: 12, marginBottom: 4 }}>{t("acceptingRemarksLabel")}</p>
+            <p style={{ fontSize: 14 }}>{appraisal.acceptingRemarks}</p>
           </div>
         )}
         {appraisal.representation && (
@@ -211,9 +326,9 @@ export default async function AparDetailPage({
         {history.length === 0 ? (
           <EmptyState icon="🕓" title={t("noHistoryTitle")} message={t("noHistoryMessage")} />
         ) : (
-          <DataTable<StageHistory>
+          <DataTable<StageHistory & { overrideLabel: string }>
             columns={HISTORY_COLS}
-            rows={history}
+            rows={historyRows}
             sortable
             filterable
             emptyIcon="🕓"

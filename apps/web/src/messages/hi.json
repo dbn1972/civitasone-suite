@@ -118,9 +118,17 @@
     "statTotal": "कुल APAR",
     "statSelfAppraisal": "स्व-मूल्यांकन",
     "statUnderReview": "समीक्षाधीन",
-    "statDisputed": "विवादित",
-    "statClosed": "बंद / स्वीकृत",
-    "flowCardTitle": "APAR प्रवाह — सक्रिय रिकॉर्ड"
+    "statAwaitingClosure": "समापन लंबित",
+    "statFinalised": "अंतिम रूप दिया गया",
+    "flowCardTitle": "APAR प्रवाह — सक्रिय रिकॉर्ड",
+    "loadingAriaLabel": "APAR लोड हो रहा है…",
+    "filterStatusLabel": "स्थिति",
+    "filterAllStatuses": "सभी स्थितियाँ",
+    "filterPeriodLabel": "मूल्यांकन अवधि",
+    "filterPeriodPlaceholder": "उदा. 2025-26",
+    "filterApplyBtn": "लागू करें",
+    "filterClearBtn": "साफ़ करें",
+    "showingOfTotal": "{total} में से {shown} दिखाए जा रहे हैं — अधिक देखने के लिए फ़िल्टर संकुचित करें"
   },
   "aparDetail": {
     "detailPageTitle": "APAR विवरण",
@@ -167,7 +175,15 @@
     "stageAcceptingAuthority": "4. स्वीकृति प्राधिकारी अंतिमीकरण",
     "stageDisclosed": "5. प्रकट — प्रतिनिधित्व अवधि",
     "stageRepresentation": "6. प्रतिनिधित्व दाखिल",
-    "stageFinalised": "7. अंतिम रूप दिया गया"
+    "stageFinalised": "7. अंतिम रूप दिया गया",
+    "reviewingRemarksLabel": "समीक्षा अधिकारी — टिप्पणी",
+    "acceptingRemarksLabel": "स्वीकृति प्राधिकारी — टिप्पणी",
+    "colActorRole": "कर्ता की भूमिका",
+    "colOverride": "ओवरराइड",
+    "overrideYes": "हाँ — विशेषाधिकार प्राप्त ओवरराइड",
+    "statProvisionalScore": "अनंतिम स्कोर",
+    "confidentialBanner": "गोपनीय — APAR। इस मूल्यांकन में सांविधिक गोपनीय कार्य निष्पादन डेटा है।",
+    "printedByLine": "{name} द्वारा {date} को मुद्रित"
   },
   "aparFlowCard": {
     "emptyText": "कोई APAR रिकॉर्ड नहीं मिला",
@@ -181,11 +197,12 @@
     "statePending": "लंबित",
     "stageSelf": "स्व-मूल्यांकन",
     "stageRo": "रिपोर्टिंग अधिकारी",
-    "stageCso": "काउंटर-हस्ताक्षरकर्ता अधिकारी",
-    "stageAccept": "स्वीकृति / विवाद",
+    "stageReviewing": "समीक्षा अधिकारी",
+    "stageAccepting": "स्वीकृति प्राधिकारी",
+    "stageClosure": "प्रकटीकरण / अंतिम",
     "stagePrefix": "चरण:",
-    "statusDisputed": "⚠️ विवादित",
-    "statusClosed": "✅ बंद",
+    "statusRepresentation": "⚠️ प्रतिनिधित्व दाखिल",
+    "statusFinalised": "✅ अंतिम रूप दिया गया",
     "updatedPrefix": "अद्यतन {date}"
   },
   "aparNew": {
