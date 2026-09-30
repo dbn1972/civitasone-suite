@@ -548,6 +548,10 @@ export interface AuditRowSummary {
   action: string;
   resource: string;
   outcome: 'success' | 'failure';
+  /** GAP-HR-AUDIT-LOG-03: ISO timestamp of the event, when the source
+   * provided one. Optional (not every caller of this shared row shape
+   * populates it) so adding it here cannot break an existing consumer. */
+  at?: string | null;
 }
 
 export type HelpdeskTicketPriority = 'Low' | 'Medium' | 'High' | 'Critical';

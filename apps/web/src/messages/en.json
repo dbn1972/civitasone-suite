@@ -51,7 +51,9 @@
     "successMsg": "Department \"{name}\" added successfully.",
     "pageTitle": "Add Department",
     "pageSubtitle": "Create a new department for your office.",
-    "pageBackLabel": "Departments"
+    "pageBackLabel": "Departments",
+    "parentLabel": "Parent department",
+    "parentNone": "None (top level)"
   },
   "addDesignationForm": {
     "statusFixFields": "Please fix the highlighted fields.",
@@ -1201,12 +1203,13 @@
     "statTotalLabel": "Total Departments",
     "statRootLabel": "Root Departments",
     "statSubLabel": "Sub-Departments",
-    "statWithCodeLabel": "With Code",
+    "statNoEmployeesLabel": "No Employees",
     "cardTitleWithCount": "Departments ({count})",
     "emptyTitle": "No departments yet",
     "emptyMessage": "Create your first department so employees can be assigned to teams.",
     "loadingSubtitle": "Organisation departments and units.",
-    "breadcrumbNavLabel": "Breadcrumb"
+    "breadcrumbNavLabel": "Breadcrumb",
+    "readOnlyNote": "You have view-only access. Ask an HR admin to add or change departments."
   },
   "departmentsTable": {
     "collapseLabel": "Collapse",
@@ -1220,6 +1223,11 @@
     "subDeptCount": "{count, plural, one {# sub-dept} other {# sub-depts}}",
     "editBtn": "Edit",
     "deleteBtn": "Delete",
+    "editAria": "Edit {name}",
+    "deleteAria": "Delete {name}",
+    "deleteBlockedHint": "This department still has sub-departments or employees. Reassign or remove them before deleting.",
+    "deptParentAriaLabel": "Parent department",
+    "parentNone": "None (top level)",
     "noDepartmentsFound": "No departments found.",
     "deleteConfirmTitle": "Delete \"{name}\"?",
     "deleteConfirmDesc": "This department will be permanently removed. This action cannot be undone.",
@@ -2577,15 +2585,24 @@
   },
   "hrAuditLog": {
     "title": "HR Audit Log",
-    "subtitle": "All HR actions — leave approvals, payroll runs, employee edits, salary changes. Required by e-Governance guidelines.",
+    "subtitle": "Recent audit trail entries for your tenant, most recent first. Required by e-Governance guidelines.",
     "cardTitle": "Recent HR Actions",
+    "colWhen": "When",
     "colAction": "Action",
     "colResource": "Resource",
     "colActor": "Performed By",
     "colOutcome": "Outcome",
     "filterPlaceholder": "Search audit trail…",
     "emptyTitle": "No audit records",
-    "emptyMessage": "HR actions will appear here once employees, leaves, or payroll are modified."
+    "emptyMessage": "HR actions will appear here once employees, leaves, or payroll are modified.",
+    "unknownResource": "Unknown resource",
+    "fromLabel": "From",
+    "toLabel": "To",
+    "applyFilter": "Apply",
+    "clearFilter": "Clear",
+    "showingRange": "Showing {from}–{to}",
+    "prevPage": "← Previous",
+    "nextPage": "Next →"
   },
   "icc": {
     "title": "ICC Complaints",
