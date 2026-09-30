@@ -77,7 +77,8 @@
     "levelHint": "Optional. Leave blank if this role isn't on the pay matrix; it will show as \"—\" (unclassified).",
     "payGradeHint": "Optional free-text reference (e.g. an old grade-pay code) — not validated against the pay matrix.",
     "addAnother": "Add another",
-    "viewList": "Back to designations"
+    "viewList": "Back to designations",
+    "loadingLabel": "Loading…"
   },
   "addLocationForm": {
     "statusFixFields": "Please fix the highlighted fields.",
