@@ -86,7 +86,7 @@ export const hrmsSeparations = lifecycleSchema.table("hrms_separations", {
 export type SeparationRow = typeof hrmsSeparations.$inferSelect;
 
 // GAP-HR-RETIREMENT-01: one row per (separation, step, check-index) --
-// see migration 0159 for the full rationale.
+// see migration 0161 for the full rationale.
 export const hrmsSeparationChecklist = lifecycleSchema.table("hrms_separation_checklist", {
   id:            uuid("id").primaryKey().defaultRandom(),
   tenantId:      uuid("tenant_id").notNull(),
