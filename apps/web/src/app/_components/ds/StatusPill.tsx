@@ -20,6 +20,11 @@ const STATUS_MAP: Record<string, PillVariant> = {
   inactive: "mut",
   closed: "mut",
   confirmed: "good",
+  // GAP-HR-SERVICE-BOOK-01: service book entries are "attested" (competent-
+  // authority sign-off, immutable) or "recorded" (not yet attested); neither
+  // key existed here before, so both fell back to the generic "info" tone.
+  attested: "good",
+  recorded: "warn",
   probation: "warn",
   retired: "mut",
   resigned: "mut",
