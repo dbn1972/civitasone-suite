@@ -52,6 +52,14 @@ export const employeeSummarySchema = z.object({
   department: z.string(),
   employeeType: z.string().optional(),
   status: z.string(),
+  // GAP-HR-DIRECTORY-01/04: designation/grade (hrmsDesignations join) and
+  // work email (a non-PII-masked column, GAP-HR-DIRECTORY-04's decision) --
+  // all optional since not every employee has a resolvable designation or
+  // an email on file. No `location`/`extension`: no such column exists yet
+  // (see queries.ts's listEmployees doc comment and docs/SECURITY.md).
+  designation: z.string().optional(),
+  grade: z.string().optional(),
+  email: z.string().optional(),
 });
 
 export const leaveRequestSchema = z.object({

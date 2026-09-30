@@ -17,39 +17,67 @@ vi.mock("@/app/_data/apiClient", () => ({
 
 import DisciplinaryPage from "./page";
 
+// GAP-HR-DISCIPLINARY-04: the backend response now carries pagination/stat
+// metadata alongside the row array (services/hrms-service/.../gap-features/
+// routes.ts's GET /v1/hrms/disciplinary-cases). mockResolvedValue below
+// stands in for fetchJson's own already-mapped LoaderResult (this mock
+// replaces fetchJson entirely, so its mapResponse callback never runs) --
+// shape must match what page.tsx's getData() now produces: { data: {items,
+// total, hasMore, stats}, source }.
+function apiResult(items: Record<string, unknown>[], stats: { major: number; minor: number; open: number }) {
+  return {
+    data: { items, total: items.length, hasMore: false, stats },
+    source: "api" as const,
+  };
+}
+
 describe("DisciplinaryPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
     mockRoles = ["hr_admin"];
   });
 
-  it("links each case row to its detail page instead of leaving it unreachable", async () => {
-    // Regression test: this table had no rowLinkKey/rowLinkPrefix at all, so
-    // the fully-built disciplinary/[id] detail page was unreachable from
-    // anywhere in the app except by hand-typing a case UUID into the URL.
-    fetchJsonMock.mockResolvedValue({
-      data: [
-        {
-          id: "case-1",
-          employee: "R. Sharma",
-          department: "Revenue",
-          proceeding_type: "major",
-          charges: "Misconduct",
-          filed_date: "2026-01-01",
-          inquiry_officer: "—",
-          status: "open",
-        },
-      ],
-      source: "api",
-    });
+  it("links each case row to its detail page using the real case number, not a fabricated reference", async () => {
+    // Regression test (updated for GAP-HR-DISCIPLINARY-02): this table used
+    // to have no rowLinkKey/rowLinkPrefix at all (unreachable detail page),
+    // and separately fabricated "VIG/"+id.slice(0,8) as a case reference
+    // instead of using the real, stored case_no the backend now returns.
+    fetchJsonMock.mockResolvedValue(apiResult(
+      [{
+        id: "case-1",
+        caseNo: "DC/2026/0042",
+        employee: "R. Sharma",
+        department: "Revenue",
+        proceeding_type: "major",
+        charges_summary: "Misconduct",
+        filed_date: "2026-01-01",
+        inquiry_officer: "—",
+        status: "open",
+      }],
+      { major: 1, minor: 0, open: 1 },
+    ));
 
-    const ui = await DisciplinaryPage();
+    const ui = await DisciplinaryPage({});
     render(ui);
 
-    // The DataTable links its first column (Case Ref, derived as
-    // "VIG/"+id for a major case) to the row's detail page.
-    const link = screen.getByRole("link", { name: "Open VIG/CASE-1" });
+    const link = screen.getByRole("link", { name: "Open DC/2026/0042" });
     expect(link).toHaveAttribute("href", "/hr/disciplinary/case-1");
+  });
+
+  it("falls back to a dash, never the raw UUID, when a row has no case_no", async () => {
+    fetchJsonMock.mockResolvedValue(apiResult(
+      [{
+        id: "case-2", caseNo: null, employee: "A. Kumar", department: "Revenue",
+        proceeding_type: "minor", charges_summary: "x", filed_date: "2026-01-01",
+        inquiry_officer: "—", status: "opened",
+      }],
+      { major: 0, minor: 1, open: 1 },
+    ));
+
+    const ui = await DisciplinaryPage({});
+    render(ui);
+    const link = screen.getByRole("link", { name: "Open —" });
+    expect(link).toHaveAttribute("href", "/hr/disciplinary/case-2");
   });
 
   it("shows an honest permission-denied state for a role the backend would reject, instead of a table the backend would refuse to serve", async () => {
@@ -59,32 +87,38 @@ describe("DisciplinaryPage", () => {
     // here, so this page used to render the full case table shell (with a
     // failed/empty fetch) instead of an honest access-restricted message.
     mockRoles = ["employee"];
-    const ui = await DisciplinaryPage();
+    const ui = await DisciplinaryPage({});
     render(ui);
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
-  it("does not count a dropped (investigated-and-exonerated) case as open", async () => {
-    // Regression: the "open" stat excluded only "closed"/"disposed"/
-    // "finalised" -- of those, only "closed" is a real status for this table
-    // (disciplinary/state-machine.ts's CaseStatus), so a "dropped" case
-    // (investigated and discontinued/exonerated) was never excluded and
-    // stayed counted as open forever.
-    fetchJsonMock.mockResolvedValue({
-      data: [
-        { id: "case-1", employee: "A. Kumar", department: "Revenue", proceeding_type: "minor", charges: "x", filed_date: "2026-01-01", inquiry_officer: "—", status: "opened" },
-        { id: "case-2", employee: "B. Rao", department: "Revenue", proceeding_type: "minor", charges: "y", filed_date: "2026-01-01", inquiry_officer: "—", status: "closed" },
-        { id: "case-3", employee: "C. Singh", department: "Revenue", proceeding_type: "major", charges: "z", filed_date: "2026-01-01", inquiry_officer: "—", status: "dropped" },
-      ],
-      source: "api",
-    });
+  it("renders the major/minor/open stat cards exactly as the backend computed them", async () => {
+    // GAP-HR-DISCIPLINARY-04: stats (previously derived client-side from
+    // `items.filter(...)`, which silently miscounted "dropped" cases as
+    // open and understated everything past a 200-row page) now come
+    // straight from the backend's own unconditional, tenant-wide COUNT(*)
+    // aggregate -- covered end-to-end for the dropped/open exclusion logic
+    // itself by disciplinary-vigilance-pagination-real-db.test.ts. This
+    // test only proves the page *wires up* whatever the backend sends,
+    // using stats that deliberately disagree with a naive recount of the
+    // (deliberately short) `items` array, so a regression back to
+    // client-side computation would be caught here too.
+    fetchJsonMock.mockResolvedValue(apiResult(
+      [{
+        id: "case-1", caseNo: "DC/1", employee: "A. Kumar", department: "Revenue",
+        proceeding_type: "minor", charges_summary: "x", filed_date: "2026-01-01",
+        inquiry_officer: "—", status: "dropped",
+      }],
+      { major: 12, minor: 8, open: 5 },
+    ));
 
-    const ui = await DisciplinaryPage();
+    const ui = await DisciplinaryPage({});
     render(ui);
 
     const openCard = screen.getByText("Active / Open").closest(".stat");
-    expect(openCard).not.toBeNull();
-    expect(openCard!.querySelector(".val")?.textContent).toBe("1");
+    expect(openCard!.querySelector(".val")?.textContent).toBe("5");
+    const majorCard = screen.getByText("Major (Vigilance)").closest(".stat");
+    expect(majorCard!.querySelector(".val")?.textContent).toBe("12");
   });
 });

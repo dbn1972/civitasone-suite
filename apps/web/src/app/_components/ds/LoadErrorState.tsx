@@ -11,8 +11,15 @@ export interface LoadErrorStateProps {
   result: Pick<LoaderResult<unknown>, "status" | "errorMessage">;
   /** Plain noun for the generic "couldn't load X, try again" copy (toHumanError's `area`). */
   area: string;
-  /** Where "Go back" should navigate for a genuine transient failure. */
+  /**
+   * Where "Go back" should navigate for a genuine transient failure -- and,
+   * additively (GAP-HR-ID-CARDS-07), also threaded through to the 403
+   * branch's PermissionDenied so a live access-restricted response gets the
+   * same sensible destination instead of always defaulting to /dashboard.
+   */
   backHref?: string;
+  /** Paired with `backHref` for the 403 branch's PermissionDenied link text; ignored by the transient-failure branch. */
+  backLabel?: string;
   /** Overrides `PermissionDenied`'s `module` copy for the fallback (no backend reason) case; defaults to `area`. */
   module?: string;
   /**
@@ -46,13 +53,15 @@ export interface LoadErrorStateProps {
  * only the backend can actually evaluate. Every other failure still gets
  * the existing generic retry copy unchanged.
  */
-export function LoadErrorState({ result, area, backHref, module, requiredRoles }: LoadErrorStateProps) {
+export function LoadErrorState({ result, area, backHref, backLabel, module, requiredRoles }: LoadErrorStateProps) {
   if (result.status === 403) {
     return (
       <PermissionDenied
         module={module ?? area}
         reason={result.errorMessage}
         requiredRoles={result.errorMessage ? undefined : requiredRoles}
+        {...(backHref ? { backHref } : {})}
+        {...(backLabel ? { backLabel } : {})}
       />
     );
   }

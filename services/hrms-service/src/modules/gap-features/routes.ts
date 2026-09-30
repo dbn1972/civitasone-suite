@@ -598,10 +598,21 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // recommended folding into this file-wide fix).
   app.get("/v1/hrms/disciplinary-cases", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    // GAP-HR-DISCIPLINARY-04 (CAP): the previous hard LIMIT 200 with no
+    // cursor/offset made case #201+ permanently unreachable and made every
+    // stat card (computed client-side from just these 200 rows) silently
+    // understate the true total once a tenant passed 200 cases. limit/offset
+    // are bounded and zod-validated; stats below are a separate,
+    // unconditional COUNT(*) aggregate over the whole tenant so the cards
+    // stay exact regardless of which page is being viewed.
+    const { limit, offset } = z.object({
+      limit: z.coerce.number().int().min(1).max(200).default(200),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(`
-        SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+        SELECT c.id, c.case_no AS "caseNo", e.full_name AS employee, COALESCE(d.name,'—') AS department,
                c.proceeding_type,
                -- GAP-HR-DISCIPLINARY-01 (PII/DPDP): full allegation text used to be
                -- shipped to every caller of this list; only a short summary crosses
@@ -617,9 +628,28 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
         LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
         WHERE c.tenant_id = $1
-        ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
+        -- GAP-HR-DISCIPLINARY-04: order by whichever date actually exists so an
+        -- unfiled "opened" case (no charge memo yet) isn't the first thing a
+        -- cursor drops once cases run past one page.
+        ORDER BY COALESCE(c.charge_memo_date, c.created_at) DESC LIMIT $2 OFFSET $3
+      `, [ctx.tenantId, limit, offset]);
+    });
+    const statsRows = await sqlClient.begin(async (sql) => {
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      return sql.unsafe(`
+        SELECT COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE proceeding_type = 'major')::int AS major,
+               COUNT(*) FILTER (WHERE proceeding_type = 'minor')::int AS minor,
+               COUNT(*) FILTER (WHERE status NOT IN ('closed','dropped'))::int AS open
+        FROM disciplinary.hrms_disciplinary_cases
+        WHERE tenant_id = $1
       `, [ctx.tenantId]);
     });
+    // A bare COUNT(*) aggregate with no GROUP BY always returns exactly one
+    // row -- this guard is purely to satisfy strict null checks on the
+    // driver's generic Row[] return type, not a real "no rows" case.
+    const stats = statsRows[0];
+    if (!stats) throw new HttpError(500, "INTERNAL", "disciplinary stats aggregate returned no rows");
     // GAP-HR-DISCIPLINARY-01: per-view read audit. Best-effort — a failure to
     // record the audit event must not take down the list read itself. Must
     // go through db.transaction() (not a bare db.insert()) — that's the only
@@ -637,7 +667,14 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       captureError(err, { service: "hrms", event: "audit_emit_failed", action: "hrms.disciplinary.list_viewed" });
     }
-    return reply.send({ data: rows });
+    // GAP-HR-DISCIPLINARY-04: hasMore/total/stats let the page render real
+    // pagination and exact counts instead of silently truncating at 200.
+    return reply.send({
+      data: rows,
+      total: stats.total,
+      hasMore: offset + rows.length < stats.total,
+      stats: { major: stats.major, minor: stats.minor, open: stats.open },
+    });
   });
 
   // ── Gap: Certifications ────────────────────────────────────────────────────
@@ -752,13 +789,17 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     // audit review) can still retrieve it with includeDropped=true; this is
     // a stopgap ahead of a real retention/purge rule, which needs separate
     // legal sign-off (see decision packet).
-    const { includeDropped } = z.object({
+    // GAP-HR-VIGILANCE-04 (CAP): same unpaginated LIMIT 200 bug as the
+    // disciplinary list above — limit/offset are bounded and zod-validated.
+    const { includeDropped, limit, offset } = z.object({
       includeDropped: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
+      limit: z.coerce.number().int().min(1).max(200).default(200),
+      offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
     const rows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(`
-        SELECT c.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
+        SELECT c.id, c.case_no AS "caseNo", e.full_name AS employee, COALESCE(d.name,'—') AS department,
                -- GAP-HR-VIGILANCE-01 (PII/DPDP): same list-view truncation as
                -- GAP-HR-DISCIPLINARY-01 — full text stays on the detail route.
                CASE WHEN length(c.allegation) > 80
@@ -766,15 +807,46 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
                  ELSE c.allegation END AS charges_summary,
                c.charge_memo_date AS "filedDate",
                COALESCE(c.inquiry_officer_name,'Not Appointed') AS "inquiryOfficer",
-               c.inquiry_appointed_date AS "nextHearing", c.status
+               -- GAP-HR-VIGILANCE-03: "nextHearing" is a misleading name for a
+               -- one-time appointment date, not a recurring hearing schedule.
+               -- Aliased under both names for one release so existing callers
+               -- of the old key keep working while new ones can move to the
+               -- honestly-named one.
+               c.inquiry_appointed_date AS "nextHearing",
+               c.inquiry_appointed_date AS "inquiryAppointedDate", c.status
         FROM disciplinary.hrms_disciplinary_cases c
         JOIN employee.hrms_employees e ON e.id = c.employee_id AND e.tenant_id = $1
         LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = $1
         WHERE c.tenant_id = $1 AND c.proceeding_type = 'major'
           ${includeDropped ? "" : "AND c.status <> 'dropped'"}
-        ORDER BY c.charge_memo_date DESC NULLS LAST LIMIT 200
+        ORDER BY COALESCE(c.charge_memo_date, c.created_at) DESC LIMIT $2 OFFSET $3
+      `, [ctx.tenantId, limit, offset]);
+    });
+    // GAP-HR-VIGILANCE-02/04: stat-card buckets computed server-side, over
+    // the whole tenant's major cases — not just the current page's rows, so
+    // they stay exact once results are paginated. Mutually exclusive and
+    // exhaustive over all 10 CaseStatus values (see disciplinary/
+    // state-machine.ts); "dropped" always counts toward total/closed here
+    // (a plain number, not a row of PII) even when includeDropped=false
+    // hides the underlying rows from the list above.
+    const vigilanceStatsRows = await sqlClient.begin(async (sql) => {
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
+      return sql.unsafe(`
+        SELECT COUNT(*)::int AS total,
+               COUNT(*) FILTER (WHERE status IN ('opened','charge_memo_issued'))::int AS charge_memo_stage,
+               COUNT(*) FILTER (WHERE status IN ('inquiry_appointed','finding_recorded','pending_approval','penalty_imposed','appeal_filed','appeal_decided'))::int AS under_inquiry,
+               COUNT(*) FILTER (WHERE status IN ('closed','dropped'))::int AS closed,
+               COUNT(*) FILTER (WHERE status = 'dropped')::int AS dropped_count
+        FROM disciplinary.hrms_disciplinary_cases
+        WHERE tenant_id = $1 AND proceeding_type = 'major'
       `, [ctx.tenantId]);
     });
+    // A bare COUNT(*) aggregate with no GROUP BY always returns exactly one
+    // row -- this guard is purely to satisfy strict null checks on the
+    // driver's generic Row[] return type, not a real "no rows" case.
+    const stats = vigilanceStatsRows[0];
+    if (!stats) throw new HttpError(500, "INTERNAL", "vigilance stats aggregate returned no rows");
+    const visibleTotal = includeDropped ? stats.total : stats.total - stats.dropped_count;
     // GAP-HR-VIGILANCE-01: per-view read audit, same best-effort shape (and
     // same db.transaction() requirement — see the disciplinary list above)
     // as the disciplinary list.
@@ -788,7 +860,17 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       captureError(err, { service: "hrms", event: "audit_emit_failed", action: "hrms.vigilance.list_viewed" });
     }
-    return reply.send({ data: rows });
+    return reply.send({
+      data: rows,
+      total: visibleTotal,
+      hasMore: offset + rows.length < visibleTotal,
+      stats: {
+        chargeMemoStage: stats.charge_memo_stage,
+        underInquiry: stats.under_inquiry,
+        closed: stats.closed,
+        total: stats.total,
+      },
+    });
   });
 
   // ── Gap: Work Summaries (derived from appraisals) ─────────────────────────

@@ -309,30 +309,84 @@ export async function idCardRoutes(app: FastifyInstance): Promise<void> {
     // photo URL, card number, department, and access_zones (physical areas
     // the badge unlocks). Same role list as every sibling handler below.
     requireRole(ctx, ["hr_admin", "security_admin", "super_admin"]);
-    const { type, status, search } = req.query as { type?: string; status?: string; search?: string };
+    const { type, status, search, limit: limitRaw, offset: offsetRaw } = req.query as {
+      type?: string; status?: string; search?: string; limit?: string; offset?: string;
+    };
+    // GAP-HR-ID-CARDS-05: was a hard LIMIT 100 with no offset/count -- a
+    // tenant with more than 100 cards silently lost the register's tail
+    // (both the list and every stat card, which counted only these rows).
+    const parsedLimit = Number.parseInt(limitRaw ?? "", 10);
+    const limit = Number.isFinite(parsedLimit) && parsedLimit > 0 ? Math.min(parsedLimit, 200) : 100;
+    const parsedOffset = Number.parseInt(offsetRaw ?? "", 10);
+    const offset = Number.isFinite(parsedOffset) && parsedOffset >= 0 ? parsedOffset : 0;
 
-    let where = "WHERE tenant_id = $1";
-    const params: any[] = [ctx.tenantId];
-    let idx = 2;
+    // `breakdownWhere`/`breakdownParams` deliberately omit the `status`
+    // filter (see the GROUP BY query below) -- the register's own status
+    // stat cards should always describe the whole tenant (as scoped by
+    // type/search), not collapse to "100% of one status" the moment
+    // someone filters the list BY that status.
+    let breakdownWhere = "WHERE tenant_id = $1";
+    const breakdownParams: any[] = [ctx.tenantId];
+    let bIdx = 2;
+    if (type) { breakdownWhere += ` AND card_type = $${bIdx++}`; breakdownParams.push(type); }
+    if (search) { breakdownWhere += ` AND (holder_name ILIKE $${bIdx} OR card_number ILIKE $${bIdx} OR employee_code ILIKE $${bIdx})`; breakdownParams.push(`%${search}%`); bIdx++; }
 
-    if (type) { where += ` AND card_type = $${idx++}`; params.push(type); }
+    let where = breakdownWhere;
+    const params: any[] = [...breakdownParams];
+    let idx = bIdx;
+
     if (status) { where += ` AND status = $${idx++}`; params.push(status); }
-    if (search) { where += ` AND (holder_name ILIKE $${idx} OR card_number ILIKE $${idx} OR employee_code ILIKE $${idx})`; params.push(`%${search}%`); idx++; }
+
+    const limitIdx = idx++;
+    const offsetIdx = idx++;
+    params.push(limit, offset);
 
     // hrms.id_cards is RLS FORCEd -- without the GUC this always matched 0
     // rows (empty list), regardless of the `WHERE tenant_id = $1` filter
     // above (RLS's own USING clause is evaluated first and fails closed).
+    //
+    // GAP-HR-ID-CARDS-03: `status` was printed straight from the DB column,
+    // so a card past its own `valid_until` still read 'active' (only the
+    // /verify handler above derived 'expired', from valid_until, for a
+    // single scanned card) -- both the list AND the Active/Suspended stat
+    // cards (page.tsx, computed from this same response) overcounted.
+    // `effective_status` mirrors /verify's exact derivation in SQL so list,
+    // stats, and verify can never again disagree; `COUNT(*) OVER()` returns
+    // the true total alongside this page's rows in one round trip.
     const rows = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
       tx,
       `SELECT id, holder_name, holder_photo_url, designation, department, employee_code,
               card_type, card_number, vendor_name, project_name, valid_from, valid_until,
-              status, access_zones, verification_count, last_verified_at, issued_by_name, created_at
+              CASE WHEN status = 'active' AND valid_until < CURRENT_DATE THEN 'expired' ELSE status END AS status,
+              access_zones, verification_count, last_verified_at, issued_by_name, created_at,
+              COUNT(*) OVER()::int AS total_count
        FROM hrms.id_cards ${where}
-       ORDER BY created_at DESC LIMIT 100`,
+       ORDER BY created_at DESC LIMIT $${limitIdx} OFFSET $${offsetIdx}`,
       params,
     ));
 
-    return reply.send({ data: rows.rows });
+    const total = rows.rows[0]?.total_count ?? 0;
+    const data = rows.rows.map(({ total_count, ...r }) => r);
+
+    // GAP-HR-ID-CARDS-05 ("Better" option): status counts for the stat
+    // cards, computed over the WHOLE (type/search-scoped) tenant register in
+    // one grouped query, not just this page's <=200 rows -- and against the
+    // same effective_status CASE WHEN as the list/verify handler, so an
+    // Active stat can never disagree with what the list actually shows as
+    // Active.
+    const breakdown = await withTenantGuc(ctx.tenantId, (tx) => queryTx(
+      tx,
+      `SELECT CASE WHEN status = 'active' AND valid_until < CURRENT_DATE THEN 'expired' ELSE status END AS status,
+              COUNT(*)::int AS count,
+              COUNT(*) FILTER (WHERE card_type IN ('vendor_staff', 'project_team'))::int AS vendor_count
+       FROM hrms.id_cards ${breakdownWhere}
+       GROUP BY 1`,
+      breakdownParams,
+    ));
+    const statusCounts = Object.fromEntries(breakdown.rows.map((r) => [r.status, r.count]));
+    const vendorProjectTotal = breakdown.rows.reduce((sum, r) => sum + (r.vendor_count ?? 0), 0);
+
+    return reply.send({ data, total, limit, offset, meta: { statusCounts, vendorProjectTotal } });
   });
 
   // ─── MY ID CARD (Employee self-service) ───────────────────────────────

@@ -16,25 +16,34 @@ vi.mock("@/app/_data/apiClient", () => ({
 
 import VigilancePage from "./page";
 
-// The full real status enum (disciplinary/state-machine.ts's CaseStatus) --
-// a vigilance case is a proceeding_type='major' disciplinary case, so it
-// shares this exact enum (see gap-features/routes.ts's GET /v1/hrms/vigilance).
-const ALL_STATUSES = [
-  "opened", "charge_memo_issued", "inquiry_appointed", "finding_recorded",
-  "pending_approval", "penalty_imposed", "appeal_filed", "appeal_decided",
-  "closed", "dropped",
-];
-
 function rowFor(status: string, i: number) {
   return {
     id: `case-${i}`,
+    caseNo: `VC/${i}`,
     employee: `Employee ${i}`,
     department: "Revenue",
-    charges: "Misconduct",
+    charges_summary: "Misconduct",
     filedDate: "2026-01-01",
     inquiryOfficer: "—",
     nextHearing: "—",
+    inquiryAppointedDate: "—",
     status,
+  };
+}
+
+// GAP-HR-VIGILANCE-04: the backend response now carries pagination/stat
+// metadata (services/hrms-service/.../gap-features/routes.ts's GET
+// /v1/hrms/vigilance) alongside the row array. This mock replaces fetchJson
+// entirely (its mapResponse callback never runs), so the shape here must
+// match what page.tsx's getData() now produces: { data: {items, total,
+// hasMore, stats}, source }.
+function apiResult(
+  items: Record<string, unknown>[],
+  stats: { chargeMemoStage: number; underInquiry: number; closed: number; total: number },
+) {
+  return {
+    data: { items, total: items.length, hasMore: false, stats },
+    source: "api" as const,
   };
 }
 
@@ -44,31 +53,41 @@ describe("VigilancePage", () => {
     mockRoles = ["hr_admin"];
   });
 
-  it("links each case row to the shared disciplinary detail page instead of leaving it unreachable", async () => {
-    // Regression: this table had no rowLinkKey/rowLinkPrefix at all, so a
-    // vigilance case (which IS a disciplinary case, proceeding_type='major')
-    // had no way to reach its own already-built detail page from here.
-    fetchJsonMock.mockResolvedValue({ data: [rowFor("opened", 1)], source: "api" });
+  it("links each case row to the shared disciplinary detail page using the real case number, not a fabricated reference", async () => {
+    // Regression: this table used to have no rowLinkKey/rowLinkPrefix at
+    // all (a vigilance case IS a disciplinary case, proceeding_type='major',
+    // and had no way to reach its own already-built detail page from here),
+    // and separately fabricated "VIG/"+id.slice(0,8) instead of using the
+    // real, stored case_no the backend now returns (GAP-HR-VIGILANCE-06).
+    fetchJsonMock.mockResolvedValue(apiResult(
+      [rowFor("opened", 1)],
+      { chargeMemoStage: 1, underInquiry: 0, closed: 0, total: 1 },
+    ));
 
-    const ui = await VigilancePage();
+    const ui = await VigilancePage({});
     render(ui);
 
-    const link = screen.getByRole("link", { name: "Open VIG/CASE-1" });
+    const link = screen.getByRole("link", { name: "Open VC/1" });
     expect(link).toHaveAttribute("href", "/hr/disciplinary/case-1");
   });
 
-  it("covers all 10 real case statuses across the three stat-card buckets, with none left out", async () => {
-    // Regression: only "opened" and a nonexistent "inquiry"/"under_inquiry"
-    // status were ever matched (plus "closed"; "disposed"/"finalised" are
-    // not real statuses for this table either), so "Under Inquiry" could
-    // never show a nonzero count and most of the 10 real statuses silently
-    // vanished from every stat card.
-    fetchJsonMock.mockResolvedValue({
-      data: ALL_STATUSES.map((s, i) => rowFor(s, i)),
-      source: "api",
-    });
+  it("renders all three stat-card buckets exactly as the backend computed them", async () => {
+    // Regression (updated for GAP-HR-VIGILANCE-02/04): the three buckets
+    // (charge-memo stage / under inquiry / disposed-closed, mutually
+    // exclusive and exhaustive over all 10 real CaseStatus values) are now
+    // computed server-side, not from `items.filter(...)` -- covered
+    // end-to-end for the bucket logic itself by
+    // disciplinary-vigilance-pagination-real-db.test.ts. This test only
+    // proves the page *wires up* whatever the backend sends, using stats
+    // that deliberately disagree with a naive recount of the (deliberately
+    // short) `items` array, so a regression back to client-side computation
+    // would be caught here too.
+    fetchJsonMock.mockResolvedValue(apiResult(
+      [rowFor("opened", 1)],
+      { chargeMemoStage: 4, underInquiry: 3, closed: 2, total: 9 },
+    ));
 
-    const ui = await VigilancePage();
+    const ui = await VigilancePage({});
     render(ui);
 
     const total = screen.getByText("Total Cases").closest(".stat");
@@ -76,19 +95,26 @@ describe("VigilancePage", () => {
     const underInquiry = screen.getByText("Under Inquiry").closest(".stat");
     const disposedClosed = screen.getByText("Disposed / Closed").closest(".stat");
 
-    // opened + charge_memo_issued
-    expect(chargeMemoStage!.querySelector(".val")?.textContent).toBe("2");
-    // inquiry_appointed + finding_recorded + pending_approval +
-    // penalty_imposed + appeal_filed + appeal_decided
-    expect(underInquiry!.querySelector(".val")?.textContent).toBe("6");
-    // closed + dropped
+    expect(chargeMemoStage!.querySelector(".val")?.textContent).toBe("4");
+    expect(underInquiry!.querySelector(".val")?.textContent).toBe("3");
     expect(disposedClosed!.querySelector(".val")?.textContent).toBe("2");
-    expect(total!.querySelector(".val")?.textContent).toBe("10");
+    expect(total!.querySelector(".val")?.textContent).toBe("9");
+  });
+
+  it("shows a link back to the full disciplinary register (GAP-HR-VIGILANCE-05)", async () => {
+    fetchJsonMock.mockResolvedValue(apiResult(
+      [],
+      { chargeMemoStage: 0, underInquiry: 0, closed: 0, total: 0 },
+    ));
+    const ui = await VigilancePage({});
+    render(ui);
+    const link = screen.getByRole("link", { name: "All Disciplinary Cases" });
+    expect(link).toHaveAttribute("href", "/hr/disciplinary");
   });
 
   it("shows an honest permission-denied state for a role the backend would reject", async () => {
     mockRoles = ["employee"];
-    const ui = await VigilancePage();
+    const ui = await VigilancePage({});
     render(ui);
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();

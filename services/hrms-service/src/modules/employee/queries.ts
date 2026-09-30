@@ -168,8 +168,27 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
  * than "the next page of everyone". Both stay behind the exact same
  * DIRECTORY_ROLES gate and managerScope restriction as the browse path;
  * neither adds a new field to the response shape.
+ *
+ * GAP-HR-DIRECTORY-01: designation/grade were promised by the directory UI
+ * (DirectoryClient.tsx) and by en.json's own subtitle ("...designation,
+ * extension, or location") but never left this function -- the Locations
+ * and Designations stat cards always read 0 and every card's designation
+ * line rendered the literal string "undefined" (see DIRECTORY-02). Resolved
+ * the same way desig/payGrade are resolved for the single-employee detail
+ * shape above (hrmsDesignations, same module, no new column). `location`
+ * and `extension` stay OUT of the response: hrms_employees has no such
+ * columns today (verified against schema.ts) -- inventing a value would be
+ * worse than omitting the field, and the UI (DirectoryClient) already
+ * degrades gracefully (conditional render / dash stat) when a field is
+ * absent. GAP-HR-DIRECTORY-04 (DPDP decision, recommended default: "work
+ * email + extension only, visible to all, never mobile/PAN/bank"): `email`
+ * is added for the same reason -- it is a real, non-masked column
+ * (pii-mask.ts's PII_FIELDS does not include it) already returned in full to
+ * this same DIRECTORY_ROLES audience by getEmployeeDetail above. `extension`
+ * cannot be added yet (no column); see docs/SECURITY.md's Directory Fields
+ * note for the recorded policy and this gap.
  */
-export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[]): Promise<{ data: Array<{ id: string; name: string; department: string; status: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[]): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
   if (managerScope === null) {
     return { data: [], pagination: { hasMore: false, pageSize: limit } };
   }
@@ -178,15 +197,28 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
     const rows = await repo.listByIds(tenantId, ids, managerScope ?? undefined);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
+    const desigs = await scopedRead((tx) => tx.select().from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, tenantId)));
+    const desigById = new Map(desigs.map((d) => [d.id, d]));
     return {
-      data: rows.map((r) => ({
-        id: r.id,
-        employeeNo: r.employeeNo,
-        name: r.fullName,
-        department: deptNameById.get(r.departmentId) ?? "—",
-        employeeType: r.employeeType,
-        status: r.status,
-      })),
+      data: rows.map((r) => {
+        // `payGrade` is a nullable DB column (`string | null`); coerce to
+        // `undefined` here so the conditional-spread below produces
+        // `grade?: string` (never `grade: null`), matching this function's
+        // declared return type under this repo's `exactOptionalPropertyTypes`.
+        const designation = desigById.get(r.designationId)?.name ?? undefined;
+        const grade = desigById.get(r.designationId)?.payGrade ?? undefined;
+        return {
+          id: r.id,
+          employeeNo: r.employeeNo,
+          name: r.fullName,
+          department: deptNameById.get(r.departmentId) ?? "—",
+          employeeType: r.employeeType,
+          status: r.status,
+          ...(designation ? { designation } : {}),
+          ...(grade ? { grade } : {}),
+          ...(r.email ? { email: r.email } : {}),
+        };
+      }),
       pagination: { hasMore: false, pageSize: rows.length },
     };
   }
@@ -195,15 +227,25 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
     const rows = await repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
+    const desigs = await scopedRead((tx) => tx.select().from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, tenantId)));
+    const desigById = new Map(desigs.map((d) => [d.id, d]));
     return {
-      data: rows.map((r) => ({
-        id: r.id,
-        employeeNo: r.employeeNo,
-        name: r.fullName,
-        department: deptNameById.get(r.departmentId) ?? "—",
-        employeeType: r.employeeType,
-        status: r.status, // P1-5: canonical lowercase (see employee/status.ts)
-      })),
+      data: rows.map((r) => {
+        // See the `ids` branch above for why null is coerced to undefined here.
+        const designation = desigById.get(r.designationId)?.name ?? undefined;
+        const grade = desigById.get(r.designationId)?.payGrade ?? undefined;
+        return {
+          id: r.id,
+          employeeNo: r.employeeNo,
+          name: r.fullName,
+          department: deptNameById.get(r.departmentId) ?? "—",
+          employeeType: r.employeeType,
+          status: r.status, // P1-5: canonical lowercase (see employee/status.ts)
+          ...(designation ? { designation } : {}),
+          ...(grade ? { grade } : {}),
+          ...(r.email ? { email: r.email } : {}),
+        };
+      }),
       pagination: {
         hasMore: rows.length === limit,
         pageSize: limit,

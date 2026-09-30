@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { publishF3Write } from "../../shared/f3-publish.js";
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import type { RequestContext } from "@civitasone/types";
 import {
   fileRtiBody, assignPioBody, respondRtiBody, appealRtiBody, closeRtiBody, idParam,
 } from "./validators.js";
@@ -11,13 +12,83 @@ import type { RtiRow } from "./schema.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
+// GAP-HR-RTI-03 (DPDP decision, published packet default: "restrict
+// applicant identity to the assigned PIO plus hr_admin"): everyone in
+// HR_ROLES may reach this register (it is the workflow surface for the
+// whole RTI Act intake/assign/respond/appeal/close cycle), but a plain
+// hr_officer who is not the request's own assigned PIO no longer sees the
+// applicant's name/contact -- treated the same as hr_admin for this
+// purpose (a platform-wide administrator, not a citizen-facing PIO role).
+const FULL_IDENTITY_ROLES = ["hr_admin", "super_admin"];
+
+// Exported for rti/routes.test.ts -- these are pure functions (no DB/Fastify
+// dependency) that carry this gap's actual security/statutory-deadline
+// logic, so they are unit-tested directly rather than only indirectly via a
+// full route/DB integration test.
+export function canSeeApplicantIdentity(ctx: RequestContext, row: Pick<RtiRow, "pioId">): boolean {
+  if (FULL_IDENTITY_ROLES.some((r) => ctx.roles.includes(r))) return true;
+  return row.pioId != null && row.pioId === ctx.actorId;
+}
+
+// GAP-HR-RTI-06: `today` was computed in UTC (`toISOString()`), so from
+// 00:00 to 05:30 IST (UTC+5:30) the server's "today" was still yesterday --
+// overdue flipped, and daysToDue read one higher, 5.5 hours late every
+// single day. Statutory deadline tracking (RTI Act 2005) should use the
+// tenant's actual civil day, not UTC's.
+export function todayIst(now: Date = new Date()): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(now);
+}
+
 // SLA: open (not responded/closed) requests are overdue once today > due_date.
-function withSla(row: RtiRow): RtiRow & { overdue: boolean; daysToDue: number } {
-  const today = new Date().toISOString().slice(0, 10);
+export function withSla(row: RtiRow): RtiRow & { overdue: boolean; daysToDue: number } {
+  const today = todayIst();
   const open = row.status === "filed" || row.status === "assigned";
   const msPerDay = 86_400_000;
   const daysToDue = Math.round((Date.parse(row.dueDate) - Date.parse(today)) / msPerDay);
   return { ...row, overdue: open && today > row.dueDate, daysToDue };
+}
+
+/**
+ * GAP-HR-RTI-03: list DTO projection. Drops applicantContact/requestText/
+ * responseText/appealText entirely (over-fetch fix -- the register table
+ * never rendered them, only applicantName/subject/dates/status) and masks
+ * applicantName to `null` (the web renders "Restricted" for a null name,
+ * per the catalog's own fix step -- not a pseudonym, which the decision
+ * packet left as an open question, not a confirmed default) unless the
+ * caller may see it.
+ */
+export function projectRtiListRow(row: RtiRow & { overdue: boolean; daysToDue: number }, ctx: RequestContext) {
+  const canSeeIdentity = canSeeApplicantIdentity(ctx, row);
+  return {
+    id: row.id,
+    referenceNo: row.referenceNo,
+    applicantName: canSeeIdentity ? row.applicantName : null,
+    subject: row.subject,
+    receivedDate: row.receivedDate,
+    dueDate: row.dueDate,
+    status: row.status,
+    pioId: row.pioId,
+    overdue: row.overdue,
+    daysToDue: row.daysToDue,
+  };
+}
+
+/**
+ * GAP-HR-RTI-03: detail projection. Unlike the list, this keeps
+ * requestText/responseText/appealText/applicantContact -- an assigning
+ * officer or supervisor genuinely needs the request's own content to route
+ * or review it (this is need-to-know for the workflow itself, not the
+ * applicant's *identity*, which is what the decision packet's default is
+ * about). applicantName/applicantContact are masked the same way as the
+ * list, applied consistently everywhere identity would otherwise appear.
+ */
+export function projectRtiDetail(row: RtiRow & { overdue: boolean; daysToDue: number }, ctx: RequestContext) {
+  const canSeeIdentity = canSeeApplicantIdentity(ctx, row);
+  return {
+    ...row,
+    applicantName: canSeeIdentity ? row.applicantName : null,
+    applicantContact: canSeeIdentity ? row.applicantContact : null,
+  };
 }
 
 function addDays(isoDate: string, days: number): string {
@@ -26,12 +97,36 @@ function addDays(isoDate: string, days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+const listRtiQuery = z.object({
+  limit: z.coerce.number().int().positive().max(200).default(200),
+  offset: z.coerce.number().int().nonnegative().default(0),
+});
+
 export async function rtiRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/rti/requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
-    const rows = await repo.listRti(ctx.tenantId);
-    return reply.send({ data: rows.map(withSla) });
+    // GAP-HR-RTI-05: limit/offset (was always limit=200, offset=0 -- older
+    // requests silently dropped off both the register and the stat cards
+    // once a tenant passed 200 total). hasMore mirrors the same
+    // rows.length === limit convention employee/queries.ts already uses.
+    const q = listRtiQuery.parse(req.query);
+    const rows = await repo.listRti(ctx.tenantId, q.limit, q.offset);
+    const withSlaRows = rows.map(withSla);
+    return reply.send({
+      data: withSlaRows.map((r) => projectRtiListRow(r, ctx)),
+      hasMore: rows.length === q.limit,
+    });
+  });
+
+  // GAP-HR-RTI-02/05: whole-tenant counts (not just this page's rows) so the
+  // stat cards -- specifically "Under appeal", which never had a card at
+  // all before this -- stay correct past the 200-row list cap.
+  app.get("/v1/hrms/rti/requests/summary", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const summary = await repo.getRtiSummary(ctx.tenantId, todayIst());
+    return reply.send({ data: summary });
   });
 
   app.get("/v1/hrms/rti/requests/:id", async (req, reply) => {
@@ -40,7 +135,7 @@ export async function rtiRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const row = await repo.getRti(ctx.tenantId, id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "RTI request not found");
-    return reply.send({ data: withSla(row) });
+    return reply.send({ data: projectRtiDetail(withSla(row), ctx) });
   });
 
   // File a new RTI request — computes the 30-day SLA due date.

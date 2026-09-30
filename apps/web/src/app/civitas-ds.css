@@ -445,6 +445,20 @@ tr.clickable:hover{background:var(--primary-soft)!important}
   a.chip,.chip{min-height:40px;display:inline-flex;align-items:center}
   .dt-toolbar{flex-direction:column;align-items:stretch}
   .dt-filter{min-width:0;width:100%}
+  /* GAP-HR-DIRECTORY-05: opt-in (DataTable's `mobileStack` prop, class
+     `.tbl--stack`) stacked-row layout -- a labelled key/value list instead
+     of a horizontally-scrolled shrunk table. Every other `.tbl` (the
+     ~80 DataTable consumers that don't pass `mobileStack`) is untouched:
+     this whole block is scoped to the opt-in class. */
+  .tbl--stack thead{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+  .tbl--stack,.tbl--stack tbody,.tbl--stack tr{display:block;width:100%}
+  .tbl--stack tr{border:1px solid var(--line2);border-radius:8px;padding:4px 12px;margin-bottom:10px}
+  .tbl--stack td{display:flex;justify-content:space-between;align-items:baseline;gap:12px;
+    padding:8px 2px;border-bottom:1px solid var(--line2);text-align:end}
+  .tbl--stack tr:last-child,.tbl--stack td{border-bottom:1px solid var(--line2)}
+  .tbl--stack tr td:last-child{border-bottom:0}
+  .tbl--stack td[data-label]::before{content:attr(data-label);font-weight:600;font-size:11px;
+    text-transform:uppercase;letter-spacing:.03em;color:var(--ink2);text-align:start;margin-inline-end:auto}
 }
 @media(max-width:480px){
   .ph h1{font-size:20px;letter-spacing:-.3px}

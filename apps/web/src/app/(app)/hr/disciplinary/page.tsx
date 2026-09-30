@@ -13,16 +13,23 @@ import { getTranslations } from "next-intl/server";
  */
 const DISCIPLINARY_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
+// GAP-HR-DISCIPLINARY-04: server batch size per fetch. DataTable's own
+// pageSize=15 still paginates client-side *within* whichever batch is
+// loaded; this is the outer, server-fetched window and matches the
+// previous hardcoded LIMIT 200 exactly, so the default (page 1) view is
+// unchanged -- only case #201+ (previously unreachable) now is.
+const PAGE_BATCH = 200;
+
 type RawRow = {
   id: string;
+  caseNo: string | null;
   employee: string;
   department: string;
   proceeding_type: string;
-  // GAP-HR-DISCIPLINARY-01 (PII/DPDP): the backend now returns a truncated
-  // summary in the list response, not the full allegation text — that stays
-  // on the case detail page (disciplinary/[id]/page.tsx), which has its own
-  // role gate. Field renamed to match so a stale client build can't silently
-  // keep treating this as the full text.
+  // GAP-HR-DISCIPLINARY-01 (PII/DPDP): the backend returns a truncated
+  // summary in the list response, not the full allegation text -- that
+  // stays on the case detail page (disciplinary/[id]/page.tsx), which has
+  // its own role gate.
   charges_summary: string;
   filed_date: string;
   inquiry_officer: string;
@@ -31,17 +38,36 @@ type RawRow = {
 
 type Row = RawRow & { caseRef: string; type: string };
 
-async function getData(): Promise<LoaderResult<RawRow[]>> {
-  return fetchJson<unknown, RawRow[]>("/api/v1/hrms/disciplinary-cases", [], {
-    telemetryKey: "hr.disciplinary",
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: RawRow[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+type Stats = { major: number; minor: number; open: number };
+type ListPage = { items: RawRow[]; total: number; hasMore: boolean; stats: Stats };
+
+const EMPTY_STATS: Stats = { major: 0, minor: 0, open: 0 };
+
+async function getData(offset: number): Promise<LoaderResult<ListPage>> {
+  return fetchJson<unknown, ListPage>(
+    `/api/v1/hrms/disciplinary-cases?limit=${PAGE_BATCH}&offset=${offset}`,
+    { items: [], total: 0, hasMore: false, stats: EMPTY_STATS },
+    {
+      telemetryKey: "hr.disciplinary",
+      mapResponse: (p) => {
+        const body = p as { data?: RawRow[]; total?: number; hasMore?: boolean; stats?: Stats } | null;
+        if (!body || !Array.isArray(body.data)) return null;
+        return {
+          items: body.data,
+          total: body.total ?? body.data.length,
+          hasMore: body.hasMore ?? false,
+          stats: body.stats ?? EMPTY_STATS,
+        };
+      },
     },
-  });
+  );
 }
 
-export default async function DisciplinaryListPage() {
+export default async function DisciplinaryListPage({
+  searchParams,
+}: {
+  searchParams?: { page?: string };
+}) {
   const t = await getTranslations("disciplinary");
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
@@ -50,39 +76,60 @@ export default async function DisciplinaryListPage() {
     return <PermissionDenied module="disciplinary cases" requiredRoles={DISCIPLINARY_ROLES} />;
   }
 
-  const { data: rawItems, source } = await getData();
+  // GAP-HR-DISCIPLINARY-04 (CAP): the old hard LIMIT 200 with no cursor made
+  // case #201+ permanently unreachable and made the stat cards (previously
+  // computed client-side from just those 200 rows) silently understate the
+  // true total past 200 cases. `page` steps through PAGE_BATCH-sized server
+  // batches; stats now come from the backend's own unconditional counts.
+  const page = Math.max(1, Math.trunc(Number(searchParams?.page)) || 1);
+  const offset = (page - 1) * PAGE_BATCH;
+
+  const { data, source } = await getData(offset);
   const errored = source === "error";
-  const items: Row[] = rawItems.map((r) => ({
+  const items: Row[] = data.items.map((r) => ({
     ...r,
-    caseRef: (r.proceeding_type === "major" ? "VIG/" : "GRV/") + r.id.slice(0, 8).toUpperCase(),
-    type: r.proceeding_type === "major" ? "Major (Vigilance)" : "Minor (Grievance)",
+    // GAP-HR-DISCIPLINARY-02 (UUID): case_no is the real, stored case number
+    // (disciplinary.hrms_disciplinary_cases.case_no, NOT NULL) -- the
+    // fabricated "VIG/"/"GRV/" + first-8-hex-chars reference disagreed with
+    // the detail page's own caseNo, so the same case had two different
+    // "numbers" depending which screen you were on.
+    caseRef: r.caseNo ?? "—",
+    // GAP-HR-DISCIPLINARY-03 (terminology, decision packet auto-applied
+    // default -- this item wasn't one of the ~30 flagged for a dedicated
+    // card, so its own catalog fix step *is* the approved default): a minor
+    // proceeding is a penalty proceeding against the employee, not a
+    // grievance raised by one, and the real /hr/grievance register is an
+    // unrelated, still-stubbed (always returns []) endpoint that can never
+    // reconcile with it. Renamed to the CCS (CCA) terms; "Grievance"/"GRV/"
+    // dropped entirely rather than building a real grievance register here
+    // (that's the catalog's own separate, unscoped "if wanted" call).
+    type: r.proceeding_type === "major" ? t("typeMajor") : t("typeMinor"),
   }));
 
-  const major = items.filter((i) => i.proceeding_type === "major").length;
-  const minor = items.filter((i) => i.proceeding_type === "minor").length;
-  // Real terminal statuses (disciplinary/state-machine.ts's CaseStatus) are
-  // "closed" and "dropped" -- "disposed"/"finalised" are not real statuses
-  // for this table, so a dropped (investigated-and-exonerated/discontinued)
-  // case was never excluded here and stayed counted as "open" forever.
-  const open = items.filter((i) => !["closed", "dropped"].includes(i.status)).length;
+  const { major, minor, open } = data.stats;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date" }[] = [
     { key: "caseRef", label: t("colCaseRef") },
     { key: "employee", label: t("colEmployee") },
     { key: "department", label: t("colDepartment") },
     { key: "type", label: t("colType") },
     { key: "charges_summary", label: t("colCharge") },
     { key: "inquiry_officer", label: t("colOfficer") },
-    { key: "filed_date", label: t("colFiled") },
+    // GAP-HR-DISCIPLINARY-05 (DATEFMT): filed_date is charge_memo_date,
+    // which is null for a case still in "opened" state (no charge memo
+    // issued yet) -- cellType:"date" renders that as "—" (formatIndianDate's
+    // existing null convention) instead of a raw blank cell, and formats a
+    // real date instead of an unformatted serialized value. Header renamed
+    // to reflect what the column actually is (a charge-memo date, not a
+    // generic "filed" date that every case has).
+    { key: "filed_date", label: t("colFiled"), cellType: "date" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   // GAP-HR-DISCIPLINARY-01 (PII/DPDP): charges_summary still shows in the
   // table (as a truncated summary) but is out of the client-side search
-  // scope, so filtering never has to scan allegation text — searching still
-  // works over every other column (case ref, employee, department, type,
-  // officer, filed date, status), matching the catalog's own acceptance
-  // criterion ("table still filters by employee and status").
+  // scope, so filtering never has to scan allegation text -- searching
+  // still works over every other column.
   const filterKeys = columns.filter((c) => c.key !== "charges_summary").map((c) => c.key);
 
   return (
@@ -91,17 +138,27 @@ export default async function DisciplinaryListPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
-        actions={<Link href="/hr/vigilance" className="btn-outline">{t("vigilanceOnly")}</Link>}
+        // GAP-HR-DISCIPLINARY-06 (WIRING): this looks like a filter toggle
+        // next to the search box but is actually navigation to a different
+        // page -- relabelled to say so plainly, with an aria-label spelling
+        // out the destination for screen-reader users (the visible arrow
+        // and label text alone already read as navigation, so this stays a
+        // link rather than being converted into an in-place filter chip).
+        actions={
+          <Link href="/hr/vigilance" className="btn-outline" aria-label={t("vigilanceOnlyAriaLabel")}>
+            {t("vigilanceOnly")} →
+          </Link>
+        }
       />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-<StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
+<StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : major + minor} />
         <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statMajor")} value={errored ? null : major} />
         <StatCard icon="🟡" iconBg="var(--warnbg, #fffbe6)" label={t("statMinor")} value={errored ? null : minor} />
         <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOpen")} value={errored ? null : open} />
       </StatGrid>
       {/* GAP-HR-DISCIPLINARY-01 (PII/DPDP): purpose/confidentiality notice
-          above the table — mirrors the styling of the existing DPDP notice
+          above the table -- mirrors the styling of the existing DPDP notice
           in citizen/grievances/new/page.tsx. */}
       <div
         role="note"
@@ -149,6 +206,24 @@ export default async function DisciplinaryListPage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        {/* GAP-HR-DISCIPLINARY-04: this batch (up to PAGE_BATCH rows) may
+            not be everything -- hasMore/page step to the next server batch;
+            DataTable's own pager above still handles paging within a
+            batch. */}
+        {(page > 1 || data.hasMore) && !errored && (
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
+            {page > 1 ? (
+              <Link href={`/hr/disciplinary?page=${page - 1}`} className="btn-outline">
+                ← {t("prevBatch")}
+              </Link>
+            ) : <span />}
+            {data.hasMore ? (
+              <Link href={`/hr/disciplinary?page=${page + 1}`} className="btn-outline">
+                {t("nextBatch")} →
+              </Link>
+            ) : <span />}
+          </div>
+        )}
         </>)}
       </Card>
     </div>

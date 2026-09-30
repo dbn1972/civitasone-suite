@@ -40,6 +40,10 @@ Operate as a **trust-first** platform: security by default, least privilege, exp
 - **Tenant boundaries preserved everywhere**: storage, cache (per-service keyspace prefix), search, queues, analytics, backups, and exports. This is reinforced by the DB-per-service topology (ARCHITECTURE L1) — a service physically cannot read another's data.
 - Data lifecycle defines retention, deletion, restore, legal hold, and export (DPDP data-principal rights).
 
+### 4.1 Field-visibility policies (per-surface, recorded here as decided)
+
+- **HR employee directory** (`/hr/directory`, DIRECTORY_ROLES incl. `employee` — every colleague can browse): a colleague may see **name, department, designation, grade, and work email only**. Never mobile, PAN, bank account/IFSC, or any other DPDP-sensitive personal field, regardless of role. `location`/`extension` are not yet stored on `hrms_employees` — they stay out of the response until a real column/source exists, rather than being fabricated. (GAP-HR-DIRECTORY-04.)
+
 ## 5. Application & platform security (Vol 5 §5)
 
 - Secure SDLC: dependency management, vulnerability remediation SLAs, and **release gating on SAST** (§8 below).

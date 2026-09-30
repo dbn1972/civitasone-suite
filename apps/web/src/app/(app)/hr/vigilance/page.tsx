@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -12,13 +13,18 @@ import { toHumanError } from "@/lib/messages";
  */
 const VIGILANCE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
+// GAP-HR-VIGILANCE-04: server batch size per fetch -- see the matching
+// constant/comment on hr/disciplinary/page.tsx.
+const PAGE_BATCH = 200;
+
 type RawRow = {
   id: string;
+  caseNo: string | null;
   employee: string;
   department: string;
-  // GAP-HR-VIGILANCE-01 (PII/DPDP): the backend now returns a truncated
-  // summary in the list response (same shape as GAP-HR-DISCIPLINARY-01), not
-  // the full allegation text, and — by default — omits cases whose status is
+  // GAP-HR-VIGILANCE-01 (PII/DPDP): the backend returns a truncated summary
+  // in the list response (same shape as GAP-HR-DISCIPLINARY-01), not the
+  // full allegation text, and -- by default -- omits cases whose status is
   // 'dropped' (exonerated/discontinued) entirely. Full text and dropped
   // cases both remain reachable from the case detail page.
   charges_summary: string;
@@ -30,21 +36,36 @@ type RawRow = {
 
 type Row = RawRow & { caseRef: string };
 
-async function getData(): Promise<LoaderResult<RawRow[]>> {
-  return fetchJson<unknown, RawRow[]>("/api/v1/hrms/vigilance", [], {
-    telemetryKey: "hr.vigilance",
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: RawRow[] })?.data;
-      return Array.isArray(arr) ? arr : null;
+type Stats = { chargeMemoStage: number; underInquiry: number; closed: number; total: number };
+type ListPage = { items: RawRow[]; total: number; hasMore: boolean; stats: Stats };
+
+const EMPTY_STATS: Stats = { chargeMemoStage: 0, underInquiry: 0, closed: 0, total: 0 };
+
+async function getData(offset: number): Promise<LoaderResult<ListPage>> {
+  return fetchJson<unknown, ListPage>(
+    `/api/v1/hrms/vigilance?limit=${PAGE_BATCH}&offset=${offset}`,
+    { items: [], total: 0, hasMore: false, stats: EMPTY_STATS },
+    {
+      telemetryKey: "hr.vigilance",
+      mapResponse: (p) => {
+        const body = p as { data?: RawRow[]; total?: number; hasMore?: boolean; stats?: Stats } | null;
+        if (!body || !Array.isArray(body.data)) return null;
+        return {
+          items: body.data,
+          total: body.total ?? body.data.length,
+          hasMore: body.hasMore ?? false,
+          stats: body.stats ?? EMPTY_STATS,
+        };
+      },
     },
-  });
+  );
 }
 
-function shortId(id: string): string {
-  return "VIG/" + id.slice(0, 8).toUpperCase();
-}
-
-export default async function VigilancePage() {
+export default async function VigilancePage({
+  searchParams,
+}: {
+  searchParams?: { page?: string };
+}) {
   /* ── Role gate ─────────────────────────────────────────────── */
   const roles = getSessionRoles();
   const canAccess = roles.some((r) => VIGILANCE_ROLES.includes(r));
@@ -53,60 +74,61 @@ export default async function VigilancePage() {
   }
 
   const t = await getTranslations("vigilance");
+  // GAP-HR-VIGILANCE-04 (CAP): same unpaginated-LIMIT-200 bug as the
+  // disciplinary list; page steps through PAGE_BATCH-sized server batches.
+  const page = Math.max(1, Math.trunc(Number(searchParams?.page)) || 1);
+  const offset = (page - 1) * PAGE_BATCH;
+
   // GAP-HR-VIGILANCE-01 (PII/DPDP decision packet): this page intentionally
-  // does NOT pass includeDropped=true — a dropped/exonerated case should not
-  // reach the browser by default at all (truncated summary or not), so the
-  // stat cards below are computed from whatever the default-filtered
-  // response returns, same as before.
-  const { data: rawItems, source } = await getData();
+  // does NOT pass includeDropped=true -- a dropped/exonerated case should
+  // not reach the browser by default at all (truncated summary or not).
+  const { data, source } = await getData(offset);
   const errored = source === "error";
-  const items: Row[] = rawItems.map((r) => ({ ...r, caseRef: shortId(r.id) }));
+  const items: Row[] = data.items.map((r) => ({
+    ...r,
+    // GAP-HR-VIGILANCE-06 (UUID): case_no is the real, stored case number --
+    // the same case's disciplinary/[id] detail page shows it too, so the
+    // fabricated "VIG/" + first-8-hex-chars reference (unrelated to case_no)
+    // meant this list and that detail page disagreed on the case's own
+    // number.
+    caseRef: r.caseNo ?? "—",
+  }));
 
-  // Real status enum (disciplinary/state-machine.ts's CaseStatus, shared by
-  // this table since a vigilance case is simply a proceeding_type='major'
-  // disciplinary case -- see gap-features/routes.ts's GET /v1/hrms/vigilance):
-  // opened, charge_memo_issued, inquiry_appointed, finding_recorded,
-  // pending_approval, penalty_imposed, appeal_filed, appeal_decided, closed,
-  // dropped -- 10 statuses total. "inquiry"/"under_inquiry" and
-  // "disposed"/"finalised" below were never real statuses for this table, so
-  // "Under Inquiry" could never show a nonzero count and 7 of the 10 real
-  // statuses (charge_memo_issued, inquiry_appointed, finding_recorded,
-  // pending_approval, penalty_imposed, appeal_filed, dropped) silently
-  // vanished from every stat card. Buckets below are mutually exclusive and
-  // jointly exhaustive over all 10 (2 + 6 + 2 = every case, exactly once),
-  // preserving each existing card's original intent/label rather than
-  // introducing new ones.
-  //
-  // GAP-HR-VIGILANCE-01 note: since the backend now hides 'dropped' cases
-  // from this response by default (see above), "closed" here in practice
-  // now counts only genuinely closed cases, not dropped ones — an accepted,
-  // intentional undercount for as long as the interim "hide by default"
-  // containment is in effect. A caller who needs the true disposed+dropped
-  // total should use the detail/audit views, not this card, until a real
-  // retention rule lands.
-  const chargeMemoStage = items.filter((i) => ["opened", "charge_memo_issued"].includes(i.status)).length;
-  const underInquiry = items.filter((i) => [
-    "inquiry_appointed", "finding_recorded", "pending_approval",
-    "penalty_imposed", "appeal_filed", "appeal_decided",
-  ].includes(i.status)).length;
-  const closed = items.filter((i) => ["closed", "dropped"].includes(i.status)).length;
+  // GAP-HR-VIGILANCE-02: stat-card buckets are now computed server-side
+  // (services/hrms-service/.../gap-features/routes.ts), over every major
+  // case in the tenant -- not just whatever page is currently loaded, so
+  // they stay exact once results are paginated (GAP-HR-VIGILANCE-04). The
+  // three buckets remain mutually exclusive and jointly exhaustive over all
+  // 10 CaseStatus values (disciplinary/state-machine.ts) -- this keeps the
+  // prior fix's own documented choice of 3 cards (matching each existing
+  // card's original intent/label) rather than the catalog's alternative
+  // "four cards" suggestion; "closed" still means closed-or-dropped by
+  // design (a plain count, not a row of PII, so it is not subject to the
+  // includeDropped row-visibility default above).
+  const { chargeMemoStage, underInquiry, closed } = data.stats;
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date" }[] = [
     { key: "caseRef", label: t("colCaseRef") },
     { key: "employee", label: t("colEmployee") },
     { key: "department", label: t("colDepartment") },
     { key: "charges_summary", label: t("colChargeSummary") },
     { key: "inquiryOfficer", label: t("colInquiryOfficer") },
+    // GAP-HR-VIGILANCE-03 (DATEFMT): nextHearing (inquiry_appointed_date) was
+    // rendered as a raw unformatted value and printed blank (not "—") when
+    // no inquiry officer is appointed yet. cellType:"date" fixes both via
+    // DataTable's existing formatIndianDate wiring (shared with
+    // GAP-HR-DISCIPLINARY-05 above).
+    //
     // Backend aliases inquiry_appointed_date (a one-time event) as
     // "nextHearing" -- it is not a recurring hearing schedule, so a case
     // shows the same date forever after its inquiry officer is appointed,
     // regardless of how many hearings actually happen afterward. Labelled
     // honestly until the backend tracks real hearing dates.
-    { key: "nextHearing", label: t("colInquiryOfficerAppointed") },
+    { key: "nextHearing", label: t("colInquiryOfficerAppointed"), cellType: "date" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
-  // GAP-HR-VIGILANCE-01 (PII/DPDP): same rationale as hr/disciplinary —
+  // GAP-HR-VIGILANCE-01 (PII/DPDP): same rationale as hr/disciplinary --
   // charges_summary stays visible in the table but out of client-side
   // search scope, so filtering never scans allegation text.
   const filterKeys = columns.filter((c) => c.key !== "charges_summary").map((c) => c.key);
@@ -117,17 +139,21 @@ export default async function VigilancePage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr" backLabel="Back to HR"
-        actions={<span />}
+        // GAP-HR-VIGILANCE-05 (NAV, depends on VIGILANCE-07): disciplinary's
+        // list links here ("Vigilance Only") but this page had no way back
+        // to the full register -- an empty <span/> actions slot with
+        // back="/hr" skipped disciplinary entirely.
+        actions={<Link href="/hr/disciplinary" className="btn-outline">{t("allDisciplinary")}</Link>}
       />
       <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
-        <StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCasesLabel")} value={errored ? null : items.length} />
+        <StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCasesLabel")} value={errored ? null : data.stats.total} />
         <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statChargeMemoStageLabel")} value={errored ? null : chargeMemoStage} />
         <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={errored ? null : underInquiry} />
         <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedClosedLabel")} value={errored ? null : closed} />
       </StatGrid>
       {/* GAP-HR-VIGILANCE-01 (PII/DPDP): purpose/confidentiality notice above
-          the table — mirrors the styling of the existing DPDP notice in
+          the table -- mirrors the styling of the existing DPDP notice in
           citizen/grievances/new/page.tsx. */}
       <div
         role="note"
@@ -155,7 +181,7 @@ export default async function VigilancePage() {
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "vigilance" })} backHref="/hr" />
           </div>
-        ) : (
+        ) : (<>
           <DataTable<Row>
           columns={columns}
           rows={items}
@@ -180,7 +206,23 @@ export default async function VigilancePage() {
           emptyTitle={t("emptyTitle")}
           emptyMessage={t("emptyMessage")}
         />
+        {/* GAP-HR-VIGILANCE-04: this batch (up to PAGE_BATCH rows) may not be
+            everything -- hasMore/page step to the next server batch. */}
+        {(page > 1 || data.hasMore) && !errored && (
+          <div style={{ display: "flex", justifyContent: "space-between", marginTop: 12 }}>
+            {page > 1 ? (
+              <Link href={`/hr/vigilance?page=${page - 1}`} className="btn-outline">
+                ← {t("prevBatch")}
+              </Link>
+            ) : <span />}
+            {data.hasMore ? (
+              <Link href={`/hr/vigilance?page=${page + 1}`} className="btn-outline">
+                {t("nextBatch")} →
+              </Link>
+            ) : <span />}
+          </div>
         )}
+        </>)}
       </Card>
     </div>
   );

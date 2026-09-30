@@ -15,9 +15,9 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  */
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and, sql, inArray } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { db, scopedRead } from "../../shared/db.js";
+import { scopedRead } from "../../shared/db.js";
 import { hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsOnboardingDocuments } from "./schema.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
 
@@ -96,6 +96,115 @@ export function mergeOnboardingDocuments(
     };
   });
 }
+
+// ── Tenant-wide onboarding summary (GET /v1/hrms/onboarding) ───────────────
+//
+// Pure row-shaping + filtering, split out of the route handler so it's
+// testable without a database (mirrors mergeOnboardingDocuments() above).
+
+export type OnboardingTaskLite = { employeeId: string; status: string; dueByDay: number };
+export type OnboardingEmployeeLite = {
+  id: string;
+  fullName: string | null;
+  employeeNo: string | null;
+  departmentId: string | null;
+  dateOfJoining: string | null;
+};
+
+export interface OnboardingSummaryRow {
+  id: string;
+  employee: string;
+  employeeNo: string;
+  /** null (not a raw uuid, not "—") when the department can't be resolved — GAP-HR-ONBOARDING-04. */
+  department: string | null;
+  /** null (not "—", which downstream date-formatting would render as "Invalid Date") when unknown. */
+  joiningDate: string | null;
+  stepsCompleted: string;
+  totalSteps: string;
+  overdue: number;
+  progress: string;
+  status: "completed" | "overdue" | "in_progress";
+}
+
+export type OnboardingStatusFilter = "all" | "active" | "in_progress" | "overdue" | "completed";
+
+export interface OnboardingCounts {
+  total: number;
+  inProgress: number;
+  overdue: number;
+  completed: number;
+}
+
+/**
+ * One row per employee with >=1 task, in insertion order of `empIds`.
+ * `todayStr` is injected (rather than computed from `new Date()` inside)
+ * so the overdue calculation is deterministic and unit-testable.
+ */
+export function buildOnboardingSummaryRows(
+  empIds: readonly string[],
+  empMap: ReadonlyMap<string, OnboardingEmployeeLite>,
+  deptMap: ReadonlyMap<string, string>,
+  tasksByEmployee: ReadonlyMap<string, readonly OnboardingTaskLite[]>,
+  todayStr: string,
+): OnboardingSummaryRow[] {
+  return empIds.map((empId) => {
+    const emp = empMap.get(empId);
+    const empTasks = tasksByEmployee.get(empId) ?? [];
+    const total = empTasks.length;
+    const completed = empTasks.filter((t) => t.status === "completed").length;
+    const overdue = empTasks.filter((t) => {
+      if (t.status === "completed" || !emp?.dateOfJoining) return false;
+      // Both sides are date-only strings or Date objects from a date column;
+      // compute due date in UTC to avoid local-tz midnight hazard.
+      const join = new Date(emp.dateOfJoining + "T00:00:00Z");
+      const due = new Date(join);
+      due.setUTCDate(due.getUTCDate() + t.dueByDay);
+      return due.toISOString().slice(0, 10) < todayStr;
+    }).length;
+    const status = completed === total ? "completed" : overdue > 0 ? "overdue" : "in_progress";
+    return {
+      id: empId,
+      employee: emp?.fullName ?? "—",
+      employeeNo: emp?.employeeNo ?? "—",
+      department: emp?.departmentId ? (deptMap.get(emp.departmentId) ?? null) : null,
+      joiningDate: emp?.dateOfJoining ?? null,
+      stepsCompleted: `${completed}/${total}`,
+      totalSteps: String(total),
+      overdue,
+      progress: total > 0 ? `${Math.round((completed / total) * 100)}%` : "0%",
+      status,
+    };
+  });
+}
+
+/** Tenant-wide counts over every row, independent of any status filter/pagination applied afterwards. */
+export function countOnboardingRows(rows: readonly OnboardingSummaryRow[]): OnboardingCounts {
+  return {
+    total: rows.length,
+    inProgress: rows.filter((r) => r.status === "in_progress").length,
+    overdue: rows.filter((r) => r.status === "overdue").length,
+    completed: rows.filter((r) => r.status === "completed").length,
+  };
+}
+
+export function filterOnboardingRows(
+  rows: readonly OnboardingSummaryRow[],
+  status: OnboardingStatusFilter,
+): OnboardingSummaryRow[] {
+  if (status === "all") return [...rows];
+  if (status === "active") return rows.filter((r) => r.status !== "completed");
+  return rows.filter((r) => r.status === status);
+}
+
+const onboardingListQuery = z.object({
+  // GAP-HR-ONBOARDING-05: "active" (everything except completed) is the
+  // default so a fresh, unfiltered visit doesn't grow unbounded with every
+  // joinee who has ever finished onboarding -- "all" is available as an
+  // explicit choice, never implied by omission.
+  status: z.enum(["all", "active", "in_progress", "overdue", "completed"]).default("active"),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  offset: z.coerce.number().int().min(0).default(0),
+});
 
 export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/employees/:id/onboarding-tasks", async (req, reply) => {
@@ -199,15 +308,24 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ employeeId: id, docType, status: body.status }) as any;
   });
 
-  // GET /v1/hrms/onboarding — tenant-wide onboarding summary (one row per employee with tasks)
+  // GET /v1/hrms/onboarding — tenant-wide onboarding summary (one row per
+  // employee with tasks), status-filterable and paginated.
+  //
+  // GAP-HR-ONBOARDING-05: `meta.counts` is computed over every row that
+  // matches the tenant (before the status filter/pagination below), so the
+  // stat tiles built from it stay correct regardless of which filtered,
+  // paginated slice of `filtered` actually renders as cards.
   app.get("/v1/hrms/onboarding", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
+    const { status, limit, offset } = onboardingListQuery.parse(req.query);
 
     const tasks = await scopedRead((tx) => tx.select().from(hrmsOnboardingTasks)
       .where(eq(hrmsOnboardingTasks.tenantId, ctx.tenantId)).limit(2000));
 
-    if (tasks.length === 0) return reply.send({ data: [] });
+    if (tasks.length === 0) {
+      return reply.send({ data: [], meta: { total: 0, limit, offset, counts: countOnboardingRows([]) } });
+    }
 
     const empIds = [...new Set(tasks.map((t) => t.employeeId))];
     const employees = await scopedRead((tx) => tx
@@ -222,44 +340,19 @@ export async function onboardingRoutes(app: FastifyInstance): Promise<void> {
       .from(hrmsDepartments)
       .where(and(eq(hrmsDepartments.tenantId, ctx.tenantId), inArray(hrmsDepartments.id, deptIds)))) : [];
     const deptMap = new Map(depts.map((d) => [d.id, d.name]));
-    const grouped = new Map<string, typeof tasks>();
+    const grouped = new Map<string, OnboardingTaskLite[]>();
     for (const t of tasks) {
       if (!grouped.has(t.employeeId)) grouped.set(t.employeeId, []);
       grouped.get(t.employeeId)!.push(t);
     }
 
-    const now = new Date();
-    const data = empIds.map((empId) => {
-      const emp = empMap.get(empId);
-      const empTasks = grouped.get(empId) ?? [];
-      const total = empTasks.length;
-      const completed = empTasks.filter((t) => t.status === "completed").length;
-      const todayStr = now.toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
-      const overdue = empTasks.filter((t) => {
-        if (t.status === "completed" || !emp?.dateOfJoining) return false;
-        // Both sides are date-only strings or Date objects from a date column;
-        // compute due date in UTC to avoid local-tz midnight hazard.
-        const join = new Date(emp.dateOfJoining + "T00:00:00Z");
-        const due = new Date(join);
-        due.setUTCDate(due.getUTCDate() + t.dueByDay);
-        return due.toISOString().slice(0, 10) < todayStr;
-      }).length;
-      const status = completed === total ? "completed" : overdue > 0 ? "overdue" : "in_progress";
-      return {
-        id: empId,
-        employee: emp?.fullName ?? "—",
-        employeeNo: emp?.employeeNo ?? "—",
-        department: emp?.departmentId ? (deptMap.get(emp.departmentId) ?? emp.departmentId) : "—",
-        joiningDate: emp?.dateOfJoining ?? "—",
-        stepsCompleted: `${completed}/${total}`,
-        totalSteps: String(total),
-        overdue,
-        progress: total > 0 ? `${Math.round((completed / total) * 100)}%` : "0%",
-        status,
-      };
-    });
+    const todayStr = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" in UTC
+    const all = buildOnboardingSummaryRows(empIds, empMap, deptMap, grouped, todayStr);
+    const counts = countOnboardingRows(all);
+    const filtered = filterOnboardingRows(all, status);
+    const page = filtered.slice(offset, offset + limit);
 
-    return reply.send({ data });
+    return reply.send({ data: page, meta: { total: filtered.length, limit, offset, counts } });
   });
 
   app.setErrorHandler((err, req, reply) => {

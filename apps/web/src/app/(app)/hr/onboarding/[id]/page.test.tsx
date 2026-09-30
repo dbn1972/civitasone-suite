@@ -232,6 +232,10 @@ describe("OnboardingDetailPage", () => {
     expect(
       screen.getByRole("button", { name: /mark "collect department id badge" as complete/i }),
     ).toBeInTheDocument();
+    // The already-completed task must not offer a redundant "Mark done".
+    expect(
+      screen.queryByRole("button", { name: /mark "submit joining report" as complete/i }),
+    ).not.toBeInTheDocument();
   });
 
   it("shows PermissionDenied instead of fetching anything for a role outside HR", async () => {
@@ -240,5 +244,21 @@ describe("OnboardingDetailPage", () => {
     render(await OnboardingDetailPage({ params: { id: "emp-1" } }));
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-HR-ONBOARDING-DETAIL-01 regression: the checklist used to render
+  // read-only (no onComplete passed from this server component), so "Mark
+  // done" could never appear no matter what state a task was in.
+  it("GAP-HR-ONBOARDING-DETAIL-01: wires the checklist to a real 'Mark done' action for a pending task", async () => {
+    fetchJsonMock.mockImplementation((path: string) => Promise.resolve(mockFor(path)));
+    render(await OnboardingDetailPage({ params: Promise.resolve({ id: "emp-1" }) }));
+
+    expect(
+      screen.getByRole("button", { name: /mark "collect department id badge" as complete/i }),
+    ).toBeInTheDocument();
+    // The already-completed task must not offer a redundant "Mark done".
+    expect(
+      screen.queryByRole("button", { name: /mark "submit joining report" as complete/i }),
+    ).not.toBeInTheDocument();
   });
 });

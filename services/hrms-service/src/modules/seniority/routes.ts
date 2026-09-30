@@ -12,6 +12,15 @@
  *      (measured from date_of_joining, or confirmation_date if present) as of
  *      `asOf` (default today). Returns eligible + ineligible buckets.
  *
+ *  GET /v1/hrms/seniority/lists
+ *      GAP-HR-DPC-04: persisted snapshot summaries (id, status, asOf,
+ *      createdAt, approvedAt) — before this route existed, a snapshot the
+ *      generate command below persisted (hrms_seniority_lists +
+ *      hrms_seniority_list_entries) had no way to be listed back to the UI,
+ *      so a caller who reloaded the page lost track of anything not still
+ *      held in that browser tab's own React state (see
+ *      SeniorityListActions.tsx's rewrite for the frontend half).
+ *
  *  POST /v1/hrms/seniority/generate
  *      DOM-019: publishes `hrms.seniority.generate` so `seniority/consumer.ts`
  *      persists a point-in-time snapshot (hrms_seniority_lists +
@@ -42,7 +51,7 @@ import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
-import { and, eq } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -155,6 +164,27 @@ export async function seniorityRoutes(app: FastifyInstance): Promise<void> {
       eligibleCount: eligible.length, ineligibleCount: ineligible.length,
       eligible, ineligible,
     });
+  });
+
+  // GAP-HR-DPC-04: list persisted snapshot summaries. HR_ROLES-only (same
+  // gate as generate/approve below) — this is the administrative view of
+  // what snapshots exist and their approval state, not a read-only officer
+  // view like GET /v1/hrms/seniority above.
+  app.get("/v1/hrms/seniority/lists", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const rows = await scopedRead((tx) => tx.select({
+      id: hrmsSeniorityLists.id,
+      status: hrmsSeniorityLists.status,
+      asOf: hrmsSeniorityLists.asOf,
+      createdAt: hrmsSeniorityLists.createdAt,
+      approvedAt: hrmsSeniorityLists.approvedAt,
+    })
+      .from(hrmsSeniorityLists)
+      .where(eq(hrmsSeniorityLists.tenantId, ctx.tenantId))
+      .orderBy(desc(hrmsSeniorityLists.createdAt))
+      .limit(50));
+    return reply.send({ data: rows });
   });
 
   app.post("/v1/hrms/seniority/generate", async (req, reply) => {
