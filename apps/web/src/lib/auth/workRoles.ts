@@ -96,4 +96,11 @@ export const HR_ROLES = [
   "super_admin",
   "manager",
   "employee",
+  // GAP-HR-ICC-06: a nominated ICC member holding ONLY icc_member (no HR
+  // role) was redirected to /dashboard by this layout before /hr/icc's own
+  // (already-correct) page/API gate ever ran. hrTileAccess.ts's
+  // HR_TILE_ROLE_OVERRIDES already maps "/hr/icc" to icc_member (GAP-HR-
+  // HOME-01), so the hub already filters correctly once this layout admits
+  // the role at all.
+  "icc_member",
 ];

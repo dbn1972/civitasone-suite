@@ -138,10 +138,28 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
           }
           case "disciplinary_icc_routes__0": {
             // POST /v1/hrms/icc/complaints — no path param; `id` is the new PK.
+            // GAP-HR-ICC-04: case_no (ICC/YYYY/NNN, per-tenant-per-year
+            // sequence) -- same COUNT(*)+1 shape id-cards/routes.ts already
+            // uses for its own sequential card_number (that comment's own
+            // caveat about concurrent-insert races applies equally here; a
+            // real DB sequence would be more robust but is a bigger change
+            // than this fix warrants). Computed inside this same
+            // transaction, immediately before the insert, on the row's own
+            // filed year (this insert relies on filed_at's DB-side
+            // defaultNow(), so the JS year at write time is authoritative).
+            const year = new Date().getFullYear();
+            const countRows = await tx
+              .select({ count: sql<number>`count(*)`.mapWith(Number) })
+              .from(hrmsIccComplaints)
+              .where(and(
+                eq(hrmsIccComplaints.tenantId, p.tenantId),
+                sql`extract(year from ${hrmsIccComplaints.filedAt}) = ${year}`,
+              ));
+            const caseNo = `ICC/${year}/${String((countRows[0]?.count ?? 0) + 1).padStart(3, "0")}`;
             await tx.insert(hrmsIccComplaints).values({
                   id, tenantId: p.tenantId, complainantId: body.complainantId,
                   respondentId: body.respondentId ?? null, summary: body.summary,
-                  createdBy: msg.actorId,
+                  createdBy: msg.actorId, caseNo,
                 });
             break;
           }
