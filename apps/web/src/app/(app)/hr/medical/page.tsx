@@ -1,12 +1,20 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import Link from "next/link";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { resolveEmployees } from "@/lib/entityAdapters/employee";
+import { MedicalClaimsTable, type MedicalClaimRow } from "./MedicalClaimsTable";
+
+// Mirrors medical/routes.ts's HR_ROLES for the approve/reject PATCH route.
+const HR_ROLES = ["hr_admin", "hr_officer", "super_admin", "finance_officer"];
 
 type ApiRow = {
   id: string;
+  claim_no: number | null;
   employee_id: string;
   claim_type: string;
   amount_minor: string;
@@ -19,62 +27,69 @@ type ApiRow = {
   created_at: string;
 } & Record<string, unknown>;
 
-type Row = {
-  id: string;
-  caseRef: string;
-  claimType: string;
-  hospital: string;
-  amount: number | null;
-  approvedAmount: number | null;
-  claimantType: string;
-  filedDate: string;
-  status: string;
-} & Record<string, unknown>;
-
-async function getData(t: Awaited<ReturnType<typeof getTranslations>>): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/hrms/medical/claims", [], {
+async function getData(): Promise<LoaderResult<ApiRow[]>> {
+  return fetchJson<unknown, ApiRow[]>("/api/v1/hrms/medical/claims", [], {
     telemetryKey: "hr.medical",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: ApiRow[] })?.data;
-      if (!Array.isArray(arr)) return null;
-      return (arr as ApiRow[]).map((r) => {
-        const amountNum = r.amount_minor != null ? Number(r.amount_minor) : null;
-        const approvedNum = r.approved_amount_minor != null ? Number(r.approved_amount_minor) : null;
-        return {
-          id: r.id,
-          caseRef: "MED/" + r.id.slice(0, 8).toUpperCase(),
-          claimType: r.claim_type ?? "—",
-          hospital: r.hospital_name ?? "—",
-          amount: amountNum != null && Number.isFinite(amountNum) ? amountNum : null,
-          approvedAmount: approvedNum != null && Number.isFinite(approvedNum) ? approvedNum : null,
-          claimantType: r.dependant_name ? t("claimantDependant", { relation: r.dependant_relation ?? "" }) : t("claimantSelf"),
-          filedDate: formatIndianDate(r.created_at ? r.created_at.slice(0, 10) : null),
-          status: r.status,
-        };
-      });
+      return Array.isArray(arr) ? arr : null;
     },
   });
 }
 
 export default async function MedicalPage() {
   const t = await getTranslations("medicalClaims");
-  const { data: items, source } = await getData(t);
+  const roles = getSessionRoles();
+  // GAP-HR-MEDICAL-05: approve/reject is only ever meaningful for the same
+  // HR_ROLES the backend's own PATCH .../approve route requires — computed
+  // here (a Server Component, with real session data) and passed down as a
+  // plain boolean, since the client table/actions components below have no
+  // session access of their own.
+  const canApprove = roles.some((r) => HR_ROLES.includes(r));
+
+  const { data: apiRows, source } = await getData();
   const errored = source === "error";
 
-  const pending = items.filter((i) => i.status === "pending").length;
-  const approved = items.filter((i) => i.status === "approved" || i.status === "paid").length;
-  const rejected = items.filter((i) => i.status === "rejected").length;
+  // GAP-HR-MEDICAL-02 (PII/identity): employee_id was already in the API
+  // response but dropped before rendering, so an HR reader couldn't tell
+  // whose claim a row was. Batch-resolve names via the same adapter
+  // EntityPicker uses (GAP-HR-SF-06) — one call for every unique id on the
+  // page, not N+1 — since medical/routes.ts cannot itself JOIN
+  // employee.hrms_employees (module isolation, CLAUDE.md rule 4).
+  const employeeIds = [...new Set(apiRows.map((r) => r.employee_id).filter(Boolean))];
+  const employees = employeeIds.length > 0 ? await resolveEmployees(employeeIds) : [];
+  const employeeById = new Map(employees.map((e) => [e.id, e]));
 
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount"; sortable?: boolean }[] = [
-    { key: "caseRef", label: t("colClaimRef") },
-    { key: "claimType", label: t("colClaimType") },
-    { key: "hospital", label: t("colHospital") },
-    { key: "amount", label: t("colClaimedAmount"), cellType: "amount" },
-    { key: "approvedAmount", label: t("colApproved"), cellType: "amount" },
-    { key: "claimantType", label: t("colClaimant") },
-    { key: "filedDate", label: t("colFiledDate"), sortable: false },
-    { key: "status", label: t("colStatus"), cellType: "status" },
-  ];
+  const items: MedicalClaimRow[] = apiRows.map((r) => {
+    const amountNum = r.amount_minor != null ? Number(r.amount_minor) : null;
+    const approvedNum = r.approved_amount_minor != null ? Number(r.approved_amount_minor) : null;
+    const employee = employeeById.get(r.employee_id);
+    return {
+      id: r.id,
+      // GAP-HR-MEDICAL-04 (UUID): claim_no is now the real, DB-guaranteed-
+      // unique column (migration 0156), not a client-side slice of the
+      // row's opaque uuid, which could (and eventually would) collide.
+      caseRef: r.claim_no != null ? `MED-${String(r.claim_no).padStart(6, "0")}` : "—",
+      employeeId: r.employee_id,
+      employeeLabel: employee?.label ?? "—",
+      claimType: r.claim_type,
+      hospital: r.hospital_name ?? "—",
+      amount: amountNum != null && Number.isFinite(amountNum) ? amountNum : null,
+      approvedAmount: approvedNum != null && Number.isFinite(approvedNum) ? approvedNum : null,
+      claimantType: r.dependant_name ? t("claimantDependant", { relation: r.dependant_relation ?? "" }) : t("claimantSelf"),
+      filedDate: formatIndianDate(r.created_at ? r.created_at.slice(0, 10) : null),
+      status: r.status,
+      actions: "",
+    };
+  });
+
+  const pending = items.filter((i) => i.status === "pending").length;
+  // GAP-HR-MEDICAL-03: schema status enum is pending|approved|rejected|
+  // settled — "paid" is never produced by the backend, so it never
+  // contributed to this tile, and "settled" (paid out) claims were counted
+  // in no tile at all.
+  const approved = items.filter((i) => i.status === "approved" || i.status === "settled").length;
+  const rejected = items.filter((i) => i.status === "rejected").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -83,9 +98,12 @@ export default async function MedicalPage() {
         subtitle={t("subtitle")}
         back="/hr"
         backLabel={t("backToHr")}
-        actions={<span />}
+        // GAP-HR-MEDICAL-05/06: was an empty <span/> (dead markup) despite
+        // POST /medical/claims already existing on the backend with no UI
+        // anywhere in the app calling it.
+        actions={<Link href="/hr/medical/new" className="btn primary">{t("fileClaimAction")}</Link>}
       />
-      <DataSourceBadge source={source} />
+      <DataSourceBadge source={source} message={t("dataSourceErrorMessage")} />
       <StatGrid>
         <StatCard icon="🏥" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? null : items.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? null : pending} />
@@ -98,17 +116,7 @@ export default async function MedicalPage() {
             <RefreshErrorState error={toHumanError("load", { area: "medical claims" })} backHref="/hr" />
           </div>
         ) : (
-          <DataTable<Row>
-            columns={columns}
-            rows={items}
-            sortable
-            filterable
-            filterPlaceholder={t("filterPlaceholder")}
-            pageSize={15}
-            emptyIcon="🏥"
-            emptyTitle={t("emptyTitle")}
-            emptyMessage={t("emptyMessage")}
-          />
+          <MedicalClaimsTable rows={items} canApprove={canApprove} />
         )}
       </Card>
     </div>
