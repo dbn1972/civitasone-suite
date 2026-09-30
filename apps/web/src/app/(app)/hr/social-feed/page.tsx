@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
+import { GiveKudosButton } from "./GiveKudosButton";
 
 type FeedItem = {
   type: string;
@@ -81,6 +82,7 @@ export default async function SocialFeedPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr" backLabel={t("backToHr")}
+        actions={<GiveKudosButton label={t("giveKudosBtn")} />}
       />
       {!errored ? <DataSourceBadge source={source} /> : null}
       <StatGrid>
@@ -103,13 +105,10 @@ export default async function SocialFeedPage() {
             <div style={{ fontSize: 40, marginBottom: 12 }}>🎉</div>
             <p style={{ fontWeight: 600, marginBottom: 4 }}>{t("emptyTitle")}</p>
             {/* GAP-HR-SOCIAL-FEED-03: this used to promise a "Give kudos"
-                action ("Give kudos to a colleague to start the feed!") that
-                doesn't exist anywhere on this page. A real give-kudos flow
-                needs a receiver picker, which this campaign's shared
-                EntityPicker component (still Phase-2 build, not yet
-                adopted anywhere) is meant to provide -- adding an ad hoc
-                one here would pre-empt that shared design, so the honest
-                fix for now is copy that doesn't promise a missing action. */}
+                action that didn't exist anywhere on the page. Now that the
+                header's Give Kudos button (EntityPicker-backed, see
+                GiveKudosButton.tsx) actually exists, this copy is honest
+                again. */}
             <p style={{ fontSize: 14 }}>{t("emptyMessage")}</p>
           </div>
         </Card>
@@ -133,8 +132,10 @@ export default async function SocialFeedPage() {
                           })}
                         </p>
                         {/* GAP-HR-SOCIAL-FEED-03: every feed item already
-                            carries createdAt; it was never rendered, so a
-                            7-day-old kudos and a today one looked the same. */}
+                            carries createdAt; it was never rendered anywhere,
+                            so a 7-day-old kudos and a today one looked the
+                            same. Rendered for all 4 item types below, not
+                            just this one. */}
                         <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
                       </div>
                       {item.message && (
@@ -151,8 +152,11 @@ export default async function SocialFeedPage() {
                   <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--warnbg, #fff9f0)", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 32 }} aria-hidden="true">🎂</span>
                     <span className="sr-only">{t("birthdayTypeLabel")}</span>
-                    <div>
-                      <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("birthdayGreeting", { name: item.name ?? "" })}</p>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("birthdayGreeting", { name: item.name ?? "" })}</p>
+                        <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
+                      </div>
                       <p style={{ fontSize: 12, color: "var(--mut)" }}>{item.designation} · {item.department}</p>
                     </div>
                   </div>
@@ -163,8 +167,11 @@ export default async function SocialFeedPage() {
                   <div key={item.id} style={{ display: "flex", alignItems: "center", gap: 14, padding: "14px 20px", background: "var(--goodbg, #f0fff8)", borderBottom: "1px solid var(--line)" }}>
                     <span style={{ fontSize: 32 }} aria-hidden="true">👋</span>
                     <span className="sr-only">{t("newJoineeTypeLabel")}</span>
-                    <div>
-                      <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("newJoineeGreeting", { name: item.name ?? "" })}</p>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", gap: 8 }}>
+                        <p style={{ fontWeight: 600, color: "var(--ink)", fontSize: 14 }}>{t("newJoineeGreeting", { name: item.name ?? "" })}</p>
+                        <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
+                      </div>
                       <p style={{ fontSize: 12, color: "var(--mut)" }}>{t("joinedAsLine", { designation: item.designation ?? "", department: item.department ?? "" })}</p>
                     </div>
                   </div>

@@ -62,11 +62,32 @@ describe("SocialFeedPage", () => {
     expect(screen.getByText("20/09/2026")).toBeInTheDocument();
   });
 
-  it("uses one constant card title across empty/filled/error states, and an honest empty message that promises no missing action (GAP-HR-SOCIAL-FEED-06/03)", async () => {
+  it("uses one constant card title across empty/filled/error states, and now that the Give Kudos action genuinely exists, the empty-state copy that names it is honest again (GAP-HR-SOCIAL-FEED-06/03)", async () => {
     fetchJsonMock.mockResolvedValue(loaderResult([], { kudos7d: 0, birthdaysToday: 0, joinees30d: 0, announcementsActive: 0 }));
     await renderPage();
     expect(screen.getByText("Latest Updates")).toBeInTheDocument();
-    expect(screen.queryByText("Give kudos to a colleague to start the feed!")).not.toBeInTheDocument();
+    expect(screen.getByText("Give kudos to a colleague to start the feed!")).toBeInTheDocument();
+  });
+
+  it("renders the Give Kudos action in the page header (GAP-HR-SOCIAL-FEED-03)", async () => {
+    fetchJsonMock.mockResolvedValue(loaderResult([], { kudos7d: 0, birthdaysToday: 0, joinees30d: 0, announcementsActive: 0 }));
+    await renderPage();
+    expect(screen.getByRole("button", { name: "+ Give Kudos" })).toBeInTheDocument();
+  });
+
+  it("renders a timestamp on birthday and new_joinee items too, not just kudos/announcement", async () => {
+    fetchJsonMock.mockResolvedValue(
+      loaderResult(
+        [
+          { type: "birthday", id: "b1", createdAt: "2026-09-20T10:00:00Z", name: "Priya", department: "Finance", designation: "Officer" },
+          { type: "new_joinee", id: "j1", createdAt: "2026-09-15T10:00:00Z", name: "Ravi", department: "Works", designation: "Engineer" },
+        ],
+        { kudos7d: 0, birthdaysToday: 1, joinees30d: 1, announcementsActive: 0 },
+      ),
+    );
+    await renderPage();
+    expect(screen.getByText("20/09/2026")).toBeInTheDocument();
+    expect(screen.getByText("15/09/2026")).toBeInTheDocument();
   });
 
   it("shows the same constant title and a real error message on failure, not a bare 'Feed'", async () => {
