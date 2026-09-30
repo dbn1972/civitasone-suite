@@ -420,16 +420,30 @@ function mapAuditRows(payload: unknown): AuditRowSummary[] | null {
     const actor = toText(row.actor) ?? (isRecord(row.actor) ? toText(row.actor.email) ?? toText(row.actor.name) : null);
     const action = toText(row.action) ?? toText(row.type);
     const resource = toText(row.resource) ?? toText(row.target) ?? "unknown";
-    const outcome =
+    // GAP-HR-AUDIT-LOG-06: previously defaulted an ambiguous/unrecognised
+    // outcome to "success" (only error/critical severity flipped it to
+    // "failure") -- an audit trail must never call an action successful
+    // when it isn't sure. Flipped the fallback's polarity: only a
+    // positively-known-good severity reads as success now.
+    const outcome: "success" | "failure" =
       row.outcome === "success" || row.outcome === "failure"
         ? row.outcome
-        : row.severity === "error" || row.severity === "critical"
-          ? "failure"
-          : "success";
-    if (!actor || !action || !resource) continue;
-    mapped.push({ actor, action, resource, outcome });
+        : row.severity === "info" || row.severity === "warning"
+          ? "success"
+          : "failure";
+    if (!actor || !action) continue;
+    // GAP-HR-AUDIT-LOG-03: surface the event's own timestamp -- occurredAt
+    // for the raw audit-service row shape, timestamp for an already-
+    // flattened one -- previously dropped entirely by this mapper.
+    const at = toText(row.occurredAt) ?? toText(row.timestamp);
+    mapped.push({ actor, action, resource, outcome, at });
   }
-  return mapped.length > 0 ? mapped : null;
+  // GAP-HR-AUDIT-LOG-01: an empty but VALID array must stay a clean "no
+  // records", never the error badge -- only fall back to null when the
+  // payload had rows but none of them were parseable (a genuine shape-drift
+  // signal worth flagging as an error), matching mapAuditRows's own sibling
+  // mappers' convention for a real parse failure.
+  return rows.length > 0 && mapped.length === 0 ? null : mapped;
 }
 
 function mapMetrics(payload: unknown): MetricCard[] | null {
@@ -701,9 +715,27 @@ export async function getAuditItems(): Promise<LoaderResult<AuditRowSummary[]>> 
   });
 }
 
-/** HR-scoped audit log — filters to employee, leave, payroll resource types. */
-export async function getHrAuditLog(limit = 50, offset = 0): Promise<LoaderResult<AuditRowSummary[]>> {
-  return fetchJson(`/api/audit/events?resourceType=employee,leave_app,leave_type,leave_alloc,payroll_run,payroll_structure,salary_slip&limit=${limit}&offset=${offset}`, [] as AuditRowSummary[], {
+/**
+ * HR-scoped audit log. GAP-HR-AUDIT-LOG-08: the `resourceType=...` param
+ * this used to send was silently dropped -- GET /audit/events on
+ * audit-service only ever recognised tenantId/from/to/type, so it did
+ * nothing at all (not "excludes most HR modules" as originally suspected;
+ * genuinely inert). Removed rather than left in place claiming a scope it
+ * never enforced. A real resource-type filter needs a small audit-service
+ * change (matching the actor/payload JSONB columns) not made in this pass;
+ * `from`/`to` are real, backend-enforced filters already.
+ */
+export async function getHrAuditLog(
+  limit = 50,
+  offset = 0,
+  filters?: { from?: string; to?: string },
+): Promise<LoaderResult<AuditRowSummary[]>> {
+  const params = new URLSearchParams();
+  params.set("limit", String(limit));
+  params.set("offset", String(offset));
+  if (filters?.from) params.set("from", filters.from);
+  if (filters?.to) params.set("to", filters.to);
+  return fetchJson(`/api/audit/events?${params.toString()}`, [] as AuditRowSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.audit-log",
     responseSchema: auditEventsListSchema,

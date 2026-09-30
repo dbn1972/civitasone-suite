@@ -1,6 +1,8 @@
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewDepartmentPageClient } from "./NewDepartmentPageClient";
+import { fetchJson } from "@/app/_data/apiClient";
+import type { MinimalDept } from "@/lib/hr/departmentTree";
 
 /**
  * Mirrors services/hrms-service/src/modules/employee/masters-routes.ts's
@@ -15,7 +17,21 @@ import { NewDepartmentPageClient } from "./NewDepartmentPageClient";
  */
 const DEPARTMENT_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
-export default function NewDepartmentPage() {
+/**
+ * GAP-HR-DEPARTMENTS-03: the parent-department select needs the existing
+ * department list. Best-effort only -- a fetch failure here should not
+ * block the whole "Add Department" form; it just means the parent select
+ * falls back to "None (top level)" only, same as before this fix.
+ */
+async function getDepartments(): Promise<MinimalDept[]> {
+  const result = await fetchJson<unknown, MinimalDept[]>("/api/v1/hrms/departments", [], {
+    telemetryKey: "config.departments.new",
+    mapResponse: (p) => (p as { data: MinimalDept[] })?.data ?? null,
+  });
+  return result.source === "error" ? [] : result.data;
+}
+
+export default async function NewDepartmentPage() {
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => DEPARTMENT_ADMIN_ROLES.includes(r));
 
@@ -23,5 +39,6 @@ export default function NewDepartmentPage() {
     return <PermissionDenied module="adding a department" requiredRoles={DEPARTMENT_ADMIN_ROLES} />;
   }
 
-  return <NewDepartmentPageClient />;
+  const departments = await getDepartments();
+  return <NewDepartmentPageClient departments={departments} />;
 }

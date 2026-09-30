@@ -6,6 +6,11 @@
  *  - POST /v1/hrms/departments           — 202 accepted (async F3 write), 400 validation, 403 low-privilege
  *  - PATCH /v1/hrms/departments/:id      — 202 accepted, 404 not-found, 403 low-privilege
  *  - DELETE /v1/hrms/departments/:id     — 202 accepted, 404 not-found, 403 low-privilege
+ *  - GAP-HR-DEPARTMENTS-01: GET includes a real employeeCount per row
+ *  - GAP-HR-DEPARTMENTS-02: DELETE is blocked (409 DEPARTMENT_IN_USE) when a
+ *    department still has child departments or active employees
+ *  - GAP-HR-DEPARTMENTS-03: PATCH rejects a re-parent that would create a
+ *    cycle, and derives `level` server-side from the new parent
  *
  * Pattern: buildApp() + app.inject() (no real DB — mocked via vi.mock).
  * Auth:    signToken (HS256) with test_secret_for_civitasone_32chr.
@@ -31,6 +36,7 @@ const SECRET  = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT  = "aaaaaaaa-0001-4000-8000-000000000011";
 const FAKE_ID = "00000000-cafe-4000-8000-ffffffffffff";
 const NEW_ID  = "11111111-cafe-4000-8000-ffffffffffff";
+const OTHER_ID = "22222222-cafe-4000-8000-ffffffffffff";
 
 // ── Token helpers ─────────────────────────────────────────────────────────
 
@@ -161,7 +167,7 @@ afterAll(async () => { await sqlClient.end(); });
 
 // ── Helper ────────────────────────────────────────────────────────────────
 
-function mockDept() {
+function mockDept(overrides: Partial<Record<string, unknown>> = {}) {
   return {
     id: FAKE_ID,
     tenantId: TENANT,
@@ -177,7 +183,27 @@ function mockDept() {
     updatedBy: "dept-test-user",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
+    ...overrides,
   };
+}
+
+/**
+ * The mocked db.js's `.select().from().where()` chain calls H.rows() TWICE
+ * per query -- once (discarded) while `.from()` eagerly builds an unused
+ * `.then` fallback for the rare caller that awaits before ever calling
+ * `.where()`, and once for real inside `.where()` itself (see this file's
+ * `vi.mock("../shared/db.js", ...)` above). A test asserting on a single
+ * query's result is unaffected (H.rows.mockReturnValue(x) is a blanket
+ * default regardless of call count), but a test sequencing MULTIPLE
+ * distinct queries within one request via `mockReturnValueOnce` must queue
+ * each logical query's value twice, or the sequence desyncs by the 2nd
+ * query onward. Queue one call per *query* here, not per H.rows()
+ * invocation.
+ */
+function queueRows(...perQuery: unknown[]): void {
+  for (const v of perQuery) {
+    H.rows.mockReturnValueOnce(v).mockReturnValueOnce(v);
+  }
 }
 
 // No shared beforeEach existed previously, which let mock state silently leak
@@ -242,6 +268,38 @@ describe("GET /v1/hrms/departments", () => {
     await app.close();
     expect([401, 403]).toContain(r.statusCode);
   });
+
+  // GAP-HR-HR-DEPARTMENTS-01
+  it("200 — each department row carries a real employeeCount (not always 0)", async () => {
+    queueRows(
+      [mockDept({ id: "d1" }), mockDept({ id: "d2", code: "FIN", name: "Finance" })],
+      [{ departmentId: "d1" }, { departmentId: "d1" }, { departmentId: "d2" }],
+    );
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/departments",
+      headers: { authorization: `Bearer ${adminTok}` },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(200);
+    const body = r.json<{ data: Array<{ id: string; employeeCount: number }> }>();
+    expect(body.data.find((d) => d.id === "d1")?.employeeCount).toBe(2);
+    expect(body.data.find((d) => d.id === "d2")?.employeeCount).toBe(1);
+  });
+
+  it("200 — a department with no employees gets employeeCount 0, not omitted", async () => {
+    queueRows([mockDept({ id: "d1" })], []);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/departments",
+      headers: { authorization: `Bearer ${adminTok}` },
+    });
+    await app.close();
+    const body = r.json<{ data: Array<{ employeeCount: number }> }>();
+    expect(body.data[0]?.employeeCount).toBe(0);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -250,7 +308,7 @@ describe("GET /v1/hrms/departments", () => {
 describe("POST /v1/hrms/departments", () => {
   const validBody = { code: "FIN", name: "Finance Department" };
 
-  it("202 — admin creates a department (accepted, async F3 write)", async () => {
+  it("202 — admin creates a top-level department (accepted, async F3 write)", async () => {
     const app = await buildApp();
     const r = await injectF3(app, {
       method: "POST",
@@ -319,6 +377,41 @@ describe("POST /v1/hrms/departments", () => {
     await app.close();
     expect([401, 403]).toContain(r.statusCode);
   });
+
+  // GAP-HR-DEPARTMENTS-03
+  it("202 — creating under a parent derives level server-side (client-sent level is ignored)", async () => {
+    queueRows([mockDept({ id: OTHER_ID, level: 1 })]); // parent lookup
+    const app = await buildApp();
+    const r = await injectF3(app, {
+      method: "POST",
+      url: "/v1/hrms/departments",
+      headers: {
+        authorization: `Bearer ${adminTok}`,
+        "content-type": "application/json",
+      },
+      payload: { code: "SUB", name: "Sub Unit", parentId: OTHER_ID, level: 99 },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(H.insert).toHaveBeenCalledWith(expect.objectContaining({ level: 2, parentId: OTHER_ID }));
+  });
+
+  it("400 — creating under a non-existent parent is rejected", async () => {
+    queueRows([]); // parent lookup finds nothing
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/departments",
+      headers: {
+        authorization: `Bearer ${adminTok}`,
+        "content-type": "application/json",
+      },
+      payload: { code: "SUB", name: "Sub Unit", parentId: OTHER_ID },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(400);
+    expect(r.json<{ code: string }>().code).toBe("PARENT_NOT_FOUND");
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -379,16 +472,70 @@ describe("PATCH /v1/hrms/departments/:id", () => {
     await app.close();
     expect([401, 403]).toContain(r.statusCode);
   });
+
+  // GAP-HR-DEPARTMENTS-03
+  it("400 — a department cannot be re-parented under itself", async () => {
+    queueRows([mockDept()]); // existence pre-check
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/departments/${FAKE_ID}`,
+      headers: { authorization: `Bearer ${adminTok}`, "content-type": "application/json" },
+      payload: { parentId: FAKE_ID },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(400);
+    expect(r.json<{ code: string }>().code).toBe("HIERARCHY_CYCLE");
+  });
+
+  it("400 — a department cannot be re-parented under one of its own descendants", async () => {
+    queueRows(
+      [mockDept()],            // existence pre-check on FAKE_ID
+      [{ parentId: FAKE_ID }], // isAncestor's walk: OTHER_ID's own parent is FAKE_ID
+    );
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/departments/${FAKE_ID}`,
+      headers: { authorization: `Bearer ${adminTok}`, "content-type": "application/json" },
+      payload: { parentId: OTHER_ID },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(400);
+    expect(r.json<{ code: string }>().code).toBe("HIERARCHY_CYCLE");
+  });
+
+  it("202 — a valid re-parent derives level from the new parent server-side", async () => {
+    queueRows(
+      [mockDept()],                            // existence pre-check on FAKE_ID
+      [{ parentId: null }],                    // isAncestor's walk: OTHER_ID's parent is null (top-level, no cycle)
+      [mockDept({ id: OTHER_ID, level: 3 })],   // parent lookup for level
+    );
+    const app = await buildApp();
+    const r = await injectF3(app, {
+      method: "PATCH",
+      url: `/v1/hrms/departments/${FAKE_ID}`,
+      headers: { authorization: `Bearer ${adminTok}`, "content-type": "application/json" },
+      payload: { parentId: OTHER_ID },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(202);
+    expect(H.update).toHaveBeenCalledWith(expect.objectContaining({ parentId: OTHER_ID, level: 4 }));
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
 // DELETE /v1/hrms/departments/:id
 // ═══════════════════════════════════════════════════════════════════════════
 describe("DELETE /v1/hrms/departments/:id", () => {
-  it("202 — admin deletes an existing department (accepted, async F3 write)", async () => {
-    // Same existence pre-check as PATCH — required or this 404s regardless of
-    // the delete mock.
-    H.rows.mockReturnValue([mockDept()]);
+  it("202 — admin deletes an empty, childless department (accepted, async F3 write)", async () => {
+    // Same existence pre-check as PATCH, plus (GAP-HR-DEPARTMENTS-02) the new
+    // childCount and employeeCount checks -- both zero, so delete proceeds.
+    queueRows(
+      [mockDept()],       // existence pre-check
+      [{ childCount: 0 }], // child-department count
+      [],                  // active-employee rows (none)
+    );
     const app = await buildApp();
     const r = await injectF3(app, {
       method: "DELETE",
@@ -421,5 +568,42 @@ describe("DELETE /v1/hrms/departments/:id", () => {
     });
     await app.close();
     expect([401, 403]).toContain(r.statusCode);
+  });
+
+  // GAP-HR-DEPARTMENTS-02
+  it("409 DEPARTMENT_IN_USE — refuses to delete a department that still has child departments, and never publishes", async () => {
+    // Child-department count is 2 (blocking) -- the route still goes on to
+    // compute employeeCount too (for a complete 409 payload) before it
+    // checks either condition, so a 3rd query's worth of rows is queued
+    // even though this test doesn't care what it is.
+    queueRows([mockDept()], [{ childCount: 2 }], []);
+    const app = await buildApp();
+    const r = await injectF3(app, {
+      method: "DELETE",
+      url: `/v1/hrms/departments/${FAKE_ID}`,
+      headers: { authorization: `Bearer ${adminTok}` },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(409);
+    expect(r.json<{ code: string; childCount: number }>().code).toBe("DEPARTMENT_IN_USE");
+    expect(H.delete).not.toHaveBeenCalled();
+  });
+
+  it("409 DEPARTMENT_IN_USE — refuses to delete a department that still has active employees, and never publishes", async () => {
+    queueRows(
+      [mockDept()],                 // existence pre-check
+      [{ childCount: 0 }],           // no child departments
+      [{ departmentId: FAKE_ID }],   // one active employee
+    );
+    const app = await buildApp();
+    const r = await injectF3(app, {
+      method: "DELETE",
+      url: `/v1/hrms/departments/${FAKE_ID}`,
+      headers: { authorization: `Bearer ${adminTok}` },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(409);
+    expect(r.json<{ code: string; employeeCount: number }>().employeeCount).toBe(1);
+    expect(H.delete).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,6 @@
 import Link from "next/link";
-import { PageHeader, Card, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, Card, EmptyState, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { toResourceState } from "@/app/_data/useResource";
-import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { DepartmentsTable } from "./DepartmentsTable";
@@ -24,19 +22,21 @@ type Dept = {
   code: string;
   name: string;
   parentId: string | null;
+  level?: number | null;
   employeeCount?: number;
 } & Record<string, unknown>;
 
-async function getDepartments(): Promise<LoaderResult<Dept[]>> {
-  try {
-    const r = await fetchJson<unknown, Dept[]>("/api/v1/hrms/departments", [], {
-      telemetryKey: "config.departments",
-      mapResponse: (p) => (p as { data: Dept[] })?.data ?? null,
-    });
-    return r;
-  } catch {
-    return { data: [], source: "error" as const };
-  }
+function getDepartments(): Promise<LoaderResult<Dept[]>> {
+  // GAP-HR-DEPARTMENTS-08: this used to wrap fetchJson in a try/catch that
+  // discarded the loader's `status`/`errorMessage` on any failure and
+  // synthesised a bare `{data: [], source: "error"}` -- fetchJson itself
+  // never throws (see apiClient.ts), so the catch branch was dead, but it
+  // also meant a real 403 could never be told apart from a 500 here. Return
+  // the full result so the Card below can render LoadErrorState correctly.
+  return fetchJson<unknown, Dept[]>("/api/v1/hrms/departments", [], {
+    telemetryKey: "config.departments",
+    mapResponse: (p) => (p as { data: Dept[] })?.data ?? null,
+  });
 }
 
 const newBtnStyle: React.CSSProperties = {
@@ -55,15 +55,19 @@ const newBtnStyle: React.CSSProperties = {
 export default async function DepartmentsPage() {
   const t = await getTranslations("departments");
   const result = await getDepartments();
-  const { data: depts } = result;
-  const resource = toResourceState(result);
-  const errored = resource.status === "error";
+  const { data: depts, source, status, errorMessage } = result;
+  const errored = source === "error";
   const roles = getSessionRoles();
   const canEdit = roles.some((r) => DEPARTMENT_ADMIN_ROLES.includes(r));
 
   const rootDepts = errored ? null : depts.filter((d) => !d.parentId).length;
   const subDepts  = errored ? null : depts.filter((d) => !!d.parentId).length;
-  const withCode  = errored ? null : depts.filter((d) => !!d.code).length;
+  // GAP-HR-DEPARTMENTS-04: "With Code" was always == Total (code is a
+  // required NOT NULL column, so every row always has one) -- a stat with
+  // no information. Replaced with a metric that actually varies: how many
+  // departments currently have zero employees, now that GET returns a real
+  // employeeCount (GAP-HR-DEPARTMENTS-01).
+  const noEmployeeDepts = errored ? null : depts.filter((d) => (d.employeeCount ?? 0) === 0).length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -76,55 +80,45 @@ export default async function DepartmentsPage() {
         actions={
           canEdit ? (
             <Link href="/hr/departments/new" style={newBtnStyle}>
+              <span aria-hidden="true">+ </span>
               {t("newBtn")}
             </Link>
           ) : undefined
         }
       />
 
-      {/* Breadcrumb */}
-      <nav aria-label={t("breadcrumbNavLabel")} style={{ marginBottom: 12 }}>
-        <ol
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            listStyle: "none",
-            margin: 0,
-            padding: 0,
-            fontSize: 12,
-            color: "var(--mut,#64748b)",
-          }}
-        >
-          <li>
-            <Link href="/" style={{ color: "var(--mut,#64748b)", textDecoration: "none" }}>
-              {t("breadcrumbHome")}
-            </Link>
-          </li>
-          <li aria-hidden="true" style={{ fontSize: 10 }}>›</li>
-          <li>
-            <Link href="/hr" style={{ color: "var(--mut,#64748b)", textDecoration: "none" }}>
-              {t("backLabel")}
-            </Link>
-          </li>
-          <li aria-hidden="true" style={{ fontSize: 10 }}>›</li>
-          <li aria-current="page" style={{ fontWeight: 600, color: "var(--fg,#0f172a)" }}>
-            {t("title")}
-          </li>
-        </ol>
-      </nav>
+      {/* GAP-HR-DEPARTMENTS-06: this hand-rolled breadcrumb duplicated the
+          global AutoBreadcrumb the AppShell TopBar already renders for every
+          /hr/* route (Home > HR > Departments) -- two "go up" trails on one
+          page, plus the PageHeader back link makes three. Removed; rely on
+          AutoBreadcrumb like every other HR page. */}
 
       <StatGrid>
         <StatCard icon="🗂️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : depts.length} />
         <StatCard icon="🌳" iconBg="var(--goodbg, #e6f7f0)" label={t("statRootLabel")}  value={rootDepts ?? "—"} />
         <StatCard icon="🌿" iconBg="var(--warnbg, #fff7e6)" label={t("statSubLabel")}   value={subDepts ?? "—"} />
-        <StatCard icon="🏷️" iconBg="var(--bg, #f5f5f5)" label={t("statWithCodeLabel")} value={withCode ?? "—"} />
+        <StatCard icon="👥" iconBg="var(--bg, #f5f5f5)" label={t("statNoEmployeesLabel")} value={noEmployeeDepts ?? "—"} />
       </StatGrid>
+
+      {!canEdit && (
+        <p
+          role="note"
+          id="departments-readonly-note"
+          style={{ fontSize: 13, color: "var(--mut,#64748b)", margin: "4px 0 12px" }}
+        >
+          {t("readOnlyNote")}
+        </p>
+      )}
 
       <Card title={errored ? t("title") : t("cardTitleWithCount", { count: depts.length })}>
         {errored ? (
-          <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "departments" })} backHref="/hr" />
+          <div className="pad" aria-describedby={!canEdit ? "departments-readonly-note" : undefined}>
+            <LoadErrorState
+              result={{ status, errorMessage }}
+              area="departments"
+              backHref="/hr"
+              requiredRoles={DEPARTMENT_ADMIN_ROLES}
+            />
           </div>
         ) : depts.length === 0 ? (
           <EmptyState
