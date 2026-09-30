@@ -21,8 +21,17 @@ export function EmployeesTable({ employees, source = "api", canCreate = false }:
     { key: "employeeNo", label: t("colEmpCode") },
     { key: "name", label: t("colName") },
     { key: "department", label: t("colDepartment") },
+    // GAP-HR-EMPLOYEES-05: employeeType is returned by the API (and, as of
+    // this fix, actually forwarded by mapEmployees) but was never rendered.
+    { key: "employeeType", label: t("colType") },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
+
+  // GAP-HR-EMPLOYEES-02: a real load failure (nothing cached either) must
+  // read differently from a genuinely empty roster -- same row count (zero)
+  // but a different reason, and only one of the two should ever invite HR
+  // to "add your first employee".
+  const isErrorEmpty = provenance === "error-no-data";
 
   return (
     <>
@@ -37,18 +46,18 @@ export function EmployeesTable({ employees, source = "api", canCreate = false }:
         rows={rows}
         rowLinkKey="id"
         rowLinkPrefix="/hr/employees/"
-        caption="Employee roster with name, department, designation, and status"
+        caption={t("caption")}
         identifyingColumnKey="name"
         sortable
         filterable
         filterPlaceholder={t("filterPlaceholder")}
         pageSize={15}
         exportable
-        emptyIcon="👥"
-        emptyTitle={t("emptyTitle")}
-        emptyMessage={t("emptyMessage")}
+        emptyIcon={isErrorEmpty ? "⚠️" : "👥"}
+        emptyTitle={isErrorEmpty ? t("emptyErrorTitle") : t("emptyTitle")}
+        emptyMessage={isErrorEmpty ? t("emptyErrorMessage") : t("emptyMessage")}
         emptyAction={
-          canCreate ? (
+          !isErrorEmpty && canCreate ? (
             <Link href="/hr/employees/new" className="btn primary" style={{ marginTop: 10 }}>
               {t("addFirstEmployee")}
             </Link>

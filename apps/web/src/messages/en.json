@@ -1742,8 +1742,6 @@
     "prevLabel": "Previous",
     "nextLabel": "Next",
     "showingRange": "Showing {from}–{to} of {total} employees",
-    "loadingTitle": "Employee Directory",
-    "loadingSubtitle": "All staff, grades and posting locations.",
     "statActiveShown": "Active (Shown)",
     "statOthersShown": "Others (Shown)"
   },
@@ -1751,11 +1749,15 @@
     "colEmpCode": "Emp Code",
     "colName": "Name",
     "colDepartment": "Department",
+    "colType": "Type",
     "colStatus": "Status",
+    "caption": "Employee roster with name, department, type, and status",
     "filterPlaceholder": "Search by name, code or department…",
     "emptyTitle": "Your team starts here",
     "emptyMessage": "Add your first employee to unlock leave management, attendance tracking, and payroll processing.",
-    "addFirstEmployee": "Add first employee"
+    "addFirstEmployee": "Add first employee",
+    "emptyErrorTitle": "Couldn't load your team",
+    "emptyErrorMessage": "This is usually temporary. Try refreshing in a moment — your existing employee records are safe."
   },
   "error": {
     "load": {

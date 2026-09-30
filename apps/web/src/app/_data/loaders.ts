@@ -550,8 +550,13 @@ export function mapEmployees(payload: unknown): EmployeeSummary[] | null {
     const name = toText(row.name);
     const department = toText(row.department) ?? toText(row.dept) ?? "—";
     const status = toEmployeeStatus(row.status);
+    // GAP-HR-EMPLOYEES-05: employeeType is already in the validated payload
+    // (employeeSummarySchema) and already returned by the backend -- this
+    // re-mapping just never forwarded it, so the list page could never show
+    // a Type column no matter what the API sent.
+    const employeeType = toText(row.employeeType);
     if (!id || !name) continue;
-    mapped.push({ id, name, department, status, ...(empNo ? { employeeNo: empNo } : {}) });
+    mapped.push({ id, name, department, status, ...(empNo ? { employeeNo: empNo } : {}), ...(employeeType ? { employeeType } : {}) });
   }
   return mapped;
 }
