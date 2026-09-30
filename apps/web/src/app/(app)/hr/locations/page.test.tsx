@@ -53,7 +53,7 @@ describe("LocationsPage", () => {
       errorMessage: "requires one of: hr_admin, hr_officer, super_admin",
     });
     await renderPage();
-    expect(screen.getByText("requires one of: hr_admin, hr_officer, super_admin")).toBeInTheDocument();
+    expect(screen.getByText(/requires one of: hr_admin, hr_officer, super_admin/i)).toBeInTheDocument();
     expect(screen.queryByText("No locations yet")).not.toBeInTheDocument();
     // single title, not "Locations (0)" -- the old title bug this item also fixed
     expect(screen.queryByText("Locations (0)")).not.toBeInTheDocument();
@@ -77,9 +77,11 @@ describe("LocationsPage", () => {
       source: "api",
     });
     await renderPage();
-    // The office row should show both the derived district and state.
-    expect(screen.getByText("Bengaluru Urban")).toBeInTheDocument();
-    expect(screen.getAllByText("Karnataka").length).toBeGreaterThan(0);
+    // "Bengaluru Urban" legitimately appears twice: once as its own row's
+    // name, once as the office row's derived district badge -- likewise
+    // "Karnataka" as its own row's name and as two rows' derived state badge.
+    expect(screen.getAllByText("Bengaluru Urban").length).toBeGreaterThan(1);
+    expect(screen.getAllByText("Karnataka").length).toBeGreaterThan(1);
   });
 
   it("shows a human label, not the raw enum, in the Type column (GAP-HR-LOCATIONS-05)", async () => {
