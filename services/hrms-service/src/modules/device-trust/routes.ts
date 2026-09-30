@@ -200,6 +200,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/devices/admin — all devices accessing org data */
   app.get("/v1/hrms/devices/admin", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
     const { status, platform, search } = req.query as { status?: string; platform?: string; search?: string };
 
     let where = "WHERE d.tenant_id = $1";
@@ -299,6 +300,7 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
   /** GET /v1/hrms/devices/:deviceId/activity — activity log for a device */
   app.get("/v1/hrms/devices/:deviceId/activity", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
     const { deviceId } = req.params as { deviceId: string };
 
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
