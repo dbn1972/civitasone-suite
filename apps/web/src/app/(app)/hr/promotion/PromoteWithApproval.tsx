@@ -3,39 +3,75 @@
 /**
  * Promotion-with-eOffice-approval — two-step wizard.
  *
- * UX: Replaces raw UUID inputs with searchable name-based dropdowns.
  * Step 1: Select employee + new designation  Step 2: Approval routing + justification
+ *
+ * GAP-HR-PROMOTION-05: employee/designation/initiating-officer/approving-
+ * officer are now EntityPicker-backed searchable pickers (employee search is
+ * real server-side search via GET /v1/hrms/employees?q=; designation and
+ * officer pickers fetch their existing small, bounded lists once and filter
+ * client-side -- see lib/entityAdapters/{designation,identityUser}.ts's own
+ * comments for why that's the right shape for those two, same reasoning as
+ * the pre-existing payStructure.ts adapter). Previously: three separate
+ * `limit=200` fetches into plain <select>s (a tenant past 200 of any of
+ * these could never reach the rest), with a silent raw-ID text-input
+ * fallback whenever a fetch failed -- removed below in favour of an inline
+ * error + Retry, since a bare UUID input invites a copy-pasted or typo'd id
+ * with zero validation.
+ *
+ * "Current designation" is now looked up via the employee detail endpoint
+ * (GET /v1/hrms/employees/:id) once an employee is selected, and shown as
+ * read-only text. NOTE: this is a display-only lookup -- neither this
+ * endpoint nor the employee list/search endpoints expose the employee's
+ * designationId (only its resolved *name*), so `fromDesigId` in the submit
+ * body stays undefined here exactly as it already did before this change
+ * (employee/consumer.ts's submitPromotionForApproval handler already treats
+ * it as optional, `p.fromDesigId ?? null` -- this was not a working,
+ * regressed feature, just an already-absent one; inventing a new endpoint
+ * to resolve it is out of this GAP's scope).
  */
 
 import { useCallback, useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
-import { Button } from "@/app/_components/ds";
+import { Button, Field, EntityPicker, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { searchDesignations, resolveDesignations } from "@/lib/entityAdapters/designation";
+import { searchIdentityUsers, resolveIdentityUsers } from "@/lib/entityAdapters/identityUser";
+import { useFormError } from "@/lib/useFormError";
 
-type Employee = { id: string; name?: string; designation?: string; designationId?: string };
-type Designation = { id: string; name: string; grade?: string };
-type Officer = { id: string; name: string; designation?: string };
+function todayIsoIST(): string {
+  return new Date(Date.now() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+// GAP-HR-PROMOTION-05: no formal policy decision on back-dated / far-future
+// effective dates was found (not a `Needs: decision` item, and the Day-0
+// decision packet doesn't cover it) -- back-dating is normal for government
+// promotion orders (the observation's own words), so only an implausibly
+// far-future date is treated as a likely data-entry error and blocked; a
+// past date gets a non-blocking notice instead of a hard stop.
+const MAX_FUTURE_YEARS = 3;
 
 export function PromoteWithApproval() {
   const t = useTranslations("promotionApprove");
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<1 | 2>(1);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [designations, setDesignations] = useState<Designation[]>([]);
-  const [officers, setOfficers] = useState<Officer[]>([]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
   const { toast } = useToast();
+  const formError = useFormError("promotion");
 
-  const [employeeId, setEmployeeId] = useState("");
-  const [fromDesigId, setFromDesigId] = useState("");
-  const [fromDesigName, setFromDesigName] = useState("");
-  const [toDesigId, setToDesigId] = useState("");
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [employeeName, setEmployeeName] = useState("");
+  const [currentDesignation, setCurrentDesignation] = useState<string | null>(null);
+  const [currentDesignationLoading, setCurrentDesignationLoading] = useState(false);
+  const [toDesigId, setToDesigId] = useState<string | null>(null);
+  const [toDesigName, setToDesigName] = useState("");
   const [effectiveDate, setEffectiveDate] = useState("");
   const [orderRef, setOrderRef] = useState("");
-  const [initiatedBy, setInitiatedBy] = useState("");
-  const [currentWith, setCurrentWith] = useState("");
+  const [initiatedBy, setInitiatedBy] = useState<string | null>(null);
+  const [currentWith, setCurrentWith] = useState<string | null>(null);
+  const [approverName, setApproverName] = useState("");
   const [note, setNote] = useState("");
+  const [stepError, setStepError] = useState("");
   // Set once step 1 (create the pending_approval promotion request) succeeds.
   // Retrying after a step-2 (eFile) failure must resume from here instead of
   // re-running step 1 — submit-approval has no idempotency key, so restarting
@@ -43,72 +79,106 @@ export function PromoteWithApproval() {
   // request for the same employee each time the eFile step failed.
   const [submittedPromotionId, setSubmittedPromotionId] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!open) return;
-    const controller = new AbortController();
-    void (async () => {
-      try {
-        const [empRes, desigRes, offRes] = await Promise.all([
-          fetch("/api/proxy/v1/hrms/employees?limit=200", { signal: controller.signal }),
-          fetch("/api/proxy/v1/hrms/designations?limit=200", { signal: controller.signal }),
-          fetch("/api/proxy/v1/identity/users?limit=200", { signal: controller.signal }),
-        ]);
-        if (empRes.ok) {
-          const body = (await empRes.json()) as { data?: Employee[] } | Employee[];
-          setEmployees(Array.isArray(body) ? body : (body.data ?? []));
-        }
-        if (desigRes.ok) {
-          const body = (await desigRes.json()) as { data?: Designation[] } | Designation[];
-          setDesignations(Array.isArray(body) ? body : (body.data ?? []));
-        }
-        if (offRes.ok) {
-          const body = (await offRes.json()) as { data?: Officer[] } | Officer[];
-          setOfficers(Array.isArray(body) ? body : (body.data ?? []));
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        /* graceful fallback */
-      }
-    })();
-    return () => controller.abort();
-  }, [open]);
-
   const reset = () => {
-    setEmployeeId(""); setFromDesigId(""); setFromDesigName(""); setToDesigId("");
-    setEffectiveDate(""); setOrderRef(""); setInitiatedBy(""); setCurrentWith(""); setNote("");
+    setEmployeeId(null); setEmployeeName(""); setCurrentDesignation(null);
+    setToDesigId(null); setToDesigName("");
+    setEffectiveDate(""); setOrderRef(""); setInitiatedBy(null); setCurrentWith(null);
+    setApproverName(""); setNote(""); setStepError("");
     setSubmittedPromotionId(null);
     setStep(1);
   };
 
-  const selectedEmployee = employees.find((e) => e.id === employeeId);
+  // GAP-HR-PROMOTION-05: current-designation display only -- see file header
+  // comment on why this can't populate fromDesigId.
+  useEffect(() => {
+    if (!employeeId) { setCurrentDesignation(null); return; }
+    let cancelled = false;
+    setCurrentDesignationLoading(true);
+    fetch(`/api/proxy/v1/hrms/employees/${employeeId}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body: { designation?: string } | null) => {
+        if (cancelled) return;
+        setCurrentDesignation(body?.designation ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setCurrentDesignation(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCurrentDesignationLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [employeeId]);
+
+  // Display-name lookups for the step-2 summary box and the confirm-dialog
+  // title. NOTE: these do NOT reuse EntityPicker's own `resolve` prop for
+  // this -- that prop only fires to pre-populate a label for a `value` the
+  // picker hasn't already seen (e.g. an id seeded from previously saved
+  // data), not on a fresh interactive search-and-select, where the picker's
+  // own internal state already has the label the instant the user clicks a
+  // result. An earlier version of this file wired `resolve` to also set
+  // this component's own name state, which therefore silently never ran in
+  // the actual "create a new promotion" flow this wizard exists for (only
+  // in an edit-existing-value scenario this component doesn't have) --
+  // caught by PromoteWithApproval.test.tsx exercising the real
+  // search-and-select interaction, not a pre-seeded value.
+  useEffect(() => {
+    if (!employeeId) { setEmployeeName(""); return; }
+    let cancelled = false;
+    resolveEmployees([employeeId]).then((opts) => {
+      if (!cancelled && opts[0]) setEmployeeName(opts[0].label);
+    }).catch(() => { /* leave showing the id fallback */ });
+    return () => { cancelled = true; };
+  }, [employeeId]);
+
+  useEffect(() => {
+    if (!toDesigId) { setToDesigName(""); return; }
+    let cancelled = false;
+    resolveDesignations([toDesigId]).then((opts) => {
+      if (!cancelled && opts[0]) setToDesigName(opts[0].label);
+    }).catch(() => { /* leave showing the id fallback */ });
+    return () => { cancelled = true; };
+  }, [toDesigId]);
+
+  useEffect(() => {
+    if (!currentWith) { setApproverName(""); return; }
+    let cancelled = false;
+    resolveIdentityUsers([currentWith]).then((opts) => {
+      if (!cancelled && opts[0]) setApproverName(opts[0].label);
+    }).catch(() => { /* leave showing the fallback */ });
+    return () => { cancelled = true; };
+  }, [currentWith]);
 
   const validateStep1 = (): boolean => {
-    if (!employeeId) { setError(t("errSelectEmployee")); return false; }
-    if (!toDesigId) { setError(t("errSelectDesignation")); return false; }
-    if (!effectiveDate) { setError(t("errEffectiveDateRequired")); return false; }
-    setError("");
+    if (!employeeId) { setStepError(t("errSelectEmployee")); return false; }
+    if (!toDesigId) { setStepError(t("errSelectDesignation")); return false; }
+    if (!effectiveDate) { setStepError(t("errEffectiveDateRequired")); return false; }
+    const max = new Date();
+    max.setFullYear(max.getFullYear() + MAX_FUTURE_YEARS);
+    if (effectiveDate > max.toISOString().slice(0, 10)) {
+      setStepError(t("errEffectiveDateTooFar"));
+      return false;
+    }
+    setStepError("");
     return true;
   };
 
   const validateStep2 = (): boolean => {
-    if (!initiatedBy) { setError(t("errSelectInitiator")); return false; }
-    if (!currentWith) { setError(t("errSelectApprover")); return false; }
-    if (note.trim().length < 3) { setError(t("errJustificationNote")); return false; }
-    setError("");
+    if (!initiatedBy) { setStepError(t("errSelectInitiator")); return false; }
+    if (!currentWith) { setStepError(t("errSelectApprover")); return false; }
+    if (currentWith === initiatedBy) { setStepError(t("errInitiatorEqualsApprover")); return false; }
+    if (note.trim().length < 3) { setStepError(t("errJustificationNote")); return false; }
+    setStepError("");
     return true;
   };
 
-  const submit = useCallback(async () => {
-    if (!validateStep2()) return;
-    setError("");
+  const doSubmit = useCallback(async () => {
     setSaving(true);
     try {
-      const reqBody: { fromDesigId: string; toDesigId: string; effectiveDate: string; orderRef?: string } = {
-        fromDesigId, toDesigId, effectiveDate,
+      const reqBody: { fromDesigId?: string; toDesigId: string; effectiveDate: string; orderRef?: string } = {
+        toDesigId: toDesigId as string, effectiveDate,
       };
       if (orderRef.trim()) reqBody.orderRef = orderRef.trim();
 
-      // Resume from an already-created request instead of re-running step 1.
       let promotionId = submittedPromotionId;
       if (!promotionId) {
         const subRes = await fetch(`/api/proxy/v1/hrms/employees/${employeeId}/promotion/submit-approval`, {
@@ -116,7 +186,10 @@ export function PromoteWithApproval() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify(reqBody),
         });
-        if (!subRes.ok) throw new Error((await subRes.text()) || t("errCreateRequestFallback"));
+        if (!subRes.ok) {
+          const resolved = await formError.fromResponse(subRes, "save");
+          throw new Error(resolved.message);
+        }
         const sub = (await subRes.json()) as { id?: string };
         if (!sub.id) throw new Error(t("errMissingIdFallback"));
         promotionId = sub.id;
@@ -136,7 +209,7 @@ export function PromoteWithApproval() {
         body: JSON.stringify({
           refType: "hr_promotion",
           refId: promotionId,
-          subject: `Promotion order — ${selectedEmployee?.name ?? employeeId.slice(0, 8)}`,
+          subject: `Promotion order — ${employeeName || employeeId?.slice(0, 8)}`,
           dept: "HR",
           classification: "confidential",
           priority: "normal",
@@ -144,13 +217,12 @@ export function PromoteWithApproval() {
           currentWith,
           approvalChain: "file_noting",
           initialNote: note.trim(),
-          context: { employeeId, fromDesigId, toDesigId, effectiveDate },
+          context: { employeeId, toDesigId, effectiveDate },
         }),
       });
       if (!raiseRes.ok) {
-        throw new Error(
-          (await raiseRes.text()) || t("errEfileRaiseFailedFallback"),
-        );
+        const resolved = await formError.fromResponse(raiseRes, "save");
+        throw new Error(resolved.message);
       }
       const file = (await raiseRes.json()) as { fileNo?: string };
       toast.success(
@@ -160,13 +232,25 @@ export function PromoteWithApproval() {
       );
       reset();
       setOpen(false);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("errGenericFallback"));
     } finally {
       setSaving(false);
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- validateStep2 is redefined each render but only closes over values already listed in this array (initiatedBy, currentWith, note[, t]).
-  }, [employeeId, fromDesigId, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note, selectedEmployee, submittedPromotionId, toast, t]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [employeeId, employeeName, toDesigId, effectiveDate, orderRef, initiatedBy, currentWith, note, submittedPromotionId, toast, t, formError]);
+
+  // GAP-HR-PROMOTION-03: a confidential eFile action had no confirmation
+  // step at all -- the submit button went straight to submit(). This
+  // doesn't change who's authorized (the backend already enforces HR_ROLES
+  // on submit-approval; see GAP-HR-PROMOTION-03's own note that
+  // maker!=checker doesn't apply here, the eFile approver is a separate,
+  // later decision by them, not this dialog) -- it only adds the missing
+  // "are you sure" step before an irreversible, confidential action.
+  const { open: confirmOpen, busy: confirmBusy, error: confirmError, trigger: triggerSubmit, cancel: cancelSubmit, confirm: doConfirmSubmit } =
+    useConfirmAction({
+      onConfirm: async () => {
+        await doSubmit();
+      },
+    });
 
   return (
     <>
@@ -181,9 +265,9 @@ export function PromoteWithApproval() {
             <span style={{ fontSize: "0.75rem", color: "var(--ink2)" }}>{t("stepIndicator", { step })}</span>
           </div>
 
-          {error && (
+          {stepError && (
             <div role="alert" aria-live="assertive">
-              <p className="pad" style={{ color: "var(--bad, #b91c1c)", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {error}</p>
+              <p className="pad" style={{ color: "var(--bad, #b91c1c)", fontSize: "0.8125rem", paddingBottom: 0 }}>⚠ {stepError}</p>
             </div>
           )}
 
@@ -193,61 +277,43 @@ export function PromoteWithApproval() {
                 {t("step1Intro")}
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{t("employeeLabel")}</span>
-                  <select
+                <Field label={t("employeeLabel")}>
+                  <EntityPicker
                     value={employeeId}
-                    onChange={(e) => {
-                      const id = e.target.value;
+                    onChange={(v) => {
+                      const id = Array.isArray(v) ? (v[0] ?? null) : v;
                       setEmployeeId(id);
-                      const emp = employees.find((x) => x.id === id);
-                      if (emp?.designationId) {
-                        setFromDesigId(emp.designationId);
-                        setFromDesigName(emp.designation ?? "");
-                      }
+                      if (!id) setEmployeeName("");
                     }}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                  >
-                    <option value="">{t("selectEmployeeOption")}</option>
-                    {employees.map((e) => (
-                      <option key={e.id} value={e.id}>
-                        {e.name ?? e.id}{e.designation ? ` · ${e.designation}` : ""}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                    search={searchEmployees}
+                    resolve={resolveEmployees}
+                    placeholder={t("selectEmployeeOption")}
+                  />
+                </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{t("currentDesignationLabel")}</span>
+                <Field label={t("currentDesignationLabel")}>
                   <input
-                    value={fromDesigName || (designations.find((d) => d.id === fromDesigId)?.name ?? fromDesigId)}
+                    value={currentDesignationLoading ? t("designationIdLoadingPlaceholder") : (currentDesignation ?? "")}
                     disabled
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44, background: "#f9fafb", color: "var(--ink2)" }}
+                    readOnly
+                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44, background: "#f9fafb", color: "var(--ink2)", width: "100%" }}
                     aria-label={t("currentDesignationAutoFilledAria")}
                   />
-                </label>
+                </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{t("promoteToLabel")}</span>
-                  <select
+                <Field label={t("promoteToLabel")}>
+                  <EntityPicker
                     value={toDesigId}
-                    onChange={(e) => setToDesigId(e.target.value)}
-                    style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                  >
-                    <option value="">{t("selectDesignationOption")}</option>
-                    {designations.filter((d) => d.id !== fromDesigId).map((d) => (
-                      <option key={d.id} value={d.id}>{d.name}{d.grade ? ` ${t("gradeSuffix", { grade: d.grade })}` : ""}</option>
-                    ))}
-                  </select>
-                  {designations.length === 0 && (
-                    <input
-                      value={toDesigId}
-                      placeholder={t("designationIdLoadingPlaceholder")}
-                      onChange={(e) => setToDesigId(e.target.value)}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                    />
-                  )}
-                </label>
+                    onChange={(v) => {
+                      const id = Array.isArray(v) ? (v[0] ?? null) : v;
+                      setToDesigId(id);
+                      if (!id) setToDesigName("");
+                    }}
+                    search={searchDesignations}
+                    resolve={resolveDesignations}
+                    placeholder={t("selectDesignationOption")}
+                  />
+                </Field>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
                   <span style={{ fontWeight: 600 }}>{t("effectiveDateLabel")}</span>
@@ -257,6 +323,9 @@ export function PromoteWithApproval() {
                     onChange={(e) => setEffectiveDate(e.target.value)}
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   />
+                  {effectiveDate && effectiveDate < todayIsoIST() && (
+                    <span style={{ fontSize: "0.75rem", color: "var(--warn, #b45309)" }}>{t("effectiveDateBackdatedNotice")}</span>
+                  )}
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
@@ -286,9 +355,9 @@ export function PromoteWithApproval() {
                   {t("resumeNotice")}
                 </div>
               )}
-              {selectedEmployee && (
+              {employeeId && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--goodbg, #f0fdf4)", borderRadius: 8, border: "1px solid var(--goodbd, #bbf7d0)" }}>
-                  <strong>{selectedEmployee.name}</strong>: {fromDesigName} → {designations.find((d) => d.id === toDesigId)?.name ?? toDesigId}
+                  <strong>{employeeName || employeeId}</strong>: {currentDesignation ?? "—"} → {toDesigName || toDesigId}
                   {effectiveDate && <> · {t("effectiveOn", { date: effectiveDate })}</>}
                 </div>
               )}
@@ -298,41 +367,28 @@ export function PromoteWithApproval() {
               </p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{t("initiatingOfficerLabel")}</span>
-                  {officers.length > 0 ? (
-                    <select
-                      value={initiatedBy}
-                      onChange={(e) => setInitiatedBy(e.target.value)}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                    >
-                      <option value="">{t("selectInitiatorOption")}</option>
-                      {officers.map((o) => (
-                        <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input value={initiatedBy} placeholder={t("officerIdPlaceholder")} onChange={(e) => setInitiatedBy(e.target.value)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }} />
-                  )}
-                </label>
+                <Field label={t("initiatingOfficerLabel")}>
+                  <EntityPicker
+                    value={initiatedBy}
+                    onChange={(v) => setInitiatedBy(Array.isArray(v) ? (v[0] ?? null) : v)}
+                    search={searchIdentityUsers}
+                    resolve={resolveIdentityUsers}
+                    placeholder={t("selectInitiatorOption")}
+                  />
+                </Field>
 
-                <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>{t("forwardToLabel")}</span>
-                  {officers.length > 0 ? (
-                    <select
-                      value={currentWith}
-                      onChange={(e) => setCurrentWith(e.target.value)}
-                      style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
-                    >
-                      <option value="">{t("selectApproverOption")}</option>
-                      {officers.filter((o) => o.id !== initiatedBy).map((o) => (
-                        <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input value={currentWith} placeholder={t("officerIdPlaceholder")} onChange={(e) => setCurrentWith(e.target.value)} style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }} />
-                  )}
-                </label>
+                <Field label={t("forwardToLabel")}>
+                  <EntityPicker
+                    value={currentWith}
+                    onChange={(v) => {
+                      const id = Array.isArray(v) ? (v[0] ?? null) : v;
+                      setCurrentWith(id);
+                    }}
+                    search={searchIdentityUsers}
+                    resolve={resolveIdentityUsers}
+                    placeholder={t("selectApproverOption")}
+                  />
+                </Field>
               </div>
 
               <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
@@ -348,10 +404,21 @@ export function PromoteWithApproval() {
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
                 <Button variant="ghost" onClick={() => setStep(1)}>{t("backBtn")}</Button>
-                <Button style={{ minHeight: 44 }} disabled={saving} loading={saving} onClick={() => void submit()}>
+                <Button style={{ minHeight: 44 }} disabled={saving} loading={saving} onClick={() => validateStep2() && triggerSubmit()}>
                   {saving ? t("raisingBtn") : t("submitBtn")}
                 </Button>
               </div>
+
+              <ConfirmDialog
+                open={confirmOpen}
+                title={t("confirmRaiseTitle", { approver: approverName || t("selectApproverOption") })}
+                description={t("confirmRaiseDescription")}
+                confirmLabel={t("confirmRaiseConfirmBtn")}
+                busy={confirmBusy}
+                errorMessage={confirmError}
+                onConfirm={() => void doConfirmSubmit()}
+                onCancel={cancelSubmit}
+              />
             </div>
           )}
         </div>
