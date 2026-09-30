@@ -175,3 +175,53 @@ describe("PATCH /v1/hrms/leave-applications/:id/cancel — IDOR guard", () => {
     expect(r.json().code).toBe("FORBIDDEN");
   });
 });
+
+/**
+ * GAP-HR-LEAVE-HISTORY-04: cancelling an APPROVED leave reverses a
+ * completed decision and re-credits the balance (feeds payroll LOP) --
+ * a reason is required for that specific case. A pending/draft self-cancel
+ * (every test above) is unaffected: none of them send a `reason` and all
+ * still get 202, proving this is additive, not a blanket new requirement.
+ */
+describe("PATCH /v1/hrms/leave-applications/:id/cancel — reason required for an APPROVED leave", () => {
+  it("400 — cancelling an APPROVED leave with no reason is rejected", async () => {
+    scopedReadMock.mockResolvedValueOnce([leaveApp(EMP_SELF_ID, "approved")]);
+    // No further scopedRead calls expected: the reason check runs before
+    // the IDOR ownership lookup even fires.
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/leave-applications/${LEAVE_APP_ID}/cancel`,
+      headers: { authorization: `Bearer ${tok(["employee"], EMP_SELF_ID)}` },
+      payload: {},
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("REASON_REQUIRED");
+  });
+
+  it("202 — cancelling an APPROVED leave WITH a reason succeeds", async () => {
+    scopedReadMock.mockResolvedValueOnce([leaveApp(EMP_SELF_ID, "approved")]);
+    scopedReadMock.mockResolvedValueOnce([empRow(EMP_SELF_ID)]);
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/leave-applications/${LEAVE_APP_ID}/cancel`,
+      headers: { authorization: `Bearer ${tok(["employee"], EMP_SELF_ID)}` },
+      payload: { reason: "Family emergency — need to reschedule" },
+    });
+    expect(r.statusCode).toBe(202);
+  });
+
+  it("202 — cancelling a PENDING leave with no reason still succeeds (existing body-less callers unaffected)", async () => {
+    scopedReadMock.mockResolvedValueOnce([leaveApp(EMP_SELF_ID, "pending")]);
+    scopedReadMock.mockResolvedValueOnce([empRow(EMP_SELF_ID)]);
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/leave-applications/${LEAVE_APP_ID}/cancel`,
+      headers: { authorization: `Bearer ${tok(["employee"], EMP_SELF_ID)}` },
+      payload: {},
+    });
+    expect(r.statusCode).toBe(202);
+  });
+});

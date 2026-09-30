@@ -132,7 +132,12 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       });
       await audit(tx, msg, "apply", "leave_app", p.id);
     });
-    await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", (msg.payload as any).employeeId));
+    // GAP-HR-LEAVE-HISTORY-01: getLeaveApplicationsByEmp now caches per
+    // (employeeId, limit, offset) via listOrLoad instead of one blob per
+    // employee via getOrLoad -- a single-key invalidate() targeting the old
+    // makeKey() shape no longer matches any of these entries.
+    // invalidateResource clears every cached page for this resource+tenant.
+    await cache.invalidateResource(msg.tenantId, "leave_apps_emp");
   });
 
   // See WORKFLOW_INSTANCE_REJECTED's own comment above. Guarded to
@@ -191,7 +196,9 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     });
     if (notifyEmployeeId) {
       await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", refId));
-      await cache.invalidate(cache.makeKey(msg.tenantId, "leave_apps_emp", notifyEmployeeId));
+      // See the leaveApply handler's own comment above on why this is
+      // invalidateResource, not invalidate(makeKey(...)).
+      await cache.invalidateResource(msg.tenantId, "leave_apps_emp");
     }
   });
 
@@ -283,7 +290,13 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.leaveCancel, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    // GAP-HR-LEAVE-HISTORY-04: `reason` is new (optional — an existing
+    // caller's body-less cancel still works; cancel-route.ts enforces it's
+    // present specifically for an approved leave before this is ever
+    // published). Threaded into the audit event and the approver
+    // notification below, same as the reject handler already does.
+    const p = msg.payload as { id: string; tenantId: string; reason?: string | null };
+    let cancelledEmployeeId = "";
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const rows = await tx.select().from(hrmsLeaveApps)
@@ -292,6 +305,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       if (!application) return;
       if (application.status === "cancelled") return;
       const wasApproved = application.status === "approved";
+      cancelledEmployeeId = application.employeeId;
       await tx.update(hrmsLeaveApps)
         .set({ status: "cancelled", updatedAt: new Date(), updatedBy: msg.actorId })
         .where(eq(hrmsLeaveApps.id, p.id));
@@ -320,7 +334,14 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: "audit.event.record", eventType: "audit.event.record",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { service: "hrms", action: "cancel", resourceType: "leave_application", resourceId: p.id, outcome: "success" },
+        // `reason` belongs under `metadata` -- packages/events/src/index.ts's
+        // AuditEventPayload has no flat `reason` field (mirrors how the
+        // WORKFLOW_INSTANCE_REJECTED handler above already nests its own
+        // `reason` under metadata, not as a sibling of outcome/resourceId).
+        payload: {
+          service: "hrms", action: "cancel", resourceType: "leave_application", resourceId: p.id, outcome: "success",
+          metadata: p.reason ? { reason: p.reason } : undefined,
+        },
       });
       // Notify the original approver that the leave was cancelled
       if (application.approvedBy) {
@@ -331,11 +352,25 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
             eventType: "hrms.leave.cancelled",
             recipient: application.approvedBy,
             recipientId: application.approvedBy,
-            variables: { leaveAppId: p.id, employeeId: application.employeeId },
+            // `variables` is Record<string,string> (packages/events/src/notification.ts)
+            // -- no `undefined` values allowed, so fall back to an explicit
+            // string the same way the routing_failed handler above does for
+            // its own optional `reason`.
+            variables: { leaveAppId: p.id, employeeId: application.employeeId, reason: p.reason ?? "No reason given" },
           }),
         });
       }
     });
+    // Pre-existing gap noticed while touching this handler for
+    // HISTORY-04: cancel never invalidated leave_app/leave_apps_emp at all
+    // (every OTHER status-changing handler in this file does). Left
+    // stale-for-up-to-TTL data on the very history page this cluster fixes
+    // — fixing alongside since it's the same handler and the same cache
+    // keys already being touched above for HISTORY-01.
+    if (cancelledEmployeeId) {
+      await cache.invalidate(cache.makeKey(msg.tenantId, "leave_app", p.id));
+      await cache.invalidateResource(msg.tenantId, "leave_apps_emp");
+    }
   });
 }
 

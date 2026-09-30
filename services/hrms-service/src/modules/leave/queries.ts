@@ -19,22 +19,55 @@ export async function getLeaveApp(id: string, tenantId: string): Promise<LeaveAp
   );
 }
 
+/**
+ * GAP-HR-LEAVE-HISTORY-01: now honours limit/offset (previously always
+ * called repo.findLeaveAppsByEmp with NO limit/offset args at all, so a
+ * caller's own page size/offset were silently dropped) and returns a real
+ * `total` + per-status `statusCounts` alongside the page of rows, instead of
+ * letting the only caller (routes.ts's `/leave/applications`) fall back to
+ * `data.length` as a fake "total".
+ *
+ * Cache key: switched from a single `getOrLoad` key (one cached blob per
+ * employee, shared across every limit/offset — which would have silently
+ * served page 1's data for a page-2 request) to `listOrLoad`'s
+ * resource+hash scheme, with `${employeeId}:${limit}:${offset}` as the hash
+ * so each distinct page gets its own cache entry. Every existing
+ * `cache.invalidate(cache.makeKey(tenantId, "leave_apps_emp", employeeId))`
+ * call site (consumer.ts x4, eoffice-consumer.ts x1) is updated alongside
+ * this to `cache.invalidateResource(tenantId, "leave_apps_emp")` — a plain
+ * single-key `invalidate` targeting the OLD key shape would no longer match
+ * any of these new list-keyed entries, which would have left every one of
+ * them stale for up to the resource's TTL after an apply/approve/reject/
+ * cancel. See packages/cache/src/index.ts's own `invalidateResource` doc
+ * comment — built for exactly this "one resource name, many cached
+ * sub-pages" shape.
+ */
 export async function getLeaveApplicationsByEmp(
   tenantId: string,
   employeeId: string,
-): Promise<(LeaveAppRow & { leaveTypeName: string })[]> {
-  const [rows, leaveTypes] = await Promise.all([
-    cache.getOrLoad<LeaveAppRow[]>(
-      cache.makeKey(tenantId, "leave_apps_emp", employeeId),
-      () => repo.findLeaveAppsByEmp(tenantId, employeeId),
-    ) as Promise<LeaveAppRow[]>,
-    repo.listLeaveTypesByTenant(tenantId),
-  ]);
+  limit = 50,
+  offset = 0,
+): Promise<{ data: (LeaveAppRow & { leaveTypeName: string })[]; total: number; statusCounts: Record<string, number> }> {
+  const [rows, leaveTypes, total, statusCounts] = await cache.listOrLoad(
+    tenantId,
+    "leave_apps_emp",
+    `${employeeId}:${limit}:${offset}`,
+    () => Promise.all([
+      repo.findLeaveAppsByEmp(tenantId, employeeId, limit, offset),
+      repo.listLeaveTypesByTenant(tenantId),
+      repo.countLeaveAppsByEmp(tenantId, employeeId),
+      repo.countLeaveAppsByEmpByStatus(tenantId, employeeId),
+    ]),
+  );
   const typeNameById = new Map(leaveTypes.map((t) => [t.id, t.name]));
-  return rows.map((r) => ({
-    ...r,
-    leaveTypeName: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
-  }));
+  return {
+    data: rows.map((r) => ({
+      ...r,
+      leaveTypeName: typeNameById.get(r.leaveTypeId) ?? r.leaveTypeId.slice(0, 8),
+    })),
+    total,
+    statusCounts,
+  };
 }
 
 /**
@@ -55,10 +88,11 @@ export async function listLeaveApplicationsByEmp(
   tenantId: string,
   employeeId: string,
 ): Promise<{ data: Array<{ id: string; employee: string; leaveType: string; status: "Pending" | "Approved" | "Rejected" }> }> {
-  const [rows, employee] = await Promise.all([
+  const [result, employee] = await Promise.all([
     getLeaveApplicationsByEmp(tenantId, employeeId),
     employeeRepo.findById(employeeId, tenantId),
   ]);
+  const rows = result.data;
   const employeeName = employee?.fullName ?? employeeId.slice(0, 8);
   return {
     data: rows.map((r) => ({

@@ -2854,7 +2854,7 @@
   "leaveBalance": {
     "title": "Leave Balance",
     "subtitle": "View leave entitlement and remaining balance for an employee.",
-    "downloadButton": "Download Leave Balance",
+    "downloadButton": "Print / Save as PDF",
     "statLeaveTypes": "Leave Types",
     "statTotalEntitlement": "Total Entitlement",
     "statTotalUsed": "Total Used",
@@ -2872,13 +2872,18 @@
     "fyCode": "FY {fy} · Code: {code}",
     "usedSuffix": "{count} used",
     "remainingSuffix": "{count} remaining",
-    "ofTotalDays": "/ {total} days"
+    "ofTotalDays": "/ {total} days",
+    "selectEmployeePrompt": "Select an employee to view their balance.",
+    "viewMyBalanceLink": "View my own balance",
+    "contactHrToAllocateMessage": "Contact HR to get leave allocated.",
+    "noLinkedProfileTitle": "No employee record linked",
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view a leave balance yet. Contact HR to get your account linked to your employee record."
   },
   "leaveHistory": {
     "title": "Leave History",
     "subtitle": "View and manage leave applications by employee.",
     "applyLeaveAction": "+ Apply Leave",
-    "statTotalApplications": "Total Applications",
+    "statTotalApplications": "Active Applications",
     "statApproved": "Approved",
     "statPending": "Pending",
     "statRejected": "Rejected",
@@ -2912,7 +2917,14 @@
     "confirmCancelDescription": "This withdraws the <b>{leaveType}</b> request for {fromDate} – {toDate}{approvedSuffix}. This cannot be undone — a new request would need to be submitted from scratch.",
     "reversesApprovalSuffix": " and reverses the approval",
     "confirmCancelLabel": "Cancel leave",
-    "keepItLabel": "Keep it"
+    "keepItLabel": "Keep it",
+    "selectEmployeePrompt": "Select an employee to view their leave history.",
+    "viewMyHistoryLink": "View my own history",
+    "chipDraft": "Draft",
+    "showingOfTotal": "Showing {shown} of {total}",
+    "cancelReasonLabel": "Reason (optional unless reversing an approval, or cancelling on someone else's behalf)",
+    "noLinkedProfileTitle": "No employee record linked",
+    "noLinkedProfileMessage": "No employee record is linked to your account, so you cannot view leave history yet. Contact HR to get your account linked to your employee record."
   },
   "leavePolicies": {
     "title": "Leave Policy Configuration",
