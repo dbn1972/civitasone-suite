@@ -290,6 +290,11 @@ export async function m7ListRoutes(app: FastifyInstance): Promise<void> {
         superannuationDate: r.effectiveDate,
         separationType: r.separationType,
         status: r.status,
+        // GAP-HR-RETIREMENT-02: batchEmployees already selects dateOfJoining
+        // (used by the confirmations queue above) -- just wasn't threaded
+        // through here, so calcYOS on the web side always fell to its "no
+        // joiningDate" branch and returned 0.
+        joiningDate: emp?.dateOfJoining ?? undefined,
       };
     });
     return reply.send({ data, hasMore: rows.length === 500 });

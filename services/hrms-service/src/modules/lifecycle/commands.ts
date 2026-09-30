@@ -24,3 +24,8 @@ export const relieveTransfer = (ctx: RequestContext, id: string, body: Record<st
   pub(ctx, COMMANDS.lifecycleTransferRelieve, id, body);
 export const joinTransfer = (ctx: RequestContext, id: string, body: Record<string, unknown>) =>
   pub(ctx, COMMANDS.lifecycleTransferJoin, id, body);
+// GAP-HR-RETIREMENT-01
+export const toggleChecklistItem = (ctx: RequestContext, separationId: string, body: Record<string, unknown>) =>
+  pub(ctx, COMMANDS.lifecycleChecklistToggle, separationId, body);
+export const issuePpo = (ctx: RequestContext, separationId: string) =>
+  pub(ctx, COMMANDS.lifecycleIssuePpo, separationId, {});

@@ -63,6 +63,20 @@ export type CreatePromotionBody = z.infer<typeof createPromotionBody>;
 // promotionBody is the shared shape consumed by employee/commands.ts
 // (employeeId comes from the URL there) — DO NOT add employeeId here. Mirrors
 // transferBody for the eOffice submit-for-approval loop.
+// GAP-HR-RETIREMENT-01: one toggle per call, matching the wizard's
+// checkbox-at-a-time UX and giving each toggle its own audit row. The
+// 5 steps x 5 checks (25 total) shape matches the wizard's own STEPS
+// constant (RetirementProcessWizard.tsx) exactly -- tightened to this
+// canonical set (not an open range) so a completeness check can safely
+// count "done" rows without also having to verify which slots exist.
+export const checklistToggleBody = z.object({
+  stepId: z.enum(["1", "2", "3", "4", "5"]),
+  checkIndex: z.number().int().min(0).max(4),
+  done: z.boolean(),
+});
+export type ChecklistToggleBody = z.infer<typeof checklistToggleBody>;
+export const TOTAL_CHECKLIST_ITEMS = 25;
+
 export const promotionBody = z.object({
   fromDesigId:   z.string().uuid(),
   toDesigId:     z.string().uuid(),

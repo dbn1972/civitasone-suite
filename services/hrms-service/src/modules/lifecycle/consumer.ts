@@ -304,4 +304,61 @@ export function registerLifecycleMutationConsumers(q: Queue): void {
       });
     });
   });
+
+  // GAP-HR-RETIREMENT-01
+  q.subscribe(COMMANDS.lifecycleChecklistToggle, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; stepId: string; checkIndex: number; done: boolean };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.upsertChecklistItem(tx, {
+        tenantId: p.tenantId, separationId: p.id, stepId: p.stepId,
+        checkIndex: p.checkIndex, done: p.done, actorId: msg.actorId,
+      });
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: p.done ? "separation_checklist_check" : "separation_checklist_uncheck",
+          resourceType: "separation", resourceId: p.id, outcome: "success",
+          metadata: { stepId: p.stepId, checkIndex: p.checkIndex },
+        },
+      });
+    });
+    log.info({ messageId: msg.messageId, separationId: p.id, stepId: p.stepId, checkIndex: p.checkIndex, done: p.done }, "separation checklist item toggled");
+  });
+
+  // GAP-HR-RETIREMENT-01: statutory pension action -- the completeness
+  // guard is re-checked here too (not just at the route layer), inside the
+  // same transaction as the write, so a race between a late-arriving
+  // checklist toggle and this command can never issue a PPO the checklist
+  // did not actually satisfy at write time.
+  q.subscribe(COMMANDS.lifecycleIssuePpo, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string };
+    let issued = false;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const row = await repo.issuePpoTx(tx, p.tenantId, p.id, msg.actorId);
+      if (!row) {
+        log.warn({ messageId: msg.messageId, separationId: p.id }, "issue-ppo refused: checklist incomplete or already issued");
+        return;
+      }
+      issued = true;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "hrms", action: "issue_ppo", resourceType: "separation", resourceId: p.id, outcome: "success" },
+      });
+      await enqueue(tx, {
+        topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: buildNotificationPayload({
+          eventType: "hrms.lifecycle.ppo_issued",
+          recipient: row.employeeId,
+          recipientId: row.employeeId,
+          variables: { effectiveDate: row.effectiveDate },
+        }),
+      });
+    });
+    if (issued) log.info({ messageId: msg.messageId, separationId: p.id }, "PPO issued");
+  });
 }

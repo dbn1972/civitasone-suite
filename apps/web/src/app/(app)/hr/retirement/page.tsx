@@ -4,15 +4,26 @@
  * Middle: RetirementProcessWizard (interactive 5-step checklist)
  * Bottom: full register DataTable
  */
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getEmployeeById } from "../../../_data/loaders";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { isUpcoming, SEPARATION_TYPES } from "@/lib/retirement";
+import { humanizeStatus } from "@/lib/formatters";
 import type { RetirementRow } from "./_components/RetirementDashboard";
 import { RetirementCaseWorkspace } from "./_components/RetirementCaseWorkspace";
 import { InitiateSeparationAction } from "./_components/InitiateSeparationAction";
-import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+
+// GAP-HR-RETIREMENT-06: retirement/separation is a DPDP-sensitive
+// lifecycle event (separation types "death"/"termination" among them);
+// the page previously had no role check of its own and relied on the
+// generic RefreshErrorState fallback for a 403, which reads like an
+// outage rather than a permission boundary. Matches the backend's own
+// HR_ROLES (lifecycle/m7-list-routes.ts's GET /v1/hrms/retirements).
+const RETIREMENT_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
 async function getData(): Promise<LoaderResult<RetirementRow[]>> {
   return fetchJson<unknown, RetirementRow[]>("/api/v1/hrms/retirements", [], {
@@ -30,45 +41,63 @@ export default async function RetirementPage({
   searchParams?: { empId?: string };
 }) {
   const t = await getTranslations("retirement");
+  const roles = getSessionRoles();
+  if (!RETIREMENT_ROLES.some((r) => roles.includes(r))) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PermissionDenied module={t("title")} requiredRoles={RETIREMENT_ROLES} backHref="/hr" />
+      </div>
+    );
+  }
+
   // HIGH fix: separation had no reachable "initiate" UI anywhere -- this
   // page already listed every separation but had no create action. ?empId=
   // arrives from the employee detail page's new "Initiate Separation" Quick
   // Action; resolved here (server-side, same loader the employee detail page
   // itself uses) so the form opens pre-filled with a real name instead of a
-  // bare id. Unlike this page's sibling Transfer/Promotion Quick Actions,
-  // which also pass ?empId= but never actually consume it (checked: neither
-  // transfer/page.tsx nor TransferWithApproval.tsx reads searchParams at
-  // all -- a pre-existing gap, not fixed here since it's outside this
-  // change's scope), this one genuinely prefills.
+  // bare id.
   const prefillEmployeeId = searchParams?.empId;
   const prefillEmployee = prefillEmployeeId ? await getEmployeeById(prefillEmployeeId) : null;
   const prefillEmployeeName = prefillEmployee?.data?.name;
-  // SEC CRITICAL (status-integrity fix): threaded through to
-  // InitiateSeparationAction so a direct ?empId=<already-exited-id>
-  // navigation can be guarded against an already-exited employee -- this
-  // page already fetches the full employee record above for the name, so
-  // no extra request is needed for the status too.
   const prefillEmployeeStatus = prefillEmployee?.data?.status;
-  const COLUMNS: { key: keyof RetirementRow & string; label: string; cellType?: "status" }[] = [
-    { key: "employee",          label: t("colEmployee") },
-    { key: "department",        label: t("colDepartment") },
-    { key: "designation",       label: t("colDesignation") },
-    { key: "superannuationDate",label: t("colRetirementDate") },
-    { key: "separationType",    label: t("colType") },
-    { key: "status",            label: t("colStatus"), cellType: "status" },
-  ];
-  const { data: items, source } = await getData();
-  const errored = source === "error";
 
-  const cutoff6m  = new Date();
-  cutoff6m.setMonth(cutoff6m.getMonth() + 6);
-  const upcoming  = items.filter((i) => {
-    if (!i.superannuationDate) return false;
-    const d = new Date(i.superannuationDate);
-    return d >= new Date() && d <= cutoff6m;
-  }).length;
-  const completed = items.filter((i) => i.status === "completed").length;
-  const vrs       = items.filter((i) => i.separationType === "VRS").length;
+  // GAP-HR-RETIREMENT-04: pre-compute a translated label server-side (this
+  // is a server component, so next-intl's client useTranslations isn't
+  // available here) instead of showing the raw lowercase enum in the
+  // register.
+  const tType = await getTranslations("initiateSeparation");
+  function typeLabel(separationType: string | undefined): string {
+    if (!separationType) return t("typeSuperannuation");
+    const key = separationType.toLowerCase();
+    return (SEPARATION_TYPES as readonly string[]).includes(key)
+      ? tType(`separationType_${key}`)
+      : humanizeStatus(separationType);
+  }
+
+  const COLUMNS: { key: keyof RetirementRow & string; label: string; cellType?: "status" }[] = [
+    { key: "employee",           label: t("colEmployee") },
+    { key: "department",         label: t("colDepartment") },
+    { key: "designation",        label: t("colDesignation") },
+    { key: "superannuationDate", label: t("colRetirementDate") },
+    { key: "separationTypeLabel",label: t("colType") },
+    { key: "status",             label: t("colStatus"), cellType: "status" },
+  ];
+  const { data: rawItems, source, status, errorMessage } = await getData();
+  const errored = source === "error";
+  const items = rawItems.map((i) => ({ ...i, separationTypeLabel: typeLabel(i.separationType) }));
+
+  const upcoming = items.filter((i) => isUpcoming(i)).length;
+  // GAP-HR-RETIREMENT-03: "Processed" counted status === "completed", which
+  // nothing in this codebase ever sets (hrms_separations.status defaults to
+  // "initiated" and no code path advances it -- confirmed by grep). Shown
+  // as "Initiated" instead until a real status-transition workflow is
+  // designed (needs a business owner, see the item's own decision note);
+  // this is the item's own stated interim default, not a fabricated fix.
+  const initiatedCount = items.filter((i) => i.status === "initiated").length;
+  // GAP-HR-RETIREMENT-03: the zod enum is lowercase "vrs"
+  // (lifecycle/validators.ts's separateBody) -- comparing against the
+  // uppercase literal "VRS" made this stat permanently 0.
+  const vrs = items.filter((i) => (i.separationType ?? "").toLowerCase() === "vrs").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -82,10 +111,10 @@ export default async function RetirementPage({
 
       {/* KPI strip */}
       <StatGrid>
-<StatCard icon="👴" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")}          value={errored ? null : items.length} />
-        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label={t("statUpcoming")}  value={errored ? null : upcoming} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statProcessed")}       value={errored ? null : completed} />
-        <StatCard icon="📝" iconBg="var(--bg, #f5f5f5)" label={t("statVrs")}            value={errored ? null : vrs} />
+        <StatCard icon="👴" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")}     value={errored ? null : items.length} />
+        <StatCard icon="📅" iconBg="var(--warnbg, #fffbe6)" label={t("statUpcoming")} value={errored ? null : upcoming} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statInitiated")} value={errored ? null : initiatedCount} />
+        <StatCard icon="📝" iconBg="var(--bg, #f5f5f5)" label={t("statVrs")}          value={errored ? null : vrs} />
       </StatGrid>
 
       {/* Card grid + wizard, bound to the same selected retiree */}
@@ -96,10 +125,15 @@ export default async function RetirementPage({
         <Card title={t("cardTitle")}>
           {errored ? (
             <div className="pad">
-              <RefreshErrorState error={toHumanError("load", { area: "retirement" })} backHref="/hr" />
+              {/* GAP-HR-RETIREMENT-06: LoadErrorState (403-aware) rather
+                  than RefreshErrorState so a permission failure reads as
+                  one, though the role gate above should now make that path
+                  unreachable via the UI -- kept as defense in depth in case
+                  the backend HR_ROLES list and this page's ever drift. */}
+              <LoadErrorState result={{ status, errorMessage }} area="retirement" backHref="/hr" />
             </div>
           ) : (
-            <DataTable<RetirementRow>
+            <DataTable<RetirementRow & { separationTypeLabel: string }>
               columns={COLUMNS}
               rows={items}
               sortable

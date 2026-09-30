@@ -71,6 +71,11 @@ export const hrmsSeparations = lifecycleSchema.table("hrms_separations", {
   currency:         char("currency", { length: 3 }).notNull().default("INR"),
   remarks:          text("remarks"),
   status:           varchar("status", { length: 24 }).notNull().default("initiated"),
+  // GAP-HR-RETIREMENT-01: set once, by POST .../issue-ppo, only after every
+  // hrms_separation_checklist row for this separation is done. Irreversible
+  // (a statutory pension action) -- never cleared by any route.
+  ppoIssuedAt:      timestamp("ppo_issued_at", { withTimezone: true }),
+  ppoIssuedBy:      uuid("ppo_issued_by"),
   createdAt:        timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:        timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:        uuid("created_by").notNull(),
@@ -79,6 +84,23 @@ export const hrmsSeparations = lifecycleSchema.table("hrms_separations", {
 });
 
 export type SeparationRow = typeof hrmsSeparations.$inferSelect;
+
+// GAP-HR-RETIREMENT-01: one row per (separation, step, check-index) --
+// see migration 0159 for the full rationale.
+export const hrmsSeparationChecklist = lifecycleSchema.table("hrms_separation_checklist", {
+  id:            uuid("id").primaryKey().defaultRandom(),
+  tenantId:      uuid("tenant_id").notNull(),
+  separationId:  uuid("separation_id").notNull(),
+  stepId:        varchar("step_id", { length: 32 }).notNull(),
+  checkIndex:    integer("check_index").notNull(),
+  done:          boolean("done").notNull().default(false),
+  doneBy:        uuid("done_by"),
+  doneAt:        timestamp("done_at", { withTimezone: true }),
+  createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type SeparationChecklistRow = typeof hrmsSeparationChecklist.$inferSelect;
 
 // ── Sprint 3: Onboarding + Structured Data ─────────────────────────────────
 
@@ -234,4 +256,4 @@ export const hrmsOnboardingDocuments = lifecycleSchema.table("hrms_onboarding_do
 });
 export type OnboardingDocumentRow = typeof hrmsOnboardingDocuments.$inferSelect;
 
-export const schema = { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsBgvChecks, hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsPropertyReturns, hrmsEmployeeEducation, hrmsEmployeeEmploymentHistory, hrmsPolicyAcknowledgements, hrmsEmployeeHolds, hrmsOnboardingDocuments };
+export const schema = { hrmsTransfers, hrmsPromotions, hrmsSeparations, hrmsSeparationChecklist, hrmsBgvChecks, hrmsOnboardingTasks, hrmsBuddyAssignments, hrmsMandatoryDocConfigs, hrmsPropertyReturns, hrmsEmployeeEducation, hrmsEmployeeEmploymentHistory, hrmsPolicyAcknowledgements, hrmsEmployeeHolds, hrmsOnboardingDocuments };

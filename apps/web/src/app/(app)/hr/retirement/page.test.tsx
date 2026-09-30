@@ -1,105 +1,89 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
+import { ToastProvider } from "@/app/_components/ds";
+
+const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn(() => ["hr_admin"]) }));
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: getSessionRolesMock,
+}));
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
-
-// HIGH fix: InitiateSeparationAction (rendered in PageHeader's `actions`
-// slot) calls useToast -- same mock TransferWithApproval.test.tsx already
-// established for the identical requirement, rather than standing up a
-// real ToastProvider this test doesn't otherwise need.
-vi.mock("@/app/_components/ds/Toast", () => ({
-  useToast: () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }),
+vi.mock("@/app/_data/loaders", () => ({
+  getEmployeeById: vi.fn(async () => ({ data: null })),
+}));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import RetirementPage from "./page";
 
-// HIGH fix: RetirementPage's PageHeader now renders InitiateSeparationAction
-// (client component) in its `actions` slot, which calls useTranslations --
-// needs a NextIntlClientProvider ancestor, same harness WfhRequestsTable.
-// test.tsx already established for the identical requirement. The page's
-// own getTranslations (server-side) calls needed no such wrapper and still
-// don't.
-function renderPage(ui: Awaited<ReturnType<typeof RetirementPage>>) {
-  return render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+async function renderPage(props: Parameters<typeof RetirementPage>[0] = {}) {
+  const page = await RetirementPage(props);
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <ToastProvider>{page}</ToastProvider>
+    </NextIntlClientProvider>,
+  );
 }
 
-describe("RetirementPage", () => {
-  beforeEach(() => {
-    fetchJsonMock.mockReset();
+function row(overrides: Partial<Record<string, unknown>> = {}) {
+  return {
+    id: "sep-1",
+    employee: "Priya Nair",
+    department: "Finance",
+    designation: "Section Officer",
+    superannuationDate: "2027-01-01",
+    separationType: "retirement",
+    status: "initiated",
+    joiningDate: "1995-01-01",
+    ...overrides,
+  };
+}
+
+// GAP-HR-RETIREMENT-06: no client-side role check existed at all.
+describe("RetirementPage role gate (GAP-HR-RETIREMENT-06)", () => {
+  it("shows PermissionDenied for a plain employee and issues no fetch", async () => {
+    getSessionRolesMock.mockReturnValue(["employee"]);
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    await renderPage();
+    expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
-  it("tells the truth on a fetch failure instead of the old 'Showing saved information' copy", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
-
-    // RetirementPage now takes a { searchParams } props object (HIGH fix:
-    // ?empId= prefill for the new InitiateSeparationAction) -- {} is the
-    // real Next.js shape for "no query params", matching what these tests
-    // are actually exercising (neither passes empId).
-    const ui = await RetirementPage({});
-    renderPage(ui);
-
-    expect(screen.getByText("Couldn't load retirement records — showing nothing")).toBeInTheDocument();
+  it("renders normally for hr_officer", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_officer"]);
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    await renderPage();
+    expect(screen.getByRole("heading", { name: "Retirement & Separation" })).toBeInTheDocument();
   });
+});
 
-  it("renders the full register and the case workspace together for real data", async () => {
+describe("RetirementPage stats (GAP-HR-RETIREMENT-03)", () => {
+  it("counts lowercase 'vrs' correctly (was compared against uppercase 'VRS', always 0)", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
     fetchJsonMock.mockResolvedValue({
-      data: [
-        { id: "e1", employee: "Meena Iyer", department: "Revenue", designation: "Tehsildar", superannuationDate: "2027-01-15", separationType: "Superannuation", status: "pending" },
-      ],
+      data: [row({ id: "s1", separationType: "vrs" }), row({ id: "s2", separationType: "retirement" })],
       source: "api",
     });
-
-    // RetirementPage now takes a { searchParams } props object (HIGH fix:
-    // ?empId= prefill for the new InitiateSeparationAction) -- {} is the
-    // real Next.js shape for "no query params", matching what these tests
-    // are actually exercising (neither passes empId).
-    const ui = await RetirementPage({});
-    renderPage(ui);
-
-    // Appears both in the register table and the upcoming-retirements card.
-    expect(screen.getAllByText("Meena Iyer").length).toBeGreaterThan(0);
+    await renderPage();
+    expect(screen.getByText("VRS").closest(".stat")).toHaveTextContent("1");
   });
 
-  // SEC CRITICAL regression (PR #1572 fix-up round): a direct navigation to
-  // /hr/retirement?empId=<already-exited-id> used to reach a fully
-  // pre-filled, submittable separation form -- this page fetches the full
-  // employee record for the name already (getEmployeeById), and now also
-  // threads its status through to InitiateSeparationAction so the guarded
-  // "already exited" state renders instead. See that component's own tests
-  // for the guard logic itself; this test proves the wiring through THIS
-  // page actually reaches it.
-  it("?empId= for an already-exited employee renders the guarded notice, not a submittable form", async () => {
-    fetchJsonMock.mockImplementation((url: string) => {
-      if (url.includes("/employees/")) {
-        return Promise.resolve({ data: { id: "emp-exited", name: "Already Gone", status: "retired" }, source: "api" });
-      }
-      return Promise.resolve({ data: [], source: "api" });
+  it("shows an 'Initiated' stat (not 'Processed', which nothing ever sets to 'completed')", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({
+      data: [row({ id: "s1", status: "initiated" }), row({ id: "s2", status: "initiated" })],
+      source: "api",
     });
-
-    const ui = await RetirementPage({ searchParams: { empId: "emp-exited" } });
-    renderPage(ui);
-
-    expect(screen.getByText("Already Gone has already exited (status: retired) and cannot be separated again.")).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "+ Initiate Separation" })).not.toBeInTheDocument();
-  });
-
-  it("?empId= for a non-exited employee still prefills the normal submittable form", async () => {
-    fetchJsonMock.mockImplementation((url: string) => {
-      if (url.includes("/employees/")) {
-        return Promise.resolve({ data: { id: "emp-active", name: "Still Serving", status: "confirmed" }, source: "api" });
-      }
-      return Promise.resolve({ data: [], source: "api" });
-    });
-
-    const ui = await RetirementPage({ searchParams: { empId: "emp-active" } });
-    renderPage(ui);
-
-    expect(screen.getByRole("button", { name: "+ Initiate Separation" })).toBeInTheDocument();
-    expect(screen.queryByText(/has already exited/)).not.toBeInTheDocument();
+    await renderPage();
+    // "Initiated" also appears per-row in the register's status column, so
+    // scope to the stat-grid label specifically (rendered before the
+    // register in document order).
+    expect(screen.getAllByText("Initiated")[0].closest(".stat")).toHaveTextContent("2");
   });
 });

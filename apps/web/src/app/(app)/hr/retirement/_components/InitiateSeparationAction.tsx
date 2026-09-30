@@ -51,11 +51,14 @@ import { useTranslations } from "next-intl";
 import { Button, ActionButton } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
+// GAP-HR-RETIREMENT-03: single source of truth for this enum, now also used
+// by retirement/page.tsx and RetirementDashboard.tsx's VRS/type-label
+// comparisons, so the two sides of this form can never drift again the way
+// page.tsx's uppercase "VRS" literal drifted from this file's lowercase
+// "vrs" before that fix.
+import { SEPARATION_TYPES, type SeparationType } from "@/lib/retirement";
 
 type EmployeeOption = { id: string; name?: string; fullName?: string; employeeNo?: string; department?: string; status?: string };
-
-const SEPARATION_TYPES = ["resignation", "retirement", "termination", "vrs", "death"] as const;
-type SeparationType = (typeof SEPARATION_TYPES)[number];
 
 // Mirrors employee/status.ts's EXITED_STATUSES exactly -- an employee
 // already in one of these has left the organisation for good and must
