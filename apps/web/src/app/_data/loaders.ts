@@ -2389,7 +2389,6 @@ export async function getPayrollRunDetails(
   if (opts.month) params.set("month", opts.month);
   const qs = params.toString();
   return fetchJson<unknown, PayrollRunDetail[]>(`/api/v1/payroll/runs${qs ? `?${qs}` : ""}`, [], {
-    revalidateSeconds: 120,
     telemetryKey: "hr.payroll.runs.detail",
     responseSchema: PayrollRunDetailListSchema,
     mapResponse: (p) => getArrayPayload(p) as PayrollRunDetail[] | null,
@@ -2398,7 +2397,6 @@ export async function getPayrollRunDetails(
 
 export async function getPayrollRunById(id: string): Promise<LoaderResult<PayrollRunFullDetail | null>> {
   return fetchJson<unknown, PayrollRunFullDetail | null>(`/api/v1/payroll/runs/${id}`, null, {
-    revalidateSeconds: 60,
     telemetryKey: "hr.payroll.run.detail",
     responseSchema: PayrollRunFullDetailSchema,
     mapResponse: (p) => (isRecord(p) ? (p as PayrollRunFullDetail) : null),

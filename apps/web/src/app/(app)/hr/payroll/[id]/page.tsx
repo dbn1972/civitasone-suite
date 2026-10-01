@@ -1,13 +1,15 @@
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatGrid, StatCard } from "../../../../_components/ds";
+import { PageHeader, Card, StatGrid, StatCard, StatusPill } from "../../../../_components/ds";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getPayrollRunById, getPayrollRunDetails } from "../../../../_data/loaders";
 import { formatRupees, formatIndianDate } from "@/lib/formatters";
+import { payrollRunStatusLabel } from "@/lib/payroll/statusLabels";
 import { PayrollRunActions } from "./PayrollRunActions";
 import { PayrollRunStepper } from "./PayrollRunStepper";
 import { MonthOverMonthCards } from "./MonthOverMonthCards";
 import { ExceptionPanel, deriveExceptions } from "./ExceptionPanel";
 import { SalarySlipsClientTable } from "./SalarySlipsClientTable";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 
 type SalarySlipRow = {
@@ -47,8 +49,26 @@ function prevPeriodIso(pp: string): string | null {
 
 export default async function PayrollRunDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("payrollDetail");
+  // GAP-PAYROLL-DETAIL-08: reuses payrollRunsTable's existing status.*
+  // translations instead of adding a parallel, independently-drifting copy
+  // under payrollDetail -- the run-list table and this detail page now show
+  // the identical translated status text.
+  const tStatus = await getTranslations("payrollRunsTable");
   const roles = getSessionRoles();
-  const canAdminister = roles.some((r) => ["payroll_admin", "payroll_officer", "super_admin"].includes(r));
+  const canAdminister = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
+
+  // GAP-PAYROLL-HOME-02's pattern, applied here: GET /v1/payroll/runs/:id
+  // 403s every role outside PAYROLL_READER_ROLES.
+  const canView = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
+  if (!canView) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title={t("titleFallback")} back="/hr/payroll" backLabel="Payroll Runs" />
+        <PermissionDenied module="this payroll run" requiredRoles={PAYROLL_READER_ROLES} />
+      </div>
+    );
+  }
+
   const { data: run, source } = await getPayrollRunById(params.id);
 
   if (!run) {
@@ -150,9 +170,12 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
           <div className="fld">
             <div className="l">{t("fieldStatus")}</div>
             <div className="v">
-              <span className={`pill ${run.status === "paid" ? "good" : run.status === "draft" ? "mut" : run.status === "failed" ? "bad" : "warn"}`}>
-                {run.status}
-              </span>
+              {/* GAP-PAYROLL-DETAIL-08: was a hand-rolled, untranslated pill
+                  (raw lowercase status text) with a 3-way tone map that
+                  treated "processing" and "completed" (awaiting
+                  disbursement) identically, unlike the run-list table's
+                  StatusPill+translated-label pattern used everywhere else. */}
+              <StatusPill status={run.status} label={payrollRunStatusLabel(run.status, tStatus)} />
             </div>
           </div>
           <div className="fld">

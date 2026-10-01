@@ -1,26 +1,44 @@
-import Link from "next/link";
-import { PageHeader, StatusPill, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, RefreshErrorState } from "../../../../_components/ds";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getPayrollRunDetails } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
-import { formatRupees } from "@/lib/formatters";
+import { PayrollRunsTable } from "../PayrollRunsTable";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 
 export default async function PayrollRunsPage() {
-  // This used to be a client component fetching "/api/v1/hrms/payroll/runs"
-  // directly -- a route that does not exist in hrms-service at all (confirmed
-  // live: GET returns 404 "Route GET:/v1/hrms/payroll/runs not found"), so
-  // this page ALWAYS landed on its error state, and the empty-state "Create
-  // first run ->" CTA it fell back to before that pointed at /hr/payroll/period,
-  // a second, independently-broken page (wrong backend: it read finance's GL
-  // period-close records, not payroll runs). Switched to the same server-side
-  // loader (getPayrollRunDetails -> GET /api/v1/payroll/runs) that the
-  // working /hr/payroll root page already uses successfully, and pointed the
-  // empty-state CTA at that same working page, where the real
-  // CreatePayrollRunForm lives.
   const t = await getTranslations("payrollRuns");
+  const roles = getSessionRoles();
+  const canAdminister = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
+
+  // GAP-PAYROLL-RUNS-04: no role gate existed at all -- every hr/layout.tsx
+  // role (including employee/manager) reached run-level gross/net totals in
+  // the rendered HTML, even though GET /v1/payroll/runs 403s anyone outside
+  // payroll-service's READER_ROLES. Gate here instead of fetching and
+  // failing generically.
+  const canView = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
+  if (!canView) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel="Payroll" />
+        <PermissionDenied module="payroll runs" requiredRoles={PAYROLL_READER_ROLES} />
+      </div>
+    );
+  }
+
+  // GAP-PAYROLL-RUNS-02: this used to be a bare, unbounded, unsorted,
+  // unfilterable <table> duplicating what PayrollRunsTable (used on
+  // /hr/payroll) already does with sort/filter/pageSize=12 and the
+  // provenance badge. GAP-PAYROLL-RUNS-05: it also rendered <StatusPill
+  // status=.../> with no translated label (unlike PayrollRunsTable).
+  // GAP-PAYROLL-RUNS-03's "Create first run" CTA was shown to every role
+  // regardless of whether they could use it -- all three are resolved by
+  // reusing the same table component the working /hr/payroll page already
+  // uses (its own empty-action hint is already gated on canAdminister),
+  // rather than maintaining a second, drifting implementation.
   const result = await getPayrollRunDetails();
-  const { data: runs } = result;
+  const { data: runs, source } = result;
   const resource = toResourceState(result);
   const errored = resource.status === "error";
 
@@ -37,43 +55,9 @@ export default async function PayrollRunsPage() {
         <div className="card" style={{ padding: 32 }}>
           <RefreshErrorState error={toHumanError("load", { area: "payroll runs" })} backHref="/hr/payroll" />
         </div>
-      ) : runs.length === 0 ? (
-        <div className="card" style={{ padding: 32, textAlign: "center" }}>
-          <p style={{ color: "var(--ink2)", fontSize: 15, marginBottom: 14 }}>{t("emptyMessage")}</p>
-          <Link href="/hr/payroll" className="btn primary">
-            {t("createFirstRun")}
-          </Link>
-        </div>
       ) : (
         <div className="card">
-          <div style={{ overflowX: "auto" }}>
-            <table className="data-table" role="table" aria-label={t("tableAriaLabel")}>
-              <thead>
-                <tr>
-                  <th scope="col">{t("colPeriod")}</th>
-                  <th scope="col" style={{ textAlign: "end" }}>{t("colEmployees")}</th>
-                  <th scope="col" style={{ textAlign: "end" }}>{t("colGross")}</th>
-                  <th scope="col" style={{ textAlign: "end" }}>{t("colNet")}</th>
-                  <th scope="col">{t("colStatus")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {runs.map((run) => (
-                  <tr key={run.id}>
-                    <td>
-                      <Link href={`/hr/payroll/${run.id}`}>{run.payPeriod}</Link>
-                    </td>
-                    <td style={{ textAlign: "end" }}>{run.employeeCount != null ? run.employeeCount.toLocaleString("en-IN") : "—"}</td>
-                    <td style={{ textAlign: "end" }}>{formatRupees(run.grossAmount)}</td>
-                    <td style={{ textAlign: "end" }}>{formatRupees(run.netAmount)}</td>
-                    <td>
-                      <StatusPill status={run.status} />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <PayrollRunsTable runs={runs} source={source} canAdminister={canAdminister} />
         </div>
       )}
     </div>

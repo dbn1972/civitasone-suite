@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button } from "../../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
@@ -37,8 +37,20 @@ export function PayrollRunActions({
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [messageTone, setMessageTone] = useState<"good" | "bad">("good");
+  // GAP-PAYROLL-DETAIL-07: router.refresh() re-renders the server component,
+  // but getPayrollRunById's cached response could still be stale for a
+  // moment right after a successful action, so the just-acted-on button
+  // could keep rendering and invite a second click on an irreversible
+  // action. Track the just-completed action locally so its buttons
+  // disappear immediately, independent of when the `status` prop itself
+  // catches up; resets once it genuinely does (see the effect below).
+  const [settledAction, setSettledAction] = useState<PendingAction>(null);
   const { toast } = useToast();
   const formError = useFormError("payroll run");
+
+  useEffect(() => {
+    setSettledAction(null);
+  }, [status]);
 
   async function runAction(action: "approve" | "disburse" | "revert", reason?: string) {
     setBusy(true);
@@ -76,6 +88,7 @@ export function PayrollRunActions({
             : t("revertedToast"),
       );
       setPending(null);
+      setSettledAction(action);
       router.refresh();
     } catch {
       setError(formError.fromException("save").message);
@@ -84,9 +97,22 @@ export function PayrollRunActions({
     }
   }
 
-  const canApprove  = canAdminister && (status === "processing" || status === "draft");
-  const canDisburse = canAdminister && status === "approved";
-  const canRevert   = canAdminister && status === "failed";
+  // GAP-PAYROLL-DETAIL-04: the real backend state machine
+  // (payroll-service domain.ts assertRunStatusTransition) only allows
+  // approved FROM "processing" -- never "draft" (draft -> processing is
+  // itself a separate, earlier transition). Approving from draft always
+  // fails server-side today; this used to render an Approve button that
+  // could never succeed from that state.
+  //
+  // The wire status enum (payroll-service queries.ts mapRunStatus) is only
+  // ever draft/processing/completed/paid/failed -- "approved" is remapped
+  // to "completed" before the API responds, so a check against the literal
+  // string "approved" can never match anything the API actually sends. That
+  // made Disburse a dead button: canDisburse was never true for any real
+  // run, no matter how far along it was.
+  const canApprove  = canAdminister && status === "processing" && settledAction !== "approve";
+  const canDisburse = canAdminister && status === "completed"  && settledAction !== "disburse";
+  const canRevert   = canAdminister && status === "failed"     && settledAction !== "revert";
 
   if (!canApprove && !canDisburse && !canRevert) return null;
 
@@ -131,11 +157,20 @@ export function PayrollRunActions({
         )}
       </div>
 
+      {/* GAP-PAYROLL-DETAIL-02/03: maker-checker and revert were a free-text
+          box (minReasonLength defaulted to 1, i.e. a single character would
+          pass). The backend already enforces maker != creator server-side
+          (payroll-service consumer.ts: SELF_APPROVAL_FORBIDDEN) and a
+          disbursement reconciliation check (DISBURSE_RECONCILIATION_FAILED)
+          -- this raises the client-side bar to match the seriousness of an
+          irreversible, money-moving action. */}
       <ConfirmDialog
         open={pending === "approve"}
         title={t("approveConfirmTitle")}
         danger
         requireReason
+        minReasonLength={10}
+        maxReasonLength={1000}
         reasonLabel={t("approveReasonLabel")}
         confirmLabel={t("approveConfirmLabel")}
         busy={busy}
@@ -155,6 +190,8 @@ export function PayrollRunActions({
         title={t("disburseConfirmTitle")}
         danger
         requireReason
+        minReasonLength={10}
+        maxReasonLength={1000}
         reasonLabel={t("disburseReasonLabel")}
         confirmLabel={t("disburseConfirmLabel")}
         busy={busy}
@@ -174,6 +211,8 @@ export function PayrollRunActions({
         title={t("revertConfirmTitle")}
         danger
         requireReason
+        minReasonLength={10}
+        maxReasonLength={1000}
         reasonLabel={t("revertReasonLabel")}
         confirmLabel={t("revertConfirmLabel")}
         busy={busy}
