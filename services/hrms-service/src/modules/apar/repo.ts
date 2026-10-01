@@ -131,6 +131,26 @@ export async function countAparsByStatusGroup(
 export async function findAppraisal(id: string, tenantId: string): Promise<AppraisalRow | null> {
   return scopedRead((tx) => findAppraisalTx(tx, id, tenantId));
 }
+
+/**
+ * GAP-HR-APAR-NEW-04: synchronous pre-check for the one-APAR-per-employee-
+ * per-period rule (apar/routes.ts's create handler). App-level only, no DB
+ * unique index -- see that route's comment for why a migration is
+ * deliberately out of scope here.
+ */
+export async function findAppraisalByEmployeeAndPeriod(
+  tenantId: string,
+  employeeId: string,
+  appraisalPeriod: string,
+): Promise<AppraisalRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsAppraisals)
+    .where(and(
+      eq(hrmsAppraisals.tenantId, tenantId),
+      eq(hrmsAppraisals.employeeId, employeeId),
+      eq(hrmsAppraisals.appraisalPeriod, appraisalPeriod),
+    )).limit(1));
+  return rows[0] ?? null;
+}
 export async function findAppraisalTx(tx: Writer, id: string, tenantId: string): Promise<AppraisalRow | null> {
   const rows = await tx.select().from(hrmsAppraisals)
     .where(and(eq(hrmsAppraisals.id, id), eq(hrmsAppraisals.tenantId, tenantId))).limit(1);

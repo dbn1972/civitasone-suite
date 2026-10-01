@@ -27,7 +27,18 @@ const H = vi.hoisted(() => ({
   // (Promise.all) for the list page's server-computed stat-card counts.
   countAparsByStatusGroup: vi.fn(),
   listDirectReportEmployeeIds: vi.fn(),
+  // GAP-HR-APAR-NEW-04: synchronous pre-check POST /v1/hrms/apar now runs
+  // before publishing the create write.
+  findAppraisalByEmployeeAndPeriod: vi.fn(),
   resolveEmployeeForActor: vi.fn(),
+  // GAP-HR-APAR-02/DETAIL-02/DETAIL-04: GET /v1/hrms/apar and GET
+  // /v1/hrms/apar/:id now batch-resolve employee/officer/actor names via
+  // this shared helper. Mocked wholesale like repo.js/actor-link.js above
+  // -- the module's real implementation goes through employee/repo.js's
+  // findManyByIds, which this file's shared/db.js mock does not shape
+  // itself around (that query has no final `.limit()`), so leaving it
+  // unmocked would throw "rows.map is not a function" on every GET test.
+  batchEmployees: vi.fn(),
 }));
 
 vi.mock("../src/modules/apar/repo.js", () => ({
@@ -40,6 +51,7 @@ vi.mock("../src/modules/apar/repo.js", () => ({
   listScores: (...a: unknown[]) => H.listScores(...a),
   listHistory: (...a: unknown[]) => H.listHistory(...a),
   listDirectReportEmployeeIds: (...a: unknown[]) => H.listDirectReportEmployeeIds(...a),
+  findAppraisalByEmployeeAndPeriod: (...a: unknown[]) => H.findAppraisalByEmployeeAndPeriod(...a),
 }));
 
 // apar/routes.ts's resolveAparReadScope resolves "manager" callers through
@@ -49,6 +61,10 @@ vi.mock("../src/modules/apar/repo.js", () => ({
 vi.mock("../src/modules/employee/actor-link.js", () => ({
   resolveEmployeeForActor: (...a: unknown[]) => H.resolveEmployeeForActor(...a),
   extractActorEmail: () => undefined,
+}));
+
+vi.mock("../src/shared/batch-resolve.js", () => ({
+  batchEmployees: (...a: unknown[]) => H.batchEmployees(...a),
 }));
 
 vi.mock("../src/shared/db.js", () => {
@@ -101,6 +117,14 @@ beforeEach(() => {
   H.countAparsByStatusGroup.mockResolvedValue({ selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 });
   H.listDirectReportEmployeeIds.mockResolvedValue([]);
   H.resolveEmployeeForActor.mockResolvedValue(undefined);
+  // Empty map: every id looks up as "no name on file", same safe default
+  // the real helper returns for an id outside the tenant -- the web layer
+  // already falls back to a translated "unavailable"/'—' string, never a
+  // thrown error, so tests that don't care about names stay unaffected.
+  H.batchEmployees.mockResolvedValue(new Map());
+  // No existing duplicate by default -- the happy-path create test must
+  // not spuriously 409.
+  H.findAppraisalByEmployeeAndPeriod.mockResolvedValue(null);
 });
 afterAll(async () => { await sqlClient.end(); });
 
@@ -673,6 +697,184 @@ describe("APAR — GET /v1/hrms/apar/:id — ownership regression (IDOR)", () =>
     const app = await buildApp();
     const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth() }); // hr_admin
     expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+});
+
+// GAP-HR-APAR-NEW-04: canonical financial-year format + one-APAR-per-
+// employee-per-period.
+describe("APAR — POST /v1/hrms/apar — appraisal period format + uniqueness (GAP-HR-APAR-NEW-04)", () => {
+  it("400 — rejects a non-FY-shaped period ('2025-2026')", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/apar", headers: auth(), payload: {
+      employeeId: EMP, appraisalPeriod: "2025-2026",
+      reportingOfficerId: RO, reviewingOfficerId: RVO, acceptingAuthorityId: AA,
+    }});
+    expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("400 — rejects a non-consecutive FY pair ('2025-28')", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/apar", headers: auth(), payload: {
+      employeeId: EMP, appraisalPeriod: "2025-28",
+      reportingOfficerId: RO, reviewingOfficerId: RVO, acceptingAuthorityId: AA,
+    }});
+    expect(r.statusCode).toBe(400);
+    await app.close();
+  });
+
+  it("409 DUPLICATE_APAR — an APAR already exists for this employee+period", async () => {
+    H.findAppraisalByEmployeeAndPeriod.mockResolvedValue(baseAppraisal());
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/apar", headers: auth(), payload: {
+      employeeId: EMP, appraisalPeriod: "2024-25",
+      reportingOfficerId: RO, reviewingOfficerId: RVO, acceptingAuthorityId: AA,
+    }});
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("DUPLICATE_APAR");
+    expect(H.findAppraisalByEmployeeAndPeriod).toHaveBeenCalledWith(TENANT, EMP, "2024-25");
+    await app.close();
+  });
+});
+
+// GAP-HR-APAR-02 / GAP-HR-APAR-DETAIL-02 / GAP-HR-APAR-DETAIL-04: the
+// circular depends_on with GAP-HR-ADVANCES-01 is resolved (PR #1698,
+// merged) -- these prove the list/detail routes actually call the shared
+// enrichment helper and surface its result, never a raw UUID.
+describe("APAR — employee/officer/actor name enrichment (GAP-HR-APAR-02/DETAIL-02/DETAIL-04)", () => {
+  it("GET /v1/hrms/apar: list rows carry employeeName from the batch-resolved map", async () => {
+    H.listAppraisals.mockResolvedValue({ rows: [baseAppraisal({ employeeId: EMP })], total: 1 });
+    H.batchEmployees.mockResolvedValue(new Map([[EMP, { id: EMP, fullName: "A Kumar", employeeNo: "E101", departmentId: "d", designationId: "g" }]]));
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth() });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data[0].employeeName).toBe("A Kumar");
+    expect(r.json().data[0].employeeNo).toBe("E101");
+    await app.close();
+  });
+
+  it("GET /v1/hrms/apar: an id with no match in the batch map has no name field, never a raw-UUID substitute", async () => {
+    H.listAppraisals.mockResolvedValue({ rows: [baseAppraisal({ employeeId: EMP })], total: 1 });
+    H.batchEmployees.mockResolvedValue(new Map()); // no match for EMP
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/apar", headers: auth() });
+    expect(r.json().data[0].employeeName).toBeUndefined();
+    await app.close();
+  });
+
+  it("GET /v1/hrms/apar/:id: appraisal + history carry resolved names", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal());
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([{ id: "h1", fromStage: null, toStage: "self_pending", actorId: EMP, actorRole: "appraisee", override: false, remarks: null, createdAt: new Date() }]);
+    H.batchEmployees.mockResolvedValue(new Map([
+      [EMP, { id: EMP, fullName: "A Kumar", employeeNo: "E101", departmentId: "d", designationId: "g" }],
+      [RO, { id: RO, fullName: "B Singh", employeeNo: "E102", departmentId: "d", designationId: "g" }],
+    ]));
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth() });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.appraisal.employeeName).toBe("A Kumar");
+    expect(body.appraisal.reportingOfficerName).toBe("B Singh");
+    expect(body.history[0].actorName).toBe("A Kumar");
+    await app.close();
+  });
+});
+
+// GAP-HR-APAR-DETAIL-01: GET /:id's server-computed `actions` -- the web
+// layer must never guess stage ownership itself.
+describe("APAR — GET /v1/hrms/apar/:id — computeAparActions (GAP-HR-APAR-DETAIL-01)", () => {
+  it("the assigned stage owner gets canAct:true, isOverride:false", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reporting_officer" }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    H.resolveEmployeeForActor.mockResolvedValue({ id: RO });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(RO, ["manager"]) });
+    expect(r.json().actions).toEqual({ expectedStage: "reporting_officer", canAct: true, isOverride: false, canFinalise: false });
+    await app.close();
+  });
+
+  it("an actor with no relationship to this record at all (not HR, not the appraisee, not their manager, not an assigned officer) is 404'd before actions is ever computed -- the read-scope IDOR guard, unchanged", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reporting_officer" }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    const OUTSIDER = "aaaaaaaa-9999-4000-8000-000000000002";
+    H.resolveEmployeeForActor.mockResolvedValue({ id: OUTSIDER });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(OUTSIDER, ["manager"]) });
+    expect(r.statusCode).toBe(404);
+    await app.close();
+  });
+
+  it("an actor who IS an assigned officer on this record (reviewing officer) can read it even with no people-manager relationship to the appraisee -- the GAP-HR-APAR-DETAIL-01 read-scope fix", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reviewing_officer" }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    // Resolves to RVO's own employee id -- the assigned reviewingOfficerId
+    // on baseAppraisal() -- but listDirectReportEmployeeIds stays [] (its
+    // default), proving this isn't a manager-relationship read: RVO is
+    // not the appraisee's people-manager.
+    H.resolveEmployeeForActor.mockResolvedValue({ id: RVO });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(RVO, ["manager"]) });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().actions).toEqual({ expectedStage: "reviewing_officer", canAct: true, isOverride: false, canFinalise: false });
+    await app.close();
+  });
+
+  it("a super_admin acting for an absent/unresolved officer gets canAct:true, isOverride:true", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reporting_officer" }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    H.resolveEmployeeForActor.mockResolvedValue(undefined);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(USER, ["super_admin"]) });
+    expect(r.json().actions).toEqual({ expectedStage: "reporting_officer", canAct: true, isOverride: true, canFinalise: false });
+    await app.close();
+  });
+
+  it("the appraisee can never override their own officer stage, even as super_admin", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "reporting_officer", employeeId: EMP }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(EMP, ["super_admin"]) });
+    expect(r.json().actions.canAct).toBe(false);
+    await app.close();
+  });
+
+  it("hr_admin gets canFinalise:true at 'disclosed', independent of stage ownership", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "disclosed" }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth() }); // default hr_admin
+    expect(r.json().actions.canFinalise).toBe(true);
+    await app.close();
+  });
+
+  it("canFinalise is false for a non-HR viewer even at 'disclosed'", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "disclosed", employeeId: EMP }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    H.resolveEmployeeForActor.mockResolvedValue({ id: EMP });
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth(EMP, ["employee"]) });
+    expect(r.json().actions.canFinalise).toBe(false);
+    expect(r.json().actions.canAct).toBe(true); // the appraisee may still file a representation
+    await app.close();
+  });
+
+  it("a finalised record is never actionable", async () => {
+    H.findAppraisal.mockResolvedValue(baseAppraisal({ status: "finalised" }));
+    H.listScores.mockResolvedValue([]);
+    H.listHistory.mockResolvedValue([]);
+    const app = await buildApp();
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/apar/${APAR_ID}`, headers: auth() });
+    expect(r.json().actions).toEqual({ expectedStage: "finalised", canAct: false, isOverride: false, canFinalise: false });
     await app.close();
   });
 });
