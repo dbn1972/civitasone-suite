@@ -12,9 +12,10 @@ import { redirect } from "next/navigation";
  * "overtime page fabricated stats" fix, 2026-09-24 23:47) touched only the
  * canonical page, after the blanket #1548 WCAG sweep that is the orphan's
  * only other history. /hr/workforce/overtime has zero inbound links
- * anywhere in the repo except its own OvertimeClaimForm sub-component (see
- * hr/workforce/overtime/new/page.tsx, redirected separately alongside this
- * page for the same reason).
+ * anywhere in the repo (its sibling hr/workforce/overtime/new/page.tsx used
+ * to render OvertimeClaimForm, redirected separately alongside this page for
+ * the same reason; GAP-HR-WORKFORCE-OVERTIME-NEW-01 has since deleted that
+ * now-unreferenced component entirely).
  *
  * Redirecting, not deleting, mirrors the /hr/appraisals -> /hr/apar
  * precedent (PR #1571): the smaller, safer fix that closes the "two

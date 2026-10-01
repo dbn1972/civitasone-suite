@@ -191,6 +191,15 @@ export default function OvertimeNewPage() {
             <p id={`${reasonId}-count`} style={{ fontSize: 11, color: "var(--mut)", margin: "3px 0 0" }}>{t("charCount", { count: reason.length })}</p>
             {reasonFieldError && <p id={`${reasonId}-error`} role="alert" style={{ color: "var(--red, #c00)", fontSize: 12, margin: "4px 0 0" }}>{reasonFieldError}</p>}
           </div>
+          {/* GAP-HR-WORKFORCE-OVERTIME-NEW-02: the retired workforce/overtime/new
+              form let the claimant name a specific duty-officer approver; the
+              canonical POST /v1/hrms/overtime-requests schema has no such field
+              (approval is a role check, not a named assignment -- see attendance/
+              routes.ts's PATCH .../approve: any hr_admin/hr_officer/super_admin
+              may decide it, never the submitter themself). Stating that plainly
+              here, rather than a picker implying the submitter chooses who
+              decides. */}
+          <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{t("approverInfo")}</p>
           {msg && (
             <p role={status === "error" ? "alert" : "status"} aria-live={status === "error" ? "assertive" : "polite"} style={{ color: status === "error" ? "var(--red, #c00)" : "var(--green, #0a0)", fontSize: 13 }}>
               {msg}

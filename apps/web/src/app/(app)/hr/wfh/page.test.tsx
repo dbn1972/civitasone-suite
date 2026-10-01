@@ -71,6 +71,22 @@ describe("WfhPage (/hr/wfh)", () => {
     expect(screen.queryByLabelText(/employee id/i)).not.toBeInTheDocument();
   });
 
+  // GAP-HR-WORKFORCE-WFH-NEW-01: /hr/workforce/wfh/new redirects here with a
+  // "#new-request" fragment so a visitor following a "/new" link lands
+  // scrolled to the form, not just the top of the list page -- this anchor
+  // element is what that fragment targets.
+  it("wraps the New Request card in an #new-request anchor target", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
+    getMyProfileMock.mockResolvedValue({ data: { id: "emp-self", name: "Self Employee", department: "IT", employeeNo: "E-1", status: "active", designation: "Officer" }, source: "api" });
+
+    const { container } = await render(WfhPage());
+
+    const anchor = container.querySelector("#new-request");
+    expect(anchor).not.toBeNull();
+    expect(anchor?.querySelector("form")).not.toBeNull();
+  });
+
   it("shows a clear message instead of a broken form for an employee with no linked profile", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
     getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
