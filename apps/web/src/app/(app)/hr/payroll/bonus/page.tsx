@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { resolveEmployeeNames, employeeDisplayLabel } from "@/app/_data/employeeNames";
 import { formatMoney } from "@/lib/formatters";
 import { ComputeBonusForm } from "./ComputeBonusForm";
 import { toHumanError } from "@/lib/messages";
@@ -16,6 +17,8 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
+type DisplayRow = Row & { employee_label: string };
+
 async function getData(): Promise<LoaderResult<Row[]>> {
   return fetchJson<unknown, Row[]>("/api/v1/payroll/bonus", [], {
     telemetryKey: "payroll.bonus",
@@ -30,9 +33,12 @@ export default async function BonusPage() {
   const t = await getTranslations("payrollBonus");
   const { data: items, source } = await getData();
   const errored = source === "error";
+  // GAP-PAYROLL-BONUS-01: names (one batched directory lookup), not UUIDs.
+  const names = await resolveEmployeeNames(items.map((r) => r.employee_id));
+  const rows: DisplayRow[] = items.map((r) => ({ ...r, employee_label: employeeDisplayLabel(names, r.employee_id, t("unknownEmployee")) }));
 
-  const columns: { key: keyof Row & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
-    { key: "employee_id", label: t("colEmployee") },
+  const columns: { key: keyof DisplayRow & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount" }[] = [
+    { key: "employee_label", label: t("colEmployee") },
     { key: "fy", label: t("colFy") },
     { key: "basic_minor", label: t("colBasic"), align: "right", cellType: "amount" },
     { key: "bonus_pct", label: t("colBonusPct"), align: "right" },
@@ -48,7 +54,7 @@ export default async function BonusPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={t("backLabel")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
@@ -66,9 +72,9 @@ export default async function BonusPage() {
             <RefreshErrorState error={toHumanError("load", { area: "bonus" })} backHref="/hr/payroll" />
           </div>
         ) : (
-          <DataTable<Row>
+          <DataTable<DisplayRow>
           columns={columns}
-          rows={items}
+          rows={rows}
           sortable
           filterable
           filterPlaceholder={t("filterPlaceholder")}

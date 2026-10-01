@@ -3,14 +3,16 @@ import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import {
   createArrearBody, computeBonusBody, createReimbursementBody,
   createSalaryRevisionBody, updateSettingsBody,
+  reimbursementDecisionBody, reimbursementRejectBody,
 } from "./validators.js";
+import { scopeReimbursementEmployee, assertReimbursementDecidable } from "./adjustment-guards.js";
 
 const ROLES = ["payroll_admin","payroll_officer","super_admin","hr_admin"];
 
@@ -71,15 +73,42 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
   });
 
   // Reimbursements
+  // GAP-PAYROLL-REIMBURSEMENTS-05: a self-service employee may now list
+  // claims, but only their OWN (employeeId is forced to their resolved
+  // hrms employee id; naming anyone else is 403). Privileged roles keep the
+  // tenant-wide list. Before, the employee got a blanket 403 while the web
+  // page (admitted by hr/layout) showed them an error state.
   app.get("/v1/payroll/reimbursements", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ROLES);
+    requireRole(ctx, [...ROLES, "employee"]);
     const q = z.object({
       employeeId: z.string().uuid().optional(),
       status: z.string().optional(),
     }).parse(req.query);
-    const rows = await repo.listReimbursements(ctx.tenantId, q.employeeId ?? null, q.status ?? null);
+    const employeeId = await scopeReimbursementEmployee(ctx, q.employeeId, "read", ROLES);
+    const rows = await repo.listReimbursements(ctx.tenantId, employeeId ?? null, q.status ?? null);
     return reply.send({ data: rows });
+  });
+
+  // GAP-PAYROLL-REIMBURSEMENTS-02: approve / reject a submitted claim.
+  // Payroll roles only; maker-checker + state checks in
+  // assertReimbursementDecidable; reason mandatory on reject.
+  app.patch("/v1/payroll/reimbursements/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = reimbursementDecisionBody.optional().parse(req.body);
+    await assertReimbursementDecidable(ctx, id);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.decideReimbursement(ctx, id, "approved", body?.reason));
+  });
+
+  app.patch("/v1/payroll/reimbursements/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = reimbursementRejectBody.parse(req.body);
+    await assertReimbursementDecidable(ctx, id);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.decideReimbursement(ctx, id, "rejected", body.reason));
   });
 
   // CQRS lift (quality-payroll-95): was a synchronous DB write in
@@ -96,7 +125,8 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     // claim (with a payout) in that co-worker's name (IDOR / claim
     // forgery). HR/payroll roles keep the existing ability to submit a
     // claim on behalf of another employee (act-on-behalf).
-    const employeeId = enforceEmployeeOwnership(ctx, body.employeeId);
+    // GAP-PAYROLL-REIMBURSEMENTS-01: resolved hrms id, not actorId.
+    const employeeId = (await scopeReimbursementEmployee(ctx, body.employeeId, "write", ROLES))!;
     return sendAccepted(reply, acceptedResponseSchema, await commands.createReimbursement(ctx, { ...body, employeeId }));
   });
 

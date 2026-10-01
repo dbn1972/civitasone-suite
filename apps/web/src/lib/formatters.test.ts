@@ -377,3 +377,18 @@ describe("daysUntilIST (GAP-HR-CONFIRMATION-06: calendar-day diff, Asia/Kolkata)
     expect(daysUntilIST("2026-01-15T19:00:00.000Z")).toBe(daysUntilIST("2026-01-16"));
   });
 });
+
+import { formatPeriod } from "./formatters";
+
+describe("formatPeriod (GAP-PAYROLL-ARREARS-06)", () => {
+  it("formats YYYY-MM as 'Mon YYYY'", () => {
+    expect(formatPeriod("2026-07")).toBe("Jul 2026");
+    expect(formatPeriod("2025-12")).toBe("Dec 2025");
+  });
+  it("renders missing as an em dash and passes unparseable values through", () => {
+    expect(formatPeriod(null)).toBe("—");
+    expect(formatPeriod("")).toBe("—");
+    expect(formatPeriod("2026-13")).toBe("2026-13");
+    expect(formatPeriod("July")).toBe("July");
+  });
+});

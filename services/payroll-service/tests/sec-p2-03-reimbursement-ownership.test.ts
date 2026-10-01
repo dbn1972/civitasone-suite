@@ -22,8 +22,15 @@ import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 
+// GAP-PAYROLL-REIMBURSEMENTS-01: ownership is now checked against the
+// caller's RESOLVED hrms employee id (resolveActorEmployeeId), not the raw
+// JWT subject -- they are different id spaces. EMP_OWN here is the
+// employee's actor id; EMP_OWN_EMPLOYEE_ID is what it resolves to.
+const ids = vi.hoisted(() => ({ actorToEmployee: new Map<string, string>() }));
 vi.mock("../src/shared/hrms-client.js", () => ({
   verifyEmployeeExists: vi.fn(async () => true),
+  resolveActorEmployeeId: vi.fn(async (_tenant: string, actorId: string) => ids.actorToEmployee.get(actorId) ?? null),
+  HrmsUnavailableError: class HrmsUnavailableError extends Error {},
 }));
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -31,6 +38,8 @@ const TENANT = randomUUID();
 const ADMIN_ACTOR = randomUUID();
 const EMP_OWN = randomUUID();
 const EMP_OTHER = randomUUID();
+const EMP_OWN_EMPLOYEE_ID = randomUUID();
+ids.actorToEmployee.set(EMP_OWN, EMP_OWN_EMPLOYEE_ID);
 
 function token(sub: string, roles: string[]) {
   return signToken({ sub, tid: TENANT, roles, sid: "sec-p2-03" }, SECRET);
@@ -59,7 +68,7 @@ describe("POST /v1/payroll/reimbursements — ownership (SEC-P2-03)", () => {
       method: "POST",
       url: "/v1/payroll/reimbursements",
       headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
-      payload: payload(EMP_OWN),
+      payload: payload(EMP_OWN_EMPLOYEE_ID),
     });
     await app.close();
     expect(res.statusCode).toBe(202);

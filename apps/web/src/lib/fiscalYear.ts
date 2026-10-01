@@ -62,3 +62,15 @@ export function recentFinancialYears(count = 5, now: Date = new Date()): string[
   const currentStart = Number(currentFinancialYear(now).slice(0, 4));
   return Array.from({ length: count }, (_, i) => fiscalYearLabel(currentStart - i));
 }
+
+/**
+ * True for a well-formed FY label whose second half is the year after the
+ * first ("2026-27", "1999-00"); false for "2026-99", "2026-05", "2026/27".
+ * GAP-PAYROLL-FLEX-BENEFITS-03 / BONUS-03: the forms' bare /^\d{4}-\d{2}$/
+ * accepted any two digits after the dash.
+ */
+export function isValidFinancialYearLabel(fy: string): boolean {
+  const match = /^(\d{4})-(\d{2})$/.exec(fy.trim());
+  if (!match) return false;
+  return Number(match[2]) === (Number(match[1]) + 1) % 100;
+}

@@ -280,6 +280,28 @@ export async function createReimbursement(ctx: RequestContext, body: CreateReimb
 }
 
 /**
+ * GAP-PAYROLL-REIMBURSEMENTS-02: approve/reject a submitted claim. The route
+ * has already checked status/maker-checker (adjustment-guards.ts); the
+ * consumer re-applies the `status = 'submitted'` condition in its UPDATE so a
+ * concurrent second decision is a no-op. One decision per claim, hence the
+ * deterministic messageId.
+ */
+export async function decideReimbursement(
+  ctx: RequestContext,
+  id: string,
+  decision: "approved" | "rejected",
+  reason: string | undefined,
+): Promise<Accepted> {
+  await queue.publish(COMMANDS.reimbursementDecide, {
+    messageId: deterministicUuid(`payroll-reimbursement-decide:${id}`),
+    type: COMMANDS.reimbursementDecide,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { id, tenantId: ctx.tenantId, decision, reason: reason ?? null },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
  * F3 leftover CQRS: salary revision create. world-class-routes.ts POST
  * /v1/payroll/salary-revisions used to INSERT synchronously in the request
  * path (marked "// ─── Gap:" — added after the rest of this file's F3
@@ -454,12 +476,14 @@ export async function createOffCycle(ctx: RequestContext, body: CreateOffCycleIn
  * Off-cycle process command. The 30% flat-tax computation now runs in the
  * consumer (single source of truth), not the HTTP handler.
  */
-export async function processOffCycle(ctx: RequestContext, offCycleId: string): Promise<Accepted> {
+export async function processOffCycle(ctx: RequestContext, offCycleId: string, reason?: string): Promise<Accepted> {
   await queue.publish(COMMANDS.offCycleProcess, {
     messageId: deterministicUuid(`payroll-offcycle-process:${offCycleId}`),
     type: COMMANDS.offCycleProcess,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id: offCycleId, tenantId: ctx.tenantId },
+    // GAP-PAYROLL-OFF-CYCLE-04: the processor's reason travels to the
+    // consumer's audit record.
+    payload: { id: offCycleId, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
   });
   return { id: offCycleId, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -10,6 +10,16 @@ vi.mock("@/app/_data/apiClient", () => ({
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
+let sessionRoles: string[] = ["payroll_admin"];
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => sessionRoles,
+  PAYROLL_ADMIN_ROLES: ["payroll_admin", "payroll_officer", "super_admin"],
+  PAYROLL_READER_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"],
+}));
+vi.mock("@/lib/entityAdapters/employee", () => ({
+  searchEmployees: vi.fn(async () => []),
+  resolveEmployees: vi.fn(async () => []),
+}));
 
 import OffCyclePage from "./page";
 
@@ -28,6 +38,7 @@ async function renderPage() {
 describe("OffCyclePage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    sessionRoles = ["payroll_admin"];
   });
 
   it("renders the list of off-cycle runs", async () => {
@@ -71,5 +82,34 @@ describe("OffCyclePage", () => {
     await renderPage();
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+
+  const DRAFT = {
+    id: "o1", run_type: "bonus", period: "2025-06", description: null, total_amount_minor: 500000,
+    total_tax_minor: 0, total_net_minor: 0, status: "draft", created_at: "2025-06-01T00:00:00Z", employee_count: 2,
+  };
+
+  it("GAP-PAYROLL-OFF-CYCLE-06: an employee gets Access restricted, no fetch, no form", async () => {
+    sessionRoles = ["employee"];
+    await renderPage();
+    expect(screen.getByText("Access restricted")).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Create Off-Cycle Run")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-OFF-CYCLE-06: a read-only reader sees runs but no form and no Process button", async () => {
+    sessionRoles = ["finance_officer"];
+    fetchJsonMock.mockResolvedValue({ data: [DRAFT], source: "api" });
+    await renderPage();
+    expect(screen.getByText("Bonus Disbursement")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Process/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Create Off-Cycle Run" })).not.toBeInTheDocument();
+  });
+
+  it("payroll admins get the create form and the Process button", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [DRAFT], source: "api" });
+    await renderPage();
+    expect(screen.getByRole("button", { name: "Create Off-Cycle Run" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Process Bonus Disbursement run/ })).toBeInTheDocument();
   });
 });

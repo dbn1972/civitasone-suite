@@ -6,10 +6,17 @@ import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
-import { currentFinancialYear } from "@/lib/fiscalYear";
+import { currentFinancialYear, isValidFinancialYearLabel } from "@/lib/fiscalYear";
+import { rupeesToMinorString } from "@/lib/money";
 
 type PlanComponent = { name: string; maxAmount: string; taxExempt: boolean };
-type PlanResponse = { data: { id: string; name: string; fy: string; totalBudgetMinor: number; status: string } };
+
+/** Paise as a safe JS number, or null (invalid / non-positive / too large). */
+function toPaise(input: string): number | null {
+  const minor = rupeesToMinorString(input);
+  if (minor === null || BigInt(minor) > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  return Number(minor);
+}
 
 const emptyComponent = (): PlanComponent => ({ name: "", maxAmount: "", taxExempt: false });
 
@@ -68,7 +75,7 @@ export function CreateFlexPlanForm() {
 
   function isComponentInvalid(c: PlanComponent): boolean {
     if (!compGroupInvalid) return false;
-    return !c.name.trim() || !(parseFloat(c.maxAmount) > 0);
+    return !c.name.trim() || toPaise(c.maxAmount) === null;
   }
 
   function updateComponent(idx: number, patch: Partial<PlanComponent>) {
@@ -86,15 +93,17 @@ export function CreateFlexPlanForm() {
       nameRef.current?.focus();
       return;
     }
-    if (!/^\d{4}-\d{2}$/.test(fy.trim())) {
+    // GAP-PAYROLL-FLEX-BENEFITS-03: "2026-99" / "2026-05" used to pass.
+    if (!isValidFinancialYearLabel(fy)) {
       setTone("bad");
       setInvalidField("fy");
       setMessage(t("fyFormatError"));
       fyRef.current?.focus();
       return;
     }
-    const budget = parseFloat(totalBudget);
-    if (Number.isNaN(budget) || budget <= 0) {
+    // GAP-PAYROLL-FLEX-BENEFITS-03: string -> paise, no parseFloat * 100.
+    const budgetMinor = toPaise(totalBudget);
+    if (budgetMinor === null) {
       setTone("bad");
       setInvalidField("budget");
       setMessage(t("budgetRequiredError"));
@@ -102,12 +111,29 @@ export function CreateFlexPlanForm() {
       return;
     }
     const validComponents = components.filter((c) => c.name.trim());
-    const firstInvalidIdx = components.findIndex((c) => !c.name.trim() || !(parseFloat(c.maxAmount) > 0));
-    if (validComponents.length === 0 || validComponents.some((c) => !(parseFloat(c.maxAmount) > 0))) {
+    const firstInvalidIdx = components.findIndex((c) => !c.name.trim() || toPaise(c.maxAmount) === null);
+    if (validComponents.length === 0 || validComponents.some((c) => toPaise(c.maxAmount) === null)) {
       setTone("bad");
       setInvalidField("components");
       setMessage(t("componentsRequiredError"));
       if (firstInvalidIdx >= 0) componentNameRefs.current[firstInvalidIdx]?.focus();
+      return;
+    }
+    // GAP-PAYROLL-FLEX-BENEFITS-03: an election is matched to a component by
+    // name, so names must be unique; and the component caps must fit inside
+    // the plan budget.
+    const names = validComponents.map((c) => c.name.trim().toLowerCase());
+    if (new Set(names).size !== names.length) {
+      setTone("bad");
+      setInvalidField("components");
+      setMessage(t("duplicateComponentError"));
+      return;
+    }
+    const capsMinor = validComponents.reduce((sum, c) => sum + BigInt(toPaise(c.maxAmount)!), 0n);
+    if (capsMinor > BigInt(budgetMinor)) {
+      setTone("bad");
+      setInvalidField("components");
+      setMessage(t("componentsOverBudgetError", { caps: formatMoney(capsMinor), budget: formatMoney(budgetMinor) }));
       return;
     }
     setDialogError(undefined);
@@ -118,21 +144,24 @@ export function CreateFlexPlanForm() {
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<PlanResponse>("v1/payroll/flex-benefits/plans", {
+      // CQRS: the route answers 202 { id, status: "accepted" } -- there is no
+      // `data` envelope, so the old `res.data.name` threw on every success.
+      const planName = name.trim();
+      await browserJson<{ id: string; status: string }>("v1/payroll/flex-benefits/plans", {
         method: "POST",
         body: JSON.stringify({
-          name: name.trim(),
+          name: planName,
           fy: fy.trim(),
-          totalBudgetMinor: Math.round(parseFloat(totalBudget) * 100),
+          totalBudgetMinor: toPaise(totalBudget),
           components: components
             .filter((c) => c.name.trim())
-            .map((c) => ({ name: c.name.trim(), maxMinor: Math.round(parseFloat(c.maxAmount) * 100), taxExempt: c.taxExempt })),
+            .map((c) => ({ name: c.name.trim(), maxMinor: toPaise(c.maxAmount), taxExempt: c.taxExempt })),
         }),
       });
       setConfirmOpen(false);
       setTone("good");
       setInvalidField(null);
-      setMessage(t("createdMessage", { name: res.data.name }));
+      setMessage(t("createdMessage", { name: planName }));
       setName("");
       setTotalBudget("");
       resetComponents();
@@ -301,7 +330,7 @@ export function CreateFlexPlanForm() {
         description={t.rich("confirmDescription", {
           name,
           fy,
-          amount: formatMoney(Math.round((parseFloat(totalBudget) || 0) * 100)),
+          amount: formatMoney(toPaise(totalBudget)),
           strong: (chunks) => <strong>{chunks}</strong>,
         })}
         onConfirm={() => void createPlan()}

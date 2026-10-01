@@ -11,6 +11,17 @@ vi.mock("next/navigation", () => ({
 
 import ArrearsPage from "./page";
 
+// GAP-PAYROLL-ARREARS-01: the page now also resolves employee names through
+// the hrms directory (fetchJson, ids= batch). Route each mocked call by path.
+const E1 = "11111111-1111-4111-8111-111111111101";
+const E2 = "11111111-1111-4111-8111-111111111102";
+const E3 = "11111111-1111-4111-8111-111111111103";
+function withDirectory(arrears: { data: unknown; source: string }, names: Array<[string, { name: string; employeeNo: string | null }]> = []) {
+  fetchJsonMock.mockImplementation((path: string) =>
+    Promise.resolve(path.startsWith("/api/v1/hrms/employees") ? { data: names, source: "api" } : arrears),
+  );
+}
+
 // Fixtures use the REAL wire shape returned by GET /v1/payroll/arrears --
 // i.e. the literal `payroll.payroll_arrears` columns (`SELECT *`), confirmed
 // against services/payroll-service/src/modules/payroll/repo.ts (listArrears)
@@ -23,11 +34,11 @@ describe("ArrearsPage", () => {
   });
 
   it("maps real backend-shaped rows onto the table instead of rendering blanks", async () => {
-    fetchJsonMock.mockResolvedValue({
+    withDirectory({
       data: [
         {
           id: "a1",
-          employee_id: "e-101",
+          employee_id: E1,
           run_id: null,
           component_code: "DA_ARREAR",
           from_period: "2025-04",
@@ -42,7 +53,7 @@ describe("ArrearsPage", () => {
         },
         {
           id: "a2",
-          employee_id: "e-102",
+          employee_id: E2,
           run_id: "r-9",
           component_code: "PROMOTION_ARREAR",
           from_period: "2025-01",
@@ -57,7 +68,7 @@ describe("ArrearsPage", () => {
         },
         {
           id: "a3",
-          employee_id: "e-103",
+          employee_id: E3,
           run_id: "r-9",
           component_code: "PAY_FIXATION_ARREAR",
           from_period: "2024-07",
@@ -72,23 +83,33 @@ describe("ArrearsPage", () => {
         },
       ],
       source: "api",
-    });
+    }, [
+      [E1, { name: "Asha Rao", employeeNo: "EMP-101" }],
+      [E2, { name: "Vikram Singh", employeeNo: null }],
+    ]);
 
     const ui = await ArrearsPage();
     render(ui);
 
-    // Employee (was `.employee`, a field the API never sent).
-    expect(screen.getByText("e-101")).toBeInTheDocument();
-    expect(screen.getByText("e-102")).toBeInTheDocument();
-    expect(screen.getByText("e-103")).toBeInTheDocument();
+    // GAP-PAYROLL-ARREARS-01: names (with employee code), never the raw UUID;
+    // an id the directory didn't return renders "Unknown employee" + short id.
+    expect(screen.getByText("Asha Rao (EMP-101)")).toBeInTheDocument();
+    expect(screen.getByText("Vikram Singh")).toBeInTheDocument();
+    expect(screen.getByText(`Unknown employee · ${E3.slice(0, 8)}`)).toBeInTheDocument();
+    expect(screen.queryByText(E1)).not.toBeInTheDocument();
+    // One batched directory lookup for all three ids, not one per row.
+    const dirCalls = fetchJsonMock.mock.calls.filter(([p]) => String(p).startsWith("/api/v1/hrms/employees"));
+    expect(dirCalls).toHaveLength(1);
+    expect(String(dirCalls[0][0])).toContain(`ids=${E1},${E2},${E3}`);
 
-    // Arrear Type (was `.arrearType`; real field is `component_code`).
+    // Arrear Type (was `.arrearType`; real field is `component_code`); an
+    // unrecognised code is shown as-is.
     expect(screen.getByText("DA_ARREAR")).toBeInTheDocument();
 
-    // From/To Period (was a single non-existent `.period`; the API actually
-    // sends two separate period fields).
-    expect(screen.getByText("2025-04")).toBeInTheDocument();
-    expect(screen.getByText("2025-07")).toBeInTheDocument();
+    // GAP-PAYROLL-ARREARS-06: periods read "Apr 2025", not "2025-04".
+    expect(screen.getByText("Apr 2025")).toBeInTheDocument();
+    expect(screen.getByText("Jul 2025")).toBeInTheDocument();
+    expect(screen.queryByText("2025-04")).not.toBeInTheDocument();
 
     // Reason (a real field the old page didn't surface at all).
     expect(screen.getByText("DA revision Jan 2025")).toBeInTheDocument();
@@ -110,7 +131,7 @@ describe("ArrearsPage", () => {
   });
 
   it("renders an empty state when there are no arrears", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    withDirectory({ data: [], source: "api" });
 
     const ui = await ArrearsPage();
     render(ui);
@@ -119,11 +140,19 @@ describe("ArrearsPage", () => {
   });
 
   it("shows the saved-information badge when the source is error", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+    withDirectory({ data: [], source: "error" });
 
     const ui = await ArrearsPage();
     render(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-ARREARS-05: back link returns to the payroll hub", async () => {
+    withDirectory({ data: [], source: "api" });
+    const ui = await ArrearsPage();
+    render(ui);
+    const back = screen.getByRole("link", { name: /Back to Payroll/ });
+    expect(back).toHaveAttribute("href", "/hr/payroll");
   });
 });

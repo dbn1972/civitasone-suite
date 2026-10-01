@@ -2,7 +2,8 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney } from "@/lib/formatters";
+import { resolveEmployeeNames, employeeDisplayLabel } from "@/app/_data/employeeNames";
+import { formatMoney, formatPeriod } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
 // Wire shape from GET /v1/payroll/arrears (payroll-service, world-class-routes.ts ->
@@ -38,6 +39,13 @@ type Row = {
   status: string;
 } & Record<string, unknown>;
 
+type DisplayRow = Row & {
+  employee_label: string;
+  component_label: string;
+  from_period_display: string;
+  to_period_display: string;
+};
+
 /**
  * Translate the raw payroll_arrears columns into what the table needs. Kept as an
  * explicit function (rather than typing the table straight off the wire row) so the
@@ -45,9 +53,6 @@ type Row = {
  * to ask for `employee`/`department`/`arrearType`/`period`/`amount`/`payableMonth`,
  * none of which the API has ever sent, so every real row rendered blank.
  *
- * `employee_id`/`component_code` are shown as-is (no name/label lookup) — same
- * convention as the bonus, reimbursements, and salary-revisions screens, none of
- * which resolve employee_id to a display name or component_code to a friendly label.
  * `difference_minor` (new - old, in paise) is the amount actually owed; it is kept in
  * minor units for the table's `cellType: "amount"` (formatMoney) rendering — never
  * convert to a float rupee value before display.
@@ -77,31 +82,64 @@ async function getData(): Promise<LoaderResult<Row[]>> {
   return r;
 }
 
+// GAP-PAYROLL-ARREARS-01: component codes the payroll engine itself emits
+// (consumer.ts collectAdHocEarnings / salary components) get a readable
+// label; any other code is shown as-is rather than guessed at.
+const COMPONENT_LABEL_KEYS: Record<string, string> = {
+  BASIC: "componentBasic",
+  DA: "componentDa",
+  HRA: "componentHra",
+  TA: "componentTa",
+  ARREAR: "componentArrear",
+  ARREAR_RECOVERY: "componentArrearRecovery",
+};
+
 export default async function ArrearsPage() {
   const t = await getTranslations("arrears");
   const { data: items, source } = await getData();
   const errored = source === "error";
 
+  // GAP-PAYROLL-ARREARS-01: one batched directory lookup for every employee on
+  // the page (not one per row) -- names, not raw UUIDs.
+  const names = await resolveEmployeeNames(items.map((i) => i.employee_id));
+
   const columns: {
-    key: keyof Row & string;
+    key: keyof DisplayRow & string;
     label: string;
     align?: "left" | "right";
     cellType?: "status" | "amount";
+    sortable?: boolean;
   }[] = [
-    { key: "employee_id", label: t("colEmployee") },
-    { key: "component_code", label: t("colArrearType") },
-    { key: "from_period", label: t("colFromPeriod") },
-    { key: "to_period", label: t("colToPeriod") },
+    { key: "employee_label", label: t("colEmployee") },
+    { key: "component_label", label: t("colArrearType") },
+    // Display strings ("Jul 2026") would sort alphabetically; rows arrive
+    // newest-period first instead (below).
+    { key: "from_period_display", label: t("colFromPeriod"), sortable: false },
+    { key: "to_period_display", label: t("colToPeriod"), sortable: false },
     { key: "difference_minor", label: t("colAmount"), align: "right", cellType: "amount" },
     { key: "status", label: t("colStatus"), cellType: "status" },
     { key: "reason", label: t("colReason") },
   ];
 
-  const totalArrearsMinor = items.reduce((sum, i) => sum + Number(i.difference_minor ?? 0), 0);
+  const rows: DisplayRow[] = [...items]
+    .sort((a, b) => b.from_period.localeCompare(a.from_period))
+    .map((i) => {
+      const labelKey = COMPONENT_LABEL_KEYS[i.component_code];
+      return {
+        ...i,
+        employee_label: employeeDisplayLabel(names, i.employee_id, t("unknownEmployee")),
+        component_label: labelKey ? t(labelKey) : i.component_code,
+        from_period_display: formatPeriod(i.from_period),
+        to_period_display: formatPeriod(i.to_period),
+      };
+    });
+
+  const totalArrearsMinor = items.reduce((sum, i) => sum + BigInt(String(i.difference_minor ?? 0)), 0n);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
+      {/* GAP-PAYROLL-ARREARS-05: back to the payroll hub, like every sibling payroll page. */}
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
@@ -115,7 +153,7 @@ export default async function ArrearsPage() {
             <RefreshErrorState error={toHumanError("load", { area: "arrears" })} backHref="/hr/payroll" />
           </div>
         ) : (
-          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📋" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
+          <DataTable<DisplayRow> columns={columns} rows={rows} sortable filterable filterPlaceholder={t("filterPlaceholder")} pageSize={15} emptyIcon="📋" emptyTitle={t("emptyTitle")} emptyMessage={t("emptyMessage")} />
         )}
       </Card>
     </div>

@@ -4,26 +4,32 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatPeriod } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
+import { REIMBURSEMENT_CATEGORIES, reimbursementCategoryKey, type ReimbursementCategory } from "@/lib/payroll/reimbursementCategories";
 
-type ReimbursementResponse = {
-  data: { id: string; category: string; amount_minor: number | string; status: string };
-};
+/**
+ * GAP-PAYROLL-REIMBURSEMENTS-01: who the claim is for.
+ *  - "admin": payroll/HR staff filing on someone's behalf pick the employee
+ *    by name (EntityPicker), never by typed UUID.
+ *  - "self": a self-service employee files for THEMSELVES -- their own
+ *    profile is shown read-only and cannot be changed (the server enforces
+ *    the same, resolving the caller's own employee id).
+ */
+export type ClaimSubject = { mode: "admin" } | { mode: "self"; employeeId: string; label: string };
 
-// UX-017: keys are the stable backend category codes, never translated --
-// only used to look up which message key holds the display label.
-const CATEGORY_VALUES = ["medical", "travel", "lta", "food", "telephone", "internet", "fuel", "other"] as const;
+type InvalidField = "employeeId" | "amount" | "period" | null;
 
-export function CreateReimbursementForm() {
+const fieldStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
+
+export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) {
   const t = useTranslations("createReimbursementForm");
-  const CATEGORIES = CATEGORY_VALUES.map((value) => ({
-    value,
-    label: t(`category${value.charAt(0).toUpperCase()}${value.slice(1)}`),
-  }));
   const router = useRouter();
-  const [employeeId, setEmployeeId] = useState("");
-  const [category, setCategory] = useState<(typeof CATEGORIES)[number]["value"]>("medical");
+  const [pickedEmployeeId, setPickedEmployeeId] = useState<string | null>(null);
+  const [pickedName, setPickedName] = useState<string | null>(null);
+  const [category, setCategory] = useState<ReimbursementCategory>("medical");
   const [amount, setAmount] = useState("");
   const [period, setPeriod] = useState("");
   const [billDate, setBillDate] = useState("");
@@ -33,6 +39,7 @@ export function CreateReimbursementForm() {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const empId = useId();
   const catId = useId();
@@ -41,56 +48,53 @@ export function CreateReimbursementForm() {
   const dateId = useId();
   const refId = useId();
   const errId = useId();
-  const empRef = useRef<HTMLInputElement>(null);
   const amtRef = useRef<HTMLInputElement>(null);
   const periodRef = useRef<HTMLInputElement>(null);
 
-  const [invalidField, setInvalidField] = useState<"employeeId" | "amount" | "period" | null>(null);
-  const empInvalid = tone === "bad" && invalidField === "employeeId";
-  const amtInvalid = tone === "bad" && invalidField === "amount";
-  const periodInvalid = tone === "bad" && invalidField === "period";
+  const employeeId = subject.mode === "self" ? subject.employeeId : pickedEmployeeId;
+  const employeeLabel = subject.mode === "self" ? subject.label : pickedName ?? pickedEmployeeId ?? "";
+  const amountMinor = rupeesToMinorString(amount);
+  const isInvalid = (f: Exclude<InvalidField, null>) => tone === "bad" && invalidField === f;
+  const categoryLabel = (c: string) => {
+    const key = reimbursementCategoryKey(c);
+    return key ? t(key) : c;
+  };
+
+  function fail(field: Exclude<InvalidField, null>, key: string, focus?: () => void) {
+    setTone("bad");
+    setInvalidField(field);
+    setMessage(t(key));
+    focus?.();
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setInvalidField(null);
-    if (!employeeId.trim()) {
-      setTone("bad");
-      setInvalidField("employeeId");
-      setMessage(t("employeeIdRequiredError"));
-      empRef.current?.focus();
-      return;
+    if (!employeeId) return fail("employeeId", "employeeIdRequiredError", () => document.getElementById(empId)?.focus());
+    // GAP-PAYROLL-REIMBURSEMENTS-04: decimal-string -> paise (no parseFloat * 100).
+    if (amountMinor === null || BigInt(amountMinor) > BigInt(Number.MAX_SAFE_INTEGER)) {
+      return fail("amount", "amountRequiredError", () => amtRef.current?.focus());
     }
-    const rupees = parseFloat(amount);
-    if (Number.isNaN(rupees) || rupees <= 0) {
-      setTone("bad");
-      setInvalidField("amount");
-      setMessage(t("amountRequiredError"));
-      amtRef.current?.focus();
-      return;
-    }
-    if (!/^\d{4}-\d{2}$/.test(period.trim())) {
-      setTone("bad");
-      setInvalidField("period");
-      setMessage(t("periodFormatError"));
-      periodRef.current?.focus();
-      return;
-    }
+    // GAP-PAYROLL-REIMBURSEMENTS-04: a real month (2026-13 used to pass).
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period.trim())) return fail("period", "periodFormatError", () => periodRef.current?.focus());
     setDialogError(undefined);
     setConfirmOpen(true);
   }
 
   async function createReimbursement() {
+    if (!employeeId || amountMinor === null) return;
     setBusy(true);
     setDialogError(undefined);
     try {
-      const amountMinor = Math.round(parseFloat(amount) * 100);
-      const res = await browserJson<ReimbursementResponse>("v1/payroll/reimbursements", {
+      // CQRS: 202 { id, status: "accepted" } -- the old `res.data.amount_minor`
+      // read a field the response never carries and threw on every success.
+      await browserJson<{ id: string; status: string }>("v1/payroll/reimbursements", {
         method: "POST",
         body: JSON.stringify({
-          employeeId: employeeId.trim(),
+          employeeId,
           category,
-          amountMinor,
+          amountMinor: Number(amountMinor),
           billDate: billDate.trim() || undefined,
           billRef: billRef.trim() || undefined,
           period: period.trim(),
@@ -99,8 +103,8 @@ export function CreateReimbursementForm() {
       setConfirmOpen(false);
       setTone("good");
       setInvalidField(null);
-      setMessage(t("submittedMessage", { amount: formatMoney(res.data.amount_minor) }));
-      setEmployeeId("");
+      setMessage(t("submittedMessage", { amount: formatMoney(amountMinor) }));
+      if (subject.mode === "admin") { setPickedEmployeeId(null); setPickedName(null); }
       setAmount("");
       setBillRef("");
       router.refresh();
@@ -112,35 +116,35 @@ export function CreateReimbursementForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form onSubmit={handleSubmit} noValidate style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input
-                id={empId}
-                ref={empRef}
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                aria-required="true"
-                aria-invalid={empInvalid || undefined}
-                aria-describedby={empInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+              {subject.mode === "self" ? (
+                <input id={empId} value={subject.label} readOnly aria-readonly="true" style={{ ...fieldStyle, background: "var(--panel)" }} />
+              ) : (
+                <EmployeePicker
+                  id={empId}
+                  value={pickedEmployeeId}
+                  onChange={(id, option) => { setPickedEmployeeId(id); setPickedName(option?.label ?? null); }}
+                  clearable
+                />
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={catId} style={{ fontSize: 13, fontWeight: 600 }}>{t("categoryLabel")}</label>
               <select
                 id={catId}
                 value={category}
-                onChange={(e) => setCategory(e.target.value as typeof category)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
+                onChange={(e) => setCategory(e.target.value as ReimbursementCategory)}
+                style={{ ...fieldStyle, background: "var(--bg, #fff)" }}
               >
-                {CATEGORIES.map((c) => (
-                  <option key={c.value} value={c.value}>{c.label}</option>
+                {REIMBURSEMENT_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>{categoryLabel(c)}</option>
                 ))}
               </select>
             </div>
@@ -151,15 +155,13 @@ export function CreateReimbursementForm() {
               <input
                 id={amtId}
                 ref={amtRef}
-                type="number"
-                min="0"
-                step="0.01"
+                inputMode="decimal"
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
                 aria-required="true"
-                aria-invalid={amtInvalid || undefined}
-                aria-describedby={amtInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                aria-invalid={isInvalid("amount") || undefined}
+                aria-describedby={isInvalid("amount") ? errId : undefined}
+                style={fieldStyle}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
@@ -169,34 +171,22 @@ export function CreateReimbursementForm() {
               <input
                 id={periodId}
                 ref={periodRef}
+                type="month"
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                placeholder="2026-08"
                 aria-required="true"
-                aria-invalid={periodInvalid || undefined}
-                aria-describedby={periodInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                aria-invalid={isInvalid("period") || undefined}
+                aria-describedby={isInvalid("period") ? errId : undefined}
+                style={fieldStyle}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>{t("billDateLabel")}</label>
-              <input
-                id={dateId}
-                type="date"
-                value={billDate}
-                onChange={(e) => setBillDate(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+              <input id={dateId} type="date" value={billDate} onChange={(e) => setBillDate(e.target.value)} style={fieldStyle} />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={refId} style={{ fontSize: 13, fontWeight: 600 }}>{t("billRefLabel")}</label>
-              <input
-                id={refId}
-                value={billRef}
-                onChange={(e) => setBillRef(e.target.value)}
-                maxLength={128}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+              <input id={refId} value={billRef} onChange={(e) => setBillRef(e.target.value)} maxLength={128} style={fieldStyle} />
             </div>
           </div>
 
@@ -227,10 +217,10 @@ export function CreateReimbursementForm() {
         busy={busy}
         errorMessage={dialogError}
         description={t.rich("confirmDescription", {
-          category: CATEGORIES.find((c) => c.value === category)?.label ?? category,
-          amount: formatMoney(Math.round((parseFloat(amount) || 0) * 100)),
-          employeeId,
-          period,
+          category: categoryLabel(category),
+          amount: formatMoney(amountMinor ?? 0),
+          employee: employeeLabel,
+          period: formatPeriod(period),
           strong: (chunks) => <strong>{chunks}</strong>,
         })}
         onConfirm={() => void createReimbursement()}

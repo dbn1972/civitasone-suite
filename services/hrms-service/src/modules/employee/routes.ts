@@ -33,7 +33,20 @@ const READER_ROLES = [...HR_ROLES, "manager"];
 // any employee pull up any other employee's masked-PII detail record by id
 // enumeration -- a materially bigger change than "let employees see the
 // directory" and out of this fix's scope.
-const DIRECTORY_ROLES = [...READER_ROLES, "employee"];
+// b3 payroll gap batch (GAP-PAYROLL-ARREARS-01 / BONUS-01 / CORRECTIONS-02 /
+// OFF-CYCLE-02 / REIMBURSEMENTS-01): payroll staff must pick employees by
+// name (EntityPicker -> searchEmployees) and see names instead of UUIDs on
+// the payroll registers (server-side ids= lookup). This LIST route returns,
+// per employee: id, employeeNo, name, department, employeeType, status,
+// dateOfJoining, designation, grade and work email (queries.listEmployees)
+// -- no bank/PAN/phone/address. Payroll staff already read every employee's
+// payroll rows (salary, arrears, claims, bank-file data) tenant-wide, so
+// these directory fields are a strictly smaller set. Admitted to the LIST route only (not
+// READER_ROLES, which also gates the richer GET /:id detail) and treated as
+// tenant-wide on the list route below -- otherwise a payroll officer
+// with no direct reports would get an empty picker.
+const PAYROLL_DIRECTORY_ROLES = ["payroll_admin", "payroll_officer"];
+const DIRECTORY_ROLES = [...READER_ROLES, "employee", ...PAYROLL_DIRECTORY_ROLES];
 
 /**
  * SEC finding (HRMS role review): READER_ROLES lets a bare "manager" read
@@ -91,7 +104,13 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     // id/employeeNo/name/department/employeeType/status shape unchanged.
     requireRole(ctx, DIRECTORY_ROLES);
     const q = employeeListQuery.parse(req.query);
-    const managerScope = await resolveManagerScope(ctx, req);
+    // Payroll staff are tenant-wide on this LIST route only (see
+    // PAYROLL_DIRECTORY_ROLES) -- applied here, not inside
+    // resolveManagerScope, so a manager+payroll_officer user's GET /:id
+    // detail scope is untouched.
+    const managerScope = PAYROLL_DIRECTORY_ROLES.some((r) => ctx.roles.includes(r))
+      ? undefined
+      : await resolveManagerScope(ctx, req);
     sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status));
   });
 

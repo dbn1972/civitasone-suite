@@ -13,28 +13,37 @@ vi.mock("next/navigation", () => ({
 
 import BonusPage from "./page";
 
+const E1 = "22222222-2222-4222-8222-222222222201";
+// GAP-PAYROLL-BONUS-01: the page also resolves names via the hrms directory.
+function withDirectory(bonus: { data: unknown; source: string }, names: unknown[] = []) {
+  fetchJsonMock.mockImplementation((path: string) =>
+    Promise.resolve(path.startsWith("/api/v1/hrms/employees") ? { data: names, source: "api" } : bonus),
+  );
+}
+
 describe("BonusPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
   });
 
   it("renders the list of bonus records", async () => {
-    fetchJsonMock.mockResolvedValue({
+    withDirectory({
       data: [
-        { id: "b1", employee_id: "e1", fy: "2025-26", basic_minor: 5000000, bonus_pct: 8.33, bonus_amount_minor: 416500, status: "computed" },
+        { id: "b1", employee_id: E1, fy: "2025-26", basic_minor: 5000000, bonus_pct: 8.33, bonus_amount_minor: 416500, status: "computed" },
       ],
       source: "api",
-    });
+    }, [[E1, { name: "Meera Iyer", employeeNo: "EMP-7" }]]);
 
     const ui = await BonusPage();
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
-    expect(screen.getByText("e1")).toBeInTheDocument();
-    expect(screen.getByText("2025-26")).toBeInTheDocument();
+    expect(screen.getByText("Meera Iyer (EMP-7)")).toBeInTheDocument();
+    expect(screen.queryByText(E1)).not.toBeInTheDocument();
+    expect(screen.getByRole("cell", { name: "2025-26" })).toBeInTheDocument();
   });
 
   it("renders an empty state when there are no bonus records", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    withDirectory({ data: [], source: "api" });
 
     const ui = await BonusPage();
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
@@ -43,7 +52,7 @@ describe("BonusPage", () => {
   });
 
   it("shows the saved-information badge when the source is error", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+    withDirectory({ data: [], source: "error" });
 
     const ui = await BonusPage();
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
