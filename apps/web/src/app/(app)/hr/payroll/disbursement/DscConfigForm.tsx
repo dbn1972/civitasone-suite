@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, Button } from "../../../../_components/ds";
@@ -73,10 +73,6 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
     }
     setConfirmOpen(true);
   }
-
-  // GAP-PAYROLL-DISBURSEMENT-04: never leave the keystore passphrase sitting
-  // in component state after the form goes away.
-  useEffect(() => () => setPassphrase(""), []);
 
   async function upload(reason: string) {
     const file = fileRef.current?.files?.[0];

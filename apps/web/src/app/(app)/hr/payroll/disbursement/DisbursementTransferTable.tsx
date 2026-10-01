@@ -42,11 +42,18 @@ export type TransferRow = {
 
 /** Server-side reduction of a raw transfer row to the client-safe shape. */
 export function toClientTransferRow(raw: RawTransferRow): TransferRow {
-  const source = (raw.accountNumberMasked ?? raw.accountNumber ?? "").replace(/[^0-9A-Za-z]/g, "");
+  // A server-masked value (e.g. "••••1234" or "XXXXXXXX1234") already shows
+  // only its tail: take its last 4 digits directly. A raw account number
+  // needs more than 4 characters, otherwise there is nothing safe to show.
+  const maskedDigits = (raw.accountNumberMasked ?? "").replace(/[^0-9]/g, "");
+  const rawSource = (raw.accountNumber ?? "").replace(/[^0-9A-Za-z]/g, "");
+  const accountLast4 = maskedDigits.length >= 4
+    ? maskedDigits.slice(-4)
+    : rawSource.length > 4 ? rawSource.slice(-4) : null;
   return {
     id: raw.id,
     employeeName: raw.employeeName,
-    accountLast4: source.length > 4 ? source.slice(-4) : null,
+    accountLast4,
     ifsc: raw.ifsc,
     amountRupees: raw.amountRupees,
     status: raw.status,

@@ -52,6 +52,11 @@ describe("DisbursementTransferTable", () => {
     expect(row.accountLast4).toBe("7788");
   });
 
+  it("[DISB-01] takes the last 4 digits of an already-masked value like ••••1234", () => {
+    expect(toClientTransferRow({ ...RAW, accountNumber: undefined, accountNumberMasked: "••••1234" }).accountLast4).toBe("1234");
+    expect(toClientTransferRow({ ...RAW, accountNumber: null, accountNumberMasked: "XXXX-5678" }).accountLast4).toBe("5678");
+  });
+
   it("[DISB-01] renders '••••9012' with no full account number or employee UUID in the DOM", () => {
     renderTable();
     expect(screen.getByText("••••9012")).toBeInTheDocument();
