@@ -12,6 +12,24 @@ import { RESOURCE } from "../../topics.js";
 
 const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
+// GAP-HR-LOCATIONS-06: the web /hr layout (apps/web's hr/layout.tsx HR_ROLES)
+// admits hr_officer/manager/employee to /hr/locations, which fetches GET
+// /v1/locations unconditionally for whoever lands on it -- but this service
+// only ever admitted LOCATION_ROLES, so those three roles got a flat 403
+// turned into a generic "couldn't load" error instead of the office
+// directory. A location record is low-sensitivity reference data (name,
+// type, address) that any HR-context viewer can reasonably need to look up
+// (e.g. picking a work location) -- read access is widened to match what
+// the web layout already intends, while every mutation (create/update,
+// sample-data seed/clear) stays on the original, narrower LOCATION_ROLES
+// unchanged. Scoped to the one route (`GET /v1/locations`) this gap actually
+// demonstrated is hit by a legitimate broader-role caller; `/tree`,
+// `/nearby` and `/:id` are left as-is -- no evidence here that a non-HR
+// caller of this shared service needs those widened too, and the risk of
+// over-widening an authorization boundary on unverified guesswork outweighs
+// closing an unconfirmed gap.
+const LOCATION_VIEW_ROLES = [...LOCATION_ROLES, "hr_officer", "manager", "employee"];
+
 export async function locationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/locations", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -33,7 +51,7 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/locations", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, LOCATION_ROLES);
+    requireRole(ctx, LOCATION_VIEW_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, locationsListSchema, await queries.listLocations(ctx.tenantId, q.limit, q.offset));
   });
