@@ -124,4 +124,53 @@ describe("AdvancesPage", () => {
 
     expect(screen.queryByRole("button", { name: "Approve" })).not.toBeInTheDocument();
   });
+
+  // GAP-HR-ADVANCES-05: "officer"/"finance_admin" are in ADVANCE_ROLES (page
+  // access) but not in DIRECTORY_ROLES (GET /v1/hrms/employees) and have no
+  // "employee" role to self-file -- the create form must not render at all
+  // for them (it could only ever 403 on the picker), replaced by a
+  // view-only note.
+  describe("GAP-HR-ADVANCES-05: no directory access and no self-service role", () => {
+    for (const role of ["officer", "finance_admin"]) {
+      it(`shows a view-only note instead of the request form for ["${role}"] alone`, async () => {
+        getSessionRolesMock.mockReturnValue([role]);
+        fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+
+        const ui = await AdvancesPage();
+        render(ui);
+
+        expect(screen.getByText(/view-only access to salary advances/i)).toBeInTheDocument();
+      });
+    }
+
+    it("does NOT show the view-only note for hr_officer (has directory access)", async () => {
+      getSessionRolesMock.mockReturnValue(["hr_officer"]);
+      fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+
+      const ui = await AdvancesPage();
+      render(ui);
+
+      expect(screen.queryByText(/view-only access to salary advances/i)).not.toBeInTheDocument();
+    });
+
+    it("does NOT show the view-only note for a plain employee (self-service path)", async () => {
+      getSessionRolesMock.mockReturnValue(["employee"]);
+      fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+
+      const ui = await AdvancesPage();
+      render(ui);
+
+      expect(screen.queryByText(/view-only access to salary advances/i)).not.toBeInTheDocument();
+    });
+
+    it("does NOT show the view-only note for manager (has directory access)", async () => {
+      getSessionRolesMock.mockReturnValue(["manager"]);
+      fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+
+      const ui = await AdvancesPage();
+      render(ui);
+
+      expect(screen.queryByText(/view-only access to salary advances/i)).not.toBeInTheDocument();
+    });
+  });
 });
