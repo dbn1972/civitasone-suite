@@ -179,8 +179,6 @@ export default async function Page() {
 				{ title: t("departments"), href: "/hr/departments", description: t("departmentsDesc") },
 				{ title: t("designations"), href: "/hr/designations", description: t("designationsDesc") },
 				{ title: t("locations"), href: "/hr/locations", description: t("locationsDesc") },
-				{ title: t("setupLeavePolicies"), href: "/hr/leave-policies", description: t("setupLeavePoliciesDesc") },
-				{ title: t("setupHolidays"), href: "/hr/holidays", description: t("setupHolidaysDesc") },
 				{ title: t("employeeTypes"), href: "/hr/employee-types", description: t("employeeTypesDesc") },
 				{ title: t("auditLog"), href: "/hr/audit-log", description: t("auditLogDesc") },
 			],
