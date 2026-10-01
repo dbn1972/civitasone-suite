@@ -120,7 +120,7 @@ describe("DpcPage", () => {
 
     expect(screen.getByText(/Minimum qualifying service: 3 years/)).toBeInTheDocument();
     expect(screen.queryByText("2026-04-15")).not.toBeInTheDocument();
-    expect(screen.getAllByText(/15\/04\/2026/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/15 Apr 2026/).length).toBeGreaterThanOrEqual(1);
   });
 
   it("GAP-HR-DPC-05: qualifyingYears and dateOfJoining render formatted, not as a raw float or ISO string", async () => {
@@ -132,7 +132,7 @@ describe("DpcPage", () => {
     await renderDpc();
 
     expect(screen.getByText("10.5 yrs")).toBeInTheDocument();
-    expect(screen.getByText("01/06/2015")).toBeInTheDocument();
+    expect(screen.getByText("01 Jun 2015")).toBeInTheDocument();
     expect(screen.queryByText("2015-06-01")).not.toBeInTheDocument();
   });
 

@@ -306,14 +306,14 @@ describe("DataTable", () => {
       { key: "when" as const, label: "When", cellType: "date" as const },
     ];
 
-    it("formats an ISO date string the same way formatIndianDate does (dd/MM/yyyy)", () => {
+    it("formats an ISO date string the same way formatIndianDate does (dd Mon yyyy)", () => {
       const dateRows: DateRow[] = [
         // Midday UTC so this lands on the same calendar day in every real
         // timezone the test suite might run under (no local-TZ flakiness).
         { id: "1", label: "Kickoff", when: "2026-01-26T12:00:00.000Z" },
       ];
       render(<DataTable columns={dateColumns} rows={dateRows} />);
-      expect(screen.getByText("26/01/2026")).toBeInTheDocument();
+      expect(screen.getByText("26 Jan 2026")).toBeInTheDocument();
     });
 
     it("renders an em-dash for a null/undefined date, same convention as every other cellType", () => {

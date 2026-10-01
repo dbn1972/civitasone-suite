@@ -69,11 +69,11 @@ describe("LeaveManagementPage", () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_REQUESTS, source: "api" });
     await renderPage();
     expect(screen.queryByText("2026-10-03")).not.toBeInTheDocument();
-    // Computed the same way formatIndianDate does (locale-formatted, no
-    // fixed TZ) rather than hardcoded, so this doesn't depend on the test
-    // runner's local timezone matching IST.
-    const expected = new Date("2026-10-03").toLocaleDateString("en-IN", { day: "2-digit", month: "2-digit", year: "numeric" });
-    expect(screen.getByText(expected)).toBeInTheDocument();
+    // formatIndianDate now renders "dd Mon yyyy"; a bare "YYYY-MM-DD" input
+    // like fromDate here is formatted literally with no timezone conversion
+    // (see formatIndianDate's isBareCalendarDate branch), so this is
+    // deterministic regardless of the test runner's local timezone.
+    expect(screen.getByText("03 Oct 2026")).toBeInTheDocument();
   });
 
   // GAP-HR-LEAVE-04: data scoping is entirely server-side now (see
