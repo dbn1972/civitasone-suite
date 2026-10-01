@@ -43,4 +43,35 @@ describe("SalaryStructureCard", () => {
     expect(screen.queryByText(/TA\+Transport/)).not.toBeInTheDocument();
     expect(screen.queryByText("GoI standard distribution shown")).not.toBeInTheDocument();
   });
+
+  // GAP-PAYROLL-STRUCTURES-02: "Applicable Pay Levels" used to be guessed
+  // from the structure NAME by substring match (inferPayBands) and
+  // presented as if it were real data from the API -- "level 1" matched
+  // "level 10/11/12" too, so e.g. "Director - Level 10" was mislabelled
+  // MTS/Helper. The API (Row: id/name/isDefault/status) has never carried a
+  // pay-levels field at all; the block is gone rather than guessed better.
+  it("never shows a guessed 'Applicable Pay Levels' block", () => {
+    renderCard({ id: "s3", name: "Director - Level 10", isDefault: false, status: "active", components: COMPONENTS });
+    expect(screen.queryByText("Applicable Pay Levels")).not.toBeInTheDocument();
+    expect(screen.queryByText("MTS")).not.toBeInTheDocument();
+    expect(screen.queryByText("Helper")).not.toBeInTheDocument();
+  });
+
+  // GAP-PAYROLL-STRUCTURES-04: the donut's heading used to say "% of Gross"
+  // over values that are component COUNTS by type, not a share of gross pay.
+  it("labels the donut 'Components by type', not the old mislabeled '% of Gross'", () => {
+    renderCard({ id: "s4", name: "Any Structure", isDefault: false, status: "active", components: COMPONENTS });
+    expect(screen.getByText("Components by type")).toBeInTheDocument();
+    expect(screen.queryByText("% of Gross")).not.toBeInTheDocument();
+  });
+
+  // GAP-PAYROLL-STRUCTURES-05: components={[]} used to be indistinguishable
+  // from "genuinely not configured yet" -- an outage on the components
+  // fetch looked identical to an empty, healthy structure.
+  it("shows 'Components unavailable' (not 'not configured yet') when the components fetch failed", () => {
+    renderCard({ id: "s5", name: "Any Structure", isDefault: false, status: "active", components: [], componentsUnavailable: true });
+    // Rendered twice: the summary line and the donut-chart placeholder.
+    expect(screen.getAllByText("Components unavailable", { exact: false }).length).toBeGreaterThanOrEqual(2);
+    expect(screen.queryByText("No components configured yet")).not.toBeInTheDocument();
+  });
 });

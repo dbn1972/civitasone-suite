@@ -16,64 +16,39 @@ interface ComponentGridProps {
   components: ComponentRow[];
 }
 
-type Taxability = "Taxable" | "Exempt" | "Partially Exempt";
+type Taxability = "Taxable" | "NotMarked";
 
-// GoI / Income Tax Act taxability classification by component code
-function getTaxability(code: string, isTaxable: boolean): Taxability {
-  const upper = code.toUpperCase();
-  if (upper.includes("HRA")) return "Partially Exempt";
-  if (upper.includes("LTA") || upper.includes("LTC")) return "Partially Exempt";
-  if (upper.includes("MEDICAL") || upper.includes("MEDICLAIM")) return "Exempt";
-  if (upper.includes("TA") || upper.includes("TRANSPORT")) return "Partially Exempt";
-  if (upper.includes("NPS") || upper.includes("GPF") || upper.includes("PF") || upper.includes("EPF")) return "Exempt";
-  if (upper.includes("GRATUITY")) return "Partially Exempt";
-  if (upper.includes("DA") || upper.includes("DEARNESS")) return "Taxable";
-  if (upper.includes("BASIC")) return "Taxable";
-  return isTaxable ? "Taxable" : "Exempt";
-}
-
-// Known GoI salary component formulas. Keys are stable component-code
-// prefixes, never translated -- only used to look up which message key
-// holds the display formula text (same safe pattern as
-// salary-revisions/page.tsx's REVISION_TYPE_KEYS).
-const COMPONENT_FORMULA_KEYS: Record<string, string> = {
-  BASIC: "formulaBasic",
-  DA: "formulaDa",
-  HRA: "formulaHra",
-  TA: "formulaTa",
-  TRANSPORT: "formulaTransport",
-  MEDICAL: "formulaMedical",
-  LTA: "formulaLta",
-  LTC: "formulaLtc",
-  NPS: "formulaNps",
-  GPF: "formulaGpf",
-  PF: "formulaPf",
-  EPF: "formulaEpf",
-  GRATUITY: "formulaGratuity",
-  BONUS: "formulaBonus",
-  INCENTIVE: "formulaIncentive",
-};
-
-function getFormulaKey(code: string): string | null {
-  const upper = code.toUpperCase();
-  for (const key of Object.keys(COMPONENT_FORMULA_KEYS)) {
-    if (upper.includes(key)) return COMPONENT_FORMULA_KEYS[key];
-  }
-  return null;
+// GAP-PAYROLL-STRUCTURES-03: this used to override the API's own isTaxable
+// for any code containing HRA/LTA/MEDICAL/TA/TRANSPORT/NPS/GPF/PF/EPF/
+// GRATUITY/DA/DEARNESS/BASIC, as a three-way "Taxable/Exempt/Partially
+// Exempt" classification -- but the API only ever returns a plain boolean
+// isTaxable, nothing supports a partial-exemption tier, and the substring
+// matching was wrong on its own terms (`includes("TA")` matches
+// DEPUTATION_ALLOWANCE, DATA_ENTRY, any code containing "DA" matches
+// "Dearness Allowance" fine but also anything else with those two letters).
+// A wrong tax-exempt label here can mislead payroll admins into
+// mis-configuring TDS -- trust the API's own field, full stop.
+//
+// payroll_components.is_taxable is NOT NULL DEFAULT false and no API writes
+// it, so `false` means "nobody marked it taxable", NOT "exempt" (the dev
+// seed stores Basic Pay as false, and basic pay is fully taxable salary under
+// s.15/17(1)). Render it as a neutral "not marked" state, never as a green
+// exemption claim; whether an allowance is (partly) exempt is a TDS-engine /
+// declaration question this flag cannot answer.
+function getTaxability(isTaxable: boolean): Taxability {
+  return isTaxable ? "Taxable" : "NotMarked";
 }
 
 const TAXABILITY_STYLE: Record<Taxability, { background: string; color: string; border: string }> = {
   Taxable: { background: "var(--badbg)", color: "var(--bad)", border: "1px solid var(--badbd)" },
-  Exempt: { background: "var(--goodbg)", color: "var(--good)", border: "1px solid var(--goodbd)" },
-  "Partially Exempt": { background: "var(--warnbg)", color: "var(--warn)", border: "1px solid var(--warnbd)" },
+  NotMarked: { background: "var(--line2)", color: "var(--mut)", border: "1px solid var(--line)" },
 };
 
 // UX-017: keys are the stable Taxability discriminant values, never
 // translated directly -- only used to look up the display label and style.
 const TAXABILITY_LABEL_KEYS: Record<Taxability, string> = {
   Taxable: "taxabilityTaxable",
-  Exempt: "taxabilityExempt",
-  "Partially Exempt": "taxabilityPartiallyExempt",
+  NotMarked: "taxabilityNotMarked",
 };
 
 const TYPE_BADGE: Record<string, { bg: string; fg: string }> = {
@@ -125,11 +100,18 @@ function TaxabilityBadge({ taxability }: { taxability: Taxability }) {
   );
 }
 
+// GAP-PAYROLL-STRUCTURES-03: the formula tooltip used to look up a
+// hard-coded rate/slab string (COMPONENT_FORMULA_KEYS -> en.json, e.g.
+// formulaDa "currently 46%", formulaHra "27/18/9") by a component-code
+// substring match -- presented as a system fact with no source or date, and
+// DA in particular is a rate FinMin revises quarterly, so it goes stale by
+// design. Those keys are deleted from en/hi. payroll_components does carry
+// formula / pct_of_basic / fixed_minor, but listComponents doesn't expose
+// them, so the tooltip says the rule "isn't shown on this page" -- not that
+// it isn't configured, which would invite needless reconfiguration.
 function FormulaTooltip({ code }: { code: string }) {
   const t = useTranslations("componentGrid");
   const [visible, setVisible] = useState(false);
-  const formulaKey = getFormulaKey(code);
-  const formula = formulaKey ? t(formulaKey) : t("formulaNotConfigured");
   return (
     <span style={{ position: "relative", display: "inline-block" }}>
       <button
@@ -178,7 +160,7 @@ function FormulaTooltip({ code }: { code: string }) {
             lineHeight: 1.5,
           }}
         >
-          {formula}
+          {t("formulaNotConfigured")}
         </div>
       )}
     </span>
@@ -187,11 +169,6 @@ function FormulaTooltip({ code }: { code: string }) {
 
 export function ComponentGrid({ components }: ComponentGridProps) {
   const t = useTranslations("componentGrid");
-  const [enabled, setEnabled] = useState<Record<string, boolean>>(() => {
-    const init: Record<string, boolean> = {};
-    for (const c of components) init[c.id] = true;
-    return init;
-  });
   const [filter, setFilter] = useState("");
 
   const filtered = components.filter(
@@ -264,21 +241,16 @@ export function ComponentGrid({ components }: ComponentGridProps) {
               <th style={{ textAlign: "start", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
                 {t("colTaxability")}
               </th>
-              <th style={{ textAlign: "center", padding: "8px 10px", color: "var(--mut)", fontWeight: 600, fontSize: 11, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-                {t("colActive")}
-              </th>
             </tr>
           </thead>
           <tbody>
             {filtered.map((c, idx) => {
-              const taxability = getTaxability(c.code, c.isTaxable);
-              const isEnabled = enabled[c.id] ?? true;
+              const taxability = getTaxability(c.isTaxable);
               return (
                 <tr
                   key={c.id}
                   style={{
                     borderBottom: "1px solid var(--line)",
-                    opacity: isEnabled ? 1 : 0.45,
                     background: idx % 2 === 0 ? "transparent" : "var(--line2, rgba(0,0,0,0.02))",
                   }}
                 >
@@ -308,45 +280,15 @@ export function ComponentGrid({ components }: ComponentGridProps) {
                   <td style={{ padding: "10px 10px" }}>
                     <TaxabilityBadge taxability={taxability} />
                   </td>
-                  <td style={{ padding: "10px 10px", textAlign: "center" }}>
-                    <button
-                      type="button"
-                      role="switch"
-                      aria-checked={isEnabled}
-                      aria-label={isEnabled ? t("disableComponentAriaLabel", { name: c.name }) : t("enableComponentAriaLabel", { name: c.name })}
-                      onClick={() => setEnabled((prev) => ({ ...prev, [c.id]: !prev[c.id] }))}
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        width: 36,
-                        height: 20,
-                        borderRadius: 20,
-                        background: isEnabled ? "var(--good, #10b981)" : "var(--mut, #94a3b8)",
-                        border: "none",
-                        cursor: "pointer",
-                        transition: "background 0.2s",
-                        padding: "2px 3px",
-                        justifyContent: isEnabled ? "flex-end" : "flex-start",
-                      }}
-                    >
-                      <span
-                        style={{
-                          width: 16,
-                          height: 16,
-                          borderRadius: "50%",
-                          background: "var(--panel, #fff)",
-                          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-                          transition: "transform 0.2s",
-                        }}
-                      />
-                    </button>
-                  </td>
                 </tr>
               );
             })}
           </tbody>
         </table>
       </div>
+      <p style={{ margin: "10px 0 0", fontSize: 12, color: "var(--mut)", lineHeight: 1.5 }}>
+        {t("taxabilityNote")}
+      </p>
     </div>
   );
 }
