@@ -14,6 +14,7 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
+import { useTranslations } from "next-intl";
 import { useToast } from "@/app/_components/ds/Toast";
 import { Button } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -41,6 +42,8 @@ interface Props {
 }
 
 export function TransferWithApproval({ prefillEmployee }: Props = {}) {
+  // GAP-HR-TRANSFER-10: all copy comes from the transferUi namespace.
+  const tr = useTranslations("transferUi");
   const [open, setOpen] = useState(Boolean(prefillEmployee));
   const [step, setStep] = useState<1 | 2>(1);
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -156,17 +159,17 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
   const selectedEmployee = employees.find((e) => e.id === employeeId) ?? (prefillEmployee && prefillEmployee.id === employeeId ? { id: prefillEmployee.id, name: prefillEmployee.name } : undefined);
 
   const validateStep1 = (): boolean => {
-    if (!employeeId) { setError("Select an employee."); return false; }
-    if (!toDeptId) { setError("Select the destination department."); return false; }
-    if (!effectiveDate) { setError("Effective date is required."); return false; }
+    if (!employeeId) { setError(tr("errSelectEmployee")); return false; }
+    if (!toDeptId) { setError(tr("errSelectDest")); return false; }
+    if (!effectiveDate) { setError(tr("errEffectiveDate")); return false; }
     setError("");
     return true;
   };
 
   const validateStep2 = (): boolean => {
-    if (!initiatedBy) { setError("Select the initiating officer."); return false; }
-    if (!currentWith) { setError("Select who should approve this transfer."); return false; }
-    if (note.trim().length < 3) { setError("Add a justification note (at least 3 characters)."); return false; }
+    if (!initiatedBy) { setError(tr("errSelectInitiator")); return false; }
+    if (!currentWith) { setError(tr("errSelectApprover")); return false; }
+    if (note.trim().length < 3) { setError(tr("errNote")); return false; }
     setError("");
     return true;
   };
@@ -204,7 +207,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
           throw new Error(resolved.message);
         }
         const sub = (await subRes.json()) as { id?: string };
-        if (!sub.id) throw new Error("Transfer request id missing in response");
+        if (!sub.id) throw new Error(tr("errMissingId"));
         transferId = sub.id;
         setSubmittedTransferId(transferId);
       }
@@ -215,7 +218,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
         body: JSON.stringify({
           refType: "hr_transfer",
           refId: transferId,
-          subject: `Transfer order — ${selectedEmployee?.name ?? employeeId.slice(0, 8)}`,
+          subject: tr("efileSubject", { name: selectedEmployee?.name ?? employeeId.slice(0, 8) }),
           dept: "HR",
           classification: "confidential",
           priority: "normal",
@@ -229,11 +232,11 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
       if (!raiseRes.ok) {
         const resolved = await formError.fromResponse(raiseRes, "save");
         throw new Error(
-          `Transfer request created, but raising the eFile failed (${resolved.message}). It is safe to click Submit again — it will retry only the eFile step, not create another transfer request.`,
+          tr("errEfileFailed", { message: resolved.message }),
         );
       }
       const file = (await raiseRes.json()) as { fileNo?: string };
-      toast.success(`Transfer raised for approval${file.fileNo ? ` (eFile ${file.fileNo})` : ""}. On approval the posting is effected automatically.`);
+      toast.success(file.fileNo ? tr("raisedToastWithFile", { fileNo: file.fileNo }) : tr("raisedToast"));
       reset();
       setOpen(false);
     } catch (err) {
@@ -242,19 +245,19 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- validateStep2 is redefined each render but only closes over values already listed in this array (initiatedBy, currentWith, note[, t]).
-  }, [employeeId, fromDeptId, toDeptId, payStructureId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, submittedTransferId, toast, formError]);
+  }, [employeeId, fromDeptId, toDeptId, payStructureId, effectiveDate, initiatedBy, currentWith, note, selectedEmployee, submittedTransferId, toast, formError, tr]);
 
   return (
     <>
       <Button onClick={() => { if (open) reset(); setOpen((v) => !v); }}>
-        {open ? "Cancel" : "+ Transfer with approval"}
+        {open ? tr("cancel") : tr("openBtn")}
       </Button>
 
       {open && (
         <div className="card" style={{ marginTop: 14 }}>
           <div className="card-h">
-            <h3>Raise a transfer for eOffice approval</h3>
-            <span style={{ fontSize: "0.75rem", color: "var(--ink2)" }}>Step {step} of 2</span>
+            <h3>{tr("heading")}</h3>
+            <span style={{ fontSize: "0.75rem", color: "var(--ink2)" }}>{tr("stepOf", { step })}</span>
           </div>
 
           {error && (
@@ -266,11 +269,11 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
           {step === 1 && (
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               <p style={{ fontSize: "0.8125rem", color: "var(--ink2)", margin: 0 }}>
-                Select the employee and where they should be transferred to.
+                {tr("step1Intro")}
               </p>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Employee</span>
+                  <span style={{ fontWeight: 600 }}>{tr("employee")}</span>
                   <select
                     value={employeeId}
                     onChange={(e) => {
@@ -284,7 +287,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                     }}
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   >
-                    <option value="">Select employee…</option>
+                    <option value="">{tr("selectEmployee")}</option>
                     {/* GAP-HR-TRANSFER-09: the prefilled employee must always
                         be selectable even if they fall outside this
                         unsearched limit=200 list. */}
@@ -300,17 +303,17 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>From (current department)</span>
+                  <span style={{ fontWeight: 600 }}>{tr("fromDept")}</span>
                   <input
                     value={fromDeptName || (departments.find((d) => d.id === fromDeptId)?.name ?? fromDeptId)}
                     disabled
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44, background: "#f9fafb", color: "var(--ink2)" }}
-                    aria-label="Current department (auto-filled)"
+                    aria-label={tr("fromDeptAria")}
                   />
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Transfer to (department)</span>
+                  <span style={{ fontWeight: 600 }}>{tr("toDept")}</span>
                   {/* GAP-HR-TRANSFER-06: a failed departments fetch used to
                       silently swap in a raw "Department ID" text box --
                       asking a clerk to type a UUID with no guidance on
@@ -319,8 +322,8 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                       selection (validateStep1). */}
                   {deptStatus === "error" ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>Couldn't load departments.</span>
-                      <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>Retry</Button>
+                      <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>{tr("deptLoadFailed")}</span>
+                      <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>{tr("retry")}</Button>
                     </div>
                   ) : (
                     <select
@@ -329,7 +332,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                       disabled={deptStatus === "loading"}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
-                      <option value="">{deptStatus === "loading" ? "Loading departments…" : "Select destination department…"}</option>
+                      <option value="">{deptStatus === "loading" ? tr("loadingDepts") : tr("selectDest")}</option>
                       {departments.filter((d) => d.id !== fromDeptId).map((d) => (
                         <option key={d.id} value={d.id}>{d.name}</option>
                       ))}
@@ -338,7 +341,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Effective date</span>
+                  <span style={{ fontWeight: 600 }}>{tr("effectiveDate")}</span>
                   <input
                     type="date"
                     value={effectiveDate}
@@ -348,14 +351,14 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>New pay structure (optional)</span>
+                  <span style={{ fontWeight: 600 }}>{tr("payStructure")}</span>
                   <select
                     value={payStructureId}
                     onChange={(e) => setPayStructureId(e.target.value)}
                     disabled={payStructureStatus === "loading"}
                     style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                   >
-                    <option value="">No change</option>
+                    <option value="">{tr("noChange")}</option>
                     {payStructures.map((ps) => (
                       <option key={ps.id} value={ps.id}>{ps.name ?? ps.code ?? ps.id}</option>
                     ))}
@@ -364,9 +367,9 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
               </div>
 
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <Button variant="ghost" onClick={() => { reset(); setOpen(false); }}>Cancel</Button>
+                <Button variant="ghost" onClick={() => { reset(); setOpen(false); }}>{tr("cancel")}</Button>
                 <Button style={{ minHeight: 44 }} onClick={() => validateStep1() && setStep(2)}>
-                  Next: Approval routing →
+                  {tr("next")}
                 </Button>
               </div>
             </div>
@@ -376,27 +379,27 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
             <div className="pad" style={{ display: "grid", gap: 16 }}>
               {submittedTransferId && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--warnbg, #fffbeb)", borderRadius: 8, border: "1px solid var(--warnbd, #fde68a)" }}>
-                  The transfer request was already created — retrying now only raises the eFile, it will not create a duplicate.
+                  {tr("alreadyCreated")}
                 </div>
               )}
               {selectedEmployee && (
                 <div style={{ fontSize: "0.8125rem", padding: "10px 14px", background: "var(--infobg, #f0f9ff)", borderRadius: 8, border: "1px solid var(--infobd, #bae6fd)" }}>
                   <strong>{selectedEmployee.name}</strong> → {departments.find((d) => d.id === toDeptId)?.name ?? toDeptId}
-                  {effectiveDate && <> · Effective {effectiveDate}</>}
+                  {effectiveDate && <> · {tr("effectiveOn", { date: effectiveDate })}</>}
                 </div>
               )}
 
               <p style={{ fontSize: "0.8125rem", color: "var(--ink2)", margin: 0 }}>
-                Select who initiates this file and who should approve it.
+                {tr("step2Intro")}
               </p>
 
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 }}>
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Initiating officer</span>
+                  <span style={{ fontWeight: 600 }}>{tr("initiator")}</span>
                   {officerStatus === "error" ? (
                     <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>Couldn't load officers.</span>
-                      <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>Retry</Button>
+                      <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>{tr("officersLoadFailed")}</span>
+                      <Button type="button" variant="ghost" style={{ fontSize: 12 }} onClick={() => setReloadKey((k) => k + 1)}>{tr("retry")}</Button>
                     </div>
                   ) : (
                     <select
@@ -405,7 +408,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                       disabled={officerStatus === "loading"}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
-                      <option value="">{officerStatus === "loading" ? "Loading officers…" : "Select initiating officer…"}</option>
+                      <option value="">{officerStatus === "loading" ? tr("loadingOfficers") : tr("selectInitiator")}</option>
                       {officers.map((o) => (
                         <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
                       ))}
@@ -414,9 +417,9 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                 </label>
 
                 <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                  <span style={{ fontWeight: 600 }}>Forward to (approving officer)</span>
+                  <span style={{ fontWeight: 600 }}>{tr("approver")}</span>
                   {officerStatus === "error" ? (
-                    <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>Couldn't load officers.</span>
+                    <span style={{ color: "var(--bad, #b91c1c)", fontSize: "0.75rem" }}>{tr("officersLoadFailed")}</span>
                   ) : (
                     <select
                       value={currentWith}
@@ -424,7 +427,7 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
                       disabled={officerStatus === "loading"}
                       style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 44 }}
                     >
-                      <option value="">{officerStatus === "loading" ? "Loading officers…" : "Select approving officer…"}</option>
+                      <option value="">{officerStatus === "loading" ? tr("loadingOfficers") : tr("selectApprover")}</option>
                       {officers.filter((o) => o.id !== initiatedBy).map((o) => (
                         <option key={o.id} value={o.id}>{o.name}{o.designation ? ` · ${o.designation}` : ""}</option>
                       ))}
@@ -434,20 +437,20 @@ export function TransferWithApproval({ prefillEmployee }: Props = {}) {
               </div>
 
               <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
-                <span style={{ fontWeight: 600 }}>Justification note</span>
+                <span style={{ fontWeight: 600 }}>{tr("note")}</span>
                 <textarea
                   rows={3}
                   value={note}
                   onChange={(e) => setNote(e.target.value)}
-                  placeholder="Why is this transfer being initiated? This will appear in the eFile noting."
+                  placeholder={tr("notePlaceholder")}
                   style={{ padding: "10px 12px", borderRadius: 8, border: "1px solid var(--line)", resize: "vertical" }}
                 />
               </label>
 
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                <Button variant="ghost" onClick={() => setStep(1)}>← Back</Button>
+                <Button variant="ghost" onClick={() => setStep(1)}>{tr("back")}</Button>
                 <Button style={{ minHeight: 44 }} disabled={saving} loading={saving} onClick={() => void submit()}>
-                  {saving ? "Raising…" : "Submit transfer to eOffice"}
+                  {saving ? tr("raising") : tr("submit")}
                 </Button>
               </div>
             </div>

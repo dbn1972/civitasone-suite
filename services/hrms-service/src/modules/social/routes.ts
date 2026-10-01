@@ -281,9 +281,10 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const { kudos, birthdays, newJoinees, announcements, counts } = await withTenantGuc(ctx.tenantId, async (pool) => {
       // 1. Recent kudos (last 7 days)
       const kudos = await pool.query(
-        `SELECT id, giver_name, receiver_name, badge, message, created_at
-         FROM employee.hrms_social_kudos WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '7 days'
-         ORDER BY created_at DESC LIMIT 10`,
+        `SELECT k.id, k.giver_name, k.receiver_name, k.badge, k.message, k.created_at,
+                (SELECT COUNT(*) FROM employee.hrms_social_kudos_reactions r WHERE r.kudos_id = k.id) AS reactions
+         FROM employee.hrms_social_kudos k WHERE k.tenant_id = $1 AND k.created_at > NOW() - INTERVAL '7 days'
+         ORDER BY k.created_at DESC LIMIT 10`,
         [ctx.tenantId],
       );
 
@@ -363,7 +364,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     });
 
     for (const k of kudos.rows) {
-      feed.push({ type: "kudos", ...k, createdAt: k.created_at });
+      feed.push({ type: "kudos", ...k, reactions: Number(k.reactions ?? 0), createdAt: k.created_at });
     }
 
     const today = new Date();

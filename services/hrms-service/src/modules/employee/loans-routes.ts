@@ -173,6 +173,11 @@ const createAdvanceBody = z.object({
   requestDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+const loansExportAuditBody = z.object({
+  rowCount: z.number().int().min(0).max(1_000_000),
+  filter: z.string().max(200).optional(),
+});
+
 const rejectAdvanceBody = z.object({
   reason: z.string().min(1).max(500),
 });
@@ -211,6 +216,16 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
       employeeNo: empMap.get(r.employeeId)?.employeeNo,
       department: deptMap.get(empMap.get(r.employeeId)?.departmentId ?? ""),
     })) });
+  });
+
+  // GAP-HR-LOANS-02: the web CSV export (HR roles only) reports each export
+  // here so it lands on the audit trail -- the file carries employee identity
+  // plus financial data. HR_ROLES matches the roles the Export button is shown to.
+  app.post("/v1/hrms/loans/export-audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const body = loansExportAuditBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await loanCommands.recordLoansExport(ctx, body.rowCount, body.filter));
   });
 
   app.post("/v1/hrms/loans", async (req, reply) => {

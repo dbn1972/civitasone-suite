@@ -143,4 +143,43 @@ describe("AllocateLeaveForm", () => {
     expect(dialog.textContent).not.toMatch(/leave-service/);
     expect(dialog.textContent).not.toMatch(/\b500\b/);
   });
+
+  // GAP-HR-LEAVE-ALLOCATE-01
+  it("names the chosen employee in the confirm dialog", async () => {
+    renderForm();
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    await pickEmployee();
+    fireEvent.change(screen.getByRole("combobox", { name: /leave type/i }), { target: { value: "lt1" } });
+    fireEvent.change(screen.getByLabelText(/total days/i), { target: { value: "12" } });
+    await waitFor(() => expect(fetchMock.mock.calls.some(([u]) => String(u).includes("ids=") || String(u).includes("e1"))).toBe(true));
+    fireEvent.click(screen.getByRole("button", { name: /allocate leave/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    await waitFor(() => expect(dialog).toHaveTextContent("Test Employee"));
+    expect(dialog).not.toHaveTextContent("to this employee");
+  });
+
+  // GAP-HR-LEAVE-ALLOCATE-03
+  it("warns (without blocking) when the employee already has this type + FY allocated", async () => {
+    const { fiscalYearLabel, financialYearOf } = await import("@/lib/fiscalYear");
+    const fy = fiscalYearLabel(Number(financialYearOf(new Date()).slice(0, 4)));
+    fetchMock.mockImplementation((url: string) => {
+      if (url.includes("/hrms/employees")) return Promise.resolve(new Response(JSON.stringify({ data: EMPLOYEES }), { status: 200 }));
+      if (url.includes("/hrms/leave-types")) return Promise.resolve(new Response(JSON.stringify({ data: LEAVE_TYPES }), { status: 200 }));
+      if (url.includes("/hrms/leave-context")) {
+        return Promise.resolve(new Response(JSON.stringify({
+          leaveTypes: [{ id: "lt1", code: "EL", name: "Earned Leave", maxDays: 30 }],
+          allocations: [{ id: "a0", leaveTypeId: "lt1", leaveTypeCode: "EL", leaveTypeName: "Earned Leave", fy, totalDays: 30, balanceDays: 10 }],
+        }), { status: 200 }));
+      }
+      return Promise.resolve(new Response("{}", { status: 202 }));
+    });
+    renderForm();
+    await waitFor(() => expect(screen.getByRole("option", { name: /earned leave/i })).toBeInTheDocument());
+    await pickEmployee();
+    expect(screen.queryByTestId("already-allocated-warning")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: /leave type/i }), { target: { value: "lt1" } });
+    fireEvent.change(screen.getByLabelText(/total days/i), { target: { value: "5" } });
+    expect(await screen.findByTestId("already-allocated-warning")).toHaveTextContent(/already has a Earned Leave allocation/i);
+    expect(screen.getByRole("button", { name: /allocate leave/i })).toBeEnabled();
+  });
 });

@@ -124,11 +124,9 @@ export default async function ContractualPage() {
           <DataTable<Row>
             columns={columns}
             rows={items}
-            // GAP-HR-CONTRACTUAL-05 (partial): row now links to the existing
-            // employee profile for navigability. A dedicated contract detail
-            // page with renew/terminate actions (the fuller ask) is left as
-            // a follow-up -- effort-M standalone build, tracked separately.
-            rowHref={(r) => `/hr/employees/${r.employeeId}`}
+            // GAP-HR-CONTRACTUAL-05: rows open the contract detail page
+            // (renew / terminate live there; employee profile is linked from it).
+            rowHref={(r) => `/hr/contractual/${r.id}`}
             sortable filterable filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="📑"

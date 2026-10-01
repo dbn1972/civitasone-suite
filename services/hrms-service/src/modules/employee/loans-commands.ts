@@ -26,3 +26,7 @@ export const approveAdvance = (ctx: RequestContext, id: string) =>
 // mandatory rejection reason through to the consumer.
 export const rejectAdvance = (ctx: RequestContext, id: string, reason: string) =>
   pub(ctx, COMMANDS.salaryAdvanceReject, id, { reason });
+
+// GAP-HR-LOANS-02: records that an HR user exported the loans register.
+export const recordLoansExport = (ctx: RequestContext, rowCount: number, filter: string | undefined) =>
+  pub(ctx, COMMANDS.loanExportRecorded, randomUUID(), { rowCount, ...(filter ? { filter } : {}) });

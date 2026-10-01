@@ -12,6 +12,7 @@ type FeedItem = {
   giver_name?: string;
   receiver_name?: string;
   badge?: string;
+  reactions?: number;
   message?: string;
   name?: string;
   department?: string;
@@ -138,6 +139,11 @@ export default async function SocialFeedPage() {
                             just this one. */}
                         <span style={{ fontSize: 11, color: "var(--mut)", whiteSpace: "nowrap" }}>{formatIndianDate(item.createdAt)}</span>
                       </div>
+                      {Number(item.reactions ?? 0) > 0 && (
+                        <p style={{ marginTop: 4, fontSize: 12, color: "var(--mut)" }}>
+                          {t("reactionsCount", { count: Number(item.reactions) })}
+                        </p>
+                      )}
                       {item.message && (
                         <p style={{ marginTop: 6, fontSize: 13, color: "var(--ink2)", background: "var(--bg2, #f5f5f5)", borderRadius: 8, padding: "8px 12px", fontStyle: "italic" }}>
                           {item.message}

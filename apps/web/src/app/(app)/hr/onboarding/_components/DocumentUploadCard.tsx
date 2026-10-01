@@ -26,12 +26,12 @@ export interface OnboardingDocument {
 
 const STATUS_CONFIG: Record<
   DocStatus,
-  { label: string; color: string; bg: string; border: string }
+  { label: string; icon: string; color: string; bg: string; border: string }
 > = {
-  pending:  { label: "Pending",  color: "var(--warn, #92400e)",  bg: "var(--warnbg, #fef3c7)",  border: "var(--warnbd, #fde68a)" },
-  uploaded: { label: "Uploaded", color: "var(--info, #1d4ed8)",  bg: "var(--infobg, #dbeafe)",  border: "var(--infobd, #bfdbfe)" },
-  verified: { label: "Verified", color: "var(--good, #166534)",  bg: "var(--goodbg, #dcfce7)",  border: "var(--goodbd, #bbf7d0)" },
-  rejected: { label: "Rejected", color: "var(--bad, #991b1b)",   bg: "var(--badbg, #fee2e2)",   border: "var(--badbd, #fecaca)" },
+  pending:  { icon: "…", label: "Pending",  color: "var(--warn, #92400e)",  bg: "var(--warnbg, #fef3c7)",  border: "var(--warnbd, #fde68a)" },
+  uploaded: { icon: "↑", label: "Uploaded", color: "var(--info, #1d4ed8)",  bg: "var(--infobg, #dbeafe)",  border: "var(--infobd, #bfdbfe)" },
+  verified: { icon: "✓", label: "Verified", color: "var(--good, #166534)",  bg: "var(--goodbg, #dcfce7)",  border: "var(--goodbd, #bbf7d0)" },
+  rejected: { icon: "✕", label: "Rejected", color: "var(--bad, #991b1b)",   bg: "var(--badbg, #fee2e2)",   border: "var(--badbd, #fecaca)" },
 };
 
 function StatusChip({ status }: { status: DocStatus }) {
@@ -46,10 +46,12 @@ function StatusChip({ status }: { status: DocStatus }) {
         background: cfg.bg,
         color: cfg.color,
         border: `1px solid ${cfg.border}`,
-        letterSpacing: "0.04em",
       }}
     >
-      {cfg.label.toUpperCase()}
+      {/* GAP-HR-ONBOARDING-DETAIL-07: sentence-case label plus a glyph so
+          status is not carried by colour alone (WCAG 1.4.1). */}
+      <span aria-hidden="true" style={{ marginRight: 4 }}>{cfg.icon}</span>
+      {cfg.label}
     </span>
   );
 }

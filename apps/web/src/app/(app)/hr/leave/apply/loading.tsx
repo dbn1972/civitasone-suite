@@ -11,9 +11,10 @@ import { getTranslations } from "next-intl/server";
  */
 export default async function Loading() {
   const t = await getTranslations("leaveApply");
+  const tc = await getTranslations("common");
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("loadingSubtitle")} back="/hr/leave" backLabel="Back to Leave" />
+      <PageHeader title={t("title")} subtitle={t("loadingSubtitle")} back="/hr/leave" backLabel={tc("backToLeave")} />
       <section className="mx-auto max-w-2xl">
         <div
           className="space-y-4 rounded-xl border p-6 shadow-sm"
