@@ -4,22 +4,44 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Card, ConfirmDialog, Button } from "../../../../_components/ds";
+import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatPeriod } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 
 type RunType = "bonus" | "incentive" | "adhoc";
 
-type ItemDraft = { _key: string; employeeId: string; amountRupees: string };
+type ItemDraft = { _key: string; employeeId: string | null; employeeName: string | null; amountRupees: string };
 
-type CreateResponse = {
-  data: { id: string; runType: string; period: string; totalAmountMinor: number; itemCount: number; status: string };
-};
-
-type InvalidField = "period" | "items" | null;
+type InvalidField = "period" | "items" | "duplicate" | null;
 
 function emptyItem(): ItemDraft {
-  return { _key: Math.random().toString(36).slice(2), employeeId: "", amountRupees: "" };
+  return { _key: Math.random().toString(36).slice(2), employeeId: null, employeeName: null, amountRupees: "" };
 }
+
+/**
+ * GAP-PAYROLL-OFF-CYCLE-03: rupees -> paise by string arithmetic (no
+ * parseFloat * 100): "1.005", "1e3" and non-positive values are null.
+ */
+function itemMinor(it: ItemDraft): bigint | null {
+  const minor = rupeesToMinorString(it.amountRupees);
+  if (minor === null || BigInt(minor) > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  return BigInt(minor);
+}
+
+/** GAP-PAYROLL-OFF-CYCLE-02: indexes of rows whose employee already appears earlier. */
+export function duplicateEmployeeRows(items: ReadonlyArray<{ employeeId: string | null }>): Set<number> {
+  const seen = new Set<string>();
+  const dupes = new Set<number>();
+  items.forEach((it, i) => {
+    if (!it.employeeId) return;
+    if (seen.has(it.employeeId)) dupes.add(i);
+    else seen.add(it.employeeId);
+  });
+  return dupes;
+}
+
+const fieldStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
 export function CreateOffCycleForm() {
   const t = useTranslations("createOffCycleForm");
@@ -33,14 +55,8 @@ export function CreateOffCycleForm() {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
-  // UX-017: same "translated text used as a logic identity" bug class as
-  // CreateCorrectionForm.tsx's own invalidField fix (see its comment for the
-  // full explanation) -- periodInvalid/itemsInvalid used to re-test the live
-  // `message` state against hardcoded English literals
-  // (`message.startsWith("Period")` / `message.startsWith("Every off-cycle item")`),
-  // which would silently stop matching under any non-English locale once
-  // `message` holds translated text. Tracked here instead as its own
-  // identity, independent of the display string.
+  // UX-017: which field the current error is about, tracked as its own
+  // identity -- never re-derived from the translated message text.
   const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const periodId = useId();
@@ -48,10 +64,10 @@ export function CreateOffCycleForm() {
   const runTypeId = useId();
   const errId = useId();
   const periodRef = useRef<HTMLInputElement>(null);
-  const empRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   const periodInvalid = tone === "bad" && invalidField === "period";
-  const itemsInvalid = tone === "bad" && invalidField === "items";
+  const itemsInvalid = tone === "bad" && (invalidField === "items" || invalidField === "duplicate");
+  const dupes = duplicateEmployeeRows(items);
 
   function updateItem(index: number, patch: Partial<ItemDraft>) {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -65,35 +81,32 @@ export function CreateOffCycleForm() {
     setItems((prev) => (prev.length > 1 ? prev.filter((_, i) => i !== index) : prev));
   }
 
-  const totalAmountMinor = items.reduce((sum, it) => {
-    const rupees = parseFloat(it.amountRupees);
-    return sum + (Number.isNaN(rupees) ? 0 : Math.round(rupees * 100));
-  }, 0);
+  // BigInt sum: "0.1" + "0.2" totals exactly 30 paise.
+  const totalAmountMinor = items.reduce((sum, it) => sum + (itemMinor(it) ?? 0n), 0n);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setInvalidField(null);
-    if (!/^\d{4}-\d{2}$/.test(period.trim())) {
+    if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period.trim())) {
       setTone("bad");
       setInvalidField("period");
       setMessage(t("periodFormatError"));
       periodRef.current?.focus();
       return;
     }
-    const allValid = items.every((it) => {
-      const rupees = parseFloat(it.amountRupees);
-      return it.employeeId.trim().length > 0 && !Number.isNaN(rupees) && rupees > 0;
-    });
-    if (!allValid) {
+    const firstInvalid = items.findIndex((it) => !it.employeeId || itemMinor(it) === null);
+    if (firstInvalid >= 0) {
       setTone("bad");
       setInvalidField("items");
       setMessage(t("itemsValidationError"));
-      const firstInvalid = items.findIndex((it) => {
-        const rupees = parseFloat(it.amountRupees);
-        return !(it.employeeId.trim().length > 0 && !Number.isNaN(rupees) && rupees > 0);
-      });
-      if (firstInvalid >= 0) empRefs.current[firstInvalid]?.focus();
+      document.getElementById(`${errId}-emp-${firstInvalid}`)?.focus();
+      return;
+    }
+    if (dupes.size > 0) {
+      setTone("bad");
+      setInvalidField("duplicate");
+      setMessage(t("duplicateEmployeeError"));
       return;
     }
     setDialogError(undefined);
@@ -104,28 +117,21 @@ export function CreateOffCycleForm() {
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<CreateResponse>("v1/payroll/off-cycle", {
+      // CQRS: 202 { id, status: "accepted" } -- nothing to read back (the old
+      // `res.data.itemCount` threw on every success).
+      await browserJson<{ id: string; status: string }>("v1/payroll/off-cycle", {
         method: "POST",
         body: JSON.stringify({
           runType,
           period: period.trim(),
           description: description.trim() || undefined,
-          items: items.map((it) => ({
-            employeeId: it.employeeId.trim(),
-            amountMinor: Math.round(parseFloat(it.amountRupees) * 100),
-          })),
+          items: items.map((it) => ({ employeeId: it.employeeId, amountMinor: Number(itemMinor(it)) })),
         }),
       });
       setConfirmOpen(false);
       setTone("good");
       setInvalidField(null);
-      setMessage(
-        t("createdMessage", {
-          period: period.trim(),
-          count: res.data.itemCount,
-          amount: formatMoney(res.data.totalAmountMinor),
-        }),
-      );
+      setMessage(t("createdMessage", { period: formatPeriod(period.trim()), count: items.length, amount: formatMoney(totalAmountMinor) }));
       setPeriod("");
       setDescription("");
       setItems([emptyItem()]);
@@ -138,7 +144,7 @@ export function CreateOffCycleForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form onSubmit={handleSubmit} noValidate style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
@@ -151,7 +157,7 @@ export function CreateOffCycleForm() {
                 value={runType}
                 onChange={(e) => setRunType(e.target.value as RunType)}
                 aria-required="true"
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                style={fieldStyle}
               >
                 <option value="bonus">{t("runTypeBonusOption")}</option>
                 <option value="incentive">{t("runTypeIncentiveOption")}</option>
@@ -165,13 +171,13 @@ export function CreateOffCycleForm() {
               <input
                 id={periodId}
                 ref={periodRef}
+                type="month"
                 value={period}
                 onChange={(e) => setPeriod(e.target.value)}
-                placeholder="2025-06"
                 aria-required="true"
                 aria-invalid={periodInvalid || undefined}
                 aria-describedby={periodInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                style={fieldStyle}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
@@ -181,7 +187,7 @@ export function CreateOffCycleForm() {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 maxLength={256}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                style={fieldStyle}
               />
             </div>
           </div>
@@ -191,50 +197,50 @@ export function CreateOffCycleForm() {
               {t("itemsLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </span>
             {items.map((it, index) => {
-              const empLabelId = `${errId}-emp-${index}`;
-              const amtLabelId = `${errId}-amt-${index}`;
+              const empFieldId = `${errId}-emp-${index}`;
+              const amtFieldId = `${errId}-amt-${index}`;
+              const amountBad = itemsInvalid && itemMinor(it) === null;
+              const isDupe = dupes.has(index);
               return (
-                <div
-                  key={it._key}
-                  style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr auto", alignItems: "end" }}
-                >
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <label htmlFor={empLabelId} style={{ fontSize: 12, fontWeight: 600 }}>{t("employeeIdLabel")}</label>
-                    <input
-                      id={empLabelId}
-                      ref={(el) => { empRefs.current[index] = el; }}
-                      value={it.employeeId}
-                      onChange={(e) => updateItem(index, { employeeId: e.target.value })}
-                      aria-required="true"
-                      aria-invalid={itemsInvalid && !it.employeeId.trim() ? true : undefined}
-                      aria-describedby={itemsInvalid && !it.employeeId.trim() ? errId : undefined}
-                      style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-                    />
+                <div key={it._key} style={{ display: "grid", gap: 4 }}>
+                  <div style={{ display: "grid", gap: 10, gridTemplateColumns: "1fr 1fr auto", alignItems: "end" }}>
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <label htmlFor={empFieldId} style={{ fontSize: 12, fontWeight: 600 }}>{t("employeeLabel")}</label>
+                      {/* GAP-PAYROLL-OFF-CYCLE-02: pick by name/code, never a raw UUID. */}
+                      <EmployeePicker
+                        id={empFieldId}
+                        value={it.employeeId}
+                        onChange={(id, option) => updateItem(index, { employeeId: id, employeeName: option?.label ?? null })}
+                      />
+                    </div>
+                    <div style={{ display: "grid", gap: 6 }}>
+                      <label htmlFor={amtFieldId} style={{ fontSize: 12, fontWeight: 600 }}>{t("amountLabel")}</label>
+                      <input
+                        id={amtFieldId}
+                        inputMode="decimal"
+                        value={it.amountRupees}
+                        onChange={(e) => updateItem(index, { amountRupees: e.target.value })}
+                        aria-required="true"
+                        aria-invalid={amountBad || undefined}
+                        aria-describedby={amountBad ? errId : undefined}
+                        style={fieldStyle}
+                      />
+                    </div>
+                    <Button
+                      variant="ghost"
+                      onClick={() => removeItem(index)}
+                      disabled={items.length === 1}
+                      aria-label={t("removeItemAriaLabel", { index: index + 1 })}
+                      style={{ minHeight: 44 }}
+                    >
+                      {t("removeBtn")}
+                    </Button>
                   </div>
-                  <div style={{ display: "grid", gap: 6 }}>
-                    <label htmlFor={amtLabelId} style={{ fontSize: 12, fontWeight: 600 }}>{t("amountLabel")}</label>
-                    <input
-                      id={amtLabelId}
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={it.amountRupees}
-                      onChange={(e) => updateItem(index, { amountRupees: e.target.value })}
-                      aria-required="true"
-                      aria-invalid={itemsInvalid && !(parseFloat(it.amountRupees) > 0) ? true : undefined}
-                      aria-describedby={itemsInvalid && !(parseFloat(it.amountRupees) > 0) ? errId : undefined}
-                      style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-                    />
-                  </div>
-                  <Button
-                    variant="ghost"
-                    onClick={() => removeItem(index)}
-                    disabled={items.length === 1}
-                    aria-label={t("removeItemAriaLabel", { index: index + 1 })}
-                    style={{ minHeight: 44 }}
-                  >
-                    {t("removeBtn")}
-                  </Button>
+                  {isDupe && (
+                    <span role="alert" style={{ fontSize: 12, color: "var(--bad, #c0392b)" }}>
+                      {t("duplicateEmployeeRowError")}
+                    </span>
+                  )}
                 </div>
               );
             })}
@@ -245,7 +251,7 @@ export function CreateOffCycleForm() {
             </div>
           </div>
 
-          {totalAmountMinor > 0 && (
+          {totalAmountMinor > 0n && (
             <p style={{ fontSize: 13, color: "var(--ink2)" }}>
               {t.rich("totalAmountSummary", {
                 amount: formatMoney(totalAmountMinor),
@@ -281,13 +287,25 @@ export function CreateOffCycleForm() {
         confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={t.rich("confirmDescription", {
-          runType,
-          period,
-          count: items.length,
-          amount: formatMoney(totalAmountMinor),
-          strong: (chunks) => <strong>{chunks}</strong>,
-        })}
+        description={
+          <>
+            {t.rich("confirmDescription", {
+              runType: t(runType === "bonus" ? "runTypeBonusOption" : runType === "incentive" ? "runTypeIncentiveOption" : "runTypeAdhocOption"),
+              period: formatPeriod(period),
+              count: items.length,
+              amount: formatMoney(totalAmountMinor),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
+            {/* GAP-PAYROLL-OFF-CYCLE-02: who is being paid, by name, before creating the run. */}
+            <ul style={{ margin: "10px 0 0", paddingLeft: 18, maxHeight: 200, overflowY: "auto" }} aria-label={t("confirmItemsAriaLabel")}>
+              {items.map((it) => (
+                <li key={it._key}>
+                  {it.employeeName ?? it.employeeId} — {formatMoney(itemMinor(it) ?? 0n)}
+                </li>
+              ))}
+            </ul>
+          </>
+        }
         onConfirm={() => void createOffCycle()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

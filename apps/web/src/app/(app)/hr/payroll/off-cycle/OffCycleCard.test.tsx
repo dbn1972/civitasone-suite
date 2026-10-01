@@ -9,7 +9,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { OffCycleCards } from "./OffCycleCard";
-import type { OffCycleRow } from "./OffCycleList";
+import type { OffCycleRow } from "./types";
 
 const DRAFT: OffCycleRow = {
   id: "00000000-0000-4000-8000-000000000001",
@@ -56,6 +56,8 @@ describe("OffCycleCards — maker-checker processing", () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "SELF_APPROVAL_FORBIDDEN", message: "x" }), { status: 403 }));
     renderCards([DRAFT], true);
     fireEvent.click(screen.getByRole("button", { name: /process bonus disbursement run/i }));
+    // GAP-PAYROLL-OFF-CYCLE-04 (b3): processing now needs a reason.
+    fireEvent.change(await screen.findByLabelText(/Reason/), { target: { value: "Quarterly incentive approved by DDO" } });
     fireEvent.click(await screen.findByText("Process run"));
     await waitFor(() => expect(screen.getByText("You created this run, so another payroll user must process it.")).toBeInTheDocument());
     expect(refreshMock).not.toHaveBeenCalled();
@@ -65,6 +67,8 @@ describe("OffCycleCards — maker-checker processing", () => {
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: DRAFT.id, status: "accepted", correlationId: "c" }), { status: 202 }));
     renderCards([DRAFT], true);
     fireEvent.click(screen.getByRole("button", { name: /process bonus disbursement run/i }));
+    // GAP-PAYROLL-OFF-CYCLE-04 (b3): processing now needs a reason.
+    fireEvent.change(await screen.findByLabelText(/Reason/), { target: { value: "Quarterly incentive approved by DDO" } });
     fireEvent.click(await screen.findByText("Process run"));
     await waitFor(() => expect(screen.getByText(/submitted for processing/)).toBeInTheDocument());
     expect(refreshMock).toHaveBeenCalled();

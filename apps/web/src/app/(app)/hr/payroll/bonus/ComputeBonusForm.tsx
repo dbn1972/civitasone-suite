@@ -4,96 +4,98 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { applyBpsToMinor, rupeesToMinorString, percentToBps } from "@/lib/money";
+import { recentFinancialYears } from "@/lib/fiscalYear";
+import { parseBonusForm, BONUS_PCT_MIN_BPS, BONUS_PCT_MAX_BPS, type BonusFormField, type BonusPayload } from "./bonusSchema";
 
-type BonusResponse = {
-  data: { id: string; bonus_amount_minor: number | string; status: string };
-};
+const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
 export function ComputeBonusForm() {
   const t = useTranslations("computeBonusForm");
   const router = useRouter();
-  const [employeeId, setEmployeeId] = useState("");
-  const [fy, setFy] = useState("");
+  // GAP-PAYROLL-BONUS-03: the FY is a closed set of well-formed labels
+  // (current + 4 previous) -- a free-text "2025-27" can no longer be typed.
+  const [fyOptions] = useState(() => recentFinancialYears(5));
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [employeeName, setEmployeeName] = useState<string | null>(null);
+  const [fy, setFy] = useState(() => fyOptions[1] ?? fyOptions[0] ?? "");
   const [basic, setBasic] = useState("");
   const [bonusPct, setBonusPct] = useState("8.33");
   const [busy, setBusy] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pending, setPending] = useState<BonusPayload | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
+  const [invalidField, setInvalidField] = useState<BonusFormField | null>(null);
 
   const empId = useId();
   const fyId = useId();
   const basicId = useId();
   const pctId = useId();
   const errId = useId();
-  const empRef = useRef<HTMLInputElement>(null);
-  const fyRef = useRef<HTMLInputElement>(null);
+  const fyRef = useRef<HTMLSelectElement>(null);
   const basicRef = useRef<HTMLInputElement>(null);
+  const pctRef = useRef<HTMLInputElement>(null);
 
-  const [invalidField, setInvalidField] = useState<"employeeId" | "fy" | "basic" | null>(null);
-  const empInvalid = tone === "bad" && invalidField === "employeeId";
-  const fyInvalid = tone === "bad" && invalidField === "fy";
-  const basicInvalid = tone === "bad" && invalidField === "basic";
+  const isInvalid = (f: BonusFormField) => tone === "bad" && invalidField === f;
 
+  // GAP-PAYROLL-BONUS-02: preview with the exact server formula on paise/bps
+  // (no float multiplication).
   const previewAmountMinor = (() => {
-    const b = Math.round(parseFloat(basic) * 100);
-    const p = parseFloat(bonusPct);
-    if (Number.isNaN(b) || Number.isNaN(p)) return null;
-    return Math.round(b * p / 100);
+    const b = rupeesToMinorString(basic);
+    const bps = percentToBps(bonusPct);
+    if (b === null || bps === null || bps < BONUS_PCT_MIN_BPS || bps > BONUS_PCT_MAX_BPS) return null;
+    return applyBpsToMinor(BigInt(b), bps);
   })();
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setInvalidField(null);
-    if (!employeeId.trim()) {
+    const result = parseBonusForm({ employeeId, fy, basic, bonusPct });
+    if (!result.ok) {
       setTone("bad");
-      setInvalidField("employeeId");
-      setMessage(t("employeeIdRequiredError"));
-      empRef.current?.focus();
-      return;
-    }
-    if (!/^\d{4}-\d{2}$/.test(fy.trim())) {
-      setTone("bad");
-      setInvalidField("fy");
-      setMessage(t("fyFormatError"));
-      fyRef.current?.focus();
-      return;
-    }
-    const rupees = parseFloat(basic);
-    if (Number.isNaN(rupees) || rupees <= 0) {
-      setTone("bad");
-      setInvalidField("basic");
-      setMessage(t("basicRequiredError"));
-      basicRef.current?.focus();
+      setInvalidField(result.field);
+      setMessage(t(result.messageKey));
+      if (result.field === "fy") fyRef.current?.focus();
+      else if (result.field === "basic") basicRef.current?.focus();
+      else if (result.field === "bonusPct") pctRef.current?.focus();
+      else document.getElementById(empId)?.focus();
       return;
     }
     setDialogError(undefined);
-    setConfirmOpen(true);
+    setPending(result.payload);
   }
 
   async function computeBonus() {
+    if (!pending) return;
     setBusy(true);
     setDialogError(undefined);
     try {
-      const basicMinor = Math.round(parseFloat(basic) * 100);
-      const res = await browserJson<BonusResponse>("v1/payroll/bonus/compute", {
+      // POST /v1/payroll/bonus/compute is CQRS: 202 { id, status: "accepted" }.
+      // The amount is computed by the consumer, so the confirmation quotes
+      // the (identical-formula) preview rather than reading a field the
+      // response never carries -- the old `res.data.bonus_amount_minor`
+      // threw on every successful submit.
+      await browserJson<{ id: string; status: string }>("v1/payroll/bonus/compute", {
         method: "POST",
         body: JSON.stringify({
-          employeeId: employeeId.trim(),
-          fy: fy.trim(),
-          basicMinor,
-          bonusPct: parseFloat(bonusPct),
+          employeeId: pending.employeeId,
+          fy: pending.fy,
+          basicMinor: pending.basicMinor,
+          bonusPct: pending.bonusPct,
         }),
       });
-      setConfirmOpen(false);
+      const amount = formatMoney(applyBpsToMinor(BigInt(pending.basicMinor), pending.bonusBps));
+      setPending(null);
       setTone("good");
       setInvalidField(null);
-      setMessage(t("computedMessage", { amount: formatMoney(res.data.bonus_amount_minor) }));
-      setEmployeeId("");
+      setMessage(t("submittedMessage", { amount }));
+      setEmployeeId(null);
+      setEmployeeName(null);
       setBasic("");
       router.refresh();
     } catch (err) {
@@ -103,41 +105,43 @@ export function ComputeBonusForm() {
     }
   }
 
+  const employeeLabel = employeeName ?? pending?.employeeId ?? "";
+
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form onSubmit={handleSubmit} noValidate style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input
+              {/* GAP-PAYROLL-BONUS-01: pick by name/code -- no free-text UUID. */}
+              <EmployeePicker
                 id={empId}
-                ref={empRef}
                 value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                aria-required="true"
-                aria-invalid={empInvalid || undefined}
-                aria-describedby={empInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                onChange={(id, option) => { setEmployeeId(id); setEmployeeName(option?.label ?? null); }}
+                clearable
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600 }}>
                 {t("financialYearLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input
+              <select
                 id={fyId}
                 ref={fyRef}
                 value={fy}
                 onChange={(e) => setFy(e.target.value)}
-                placeholder="2025-26"
                 aria-required="true"
-                aria-invalid={fyInvalid || undefined}
-                aria-describedby={fyInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+                aria-invalid={isInvalid("fy") || undefined}
+                aria-describedby={isInvalid("fy") ? errId : undefined}
+                style={inputStyle}
+              >
+                {fyOptions.map((o) => (
+                  <option key={o} value={o}>{o}</option>
+                ))}
+              </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={basicId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -146,31 +150,34 @@ export function ComputeBonusForm() {
               <input
                 id={basicId}
                 ref={basicRef}
-                type="number"
-                min="0"
-                step="0.01"
+                inputMode="decimal"
                 value={basic}
                 onChange={(e) => setBasic(e.target.value)}
                 aria-required="true"
-                aria-invalid={basicInvalid || undefined}
-                aria-describedby={basicInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                aria-invalid={isInvalid("basic") || undefined}
+                aria-describedby={isInvalid("basic") ? errId : undefined}
+                style={inputStyle}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={pctId} style={{ fontSize: 13, fontWeight: 600 }}>{t("bonusPctLabel")}</label>
+              <label htmlFor={pctId} style={{ fontSize: 13, fontWeight: 600 }}>
+                {t("bonusPctLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              </label>
               <input
                 id={pctId}
-                type="number"
-                min="8.33"
-                max="20"
-                step="0.01"
+                ref={pctRef}
+                inputMode="decimal"
                 value={bonusPct}
                 onChange={(e) => setBonusPct(e.target.value)}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                aria-required="true"
+                aria-invalid={isInvalid("bonusPct") || undefined}
+                aria-describedby={isInvalid("bonusPct") ? errId : undefined}
+                style={inputStyle}
               />
             </div>
           </div>
+
+          <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>{t("basicHelpText")}</p>
 
           {previewAmountMinor !== null && (
             <p style={{ fontSize: 13, color: "var(--ink2)" }}>
@@ -199,20 +206,25 @@ export function ComputeBonusForm() {
       </Card>
 
       <ConfirmDialog
-        open={confirmOpen}
+        open={pending !== null}
         title={t("confirmTitle")}
         confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={t.rich("confirmDescription", {
-          pct: bonusPct,
-          amount: formatMoney(Math.round((parseFloat(basic) || 0) * 100)),
-          employeeId,
-          fy,
-          strong: (chunks) => <strong>{chunks}</strong>,
-        })}
+        description={
+          pending
+            ? t.rich("confirmDescription", {
+                pct: String(pending.bonusPct),
+                amount: formatMoney(pending.basicMinor),
+                bonus: formatMoney(applyBpsToMinor(BigInt(pending.basicMinor), pending.bonusBps)),
+                employee: employeeLabel,
+                fy: pending.fy,
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })
+            : null
+        }
         onConfirm={() => void computeBonus()}
-        onCancel={() => !busy && setConfirmOpen(false)}
+        onCancel={() => !busy && setPending(null)}
       />
     </form>
   );

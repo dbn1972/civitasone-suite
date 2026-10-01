@@ -4,50 +4,65 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney } from "@/lib/formatters";
-
-type CreateResponse = {
-  data: {
-    id: string;
-    employeeId: string;
-    component: string;
-    effectiveFrom: string;
-    affectedPeriods: number;
-    arrearsMinor: number;
-    status: string;
-  };
-};
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 
 type InvalidField = "emp" | "comp" | "date" | "old" | "new" | null;
+
+type PendingCorrection = {
+  employeeId: string;
+  component: string;
+  effectiveFrom: string;
+  oldValueMinor: number;
+  newValueMinor: number;
+};
+
+/** Minimum length of the mandatory correction reason (ConfirmDialog gate). */
+export const CORRECTION_REASON_MIN = 10;
+
+/**
+ * GAP-PAYROLL-CORRECTIONS-04: a REAL calendar date in YYYY-MM-DD -- the bare
+ * regex accepted "2025-13-45" and "2026-02-30".
+ */
+export function isRealIsoDate(value: string): boolean {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return false;
+  const [y, m, d] = [Number(match[1]), Number(match[2]), Number(match[3])];
+  const date = new Date(Date.UTC(y, m - 1, d));
+  return date.getUTCFullYear() === y && date.getUTCMonth() === m - 1 && date.getUTCDate() === d;
+}
+
+/**
+ * GAP-PAYROLL-CORRECTIONS-03: rupees -> paise by string arithmetic (no
+ * parseFloat * 100; "1e3", "12abc" and 3-decimal input are rejected). Zero is
+ * a valid OLD/NEW value for a component the employee did not have.
+ */
+function toPaise(input: string): number | null {
+  const minor = rupeesToMinorString(input, { allowZero: true });
+  if (minor === null || BigInt(minor) > BigInt(Number.MAX_SAFE_INTEGER)) return null;
+  return Number(minor);
+}
+
+const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
 export function CreateCorrectionForm() {
   const t = useTranslations("createCorrectionForm");
   const router = useRouter();
-  const [employeeId, setEmployeeId] = useState("");
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
+  const [employeeName, setEmployeeName] = useState<string | null>(null);
   const [component, setComponent] = useState("");
   const [effectiveFrom, setEffectiveFrom] = useState("");
   const [oldValue, setOldValue] = useState("");
   const [newValue, setNewValue] = useState("");
-  const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
-  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [pending, setPending] = useState<PendingCorrection | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
-  // UX-017: which field the current error message is about, tracked as its
-  // own identity instead of re-testing `message` against hardcoded English
-  // text. Before this change, `xxxInvalid` matched the live `message` state
-  // against literals (`message === "Employee ID is required."`,
-  // `message.startsWith("Old value")`); once `message` holds
-  // `t("employeeIdRequiredError")`, that still happens to match under the
-  // English locale (the translated string is byte-identical to the old
-  // hardcoded one) but would silently and permanently evaluate false under
-  // any other locale, since the comparison's right-hand side stays
-  // hardcoded English — the same "translated text used for logic/identity"
-  // bug class this gap's tranche 5/10 found in Segmented tab arrays, just
-  // shaped as form-validation state instead of tab selection. Same fix
-  // applied in CreateOffCycleForm.tsx (periodInvalid/itemsInvalid).
+  // UX-017: which field the current error is about, as its own identity
+  // (never re-derived from the translated message text).
   const [invalidField, setInvalidField] = useState<InvalidField>(null);
 
   const empId = useId();
@@ -55,99 +70,61 @@ export function CreateCorrectionForm() {
   const dateId = useId();
   const oldId = useId();
   const newId = useId();
-  const reasonId = useId();
   const errId = useId();
 
-  const empRef = useRef<HTMLInputElement>(null);
   const compRef = useRef<HTMLInputElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const oldRef = useRef<HTMLInputElement>(null);
   const newRef = useRef<HTMLInputElement>(null);
 
-  const empInvalid = tone === "bad" && invalidField === "emp";
-  const compInvalid = tone === "bad" && invalidField === "comp";
-  const dateInvalid = tone === "bad" && invalidField === "date";
-  const oldInvalid = tone === "bad" && invalidField === "old";
-  const newInvalid = tone === "bad" && invalidField === "new";
+  const isInvalid = (f: Exclude<InvalidField, null>) => tone === "bad" && invalidField === f;
+
+  function fail(field: Exclude<InvalidField, null>, key: string, focus?: () => void) {
+    setTone("bad");
+    setInvalidField(field);
+    setMessage(t(key));
+    focus?.();
+  }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
     setInvalidField(null);
-    if (!employeeId.trim()) {
-      setTone("bad");
-      setInvalidField("emp");
-      setMessage(t("employeeIdRequiredError"));
-      empRef.current?.focus();
-      return;
-    }
-    if (!component.trim()) {
-      setTone("bad");
-      setInvalidField("comp");
-      setMessage(t("componentRequiredError"));
-      compRef.current?.focus();
-      return;
-    }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(effectiveFrom.trim())) {
-      setTone("bad");
-      setInvalidField("date");
-      setMessage(t("effectiveFromFormatError"));
-      dateRef.current?.focus();
-      return;
-    }
-    const oldRupees = parseFloat(oldValue);
-    if (Number.isNaN(oldRupees) || oldRupees < 0) {
-      setTone("bad");
-      setInvalidField("old");
-      setMessage(t("oldValueInvalidError"));
-      oldRef.current?.focus();
-      return;
-    }
-    const newRupees = parseFloat(newValue);
-    if (Number.isNaN(newRupees) || newRupees < 0) {
-      setTone("bad");
-      setInvalidField("new");
-      setMessage(t("newValueInvalidError"));
-      newRef.current?.focus();
-      return;
-    }
+    // GAP-PAYROLL-CORRECTIONS-02: only an employee picked from the directory
+    // can be corrected -- a mistyped/foreign UUID cannot reach the dialog.
+    if (!employeeId) return fail("emp", "employeeIdRequiredError", () => document.getElementById(empId)?.focus());
+    if (!component.trim()) return fail("comp", "componentRequiredError", () => compRef.current?.focus());
+    if (!isRealIsoDate(effectiveFrom.trim())) return fail("date", "effectiveFromFormatError", () => dateRef.current?.focus());
+    const oldValueMinor = toPaise(oldValue);
+    if (oldValueMinor === null) return fail("old", "oldValueInvalidError", () => oldRef.current?.focus());
+    const newValueMinor = toPaise(newValue);
+    if (newValueMinor === null) return fail("new", "newValueInvalidError", () => newRef.current?.focus());
     setDialogError(undefined);
-    setConfirmOpen(true);
+    setPending({ employeeId, component: component.trim(), effectiveFrom: effectiveFrom.trim(), oldValueMinor, newValueMinor });
   }
 
-  async function createCorrection() {
+  async function createCorrection(reason?: string) {
+    if (!pending) return;
     setBusy(true);
     setDialogError(undefined);
     try {
-      const oldValueMinor = Math.round(parseFloat(oldValue) * 100);
-      const newValueMinor = Math.round(parseFloat(newValue) * 100);
-      const res = await browserJson<CreateResponse>("v1/payroll/corrections", {
+      // CQRS: 202 { id, status: "accepted" } -- arrears/affected periods are
+      // computed by the consumer, so they are not read from the response
+      // (the old `res.data.affectedPeriods` threw on every success).
+      await browserJson<{ id: string; status: string }>("v1/payroll/corrections", {
         method: "POST",
-        body: JSON.stringify({
-          employeeId: employeeId.trim(),
-          component: component.trim(),
-          effectiveFrom: effectiveFrom.trim(),
-          oldValueMinor,
-          newValueMinor,
-          reason: reason.trim() || undefined,
-        }),
+        body: JSON.stringify({ ...pending, reason: reason?.trim() }),
       });
-      setConfirmOpen(false);
+      setPending(null);
       setTone("good");
       setInvalidField(null);
-      setMessage(
-        t("recordedMessage", {
-          component: component.trim(),
-          count: res.data.affectedPeriods,
-          arrears: formatMoney(res.data.arrearsMinor),
-        }),
-      );
-      setEmployeeId("");
+      setMessage(t("submittedMessage", { component: pending.component }));
+      setEmployeeId(null);
+      setEmployeeName(null);
       setComponent("");
       setEffectiveFrom("");
       setOldValue("");
       setNewValue("");
-      setReason("");
       router.refresh();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
@@ -157,23 +134,19 @@ export function CreateCorrectionForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form onSubmit={handleSubmit} noValidate style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input
+              <EmployeePicker
                 id={empId}
-                ref={empRef}
                 value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                aria-required="true"
-                aria-invalid={empInvalid || undefined}
-                aria-describedby={empInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                onChange={(id, option) => { setEmployeeId(id); setEmployeeName(option?.label ?? null); }}
+                clearable
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
@@ -188,25 +161,26 @@ export function CreateCorrectionForm() {
                 maxLength={32}
                 placeholder={t("componentPlaceholder")}
                 aria-required="true"
-                aria-invalid={compInvalid || undefined}
-                aria-describedby={compInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                aria-invalid={isInvalid("comp") || undefined}
+                aria-describedby={isInvalid("comp") ? errId : undefined}
+                style={inputStyle}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateId} style={{ fontSize: 13, fontWeight: 600 }}>
                 {t("effectiveFromLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
+              {/* GAP-PAYROLL-CORRECTIONS-04: native date picker (value stays YYYY-MM-DD). */}
               <input
                 id={dateId}
                 ref={dateRef}
+                type="date"
                 value={effectiveFrom}
                 onChange={(e) => setEffectiveFrom(e.target.value)}
-                placeholder="2025-04-01"
                 aria-required="true"
-                aria-invalid={dateInvalid || undefined}
-                aria-describedby={dateInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                aria-invalid={isInvalid("date") || undefined}
+                aria-describedby={isInvalid("date") ? errId : undefined}
+                style={inputStyle}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
@@ -216,15 +190,13 @@ export function CreateCorrectionForm() {
               <input
                 id={oldId}
                 ref={oldRef}
-                type="number"
-                min="0"
-                step="0.01"
+                inputMode="decimal"
                 value={oldValue}
                 onChange={(e) => setOldValue(e.target.value)}
                 aria-required="true"
-                aria-invalid={oldInvalid || undefined}
-                aria-describedby={oldInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                aria-invalid={isInvalid("old") || undefined}
+                aria-describedby={isInvalid("old") ? errId : undefined}
+                style={inputStyle}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
@@ -234,25 +206,13 @@ export function CreateCorrectionForm() {
               <input
                 id={newId}
                 ref={newRef}
-                type="number"
-                min="0"
-                step="0.01"
+                inputMode="decimal"
                 value={newValue}
                 onChange={(e) => setNewValue(e.target.value)}
                 aria-required="true"
-                aria-invalid={newInvalid || undefined}
-                aria-describedby={newInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={reasonId} style={{ fontSize: 13, fontWeight: 600 }}>{t("reasonLabel")}</label>
-              <input
-                id={reasonId}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                maxLength={512}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                aria-invalid={isInvalid("new") || undefined}
+                aria-describedby={isInvalid("new") ? errId : undefined}
+                style={inputStyle}
               />
             </div>
           </div>
@@ -277,22 +237,33 @@ export function CreateCorrectionForm() {
         </div>
       </Card>
 
+      {/* GAP-PAYROLL-CORRECTIONS-02: the dialog names the employee (not the
+          UUID) and the reason is mandatory -- it is the record of why a
+          retroactive pay change was made. */}
       <ConfirmDialog
-        open={confirmOpen}
+        open={pending !== null}
         title={t("confirmTitle")}
         confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={t.rich("confirmDescription", {
-          component,
-          employeeId,
-          oldAmount: formatMoney(Math.round((parseFloat(oldValue) || 0) * 100)),
-          newAmount: formatMoney(Math.round((parseFloat(newValue) || 0) * 100)),
-          effectiveFrom,
-          strong: (chunks) => <strong>{chunks}</strong>,
-        })}
-        onConfirm={() => void createCorrection()}
-        onCancel={() => !busy && setConfirmOpen(false)}
+        requireReason
+        reasonLabel={t("reasonLabel")}
+        minReasonLength={CORRECTION_REASON_MIN}
+        maxReasonLength={512}
+        description={
+          pending
+            ? t.rich("confirmDescription", {
+                component: pending.component,
+                employee: employeeName ?? pending.employeeId,
+                oldAmount: formatMoney(pending.oldValueMinor),
+                newAmount: formatMoney(pending.newValueMinor),
+                effectiveFrom: formatIndianDate(pending.effectiveFrom),
+                strong: (chunks) => <strong>{chunks}</strong>,
+              })
+            : null
+        }
+        onConfirm={(reason) => void createCorrection(reason)}
+        onCancel={() => !busy && setPending(null)}
       />
     </form>
   );

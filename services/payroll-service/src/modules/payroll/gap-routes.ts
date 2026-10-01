@@ -17,10 +17,13 @@ import { scopedRead } from "../../shared/db.js";
 import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
 import { stateRulesBody, findPtSlabOverlap } from "./state-rules.js";
+import { assertElectionWithinPlan } from "./adjustment-guards.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 const ALL_ROLES = [...READER_ROLES, "employee"];
+
+const offCycleProcessBody = z.object({ reason: z.string().trim().min(10).max(512) });
 
 export async function gapRoutes(app: FastifyInstance): Promise<void> {
   // ─── Gap 1: Payroll Simulation ──────────────────────────────────────────────
@@ -243,11 +246,33 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       fy: z.string().regex(/^\d{4}-\d{2}$/),
       elections: z.array(z.object({ component: z.string(), electedMinor: z.number().int().min(0) })).min(1),
     }).parse(req.body);
+    // GAP-PAYROLL-FLEX-BENEFITS-01/03: the election must name only this
+    // plan's components, each within its max, total within the plan budget,
+    // same FY -- previously any planId/component/amount was accepted.
+    await assertElectionWithinPlan(ctx, body);
     const totalElectedMinor = body.elections.reduce((s, e) => s + e.electedMinor, 0);
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertFlexElection(ctx, {
       ...body,
       totalElectedMinor,
     }));
+  });
+
+  // GAP-PAYROLL-FLEX-BENEFITS-01: list active plans so the election form can
+  // offer a plan picker + its components/caps instead of a hand-typed plan
+  // UUID. Plan definitions are tenant config (name/FY/budget/component
+  // caps) -- no employee data -- so every role that may elect may read them.
+  app.get("/v1/payroll/flex-benefits/plans", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/).optional() }).parse(req.query);
+    const rows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT id, name, fy, total_budget_minor, components, status
+      FROM payroll.flex_benefit_plans
+      WHERE tenant_id = ${ctx.tenantId}::uuid AND status = 'active'
+        ${q.fy ? sql`AND fy = ${q.fy}` : sql``}
+      ORDER BY fy DESC, name LIMIT 100
+    `))) as unknown as Array<Record<string, unknown>>;
+    return reply.send({ data: rows });
   });
 
   app.get("/v1/payroll/flex-benefits/my-elections", async (req, reply) => {
@@ -424,10 +449,14 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT id, run_type, period, description, total_amount_minor, total_tax_minor, total_net_minor, status, created_at,
-        created_by
-      FROM payroll.off_cycle_runs WHERE tenant_id = ${ctx.tenantId}::uuid
-      ORDER BY created_at DESC LIMIT 50
+      SELECT r.id, r.run_type, r.period, r.description, r.total_amount_minor, r.total_tax_minor,
+        r.total_net_minor, r.status, r.created_at, r.created_by,
+        -- GAP-PAYROLL-OFF-CYCLE-02: the run card's "Employees in scope"
+        -- read a field this list never returned.
+        (SELECT count(*)::int FROM payroll.off_cycle_items i
+          WHERE i.off_cycle_run_id = r.id AND i.tenant_id = r.tenant_id) AS employee_count
+      FROM payroll.off_cycle_runs r WHERE r.tenant_id = ${ctx.tenantId}::uuid
+      ORDER BY r.created_at DESC LIMIT 50
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
   });
@@ -461,8 +490,12 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     if (run.created_by === ctx.actorId) {
       throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "an off-cycle run must be processed by someone other than its creator");
     }
+    // GAP-PAYROLL-OFF-CYCLE-04: processing is irreversible -- a reason is
+    // mandatory and is written to the audit record (after the GAP-PAYROLL-
+    // OFF-CYCLE-01 existence / draft / creator checks above).
+    const { reason } = offCycleProcessBody.parse(req.body);
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.processOffCycle(ctx, id));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.processOffCycle(ctx, id, reason));
   });
 
   // ─── Gap 4: Multi-State PT/LWF (CRUD for state rules) ────────────────────

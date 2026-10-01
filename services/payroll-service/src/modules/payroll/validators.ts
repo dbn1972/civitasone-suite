@@ -150,11 +150,23 @@ export type CreateArrearBody = z.infer<typeof createArrearBody>;
 // which collectAdHocEarnings (payroll/consumer.ts) then feeds in as a
 // negative "earning" line, bypassing the protected-net floor that only
 // guards recognized deductions. Same floor, same rationale as basicMinor.
+// GAP-PAYROLL-BONUS-03: the web form's 8.33-20 range (Payment of Bonus Act
+// s.10 minimum / s.11 maximum) was enforced only by HTML min/max -- a
+// cleared or scripted value reached this route unchecked. Same bounds here
+// so the server is authoritative; at most 2 decimals so the consumer's
+// bps conversion (Math.round(pct * 100)) is exact. fy is "YYYY-YY" with
+// consecutive years (2025-26), the same shape every other payroll FY uses.
+const BONUS_FY_RE = /^(\d{4})-(\d{2})$/;
 export const computeBonusBody = z.object({
   employeeId: z.string().uuid(),
-  fy:         z.string(),
+  fy:         z.string().regex(BONUS_FY_RE).refine((fy) => {
+    const m = BONUS_FY_RE.exec(fy);
+    return !!m && Number(m[2]) === (Number(m[1]) + 1) % 100;
+  }, "fy must be consecutive years, e.g. 2025-26"),
   basicMinor: z.number().int().nonnegative(),
-  bonusPct:   z.number().nonnegative().default(8.33),
+  bonusPct:   z.number().min(8.33).max(20)
+    .refine((p) => Math.abs(p * 100 - Math.round(p * 100)) < 1e-9, "bonusPct allows at most 2 decimals")
+    .default(8.33),
 });
 export type ComputeBonusBody = z.infer<typeof computeBonusBody>;
 
@@ -163,10 +175,21 @@ export const createReimbursementBody = z.object({
   category:    z.enum(["medical", "travel", "lta", "food", "telephone", "internet", "fuel", "other"]),
   amountMinor: z.number().int().positive(),
   billDate:    z.string().optional(),
-  billRef:     z.string().optional(),
-  period:      z.string(),
+  billRef:     z.string().max(128).optional(),
+  // GAP-PAYROLL-REIMBURSEMENTS-04: a real calendar month (2026-13 was
+  // accepted), same "YYYY-MM" the payroll run compares against.
+  period:      z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "period must be YYYY-MM"),
 });
 export type CreateReimbursementBody = z.infer<typeof createReimbursementBody>;
+
+// GAP-PAYROLL-REIMBURSEMENTS-02: approve takes an optional note; reject
+// requires a reason (it is the only record of why the claimant was refused).
+export const reimbursementDecisionBody = z.object({
+  reason: z.string().trim().max(512).optional(),
+});
+export const reimbursementRejectBody = z.object({
+  reason: z.string().trim().min(10).max(512),
+});
 
 // ─── F3 leftover CQRS: salary revisions / settings ─────────────────────────
 // Hoisted out of world-class-routes.ts (were inline z.object literals) so

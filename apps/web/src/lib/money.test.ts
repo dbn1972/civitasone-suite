@@ -81,3 +81,47 @@ describe("percentToBps", () => {
     expect(percentToBps("   ")).toBeNull();
   });
 });
+
+import { sumRupeesToMinor, applyBpsToMinor } from "./money";
+
+// b3 payroll gap batch (GAP-PAYROLL-CORRECTIONS-03 / OFF-CYCLE-03 / BONUS-02)
+describe("rupeesToMinorString — payroll entry cases", () => {
+  it("rejects exponent, trailing text and 3 decimals", () => {
+    expect(rupeesToMinorString("1e3")).toBeNull();
+    expect(rupeesToMinorString("12abc")).toBeNull();
+    expect(rupeesToMinorString("1.005")).toBeNull();
+  });
+  it("converts without float error", () => {
+    expect(rupeesToMinorString("1.10")).toBe("110");
+    expect(rupeesToMinorString("0.29")).toBe("29");
+    expect(rupeesToMinorString("10.5")).toBe("1050");
+  });
+  it("allowZero admits 0 only when asked", () => {
+    expect(rupeesToMinorString("0")).toBeNull();
+    expect(rupeesToMinorString("0", { allowZero: true })).toBe("0");
+    expect(rupeesToMinorString("0.00", { allowZero: true })).toBe("0");
+    expect(rupeesToMinorString("-1", { allowZero: true })).toBeNull();
+  });
+});
+
+describe("sumRupeesToMinor", () => {
+  it("sums exactly in paise (0.1 + 0.2 = 30)", () => {
+    expect(sumRupeesToMinor(["0.1", "0.2"])).toBe(30n);
+  });
+  it("is null if any entry is invalid", () => {
+    expect(sumRupeesToMinor(["10", "1.005"])).toBeNull();
+    expect(sumRupeesToMinor(["10", ""])).toBeNull();
+  });
+});
+
+describe("applyBpsToMinor", () => {
+  it("matches payroll-service's half-up bonus formula", () => {
+    // 21,000.00 basic x 8.33% = 1,749.30
+    expect(applyBpsToMinor(2100000n, 833)).toBe(174930n);
+    // 1.00 x 8.33% = 0.0833 -> rounds to 8 paise
+    expect(applyBpsToMinor(100n, 833)).toBe(8n);
+    // 0.06 x 8.33% = 0.4998 paise -> 0; 0.07 -> 0.5831 -> 1
+    expect(applyBpsToMinor(6n, 833)).toBe(0n);
+    expect(applyBpsToMinor(7n, 833)).toBe(1n);
+  });
+});

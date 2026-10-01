@@ -6,7 +6,10 @@ import { useTranslations } from "next-intl";
 import { Button, StatusPill, ConfirmDialog } from "../../../../_components/ds";
 import { postWithErrorCode } from "../_lib/postWithErrorCode";
 import { formatMoney } from "@/lib/formatters";
-import type { OffCycleRow } from "./OffCycleList";
+import type { OffCycleRow } from "./types";
+
+/** GAP-PAYROLL-OFF-CYCLE-04: minimum length of the mandatory processing reason. */
+export const PROCESS_REASON_MIN = 10;
 
 type Translator = (key: string, values?: Record<string, string | number | Date>) => string;
 
@@ -30,12 +33,13 @@ function reasonLabelFor(t: Translator, runType: string): string {
   return key ? t(key) : runType.replace(/_/g, " ");
 }
 
-function RunCard({ row, canProcess, onProcess }: { row: OffCycleRow; canProcess: boolean; onProcess: (row: OffCycleRow) => void }) {
+function RunCard({ row, onProcess, canProcess }: { row: OffCycleRow; onProcess: (row: OffCycleRow) => void; canProcess: boolean }) {
   const t = useTranslations("offCycleCard");
   const reasonLabel = reasonLabelFor(t, row.run_type);
-  const totalAmount = Number(row.total_amount_minor ?? 0);
-  const netAmount = Number(row.total_net_minor ?? 0);
-  const empCount = (row.employee_count as number | undefined) ?? null;
+  const totalAmount = BigInt(String(row.total_amount_minor ?? 0));
+  const netAmount = BigInt(String(row.total_net_minor ?? 0));
+  // GAP-PAYROLL-OFF-CYCLE-02: now actually returned by GET /off-cycle.
+  const empCount = typeof row.employee_count === "number" ? row.employee_count : null;
 
   return (
     <div style={{ border: "1px solid var(--line2)", borderRadius: 12, overflow: "hidden" }}>
@@ -71,7 +75,7 @@ function RunCard({ row, canProcess, onProcess }: { row: OffCycleRow; canProcess:
           <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("statTotalAmount")}</div>
           <div style={{ fontSize: 16, fontWeight: 700, marginTop: 3 }}>{formatMoney(totalAmount)}</div>
         </div>
-        {netAmount > 0 && (
+        {netAmount > 0n && (
           <div>
             <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("statNetPayable")}</div>
             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 3 }}>{formatMoney(netAmount)}</div>
@@ -105,15 +109,15 @@ export function OffCycleCards({ rows, canProcess = false }: { rows: OffCycleRow[
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
 
-  async function processRun() {
+  async function processRun(reason?: string) {
     if (!pendingRow) return;
     setBusy(true);
     setDialogError(undefined);
     try {
-      // The endpoint is async (202 + {id,status,correlationId}); tax and net
-      // are computed by the worker. This used to read res.data.totalNetMinor
-      // off that envelope, which threw and showed an error on success.
-      await postWithErrorCode("v1/payroll/off-cycle/" + pendingRow.id + "/process", {}, {
+      // GAP-PAYROLL-OFF-CYCLE-04: the mandatory reason goes to the audit
+      // record. The endpoint is async (202 + {id,status,correlationId}); tax
+      // and net are computed by the worker, so nothing is read back.
+      await postWithErrorCode("v1/payroll/off-cycle/" + pendingRow.id + "/process", { reason: reason?.trim() }, {
         SELF_APPROVAL_FORBIDDEN: t("selfProcessError"),
         OFF_CYCLE_NOT_DRAFT: t("notDraftError"),
       });
@@ -156,6 +160,11 @@ export function OffCycleCards({ rows, canProcess = false }: { rows: OffCycleRow[
         confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
+        danger
+        requireReason
+        reasonLabel={t("reasonLabel")}
+        minReasonLength={PROCESS_REASON_MIN}
+        maxReasonLength={512}
         description={
           pendingRow ? (
             t.rich("confirmDescription", {
@@ -166,7 +175,7 @@ export function OffCycleCards({ rows, canProcess = false }: { rows: OffCycleRow[
             })
           ) : null
         }
-        onConfirm={() => void processRun()}
+        onConfirm={(reason) => void processRun(reason)}
         onCancel={() => !busy && setPendingRow(null)}
       />
     </>

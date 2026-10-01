@@ -25,7 +25,7 @@
  *   rupeesToMinorString("-5")     -> null
  *   rupeesToMinorString("0")      -> null   (not a positive amount)
  */
-export function rupeesToMinorString(input: string): string | null {
+export function rupeesToMinorString(input: string, opts?: { allowZero?: boolean }): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;
 
@@ -39,8 +39,36 @@ export function rupeesToMinorString(input: string): string | null {
   const combined = `${wholePart}${paddedFrac}`;
   // Strip leading zeros (BigInt would do this anyway) but guard against "".
   const minor = BigInt(combined);
-  if (minor <= 0n) return null;
+  // `allowZero` (b3 payroll gap batch, GAP-PAYROLL-CORRECTIONS-03): a salary
+  // correction's OLD value is legitimately 0 for a component the employee
+  // did not have before. Every existing caller keeps the default (> 0).
+  if (minor < 0n || (minor === 0n && !opts?.allowZero)) return null;
   return minor.toString();
+}
+
+/**
+ * Sum of rupee input strings in paise, or null if ANY entry is invalid (see
+ * rupeesToMinorString). BigInt end to end -- no float accumulation
+ * (GAP-PAYROLL-OFF-CYCLE-03: "0.1" + "0.2" must total exactly 30 paise).
+ */
+export function sumRupeesToMinor(inputs: readonly string[]): bigint | null {
+  let total = 0n;
+  for (const input of inputs) {
+    const minor = rupeesToMinorString(input);
+    if (minor === null) return null;
+    total += BigInt(minor);
+  }
+  return total;
+}
+
+/**
+ * Bonus-style amount: basic (paise) x rate (basis points), rounded half-up to
+ * a paise -- the exact formula payroll-service's bonusCompute consumer
+ * persists ((basicMinor * bps + 5000) / 10000), so the form's preview and
+ * confirmation show what the server will store (GAP-PAYROLL-BONUS-02).
+ */
+export function applyBpsToMinor(minor: bigint, bps: number): bigint {
+  return (minor * BigInt(bps) + 5000n) / 10000n;
 }
 
 /**

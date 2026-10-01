@@ -150,7 +150,8 @@ describe("GAP-PAYROLL-OFF-CYCLE-01: off-cycle process maker-checker", () => {
 
   it("a different payroll user processes a draft run: 202", async () => {
     readQueue.push([{ status: "draft", created_by: MAKER, has_items: true }]);
-    const r = await post(`/v1/payroll/off-cycle/${ROW_ID}/process`, CHECKER);
+    // GAP-PAYROLL-OFF-CYCLE-04 (b3): processing also requires a reason.
+    const r = await post(`/v1/payroll/off-cycle/${ROW_ID}/process`, CHECKER, { reason: "Quarterly incentive approved by DDO" });
     expect(r.statusCode).toBe(202);
     expect(mockPublish.mock.calls[0]![0]).toBe(COMMANDS.offCycleProcess);
   });

@@ -124,3 +124,29 @@ describe("GET /v1/hrms/employees/:id — detail route is NOT widened", () => {
     expect(r.statusCode).not.toBe(403);
   });
 });
+
+// b3 payroll gap batch (GAP-PAYROLL-ARREARS-01 / BONUS-01 / CORRECTIONS-02 /
+// OFF-CYCLE-02 / REIMBURSEMENTS-01): payroll staff pick employees by name and
+// see names on the payroll registers via this LIST route; the richer detail
+// route stays closed to them.
+describe("GET /v1/hrms/employees — payroll roles (b3 payroll gap batch)", () => {
+  for (const role of ["payroll_admin", "payroll_officer"]) {
+    it(`200 — ${role} can search the directory list`, async () => {
+      const r = await app.inject({
+        method: "GET",
+        url: "/v1/hrms/employees?q=asha&limit=20",
+        headers: { authorization: `Bearer ${tok([role])}` },
+      });
+      expect(r.statusCode).toBe(200);
+    });
+
+    it(`403 — ${role} is still denied the per-employee detail route`, async () => {
+      const r = await app.inject({
+        method: "GET",
+        url: "/v1/hrms/employees/00000000-1234-4000-8000-000000000001",
+        headers: { authorization: `Bearer ${tok([role])}` },
+      });
+      expect(r.statusCode).toBe(403);
+    });
+  }
+});

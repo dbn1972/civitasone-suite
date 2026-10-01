@@ -936,6 +936,32 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     });
   });
 
+  // GAP-PAYROLL-REIMBURSEMENTS-02: approve/reject. Conditional on
+  // status='submitted' so a racing second decision (or a redelivery that
+  // slipped past markProcessed) changes nothing; only an actual transition
+  // is audited. approved_by is set for approvals only -- rejections keep it
+  // NULL so the column's meaning stays literal; the rejecting actor and the
+  // reason live in the audit record.
+  queue.subscribe(COMMANDS.reimbursementDecide, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; decision: "approved" | "rejected"; reason?: string | null };
+    if (p.decision !== "approved" && p.decision !== "rejected") return;
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const updated = (await tx.execute(sql`
+        UPDATE payroll.payroll_reimbursements
+           SET status = ${p.decision},
+               approved_by = ${p.decision === "approved" ? msg.actorId : null}::uuid
+         WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid AND status = 'submitted'
+        RETURNING id
+      `)) as unknown as Array<{ id: string }>;
+      if (updated.length === 0) return;
+      await audit(tx, msg, p.decision === "approved" ? "approve" : "reject", "payroll_reimbursement", p.id, {
+        newValue: { status: p.decision },
+        ...(p.reason ? { reason: p.reason } : {}),
+      });
+    });
+  });
+
   // ─── CQRS lift T1-03 (payroll/gap-routes.ts) ─────────────────────────────
   // Idempotent consumers for the 8 gap-routes.ts mutations that were doing
   // db.execute() INSERT/UPDATE in the HTTP handler. Each opens a tx, calls
@@ -1135,7 +1161,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
 
   // Off-cycle process: consumer is the single source of truth for the 30% flat-tax split.
   queue.subscribe(COMMANDS.offCycleProcess, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // GAP-PAYROLL-OFF-CYCLE-01: re-assert the route's maker-checker and
@@ -1179,7 +1205,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { id: p.id, totalTaxMinor: totalTax.toString(), totalNetMinor: totalNet.toString() },
       });
-      await audit(tx, msg, "process", "payroll_off_cycle_run", p.id);
+      await audit(tx, msg, "process", "payroll_off_cycle_run", p.id, p.reason ? { reason: p.reason } : undefined);
     });
   });
 
@@ -1928,10 +1954,20 @@ export async function computeAndInsertSlip(
 // Exported (round2 concurrency fix) so commands.ts's createRun can record
 // the same "create" audit event synchronously, from its own transaction,
 // for a regular run — see that function's doc comment.
-export async function audit(tx: Parameters<typeof enqueue>[0], msg: { tenantId: string; actorId: string; correlationId: string }, action: string, resourceType: string, resourceId: string): Promise<void> {
+export async function audit(
+  tx: Parameters<typeof enqueue>[0],
+  msg: { tenantId: string; actorId: string; correlationId: string },
+  action: string,
+  resourceType: string,
+  resourceId: string,
+  // b3 gap batch (OFF-CYCLE-04 / REIMBURSEMENTS-02): optional extra fields
+  // (e.g. the decision reason, newValue) merged into the audit payload,
+  // which audit-service stores verbatim. Omitted -> payload unchanged.
+  details?: Record<string, unknown>,
+): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "payroll", action, resourceType, resourceId, outcome: "success" },
+    payload: { ...(details ?? {}), service: "payroll", action, resourceType, resourceId, outcome: "success" },
   });
 }

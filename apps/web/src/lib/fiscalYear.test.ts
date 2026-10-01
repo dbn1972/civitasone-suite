@@ -67,3 +67,19 @@ describe("fiscalYear (Indian FY, Asia/Kolkata boundary)", () => {
     });
   });
 });
+
+import { isValidFinancialYearLabel } from "./fiscalYear";
+
+describe("isValidFinancialYearLabel (GAP-PAYROLL-FLEX-BENEFITS-03)", () => {
+  it("accepts consecutive-year labels, including the century wrap", () => {
+    expect(isValidFinancialYearLabel("2026-27")).toBe(true);
+    expect(isValidFinancialYearLabel("1999-00")).toBe(true);
+  });
+  it("rejects non-consecutive or malformed labels", () => {
+    expect(isValidFinancialYearLabel("2026-99")).toBe(false);
+    expect(isValidFinancialYearLabel("2026-05")).toBe(false);
+    expect(isValidFinancialYearLabel("2025-27")).toBe(false);
+    expect(isValidFinancialYearLabel("2026/27")).toBe(false);
+    expect(isValidFinancialYearLabel("")).toBe(false);
+  });
+});

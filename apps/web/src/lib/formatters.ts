@@ -441,3 +441,19 @@ export function formatPercent(pct: number | null | undefined, decimals = 1): str
   if (pct === null || pct === undefined || !Number.isFinite(pct)) return "—";
   return `${pct.toFixed(decimals)}%`;
 }
+
+const PERIOD_MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/**
+ * Format a payroll period "YYYY-MM" for display: "2026-07" -> "Jul 2026"
+ * (GAP-PAYROLL-ARREARS-06). null/empty -> "—"; an unparseable value is
+ * passed through unchanged rather than hidden.
+ */
+export function formatPeriod(period: string | null | undefined): string {
+  if (!period) return "—";
+  const match = /^(\d{4})-(\d{2})$/.exec(period.trim());
+  if (!match) return period;
+  const month = Number(match[2]);
+  if (month < 1 || month > 12) return period;
+  return `${PERIOD_MONTHS[month - 1]} ${match[1]}`;
+}

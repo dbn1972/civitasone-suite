@@ -946,11 +946,15 @@ describe("POST /v1/payroll/flex-benefits/plans (gap)", () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("POST /v1/payroll/flex-benefits/elections (gap)", () => {
-  it("202 (T1-03 CQRS lift) — valid election (employee can elect)", async () => {
+  // GAP-PAYROLL-FLEX-BENEFITS-01/03: an election is now validated against
+  // its plan, so a random (nonexistent) planId is a 404 rather than a 202
+  // into a silent no-op. The 202 happy path against a real seeded plan is
+  // covered in tests/b3-payroll-adjustments-routes.test.ts.
+  it("404 — election against a nonexistent plan (employee role passes the gate)", async () => {
     const app = await buildApp();
     const res = await app.inject({ method: "POST", url: "/v1/payroll/flex-benefits/elections", headers: auth(["employee"]), payload: { planId: randomUUID(), fy: "2026-27", elections: [{ component: "Medical", electedMinor: 250000 }] } });
     await app.close();
-    expect([202, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(404);
   });
 
   it("400 — empty elections", async () => {

@@ -22,6 +22,10 @@ export const COMMANDS = {
   arrearCreate:           "payroll.arrear.create",
   bonusCompute:           "payroll.bonus.compute",
   reimbursementCreate:    "payroll.reimbursement.create",
+  // GAP-PAYROLL-REIMBURSEMENTS-02: approve/reject a submitted claim (the
+  // run only pays status='approved' claims, so without this a claim could
+  // never be paid). Audited only -- no new outbound event.
+  reimbursementDecide:    "payroll.reimbursement.decide",
   salaryRevisionCreate:   "payroll.salary_revision.create",
   settingsUpdate:         "payroll.settings.update",
   // CQRS lift T1-03 (payroll/gap-routes.ts) — 8 mutating routes moved to

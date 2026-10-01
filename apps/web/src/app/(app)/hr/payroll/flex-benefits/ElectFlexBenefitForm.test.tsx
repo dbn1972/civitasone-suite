@@ -8,18 +8,39 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: refreshMock }),
 }));
 
-import { ElectFlexBenefitForm } from "./ElectFlexBenefitForm";
+import { ElectFlexBenefitForm, electionProblems } from "./ElectFlexBenefitForm";
+import type { FlexPlan } from "./flexPlans";
 
-// UX-017: ElectFlexBenefitForm now reads its copy through next-intl
-// (useTranslations("electFlexBenefitForm")), so every render needs a real
-// provider in the tree -- same pattern as off-cycle/CreateOffCycleForm.test.tsx.
-function renderForm() {
+// GAP-PAYROLL-FLEX-BENEFITS-01/03: the form is driven by the plan list
+// (GET /flex-benefits/plans) -- pick a plan, then one capped amount per
+// plan component; the total is capped at the plan budget.
+const PLAN: FlexPlan = {
+  id: "77777777-7777-4777-8777-777777777701",
+  name: "Standard Flex",
+  fy: "2026-27",
+  totalBudgetMinor: "5000000",
+  components: [
+    { name: "Medical", maxMinor: "2000000", taxExempt: true },
+    { name: "LTA", maxMinor: "4000000", taxExempt: true },
+  ],
+};
+
+function renderForm(plans: FlexPlan[] = [PLAN]) {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <ElectFlexBenefitForm />
+      <ElectFlexBenefitForm plans={plans} />
     </NextIntlClientProvider>,
   );
 }
+
+describe("electionProblems", () => {
+  it("flags amounts above a component max and totals above the budget", () => {
+    expect(electionProblems(PLAN, { Medical: "20000.01" }).lines).toEqual({ Medical: "overMax" });
+    expect(electionProblems(PLAN, { Medical: "20000", LTA: "30000.01" }).overBudget).toBe(true);
+    expect(electionProblems(PLAN, { Medical: "20000", LTA: "30000" })).toMatchObject({ overBudget: false, totalMinor: 5000000n });
+    expect(electionProblems(PLAN, { Medical: "10.005" }).lines).toEqual({ Medical: "invalid" });
+  });
+});
 
 describe("ElectFlexBenefitForm", () => {
   beforeEach(() => {
@@ -27,75 +48,66 @@ describe("ElectFlexBenefitForm", () => {
     refreshMock.mockReset();
   });
 
-  it("requires a plan id before opening the confirm dialog", () => {
+  it("has no hand-typed Plan ID or free-text component inputs", () => {
     renderForm();
-    fireEvent.click(screen.getByRole("button", { name: "Submit Election" }));
-    expect(screen.getByText("Plan ID is required.")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Plan ID/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Component$/)).not.toBeInTheDocument();
   });
 
-  it("submits an election on confirm (happy path)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ data: { id: "el1", planId: "pl1", fy: "2025-26", totalElectedMinor: 500000 } }),
-        { status: 201 },
-      ),
-    );
-
+  it("requires a plan before opening the confirm dialog", () => {
     renderForm();
-    fireEvent.change(screen.getByLabelText(/^Plan ID/), { target: { value: "pl1" } });
-    fireEvent.change(screen.getByLabelText(/^Financial Year/), { target: { value: "2025-26" } });
-    fireEvent.change(screen.getByLabelText("Component"), { target: { value: "LTA" } });
-    fireEvent.change(screen.getByLabelText("Elected Amount (₹)"), { target: { value: "5000" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit Election" }));
+    expect(screen.getByText("Choose a plan.")).toBeInTheDocument();
+  });
 
+  it("choosing a plan lists its components and blocks amounts above a component max", () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/^Plan/), { target: { value: PLAN.id } });
+    const medical = screen.getByLabelText(/^Medical/);
+    expect(screen.getByLabelText(/^LTA/)).toBeInTheDocument();
+    fireEvent.change(medical, { target: { value: "20000.01" } });
+    expect(screen.getByText("Above this component's maximum of ₹20,000.00.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit Election" })).toBeDisabled();
+  });
+
+  it("a total above the plan budget disables submit with a message", () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/^Plan/), { target: { value: PLAN.id } });
+    fireEvent.change(screen.getByLabelText(/^Medical/), { target: { value: "20000" } });
+    fireEvent.change(screen.getByLabelText(/^LTA/), { target: { value: "31000" } });
+    expect(screen.getByText(/of the ₹50,000.00 plan budget/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Submit Election" })).toBeDisabled();
+  });
+
+  it("submits only the plan's components, in paise, with the plan's FY (202 envelope)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "el1", status: "accepted", correlationId: "c" }), { status: 202 }),
+    );
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/^Plan/), { target: { value: PLAN.id } });
+    fireEvent.change(screen.getByLabelText(/^Medical/), { target: { value: "15000.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit Election" }));
     await waitFor(() => expect(screen.getByText("Submit this flex benefit election?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Submit election"));
-
-    await waitFor(() => {
-      expect(screen.getByText(/Election submitted:/)).toBeInTheDocument();
-    });
+    await waitFor(() => expect(document.querySelector(".pill.good")).toHaveTextContent("Election submitted: ₹15,000.50 elected."));
+    const body = JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body));
+    expect(body).toEqual({ planId: PLAN.id, fy: "2026-27", elections: [{ component: "Medical", electedMinor: 1500050 }] });
     expect(refreshMock).toHaveBeenCalled();
   });
 
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
-
     renderForm();
-    fireEvent.change(screen.getByLabelText(/^Plan ID/), { target: { value: "pl1" } });
-    fireEvent.change(screen.getByLabelText(/^Financial Year/), { target: { value: "2025-26" } });
-    fireEvent.change(screen.getByLabelText("Component"), { target: { value: "LTA" } });
-    fireEvent.change(screen.getByLabelText("Elected Amount (₹)"), { target: { value: "5000" } });
+    fireEvent.change(screen.getByLabelText(/^Plan/), { target: { value: PLAN.id } });
+    fireEvent.change(screen.getByLabelText(/^Medical/), { target: { value: "100" } });
     fireEvent.click(screen.getByRole("button", { name: "Submit Election" }));
-
     await waitFor(() => expect(screen.getByText("Submit this flex benefit election?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Submit election"));
-
-    await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
-    });
-    expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
   });
 
-  // Row identity: election lines were keyed by array position, so removing
-  // an earlier line shifted later ones up into a different key -- React
-  // patched the focused line's DOM node in place with a different line's
-  // data instead of removing the right node and leaving the rest (and
-  // focus) alone.
-  it("keeps a line's own value and focus attached to it after an earlier line is removed", () => {
-    renderForm();
-    fireEvent.click(screen.getByRole("button", { name: "+ Add line" }));
-    fireEvent.click(screen.getByRole("button", { name: "+ Add line" }));
-    // Three lines now. Fill and focus the third one's Component field.
-    const thirdComponent = screen.getAllByLabelText("Component")[2];
-    fireEvent.change(thirdComponent, { target: { value: "Meal Vouchers" } });
-    thirdComponent.focus();
-    expect(document.activeElement).toBe(thirdComponent);
-
-    // Remove the first line -- lines 2-3 shift up to become lines 1-2.
-    fireEvent.click(screen.getByRole("button", { name: "Remove election line 1" }));
-
-    const survivingThirdLine = screen.getAllByLabelText("Component")[1];
-    expect(survivingThirdLine).toHaveValue("Meal Vouchers");
-    expect(document.activeElement).toBe(survivingThirdLine);
+  it("explains when no plan is available", () => {
+    renderForm([]);
+    expect(screen.getByText("No flex benefit plan is open for elections yet.")).toBeInTheDocument();
   });
 });
