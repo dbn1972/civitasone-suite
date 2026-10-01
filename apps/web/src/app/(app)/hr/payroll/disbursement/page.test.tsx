@@ -3,6 +3,16 @@ import { render, screen, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
+const getSessionRolesMock = vi.fn((): string[] => ["payroll_admin"]);
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => getSessionRolesMock(),
+  PAYROLL_ADMIN_ROLES: ["payroll_admin", "payroll_officer", "super_admin"],
+}));
+vi.mock("@/lib/entityAdapters/employee", () => ({
+  searchEmployees: vi.fn(async () => []),
+  resolveEmployees: vi.fn(async () => []),
+}));
+
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
@@ -12,6 +22,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import DisbursementPage from "./page";
+import { eligibleBankFileRuns } from "./eligibility";
 
 // UX-017: DisbursementPage is a server component (translated via
 // getTranslations(), which vitest.setup.ts mocks centrally -- no provider
@@ -31,6 +42,8 @@ async function renderPage() {
 describe("DisbursementPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
   });
 
   function mockResponses(
@@ -47,14 +60,17 @@ describe("DisbursementPage", () => {
       sponsorSource?: "api" | "error";
       dscSource?: "api" | "error";
       transfersSource?: "api" | "error";
+      dscStatus?: number;
+      sponsorStatus?: number;
+      transfersStatus?: number;
     } = {},
   ) {
     const source = overrides.source ?? "api";
     fetchJsonMock.mockImplementation((path: string) => {
       if (path.includes("/runs")) return Promise.resolve({ data: overrides.runs ?? [], source: overrides.runsSource ?? source });
-      if (path.includes("sponsor-bank-config")) return Promise.resolve({ data: overrides.sponsor ?? null, source: overrides.sponsorSource ?? source });
-      if (path.includes("dsc-config")) return Promise.resolve({ data: overrides.dsc ?? null, source: overrides.dscSource ?? source });
-      if (path.includes("disbursement/transfers")) return Promise.resolve({ data: overrides.transfers ?? [], source: overrides.transfersSource ?? source });
+      if (path.includes("sponsor-bank-config")) return Promise.resolve({ data: overrides.sponsor ?? null, source: overrides.sponsorSource ?? source, status: overrides.sponsorStatus });
+      if (path.includes("dsc-config")) return Promise.resolve({ data: overrides.dsc ?? null, source: overrides.dscSource ?? source, status: overrides.dscStatus });
+      if (path.includes("disbursement/transfers")) return Promise.resolve({ data: overrides.transfers ?? [], source: overrides.transfersSource ?? source, status: overrides.transfersStatus });
       // Every real loader on this page declares its own empty default ([] or
       // null), and fetchJson() always resolves to that default on failure --
       // it never resolves to a bare null for an array-shaped loader. Match
@@ -143,7 +159,9 @@ describe("DisbursementPage", () => {
 
     await renderPage();
 
-    expect(screen.getByText("We couldn't load payroll runs.")).toBeInTheDocument();
+    // Both runs-dependent cards (bank-file wizard, NACH return) show it.
+    expect(screen.getAllByText("We couldn't load payroll runs.").length).toBe(2);
+    expect(screen.queryByText("No runs ready for a bank file")).not.toBeInTheDocument();
     expect(screen.queryByText("No runs to reconcile")).not.toBeInTheDocument();
     // The runs-derived stat shows "—", not a fabricated 0.
     expect(screen.getByText("Runs Ready for Disbursement").parentElement).toHaveTextContent("—");
@@ -185,5 +203,111 @@ describe("DisbursementPage", () => {
     expect(screen.getByText("Runs Ready for Disbursement").parentElement).toHaveTextContent("1");
     expect(screen.getByText("Transfers Credited").parentElement).toHaveTextContent("—");
     expect(screen.getByText("Transfers Failed").parentElement).toHaveTextContent("—");
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // GAP-PAYROLL-DISBURSEMENT-01/04: role gating
+  // ───────────────────────────────────────────────────────────────────────
+  it.each([["employee"], ["manager"], ["hr_officer"]])(
+    "[DISB-01/04] role '%s' gets a permission-denied view, not the transfers table or config forms",
+    async (role) => {
+      getSessionRolesMock.mockReturnValue([role]);
+      mockResponses({ runs: [{ id: "r1", payPeriod: "2026-07", employeeCount: 10, grossAmount: 100000, netAmount: 90000, status: "completed" }] });
+      await renderPage();
+      expect(screen.getByText("Access restricted")).toBeInTheDocument();
+      expect(screen.queryByText("Employee Bank Transfers")).not.toBeInTheDocument();
+      expect(screen.queryByText("Sponsor Bank Configuration")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/P12 Keystore File/)).not.toBeInTheDocument();
+      expect(fetchJsonMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("[DISB-04] payroll_officer sees transfers + wizard but no Sponsor/DSC forms, and the admin-only config APIs are not called", async () => {
+    getSessionRolesMock.mockReturnValue(["payroll_officer"]);
+    mockResponses({ runs: [{ id: "r1", payPeriod: "2026-07", employeeCount: 10, grossAmount: 100000, netAmount: 90000, status: "completed" }] });
+    await renderPage();
+    expect(screen.getByText("Employee Bank Transfers")).toBeInTheDocument();
+    expect(screen.getByText("Next: Preview →")).toBeEnabled();
+    expect(screen.queryByText("Sponsor Bank Configuration")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/P12 Keystore File/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Sponsor Code/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Only a payroll administrator can view or change this.").length).toBeGreaterThan(0);
+    const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
+    expect(paths.some((p) => p.includes("dsc-config"))).toBe(false);
+    expect(paths.some((p) => p.includes("sponsor-bank-config"))).toBe(false);
+    expect(screen.getByText("DSC Status").parentElement).toHaveTextContent("Admin only");
+    // No error badge just because the officer can't read admin config.
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+  });
+
+  it("[DISB-04] payroll_admin sees the Sponsor and DSC configuration forms", async () => {
+    mockResponses({});
+    await renderPage();
+    expect(screen.getByText("Sponsor Bank Configuration")).toBeInTheDocument();
+    expect(screen.getByLabelText(/P12 Keystore File/)).toBeInTheDocument();
+  });
+
+  it("[DISB-04] a never-configured DSC (API 404) reads 'Not configured', not an outage", async () => {
+    mockResponses({ dscSource: "error", dscStatus: 404, sponsorSource: "error", sponsorStatus: 404 });
+    await renderPage();
+    expect(screen.getByText("DSC Status").parentElement).toHaveTextContent("Not configured");
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // GAP-PAYROLL-DISBURSEMENT-07: no false empty on a transfers outage
+  // ───────────────────────────────────────────────────────────────────────
+  it("[DISB-07] a transfers fetch error renders the error state, not 'No transfers yet'", async () => {
+    mockResponses({ transfersSource: "error" });
+    await renderPage();
+    expect(screen.getByText("We couldn't load bank transfers.")).toBeInTheDocument();
+    expect(screen.queryByText("No transfers yet")).not.toBeInTheDocument();
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // GAP-PAYROLL-DISBURSEMENT-01: masking happens before the client boundary
+  // ───────────────────────────────────────────────────────────────────────
+  it("[DISB-01] the full account number never reaches the rendered page", async () => {
+    mockResponses({
+      transfers: [{
+        id: "tx-1", employeeId: "9b2f6c1e-0000-4000-8000-000000000001", employeeName: "Asha Rao",
+        accountNumber: "123456789012", ifsc: "SBIN0001234", amountRupees: 1000, status: "credited",
+        nachBatchId: null, failureReason: null,
+      }],
+    });
+    await renderPage();
+    expect(screen.getByText("••••9012")).toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("123456789012");
+    expect(document.body.innerHTML).not.toContain("9b2f6c1e-0000-4000-8000-000000000001");
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // GAP-PAYROLL-DISBURSEMENT-09: section jump links
+  // ───────────────────────────────────────────────────────────────────────
+  it("[DISB-09] renders keyboard-reachable section links that target real section ids", async () => {
+    mockResponses({});
+    await renderPage();
+    const nav = screen.getByRole("navigation", { name: "Page sections" });
+    for (const id of ["transfers", "bank-file", "nach", "configuration"]) {
+      const link = nav.querySelector(`a[href="#${id}"]`);
+      expect(link).not.toBeNull();
+      expect(document.getElementById(id)).not.toBeNull();
+    }
+  });
+});
+
+// GAP-PAYROLL-DISBURSEMENT-02: the eligibility rule, as a unit
+describe("eligibleBankFileRuns", () => {
+  const base = { runDate: "2026-07-31", payPeriod: "2026-07", employeeCount: 3, grossAmount: 1, netAmount: 1 };
+  it("keeps approved ('completed') and paid runs, excludes draft/processing/failed", () => {
+    const out = eligibleBankFileRuns([
+      { ...base, id: "a", status: "draft" },
+      { ...base, id: "b", status: "processing" },
+      { ...base, id: "c", status: "failed" },
+      { ...base, id: "d", status: "completed" },
+      { ...base, id: "e", status: "paid" },
+    ]);
+    expect(out.map((r) => [r.id, r.status])).toEqual([["d", "completed"], ["e", "paid"]]);
+    expect(out[0]).toMatchObject({ employeeCount: 3, netAmountRupees: 1 });
   });
 });

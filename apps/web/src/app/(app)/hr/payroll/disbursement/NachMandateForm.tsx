@@ -2,9 +2,12 @@
 
 import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ConfirmDialog, Button } from "../../../../_components/ds";
+import { ConfirmDialog, Button, EntityPicker, type EntityOption } from "../../../../_components/ds";
 import { browserJson, browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
+import { formatMoney } from "@/lib/formatters";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 type MandateResult = { umrn?: string; status?: string; message?: string } & Record<string, unknown>;
 
@@ -12,7 +15,10 @@ const FREQUENCIES = ["monthly", "quarterly", "yearly", "one-time"] as const;
 
 export function NachMandateForm() {
   const t = useTranslations("nachMandateForm");
-  const [employeeRef, setEmployeeRef] = useState("");
+  // GAP-PAYROLL-DISBURSEMENT-08: picked from the employee directory (the
+  // backend requires an employee UUID) instead of a free-text UUID box.
+  const [employeeRef, setEmployeeRef] = useState<string | null>(null);
+  const employeeLabels = useRef(new Map<string, string>());
   const [amountRupees, setAmountRupees] = useState("");
   const [frequency, setFrequency] = useState<(typeof FREQUENCIES)[number]>("monthly");
   const [startDate, setStartDate] = useState("");
@@ -22,7 +28,6 @@ export function NachMandateForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
-  const [employeeRefInvalid, setEmployeeRefInvalid] = useState(false);
   const [amountInvalid, setAmountInvalid] = useState(false);
   const [startInvalid, setStartInvalid] = useState(false);
   const [endInvalid, setEndInvalid] = useState(false);
@@ -44,7 +49,6 @@ export function NachMandateForm() {
   const refField = useId();
   const statusErrId = useId();
 
-  const employeeRefFieldRef = useRef<HTMLInputElement>(null);
   const amountFieldRef = useRef<HTMLInputElement>(null);
   const startFieldRef = useRef<HTMLInputElement>(null);
   const endFieldRef = useRef<HTMLInputElement>(null);
@@ -64,18 +68,20 @@ export function NachMandateForm() {
     e.preventDefault();
     setError(undefined);
     setMessage(null);
-    const empMissing = !employeeRef.trim();
+    const empMissing = !employeeRef;
     const amtMissing = !amountRupees.trim();
+    // Validate the amount as an exact paise value up front (no float maths):
+    // "1234.56" -> 123456; "1.005", "-5", "0", "abc" are rejected.
+    const amtBad = !amtMissing && rupeesToMinorString(amountRupees) === null;
     const startMissing = !startDate;
     const endMissing = !endDate;
-    setEmployeeRefInvalid(empMissing);
-    setAmountInvalid(amtMissing);
+    setAmountInvalid(amtMissing || amtBad);
     setStartInvalid(startMissing);
     setEndInvalid(endMissing);
     if (empMissing || amtMissing || startMissing || endMissing) {
       setError(t("requiredFieldsError"));
       if (empMissing) {
-        employeeRefFieldRef.current?.focus();
+        document.getElementById(empIdField)?.focus();
       } else if (amtMissing) {
         amountFieldRef.current?.focus();
       } else if (startMissing) {
@@ -85,18 +91,34 @@ export function NachMandateForm() {
       }
       return;
     }
+    if (amtBad) {
+      setError(t("amountInvalidError"));
+      amountFieldRef.current?.focus();
+      return;
+    }
     setConfirmOpen(true);
+  }
+
+  async function searchAndRemember(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+    const options = await searchEmployees(query, signal);
+    for (const o of options) employeeLabels.current.set(o.id, o.label);
+    return options;
   }
 
   async function submitMandate() {
     setBusy(true);
     setError(undefined);
     try {
-      const amountMinor = Math.round(Number(amountRupees) * 100);
+      const amountMinor = rupeesToMinorString(amountRupees);
+      if (!amountMinor || !employeeRef) {
+        setError(t("amountInvalidError"));
+        return;
+      }
       const res = await browserJson<{ data: MandateResult }>("v1/payroll/nach/mandates", {
         method: "POST",
         body: JSON.stringify({
-          employeeRef: employeeRef.trim(),
+          employeeRef,
+          // bigint-safe paise as a decimal string; the API coerces to bigint.
           amountMinor,
           frequency,
           startDate,
@@ -111,7 +133,7 @@ export function NachMandateForm() {
           status: res.data.status ?? t("statusSubmitted"),
         }),
       );
-      setEmployeeRef("");
+      setEmployeeRef(null);
       setAmountRupees("");
       setStartDate("");
       setEndDate("");
@@ -160,18 +182,17 @@ export function NachMandateForm() {
             <label htmlFor={empIdField} style={{ fontSize: 13, fontWeight: 600 }}>
               {t("employeeRefLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
             </label>
-            <input
+            <EntityPicker
               id={empIdField}
-              ref={employeeRefFieldRef}
               value={employeeRef}
-              onChange={(e) => {
-                setEmployeeRef(e.target.value);
-                setEmployeeRefInvalid(false);
+              onChange={(v) => {
+                setEmployeeRef(Array.isArray(v) ? v[0] ?? null : v);
               }}
-              aria-required="true"
-              aria-invalid={employeeRefInvalid || undefined}
-              aria-describedby={employeeRefInvalid ? errId : undefined}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              search={searchAndRemember}
+              resolve={resolveEmployees}
+              placeholder={t("employeePlaceholder")}
+              noResultsText={t("employeeNoResults")}
+              searchingText={t("employeeSearching")}
             />
           </div>
           <div style={{ display: "grid", gap: 6 }}>
@@ -284,8 +305,8 @@ export function NachMandateForm() {
           errorMessage={error}
           description={t.rich("submitConfirmDescription", {
             frequency,
-            amount: amountRupees || "0",
-            employeeId: employeeRef,
+            amount: formatMoney(rupeesToMinorString(amountRupees)),
+            employeeId: (employeeRef && employeeLabels.current.get(employeeRef)) ?? employeeRef ?? "",
             start: startDate,
             end: endDate,
             strong: (chunks) => <strong>{chunks}</strong>,

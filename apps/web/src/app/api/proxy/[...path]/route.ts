@@ -26,6 +26,9 @@ export async function DELETE(req: Request, ctx: { params: { path: string[] } }) 
   return proxy(req, ctx.params.path, "DELETE");
 }
 
+// Response headers safe to pass back to the browser (download metadata only).
+const FORWARD_RESPONSE = ["content-disposition", "x-bank-file-signed"];
+
 // Status codes that must not carry a body (undici constraint)
 const NO_BODY_STATUSES = new Set([204, 205, 304]);
 
@@ -54,9 +57,17 @@ async function proxy(req: Request, segments: string[], method: string) {
   if (NO_BODY_STATUSES.has(upstream.status)) {
     return new NextResponse(null, { status: upstream.status });
   }
-  const text = await upstream.text();
-  return new NextResponse(text, {
-    status: upstream.status,
-    headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
-  });
+  // GAP-PAYROLL-DISBURSEMENT-02/03: file downloads (bank files) need the
+  // body passed through byte-for-byte -- `upstream.text()` UTF-8-decoded a
+  // NACH multi-file ZIP and corrupted it -- and need their filename and
+  // signed-status headers, which were dropped here.
+  const responseBody = await upstream.arrayBuffer();
+  const responseHeaders: Record<string, string> = {
+    "content-type": upstream.headers.get("content-type") ?? "application/json",
+  };
+  for (const h of FORWARD_RESPONSE) {
+    const v = upstream.headers.get(h);
+    if (v) responseHeaders[h] = v;
+  }
+  return new NextResponse(responseBody, { status: upstream.status, headers: responseHeaders });
 }

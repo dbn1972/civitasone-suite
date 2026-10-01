@@ -12,7 +12,7 @@
  * directly inside a Server Component (e.g. perquisite/page.tsx) with no
  * client-boundary wrapper required.
  */
-export type MaskedKind = "pan";
+export type MaskedKind = "pan" | "account";
 
 function maskPan(value: string): string {
   // Indian PAN: 5 letters + 4 digits + 1 letter (10 chars). Show the first 5
@@ -23,6 +23,17 @@ function maskPan(value: string): string {
   return `${value.slice(0, 5)}****${value.slice(9)}`;
 }
 
+/**
+ * GAP-PAYROLL-DISBURSEMENT-01: bank account numbers show only the last 4
+ * digits ("••••1234"). Values of 4 characters or fewer are masked in full --
+ * there is nothing safe to show.
+ */
+export function maskAccount(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= 4) return "••••";
+  return `••••${trimmed.slice(-4)}`;
+}
+
 export interface MaskedProps {
   /** The raw sensitive value. Render nothing (or a caller-supplied fallback) when absent. */
   value: string | null | undefined;
@@ -30,13 +41,15 @@ export interface MaskedProps {
   /** Shown when `value` is null/empty (e.g. a "PANNOTAVBL" flag's own label). */
   fallback?: React.ReactNode;
   className?: string;
+  /** Accessible name, e.g. "Account ending 1234" -- screen readers otherwise read the bullet glyphs. */
+  ariaLabel?: string;
 }
 
-export function Masked({ value, kind, fallback = null, className }: MaskedProps) {
+export function Masked({ value, kind, fallback = null, className, ariaLabel }: MaskedProps) {
   if (!value) return <>{fallback}</>;
-  const masked = kind === "pan" ? maskPan(value) : "****";
+  const masked = kind === "pan" ? maskPan(value) : kind === "account" ? maskAccount(value) : "****";
   return (
-    <span className={className} style={{ fontFamily: "monospace" }}>
+    <span className={className} style={{ fontFamily: "monospace" }} aria-label={ariaLabel}>
       {masked}
     </span>
   );
