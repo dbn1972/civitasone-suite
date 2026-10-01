@@ -48,6 +48,9 @@ const CODE_TO_KIND: Record<string, MessageKind> = {
   // send `{ code: "FORBIDDEN" }` on a 403, so this is reached the same way
   // as every other cataloged code, no HTTP-status fallback needed here.
   FORBIDDEN: "forbidden",
+  // GAP-HR-DESIGNATIONS-02: DELETE /v1/hrms/designations/:id 409s with this
+  // code when an employee still holds the designation.
+  DESIGNATION_IN_USE: "conflict",
 };
 
 /**

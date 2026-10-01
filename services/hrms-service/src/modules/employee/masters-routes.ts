@@ -5,7 +5,7 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
-import { eq, and, count, inArray, notInArray } from "drizzle-orm";
+import { eq, and, count, inArray, notInArray, sql } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
@@ -231,6 +231,20 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createDesignationBody.parse(req.body);
+    // GAP-HR-DESIGNATIONS-NEW-02: this used to publish and answer 202 with
+    // no uniqueness check at all, so two designations could silently share
+    // a code (case-insensitive). Synchronous, tenant-scoped, so the caller
+    // sees the rejection immediately instead of a false "added successfully".
+    const dupe = await scopedRead((tx) => tx.select({ id: hrmsDesignations.id }).from(hrmsDesignations)
+      .where(and(eq(hrmsDesignations.tenantId, ctx.tenantId), sql`lower(${hrmsDesignations.code}) = lower(${body.code})`))
+      .limit(1));
+    if (dupe[0]) {
+      return reply.code(409).send({
+        code: "DUPLICATE_CODE",
+        message: `Designation code "${body.code}" already exists.`,
+        fieldErrors: [{ field: "code", message: "This code is already in use." }],
+      });
+    }
     const id = randomUUID();
     await publishF3Write(ctx, "employee_masters_routes__1", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "created" }) as any;
@@ -258,6 +272,20 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     // Synchronous pre-check (existence) — same reasoning as above.
     const existing = await scopedRead((tx) => tx.select({ id: hrmsDesignations.id }).from(hrmsDesignations).where(eq(hrmsDesignations.id, id)).limit(1));
     if (!existing[0]) return reply.code(404).send({ code: "NOT_FOUND", message: "Designation not found" });
+
+    // GAP-HR-DESIGNATIONS-02: delete used to have no reference check at
+    // all -- hrmsEmployees.designationId has no FK, so employees (and any
+    // pay-matrix/vacancy rows keyed off this id) were silently orphaned.
+    const inUse = await scopedRead((tx) => tx.select({ n: sql<number>`count(*)` }).from(hrmsEmployees)
+      .where(and(eq(hrmsEmployees.designationId, id), eq(hrmsEmployees.tenantId, ctx.tenantId))));
+    const inUseCount = Number(inUse[0]?.n ?? 0);
+    if (inUseCount > 0) {
+      return reply.code(409).send({
+        code: "DESIGNATION_IN_USE",
+        message: `${inUseCount} employee${inUseCount === 1 ? "" : "s"} still hold this designation — reassign them before deleting it.`,
+        count: inUseCount,
+      });
+    }
 
     await publishF3Write(ctx, "employee_masters_routes__5", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send();

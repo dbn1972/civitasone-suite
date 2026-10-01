@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { toHumanError, ACTION_LABELS, type MessageKind } from "./messages";
 import { findBannedTerms } from "./labels";
 
-const KINDS: MessageKind[] = ["load", "save", "offline", "unknownStatus", "accepted", "forbidden"];
+const KINDS: MessageKind[] = ["load", "save", "offline", "unknownStatus", "accepted", "forbidden", "conflict"];
 
 describe("human error vocabulary (R5, R6)", () => {
   it.each(KINDS)("%s message has plain what + next and a safe action", (kind) => {
@@ -71,6 +71,18 @@ describe("human error vocabulary (R5, R6)", () => {
     it("does not offer 'retry' -- a permission problem is not fixed by retrying", () => {
       const m = toHumanError("forbidden");
       expect(m.actions).not.toContain("retry");
+    });
+  });
+
+  describe("conflict copy (GAP-HR-DESIGNATIONS-02: a business-rule block, not a transient failure)", () => {
+    it("does not offer 'retry' -- retrying without changing anything will fail again the same way", () => {
+      const m = toHumanError("conflict");
+      expect(m.actions).not.toContain("retry");
+    });
+
+    it("never echoes the backend's own detail text (e.g. a row count or entity name)", () => {
+      const m = toHumanError("conflict", { area: "designation" });
+      expect(m.what).not.toMatch(/designation/i);
     });
   });
 });

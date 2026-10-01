@@ -349,7 +349,15 @@ export function registerF3_employee_Consumers(queue: Queue): void {
             break;
           }
           case "employee_masters_routes__5": {
-            // Restored: designation DELETE — same reasoning as __3.
+            // GAP-HR-DESIGNATIONS-02: repeat the reference guard here too --
+            // the route's check-then-publish isn't atomic, so an employee
+            // could be assigned this designation in the window between the
+            // route's 202 and this consumer actually running the delete.
+            const inUse = await tx.select({ n: sql<number>`count(*)` }).from(hrmsEmployees)
+              .where(and(eq(hrmsEmployees.designationId, targetId), eq(hrmsEmployees.tenantId, p.tenantId)));
+            if (Number(inUse[0]?.n ?? 0) > 0) {
+              throw new HttpError(409, "DESIGNATION_IN_USE", "designation is still referenced by one or more employees");
+            }
             await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.id, targetId));
             break;
           }

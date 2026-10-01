@@ -264,13 +264,20 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
                     </td>
                     {canEdit && (
                       <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                        <Button variant="ghost" size="sm" style={{ marginInlineEnd: 6 }} onClick={() => startEdit(item)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          style={{ marginInlineEnd: 6 }}
+                          onClick={() => startEdit(item)}
+                          aria-label={t("editAria", { name: item.name })}
+                        >
                           {t("editBtn")}
                         </Button>
                         <Button
                           variant="danger"
                           size="sm"
                           onClick={() => { setDeleteError(undefined); setDeleteTarget(item); }}
+                          aria-label={t("deleteAria", { name: item.name })}
                         >
                           {t("deleteBtn")}
                         </Button>
