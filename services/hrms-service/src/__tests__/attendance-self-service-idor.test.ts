@@ -155,6 +155,7 @@ function capturingTx(rows: unknown[]) {
 describe("POST /v1/hrms/overtime-requests — self-service IDOR", () => {
   it("202 — employee submits an overtime request for THEMSELVES (actorId != employeeId)", async () => {
     resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    scopedReadMock.mockResolvedValueOnce([]); // GAP-HR-OVERTIME-NEW-04 duplicate-check: no existing pending/approved request for this employee+date
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/overtime-requests",
       headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
@@ -185,6 +186,7 @@ describe("POST /v1/hrms/overtime-requests — self-service IDOR", () => {
   });
 
   it("202 — HR admin can submit on behalf of any employee (privileged path unchanged, no resolve needed)", async () => {
+    scopedReadMock.mockResolvedValueOnce([]); // GAP-HR-OVERTIME-NEW-04 duplicate-check: no existing pending/approved request for this employee+date
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/overtime-requests",
       headers: { authorization: `Bearer ${tok(["hr_admin"], HR_ACTOR)}` },
