@@ -5,7 +5,7 @@ import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import { isMaskedValue } from "../../shared/pii-mask.js";
-import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody } from "./validators.js";
+import type { CreateEmployeeBody, ConfirmEmployeeBody, UpdateEmployeeBody, ProbationExtensionBody } from "./validators.js";
 import type { TransferBody, SeparateBody, PromotionBody } from "../lifecycle/validators.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { hrmsEmployees } from "./schema.js";
@@ -79,6 +79,17 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
 export async function confirmEmployee(ctx: RequestContext, id: string, body: ConfirmEmployeeBody): Promise<Accepted> {
   await queue.publish(COMMANDS.employeeConfirm, {
     type: COMMANDS.employeeConfirm,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { ...body, id, tenantId: ctx.tenantId },
+  });
+  await cache.invalidate(cache.makeKey(ctx.tenantId, "employee", id));
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+// GAP-HR-CONFIRMATION-05
+export async function extendProbation(ctx: RequestContext, id: string, body: ProbationExtensionBody): Promise<Accepted> {
+  await queue.publish(COMMANDS.employeeProbationExtend, {
+    type: COMMANDS.employeeProbationExtend,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { ...body, id, tenantId: ctx.tenantId },
   });

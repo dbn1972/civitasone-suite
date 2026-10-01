@@ -72,10 +72,29 @@ export const createEmployeeBody = z.object({
 });
 export type CreateEmployeeBody = z.infer<typeof createEmployeeBody>;
 
+// GAP-HR-CONFIRMATION-02: a confirmation is a formal service-record event
+// (order/authority reference, GFR-style), not just a click-through date --
+// orderRef is required so every confirmation is traceable to a real order;
+// authority/remark are optional context. confirmationDate bounds (not
+// before dateOfJoining, not in the future) are checked at the route, which
+// already reads the employee row for the status precheck.
 export const confirmEmployeeBody = z.object({
   confirmationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
+  orderRef: z.string().min(1, "order reference is required").max(64),
+  authority: z.string().max(128).optional(),
+  remark: z.string().max(500).optional(),
 });
 export type ConfirmEmployeeBody = z.infer<typeof confirmEmployeeBody>;
+
+// GAP-HR-CONFIRMATION-05: probation-extension record. newEndDate must move
+// the probation end *later* than its current value -- checked at the route
+// (a DB read the schema alone can't express), not here.
+export const probationExtensionBody = z.object({
+  newEndDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
+  reason:     z.string().min(3, "reason must be at least 3 characters").max(500),
+  orderRef:   z.string().max(128).optional(),
+});
+export type ProbationExtensionBody = z.infer<typeof probationExtensionBody>;
 
 export const idParam = z.object({ id: z.string().uuid() });
 

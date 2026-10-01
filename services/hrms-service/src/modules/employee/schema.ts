@@ -161,4 +161,35 @@ export const hrmsEmployeeAddresses = employeeSchema.table("hrms_employee_address
 export type AddressRow = typeof hrmsEmployeeAddresses.$inferSelect;
 export type AddressInsert = typeof hrmsEmployeeAddresses.$inferInsert;
 
-export const schema = { hrmsDepartments, hrmsDesignations, hrmsEmployees, hrmsEmployeeDocs, hrmsEmployeeNominees, hrmsEmployeeAddresses };
+/**
+ * GAP-HR-CONFIRMATION-05: probation-extension audit trail. Each row is one
+ * recorded extension of an employee's probation end date. An employee's
+ * *current* probation end is the newEndDate of their most recent row here,
+ * if any, else the unchanged default (dateOfJoining + 2 years, computed in
+ * lifecycle/m7-list-routes.ts's confirmations handler and mirrored in this
+ * module's repo.findCurrentProbationEnd -- see that function's own comment
+ * for why the formula is duplicated rather than shared across the module
+ * boundary). Written only via the standard CQRS path: employee/routes.ts
+ * validates + publishes hrms.employee.probation.extend; employee/
+ * consumer.ts's subscriber does the actual insert + audit event -- never
+ * from a route handler directly (CLAUDE.md: only the consumer/outbox layer
+ * writes).
+ */
+export const hrmsProbationExtensions = employeeSchema.table("hrms_probation_extensions", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  employeeId:      uuid("employee_id").notNull(),
+  previousEndDate: date("previous_end_date").notNull(),
+  newEndDate:      date("new_end_date").notNull(),
+  reason:          text("reason").notNull(),
+  orderRef:        text("order_ref"),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+  updatedBy:       uuid("updated_by").notNull(),
+  version:         integer("version").notNull().default(1),
+});
+export type ProbationExtensionRow = typeof hrmsProbationExtensions.$inferSelect;
+export type ProbationExtensionInsert = typeof hrmsProbationExtensions.$inferInsert;
+
+export const schema = { hrmsDepartments, hrmsDesignations, hrmsEmployees, hrmsEmployeeDocs, hrmsEmployeeNominees, hrmsEmployeeAddresses, hrmsProbationExtensions };

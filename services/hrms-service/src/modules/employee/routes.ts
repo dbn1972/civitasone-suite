@@ -6,7 +6,7 @@ import { employeesListSchema } from "@civitasone/schemas/web";
 import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { PiiDecryptError } from "../../shared/pii-crypto.js";
-import { createEmployeeBody, confirmEmployeeBody, idParam, updateEmployeeBody, employeeListQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
+import { createEmployeeBody, confirmEmployeeBody, probationExtensionBody, idParam, updateEmployeeBody, employeeListQuery, SENSITIVE_UPDATE_FIELDS } from "./validators.js";
 import { assertKnownEngagementType } from "./engagement-policy.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
 import { transferBody, separateBody } from "../lifecycle/validators.js";
@@ -126,7 +126,44 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
         `employee cannot be confirmed from status '${emp.status}' — only an employee in 'probation' status can be confirmed`,
       );
     }
+    // GAP-HR-CONFIRMATION-02: a confirmation date must be a real, bounded
+    // service-record date -- not before the employee even joined, and not
+    // postdated into the future (backdating is normal for govt orders;
+    // future-dating is not a thing this action means).
+    const todayIso = new Date().toISOString().slice(0, 10);
+    if (body.confirmationDate > todayIso) {
+      throw new HttpError(400, "VALIDATION_FAILED", "confirmationDate cannot be in the future");
+    }
+    if (body.confirmationDate < emp.dateOfJoining) {
+      throw new HttpError(400, "VALIDATION_FAILED", "confirmationDate cannot be before the employee's date of joining");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.confirmEmployee(ctx, id, body));
+  });
+
+  // GAP-HR-CONFIRMATION-05: record a probation extension. Same HR_ROLES gate
+  // and synchronous-precheck shape as .../confirm above -- this only
+  // publishes a command and answers 202 immediately, so both the status
+  // precondition and the "does newEndDate actually move the date forward"
+  // input check must happen here, not silently fail later in the consumer.
+  app.patch("/v1/hrms/employees/:id/probation-extension", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = probationExtensionBody.parse(req.body);
+    const emp = await repo.findById(id, ctx.tenantId);
+    if (!emp) throw new HttpError(404, "NOT_FOUND", "employee not found");
+    if (emp.status !== "probation") {
+      throw new HttpError(
+        409,
+        "INVALID_STATUS_TRANSITION",
+        `employee cannot have probation extended from status '${emp.status}' — only an employee in 'probation' status can be extended`,
+      );
+    }
+    const currentEnd = await repo.findCurrentProbationEnd(id, ctx.tenantId);
+    if (currentEnd && body.newEndDate <= currentEnd) {
+      throw new HttpError(400, "VALIDATION_FAILED", `newEndDate must be after the current probation end (${currentEnd})`);
+    }
+    return sendAccepted(reply, acceptedResponseSchema, await commands.extendProbation(ctx, id, body));
   });
 
   app.patch("/v1/hrms/employees/:id/transfer", async (req, reply) => {

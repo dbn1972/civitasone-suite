@@ -110,7 +110,7 @@ describe("createEmployeeBody — EM-02: required field boundaries", () => {
 
 describe("confirmEmployeeBody — EM-09: confirmation validation", () => {
   it("accepts valid YYYY-MM-DD date", () => {
-    expect(confirmEmployeeBody.safeParse({ confirmationDate: "2026-07-01" }).success).toBe(true);
+    expect(confirmEmployeeBody.safeParse({ confirmationDate: "2026-07-01", orderRef: "CONFIRM/TEST/001" }).success).toBe(true);
   });
 
   it("rejects invalid date format", () => {
@@ -120,6 +120,12 @@ describe("confirmEmployeeBody — EM-09: confirmation validation", () => {
 
   it("rejects missing confirmationDate", () => {
     expect(confirmEmployeeBody.safeParse({}).success).toBe(false);
+  });
+
+  it("rejects missing orderRef", () => {
+    // GAP-HR-CONFIRMATION-02: orderRef is a required service-record reference,
+    // not just a click-through date -- a confirmationDate alone must fail.
+    expect(confirmEmployeeBody.safeParse({ confirmationDate: "2026-07-01" }).success).toBe(false);
   });
 });
 

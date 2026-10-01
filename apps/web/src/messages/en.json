@@ -5135,6 +5135,7 @@
     "statOverdue": "Overdue",
     "statDueSoon": "Due in 30 Days",
     "statTimely": "Timely",
+    "statDateNotSet": "Date Not Set",
     "cardTitle": "Probation Register — Confirmation Due"
   },
   "deputation": {
