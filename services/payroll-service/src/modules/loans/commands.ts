@@ -22,6 +22,14 @@ export async function createLoan(ctx: RequestContext, body: CreateLoanBody): Pro
   // assertCombinedEmiWithinCap-equivalent block re-checks it, transaction-
   // scoped and advisory-locked, immediately before the insert -- see that
   // file and policy.ts for the full rationale.
+  // GAP-PAYROLL-LOANS-05: honour a client x-idempotency-key -- a retried
+  // submit maps to the same loan id / messageId, so the consumer's inbox
+  // dedup (markProcessed) files the loan once. Without a key, behaviour is
+  // unchanged (fresh id per call).
+  const id = ctx.idempotencyKey
+    ? deterministicUuid(`payroll-loan-create:${ctx.tenantId}:${ctx.idempotencyKey}`)
+    : randomUUID();
+
   const [existingLoans, grossMinor, duplicateLoanId] = await Promise.all([
     repo.findLoansByEmployee(ctx.tenantId, body.employeeId),
     repo.findLatestGrossMinorForEmployee(ctx.tenantId, body.employeeId),
@@ -32,6 +40,8 @@ export async function createLoan(ctx: RequestContext, body: CreateLoanBody): Pro
   // under it. Not race-safe (no UNIQUE constraint exists yet) -- see
   // repo.findLoanIdByLoanNo.
   if (duplicateLoanId) {
+    // The same idempotent request already landed: answer as before.
+    if (duplicateLoanId === id) return { id, status: "accepted", correlationId: ctx.correlationId };
     throw new HttpError(409, "LOAN_NO_TAKEN", `loan number ${body.loanNo} is already in use`);
   }
   const existingEmiMinor = sumActiveEmiMinor(existingLoans);
@@ -46,7 +56,6 @@ export async function createLoan(ctx: RequestContext, body: CreateLoanBody): Pro
     );
   }
 
-  const id = randomUUID();
   await queue.publish(COMMANDS.loanCreate, {
     messageId: id, type: COMMANDS.loanCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

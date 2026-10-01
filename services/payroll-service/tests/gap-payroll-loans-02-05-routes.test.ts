@@ -18,6 +18,7 @@ import { queue } from "../src/shared/infra.js";
 import { buildApp } from "../src/app.js";
 import { payrollLoans } from "../src/modules/loans/schema.js";
 import { COMMANDS } from "../src/topics.js";
+import { deterministicUuid } from "../src/shared/deterministic-id.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -144,6 +145,51 @@ describe("POST /v1/payroll/loans duplicate loan number (GAP-PAYROLL-LOANS-05)", 
     const res = await create(LOAN_NO_TAKEN);
     expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("LOAN_NO_TAKEN");
+  });
+
+  it("maps a retried submit with the same x-idempotency-key to the same loan id", async () => {
+    const key = randomUUID();
+    const send = async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "POST",
+        url: "/v1/payroll/loans",
+        headers: { authorization: `Bearer ${token(MAKER)}`, "x-idempotency-key": key },
+        payload: {
+          loanNo: `${LOAN_NO_TAKEN}-IDEM-${key.slice(0, 6)}`, employeeId: EMP, loanType: "personal",
+          principalMinor: 100_000, emiMinor: 10_000, tenureMonths: 10, interestRatePct: 0, currency: "INR",
+        },
+      });
+      await app.close();
+      return res;
+    };
+    const first = await send();
+    const second = await send();
+    expect(first.statusCode).toBe(202);
+    expect(second.statusCode).toBe(202);
+    expect(second.json().id).toBe(first.json().id);
+  });
+
+  it("answers 202 (not 409) when the idempotent retry's loan already landed", async () => {
+    const key = randomUUID();
+    const landedId = deterministicUuid(`payroll-loan-create:${TENANT}:${key}`);
+    const loanNo = `${LOAN_NO_TAKEN}-LANDED-${key.slice(0, 6)}`;
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(payrollLoans).values(loanRow(landedId, TENANT, "applied", loanNo));
+    }));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/payroll/loans",
+      headers: { authorization: `Bearer ${token(MAKER)}`, "x-idempotency-key": key },
+      payload: {
+        loanNo, employeeId: EMP, loanType: "personal",
+        principalMinor: 100_000, emiMinor: 10_000, tenureMonths: 10, interestRatePct: 0, currency: "INR",
+      },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+    expect(res.json().id).toBe(landedId);
   });
 
   it("accepts a fresh loan number", async () => {
