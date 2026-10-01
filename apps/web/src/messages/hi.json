@@ -1120,7 +1120,15 @@
     "confirmTitle": "क्या यह ऋण बनाएं?",
     "confirmLabel": "ऋण बनाएं",
     "confirmDescription": "<strong>{employee}</strong> के लिए ऋण <strong>{loanNo}</strong> मूलधन {principal}, ईएमआई {emi} के साथ {tenure} माह की अवधि हेतु बनाएं।",
-    "employeeLabel": "कर्मचारी"
+    "employeeLabel": "कर्मचारी",
+    "employeeRequiredError": "वह कर्मचारी चुनें जिसके लिए यह ऋण है।",
+    "amountInvalidError": "राशि रुपये में अधिकतम 2 दशमलव स्थानों वाली धनात्मक संख्या के रूप में दर्ज करें (जैसे 1250.50)।",
+    "amountTooLargeError": "राशि ₹10,00,00,000 से अधिक नहीं हो सकती।",
+    "tenureInvalidError": "अवधि 1 से 360 के बीच पूर्ण महीनों में होनी चाहिए।",
+    "rateInvalidError": "ब्याज दर 0 और 100 के बीच, अधिकतम 2 दशमलव स्थानों तक होनी चाहिए।",
+    "emiTooLowError": "ईएमआई × अवधि कम से कम मूलधन के बराबर होनी चाहिए।",
+    "loanNoTakenError": "ऋण संख्या {loanNo} पहले से उपयोग में है। कोई अन्य ऋण संख्या दर्ज करें।",
+    "emiAboveInterestBoundWarning": "ईएमआई जांचें: ईएमआई × अवधि ({total}) इस दर पर मूलधन और साधारण ब्याज ({bound}) से अधिक है। आप फिर भी ऋण बना सकते हैं।"
   },
   "createOffCycleForm": {
     "formTitle": "ऑफ़-साइकिल रन बनाएं",
@@ -3210,7 +3218,15 @@
     "emptyMessage": "इस कर्मचारी के रिकॉर्ड में कोई ऋण नहीं है।",
     "confirmTitle": "क्या यह ऋण वितरित करें?",
     "confirmLabel": "ऋण वितरित करें",
-    "confirmDescription": "इससे ऋण <strong>{loanNo}</strong> के लिए धनराशि जारी होगी। यह कार्रवाई अपरिवर्तनीय है।"
+    "confirmDescription": "इससे ऋण <strong>{loanNo}</strong> के लिए धनराशि जारी होगी। यह कार्रवाई अपरिवर्तनीय है।",
+    "typePersonal": "व्यक्तिगत",
+    "typeVehicle": "वाहन",
+    "typeHouseBuilding": "गृह निर्माण",
+    "typeFestival": "त्योहार अग्रिम",
+    "reasonLabel": "कारण / स्वीकृति संदर्भ (ऑडिट लॉग में दर्ज किया जाएगा)",
+    "ownLoanNote": "आपके द्वारा बनाया गया — किसी अन्य अधिकारी को वितरित करना होगा",
+    "selfDisburseError": "यह ऋण आपने बनाया है, इसलिए इसे किसी अन्य पेरोल अधिकारी को वितरित करना होगा।",
+    "notDisbursableError": "यह ऋण अब वितरित नहीं किया जा सकता — यह 'applied' स्थिति में नहीं है। इसकी वर्तमान स्थिति देखने के लिए रीफ़्रेश करें।"
   },
   "locations": {
     "title": "स्थान",
@@ -3624,16 +3640,19 @@
     "subtitle": "कर्मचारी ऋण खोजें, बनाएं और वितरित करें, तथा स्वीकृत राशि, ईएमआई और बकाया शेष देखें।",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ भी नहीं दिखाया जा रहा",
     "statTotalLoans": "कुल ऋण",
-    "statActiveDisbursed": "सक्रिय / वितरित",
-    "statTotalOutstanding": "कुल बकाया",
-    "statMonthlyEmiTotal": "मासिक ईएमआई कुल",
+    "statActiveDisbursed": "सक्रिय (वितरित)",
+    "statTotalOutstanding": "बकाया (सक्रिय ऋण)",
+    "statMonthlyEmiTotal": "मासिक ईएमआई (सक्रिय ऋण)",
     "searchCardTitle": "कर्मचारी द्वारा ऋण खोजें",
     "loansCardTitle": "ऋण",
     "searchEmptyTitle": "उनके ऋण देखने के लिए एक कर्मचारी खोजें",
     "searchEmptyMessage": "किसी कर्मचारी के सक्रिय और पूर्व ऋण, बकाया शेष और ईएमआई विवरण देखने के लिए कर्मचारी का नाम या कोड खोजें।",
     "recoveryCardTitle": "वसूली अनुसूची",
     "recoveryEmptyTitle": "वसूली अनुसूची अभी उपलब्ध नहीं है",
-    "recoveryEmptyMessage": "अभी तक कोई प्रति-किस्त पुनर्भुगतान अनुसूची एंडपॉइंट नहीं है। ऊपर दिया गया ईएमआई कुल ऋण रिकॉर्ड से परिकलित है; व्यक्तिगत देय तिथियां इस दृश्य में ट्रैक नहीं की जातीं।"
+    "recoveryEmptyMessage": "अभी तक कोई प्रति-किस्त पुनर्भुगतान अनुसूची एंडपॉइंट नहीं है। ऊपर दिया गया ईएमआई कुल ऋण रिकॉर्ड से परिकलित है; व्यक्तिगत देय तिथियां इस दृश्य में ट्रैक नहीं की जातीं।",
+    "statPendingDisbursement": "वितरण हेतु लंबित",
+    "loansCardTitleFor": "ऋण — {employee}",
+    "loansCardTitleUnknown": "ऋण — कर्मचारी का नाम उपलब्ध नहीं"
   },
   "payrollPeriod": {
     "title": "वेतन अवधि",
@@ -6311,5 +6330,12 @@
     "discardTitle": "इस अनुरोध को छोड़ दें?",
     "discardMessage": "आपके पास सहेजे न गए परिवर्तन हैं। अभी छोड़ने पर वे मिट जाएंगे।",
     "discardConfirm": "छोड़ें"
+  },
+  "employeePicker": {
+    "placeholder": "नाम या कर्मचारी कोड टाइप करें…",
+    "searching": "खोज रहे हैं…",
+    "noResults": "कोई मेल खाता कर्मचारी नहीं",
+    "clear": "हटाएं",
+    "clearAriaLabel": "चयनित कर्मचारी हटाएं"
   }
 }
