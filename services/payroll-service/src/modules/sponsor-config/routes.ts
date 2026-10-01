@@ -11,7 +11,11 @@ const ADMIN_ROLES = ["payroll_admin", "super_admin"];
 const upsertBodySchema = z.object({
   sponsorCode: z.string().length(4, "sponsor_code must be exactly 4 characters"),
   sponsorIfsc: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "invalid IFSC format"),
-  sponsorAccount: z.string().min(1, "sponsor_account is required"),
+  // Optional on update: the web form says "Leave blank to keep existing
+  // account" and omits it, which this schema used to reject with a 400 --
+  // the update path never worked without retyping the account number.
+  // Still required when no config exists yet (checked in the handler).
+  sponsorAccount: z.string().trim().min(1, "sponsor_account is required").optional(),
   utilityCode: z.string().max(18, "utility_code must be at most 18 characters").optional(),
   userNumber: z.string().max(20, "user_number must be at most 20 characters").optional(),
   settlementOffsetDays: z.number().int().min(0).default(1),
@@ -21,6 +25,12 @@ const upsertBodySchema = z.object({
   maxAmountPerFileMinor: z.union([z.bigint(), z.number().int(), z.string()])
     .transform((v) => BigInt(v))
     .default(1000000000),
+  /**
+   * GAP-PAYROLL-DISBURSEMENT-04: why the sponsor bank details are changing --
+   * recorded on the audit event. Optional for non-UI callers; the web
+   * ConfirmDialog always requires it (min 10 chars).
+   */
+  reason: z.string().trim().min(10).max(500).optional(),
 });
 
 export async function sponsorConfigRoutes(app: FastifyInstance): Promise<void> {
@@ -41,10 +51,19 @@ export async function sponsorConfigRoutes(app: FastifyInstance): Promise<void> {
 
     const body = upsertBodySchema.parse(req.body);
 
+    let sponsorAccount = body.sponsorAccount;
+    if (!sponsorAccount) {
+      const existing = await repo.findByTenantId(ctx.tenantId);
+      if (!existing) {
+        throw new HttpError(400, "VALIDATION_FAILED", "sponsorAccount is required when no sponsor bank config exists");
+      }
+      sponsorAccount = existing.sponsorAccount;
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertSponsorConfig(ctx, {
       sponsorCode: body.sponsorCode,
       sponsorIfsc: body.sponsorIfsc,
-      sponsorAccount: body.sponsorAccount,
+      sponsorAccount,
       utilityCode: body.utilityCode ?? null,
       userNumber: body.userNumber ?? null,
       settlementOffsetDays: body.settlementOffsetDays,
@@ -52,6 +71,7 @@ export async function sponsorConfigRoutes(app: FastifyInstance): Promise<void> {
       apbsEnabled: body.apbsEnabled,
       maxRecordsPerFile: body.maxRecordsPerFile,
       maxAmountPerFileMinor: body.maxAmountPerFileMinor.toString(),
+      reason: body.reason ?? null,
     }));
   });
 

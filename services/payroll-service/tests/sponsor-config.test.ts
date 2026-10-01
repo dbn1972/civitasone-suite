@@ -195,3 +195,66 @@ describe("PUT /v1/payroll/sponsor-bank-config", () => {
     expect(res.statusCode).toBe(202);
   });
 });
+
+// GAP-PAYROLL-DISBURSEMENT-04: the web form's "Leave blank to keep existing
+// account" path was rejected with a 400 by the old schema.
+describe("PUT /v1/payroll/sponsor-bank-config — keep existing account", () => {
+  const TENANT2 = "aaaaaaaa-3333-4000-8000-000000000034";
+  function token2() {
+    return signToken({ sub: "00000000-0000-4000-8000-000000000099", tid: TENANT2, roles: ["payroll_admin"], sid: "sess-sponsor-002" }, SECRET);
+  }
+  const body = {
+    sponsorCode: "HDFC", sponsorIfsc: "HDFC0001234", settlementOffsetDays: 2,
+    nachEnabled: true, apbsEnabled: false, reason: "Settlement offset change per bank",
+  };
+
+  beforeAll(async () => {
+    await runWithTenant(TENANT2, () => db.transaction(async (tx) => {
+      await tx.delete(sponsorBankConfig).where(eq(sponsorBankConfig.tenantId, TENANT2));
+    }));
+  });
+
+  it("returns 400 when no config exists and the account is omitted", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/payroll/sponsor-bank-config",
+      headers: { authorization: `Bearer ${token2()}`, "content-type": "application/json" },
+      payload: body,
+    });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("keeps the stored account when an update omits it", async () => {
+    const app = await buildApp();
+    const first = await app.inject({
+      method: "PUT",
+      url: "/v1/payroll/sponsor-bank-config",
+      headers: { authorization: `Bearer ${token2()}`, "content-type": "application/json" },
+      payload: { ...body, sponsorAccount: "555566667777" },
+    });
+    expect(first.statusCode).toBe(202);
+    await queue.drain();
+
+    const second = await app.inject({
+      method: "PUT",
+      url: "/v1/payroll/sponsor-bank-config",
+      headers: { authorization: `Bearer ${token2()}`, "content-type": "application/json" },
+      payload: { ...body, settlementOffsetDays: 3 },
+    });
+    expect(second.statusCode).toBe(202);
+    await queue.drain();
+
+    const get = await app.inject({
+      method: "GET",
+      url: "/v1/payroll/sponsor-bank-config",
+      headers: { authorization: `Bearer ${token2()}` },
+    });
+    await app.close();
+    expect(get.statusCode).toBe(200);
+    expect(get.json().sponsorAccount).toBe("555566667777");
+    expect(get.json().settlementOffsetDays).toBe(3);
+  });
+});
+

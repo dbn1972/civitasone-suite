@@ -23,6 +23,7 @@ export function registerDscConfigConsumers(queue: Queue): void {
       notBefore: string;
       notAfter: string;
       sha256Fingerprint: string;
+      reason?: string | null;
     };
 
     try {
@@ -80,6 +81,7 @@ export function registerDscConfigConsumers(queue: Queue): void {
               serialNumber: p.serialNumber,
               sha256Fingerprint: p.sha256Fingerprint,
               notAfter: p.notAfter,
+              reason: p.reason ?? null,
             },
           },
         });
@@ -92,7 +94,7 @@ export function registerDscConfigConsumers(queue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.dscConfigRemove, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string };
+    const p = msg.payload as { id: string; tenantId: string; reason?: string | null };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -120,8 +122,8 @@ export function registerDscConfigConsumers(queue: Queue): void {
             resourceId: p.tenantId,
             outcome: "success",
             detail: row
-              ? { subjectCN: row.subjectCn, serialNumber: row.serialNumber }
-              : {},
+              ? { subjectCN: row.subjectCn, serialNumber: row.serialNumber, reason: p.reason ?? null }
+              : { reason: p.reason ?? null },
           },
         });
       });
