@@ -970,6 +970,38 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     });
   });
 
+  // GAP-PAYROLL-CORRECTIONS-01: checker decision. The conditional UPDATE
+  // re-asserts the route's pre-checks (still pending, decider != creator) so a
+  // race between two deciders, or a replay, can never flip a decided row or
+  // let the maker decide their own correction. Zero rows updated => no-op,
+  // no event, no audit (the route already answered 403/409 to the losers it
+  // could see).
+  queue.subscribe(COMMANDS.correctionDecide, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; decision: "approved" | "rejected"; note?: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const updated = (await tx.execute(sql`
+        UPDATE payroll.salary_corrections
+           SET status = ${p.decision},
+               decided_by = ${msg.actorId}::uuid,
+               decided_at = NOW(),
+               decision_note = ${p.note ?? null}
+         WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid
+           AND status = 'pending' AND created_by <> ${msg.actorId}::uuid
+        RETURNING id, employee_id
+      `)) as unknown as Array<{ id: string; employee_id: string }>;
+      if (updated.length === 0) return;
+      await enqueue(tx, {
+        topic: EVENTS.correctionDecided, eventType: EVENTS.correctionDecided,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { id: p.id, employeeId: updated[0]!.employee_id, decision: p.decision },
+      });
+      await audit(tx, msg, p.decision === "approved" ? "approve" : "reject", "payroll_correction", p.id);
+    });
+  });
+
   queue.subscribe(COMMANDS.payGroupCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; name: string;
@@ -1106,6 +1138,16 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-PAYROLL-OFF-CYCLE-01: re-assert the route's maker-checker and
+      // draft-only guards under a row lock, so a replayed or racing command
+      // can never process a run twice or let its creator process it.
+      const runRows = (await tx.execute(sql`
+        SELECT status, created_by FROM payroll.off_cycle_runs
+        WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid
+        FOR UPDATE
+      `)) as unknown as Array<{ status: string; created_by: string }>;
+      const run = runRows[0];
+      if (!run || run.status !== "draft" || run.created_by === msg.actorId) return;
       const items = (await tx.execute(sql`
         SELECT id, employee_id, amount_minor FROM payroll.off_cycle_items
         WHERE off_cycle_run_id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid
@@ -1146,6 +1188,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       tenantId: string; stateCode: string;
       ptSlabs?: Array<{ fromMinor: number; toMinor: number; taxMinor: number }>;
       lwfEmployee?: number; lwfEmployer?: number;
+      lwfFrequency?: "monthly" | "quarterly" | "half_yearly" | "yearly";
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -1161,16 +1204,27 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
             pt_amount_minor = EXCLUDED.pt_amount_minor
         `);
       }
-      if (p.lwfEmployee != null || p.lwfEmployer != null) {
+      if (p.lwfEmployee != null || p.lwfEmployer != null || p.lwfFrequency != null) {
+        // GAP-PAYROLL-STATUTORY-LWF-02: an omitted field keeps its stored
+        // value (COALESCE against the existing row) instead of being reset —
+        // previously a POST without lwfEmployer zeroed it, and frequency could
+        // not be set at all. A brand-new row falls back to the column
+        // defaults (0 / 'half_yearly').
+        const emp = p.lwfEmployee != null ? p.lwfEmployee.toString() : null;
+        const er = p.lwfEmployer != null ? p.lwfEmployer.toString() : null;
+        const freq = p.lwfFrequency ?? null;
         await tx.execute(sql`
           INSERT INTO payroll.payroll_lwf
-            (tenant_id, state_code, employee_contrib_minor, employer_contrib_minor)
+            (tenant_id, state_code, employee_contrib_minor, employer_contrib_minor, frequency)
           VALUES (${p.tenantId}::uuid, ${p.stateCode},
-            ${(p.lwfEmployee ?? 0).toString()}::bigint,
-            ${(p.lwfEmployer ?? 0).toString()}::bigint)
+            COALESCE(${emp}::bigint, 0),
+            COALESCE(${er}::bigint, 0),
+            COALESCE(${freq}::varchar, 'half_yearly'))
           ON CONFLICT (tenant_id, state_code)
-          DO UPDATE SET employee_contrib_minor = EXCLUDED.employee_contrib_minor,
-            employer_contrib_minor = EXCLUDED.employer_contrib_minor
+          DO UPDATE SET
+            employee_contrib_minor = COALESCE(${emp}::bigint, payroll.payroll_lwf.employee_contrib_minor),
+            employer_contrib_minor = COALESCE(${er}::bigint, payroll.payroll_lwf.employer_contrib_minor),
+            frequency = COALESCE(${freq}::varchar, payroll.payroll_lwf.frequency)
         `);
       }
       await enqueue(tx, {

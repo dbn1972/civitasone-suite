@@ -1,4 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Role gate (see the page's own GAP comment): default every test to an
+// authorized payroll role; the gate tests below override per call.
+const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn((): string[] => ["payroll_admin"]) }));
+vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
+  getSessionRoles: getSessionRolesMock,
+}));
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -25,6 +33,7 @@ function renderPage(ui: React.ReactElement) {
 
 describe("PfStatutoryPage", () => {
   beforeEach(() => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
     fetchJsonMock.mockReset();
   });
 
@@ -50,5 +59,28 @@ describe("PfStatutoryPage", () => {
     const ui = await PfStatutoryPage();
     renderPage(ui);
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-PF-01: shows Access restricted to employee/manager without calling the API", async () => {
+    getSessionRolesMock.mockReturnValue(["employee", "manager"]);
+    const ui = await PfStatutoryPage();
+    renderPage(ui);
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-PF-01: a read-only role (hr_admin) sees the ledger but not the write form", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    const ui = await PfStatutoryPage();
+    renderPage(ui);
+    expect(screen.queryByText("Generate EPFO ECR File")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-PF-01: a payroll role sees the write form", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    const ui = await PfStatutoryPage();
+    renderPage(ui);
+    expect(screen.getByText("Generate EPFO ECR File")).toBeInTheDocument();
   });
 });

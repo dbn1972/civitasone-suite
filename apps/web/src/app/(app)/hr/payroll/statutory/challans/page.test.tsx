@@ -1,4 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Role gate (see the page's own GAP comment): default every test to an
+// authorized payroll role; the gate tests below override per call.
+const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn((): string[] => ["payroll_admin"]) }));
+vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
+  getSessionRoles: getSessionRolesMock,
+}));
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -28,6 +36,7 @@ function renderPage(ui: React.ReactElement) {
 
 describe("ChallansPage", () => {
   beforeEach(() => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
     fetchJsonMock.mockReset();
   });
 
@@ -79,5 +88,37 @@ describe("ChallansPage", () => {
 
     expect(screen.getByText("We couldn't load TDS challans.")).toBeInTheDocument();
     expect(screen.queryByText("No challans ingested for this period")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-CHALLANS-01: shows Access restricted to employee/manager without calling the API", async () => {
+    getSessionRolesMock.mockReturnValue(["employee", "manager"]);
+    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    renderPage(ui);
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-CHALLANS-06: shows a translated reconcile status and a formatted deposit date", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/reconcile")) {
+        return Promise.resolve({
+          data: {
+            formType: "24Q", period: "2026-06",
+            perPeriod: [{ period: "2026-06", formType: "24Q", tdsDeductedMinor: "100000", tdsDepositedMinor: "0", varianceMinor: "-100000", matched: false, challanCount: 0, status: "no_challan" }],
+            totalDeductedMinor: "100000", totalDepositedMinor: "0", varianceMinor: "-100000", matched: false, filingBlocked: true, note: "",
+          },
+          source: "api",
+        });
+      }
+      return Promise.resolve({
+        data: [{ cin: "C9", bsrCode: "1234567", challanSerial: "1", depositDate: "2026-06-07", section: "192", tdsAmountMinor: "10000", totalAmountMinor: "10000", status: "ingested" }],
+        source: "api",
+      });
+    });
+    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    renderPage(ui);
+    expect(screen.getByText("No challan")).toBeInTheDocument();
+    expect(screen.queryByText("no_challan")).not.toBeInTheDocument();
+    expect(screen.queryByText("2026-06-07")).not.toBeInTheDocument();
   });
 });

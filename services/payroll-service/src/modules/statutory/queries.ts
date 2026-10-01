@@ -37,10 +37,17 @@ export async function listTdsReport(tenantId: string, limit: number) {
 }
 
 export async function listGratuityReport(tenantId: string, limit: number) {
-  const rows = await repo.listGratuityByTenant(tenantId, limit);
+  // GAP-PAYROLL-STATUTORY-GRATUITY-06: same best-effort employeeName
+  // enrichment as listGpfReport below (fails open to null on an unreachable
+  // HRMS; the page then falls back to the employeeId).
+  const [rows, empMap] = await Promise.all([
+    repo.listGratuityByTenant(tenantId, limit),
+    fetchEmployeeSummaries(tenantId),
+  ]);
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
+    employeeName: empMap.get(r.employeeId)?.fullName ?? null,
     yearsOfService: r.yearsOfService,
     gratuityMinor: Number(r.gratuityMinor),
     status: r.status,

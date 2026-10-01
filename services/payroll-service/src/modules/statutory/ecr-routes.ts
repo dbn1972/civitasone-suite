@@ -5,10 +5,13 @@ import { db, scopedRead } from "../../shared/db.js";
 import { payrollPf } from "./schema.js";
 import { payrollSlips } from "../payroll/schema.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
+import { queue } from "../../shared/infra.js";
+import { randomUUID } from "node:crypto";
 
 import { computePensionableWage } from "./ecr-domain.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+const AUDIT_TOPIC = "audit.event.record";
 
 /**
  * EPFO ECR (Electronic Challan cum Return) file generation.
@@ -98,6 +101,29 @@ export async function ecrRoutes(app: FastifyInstance): Promise<void> {
 
     const ecrContent = lines.join("\r\n");
     const filename = `ECR_${month.replace("-", "")}.txt`;
+
+    // GAP-PAYROLL-STATUTORY-PF-02: the ECR is a bulk export of every PF
+    // member's UAN, name and wages. It mutates nothing (so it stays a GET and
+    // is idempotent), but every generation is recorded with actor, month and
+    // record count -- same read-side audit pattern as Form 16 issuance
+    // (form16-pdf/routes.ts). Published before the body is sent so an export
+    // that cannot be audited is not delivered.
+    await queue.publish(AUDIT_TOPIC, {
+      messageId: randomUUID(),
+      type: AUDIT_TOPIC,
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      correlationId: ctx.correlationId,
+      schemaVersion: "1.0",
+      payload: {
+        service: "payroll",
+        action: "export_ecr",
+        resourceType: "statutory_ecr",
+        resourceId: `ECR:${month}`,
+        outcome: "success",
+        detail: { month, recordCount: lines.length },
+      },
+    });
 
     return reply
       .header("content-type", "text/plain; charset=utf-8")

@@ -185,6 +185,11 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
         taxableIncome: String(taxableIncome),
         taxPayable: String(tax.totalTax),
         status: dec?.status ?? "pending",
+        // GAP-PAYROLL-INCOME-TAX-05: the regime this row was computed under
+        // (declaration's choice, else the statutory default "new"). Under the
+        // new regime 80C/other deductions are not applied (always 0 above),
+        // so the UI needs this to show "not applicable" rather than ₹0.
+        regime,
       });
     }
 

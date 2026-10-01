@@ -562,7 +562,12 @@
     "historyCardTitle": "चालान — {period}",
     "filterPlaceholder": "BSR कोड या CIN के अनुसार फ़िल्टर करें…",
     "emptyTitle": "इस अवधि के लिए कोई चालान अंतर्ग्रहीत नहीं",
-    "emptyMessage": "ऊपर दिए गए फॉर्म का उपयोग करके एक TDS चालान अंतर्ग्रहीत करें।"
+    "emptyMessage": "ऊपर दिए गए फॉर्म का उपयोग करके एक TDS चालान अंतर्ग्रहीत करें।",
+    "reconcileMatched": "मिलान हुआ",
+    "reconcileShortfall": "कमी",
+    "reconcileExcess": "अधिक जमा",
+    "reconcileNoChallan": "कोई चालान नहीं",
+    "reconcilePendingFinalisation": "रन अंतिम नहीं"
   },
   "checkinLog": {
     "title": "चेक-इन लॉग",
@@ -1078,7 +1083,8 @@
     "colNewValue": "नया मूल्य",
     "colArrears": "एरियर",
     "colPeriods": "अवधियां",
-    "colStatus": "स्थिति"
+    "colStatus": "स्थिति",
+    "pendingCardTitle": "अनुमोदन लंबित"
   },
   "createCorrectionForm": {
     "formTitle": "वेतन सुधार दर्ज करें",
@@ -2345,7 +2351,8 @@
     "historyCardTitle": "GPF अभिदान लेजर",
     "filterPlaceholder": "कर्मचारी या अवधि के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई GPF रिकॉर्ड नहीं",
-    "emptyMessage": "पुरानी पेंशन योजना (2004 से पहले भर्ती) के अंतर्गत पात्र कर्मचारियों के लिए GPF अभिदान वेतन प्रक्रिया के दौरान स्वतः काटा जाता है।"
+    "emptyMessage": "पुरानी पेंशन योजना (2004 से पहले भर्ती) के अंतर्गत पात्र कर्मचारियों के लिए GPF अभिदान वेतन प्रक्रिया के दौरान स्वतः काटा जाता है।",
+    "backToStatutoryLabel": "सांविधिक पर वापस जाएँ"
   },
   "gpfStatements": {
     "errorBackLabel": "एचआर पर वापस जाएं",
@@ -2394,7 +2401,8 @@
     "emptyMessage": "कर्मचारी के सेवानिवृत्त होने पर ग्रेच्युटी स्वतः गणना की जाती है। कर्मचारी के 5 वर्ष पूरे कर सेवानिवृत्त होने के बाद रिकॉर्ड यहाँ दिखाई देंगे।",
     "filterPlaceholder": "कर्मचारी या स्थिति के अनुसार फ़िल्टर करें…",
     "emptyTitleFiltered": "कोई ग्रेच्युटी रिकॉर्ड नहीं मिला",
-    "emptyMessageFiltered": "आपके फ़िल्टर मानदंड से कोई रिकॉर्ड मेल नहीं खाता।"
+    "emptyMessageFiltered": "आपके फ़िल्टर मानदंड से कोई रिकॉर्ड मेल नहीं खाता।",
+    "loadErrorMessage": "ग्रेच्युटी रजिस्टर लोड नहीं हो सका — नीचे दिया कैलकुलेटर फिर भी काम करता है"
   },
   "gratuityCalculator": {
     "heading": "ग्रेच्युटी कैलकुलेटर",
@@ -2782,7 +2790,10 @@
     "cardTitle": "आयकर घोषणाएं",
     "filterPlaceholder": "फ़िल्टर…",
     "emptyTitle": "कोई आयकर घोषणा नहीं",
-    "emptyMessage": "घोषणा विंडो के दौरान सबमिट किए जाने पर कर्मचारी आयकर घोषणाएं यहां दिखाई देती हैं।"
+    "emptyMessage": "घोषणा विंडो के दौरान सबमिट किए जाने पर कर्मचारी आयकर घोषणाएं यहां दिखाई देती हैं।",
+    "colRegime": "व्यवस्था",
+    "regimeOld": "पुरानी",
+    "regimeNew": "नई"
   },
   "ingestChallanForm": {
     "formTitle": "TDS चालान अंतर्ग्रहीत करें",
@@ -2802,7 +2813,9 @@
     "ingestedMessage": "{period} के लिए चालान अंतर्ग्रहीत किया गया।",
     "confirmTitle": "क्या यह TDS चालान अंतर्ग्रहीत करें?",
     "confirmLabel": "पुष्टि करें और अंतर्ग्रहीत करें",
-    "confirmDescription": "अवधि <strong>{period}</strong> के लिए {formType} चालान अंतर्ग्रहीत करें: BSR {bsr}, क्रम संख्या {serial}, TDS ₹{amount}, जमा तिथि {date}।"
+    "confirmDescription": "अवधि <strong>{period}</strong> के लिए {formType} चालान अंतर्ग्रहीत करें: BSR {bsr}, क्रम संख्या {serial}, TDS {amount}, जमा तिथि {date}।",
+    "duplicateChallanError": "इस BSR कोड, जमा तिथि और क्रम संख्या वाला चालान पहले से दर्ज है।",
+    "validationFailedError": "चालान के कुछ विवरण अस्वीकार कर दिए गए। BSR कोड, क्रम संख्या, तिथियाँ और राशि जाँचें, फिर पुनः प्रयास करें।"
   },
   "interns": {
     "title": "प्रशिक्षु और शिक्षार्थी",
@@ -3287,10 +3300,18 @@
     "submitBtn": "LWF विन्यास सहेजें",
     "confirmTitle": "क्या यह LWF विन्यास सहेजें?",
     "confirmLabel": "पुष्टि करें और सहेजें",
-    "confirmDescription": "<strong>{state}</strong> के लिए LWF विन्यास सहेजें: कर्मचारी ₹{emp}, नियोक्ता ₹{er}।",
+    "confirmDescription": "<strong>{state}</strong> के लिए LWF विन्यास सहेजें: कर्मचारी {emp}, नियोक्ता {er}, आवृत्ति {frequency}।",
     "stateCodeRequiredError": "राज्य कोड आवश्यक है।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "savedMessage": "{state} के लिए LWF विन्यास सहेज दिया गया।"
+    "savedMessage": "{state} के लिए LWF विन्यास सहेज दिया गया।",
+    "frequencyLabel": "आवृत्ति",
+    "frequencyKeepCurrent": "वर्तमान आवृत्ति रखें",
+    "frequencyMonthly": "मासिक",
+    "frequencyQuarterly": "त्रैमासिक",
+    "frequencyHalfYearly": "अर्धवार्षिक",
+    "frequencyYearly": "वार्षिक",
+    "blankKeepsCurrentHint": "इस राज्य के लिए पहले से सहेजा गया मान रखने के लिए फ़ील्ड खाली छोड़ें।",
+    "unchangedValue": "अपरिवर्तित"
   },
   "medicalClaims": {
     "title": "चिकित्सा दावे",
@@ -3548,7 +3569,11 @@
     "confirmLabel": "रन संसाधित करें",
     "confirmDescription": "अवधि <strong>{period}</strong> के लिए {reason} रन संसाधित करें, कुल {amount}। यह हर आइटम के लिए कर और नेट देय की गणना करता है और अपरिवर्तनीय है।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "processedMessage": "अवधि {period} के लिए ऑफ़-साइकिल रन संसाधित किया गया। नेट देय {amount}।"
+    "processedMessage": "अवधि {period} के लिए ऑफ़-साइकिल रन संसाधित किया गया। नेट देय {amount}।",
+    "checkerNote": "इस रन को बनाने वाले के अलावा किसी अन्य पेरोल उपयोगकर्ता द्वारा प्रोसेस किया जाना चाहिए।",
+    "selfProcessError": "यह रन आपने बनाया है, इसलिए किसी अन्य पेरोल उपयोगकर्ता को इसे प्रोसेस करना होगा।",
+    "notDraftError": "यह रन पहले ही प्रोसेस या बंद किया जा चुका है।",
+    "processSubmittedMessage": "{period} का ऑफ-साइकिल रन प्रोसेसिंग के लिए भेजा गया। पूरा होने पर कर और शुद्ध देय दिखाई देंगे।"
   },
   "offCycleList": {
     "colRunType": "रन प्रकार",
@@ -4241,7 +4266,8 @@
     "downloadRpu": "आरपीयू फ़्लैट फ़ाइल (.txt) डाउनलोड करें",
     "loadingAriaLabel": "लोड हो रहा है…",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
-    "reconciliationBlockedMessage": "काटा गया टीडीएस जमा किए गए चालानों से मेल नहीं खाता (TRACES समाधान गेट)।"
+    "reconciliationBlockedMessage": "काटा गया टीडीएस जमा किए गए चालानों से मेल नहीं खाता (TRACES समाधान गेट)।",
+    "backToPayrollLabel": "पेरोल पर वापस जाएँ"
   },
   "forceFileButton": {
     "fileAnywayBtn": "फिर भी फ़ाइल करें — समाधान को दरकिनार करें (बाध्य)",
@@ -4892,12 +4918,13 @@
     "submitBtn": "PT स्लैब सहेजें",
     "confirmTitle": "क्या यह व्यावसायिक कर स्लैब सहेजें?",
     "confirmLabel": "पुष्टि करें और सहेजें",
-    "confirmDescription": "<strong>{state}</strong> के लिए PT स्लैब सहेजें: ₹{from} से {to}, कर ₹{amount}।",
+    "confirmDescription": "<strong>{state}</strong> के लिए PT स्लैब सहेजें: ₹{from} से {to}, कर ₹{amount}। यदि कोई स्लैब पहले से ₹{from} से शुरू होता है तो उसे अद्यतन किया जाएगा; राज्य के अन्य स्लैब बने रहेंगे।",
     "noUpperBound": "कोई ऊपरी सीमा नहीं",
     "stateCodeRequiredError": "राज्य कोड आवश्यक है।",
     "ptAmountInvalidError": "PT राशि एक मान्य रुपया राशि होनी चाहिए।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
-    "savedMessage": "{state} के लिए व्यावसायिक कर स्लैब सहेज दिया गया।"
+    "savedMessage": "{state} के लिए व्यावसायिक कर स्लैब सहेज दिया गया।",
+    "overlapError": "यह सीमा इस राज्य के किसी अन्य स्लैब से टकराती है। 'से'/'तक' राशि बदलें, या जिस स्लैब को अद्यतन करना है उसकी सटीक प्रारंभ राशि दर्ज करें।"
   },
   "recruitment": {
     "title": "भर्ती",
@@ -6347,5 +6374,25 @@
     "noResults": "कोई मेल खाता कर्मचारी नहीं",
     "clear": "हटाएं",
     "clearAriaLabel": "चयनित कर्मचारी हटाएं"
+  },
+  "pendingCorrections": {
+    "noneMessage": "कोई सुधार निर्णय की प्रतीक्षा में नहीं है।",
+    "checkerNote": "किसी सुधार को उसे बनाने वाले के अलावा किसी अन्य पेरोल उपयोगकर्ता द्वारा अनुमोदित या अस्वीकृत किया जाना चाहिए।",
+    "summary": "{from} से: {oldValue} → {newValue}, बकाया {arrears}",
+    "employeeLabel": "कर्मचारी {id}",
+    "approveBtn": "अनुमोदित करें",
+    "rejectBtn": "अस्वीकार करें",
+    "approveAriaLabel": "{component} सुधार अनुमोदित करें",
+    "rejectAriaLabel": "{component} सुधार अस्वीकार करें",
+    "approveTitle": "यह सुधार अनुमोदित करें?",
+    "rejectTitle": "यह सुधार अस्वीकार करें?",
+    "reasonLabel": "कारण",
+    "approveDescription": "{arrears} बकाया वाले {component} सुधार को अनुमोदित करें।",
+    "rejectDescription": "{arrears} बकाया वाले {component} सुधार को अस्वीकार करें। कारण दर्ज किया जाएगा।",
+    "selfDecisionError": "यह सुधार आपने बनाया है, इसलिए किसी अन्य पेरोल उपयोगकर्ता को इस पर निर्णय लेना होगा।",
+    "alreadyDecidedError": "इस सुधार पर पहले ही निर्णय हो चुका है।",
+    "approvedMessage": "{component} सुधार का अनुमोदन भेजा गया।",
+    "rejectedMessage": "{component} सुधार की अस्वीकृति भेजी गई।",
+    "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।"
   }
 }

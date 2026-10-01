@@ -1,4 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Role gate (see the page's own GAP comment): default every test to an
+// authorized payroll role; the gate tests below override per call.
+const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn((): string[] => ["payroll_admin"]) }));
+vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
+  getSessionRoles: getSessionRolesMock,
+}));
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -41,6 +49,7 @@ const populated26Q = {
 
 describe("ReturnsPage", () => {
   beforeEach(() => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
     statusAwareGetMock.mockReset();
     fetchJsonMock.mockReset();
     fetchJsonMock.mockResolvedValue({ data: populated26Q, source: "api" });
@@ -119,5 +128,14 @@ describe("ReturnsPage", () => {
     // UX-016: same hardcoded-literal leak as the Form-24Q branch above.
     expect(screen.getByText(/couldn't load this form-26q return/i)).toBeInTheDocument();
     expect(screen.queryByText(/^The request failed\./)).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-RETURNS-04: shows Access restricted to employee/manager without calling the API", async () => {
+    getSessionRolesMock.mockReturnValue(["employee", "manager"]);
+    const ui = await ReturnsPage({ searchParams: { fy: "2025-26", quarter: "Q1" } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+    expect(statusAwareGetMock).not.toHaveBeenCalled();
   });
 });

@@ -69,4 +69,23 @@ describe("PtSlabForm", () => {
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-STATUTORY-PT-03: explains an overlapping slab (422 PT_SLAB_OVERLAP) and states upsert semantics", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "PT_SLAB_OVERLAP", message: "slab 0-1 overlaps" }), { status: 422 }),
+    );
+
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "KA" } });
+    fireEvent.change(screen.getByLabelText(/PT Amount/), { target: { value: "200" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save PT Slab" }));
+
+    await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+    expect(screen.getByText(/the state's other slabs are kept/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Confirm & Save"));
+
+    await waitFor(() => {
+      expect(screen.getByText(/This range overlaps another slab for this state/)).toBeInTheDocument();
+    });
+  });
 });

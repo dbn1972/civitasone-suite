@@ -7,6 +7,7 @@ import { CreateOffCycleForm } from "./CreateOffCycleForm";
 import { OffCycleList, type OffCycleRow } from "./OffCycleList";
 import { OffCycleCards } from "./OffCycleCard";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
 
 async function getData(): Promise<LoaderResult<OffCycleRow[]>> {
   return fetchJson<unknown, OffCycleRow[]>("/api/v1/payroll/off-cycle", [], {
@@ -32,7 +33,7 @@ export default async function OffCyclePage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={t("errorBackLabel")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
@@ -53,7 +54,8 @@ export default async function OffCyclePage() {
           </div>
         ) : (
           <div style={{ padding: "0 4px" }}>
-          <OffCycleCards rows={items} />
+          {/* POST off-cycle/:id/process is PAYROLL_ROLES-only server-side. */}
+          <OffCycleCards rows={items} canProcess={getSessionRoles().some((r) => PAYROLL_ADMIN_ROLES.includes(r))} />
         </div>
         )}
       </Card>

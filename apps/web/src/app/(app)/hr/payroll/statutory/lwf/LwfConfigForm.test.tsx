@@ -67,4 +67,25 @@ describe("LwfConfigForm", () => {
     });
     expect(screen.queryByText(/API_ERROR: 500/)).not.toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-STATUTORY-LWF-02: sends the chosen frequency and omits blank amounts (server keeps them)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "MH", status: "accepted", correlationId: "c" }), { status: 202 }),
+    );
+
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "mh" } });
+    fireEvent.change(screen.getByLabelText("Employee Contribution (₹)"), { target: { value: "25" } });
+    fireEvent.change(screen.getByLabelText("Frequency"), { target: { value: "yearly" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save LWF Configuration" }));
+
+    await waitFor(() => expect(screen.getByText("Save this LWF configuration?")).toBeInTheDocument());
+    expect(screen.getByText(/employer unchanged, frequency Yearly/)).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Confirm & Save"));
+
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    const body = JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body));
+    expect(body).toEqual({ stateCode: "MH", lwfEmployee: 2500, lwfFrequency: "yearly" });
+    expect("lwfEmployer" in body).toBe(false);
+  });
 });

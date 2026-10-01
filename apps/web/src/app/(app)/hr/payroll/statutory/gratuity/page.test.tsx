@@ -1,4 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Role gate (see the page's own GAP comment): default every test to an
+// authorized payroll role; the gate tests below override per call.
+const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn((): string[] => ["payroll_admin"]) }));
+vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
+  getSessionRoles: getSessionRolesMock,
+}));
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -25,6 +33,7 @@ function renderPage(ui: React.ReactElement) {
 
 describe("GratuityPage", () => {
   beforeEach(() => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
     fetchJsonMock.mockReset();
   });
 
@@ -55,5 +64,31 @@ describe("GratuityPage", () => {
     renderPage(ui);
     expect(screen.getByText("We couldn't load gratuity records.")).toBeInTheDocument();
     expect(screen.queryByText("No gratuity records")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-GRATUITY-02: shows Access restricted to employee/manager without calling the API", async () => {
+    getSessionRolesMock.mockReturnValue(["employee", "manager"]);
+    const ui = await GratuityPage();
+    renderPage(ui);
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-GRATUITY-06: shows the employee name the API returns instead of the raw id", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [{ id: "1", employeeId: "e1", employeeName: "Meena Iyer", yearsOfService: "22.00", gratuityMinor: 500000, status: "computed" }],
+      source: "api",
+    });
+    const ui = await GratuityPage();
+    renderPage(ui);
+    expect(screen.getByText("Meena Iyer")).toBeInTheDocument();
+    expect(screen.queryByText("e1")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-GRATUITY-06: flags a failed register load with the DataSourceBadge", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+    const ui = await GratuityPage();
+    renderPage(ui);
+    expect(screen.getByText(/couldn.t load the gratuity register/i)).toBeInTheDocument();
   });
 });

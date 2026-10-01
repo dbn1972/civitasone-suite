@@ -83,7 +83,7 @@ const employerIdentity = () => ({
 const pipeSafe = (v: unknown): string => String(v ?? "").replace(/[|\r\n]/g, " ").trim();
 
 /** Deductee-wise TDS aggregate for a set of months (one row per employee). */
-async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<string, { tds: number; periods: Set<string> }>> {
+async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<string, { tdsMinor: bigint; periods: Set<string> }>> {
   // Restrict to disbursed/approved runs so we only report deposited TDS.
   const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
     .where(and(eq(payrollRuns.tenantId, tenantId), inArray(payrollRuns.month, months))));
@@ -92,11 +92,14 @@ async function deducteeWiseTds(tenantId: string, months: string[]): Promise<Map<
   const tdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, tenantId), inArray(payrollTds.period, months))));
 
-  const byEmp = new Map<string, { tds: number; periods: Set<string> }>();
+  // GAP-PAYROLL-RETURNS-06: accumulate in exact bigint paise. This used to
+  // sum float rupees (tdsMinor / 100) and re-multiply by 100, so the paise
+  // figure the UI shows could drift from the stored deductions.
+  const byEmp = new Map<string, { tdsMinor: bigint; periods: Set<string> }>();
   for (const t of tdsRows) {
     if (validRunIds.size > 0 && !validRunIds.has(t.runId)) continue;
-    const e = byEmp.get(t.employeeId) ?? { tds: 0, periods: new Set<string>() };
-    e.tds += Number(t.tdsMinor) / 100;
+    const e = byEmp.get(t.employeeId) ?? { tdsMinor: 0n, periods: new Set<string>() };
+    e.tdsMinor += BigInt(t.tdsMinor);
     e.periods.add(t.period);
     byEmp.set(t.employeeId, e);
   }
@@ -192,13 +195,17 @@ async function buildForm24Q(
 
   const deductees = [...byEmp.entries()].map(([employeeId, agg]) => {
     const emp = master.get(employeeId);
-    const tdsDeducted = Math.round(agg.tds);
+    // Whole-rupee figures are kept for the TRACES flat file below; the
+    // *Minor fields are the exact paise values every UI should display.
+    const tdsDeductedMinor = Number(agg.tdsMinor);
+    const tdsDeducted = Math.round(tdsDeductedMinor / 100);
     return {
       employeeId,
       pan: emp?.pan ?? "",
       panFlag: emp?.pan ? "" : "PANNOTAVBL",
       name: emp?.fullName ?? "",
-      tdsDeductedMinor: Math.round(agg.tds * 100),
+      tdsDeductedMinor,
+      tdsDepositedMinor: tdsDeductedMinor, // deposited == deducted in this model
       tdsDeducted,
       tdsDeposited: tdsDeducted, // deposited == deducted in this model
       periods: [...agg.periods].sort(),
@@ -206,6 +213,7 @@ async function buildForm24Q(
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   const totalTdsDeducted = deductees.reduce((s, d) => s + d.tdsDeducted, 0);
+  const totalTdsDeductedMinor = deductees.reduce((s, d) => s + d.tdsDeductedMinor, 0);
 
   // Challan summary: one challan per month (TDS deposited for that month),
   // restricted to approved/disbursed runs.
@@ -214,12 +222,12 @@ async function buildForm24Q(
   const challanValidRunIds = new Set(challanRuns.filter((r) => r.status === "approved" || r.status === "disbursed").map((r) => r.id));
   const challanTdsRows = await scopedRead((tx) => tx.select().from(payrollTds)
     .where(and(eq(payrollTds.tenantId, ctx.tenantId), inArray(payrollTds.period, months))));
-  const challans = months.map((month) => ({
-    month,
-    tdsDeposited: Math.round(challanTdsRows
+  const challans = months.map((month) => {
+    const tdsDepositedMinor = Number(challanTdsRows
       .filter((t) => t.period === month && (challanValidRunIds.size === 0 || challanValidRunIds.has(t.runId)))
-      .reduce((s, t) => s + Number(t.tdsMinor) / 100, 0)),
-  }));
+      .reduce((s, t) => s + BigInt(t.tdsMinor), 0n));
+    return { month, tdsDepositedMinor, tdsDeposited: Math.round(tdsDepositedMinor / 100) };
+  });
 
   // Q4: Annexure II — salary detail per deductee (Form 16 Part B figures).
   let annexureII: Array<Record<string, unknown>> | undefined;
@@ -255,6 +263,10 @@ async function buildForm24Q(
     challanSummary: challans,
     totalTdsDeducted,
     totalTdsDeposited: challans.reduce((s, c) => s + c.tdsDeposited, 0),
+    // GAP-PAYROLL-RETURNS-06: paise totals, so no client has to multiply a
+    // rupee figure back up (ForceFileButton used to do `* 100`).
+    totalTdsDeductedMinor,
+    totalTdsDepositedMinor: challans.reduce((s, c) => s + c.tdsDepositedMinor, 0),
     ...(annexureII ? { annexureII } : {}),
     reconciliation: {
       matched: reconciled,

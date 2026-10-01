@@ -580,7 +580,12 @@
     "historyCardTitle": "Challans — {period}",
     "filterPlaceholder": "Filter by BSR code or CIN…",
     "emptyTitle": "No challans ingested for this period",
-    "emptyMessage": "Ingest a TDS challan using the form above."
+    "emptyMessage": "Ingest a TDS challan using the form above.",
+    "reconcileMatched": "Matched",
+    "reconcileShortfall": "Shortfall",
+    "reconcileExcess": "Excess deposited",
+    "reconcileNoChallan": "No challan",
+    "reconcilePendingFinalisation": "Run not finalised"
   },
   "checkinLog": {
     "title": "Check-In Log",
@@ -1098,7 +1103,8 @@
     "colNewValue": "New Value",
     "colArrears": "Arrears",
     "colPeriods": "Periods",
-    "colStatus": "Status"
+    "colStatus": "Status",
+    "pendingCardTitle": "Pending approval"
   },
   "createCorrectionForm": {
     "formTitle": "Record Salary Correction",
@@ -2422,7 +2428,8 @@
     "historyCardTitle": "GPF Subscription Ledger",
     "filterPlaceholder": "Filter by employee or period…",
     "emptyTitle": "No GPF records",
-    "emptyMessage": "GPF subscriptions are deducted automatically during payroll runs for eligible employees under the old pension scheme (pre-2004 recruits)."
+    "emptyMessage": "GPF subscriptions are deducted automatically during payroll runs for eligible employees under the old pension scheme (pre-2004 recruits).",
+    "backToStatutoryLabel": "Back to Statutory"
   },
   "gpfStatements": {
     "errorBackLabel": "Back to HR",
@@ -2471,7 +2478,8 @@
     "emptyMessage": "Gratuity is computed automatically on employee separation. Records will appear here once an employee completes 5 years and separates.",
     "filterPlaceholder": "Filter by employee or status…",
     "emptyTitleFiltered": "No gratuity records found",
-    "emptyMessageFiltered": "No records match your filter criteria."
+    "emptyMessageFiltered": "No records match your filter criteria.",
+    "loadErrorMessage": "Couldn't load the gratuity register — the calculator below still works"
   },
   "gratuityCalculator": {
     "heading": "Gratuity Calculator",
@@ -2892,7 +2900,10 @@
     "cardTitle": "Income Tax Declarations",
     "filterPlaceholder": "Filter…",
     "emptyTitle": "No income tax declarations",
-    "emptyMessage": "Employee income tax declarations appear here once submitted during the declaration window."
+    "emptyMessage": "Employee income tax declarations appear here once submitted during the declaration window.",
+    "colRegime": "Regime",
+    "regimeOld": "Old",
+    "regimeNew": "New"
   },
   "ingestChallanForm": {
     "formTitle": "Ingest TDS Challan",
@@ -2912,7 +2923,9 @@
     "ingestedMessage": "Challan ingested for {period}.",
     "confirmTitle": "Ingest this TDS challan?",
     "confirmLabel": "Confirm & Ingest",
-    "confirmDescription": "Ingest {formType} challan for period <strong>{period}</strong>: BSR {bsr}, serial {serial}, TDS ₹{amount} deposited on {date}."
+    "confirmDescription": "Ingest {formType} challan for period <strong>{period}</strong>: BSR {bsr}, serial {serial}, TDS {amount} deposited on {date}.",
+    "duplicateChallanError": "A challan with this BSR code, deposit date and serial is already recorded.",
+    "validationFailedError": "Some challan details were rejected. Check the BSR code, serial, dates and amount, then try again."
   },
   "interns": {
     "title": "Interns & Apprentices",
@@ -3398,10 +3411,18 @@
     "submitBtn": "Save LWF Configuration",
     "confirmTitle": "Save this LWF configuration?",
     "confirmLabel": "Confirm & Save",
-    "confirmDescription": "Save LWF configuration for <strong>{state}</strong>: employee ₹{emp}, employer ₹{er}.",
+    "confirmDescription": "Save LWF configuration for <strong>{state}</strong>: employee {emp}, employer {er}, frequency {frequency}.",
     "stateCodeRequiredError": "State code is required.",
     "networkError": "Network error. Please try again.",
-    "savedMessage": "LWF configuration saved for {state}."
+    "savedMessage": "LWF configuration saved for {state}.",
+    "frequencyLabel": "Frequency",
+    "frequencyKeepCurrent": "Keep current frequency",
+    "frequencyMonthly": "Monthly",
+    "frequencyQuarterly": "Quarterly",
+    "frequencyHalfYearly": "Half-yearly",
+    "frequencyYearly": "Yearly",
+    "blankKeepsCurrentHint": "Leave a field blank to keep the value already saved for this state.",
+    "unchangedValue": "unchanged"
   },
   "medicalClaims": {
     "title": "Medical Claims",
@@ -3660,7 +3681,11 @@
     "confirmLabel": "Process run",
     "confirmDescription": "Process the {reason} run for period <strong>{period}</strong>, total {amount}. This computes tax and net payable for every item and is irreversible.",
     "networkError": "Network error. Please try again.",
-    "processedMessage": "Off-cycle run for {period} processed. Net payable {amount}."
+    "processedMessage": "Off-cycle run for {period} processed. Net payable {amount}.",
+    "checkerNote": "Must be processed by a payroll user other than the one who created this run.",
+    "selfProcessError": "You created this run, so another payroll user must process it.",
+    "notDraftError": "This run has already been processed or closed.",
+    "processSubmittedMessage": "Off-cycle run for {period} submitted for processing. Tax and net payable will appear once it completes."
   },
   "offCycleList": {
     "colRunType": "Run Type",
@@ -4251,12 +4276,13 @@
     "submitBtn": "Save PT Slab",
     "confirmTitle": "Save this professional tax slab?",
     "confirmLabel": "Confirm & Save",
-    "confirmDescription": "Save PT slab for <strong>{state}</strong>: ₹{from} to {to}, tax ₹{amount}.",
+    "confirmDescription": "Save PT slab for <strong>{state}</strong>: ₹{from} to {to}, tax ₹{amount}. If a slab already starts at ₹{from} it is updated; the state's other slabs are kept.",
     "noUpperBound": "no upper bound",
     "stateCodeRequiredError": "State code is required.",
     "ptAmountInvalidError": "PT amount must be a valid rupee amount.",
     "networkError": "Network error. Please try again.",
-    "savedMessage": "Professional tax slab saved for {state}."
+    "savedMessage": "Professional tax slab saved for {state}.",
+    "overlapError": "This range overlaps another slab for this state. Adjust the From/To amounts, or enter the exact start of the slab you want to update."
   },
   "recruitment": {
     "title": "Recruitment",
@@ -6127,7 +6153,8 @@
     "downloadRpu": "Download RPU flat file (.txt)",
     "loadingAriaLabel": "Loading…",
     "loadErrorMessage": "Couldn't load — showing nothing",
-    "reconciliationBlockedMessage": "TDS deducted does not match deposited challans (TRACES reconciliation gate)."
+    "reconciliationBlockedMessage": "TDS deducted does not match deposited challans (TRACES reconciliation gate).",
+    "backToPayrollLabel": "Back to Payroll"
   },
   "forceFileButton": {
     "fileAnywayBtn": "File anyway — bypass reconciliation (force)",
@@ -6933,5 +6960,25 @@
     "noResults": "No matching employees",
     "clear": "Clear",
     "clearAriaLabel": "Clear selected employee"
+  },
+  "pendingCorrections": {
+    "noneMessage": "No corrections are waiting for a decision.",
+    "checkerNote": "A correction must be approved or rejected by a payroll user other than the one who created it.",
+    "summary": "from {from}: {oldValue} → {newValue}, arrears {arrears}",
+    "employeeLabel": "Employee {id}",
+    "approveBtn": "Approve",
+    "rejectBtn": "Reject",
+    "approveAriaLabel": "Approve {component} correction",
+    "rejectAriaLabel": "Reject {component} correction",
+    "approveTitle": "Approve this correction?",
+    "rejectTitle": "Reject this correction?",
+    "reasonLabel": "Reason",
+    "approveDescription": "Approve the {component} correction with arrears of {arrears}.",
+    "rejectDescription": "Reject the {component} correction with arrears of {arrears}. The reason is recorded.",
+    "selfDecisionError": "You created this correction, so another payroll user must decide it.",
+    "alreadyDecidedError": "This correction has already been decided.",
+    "approvedMessage": "{component} correction approval submitted.",
+    "rejectedMessage": "{component} correction rejection submitted.",
+    "networkError": "Network error. Please try again."
   }
 }

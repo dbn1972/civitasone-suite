@@ -360,6 +360,25 @@ export async function createCorrection(ctx: RequestContext, body: CreateCorrecti
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+/**
+ * GAP-PAYROLL-CORRECTIONS-01: checker decision on a pending correction. The
+ * route has already verified status='pending' and decider != creator; the
+ * consumer re-asserts both in a conditional UPDATE. Deterministic message id
+ * so a double-click cannot produce two decisions.
+ */
+export type DecideCorrectionInput = {
+  id: string; decision: "approved" | "rejected"; note?: string | undefined;
+};
+export async function decideCorrection(ctx: RequestContext, body: DecideCorrectionInput): Promise<Accepted> {
+  await queue.publish(COMMANDS.correctionDecide, {
+    messageId: deterministicUuid(`payroll-correction-decide:${body.id}`),
+    type: COMMANDS.correctionDecide,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, ...body },
+  });
+  return { id: body.id, status: "accepted", correlationId: ctx.correlationId };
+}
+
 export type CreatePayGroupInput = {
   name: string; frequency: "monthly" | "bi_weekly" | "weekly";
   payDayOfMonth: number; timezone: string;
@@ -450,6 +469,7 @@ export type UpsertStateRulesInput = {
   ptSlabs?: Array<{ fromMinor: number; toMinor: number; taxMinor: number }> | undefined;
   lwfEmployee?: number | undefined;
   lwfEmployer?: number | undefined;
+  lwfFrequency?: "monthly" | "quarterly" | "half_yearly" | "yearly" | undefined;
 };
 export async function upsertStateRules(ctx: RequestContext, body: UpsertStateRulesInput): Promise<Accepted> {
   await queue.publish(COMMANDS.stateRulesUpsert, {

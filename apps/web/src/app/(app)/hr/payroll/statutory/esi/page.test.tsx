@@ -1,4 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+
+// Role gate (see the page's own GAP comment): default every test to an
+// authorized payroll role; the gate tests below override per call.
+const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn((): string[] => ["payroll_admin"]) }));
+vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
+  getSessionRoles: getSessionRolesMock,
+}));
 import { render, screen } from "@testing-library/react";
 
 const fetchJsonMock = vi.fn();
@@ -10,6 +18,7 @@ import EsiStatutoryPage from "./page";
 
 describe("EsiStatutoryPage", () => {
   beforeEach(() => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
     fetchJsonMock.mockReset();
   });
 
@@ -35,5 +44,13 @@ describe("EsiStatutoryPage", () => {
     const ui = await EsiStatutoryPage();
     render(ui);
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-ESI-01: shows Access restricted to employee/manager without calling the API", async () => {
+    getSessionRolesMock.mockReturnValue(["employee", "manager"]);
+    const ui = await EsiStatutoryPage();
+    render(ui);
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 });

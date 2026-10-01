@@ -16,6 +16,7 @@ import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from
 import { scopedRead } from "../../shared/db.js";
 import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
+import { stateRulesBody, findPtSlabOverlap } from "./state-rules.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -123,7 +124,8 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT id, employee_id, component, effective_from::text AS effective_from,
-        old_value_minor, new_value_minor, arrears_minor, affected_periods, reason, status, created_at
+        old_value_minor, new_value_minor, arrears_minor, affected_periods, reason, status, created_at,
+        created_by, decided_by, decided_at, decision_note
       FROM payroll.salary_corrections
       WHERE tenant_id = ${ctx.tenantId}::uuid
         ${q.employeeId ? sql`AND employee_id = ${q.employeeId}::uuid` : sql``}
@@ -131,6 +133,43 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
   });
+
+  // GAP-PAYROLL-CORRECTIONS-01: maker-checker decision on a pending
+  // correction. A correction used to sit at 'pending' forever (no endpoint
+  // could move it). The checker must differ from the maker (same rule as
+  // payroll-run approval, consumer.ts SELF_APPROVAL_FORBIDDEN); the check is
+  // done here synchronously so the caller gets a 403/409 instead of a 202
+  // that the consumer silently drops, and re-asserted in the consumer's
+  // conditional UPDATE for race safety.
+  const decisionBody = z.object({ note: z.string().trim().max(512).optional() });
+  const rejectBody = z.object({ note: z.string().trim().min(1).max(512) });
+  for (const decision of ["approve", "reject"] as const) {
+    app.post(`/v1/payroll/corrections/:id/${decision}`, async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, PAYROLL_ROLES);
+      const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+      // A rejection must say why; an approval note is optional.
+      const body = (decision === "reject" ? rejectBody : decisionBody).parse(req.body ?? {});
+      const rows = (await scopedRead((tx) => tx.execute(sql`
+        SELECT status, created_by FROM payroll.salary_corrections
+        WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
+        LIMIT 1
+      `))) as unknown as Array<{ status: string; created_by: string }>;
+      const row = rows[0];
+      if (!row) throw new HttpError(404, "NOT_FOUND", "correction not found");
+      if (row.status !== "pending") {
+        throw new HttpError(409, "CORRECTION_NOT_PENDING", `correction is already ${row.status}`);
+      }
+      if (row.created_by === ctx.actorId) {
+        throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "a correction must be decided by someone other than its creator");
+      }
+      return sendAccepted(reply, acceptedResponseSchema, await commands.decideCorrection(ctx, {
+        id,
+        decision: decision === "approve" ? "approved" : "rejected",
+        note: body.note,
+      }));
+    });
+  }
 
   // ─── Gap 2: Pay Groups ────────────────────────────────────────────────────
   app.post("/v1/payroll/pay-groups", async (req, reply) => {
@@ -385,7 +424,8 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT id, run_type, period, description, total_amount_minor, total_tax_minor, total_net_minor, status, created_at
+      SELECT id, run_type, period, description, total_amount_minor, total_tax_minor, total_net_minor, status, created_at,
+        created_by
       FROM payroll.off_cycle_runs WHERE tenant_id = ${ctx.tenantId}::uuid
       ORDER BY created_at DESC LIMIT 50
     `))) as unknown as Array<Record<string, unknown>>;
@@ -400,12 +440,27 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     // 404 pre-check: keep the existence guard in the route (read-only). The
     // actual 30% flat-tax computation now runs in the consumer — single
     // source of truth alongside the persisted update.
-    const items = (await scopedRead((tx) => tx.execute(sql`
-      SELECT id FROM payroll.off_cycle_items
-      WHERE off_cycle_run_id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid
+    const runs = (await scopedRead((tx) => tx.execute(sql`
+      SELECT r.status, r.created_by,
+        EXISTS (SELECT 1 FROM payroll.off_cycle_items i
+                WHERE i.off_cycle_run_id = r.id AND i.tenant_id = r.tenant_id) AS has_items
+      FROM payroll.off_cycle_runs r
+      WHERE r.id = ${id}::uuid AND r.tenant_id = ${ctx.tenantId}::uuid
       LIMIT 1
-    `))) as unknown as Array<{ id: string }>;
-    if (items.length === 0) throw new HttpError(404, "NOT_FOUND", "off-cycle run not found or has no items");
+    `))) as unknown as Array<{ status: string; created_by: string; has_items: boolean }>;
+    const run = runs[0];
+    if (!run || !run.has_items) throw new HttpError(404, "NOT_FOUND", "off-cycle run not found or has no items");
+    // GAP-PAYROLL-OFF-CYCLE-01: processing fixes tax and net pay and is
+    // irreversible, so it is the checker step of a maker-checker pair: the
+    // user who created the run may not process it (same rule as payroll-run
+    // approval), and only a draft run can be processed. Re-asserted in the
+    // consumer for race safety.
+    if (run.status !== "draft") {
+      throw new HttpError(409, "OFF_CYCLE_NOT_DRAFT", `off-cycle run is already ${run.status}`);
+    }
+    if (run.created_by === ctx.actorId) {
+      throw new HttpError(403, "SELF_APPROVAL_FORBIDDEN", "an off-cycle run must be processed by someone other than its creator");
+    }
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.processOffCycle(ctx, id));
   });
@@ -414,12 +469,25 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/payroll/statutory/state-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
-    const body = z.object({
-      stateCode: z.string().min(2).max(4),
-      ptSlabs: z.array(z.object({ fromMinor: z.number().int(), toMinor: z.number().int(), taxMinor: z.number().int() })).optional(),
-      lwfEmployee: z.number().int().optional(),
-      lwfEmployer: z.number().int().optional(),
-    }).parse(req.body);
+    const body = stateRulesBody.parse(req.body);
+    // GAP-PAYROLL-STATUTORY-PT-03: each slab is upserted on its own
+    // (tenant, state, slab_from) key — the state's other slabs are never
+    // deleted. Reject a slab whose range overlaps another active slab of the
+    // same state (or another slab in the same request), since overlapping
+    // ranges make the PT lookup ambiguous.
+    if (body.ptSlabs && body.ptSlabs.length > 0) {
+      const existing = (await scopedRead((tx) => tx.execute(sql`
+        SELECT slab_from_minor, slab_to_minor
+        FROM payroll.payroll_professional_tax
+        WHERE tenant_id = ${ctx.tenantId}::uuid AND state_code = ${body.stateCode} AND is_active = true
+      `))) as unknown as Array<{ slab_from_minor: string | number; slab_to_minor: string | number }>;
+      const overlap = findPtSlabOverlap(body.ptSlabs, existing.map((r) => ({
+        fromMinor: Number(r.slab_from_minor), toMinor: Number(r.slab_to_minor),
+      })));
+      if (overlap) {
+        throw new HttpError(422, "PT_SLAB_OVERLAP", overlap);
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertStateRules(ctx, body));
   });
 

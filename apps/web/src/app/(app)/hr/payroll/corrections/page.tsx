@@ -5,6 +5,8 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { CreateCorrectionForm } from "./CreateCorrectionForm";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { PendingCorrections } from "./PendingCorrections";
 
 type Row = {
   id: string;
@@ -60,13 +62,14 @@ export default async function CorrectionsPage() {
   const pendingCount = items.filter((r) => r.status === "pending").length;
   const totalArrearsMinor = items.reduce((sum, r) => sum + Number(r.arrears_minor ?? 0), 0);
   const approvedCount = items.filter((r) => r.status === "approved").length;
+  const canDecide = getSessionRoles().some((r) => PAYROLL_ADMIN_ROLES.includes(r));
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={t("errorBackLabel")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
 
@@ -78,6 +81,16 @@ export default async function CorrectionsPage() {
       </StatGrid>
 
       <CreateCorrectionForm />
+
+      {/* GAP-PAYROLL-CORRECTIONS-01: corrections used to stay "Pending"
+          forever -- nothing could approve or reject them. Decisions are
+          PAYROLL_ROLES-only server-side and must come from someone other
+          than the correction's creator. */}
+      {!errored && canDecide && (
+        <Card title={t("pendingCardTitle")} padding>
+          <PendingCorrections rows={items.filter((r) => r.status === "pending")} />
+        </Card>
+      )}
 
       <Card title={t("historyCardTitle")}>
         {errored ? (
