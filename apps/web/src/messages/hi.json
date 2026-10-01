@@ -1915,8 +1915,9 @@
     "prevLabel": "पिछला",
     "nextLabel": "अगला",
     "showingRange": "{total} में से {from}–{to} कर्मचारी दिखाए जा रहे हैं",
-    "statActiveShown": "सक्रिय (प्रदर्शित)",
-    "statOthersShown": "अन्य (प्रदर्शित)"
+    "othersLegend": "अन्य: वे कर्मचारी जो न सेवारत (परिवीक्षा, पुष्टि, प्रतिनियुक्ति) हैं और न अवकाश पर — जैसे निलंबित, सेवानिवृत्त, बर्खास्त, अनुपस्थित।",
+    "statusFilterLabel": "स्थिति के अनुसार छाँटें",
+    "statusAll": "सभी स्थितियाँ"
   },
   "employeesTable": {
     "colEmpCode": "कर्मचारी कोड",
@@ -2566,7 +2567,7 @@
     "ddoManagementDesc": "आहरण एवं वितरण अधिकारी",
     "fullFinal": "पूर्ण एवं अंतिम",
     "fullFinalDesc": "F&F निपटान",
-    "loans": "ऋण",
+    "loans": "वेतन ऋण वसूली",
     "loansDesc": "ऋण वितरण और वसूली",
     "offCyclePayroll": "ऑफ़-साइकल वेतन",
     "offCyclePayrollDesc": "बोनस, प्रोत्साहन, और तदर्थ भुगतान",
@@ -2606,7 +2607,7 @@
     "disbursementDesc": "बैंक फ़ाइल और भुगतान प्रेषण",
     "benefits": "लाभ",
     "benefitsDesc": "HRA, LTC, चिकित्सा नामांकन",
-    "loansB": "ऋण",
+    "loansB": "कर्मचारी ऋण एवं अग्रिम",
     "loansBDesc": "ऋण आवेदन और EMI",
     "advances": "अग्रिम",
     "advancesDesc": "वेतन अग्रिम अनुरोध",
@@ -2678,14 +2679,17 @@
     "designationsDesc": "पद नाम और वेतन स्तर",
     "locations": "स्थान",
     "locationsDesc": "कार्यालय और सुविधा स्थान",
-    "setupLeavePolicies": "छुट्टी नीतियाँ",
-    "setupLeavePoliciesDesc": "छुट्टी नियम और पात्रताएं",
-    "setupHolidays": "अवकाश",
-    "setupHolidaysDesc": "राजपत्रित और प्रतिबंधित अवकाश",
     "employeeTypes": "कर्मचारी प्रकार",
     "employeeTypesDesc": "नियमित, संविदा और प्रतिनियुक्ति कर्मचारी प्रकार परिभाषित करें",
     "auditLog": "ऑडिट लॉग",
-    "auditLogDesc": "सभी HR कार्रवाइयाँ — स्वीकृतियाँ, संपादन, वेतन प्रक्रियाएं (ई-गवर्नेंस अनुपालन)"
+    "auditLogDesc": "सभी HR कार्रवाइयाँ — स्वीकृतियाँ, संपादन, वेतन प्रक्रियाएं (ई-गवर्नेंस अनुपालन)",
+    "hubSearchPlaceholder": "मॉड्यूल खोजें… (जैसे छुट्टी, वेतन, उपस्थिति)",
+    "hubSearchLabel": "एचआर मॉड्यूल खोजें",
+    "hubClearSearch": "खोज साफ़ करें",
+    "hubQuickAccess": "त्वरित पहुँच",
+    "hubResultsFor": "“{query}” के लिए {count, plural, one {# परिणाम} other {# परिणाम}}",
+    "hubNoMatch": "“{query}” से कोई मॉड्यूल मेल नहीं खाता। कोई दूसरा शब्द आज़माएँ, या इनमें से कोई खोलें:",
+    "hubItemsCount": "{count, plural, one {# आइटम} other {# आइटम}}"
   },
   "hrAuditLog": {
     "title": "मानव संसाधन लेखा-परीक्षा लॉग",
@@ -2697,7 +2701,11 @@
     "colOutcome": "परिणाम",
     "filterPlaceholder": "लेखा-परीक्षा ट्रेल खोजें…",
     "emptyTitle": "कोई लेखा-परीक्षा रिकॉर्ड नहीं",
-    "emptyMessage": "कर्मचारी, अवकाश या वेतन में परिवर्तन होने पर मानव संसाधन कार्रवाइयाँ यहाँ दिखाई देंगी।"
+    "emptyMessage": "कर्मचारी, अवकाश या वेतन में परिवर्तन होने पर मानव संसाधन कार्रवाइयाँ यहाँ दिखाई देंगी।",
+    "resourceTypeLabel": "संसाधन प्रकार",
+    "allResourceTypes": "सभी प्रकार",
+    "actorLabel": "कर्ता",
+    "actorPlaceholder": "यूज़र आईडी (सटीक)"
   },
   "icc": {
     "title": "ICC शिकायतें",
@@ -5740,7 +5748,6 @@
     "statTotalCasesLabel": "कुल मामले",
     "statChargeMemoStageLabel": "आरोप पत्र चरण",
     "statUnderInquiryLabel": "जांच में",
-    "statDisposedClosedLabel": "निपटाए / बंद",
     "cardTitle": "सतर्कता मामला रजिस्टर",
     "filterPlaceholder": "कर्मचारी, विभाग या जांच अधिकारी के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई सतर्कता मामला दर्ज नहीं",
@@ -5749,7 +5756,10 @@
     "confidentialBannerBody": "इस रजिस्टर में सतर्कता कार्यवाही के अंतर्गत नामित कर्मचारियों से संबंधित संवेदनशील व्यक्तिगत डेटा है, जिसमें बाद में वापस लिए गए मामले भी शामिल हैं। पहुंच केवल अधिकृत HR/सतर्कता भूमिकाओं तक सीमित है और लॉग की जाती है।",
     "allDisciplinary": "सभी अनुशासनिक मामले",
     "prevBatch": "पिछले 200",
-    "nextBatch": "अगले 200"
+    "nextBatch": "अगले 200",
+    "statPenaltyAppealLabel": "दंड एवं अपील",
+    "statClosedLabel": "बंद",
+    "statDroppedLabel": "वापस लिए गए"
   },
   "wfhForm": {
     "ariaLabel": "घर से काम अनुरोध फ़ॉर्म",

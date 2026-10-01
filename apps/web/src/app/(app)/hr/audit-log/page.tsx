@@ -1,9 +1,12 @@
 import Link from "next/link";
-import { PageHeader, Card, DataTable, LoadErrorState } from "@/app/_components/ds";
+import { PageHeader, Card, LoadErrorState } from "@/app/_components/ds";
+import { AuditLogTable } from "./AuditLogTable";
 import { getHrAuditLog } from "@/app/_data/loaders";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
+import { humanizeStatus } from "@/lib/formatters";
+import { HR_AUDIT_RESOURCE_TYPES, resourceHref, resourceLabel } from "./auditResource";
 
 /**
  * Mirrors services/audit-service/src/modules/events/routes.ts's role guard
@@ -19,7 +22,7 @@ export const dynamic = "force-dynamic";
 
 const PAGE_SIZE = 50;
 
-type SearchParams = { page?: string; from?: string; to?: string };
+type SearchParams = { page?: string; from?: string; to?: string; resourceType?: string; actor?: string };
 
 /** Plain `yyyy-mm-dd` from an `<input type="date">` -> an ISO instant, to
  * match the backend's `z.string().datetime()` from/to params. */
@@ -53,16 +56,25 @@ export default async function HrAuditLogPage({ searchParams }: { searchParams?: 
   // auditors could never before reach anything past the first 50 events,
   // full stop, and the CSV export (still current-page-only, see below)
   // silently covered only those same 50 with no indication more existed.
-  const result = await getHrAuditLog(PAGE_SIZE + 1, offset, { from, to });
+  // GAP-HR-AUDIT-LOG-07: resource type + actor now narrow the query
+  // server-side (audit-service ?resourceType=/?actor=), across all pages.
+  const resourceType = (HR_AUDIT_RESOURCE_TYPES as readonly string[]).includes(searchParams?.resourceType ?? "")
+    ? searchParams?.resourceType
+    : undefined;
+  const actor = searchParams?.actor?.trim().slice(0, 128) || undefined;
+  const result = await getHrAuditLog(PAGE_SIZE + 1, offset, { from, to, resourceType, actor });
   const { data: events, source, status, errorMessage } = result;
   const errored = source === "error";
   const hasNext = !errored && events.length > PAGE_SIZE;
   const pageEvents = errored ? [] : events.slice(0, PAGE_SIZE);
 
+  // GAP-HR-AUDIT-LOG-05: "Type · id" (so the CSV export carries the id too)
+  // and a row link to the entity's page for the types that have one.
   const rows = pageEvents.map((e, i) => ({
     id: String(offset + i),
     action: e.action,
-    resource: e.resource === "unknown" ? t("unknownResource") : e.resource,
+    resource: resourceLabel(e.resourceType, e.resourceId, humanizeStatus) ?? (e.resource === "unknown" ? t("unknownResource") : e.resource),
+    href: resourceHref(e.resourceType, e.resourceId) ?? null,
     actor: e.actor,
     outcome: e.outcome,
     at: e.at ?? null,
@@ -73,9 +85,11 @@ export default async function HrAuditLogPage({ searchParams }: { searchParams?: 
     params.set("page", String(p));
     if (searchParams?.from) params.set("from", searchParams.from);
     if (searchParams?.to) params.set("to", searchParams.to);
+    if (resourceType) params.set("resourceType", resourceType);
+    if (actor) params.set("actor", actor);
     return `/hr/audit-log?${params.toString()}`;
   };
-  const hasDateFilter = Boolean(searchParams?.from || searchParams?.to);
+  const hasFilter = Boolean(searchParams?.from || searchParams?.to || resourceType || actor);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -85,13 +99,10 @@ export default async function HrAuditLogPage({ searchParams }: { searchParams?: 
         back="/hr" backLabel="Back to HR"
       />
 
-      {/* GAP-HR-AUDIT-LOG-07: date range now actually narrows the query
-          server-side -- the backend already accepted from/to, nothing on
-          this page ever sent them. An actor free-text filter is NOT
-          included here: it would need a small backend addition (matching
-          the actor JSONB column) not made in this pass -- the existing
-          per-page quick filter below still searches actor/action/resource
-          text within whatever page is currently on screen. */}
+      {/* GAP-HR-AUDIT-LOG-07: date range, resource type and actor all narrow
+          the query server-side (so they apply across every page, not just
+          the 50 rows on screen). The DataTable's own text box below is a
+          within-page quick filter only. */}
       <form method="GET" style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "flex-end", margin: "0 0 16px" }}>
         <div style={{ display: "grid", gap: 4 }}>
           <label htmlFor="audit-log-from" style={{ fontSize: 12, fontWeight: 600 }}>{t("fromLabel")}</label>
@@ -101,8 +112,21 @@ export default async function HrAuditLogPage({ searchParams }: { searchParams?: 
           <label htmlFor="audit-log-to" style={{ fontSize: 12, fontWeight: 600 }}>{t("toLabel")}</label>
           <input id="audit-log-to" type="date" name="to" defaultValue={searchParams?.to ?? ""} />
         </div>
+        <div style={{ display: "grid", gap: 4 }}>
+          <label htmlFor="audit-log-resource-type" style={{ fontSize: 12, fontWeight: 600 }}>{t("resourceTypeLabel")}</label>
+          <select id="audit-log-resource-type" name="resourceType" defaultValue={resourceType ?? ""}>
+            <option value="">{t("allResourceTypes")}</option>
+            {HR_AUDIT_RESOURCE_TYPES.map((rt) => (
+              <option key={rt} value={rt}>{humanizeStatus(rt)}</option>
+            ))}
+          </select>
+        </div>
+        <div style={{ display: "grid", gap: 4 }}>
+          <label htmlFor="audit-log-actor" style={{ fontSize: 12, fontWeight: 600 }}>{t("actorLabel")}</label>
+          <input id="audit-log-actor" type="search" name="actor" maxLength={128} defaultValue={actor ?? ""} placeholder={t("actorPlaceholder")} />
+        </div>
         <button type="submit" className="btn">{t("applyFilter")}</button>
-        {hasDateFilter && (
+        {hasFilter && (
           <Link href="/hr/audit-log" className="btn ghost">{t("clearFilter")}</Link>
         )}
       </form>
@@ -119,24 +143,19 @@ export default async function HrAuditLogPage({ searchParams }: { searchParams?: 
           </div>
         ) : (
           <>
-            <DataTable
-              columns={[
-                { key: "at", label: t("colWhen"), cellType: "datetime" },
-                { key: "action", label: t("colAction") },
-                { key: "resource", label: t("colResource") },
-                { key: "actor", label: t("colActor") },
-                { key: "outcome", label: t("colOutcome"), cellType: "status" },
-              ]}
+            <AuditLogTable
               rows={rows}
-              sortable
-              filterable
-              filterPlaceholder={t("filterPlaceholder")}
-              exportable
-              exportFilename="hr-audit-log"
-              emptyIcon="📋"
-              emptyTitle={t("emptyTitle")}
-              emptyMessage={t("emptyMessage")}
-              caption={t("cardTitle")}
+              labels={{
+                when: t("colWhen"),
+                action: t("colAction"),
+                resource: t("colResource"),
+                actor: t("colActor"),
+                outcome: t("colOutcome"),
+                filterPlaceholder: t("filterPlaceholder"),
+                emptyTitle: t("emptyTitle"),
+                emptyMessage: t("emptyMessage"),
+                caption: t("cardTitle"),
+              }}
             />
             {pageEvents.length > 0 && (
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 12, fontSize: 13, color: "var(--mut,#64748b)" }}>

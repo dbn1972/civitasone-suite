@@ -39,7 +39,7 @@ function rowFor(status: string, i: number) {
 // hasMore, stats}, source }.
 function apiResult(
   items: Record<string, unknown>[],
-  stats: { chargeMemoStage: number; underInquiry: number; closed: number; total: number },
+  stats: { chargeMemoStage: number; underInquiry: number; penaltyAndAppeal?: number; closed: number; dropped?: number; total: number },
 ) {
   return {
     data: { items, total: items.length, hasMore: false, stats },
@@ -71,34 +71,27 @@ describe("VigilancePage", () => {
     expect(link).toHaveAttribute("href", "/hr/disciplinary/case-1");
   });
 
-  it("renders all three stat-card buckets exactly as the backend computed them", async () => {
-    // Regression (updated for GAP-HR-VIGILANCE-02/04): the three buckets
-    // (charge-memo stage / under inquiry / disposed-closed, mutually
-    // exclusive and exhaustive over all 10 real CaseStatus values) are now
-    // computed server-side, not from `items.filter(...)` -- covered
-    // end-to-end for the bucket logic itself by
-    // disciplinary-vigilance-pagination-real-db.test.ts. This test only
-    // proves the page *wires up* whatever the backend sends, using stats
-    // that deliberately disagree with a naive recount of the (deliberately
-    // short) `items` array, so a regression back to client-side computation
-    // would be caught here too.
+  it("renders every stat-card bucket exactly as the backend computed it (GAP-HR-VIGILANCE-02)", async () => {
+    // Stats deliberately disagree with a naive recount of the (short)
+    // `items` array so a regression to client-side computation is caught.
+    // penaltyAndAppeal is its own card: a penalty_imposed/appeal_filed case
+    // must NOT show up under "Under Inquiry".
     fetchJsonMock.mockResolvedValue(apiResult(
-      [rowFor("opened", 1)],
-      { chargeMemoStage: 4, underInquiry: 3, closed: 2, total: 9 },
+      [rowFor("penalty_imposed", 1)],
+      { chargeMemoStage: 4, underInquiry: 3, penaltyAndAppeal: 5, closed: 2, dropped: 1, total: 15 },
     ));
 
     const ui = await VigilancePage({});
     render(ui);
 
-    const total = screen.getByText("Total Cases").closest(".stat");
-    const chargeMemoStage = screen.getByText("Charge Memo Stage").closest(".stat");
-    const underInquiry = screen.getByText("Under Inquiry").closest(".stat");
-    const disposedClosed = screen.getByText("Disposed / Closed").closest(".stat");
-
-    expect(chargeMemoStage!.querySelector(".val")?.textContent).toBe("4");
-    expect(underInquiry!.querySelector(".val")?.textContent).toBe("3");
-    expect(disposedClosed!.querySelector(".val")?.textContent).toBe("2");
-    expect(total!.querySelector(".val")?.textContent).toBe("9");
+    const val = (label: string) => screen.getByText(label).closest(".stat")!.querySelector(".val")?.textContent;
+    expect(val("Charge Memo Stage")).toBe("4");
+    expect(val("Under Inquiry")).toBe("3");
+    expect(val("Penalty & Appeal")).toBe("5");
+    expect(val("Closed")).toBe("2");
+    expect(val("Dropped")).toBe("1");
+    expect(val("Total Cases")).toBe("15");
+    expect(["Charge Memo Stage", "Under Inquiry", "Penalty & Appeal", "Closed", "Dropped"].reduce((n, l) => n + Number(val(l)), 0)).toBe(15);
   });
 
   it("shows a link back to the full disciplinary register (GAP-HR-VIGILANCE-05)", async () => {

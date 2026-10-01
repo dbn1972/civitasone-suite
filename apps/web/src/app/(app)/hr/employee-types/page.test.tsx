@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+let mockRoles: string[] = ["hr_admin"];
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => mockRoles }));
+
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
@@ -18,7 +21,14 @@ const MOCK_TYPES = [
 ];
 
 describe("EmployeeTypesPage", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
+  beforeEach(() => { fetchJsonMock.mockReset(); mockRoles = ["hr_admin"]; });
+
+  it("shows PermissionDenied and never fetches for a role the backend would 403 (GAP-HR-EMPLOYEE-TYPES-04)", async () => {
+    mockRoles = ["payroll_officer"];
+    render(await EmployeeTypesPage());
+    expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+  });
 
   it("renders employee types and real stat counts on success", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_TYPES, source: "api" });

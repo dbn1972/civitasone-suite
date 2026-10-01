@@ -173,13 +173,13 @@ describe("GET /v1/hrms/vigilance (GAP-HR-VIGILANCE-04/06)", () => {
     expect(body.hasMore).toBe(true);
   });
 
-  it("stat buckets count every major case in the tenant; dropped counts toward total/closed even though hidden from the row list", async () => {
+  it("stat buckets count every major case in the tenant; dropped is its own bucket and counts toward total even though hidden from the row list", async () => {
     const res = await app.inject({
       method: "GET", url: "/v1/hrms/vigilance?limit=1&offset=0",
       headers: auth(HR_OFFICER_ACTOR, ["hr_officer"]),
     });
     const body = res.json();
-    expect(body.stats).toEqual({ chargeMemoStage: 0, underInquiry: 1, closed: 2, total: 3 });
+    expect(body.stats).toEqual({ chargeMemoStage: 0, underInquiry: 1, penaltyAndAppeal: 0, closed: 1, dropped: 1, total: 3 });
   });
 
   it("still returns nextHearing alongside the newly-added inquiryAppointedDate alias with the same value", async () => {

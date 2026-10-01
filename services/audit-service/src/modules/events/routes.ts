@@ -41,6 +41,25 @@ async function auditCrossTenantRead(
   );
 }
 
+/**
+ * GAP-HR-AUDIT-LOG-07/08: shared narrowing params for both list routes.
+ * `service` is a comma-separated allow-list ("hrms,payroll"), matched against
+ * the `service` every producer writes into its audit payload.
+ */
+const eventFilterQuery = {
+  service: z.string().max(256).optional(),
+  resourceType: z.string().min(1).max(128).optional(),
+  actor: z.string().trim().min(1).max(128).optional(),
+};
+function toFilters(q: { service?: string | undefined; resourceType?: string | undefined; actor?: string | undefined }): queries.EventFilters {
+  const services = q.service?.split(",").map((v) => v.trim()).filter((v) => v.length > 0).slice(0, 10);
+  return {
+    ...(services && services.length > 0 ? { services } : {}),
+    ...(q.resourceType ? { resourceType: q.resourceType } : {}),
+    ...(q.actor ? { actor: q.actor } : {}),
+  };
+}
+
 export async function eventRoutes(app: FastifyInstance): Promise<void> {
   app.get("/audit/events", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -49,6 +68,7 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
       from:     z.string().datetime().optional(),
       to:       z.string().datetime().optional(),
       type:     z.string().optional(),
+      ...eventFilterQuery,
     }).parse(req.query);
     const tenantId = q.tenantId ?? ctx.tenantId;
     const isCrossTenant = tenantId !== ctx.tenantId;
@@ -64,7 +84,7 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     // that file for why a bare db.transaction() here was not enough. Fixed
     // at the repo layer (not per call site) so no future caller can forget
     // it the way this one originally did.
-    sendValidated(reply, auditEventsListSchema, await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset));
+    sendValidated(reply, auditEventsListSchema, await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset, toFilters(q)));
   });
 
   app.get("/v1/audit/events", async (req, reply) => {
@@ -79,6 +99,7 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
       from: z.string().datetime().optional(),
       to: z.string().datetime().optional(),
       type: z.string().optional(),
+      ...eventFilterQuery,
     }).parse(req.query);
     requireRole(ctx, ["audit_officer", "audit_admin", "super_admin", "platform_admin"]);
     const tenantId = q.tenantScoped === false ? (q.tenantId ?? ctx.tenantId) : ctx.tenantId;
@@ -93,7 +114,7 @@ export async function eventRoutes(app: FastifyInstance): Promise<void> {
     const to = q.to ? new Date(q.to) : new Date();
     // G-FIX-3: see the identical note on GET /audit/events above — RLS
     // scoping is guaranteed inside queries.listEvents()/repo.listEvents().
-    sendValidated(reply, TenantAuditEventListSchema, (await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset)).map((event) => ({
+    sendValidated(reply, TenantAuditEventListSchema, (await queries.listEvents(tenantId, from, to, q.type, q.limit, q.offset, toFilters(q))).map((event) => ({
       id: event.id,
       actor: typeof event.actor === "object" && event.actor !== null && "email" in event.actor
         ? String(event.actor.email)

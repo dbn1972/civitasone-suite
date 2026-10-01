@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { HR_AUDIT_SERVICES } from "@/app/(app)/hr/audit-log/auditResource";
 import type {
   AccountSummary,
   AppraisalSummary,
@@ -438,7 +439,14 @@ function mapAuditRows(payload: unknown): AuditRowSummary[] | null {
     // for the raw audit-service row shape, timestamp for an already-
     // flattened one -- previously dropped entirely by this mapper.
     const at = toText(row.occurredAt) ?? toText(row.timestamp);
-    mapped.push({ actor, action, resource, outcome, at });
+    // GAP-HR-AUDIT-LOG-05: the raw audit-service row carries the audited
+    // entity's type in payload.resourceType and its id as `target` (the
+    // flattened /v1 shape has neither a payload nor a separate id) -- kept
+    // so the page can render "Type · id" and link to the entity.
+    const rowPayload = isRecord(row.payload) ? row.payload : null;
+    const resourceType = (rowPayload ? toText(rowPayload.resourceType) : null) ?? undefined;
+    const resourceId = toText(row.resourceId) ?? (rowPayload ? toText(rowPayload.resourceId) : null) ?? toText(row.target) ?? undefined;
+    mapped.push({ actor, action, resource, outcome, at, ...(resourceType ? { resourceType } : {}), ...(resourceId ? { resourceId } : {}) });
   }
   // GAP-HR-AUDIT-LOG-01: an empty but VALID array must stay a clean "no
   // records", never the error badge -- only fall back to null when the
@@ -742,13 +750,18 @@ export async function getAuditItems(): Promise<LoaderResult<AuditRowSummary[]>> 
 export async function getHrAuditLog(
   limit = 50,
   offset = 0,
-  filters?: { from?: string; to?: string },
+  filters?: { from?: string; to?: string; resourceType?: string; actor?: string },
 ): Promise<LoaderResult<AuditRowSummary[]>> {
   const params = new URLSearchParams();
   params.set("limit", String(limit));
   params.set("offset", String(offset));
   if (filters?.from) params.set("from", filters.from);
   if (filters?.to) params.set("to", filters.to);
+  // GAP-HR-AUDIT-LOG-08: scope to the services whose events are HR actions
+  // (audit-service filters on payload.service) instead of the whole tenant.
+  params.set("service", HR_AUDIT_SERVICES.join(","));
+  if (filters?.resourceType) params.set("resourceType", filters.resourceType);
+  if (filters?.actor) params.set("actor", filters.actor);
   return fetchJson(`/api/audit/events?${params.toString()}`, [] as AuditRowSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.audit-log",
@@ -1177,10 +1190,12 @@ export async function getAdminOperationsDashboard(): Promise<LoaderResult<AdminO
 // can only ever see the current 50-row server page. An employee on page 3
 // was simply unreachable by name from page 1's search box. Now forwards a
 // real server-side search across the whole tenant.
-export async function getEmployees(limit = 50, offset = 0, employeeType?: string, q?: string): Promise<LoaderResult<EmployeeSummary[]>> {
+export async function getEmployees(limit = 50, offset = 0, employeeType?: string, q?: string, status?: string): Promise<LoaderResult<EmployeeSummary[]>> {
   const typeQs = employeeType ? `&employeeType=${encodeURIComponent(employeeType)}` : "";
   const qQs = q ? `&q=${encodeURIComponent(q)}` : "";
-  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}${typeQs}${qQs}`, [] as EmployeeSummary[], {
+  // GAP-HR-EMPLOYEES-06: server-side status filter (canonical lowercase status).
+  const statusQs = status ? `&status=${encodeURIComponent(status)}` : "";
+  return fetchJson(`/api/v1/hrms/employees?limit=${limit}&offset=${offset}${typeQs}${qQs}${statusQs}`, [] as EmployeeSummary[], {
     revalidateSeconds: 30,
     telemetryKey: "hr.employees",
     responseSchema: employeesListSchema,
@@ -2273,6 +2288,7 @@ const HR_DASHBOARD_EMPTY: HRDashboard = {
   employeeTypeBreakdown: [],
   routingFailedCount: 0,
   totalDepartments: 0,
+  servingCount: null,
 };
 
 function mapHRDashboard(payload: unknown): HRDashboard | null {
@@ -2302,6 +2318,7 @@ function mapHRDashboard(payload: unknown): HRDashboard | null {
       : [],
     routingFailedCount: typeof raw.routingFailedCount === "number" ? raw.routingFailedCount : 0,
     totalDepartments: typeof raw.totalDepartments === "number" ? raw.totalDepartments : 0,
+    servingCount: typeof raw.servingCount === "number" ? raw.servingCount : null,
   };
 }
 

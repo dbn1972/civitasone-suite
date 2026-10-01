@@ -41,6 +41,7 @@ export const HR_TILE_ROLE_OVERRIDES: Record<string, readonly string[]> = {
   //     today; hiding the tile from them is purely descriptive.
   "/hr/advances": ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer"], // advances/page.tsx ADVANCE_ROLES
   "/hr/apar": ["hr_admin", "hr_officer", "super_admin", "manager", "employee"], // apar/page.tsx APAR_ROLES
+  "/hr/employee-types": ["hr_admin", "super_admin", "admin", "manager", "officer"], // GAP-HR-EMPLOYEE-TYPES-04: mirrors employee-types-routes.ts GET guard (HR_ROLES + manager + officer) 1:1; widening it is the open policy question
   "/hr/icc": ["hr_admin", "super_admin", "icc_member"], // icc/page.tsx ICC_ROLES
   "/hr/id-cards": ["hr_admin", "security_admin", "super_admin"], // id-cards/page.tsx ID_CARDS_ROLES
   "/hr/leave-policies": ["hr_admin", "super_admin", "admin"], // leave-policies/page.tsx LEAVE_POLICY_ADMIN_ROLES

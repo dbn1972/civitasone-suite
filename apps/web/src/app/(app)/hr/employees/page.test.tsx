@@ -24,6 +24,7 @@ const DASHBOARD_EMPTY = {
 const DASH_OK = {
   headcount: 3,
   onLeave: 1,
+  servingCount: 1,
   employeeTypeBreakdown: [{ name: "permanent", count: 2 }, { name: "intern", count: 1 }],
 };
 
@@ -57,13 +58,13 @@ describe("EmployeeDirectoryPage", () => {
     it("forwards ?q= to getEmployees", async () => {
       getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
       await renderPage({ q: "Rashmi" });
-      expect(getEmployeesMock).toHaveBeenCalledWith(50, 0, undefined, "Rashmi");
+      expect(getEmployeesMock).toHaveBeenCalledWith(50, 0, undefined, "Rashmi", undefined);
     });
 
     it("does not forward an empty search string as a real query", async () => {
       getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
       await renderPage({});
-      expect(getEmployeesMock).toHaveBeenCalledWith(50, 0, undefined, undefined);
+      expect(getEmployeesMock).toHaveBeenCalledWith(50, 0, undefined, undefined, undefined);
     });
 
     it("finds an employee whose row is on a later server page when searching (regression: used to only ever see the current 50-row page)", async () => {
@@ -72,7 +73,7 @@ describe("EmployeeDirectoryPage", () => {
         source: "api",
       });
       await renderPage({ q: "Rashmi", page: "3" });
-      expect(getEmployeesMock).toHaveBeenCalledWith(50, 150, undefined, "Rashmi");
+      expect(getEmployeesMock).toHaveBeenCalledWith(50, 150, undefined, "Rashmi", undefined);
       expect(screen.getByText("Rashmi Ranjan Das")).toBeInTheDocument();
     });
 
@@ -135,12 +136,9 @@ describe("EmployeeDirectoryPage", () => {
     getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
     getHRDashboardMock.mockResolvedValue({ data: { headcount: 0, onLeave: 0, employeeTypeBreakdown: [] }, source: "error" });
     await renderPage();
-    // Total, OnLeave, and Others all derive (directly, or via the total/others
-    // arithmetic) from the now-failed dashboard fetch, so all three dash out.
-    expect(screen.getAllByText("—").length).toBe(3);
-    // Active is derived only from the (successfully-fetched) employees page,
-    // so it must still show its real count rather than dashing out too.
-    expect(screen.getByText("1")).toBeInTheDocument();
+    // Total, Active, OnLeave and Others all derive from the now-failed dashboard fetch.
+    // Active (servingCount) is a dashboard aggregate now too (GAP-HR-EMPLOYEES-01), so all four dash out.
+    expect(screen.getAllByText("—").length).toBe(4);
   });
 
   it("does not show dash stats on a genuine successful load", async () => {
@@ -200,5 +198,76 @@ describe("EmployeeDirectoryPage", () => {
     await renderPage({ type: "permanent" });
     expect(screen.getByRole("link", { name: "Permanent (2)" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("link", { name: "All (3)" })).not.toHaveAttribute("aria-current");
+  });
+
+  /**
+   * GAP-HR-EMPLOYEES-01: Active/Others used to be computed from the 50 rows
+   * on the current page (and Others subtracted that page count from the
+   * tenant total), so the cards changed with ?page=.
+   */
+  describe("tenant-wide stat cards (GAP-HR-EMPLOYEES-01)", () => {
+    const TENANT = { headcount: 214, onLeave: 5, servingCount: 157, employeeTypeBreakdown: [] as Array<{ name: string; count: number }> };
+    const cardValue = (label: string) =>
+      Array.from(document.querySelectorAll(".stat")).find((el) => el.textContent?.includes(label))?.querySelector(".val")?.textContent;
+
+    it("shows 214 / 157 / 5 / 52 regardless of ?page=", async () => {
+      for (const page of ["0", "3"]) {
+        getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+        getHRDashboardMock.mockResolvedValue({ data: TENANT, source: "api" });
+        const { unmount } = await renderPage({ page });
+        expect(cardValue("Total")).toBe("214");
+        expect(cardValue("Active")).toBe("157");
+        expect(cardValue("On Leave")).toBe("5");
+        expect(cardValue("Others")).toBe("52");
+        unmount();
+      }
+    });
+
+    it("shows a dash for Active and Others (not a computed guess) when the backend does not report servingCount", async () => {
+      getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+      getHRDashboardMock.mockResolvedValue({ data: { ...TENANT, servingCount: null }, source: "api" });
+      await renderPage();
+      expect(cardValue("Active")).toBe("—");
+      expect(cardValue("Others")).toBe("—");
+      expect(cardValue("Total")).toBe("214");
+    });
+  });
+
+  /**
+   * GAP-HR-EMPLOYEES-06: server-side status filter; stats stay tenant-wide.
+   */
+  describe("status filter (GAP-HR-EMPLOYEES-06)", () => {
+    it("forwards a known ?status= to getEmployees and marks that chip current", async () => {
+      getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+      getHRDashboardMock.mockResolvedValue({ data: DASH_OK, source: "api" });
+      await renderPage({ status: "separated" });
+      expect(getEmployeesMock).toHaveBeenCalledWith(50, 0, undefined, undefined, "separated");
+      expect(screen.getByRole("link", { name: "Separated" })).toHaveAttribute("aria-current", "page");
+      expect(screen.getByRole("link", { name: "All statuses" })).not.toHaveAttribute("aria-current");
+    });
+
+    it("ignores an unknown ?status= value instead of forwarding it", async () => {
+      getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+      getHRDashboardMock.mockResolvedValue({ data: DASH_OK, source: "api" });
+      await renderPage({ status: "bogus" });
+      expect(getEmployeesMock).toHaveBeenCalledWith(50, 0, undefined, undefined, undefined);
+    });
+
+    it("keeps the status when switching the type tab", async () => {
+      getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+      getHRDashboardMock.mockResolvedValue({ data: DASH_OK, source: "api" });
+      await renderPage({ status: "confirmed" });
+      expect(screen.getByRole("link", { name: "Intern (1)" })).toHaveAttribute("href", "/hr/employees?type=intern&status=confirmed");
+    });
+  });
+
+  /** GAP-HR-EMPLOYEES-08: no inline styles on the chip rows. */
+  it("renders the chip rows without inline style attributes", async () => {
+    getEmployeesMock.mockResolvedValue({ data: ONE_EMPLOYEE, source: "api" });
+    getHRDashboardMock.mockResolvedValue({ data: DASH_OK, source: "api" });
+    await renderPage();
+    const chips = Array.from(document.querySelectorAll("a.chip-link"));
+    expect(chips.length).toBeGreaterThan(0);
+    expect(chips.every((c) => !c.hasAttribute("style"))).toBe(true);
   });
 });

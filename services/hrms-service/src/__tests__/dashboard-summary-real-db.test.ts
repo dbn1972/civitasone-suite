@@ -124,6 +124,11 @@ beforeAll(async () => {
       VALUES (gen_random_uuid(), ${TENANT_B}, ${empId}, ${TODAY}, ${status}, ${SEED_ACTOR}, ${SEED_ACTOR})
     `);
   }
+  // GAP-HR-EMPLOYEES-01/06: give tenant B a mix of statuses -- 2 serving
+  // (confirmed), 1 on_leave, 1 suspended (neither serving nor on leave).
+  for (const [id, status] of [[EMP_B1, "confirmed"], [EMP_B2, "confirmed"], [EMP_B3, "on_leave"], [EMP_B4, "suspended"]] as const) {
+    await asTenant(TENANT_B, (tx) => tx`UPDATE employee.hrms_employees SET status = ${status} WHERE id = ${id}`);
+  }
   // EMP_B4 deliberately gets NO attendance row today -- still counts toward
   // headcount/totalDepartments, just not toward present/attendanceRowsToday.
 
@@ -140,6 +145,8 @@ interface DashboardResponseBody {
   headcount: number;
   attendanceTodayPct: number | null;
   totalDepartments: number;
+  servingCount: number | null;
+  onLeave: number;
   departmentBreakdown: { name: string; count: number }[];
 }
 
@@ -181,5 +188,39 @@ describe("GET /v1/hrms/dashboard — GAP-HR-DASHBOARD-06 (real totalDepartments 
     const { status, body } = await getDashboard(HR_TOKEN_A);
     expect(status).toBe(200);
     expect(body.totalDepartments).toBe(1);
+  });
+});
+
+describe("GET /v1/hrms/dashboard — GAP-HR-EMPLOYEES-01 (tenant-wide servingCount)", () => {
+  it("counts probation/confirmed/deputation only, separately from onLeave and other statuses", async () => {
+    const { status, body } = await getDashboard(HR_TOKEN_B);
+    expect(status).toBe(200);
+    expect(body.headcount).toBe(4);
+    expect(body.servingCount).toBe(2);
+    expect(body.onLeave).toBe(1);
+    // headcount 4 - serving 2 - onLeave 1 = 1 "other" (the suspended employee).
+    expect(body.headcount - (body.servingCount ?? 0) - body.onLeave).toBe(1);
+  });
+});
+
+describe("GET /v1/hrms/employees?status= — GAP-HR-EMPLOYEES-06 (server-side status filter)", () => {
+  async function list(qs: string): Promise<{ status: number; ids: string[] }> {
+    const r = await app.inject({ method: "GET", url: `/v1/hrms/employees?limit=50${qs}`, headers: { authorization: `Bearer ${HR_TOKEN_B}` } });
+    const body = JSON.parse(r.body) as { data?: Array<{ id: string }> };
+    return { status: r.statusCode, ids: (body.data ?? []).map((e) => e.id) };
+  }
+
+  it("returns only employees with that status", async () => {
+    const res = await list("&status=on_leave");
+    expect(res.status).toBe(200);
+    expect(res.ids).toEqual([EMP_B3]);
+  });
+
+  it("without the filter returns everyone", async () => {
+    expect((await list("")).ids.sort()).toEqual([EMP_B1, EMP_B2, EMP_B3, EMP_B4].sort());
+  });
+
+  it("rejects a status outside the canonical set", async () => {
+    expect((await list("&status=bogus")).status).toBe(400);
   });
 });

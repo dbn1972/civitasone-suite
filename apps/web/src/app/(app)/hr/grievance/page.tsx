@@ -56,6 +56,9 @@ async function getData(): Promise<LoaderResult<GrievanceListResult>> {
   );
 }
 
+const INQUIRY_STATUSES: ReadonlySet<string> = new Set(["under_inquiry", "in_progress"]);
+const TERMINAL_STATUSES: ReadonlySet<string> = new Set(["closed", "disposed", "dropped"]);
+
 function shortId(id: string): string {
   return id.slice(0, 8).toUpperCase();
 }
@@ -85,9 +88,14 @@ export default async function GrievancePage() {
   const notBuilt = !errored && data.notBuilt;
   const items: Row[] = data.items.map((r) => ({ ...r, caseRef: shortId(r.id) }));
 
-  const opened = items.filter((i) => i.status === "opened" || i.status === "registered").length;
-  const inquiry = items.filter((i) => i.status === "under_inquiry" || i.status === "in_progress").length;
-  const closed = items.filter((i) => i.status === "closed" || i.status === "disposed").length;
+  // GAP-HR-GRIEVANCE-06: there is no grievance status enum yet (the register
+  // is a stub, GAP-HR-GRIEVANCE-01), so the explicit sets below are the two
+  // "known" stages; everything else -- including any status not listed, e.g.
+  // 'escalated' -- counts as Open. That keeps Open + Under Inquiry + Disposed
+  // equal to Total instead of silently dropping unlisted statuses.
+  const inquiry = items.filter((i) => INQUIRY_STATUSES.has(i.status)).length;
+  const closed = items.filter((i) => TERMINAL_STATUSES.has(i.status)).length;
+  const opened = items.length - inquiry - closed;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "caseRef", label: t("colRefNo") },

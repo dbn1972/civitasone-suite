@@ -15,8 +15,10 @@ export async function getEvent(tenantId: string, id: string): Promise<AuditEvent
   }
 }
 
-export async function listEvents(tenantId: string, from: Date, to: Date, type?: string, limit = 50, offset = 0): Promise<AuditEventView[]> {
-  return repo.listEvents(tenantId, from, to, type, limit, offset);
+export type EventFilters = repo.ListEventsFilters;
+
+export async function listEvents(tenantId: string, from: Date, to: Date, type?: string, limit = 50, offset = 0, filters: EventFilters = {}): Promise<AuditEventView[]> {
+  return repo.listEvents(tenantId, from, to, type, limit, offset, filters);
 }
 
 /** Return the audit trail for a specific entity (entityType + entityId). */

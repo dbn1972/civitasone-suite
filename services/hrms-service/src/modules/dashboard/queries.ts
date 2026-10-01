@@ -1,8 +1,9 @@
-import { eq, and, sql, ne, or, lt } from "drizzle-orm";
+import { eq, and, sql, ne, or, lt, inArray } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
 import { hrmsLeaveApps, hrmsLeaveTypes } from "../leave/schema.js";
 import { hrmsAttendance } from "../attendance/schema.js";
+import { SERVING_STATUSES } from "../employee/status.js";
 
 export async function getDashboard(tenantId: string): Promise<{
   headcount: number;
@@ -19,6 +20,10 @@ export async function getDashboard(tenantId: string): Promise<{
   // GAP-HR-DASHBOARD-06: real count of hrms_departments rows for this
   // tenant -- departmentBreakdown is capped to top-6-plus-"Others".
   totalDepartments: number;
+  // GAP-HR-EMPLOYEES-01: tenant-wide count of currently-serving employees
+  // (status probation/confirmed/deputation -- SERVING_STATUSES), so the
+  // employees page's Active/Others cards no longer derive from one page of rows.
+  servingCount: number;
 }> {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
@@ -26,7 +31,7 @@ export async function getDashboard(tenantId: string): Promise<{
 
   const {
     headcountRow, headcountLastMonthRow, pendingRow, presentRow, attendanceTodayRow,
-    onLeaveRow, deptRows, employeeTypeRows, routingFailedRow, totalDeptsRow,
+    onLeaveRow, deptRows, employeeTypeRows, routingFailedRow, totalDeptsRow, servingRow,
   } =
     await db.transaction(async (tx) => {
       const [headcountRow] = await tx
@@ -104,6 +109,16 @@ export async function getDashboard(tenantId: string): Promise<{
           eq(hrmsEmployees.status, "on_leave"),
         ));
 
+      // GAP-HR-EMPLOYEES-01: serving = SERVING_STATUSES. on_leave is its own
+      // status (counted by onLeaveRow above), so the two never overlap.
+      const [servingRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hrmsEmployees)
+        .where(and(
+          eq(hrmsEmployees.tenantId, tenantId),
+          inArray(hrmsEmployees.status, [...SERVING_STATUSES]),
+        ));
+
       // Tenant-wide headcount by employeeType (mirrors headcount's "not separated" scope,
       // so per-type counts sum to the same total shown for "All"). Independent of any
       // list-endpoint pagination -- see employees/page.tsx type-tabs.
@@ -136,7 +151,7 @@ export async function getDashboard(tenantId: string): Promise<{
 
       return {
         headcountRow, headcountLastMonthRow, pendingRow, presentRow, attendanceTodayRow,
-        onLeaveRow, deptRows, employeeTypeRows, routingFailedRow, totalDeptsRow,
+        onLeaveRow, deptRows, employeeTypeRows, routingFailedRow, totalDeptsRow, servingRow,
       };
     });
 
@@ -174,6 +189,7 @@ export async function getDashboard(tenantId: string): Promise<{
     employeeTypeBreakdown: employeeTypeRows.map((r) => ({ name: r.name, count: r.count })),
     routingFailedCount: routingFailedRow?.count ?? 0,
     totalDepartments: totalDeptsRow?.count ?? 0,
+    servingCount: servingRow?.count ?? 0,
   };
 }
 

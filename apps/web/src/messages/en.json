@@ -1991,8 +1991,9 @@
     "prevLabel": "Previous",
     "nextLabel": "Next",
     "showingRange": "Showing {from}–{to} of {total} employees",
-    "statActiveShown": "Active (Shown)",
-    "statOthersShown": "Others (Shown)"
+    "othersLegend": "Others: employees who are neither serving (probation, confirmed, deputation) nor on leave — e.g. suspended, retired, terminated, no-show.",
+    "statusFilterLabel": "Filter by status",
+    "statusAll": "All statuses"
   },
   "employeesTable": {
     "colEmpCode": "Emp Code",
@@ -2667,7 +2668,7 @@
     "ddoManagementDesc": "Drawing & Disbursing Officers",
     "fullFinal": "Full & Final",
     "fullFinalDesc": "F&F settlements",
-    "loans": "Loans",
+    "loans": "Payroll Loan Recovery",
     "loansDesc": "Loan disbursement and recovery",
     "offCyclePayroll": "Off-Cycle Payroll",
     "offCyclePayrollDesc": "Bonus, incentive, and ad-hoc payments",
@@ -2707,7 +2708,7 @@
     "disbursementDesc": "Bank file and payment dispatch",
     "benefits": "Benefits",
     "benefitsDesc": "HRA, LTC, medical enrollment",
-    "loansB": "Loans",
+    "loansB": "Staff Loans & Advances",
     "loansBDesc": "Loan applications and EMI",
     "advances": "Advances",
     "advancesDesc": "Salary advance requests",
@@ -2779,14 +2780,17 @@
     "designationsDesc": "Job titles and pay levels",
     "locations": "Locations",
     "locationsDesc": "Office and facility locations",
-    "setupLeavePolicies": "Leave Policies",
-    "setupLeavePoliciesDesc": "Leave rules and entitlements",
-    "setupHolidays": "Holidays",
-    "setupHolidaysDesc": "Gazetted and restricted holidays",
     "employeeTypes": "Employee Types",
     "employeeTypesDesc": "Define regular, contractual, and deputation employee types",
     "auditLog": "Audit Log",
-    "auditLogDesc": "All HR actions — approvals, edits, payroll runs (e-Governance compliance)"
+    "auditLogDesc": "All HR actions — approvals, edits, payroll runs (e-Governance compliance)",
+    "hubSearchPlaceholder": "Search modules… (e.g. leave, payroll, attendance)",
+    "hubSearchLabel": "Search HR modules",
+    "hubClearSearch": "Clear search",
+    "hubQuickAccess": "Quick Access",
+    "hubResultsFor": "{count, plural, one {# result} other {# results}} for “{query}”",
+    "hubNoMatch": "No modules match “{query}”. Try a different term, or open one of these:",
+    "hubItemsCount": "{count, plural, one {# item} other {# items}}"
   },
   "hrAuditLog": {
     "title": "HR Audit Log",
@@ -2807,7 +2811,11 @@
     "clearFilter": "Clear",
     "showingRange": "Showing {from}–{to}",
     "prevPage": "← Previous",
-    "nextPage": "Next →"
+    "nextPage": "Next →",
+    "resourceTypeLabel": "Resource type",
+    "allResourceTypes": "All types",
+    "actorLabel": "Actor",
+    "actorPlaceholder": "User ID (exact)"
   },
   "icc": {
     "title": "ICC Complaints",
@@ -4983,7 +4991,6 @@
     "statTotalCasesLabel": "Total Cases",
     "statChargeMemoStageLabel": "Charge Memo Stage",
     "statUnderInquiryLabel": "Under Inquiry",
-    "statDisposedClosedLabel": "Disposed / Closed",
     "cardTitle": "Vigilance Cases Register",
     "filterPlaceholder": "Filter by employee, department or inquiry officer…",
     "emptyTitle": "No vigilance cases on record",
@@ -4992,7 +4999,10 @@
     "confidentialBannerBody": "This register contains sensitive personal data relating to named employees under vigilance proceedings, including cases that were later dropped. Access is restricted to authorised HR/Vigilance roles and is logged.",
     "allDisciplinary": "All Disciplinary Cases",
     "prevBatch": "Previous 200",
-    "nextBatch": "Next 200"
+    "nextBatch": "Next 200",
+    "statPenaltyAppealLabel": "Penalty & Appeal",
+    "statClosedLabel": "Closed",
+    "statDroppedLabel": "Dropped"
   },
   "wfhForm": {
     "ariaLabel": "Work From Home request form",
