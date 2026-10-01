@@ -2,6 +2,11 @@ import Link from "next/link";
 
 interface Props {
   userName: string;
+  // GAP-HR-DASHBOARD-08: computed server-side in page.tsx from the real
+  // current hour in Asia/Kolkata (see greetingForHour/currentIstHour there)
+  // -- replaces the previous `dayName.startsWith("S") ? "Good day" : "Good
+  // morning"` weekday hack, which never reflected the actual time of day.
+  greeting: string;
   // Sourced from the HR dashboard loader (page.tsx's data.pendingLeaves) --
   // null/undefined means the load genuinely failed, not "zero pending
   // actions". Same underlying field as HRKPIStrip's pendingLeaves prop; see
@@ -26,7 +31,11 @@ interface Props {
 }
 
 const DEFAULT_ACTIONS: NonNullable<Props["actions"]> = [
-  { label: "Export Report", href: "/hr/payroll" },
+  // GAP-HR-DASHBOARD-06: was "/hr/payroll" -- not a report, a dead-end link.
+  // /reports/list/new?reportType=hr is a real, working report-generation
+  // flow (the generic reports pipeline's own form offers "hr" as its
+  // example report-type value).
+  { label: "Export Report", href: "/reports/list/new?reportType=hr" },
   { label: "+ Add Employee", href: "/hr/employees/new", primary: true },
 ];
 
@@ -39,7 +48,7 @@ function hasValue(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
 }
 
-export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today, dayName, actions = DEFAULT_ACTIONS }: Props) {
+export function GreetingHeader({ userName, greeting, pendingCount, payrollDaysLeft, today, dayName, actions = DEFAULT_ACTIONS }: Props) {
   // hasValue(pendingCount) is checked first and short-circuits the rest of
   // the chain on purpose: if we don't know the real pending count, we can't
   // conclude "nothing urgent", and silently falling back to the payroll
@@ -65,7 +74,7 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
               className drives all visual styling, so demoting the tag is a
               no-op for layout/appearance. */}
           <h2 className="greeting-title">
-            {dayName.startsWith("S") ? "Good day" : "Good morning"}, {userName}
+            {greeting}, {userName}
           </h2>
           <p className="greeting-sub">
             {dayName}, {today} · {briefing}
@@ -87,7 +96,13 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
       </div>
       <style>{`
         .greeting-header {
-          background: linear-gradient(108deg, #0f2240 0%, #1a3a6b 60%, #2554a0 100%);
+          /* GAP-HR-DASHBOARD-09: wrapped in var(--token, #same-fallback) --
+             no --dash-greeting-* token is defined anywhere, so this renders
+             identically to the previous bare-hex gradient. Page-local names
+             (not a reuse of an existing design-system token) since this
+             gradient's exact stops are bespoke to this one banner and its
+             own hand-verified WCAG contrast math below, not shared elsewhere. */
+          background: linear-gradient(108deg, var(--dash-greeting-grad-1, #0f2240) 0%, var(--dash-greeting-grad-2, #1a3a6b) 60%, var(--dash-greeting-grad-3, #2554a0) 100%);
           padding: 20px 28px 0;
           position: relative;
           overflow: hidden;
@@ -131,13 +146,13 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
              worst-case background is computable directly from the gradient's
              own stops, and it fails. #bfdbfe clears 4.5:1 at that same
              worst-case stop (5.18:1), so it holds across the whole gradient. */
-          color: #bfdbfe;
+          color: var(--dash-greeting-eyebrow, #bfdbfe);
           margin: 0 0 4px;
         }
         .greeting-title {
           font-size: 20px;
           font-weight: 700;
-          color: #f0f6ff;
+          color: var(--dash-greeting-title, #f0f6ff);
           letter-spacing: -.02em;
           margin: 0 0 3px;
         }
@@ -146,7 +161,7 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
           /* UX-005 tranche 10: #7ea8d8 measured 2.97:1 at the gradient's
              lightest stop -- same bgGradient/incomplete case as
              .greeting-eyebrow above. #dbeafe clears 4.5:1 there (6.03:1). */
-          color: #dbeafe;
+          color: var(--dash-greeting-sub, #dbeafe);
           margin: 0;
         }
         .greeting-actions {
@@ -162,7 +177,7 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
              composited on the gradient's lightest stop, measured 3.88:1
              (bgGradient/incomplete). #fff clears 4.5:1 there (5.50:1),
              matching .btn-primary-nav's own use of solid white text. */
-          color: #ffffff;
+          color: var(--dash-greeting-btn-fg, #ffffff);
           border: 1px solid rgba(255,255,255,.15);
           border-radius: 6px;
           font-size: 12px;
@@ -172,8 +187,12 @@ export function GreetingHeader({ userName, pendingCount, payrollDaysLeft, today,
           white-space: nowrap;
         }
         .btn-primary-nav {
-          background: #2563eb;
-          color: #fff;
+          /* This exact hex already matches the established --info token's
+             own fallback value used fleet-wide (e.g. var(--info, #2563eb) in
+             every dashboard SVG icon in this file family) -- reused directly
+             rather than inventing a new page-local name for it. */
+          background: var(--info, #2563eb);
+          color: var(--dash-greeting-btn-fg, #fff);
           border: none;
           border-radius: 6px;
           font-size: 12px;

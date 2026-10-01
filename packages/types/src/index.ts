@@ -517,6 +517,14 @@ export interface EmployeeSummary {
   // apps/web's mapEmployees() dropped it while re-mapping the row.
   employeeType?: string;
   status: string;
+  // GAP-HR-DASHBOARD-04: real columns (hrms_employees.date_of_joining /
+  // hrms_designations.pay_grade via employee/queries.ts's listEmployees),
+  // both optional since not every employee resolves a designation/grade.
+  // `payGrade` (not `grade`) to match the pre-existing hr/dashboard
+  // page.tsx EmpRow contract this loader feeds; see mapEmployees in
+  // loaders.ts for the grade->payGrade rename.
+  dateOfJoining?: string;
+  payGrade?: string;
 }
 
 export interface AttendanceSummary {
@@ -752,7 +760,10 @@ export type FinancialStatementSummary = {
 export type HRDashboard = {
   headcount: number;
   headcountLastMonth: number;
-  attendanceTodayPct: number;
+  // GAP-HR-DASHBOARD-07: null means "no attendance feed synced for today
+  // yet" (an honest unknown), distinct from a genuine 0%. See
+  // hrms-service dashboard/queries.ts's getDashboard.
+  attendanceTodayPct: number | null;
   pendingLeaves: number;
   onLeave: number;
   payrollDue: number;
@@ -761,6 +772,10 @@ export type HRDashboard = {
   employeeTypeBreakdown: { name: string; count: number }[];
   /** Leave applications stuck in "routing_failed" -- see hrms-service leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber. */
   routingFailedCount: number;
+  // GAP-HR-DASHBOARD-06: real total count of this tenant's hrms_departments
+  // rows -- distinct from departmentBreakdown.length, which is capped to a
+  // top-6-plus-"Others" bucket and so understates the true department count.
+  totalDepartments: number;
 };
 
 export type LeaveInboxItem = {

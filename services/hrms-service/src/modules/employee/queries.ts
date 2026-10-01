@@ -188,7 +188,7 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
  * cannot be added yet (no column); see docs/SECURITY.md's Directory Fields
  * note for the recorded policy and this gap.
  */
-export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[]): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[]): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string; dateOfJoining: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
   if (managerScope === null) {
     return { data: [], pagination: { hasMore: false, pageSize: limit } };
   }
@@ -214,6 +214,9 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
           department: deptNameById.get(r.departmentId) ?? "—",
           employeeType: r.employeeType,
           status: r.status,
+          // GAP-HR-DASHBOARD-04: real column (NOT NULL), always present --
+          // unlike designation/grade/email above, no conditional spread needed.
+          dateOfJoining: r.dateOfJoining,
           ...(designation ? { designation } : {}),
           ...(grade ? { grade } : {}),
           ...(r.email ? { email: r.email } : {}),
@@ -223,7 +226,15 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
     };
   }
 
-  return cache.listOrLoad(tenantId, "employee", `list:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}`, async () => {
+  // GAP-HR-DASHBOARD-04: "v2" bumps this list's cache key now that the
+  // cached payload shape carries a new `dateOfJoining` field -- guarantees
+  // every caller reads a freshly-shaped payload post-deploy instead of
+  // possibly serving a pre-existing cached entry (up to MAX_TTL_SECONDS old)
+  // that predates this field. Scoped to the list-hash suffix only, not the
+  // shared "employee" resource prefix also used by getEmployee/
+  // getEmployeeDetail's single-record cache keys (makeKey), which this
+  // change does not affect and must not invalidate.
+  return cache.listOrLoad(tenantId, "employee", `list:v2:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}`, async () => {
     const rows = await repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
@@ -241,6 +252,7 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
           department: deptNameById.get(r.departmentId) ?? "—",
           employeeType: r.employeeType,
           status: r.status, // P1-5: canonical lowercase (see employee/status.ts)
+          dateOfJoining: r.dateOfJoining,
           ...(designation ? { designation } : {}),
           ...(grade ? { grade } : {}),
           ...(r.email ? { email: r.email } : {}),

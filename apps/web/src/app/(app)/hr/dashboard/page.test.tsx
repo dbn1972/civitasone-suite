@@ -27,7 +27,7 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-import HRDashboardPage from "./page";
+import HRDashboardPage, { greetingForHour } from "./page";
 import {
   getHRDashboard,
   getEmployees,
@@ -58,6 +58,10 @@ const DASH_OK = {
   departmentBreakdown: [{ name: "Finance", count: 10 }],
   employeeTypeBreakdown: [],
   routingFailedCount: 0,
+  // GAP-HR-DASHBOARD-06: a real tenant-wide count, deliberately != the
+  // departmentBreakdown bucket's own length/count (7 vs 1 here) so a test
+  // reading the wrong field would fail loudly instead of accidentally passing.
+  totalDepartments: 7,
 };
 
 // Same shape fetchJson's `empty` fallback gives getHRDashboard() on a real
@@ -72,6 +76,7 @@ const DASH_EMPTY = {
   departmentBreakdown: [],
   employeeTypeBreakdown: [],
   routingFailedCount: 0,
+  totalDepartments: 0,
 };
 
 const EMP_ROW = { id: "e1", name: "Asha Rao", department: "Finance", status: "confirmed" };
@@ -112,7 +117,9 @@ beforeEach(() => {
   // that branch with no changes required.
   mockedDash.mockResolvedValue({ data: DASH_OK, source: "api" });
   mockedEmp.mockResolvedValue({ data: [EMP_ROW], source: "api" });
-  mockedInbox.mockResolvedValue({ data: [], routingFailed: [] });
+  // GAP-HR-DASHBOARD-02: getDashboardLeaveInbox() now returns a full
+  // LoaderResult (was the bare {data, routingFailed} tuple).
+  mockedInbox.mockResolvedValue({ data: { data: [], routingFailed: [] }, source: "api" });
   mockedProfile.mockResolvedValue({ data: PROFILE_OK, source: "api" });
   mockedBalance.mockResolvedValue({ data: MY_BALANCE_OK, source: "api" });
   mockedAttendance.mockResolvedValue({ data: MY_ATTENDANCE_OK, source: "api" });
@@ -201,16 +208,20 @@ describe("HRDashboardPage", () => {
   describe("HR-admin routing-failure alert", () => {
     it("surfaces routing-failed leave applications to HR instead of staying silent", async () => {
       mockedInbox.mockResolvedValue({
-        data: [],
-        routingFailed: [{
-          id: "rf1", employeeName: "Kiran Kumar", employeeNo: "E9", departmentName: "IT",
-          leaveTypeName: "Earned Leave", leaveTypeCode: "EL", fromDate: "2026-09-01", toDate: "2026-09-02",
-          daysApplied: 2, status: "routing_failed",
-        }],
+        data: {
+          data: [],
+          routingFailed: [{
+            id: "rf1", employeeName: "Kiran Kumar", employeeNo: "E9", departmentName: "IT",
+            leaveTypeName: "Earned Leave", leaveTypeCode: "EL", fromDate: "2026-09-01", toDate: "2026-09-02",
+            daysApplied: 2, status: "routing_failed",
+          }],
+        },
+        source: "api",
       });
       render(await HRDashboardPage());
-      // testid, not role="alert": PayrollBanner (always rendered in this
-      // branch) is ALSO role="alert", so the role alone is ambiguous here.
+      // testid, not role: PayrollBanner is role="status" and this alert is
+      // role="alert" -- disjoint now, but the testid keeps this test's
+      // intent explicit either way.
       expect(screen.getByTestId("routing-failed-alert")).toHaveTextContent(/could not be routed for approval/i);
       expect(screen.getByText(/Kiran Kumar/)).toBeInTheDocument();
     });
@@ -218,6 +229,122 @@ describe("HRDashboardPage", () => {
     it("shows no routing-failure alert when there are none", async () => {
       render(await HRDashboardPage());
       expect(screen.queryByText(/could not be routed for approval/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // GAP-HR-DASHBOARD-02: getDashboardLeaveInbox() failing must show an
+  // honest error state, never the false "Inbox clear" all-clear.
+  describe("GAP-HR-DASHBOARD-02: leave-inbox load failure", () => {
+    it("shows an error state instead of the false 'Inbox clear' when the inbox load fails", async () => {
+      mockedInbox.mockResolvedValue({ data: { data: [], routingFailed: [] }, source: "error" });
+      render(await HRDashboardPage());
+      expect(screen.queryByText(/inbox clear/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/we couldn't load pending leave approvals/i)).toBeInTheDocument();
+    });
+
+    it("still shows the real 'Inbox clear' state on a genuinely empty, successful load", async () => {
+      render(await HRDashboardPage());
+      expect(screen.getByText(/inbox clear/i)).toBeInTheDocument();
+    });
+
+    it("does not render the routing-failed alert when the inbox load itself failed", async () => {
+      mockedInbox.mockResolvedValue({ data: { data: [], routingFailed: [] }, source: "error" });
+      render(await HRDashboardPage());
+      expect(screen.queryByText(/could not be routed for approval/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // GAP-HR-DASHBOARD-01: a manager (HR_DASHBOARD_READER_ROLES member, but
+  // not EMPLOYEE_ADMIN_ROLES) sees no approve/decline buttons -- backend
+  // 403s WORKFLOW_REQUIRED for that role (leave/routes.ts).
+  describe("GAP-HR-DASHBOARD-01: manager cannot decide leave requests", () => {
+    it("renders no Approve/Decline buttons, only an Open in Approvals link, for a manager session", async () => {
+      mockedRoles.mockReturnValue(["manager"]);
+      mockedInbox.mockResolvedValue({
+        data: {
+          data: [{
+            id: "i1", employeeName: "Test Employee", employeeNo: "E1", departmentName: "IT",
+            leaveTypeName: "Earned Leave", leaveTypeCode: "EL", fromDate: "2026-09-10", toDate: "2026-09-11",
+            daysApplied: 2, status: "pending",
+          }],
+          routingFailed: [],
+        },
+        source: "api",
+      });
+      render(await HRDashboardPage());
+      expect(screen.queryByRole("button", { name: /approve leave for/i })).not.toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /open in approvals/i })).toBeInTheDocument();
+    });
+  });
+
+  // GAP-HR-DASHBOARD-03: every EMPLOYEE_STATUSES value gets its own real
+  // label -- the previous statusLabel() hardcoded "Confirmed" for anything
+  // besides probation/on_leave.
+  describe("GAP-HR-DASHBOARD-03: honest employee status labels", () => {
+    it("renders suspended/deputation/separated with their own labels, never 'Confirmed'", async () => {
+      mockedEmp.mockResolvedValue({
+        data: [
+          { id: "e1", name: "A Suspended", department: "IT", status: "suspended" },
+          { id: "e2", name: "B Deputation", department: "IT", status: "deputation" },
+          { id: "e3", name: "C Separated", department: "IT", status: "separated" },
+        ],
+        source: "api",
+      });
+      render(await HRDashboardPage());
+      expect(screen.getByText("Suspended")).toBeInTheDocument();
+      expect(screen.getByText("Deputation")).toBeInTheDocument();
+      expect(screen.getByText("Separated")).toBeInTheDocument();
+      expect(screen.queryByText("Confirmed")).not.toBeInTheDocument();
+    });
+  });
+
+  // GAP-HR-DASHBOARD-06: Departments KPI must equal the real tenant-wide
+  // totalDepartments count, not departmentBreakdown's top-6-plus-"Others"
+  // bucket length (DASH_OK's fixture deliberately sets these to different
+  // values -- 7 vs a breakdown of length 1 -- so reading the wrong field
+  // fails loudly).
+  describe("GAP-HR-DASHBOARD-06: real department count", () => {
+    it("shows the real totalDepartments count on the Departments KPI, not the breakdown bucket length", async () => {
+      render(await HRDashboardPage());
+      expect(screen.getByText("7")).toBeInTheDocument();
+      expect(screen.queryByText(/across all grades/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // GAP-HR-DASHBOARD-08: safe non-decision fallback -- labels manager-visible
+  // KPIs/dept-chart as organisation-wide, without changing what data renders.
+  describe("GAP-HR-DASHBOARD-08: manager scope transparency label", () => {
+    it("shows the organisation-wide label for a manager viewer", async () => {
+      mockedRoles.mockReturnValue(["manager"]);
+      render(await HRDashboardPage());
+      // Rendered twice on purpose (once above the KPI strip, once in the
+      // dept chart's own header) -- getAllByText, same convention this file
+      // already uses for other legitimate multi-match text.
+      expect(screen.getAllByText(/organisation-wide/i).length).toBeGreaterThan(0);
+    });
+
+    it("does not show the organisation-wide label for an HR-admin viewer", async () => {
+      render(await HRDashboardPage());
+      expect(screen.queryByText(/organisation-wide/i)).not.toBeInTheDocument();
+    });
+  });
+
+  // GAP-HR-DASHBOARD-08: pure function, no Date/timezone mocking needed.
+  describe("greetingForHour", () => {
+    it("is 'Good afternoon' at 15:00 IST", () => {
+      expect(greetingForHour(15)).toBe("Good afternoon");
+    });
+    it("is 'Good morning' before noon", () => {
+      expect(greetingForHour(0)).toBe("Good morning");
+      expect(greetingForHour(11)).toBe("Good morning");
+    });
+    it("is 'Good afternoon' from noon up to (not including) 17:00", () => {
+      expect(greetingForHour(12)).toBe("Good afternoon");
+      expect(greetingForHour(16)).toBe("Good afternoon");
+    });
+    it("is 'Good evening' from 17:00 onward", () => {
+      expect(greetingForHour(17)).toBe("Good evening");
+      expect(greetingForHour(23)).toBe("Good evening");
     });
   });
 

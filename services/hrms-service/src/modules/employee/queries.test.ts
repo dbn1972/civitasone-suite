@@ -133,9 +133,10 @@ describe("listEmployees — designation/grade/email (GAP-HR-DIRECTORY-01/04)", (
     employeeType: "permanent",
     status: "confirmed",
     email: "asha.rao@example.gov.in",
+    dateOfJoining: "2021-06-15",
   };
 
-  it("includes designation, grade, and email for a seeded employee with a designation", async () => {
+  it("includes designation, grade, email, and dateOfJoining for a seeded employee with a designation", async () => {
     listByTenantMock.mockResolvedValue([ROW]);
     dbFixtures.departmentRows = [{ id: "dept-1", name: "Finance" }];
     dbFixtures.designationRows = [{ id: "desig-1", name: "Under Secretary", payGrade: "Grade-3" }];
@@ -153,6 +154,7 @@ describe("listEmployees — designation/grade/email (GAP-HR-DIRECTORY-01/04)", (
         designation: "Under Secretary",
         grade: "Grade-3",
         email: "asha.rao@example.gov.in",
+        dateOfJoining: "2021-06-15",
       },
     ]);
   });
@@ -186,6 +188,41 @@ describe("listEmployees — designation/grade/email (GAP-HR-DIRECTORY-01/04)", (
     expect(row.mobile).toBeUndefined();
     expect(row.pan).toBeUndefined();
     expect(row.bankAccountNo).toBeUndefined();
+  });
+});
+
+// GAP-HR-DASHBOARD-04: dateOfJoining is a real, NOT NULL column
+// (hrms_employees.date_of_joining) -- unlike designation/grade/email above,
+// it must always be present, never conditionally omitted. Covers both
+// listEmployees branches (repo.listByTenant's cached tenant-list path and
+// repo.listByIds' uncached ids= path), since both map rows independently.
+describe("listEmployees — dateOfJoining (GAP-HR-DASHBOARD-04)", () => {
+  it("includes dateOfJoining in the default tenant-list branch", async () => {
+    listByTenantMock.mockResolvedValue([{
+      id: "emp-2", employeeNo: "E002", fullName: "Kiran Kumar", departmentId: "dept-1",
+      designationId: "desig-1", employeeType: "permanent", status: "confirmed", email: null,
+      dateOfJoining: "2019-11-02",
+    }]);
+    dbFixtures.departmentRows = [{ id: "dept-1", name: "Finance" }];
+    dbFixtures.designationRows = [];
+
+    const result = await listEmployees(TENANT, 200, 0);
+
+    expect(result.data[0]?.dateOfJoining).toBe("2019-11-02");
+  });
+
+  it("includes dateOfJoining in the ids= batch-lookup branch", async () => {
+    listByIdsMock.mockResolvedValue([{
+      id: "emp-3", employeeNo: "E003", fullName: "Priya Singh", departmentId: "dept-1",
+      designationId: "desig-1", employeeType: "permanent", status: "confirmed", email: null,
+      dateOfJoining: "2022-03-20",
+    }]);
+    dbFixtures.departmentRows = [{ id: "dept-1", name: "Finance" }];
+    dbFixtures.designationRows = [];
+
+    const result = await listEmployees(TENANT, 200, 0, undefined, undefined, undefined, ["emp-3"]);
+
+    expect(result.data[0]?.dateOfJoining).toBe("2022-03-20");
   });
 });
 

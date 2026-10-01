@@ -60,6 +60,10 @@ export const employeeSummarySchema = z.object({
   designation: z.string().optional(),
   grade: z.string().optional(),
   email: z.string().optional(),
+  // GAP-HR-DASHBOARD-04: real column (hrms_employees.date_of_joining, NOT
+  // NULL in the DB) -- optional here only because this schema also backs
+  // narrower/legacy payload shapes that may omit it.
+  dateOfJoining: z.string().optional(),
 });
 
 export const leaveRequestSchema = z.object({
@@ -711,7 +715,11 @@ export const FinancialStatementSummaryListSchema = z.array(FinancialStatementSum
 export const HRDashboardSchema = z.object({
   headcount: z.number().default(0),
   headcountLastMonth: z.number().default(0),
-  attendanceTodayPct: z.number().default(0),
+  // GAP-HR-DASHBOARD-07: nullable -- a zero-attendance-feed tenant (no
+  // hrms_attendance rows synced for today yet) must read as "we don't know"
+  // (null), never a fabricated 0%. `.default(0)` still covers a payload that
+  // omits the field entirely (undefined), not one that explicitly sends null.
+  attendanceTodayPct: z.number().nullable().default(0),
   pendingLeaves: z.number().default(0),
   onLeave: z.number().default(0),
   payrollDue: z.number().default(0),
@@ -725,6 +733,10 @@ export const HRDashboardSchema = z.object({
   // about this field (e.g. HR_DASHBOARD_EMPTY / DASH_OK in page.test.tsx)
   // parsing exactly as before.
   routingFailedCount: z.number().default(0),
+  // GAP-HR-DASHBOARD-06: real count of this tenant's hrms_departments rows --
+  // distinct from departmentBreakdown.length, which is capped to a top-6-
+  // plus-"Others" bucket and understates the true department count.
+  totalDepartments: z.number().default(0),
 });
 
 export const AttendanceSummaryItemSchema = z.object({

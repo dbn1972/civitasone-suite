@@ -2,13 +2,16 @@ export const dynamic = "force-dynamic";
 import { getTranslations } from "next-intl/server";
 import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { RefreshErrorState } from "../../../_components/ds";
+import { RefreshErrorState, StatusPill } from "../../../_components/ds";
 import {
   getHRDashboard, getEmployees, getDashboardLeaveInbox, getMyProfile,
   getMyLeaveBalance, getMyAttendance, getMyLeaveApplications,
 } from "../../../_data/loaders";
 import { getSessionName, getSessionRoles } from "../../../../lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
+// Read-only consumption -- do NOT modify formatters.ts, it may be mid-change
+// in another open PR (GAP-HR-SF-07).
+import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
 import { GreetingHeader } from "./_components/GreetingHeader";
 import { HRKPIStrip } from "./_components/HRKPIStrip";
 import { MyKPIStrip } from "./_components/MyKPIStrip";
@@ -53,6 +56,14 @@ const HR_DASHBOARD_READER_ROLES = ["hr_admin", "hr_officer", "super_admin", "man
  */
 const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
+// GAP-HR-DASHBOARD-05: mirrors hr/payroll/page.tsx's own PAYROLL_ADMIN_ROLES
+// exactly (that page's own canAdminister flag, which hides its run-payroll
+// form for anyone outside this set). Deliberately its own constant, not a
+// reuse of EMPLOYEE_ADMIN_ROLES above: payroll administration and employee
+// administration are different privileges in this app's role model, even
+// though both happen to be held by hr_admin/super_admin today.
+const PAYROLL_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+
 type EmpRow = {
   id: string;
   name: string;
@@ -62,6 +73,15 @@ type EmpRow = {
   dateOfJoining?: string;
   payGrade?: string;
 } & Record<string, unknown>;
+
+// GAP-HR-DASHBOARD-09: pre-existing rotating avatar-tint palette, wrapped in
+// var(--token, #same-fallback) instead of bare hex -- identical rendering
+// (no token is defined anywhere, so every fallback renders exactly as
+// before), just no longer a bare-hex literal. Duplicated from
+// ActionInbox.tsx's own AVATAR_BG/FG (both flagged by the same gap) rather
+// than shared, matching this file's existing "each own copy" convention.
+const AVATAR_BG = ["var(--dash-avatar-bg-1, #dbeafe)", "var(--dash-avatar-bg-2, #fce7f3)", "var(--dash-avatar-bg-3, #d1fae5)", "var(--dash-avatar-bg-4, #fef3c7)", "var(--dash-avatar-bg-5, #e0e7ff)", "var(--dash-avatar-bg-6, #fee2e2)"];
+const AVATAR_FG = ["var(--dash-avatar-fg-1, #1e40af)", "var(--dash-avatar-fg-2, #9d174d)", "var(--dash-avatar-fg-3, #065f46)", "var(--dash-avatar-fg-4, #92400e)", "var(--dash-avatar-fg-5, #3730a3)", "var(--dash-avatar-fg-6, #991b1b)"];
 
 function payrollDaysLeft(): number {
   const now = new Date();
@@ -78,10 +98,35 @@ function formatToday(): { today: string; dayName: string; monthName: string } {
   };
 }
 
-function statusLabel(s: string) {
-  if (s === "probation") return { label: "Probation", bg: "var(--warnbg, #fef3c7)", color: "var(--warn, #92400e)" };
-  if (s === "on_leave")  return { label: "On Leave",  bg: "var(--infobg, #dbeafe)", color: "var(--info, #1e40af)" };
-  return                        { label: "Confirmed", bg: "var(--goodbg, #d1fae5)", color: "var(--good, #065f46)" };
+/**
+ * GAP-HR-DASHBOARD-08: pure, hour-in/greeting-out so it's unit-testable with
+ * no Date/timezone mocking (see page.test.tsx). Replaces the previous
+ * `dayName.startsWith("S") ? "Good day" : "Good morning"` weekday hack
+ * entirely -- that never reflected the actual time of day, only whether
+ * today happened to be a Saturday/Sunday.
+ */
+export function greetingForHour(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+/**
+ * The real current hour in Asia/Kolkata, 0-23. Uses hourCycle:"h23" (not
+ * hour12:false) specifically to avoid a known ICU quirk where hour12:false
+ * can render midnight as "24" instead of "0" on some Node/ICU builds; the
+ * `% 24` is a defensive belt-and-suspenders clamp against that same quirk
+ * however it manifests.
+ */
+function currentIstHour(): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const hourPart = parts.find((p) => p.type === "hour");
+  const hour = hourPart ? parseInt(hourPart.value, 10) : new Date().getHours();
+  return Number.isFinite(hour) ? hour % 24 : new Date().getHours();
 }
 
 export default async function HRDashboardPage() {
@@ -128,7 +173,12 @@ export default async function HRDashboardPage() {
       : Math.round((attendanceResult.data.filter((a) => a.status === "present").length / attendanceResult.data.length) * 100);
     const pendingCount = myAppsFailed ? null : myAppsResult.data.filter((a) => a.status === "pending").length;
     const routingFailedCount = myAppsFailed ? null : myAppsResult.data.filter((a) => a.status === "routing_failed").length;
-    const employmentStatusLabel = profile ? statusLabel(profile.status).label : null;
+    // GAP-HR-DASHBOARD-03: humanizeStatus (the same helper StatusPill.tsx
+    // itself uses) covers every EMPLOYEE_STATUSES value with a real,
+    // distinct label -- the previous statusLabel() hardcoded "Confirmed" for
+    // every status besides probation/on_leave (suspended, deputation,
+    // retired, separated, terminated all rendered as "Confirmed").
+    const employmentStatusLabel = profile ? humanizeStatus(profile.status) : null;
 
     const myRecentApps = myAppsFailed
       ? []
@@ -149,6 +199,7 @@ export default async function HRDashboardPage() {
 
         <GreetingHeader
           userName={userName}
+          greeting={greetingForHour(currentIstHour())}
           pendingCount={routingFailedCount}
           payrollDaysLeft={daysLeft}
           today={today}
@@ -199,13 +250,17 @@ export default async function HRDashboardPage() {
 
   const { data, source } = dashResult;
   const employees = empResult.data as EmpRow[];
-  const leaveInbox = inboxResult.data;
-  const routingFailedItems = inboxResult.routingFailed;
+  const leaveInbox = inboxResult.data.data;
+  const routingFailedItems = inboxResult.data.routingFailed;
   const profile = profileResult.data;
 
-  // Note: getDashboardLeaveInbox() doesn't surface a `source` (it discards the
-  // loader's error token internally -- a separate, loader-level gap outside
-  // UX-013's page.tsx scope), so it can't be included here.
+  // GAP-HR-DASHBOARD-02: getDashboardLeaveInbox() now surfaces a real
+  // `source` (previously swallowed internally, so this page could never
+  // tell a genuine load failure apart from a healthy empty inbox -- see
+  // loaders.ts). inboxFailed is deliberately its own flag, not folded into
+  // hrDashboardFailed: it gates ActionInbox/the routing-failed alert, which
+  // render from inboxResult alone, the same "narrow per-widget flag" pattern
+  // hrDashboardFailed/employeesFailed already use for their own widgets.
   //
   // profileResult specifically: a 404 on /hrms/me/profile ("no employee
   // record linked to your user") is a normal, expected state for an
@@ -214,10 +269,12 @@ export default async function HRDashboardPage() {
   // loaders.ts), so it never reaches here as an "error" in the first place.
   // Any OTHER profile failure (auth, network, 5xx) still counts, same as
   // dashResult/empResult.
+  const inboxFailed = inboxResult.source === "error";
   const anyError =
     source === "error" ||
     empResult.source === "error" ||
-    profileResult.source === "error";
+    profileResult.source === "error" ||
+    inboxFailed;
   // Narrower than anyError on purpose: the KPI strip only renders numbers
   // that came from dashResult, so it should only go honest-blank ("—") on
   // dashResult's own failure -- not, say, because the unrelated profile
@@ -235,13 +292,21 @@ export default async function HRDashboardPage() {
   // profileResult's legitimate 404 kept anyError true).
   const employeesFailed = empResult.source === "error";
   const onLeaveCount = data.onLeave;
-  const deptCount = data.departmentBreakdown.length > 0
-    ? data.departmentBreakdown.filter((d) => !d.name.startsWith("Others")).length +
-      (data.departmentBreakdown.some((d) => d.name.startsWith("Others")) ? 1 : 0)
-    : 0;
 
   const userName = sessionName ? sessionName.split(" ")[0] : (profile ? profile.name.split(" ")[0] : "there");
   const canManageEmployees = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
+  // GAP-HR-DASHBOARD-05: mirrors hr/payroll/page.tsx's own canAdminister
+  // check exactly (PAYROLL_ADMIN_ROLES above) -- gates whether PayrollBanner
+  // shows a "Start Run" link a manager would only reach a dead-end
+  // PermissionDenied wall from.
+  const canRunPayroll = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
+  // GAP-HR-DASHBOARD-08: safe non-decision fallback -- whether a manager
+  // should see tenant-wide KPIs/dept-chart/leave-inbox at all (vs scoped to
+  // direct reports) is a real DPDP-relevant access decision this fix does
+  // NOT make either way (see this cluster's PR description). Labeling makes
+  // the existing (unchanged) scope honest/transparent instead of silently
+  // implying it's "the manager's own" data.
+  const isManagerOnlyViewer = !canManageEmployees;
 
   const recentEmployees = employees;
 
@@ -256,6 +321,7 @@ export default async function HRDashboardPage() {
 
       <GreetingHeader
         userName={userName}
+        greeting={greetingForHour(currentIstHour())}
         pendingCount={hrDashboardFailed ? null : data.pendingLeaves}
         payrollDaysLeft={daysLeft}
         today={today}
@@ -264,18 +330,34 @@ export default async function HRDashboardPage() {
           canManageEmployees
             ? undefined
             : [
-                { label: "Export Report", href: "/hr/payroll" },
+                // GAP-HR-DASHBOARD-06: was "/hr/payroll" -- not a report of
+                // any kind, a dead-end link. /reports/list/new?reportType=hr
+                // is a real, working report-generation flow (verified: the
+                // generic reports pipeline's own form literally offers "hr"
+                // as its example report-type value).
+                { label: "Export Report", href: "/reports/list/new?reportType=hr" },
                 { label: "View Employees", href: "/hr/employees" },
               ]
         }
       />
 
+      {/* GAP-HR-DASHBOARD-08: safe non-decision fallback -- see
+          isManagerOnlyViewer's doc comment above. Transparency only; does
+          not change what data a manager can already see. */}
+      {isManagerOnlyViewer && (
+        <p
+          className="scope-note"
+          style={{ margin: "0 24px 8px", fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--muted,#64748b)" }}
+        >
+          Organisation-wide data
+        </p>
+      )}
       <HRKPIStrip
         headcount={hrDashboardFailed ? null : data.headcount}
         headcountLastMonth={hrDashboardFailed ? null : data.headcountLastMonth}
         pendingLeaves={hrDashboardFailed ? null : data.pendingLeaves}
         onLeave={hrDashboardFailed ? null : onLeaveCount}
-        departments={hrDashboardFailed ? null : (deptCount || data.departmentBreakdown.length)}
+        departments={hrDashboardFailed ? null : data.totalDepartments}
         attendanceTodayPct={hrDashboardFailed ? null : data.attendanceTodayPct}
         payrollDaysLeft={daysLeft}
       />
@@ -284,7 +366,10 @@ export default async function HRDashboardPage() {
       <div className="dash-body-grid">
         {/* Left: routing-failure alert + action inbox + payroll banner */}
         <div className="dash-col-left">
-          {!hrDashboardFailed && routingFailedItems.length > 0 && (
+          {/* GAP-HR-DASHBOARD-02: gated on inboxFailed (this alert's own
+              data source), not hrDashboardFailed (an unrelated summary
+              query) -- the previous gate was simply the wrong flag. */}
+          {!inboxFailed && routingFailedItems.length > 0 && (
             <div className="routing-failed-alert" role="alert" data-testid="routing-failed-alert">
               <div className="rf-head">
                 ⚠ {routingFailedItems.length} leave request{routingFailedItems.length !== 1 ? "s" : ""} could not be routed for approval
@@ -298,13 +383,31 @@ export default async function HRDashboardPage() {
               </ul>
             </div>
           )}
-          <ActionInbox initialItems={leaveInbox} />
-          <PayrollBanner daysLeft={daysLeft} monthName={monthName} headcount={hrDashboardFailed ? null : data.headcount} />
+          {inboxFailed ? (
+            <RefreshErrorState error={toHumanError("load", { area: "pending leave approvals" })} />
+          ) : (
+            <ActionInbox initialItems={leaveInbox} canDecide={canManageEmployees} />
+          )}
+          {/* GAP-HR-DASHBOARD-05: only surfaced once payroll is genuinely
+              close (was unconditional on every HR-staff load); canRunPayroll
+              hides "Start Run ->" for a manager who'd only reach a dead-end
+              PermissionDenied wall from it. */}
+          {daysLeft <= 7 && (
+            <PayrollBanner
+              daysLeft={daysLeft}
+              monthName={monthName}
+              headcount={hrDashboardFailed ? null : data.headcount}
+              canRunPayroll={canRunPayroll}
+            />
+          )}
         </div>
 
         {/* Center: dept chart */}
         <div className="dash-col-center">
-          <DeptHeadcountChart breakdown={data.departmentBreakdown} />
+          <DeptHeadcountChart
+            breakdown={data.departmentBreakdown}
+            scopeNote={isManagerOnlyViewer ? "Organisation-wide" : undefined}
+          />
         </div>
 
         {/* Right: quick actions */}
@@ -343,9 +446,8 @@ export default async function HRDashboardPage() {
                   <tr><td colSpan={6} style={{ textAlign: "center", padding: "24px", color: "var(--muted,#64748b)" }}>No employee records found</td></tr>
                 ) : (
                   recentEmployees.map((emp, idx) => {
-                    const s = statusLabel(emp.status);
-                    const bg = ["#dbeafe","#fce7f3","#d1fae5","#fef3c7","#e0e7ff","#fee2e2"][idx % 6];
-                    const fg = ["#1e40af","#9d174d","#065f46","#92400e","#3730a3","#991b1b"][idx % 6];
+                    const bg = AVATAR_BG[idx % AVATAR_BG.length];
+                    const fg = AVATAR_FG[idx % AVATAR_FG.length];
                     const ini = emp.name.split(" ").slice(0, 2).map((n: string) => n[0]).join("").toUpperCase();
                     return (
                       <tr key={emp.id}>
@@ -358,8 +460,13 @@ export default async function HRDashboardPage() {
                         <td className="emp-code">{(emp.employeeNo as string | undefined) ?? "—"}</td>
                         <td>{emp.department}</td>
                         <td>{(emp.payGrade as string | undefined) ? <span className="grade-pill">{emp.payGrade as string}</span> : "—"}</td>
-                        <td className="emp-date">{(emp.dateOfJoining as string | undefined) ?? "—"}</td>
-                        <td><span className="status-pill" style={{ background: s.bg, color: s.color }}><span className="status-dot" style={{ background: s.color }} />{s.label}</span></td>
+                        <td className="emp-date">{formatIndianDate(emp.dateOfJoining as string | undefined)}</td>
+                        {/* GAP-HR-DASHBOARD-03: shared StatusPill instead of
+                            the local statusLabel() helper, which hardcoded
+                            "Confirmed" for every status besides
+                            probation/on_leave (suspended, deputation,
+                            retired, separated, terminated all included). */}
+                        <td><StatusPill status={emp.status} /></td>
                       </tr>
                     );
                   })
@@ -394,8 +501,6 @@ export default async function HRDashboardPage() {
         .emp-code { color:var(--muted,#64748b);font-variant-numeric:tabular-nums; }
         .emp-date { color:var(--muted,#64748b);font-variant-numeric:tabular-nums;white-space:nowrap; }
         .grade-pill { display:inline-block;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;background:var(--bg,#f1f5f9);color:var(--ink2,#334155);border:1px solid var(--line,#e2e8f0);letter-spacing:.04em; }
-        .status-pill { display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600; }
-        .status-dot { width:6px;height:6px;border-radius:50%;flex-shrink:0; }
       `}</style>
     </div>
   );

@@ -7,19 +7,27 @@ import { hrmsAttendance } from "../attendance/schema.js";
 export async function getDashboard(tenantId: string): Promise<{
   headcount: number;
   headcountLastMonth: number;
-  attendanceTodayPct: number;
+  // GAP-HR-DASHBOARD-07: null when no hrms_attendance rows exist for the
+  // tenant today at all (feed not synced yet) -- distinct from a genuine 0%.
+  attendanceTodayPct: number | null;
   pendingLeaves: number;
   onLeave: number;
   payrollDue: number;
   departmentBreakdown: { name: string; count: number }[];
   employeeTypeBreakdown: { name: string; count: number }[];
   routingFailedCount: number;
+  // GAP-HR-DASHBOARD-06: real count of hrms_departments rows for this
+  // tenant -- departmentBreakdown is capped to top-6-plus-"Others".
+  totalDepartments: number;
 }> {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
 
-  const { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows, employeeTypeRows, routingFailedRow } =
+  const {
+    headcountRow, headcountLastMonthRow, pendingRow, presentRow, attendanceTodayRow,
+    onLeaveRow, deptRows, employeeTypeRows, routingFailedRow, totalDeptsRow,
+  } =
     await db.transaction(async (tx) => {
       const [headcountRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
@@ -52,6 +60,26 @@ export async function getDashboard(tenantId: string): Promise<{
           eq(hrmsAttendance.attendanceDate, today),
           eq(hrmsAttendance.status, "present"),
         ));
+
+      // GAP-HR-DASHBOARD-07: any attendance row at all for the tenant today
+      // (regardless of status) -- distinguishes "feed hasn't synced yet"
+      // (zero rows -> attendanceTodayPct should be null) from "feed synced,
+      // genuinely 0% present" (rows exist, none are status='present').
+      const [attendanceTodayRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hrmsAttendance)
+        .where(and(
+          eq(hrmsAttendance.tenantId, tenantId),
+          eq(hrmsAttendance.attendanceDate, today),
+        ));
+
+      // GAP-HR-DASHBOARD-06: real total, unfiltered by isActive -- mirrors
+      // employee/queries.ts's own unfiltered hrmsDepartments lookups (no
+      // isActive column check exists in that established convention either).
+      const [totalDeptsRow] = await tx
+        .select({ count: sql<number>`count(*)::int` })
+        .from(hrmsDepartments)
+        .where(eq(hrmsDepartments.tenantId, tenantId));
 
       const deptRows = await tx
         .select({
@@ -106,11 +134,15 @@ export async function getDashboard(tenantId: string): Promise<{
           eq(hrmsLeaveApps.status, "routing_failed"),
         ));
 
-      return { headcountRow, headcountLastMonthRow, pendingRow, presentRow, onLeaveRow, deptRows, employeeTypeRows, routingFailedRow };
+      return {
+        headcountRow, headcountLastMonthRow, pendingRow, presentRow, attendanceTodayRow,
+        onLeaveRow, deptRows, employeeTypeRows, routingFailedRow, totalDeptsRow,
+      };
     });
 
   const headcount = headcountRow?.count ?? 0;
   const present = presentRow?.count ?? 0;
+  const attendanceRowsToday = attendanceTodayRow?.count ?? 0;
 
   // Collapse to top 6 + "Others"
   const topDepts = deptRows.slice(0, 6);
@@ -126,13 +158,22 @@ export async function getDashboard(tenantId: string): Promise<{
   return {
     headcount,
     headcountLastMonth: headcountLastMonthRow?.count ?? 0,
-    attendanceTodayPct: headcount > 0 ? Math.round((present / headcount) * 100) : 0,
+    // GAP-HR-DASHBOARD-07: null (never a fabricated 0%) when the tenant has
+    // no attendance rows synced for today at all. When rows do exist, this
+    // deliberately keeps the pre-existing present/headcount formula
+    // unchanged -- no test suite for this query existed before this fix to
+    // confirm a different denominator (e.g. excluding on_leave) was actually
+    // intended, so only the null-vs-zero bug is fixed here, not the formula.
+    attendanceTodayPct: attendanceRowsToday === 0
+      ? null
+      : (headcount > 0 ? Math.round((present / headcount) * 100) : 0),
     pendingLeaves: pendingRow?.count ?? 0,
     onLeave: onLeaveRow?.count ?? 0,
     payrollDue: 0,
     departmentBreakdown,
     employeeTypeBreakdown: employeeTypeRows.map((r) => ({ name: r.name, count: r.count })),
     routingFailedCount: routingFailedRow?.count ?? 0,
+    totalDepartments: totalDeptsRow?.count ?? 0,
   };
 }
 

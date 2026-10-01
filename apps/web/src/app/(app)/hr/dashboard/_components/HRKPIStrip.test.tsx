@@ -33,7 +33,16 @@ describe("HRKPIStrip", () => {
     expect(within(getCard(container, "On Leave Today")).getByText("2")).toBeInTheDocument();
     expect(within(getCard(container, "Departments")).getByText("12")).toBeInTheDocument();
     expect(within(getCard(container, "Present Today")).getByText("87%")).toBeInTheDocument();
-    expect(within(getCard(container, "Payroll Closes")).getByText("5 days")).toBeInTheDocument();
+    // GAP-HR-DASHBOARD-05: relabeled from "Payroll Closes" (see HRKPIStrip.tsx).
+    expect(within(getCard(container, "Days left in month")).getByText("5 days")).toBeInTheDocument();
+  });
+
+  // GAP-HR-DASHBOARD-05: was the unpluralized literal "{payrollDaysLeft} days"
+  // (1 -> "1 days").
+  it("pluralizes correctly for exactly 1 day left in the month", () => {
+    const { container } = render(<HRKPIStrip {...baseProps} payrollDaysLeft={1} />);
+    expect(within(getCard(container, "Days left in month")).getByText("1 day")).toBeInTheDocument();
+    expect(within(getCard(container, "Days left in month")).queryByText("1 days")).not.toBeInTheDocument();
   });
 
   describe("fabricated zero vs honest — (absent data)", () => {
@@ -102,7 +111,7 @@ describe("HRKPIStrip", () => {
       for (const label of ["Headcount", "Pending Approvals", "On Leave Today", "Departments", "Present Today"]) {
         expect(within(getCard(container, label)).getByText("—")).toBeInTheDocument();
       }
-      expect(within(getCard(container, "Payroll Closes")).getByText("5 days")).toBeInTheDocument();
+      expect(within(getCard(container, "Days left in month")).getByText("5 days")).toBeInTheDocument();
     });
   });
 
