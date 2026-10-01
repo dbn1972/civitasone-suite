@@ -125,6 +125,37 @@ export function todayIST(): string {
 }
 
 /**
+ * GAP-HR-DASHBOARD-08: pure, hour-in/greeting-out so it's unit-testable with
+ * no Date/timezone mocking (see page.test.tsx). Replaces the previous
+ * `dayName.startsWith("S") ? "Good day" : "Good morning"` weekday hack
+ * entirely -- that never reflected the actual time of day, only whether
+ * today happened to be a Saturday/Sunday.
+ */
+export function greetingForHour(hour: number): string {
+  if (hour < 12) return "Good morning";
+  if (hour < 17) return "Good afternoon";
+  return "Good evening";
+}
+
+/**
+ * The real current hour in Asia/Kolkata, 0-23. Uses hourCycle:"h23" (not
+ * hour12:false) specifically to avoid a known ICU quirk where hour12:false
+ * can render midnight as "24" instead of "0" on some Node/ICU builds; the
+ * `% 24` is a defensive belt-and-suspenders clamp against that same quirk
+ * however it manifests.
+ */
+export function currentIstHour(): number {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "Asia/Kolkata",
+    hour: "numeric",
+    hourCycle: "h23",
+  }).formatToParts(new Date());
+  const hourPart = parts.find((p) => p.type === "hour");
+  const hour = hourPart ? parseInt(hourPart.value, 10) : new Date().getHours();
+  return Number.isFinite(hour) ? hour % 24 : new Date().getHours();
+}
+
+/**
  * Add (or, with a negative `days`, subtract) whole calendar days to `date` in
  * Asia/Kolkata, returning the result as a "YYYY-MM-DD" string -- the same
  * shape as todayIST(), so the two compose directly, e.g. a form's `max` date

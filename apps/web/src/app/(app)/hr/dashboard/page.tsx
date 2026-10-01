@@ -9,9 +9,7 @@ import {
 } from "../../../_data/loaders";
 import { getSessionName, getSessionRoles } from "../../../../lib/auth/roleGuard";
 import { toHumanError } from "@/lib/messages";
-// Read-only consumption -- do NOT modify formatters.ts, it may be mid-change
-// in another open PR (GAP-HR-SF-07).
-import { formatIndianDate, humanizeStatus } from "@/lib/formatters";
+import { formatIndianDate, humanizeStatus, greetingForHour, currentIstHour } from "@/lib/formatters";
 import { GreetingHeader } from "./_components/GreetingHeader";
 import { HRKPIStrip } from "./_components/HRKPIStrip";
 import { MyKPIStrip } from "./_components/MyKPIStrip";
@@ -96,37 +94,6 @@ function formatToday(): { today: string; dayName: string; monthName: string } {
     dayName: d.toLocaleDateString("en-IN", { weekday: "long" }),
     monthName: d.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
   };
-}
-
-/**
- * GAP-HR-DASHBOARD-08: pure, hour-in/greeting-out so it's unit-testable with
- * no Date/timezone mocking (see page.test.tsx). Replaces the previous
- * `dayName.startsWith("S") ? "Good day" : "Good morning"` weekday hack
- * entirely -- that never reflected the actual time of day, only whether
- * today happened to be a Saturday/Sunday.
- */
-export function greetingForHour(hour: number): string {
-  if (hour < 12) return "Good morning";
-  if (hour < 17) return "Good afternoon";
-  return "Good evening";
-}
-
-/**
- * The real current hour in Asia/Kolkata, 0-23. Uses hourCycle:"h23" (not
- * hour12:false) specifically to avoid a known ICU quirk where hour12:false
- * can render midnight as "24" instead of "0" on some Node/ICU builds; the
- * `% 24` is a defensive belt-and-suspenders clamp against that same quirk
- * however it manifests.
- */
-function currentIstHour(): number {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: "Asia/Kolkata",
-    hour: "numeric",
-    hourCycle: "h23",
-  }).formatToParts(new Date());
-  const hourPart = parts.find((p) => p.type === "hour");
-  const hour = hourPart ? parseInt(hourPart.value, 10) : new Date().getHours();
-  return Number.isFinite(hour) ? hour % 24 : new Date().getHours();
 }
 
 export default async function HRDashboardPage() {

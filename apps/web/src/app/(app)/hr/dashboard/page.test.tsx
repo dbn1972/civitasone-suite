@@ -27,7 +27,8 @@ vi.mock("next/link", () => ({
   ),
 }));
 
-import HRDashboardPage, { greetingForHour } from "./page";
+import HRDashboardPage from "./page";
+import { greetingForHour } from "@/lib/formatters";
 import {
   getHRDashboard,
   getEmployees,
