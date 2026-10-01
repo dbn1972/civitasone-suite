@@ -1,5 +1,5 @@
 import { StatusPill } from "@/app/_components/ds";
-import { minorToRupeesOrNull } from "@/lib/formatters";
+import { formatIndianDate, minorToRupeesOrNull } from "@/lib/formatters";
 
 type Quarter = "Q1" | "Q2" | "Q3" | "Q4";
 
@@ -19,8 +19,10 @@ export type QuarterSummaryRow = {
   status: string;
   filingDate: string | null;
   challanRef: string | null;
-  totalTdsDepositedMinor: number;
-  deducteeCount: number;
+  /** null = unknown (quarter not loaded / blocked) -- renders "—", never ₹0. */
+  totalTdsDepositedMinor: number | null;
+  /** null = unknown. */
+  deducteeCount: number | null;
 };
 
 const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
@@ -67,13 +69,29 @@ export function TaxReturnsSummary({ fy, quarters, t }: { fy: string; quarters: Q
   // than quietly summing only the known quarters — silently excluding a
   // missing quarter from the sum is itself indistinguishable from treating
   // it as a real zero, the exact masking this campaign closes.
+  const STATUS_LABEL_KEYS: Record<string, string> = {
+    filed: "statusFiled",
+    late_filed: "statusLateFiled",
+    reconciled: "statusReconciled",
+    unreconciled: "statusUnreconciled",
+    blocked: "statusBlocked",
+    "not loaded": "statusNotLoaded",
+  };
+  const statusLabel = (status: string): string | undefined => {
+    const key = STATUS_LABEL_KEYS[status];
+    return key ? t(key) : undefined;
+  };
   const quarterTdsRupees = quarters.map((q) => minorToRupeesOrNull(q.totalTdsDepositedMinor));
   const totalTdsRupees = quarterTdsRupees.some((r) => r === null)
     ? null
     : quarterTdsRupees.reduce<number>((s, r) => s + (r as number), 0);
-  const filedCount = quarters.filter((q) => q.status === "filed" || q.status === "late_filed").length;
+  // GAP-PAYROLL-RETURNS-01: only a quarter with a recorded filing date
+  // counts as filed (TRACES-reconciled is not filed). If any quarter could
+  // not be loaded the count is unknown ("—"), not a confident "0 / 4".
+  const filedCount = quarters.filter((q) => (q.status === "filed" || q.status === "late_filed") && !!q.filingDate).length;
+  const anyUnknown = quarters.some((q) => q.status === "not loaded");
   const qMap = new Map<Quarter, QuarterSummaryRow>(quarters.map((q) => [q.quarter, q]));
-  const filedLabel = String(filedCount) + " / 4";
+  const filedLabel = anyUnknown ? "—" : String(filedCount) + " / 4";
 
   return (
     <div>
@@ -120,7 +138,7 @@ export function TaxReturnsSummary({ fy, quarters, t }: { fy: string; quarters: Q
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{t(QUARTER_LABEL_KEYS[q])}</div>
                 {data?.filingDate ? (
                   <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
-                    {t("filedOnText", { date: new Date(data.filingDate).toLocaleDateString("en-IN") })}
+                    {t("filedOnText", { date: formatIndianDate(data.filingDate) })}
                   </div>
                 ) : null}
                 {data?.challanRef ? (
@@ -130,19 +148,19 @@ export function TaxReturnsSummary({ fy, quarters, t }: { fy: string; quarters: Q
                 ) : null}
               </div>
               <div style={{ display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
-                {data && data.deducteeCount > 0 ? (
+                {data && data.deducteeCount !== null && data.deducteeCount > 0 ? (
                   <div style={{ textAlign: "end" }}>
                     <div style={{ fontSize: 11, color: "var(--ink2)" }}>{t("tdsDepositedLabel")}</div>
                     <div style={{ fontWeight: 700 }}>{tdsRupees === null ? "—" : inrFmt.format(tdsRupees)}</div>
                   </div>
                 ) : null}
-                {data && data.deducteeCount > 0 ? (
+                {data && data.deducteeCount !== null && data.deducteeCount > 0 ? (
                   <div style={{ textAlign: "end" }}>
                     <div style={{ fontSize: 11, color: "var(--ink2)" }}>{t("deducteesLabel")}</div>
                     <div style={{ fontWeight: 700 }}>{data.deducteeCount}</div>
                   </div>
                 ) : null}
-                <StatusPill status={data?.status ?? "pending"} />
+                <StatusPill status={data?.status ?? "not loaded"} label={data ? statusLabel(data.status) : statusLabel("not loaded")} />
                 <a
                   className="btn ghost sm"
                   href={"/hr/payroll/returns?fy=" + encodeURIComponent(fy) + "&quarter=" + q}

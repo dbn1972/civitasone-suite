@@ -1,40 +1,25 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, Button, RefreshErrorState } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
+import { PERIOD_PATTERN, parsePeriodParam, type PeriodParam } from "@/lib/payroll/period";
+import { formatSignedMoney, formatSignedPercent, percentChange, toMinorBigInt } from "@/lib/payroll/money";
 import { getTranslations } from "next-intl/server";
-
-type PeriodSummary = {
-  period: string;
-  gross: number | string;
-  net: number | string;
-  headcount: number;
-};
-
-type CompareData = { period1: PeriodSummary; period2: PeriodSummary };
-
-const PERIOD_RE = /^\d{4}-\d{2}$/;
+import { mapComparisonResponse, type CompareData } from "./mapComparisonResponse";
 
 async function getData(period1: string, period2: string): Promise<LoaderResult<CompareData | null>> {
   return fetchJson<unknown, CompareData | null>(
     `/api/v1/payroll/comparison?period1=${encodeURIComponent(period1)}&period2=${encodeURIComponent(period2)}`,
     null,
-    {
-      telemetryKey: "payroll.comparison",
-      mapResponse: (p) => {
-        const body = p as { period1?: PeriodSummary; period2?: PeriodSummary } | null;
-        if (!body || !body.period1 || !body.period2) return null;
-        return { period1: body.period1, period2: body.period2 };
-      },
-    },
+    { telemetryKey: "payroll.comparison", mapResponse: mapComparisonResponse },
   );
 }
 
-function delta(a: number, b: number): string {
+function headcountDelta(a: number, b: number): string {
   const d = b - a;
-  const sign = d > 0 ? "+" : "";
-  return `${sign}${formatMoney(d)}`;
+  return d > 0 ? `+${d}` : d < 0 ? `−${Math.abs(d)}` : "0";
 }
 
 export default async function PayrollComparisonPage({
@@ -43,119 +28,161 @@ export default async function PayrollComparisonPage({
   searchParams?: { period1?: string; period2?: string };
 }) {
   const t = await getTranslations("payrollComparison");
-  const period1 = searchParams?.period1?.trim();
-  const period2 = searchParams?.period2?.trim();
-  const canCompare = !!period1 && !!period2 && PERIOD_RE.test(period1) && PERIOD_RE.test(period2);
+
+  // GAP-PAYROLL-COMPARISON-03: org-wide gross/net/headcount must not reach
+  // employee/manager sessions (hr/layout.tsx admits both).
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_REPORT_ROLES.includes(r))) {
+    return (
+      <div className="page-main wrap">
+        <PermissionDenied module="payroll comparison" requiredRoles={PAYROLL_REPORT_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
+      </div>
+    );
+  }
+
+  // GAP-PAYROLL-COMPARISON-01: strict YYYY-MM (month 01-12) with a per-field
+  // error instead of silently falling back to the "choose two periods" state.
+  const p1 = parsePeriodParam(searchParams?.period1);
+  const p2 = parsePeriodParam(searchParams?.period2);
+  const anyEntered = p1.state !== "empty" || p2.state !== "empty";
+  const canCompare = p1.state === "valid" && p2.state === "valid";
+  const fieldError = (p: PeriodParam): string | null =>
+    !anyEntered ? null : p.state === "empty" ? t("periodRequiredError") : p.state === "invalid" ? t("periodInvalidError", { value: p.raw }) : null;
+  const err1 = fieldError(p1);
+  const err2 = fieldError(p2);
+
+  const valid1 = p1.state === "valid" ? p1.period : "";
+  const valid2 = p2.state === "valid" ? p2.period : "";
 
   let data: CompareData | null = null;
   let source: "api" | "error" | null = null;
   if (canCompare) {
-    const result = await getData(period1 as string, period2 as string);
+    const result = await getData(valid1, valid2);
     data = result.data;
     source = result.source;
   }
+  const period1 = p1.state === "valid" ? p1.period : p1.state === "invalid" ? p1.raw : "";
+  const period2 = p2.state === "valid" ? p2.period : p2.state === "invalid" ? p2.raw : "";
+  const both = data && data.period1 && data.period2 ? { a: data.period1, b: data.period2 } : null;
 
-  const filterForm = (
-    <Card title={t("filterCardTitle")} padding>
-      <form method="get" style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-        <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor="cmp-period1" style={{ fontSize: 13, fontWeight: 600 }}>
-            {t("labelPeriod1")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
-          </label>
-          <input
-            id="cmp-period1"
-            name="period1"
-            defaultValue={period1 ?? ""}
-            placeholder="2025-05"
-            aria-required="true"
-            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-          />
-        </div>
-        <div style={{ display: "grid", gap: 6 }}>
-          <label htmlFor="cmp-period2" style={{ fontSize: 13, fontWeight: 600 }}>
-            {t("labelPeriod2")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
-          </label>
-          <input
-            id="cmp-period2"
-            name="period2"
-            defaultValue={period2 ?? ""}
-            placeholder="2025-06"
-            aria-required="true"
-            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-          />
-        </div>
-        <div style={{ display: "flex", alignItems: "flex-end" }}>
-          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>{t("compareButton")}</Button>
-        </div>
-      </form>
-    </Card>
+  const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
+  const periodField = (id: string, name: string, label: string, value: string, error: string | null, placeholder: string) => (
+    <div style={{ display: "grid", gap: 6 }}>
+      <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
+        {label} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span>
+      </label>
+      <input
+        id={id}
+        name={name}
+        type="month"
+        pattern={PERIOD_PATTERN}
+        defaultValue={value}
+        placeholder={placeholder}
+        aria-required="true"
+        aria-invalid={error ? true : undefined}
+        aria-describedby={error ? `${id}-err` : undefined}
+        style={inputStyle}
+      />
+      {error && (
+        <p id={`${id}-err`} role="alert" className="pill bad" style={{ width: "fit-content", margin: 0 }}>{error}</p>
+      )}
+    </div>
   );
+
+  // GAP-PAYROLL-COMPARISON-04: exact bigint deltas, a real minus sign, a %
+  // column, and a screen-reader word so the direction isn't sign-only.
+  const moneyDeltaCell = (aRaw: number | string, bRaw: number | string) => {
+    const a = toMinorBigInt(aRaw);
+    const b = toMinorBigInt(bRaw);
+    const d = a !== null && b !== null ? b - a : null;
+    const direction = d === null || d === 0n ? null : d > 0n ? t("srIncrease") : t("srDecrease");
+    return (
+      <>
+        <td style={{ textAlign: "right" }}>
+          {direction && <span className="sr-only">{direction} </span>}
+          {formatSignedMoney(d)}
+        </td>
+        <td style={{ textAlign: "right" }}>{formatSignedPercent(percentChange(a, b))}</td>
+      </>
+    );
+  };
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={t("backLabel")}
       />
-      <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />
 
-      {canCompare && data && (
+      {both && (
         <StatGrid>
-          <StatCard icon="💰" iconBg="var(--infobg)" label={t("periodGrossLabel", { period: data.period1.period })} value={formatMoney(data.period1.gross)} />
-          <StatCard icon="💰" iconBg="var(--goodbg)" label={t("periodGrossLabel", { period: data.period2.period })} value={formatMoney(data.period2.gross)} />
-          <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statHeadcountDelta")} value={(data.period2.headcount - data.period1.headcount > 0 ? "+" : "") + String(data.period2.headcount - data.period1.headcount)} />
-          <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statNetDelta")} value={delta(Number(data.period1.net), Number(data.period2.net))} />
+          <StatCard icon="💰" iconBg="var(--infobg)" label={t("periodGrossLabel", { period: both.a.period })} value={formatMoney(both.a.gross)} />
+          <StatCard icon="💰" iconBg="var(--goodbg)" label={t("periodGrossLabel", { period: both.b.period })} value={formatMoney(both.b.gross)} />
+          <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statHeadcountDelta")} value={headcountDelta(both.a.headcount, both.b.headcount)} />
+          <StatCard
+            icon="📊"
+            iconBg="var(--goodbg)"
+            label={t("statNetDelta")}
+            value={formatSignedMoney(
+              (() => { const a = toMinorBigInt(both.a.net); const b = toMinorBigInt(both.b.net); return a !== null && b !== null ? b - a : null; })(),
+            )}
+          />
         </StatGrid>
       )}
 
-      {filterForm}
+      <Card title={t("filterCardTitle")} padding>
+        <form method="get" noValidate style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
+          {periodField("cmp-period1", "period1", t("labelPeriod1"), period1, err1, "2025-05")}
+          {periodField("cmp-period2", "period2", t("labelPeriod2"), period2, err2, "2025-06")}
+          <div style={{ display: "flex", alignItems: "flex-end" }}>
+            <Button type="submit" variant="primary" style={{ minHeight: 44 }}>{t("compareButton")}</Button>
+          </div>
+        </form>
+      </Card>
 
-      {!canCompare && (
+      {!anyEntered && (
         <Card>
-          <EmptyState
-            icon="📊"
-            title={t("emptyTitle")}
-            message={t("emptyMessage")}
-          />
+          <EmptyState icon="📊" title={t("emptyTitle")} message={t("emptyMessage")} />
         </Card>
       )}
 
-      {canCompare && data && (
-        <Card title={t("comparisonCardTitle", { period1: data.period1.period, period2: data.period2.period })}>
+      {both && (
+        <Card title={t("comparisonCardTitle", { period1: both.a.period, period2: both.b.period })}>
           <div style={{ overflowX: "auto" }}>
             <table className="tbl">
               <caption className="sr-only">
-                {t("comparisonCaption", { period1: data.period1.period, period2: data.period2.period })}
+                {t("comparisonCaption", { period1: both.a.period, period2: both.b.period })}
               </caption>
               <thead>
                 <tr>
                   <th scope="col">{t("colMetric")}</th>
-                  <th scope="col" style={{ textAlign: "right" }}>{data.period1.period}</th>
-                  <th scope="col" style={{ textAlign: "right" }}>{data.period2.period}</th>
+                  <th scope="col" style={{ textAlign: "right" }}>{both.a.period}</th>
+                  <th scope="col" style={{ textAlign: "right" }}>{both.b.period}</th>
                   <th scope="col" style={{ textAlign: "right" }}>{t("colDelta")}</th>
+                  <th scope="col" style={{ textAlign: "right" }}>{t("colDeltaPct")}</th>
                 </tr>
               </thead>
               <tbody>
                 <tr>
                   <th scope="row">{t("metricGross")}</th>
-                  <td style={{ textAlign: "right" }}>{formatMoney(data.period1.gross)}</td>
-                  <td style={{ textAlign: "right" }}>{formatMoney(data.period2.gross)}</td>
-                  <td style={{ textAlign: "right" }}>{delta(Number(data.period1.gross), Number(data.period2.gross))}</td>
+                  <td style={{ textAlign: "right" }}>{formatMoney(both.a.gross)}</td>
+                  <td style={{ textAlign: "right" }}>{formatMoney(both.b.gross)}</td>
+                  {moneyDeltaCell(both.a.gross, both.b.gross)}
                 </tr>
                 <tr>
                   <th scope="row">{t("metricNet")}</th>
-                  <td style={{ textAlign: "right" }}>{formatMoney(data.period1.net)}</td>
-                  <td style={{ textAlign: "right" }}>{formatMoney(data.period2.net)}</td>
-                  <td style={{ textAlign: "right" }}>{delta(Number(data.period1.net), Number(data.period2.net))}</td>
+                  <td style={{ textAlign: "right" }}>{formatMoney(both.a.net)}</td>
+                  <td style={{ textAlign: "right" }}>{formatMoney(both.b.net)}</td>
+                  {moneyDeltaCell(both.a.net, both.b.net)}
                 </tr>
                 <tr>
                   <th scope="row">{t("metricHeadcount")}</th>
-                  <td style={{ textAlign: "right" }}>{data.period1.headcount}</td>
-                  <td style={{ textAlign: "right" }}>{data.period2.headcount}</td>
+                  <td style={{ textAlign: "right" }}>{both.a.headcount}</td>
+                  <td style={{ textAlign: "right" }}>{both.b.headcount}</td>
+                  <td style={{ textAlign: "right" }}>{headcountDelta(both.a.headcount, both.b.headcount)}</td>
                   <td style={{ textAlign: "right" }}>
-                    {data.period2.headcount - data.period1.headcount > 0 ? "+" : ""}
-                    {data.period2.headcount - data.period1.headcount}
+                    {formatSignedPercent(percentChange(BigInt(Math.trunc(Number(both.a.headcount) || 0)), BigInt(Math.trunc(Number(both.b.headcount) || 0))))}
                   </td>
                 </tr>
               </tbody>
@@ -170,12 +197,16 @@ export default async function PayrollComparisonPage({
         </Card>
       )}
 
-      {canCompare && !data && source !== "error" && (
+      {canCompare && source !== "error" && !both && (
         <Card>
           <EmptyState
             icon="📊"
             title={t("noDataTitle")}
-            message={t("noDataMessage")}
+            message={
+              !data || (!data.period1 && !data.period2)
+                ? t("noDataBothMessage", { period1: valid1, period2: valid2 })
+                : t("noDataPeriodMessage", { period: !data.period1 ? valid1 : valid2 })
+            }
           />
         </Card>
       )}

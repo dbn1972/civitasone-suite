@@ -154,7 +154,9 @@ describe("DDO CQRS — consumer persistence", () => {
       payload: { tenantId: TENANT, ddoCode: "DDO-P2", name: "Treasury B", departmentIds: ["22222222-2222-4222-8222-222222222222"] },
     });
 
-    // One INSERT for payroll_ddos + one for the department mapping.
+    // One INSERT for payroll_ddos + one for the department mapping. No
+    // reason was sent, so the list is add-only (GAP-PAYROLL-DDOS-02 review
+    // fix): no SELECT/DELETE of the existing mapping.
     expect(executedQueries.length).toBe(2);
     const ddoParams = paramsOf(executedQueries[0]);
     expect(ddoParams).toContain(TENANT);

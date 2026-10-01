@@ -139,6 +139,15 @@ const STATUS_MAP: Record<string, PillVariant> = {
 
   // Leave-routing engine failure (a technical failure, not a human rejection)
   "routing failed": "bad",
+
+  // TDS returns overview (GAP-PAYROLL-RETURNS-01/02): "reconciled" with
+  // TRACES is NOT "filed"; a quarter that failed to load is unknown, not
+  // "pending". PAN status on deductee rows (GAP-PAYROLL-RETURNS-05).
+  reconciled: "good",
+  unreconciled: "warn",
+  "not loaded": "mut",
+  "pan ok": "good",
+  "pan missing": "bad",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

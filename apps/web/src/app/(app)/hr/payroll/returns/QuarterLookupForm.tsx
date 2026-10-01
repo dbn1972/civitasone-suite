@@ -37,6 +37,7 @@ export function QuarterLookupForm({
           name="fy"
           defaultValue={defaultFy}
           pattern="\d{4}-\d{2}"
+          title={t("fyFormatHint")}
           placeholder="2025-26"
           aria-describedby="ret-fy-hint"
           style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, width: 140 }}

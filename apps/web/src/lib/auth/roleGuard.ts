@@ -83,3 +83,14 @@ export const PAYROLL_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_a
  * an unhandled failed fetch (GAP-PAYROLL-HOME-02/RUNS-04).
  */
 export const PAYROLL_READER_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin", "finance_officer"];
+
+/**
+ * Roles permitted to read the payroll register / comparison / CTC config
+ * reports. Mirrors payroll-service world-class-routes.ts's own `ROLES`
+ * (payroll_admin, payroll_officer, super_admin, hr_admin) -- narrower than
+ * PAYROLL_READER_ROLES: "finance_officer" gets a 403 from those endpoints,
+ * and "employee"/"manager" (which hr/layout.tsx admits) must never see
+ * department-wide salary totals (GAP-PAYROLL-REGISTER-05 /
+ * GAP-PAYROLL-COMPARISON-03).
+ */
+export const PAYROLL_REPORT_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin"];

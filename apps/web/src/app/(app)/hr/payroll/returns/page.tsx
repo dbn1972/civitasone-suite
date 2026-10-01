@@ -1,16 +1,20 @@
-import { PageHeader, Card, StatGrid, StatCard, DataTable, EmptyState } from "../../../../_components/ds";
+import { PageHeader, Card, StatGrid, StatCard, DataTable, EmptyState, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
+import { maskPan } from "../../../../_components/ds/Masked";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { statusAwareGet } from "../_lib/statusAwareFetch";
 import { QuarterLookupForm } from "./QuarterLookupForm";
 import { ForceFileButton } from "./ForceFileButton";
+import { RpuDownloadLink } from "./RpuDownloadLink";
 import { TaxReturnsSummary, type QuarterSummaryRow } from "./TaxReturnsSummary";
 import { toHumanError } from "@/lib/messages";
-import { getTranslations } from "next-intl/server";
-import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { isValidFinancialYear } from "@/lib/payroll/period";
+import { sumMinor } from "@/lib/payroll/money";
+import { getTranslations } from "next-intl/server";
 
 /**
  * Plain-language failure message for a quarterly-return load, for this
@@ -45,6 +49,13 @@ type Form24Q = {
   deductees: Deductee24Q[];
   reconciliation: { matched: boolean; warning?: string };
   note: string;
+  /**
+   * GAP-PAYROLL-RETURNS-01: a real filing record, when payroll-service
+   * starts returning one. Reconciled-with-TRACES is NOT filed, so without
+   * these the quarter is never shown as "filed".
+   */
+  filedAt: string | null;
+  challanRef: string | null;
 };
 
 type Deductee26Q = {
@@ -84,8 +95,6 @@ function currentFyQuarter(): { fy: string; quarter: Quarter } {
   return { fy, quarter };
 }
 
-const FY_RE = /^\d{4}-\d{2}$/;
-
 function toForm24Q(raw: unknown): Form24Q | null {
   if (!raw || typeof raw !== "object") return null;
   const r = raw as Record<string, unknown>;
@@ -108,6 +117,8 @@ function toForm24Q(raw: unknown): Form24Q | null {
     deductees,
     reconciliation: (r.reconciliation as Form24Q["reconciliation"]) ?? { matched: true },
     note: String(r.note ?? ""),
+    filedAt: typeof r.filedAt === "string" && r.filedAt ? r.filedAt : null,
+    challanRef: typeof r.challanRef === "string" && r.challanRef ? r.challanRef : null,
   };
 }
 
@@ -144,6 +155,38 @@ async function getForm26Q(fy: string, quarter: Quarter): Promise<LoaderResult<Fo
   );
 }
 
+/** GAP-PAYROLL-RETURNS-05: status-pill key for a deductee's PAN (PANNOTAVBL = no PAN on record). */
+function panStatus(pan: string, panFlag: string): "pan ok" | "pan missing" {
+  return !pan || panFlag ? "pan missing" : "pan ok";
+}
+
+/** Annual-overview row for one quarter's Form-24Q lookup. */
+function quarterSummary(q: Quarter, lookup: Form24QLookup): QuarterSummaryRow {
+  if (lookup.state === "ok") {
+    const d = lookup.data;
+    const deposited = sumMinor(d.deductees.map((x) => x.tdsDepositedMinor));
+    return {
+      quarter: q,
+      // GAP-PAYROLL-RETURNS-01: matched -> "reconciled", never "filed".
+      status: d.filedAt ? "filed" : d.reconciliation.matched ? "reconciled" : "unreconciled",
+      filingDate: d.filedAt,
+      challanRef: d.challanRef,
+      totalTdsDepositedMinor: deposited === null ? null : Number(deposited),
+      deducteeCount: d.deducteeCount,
+    };
+  }
+  // GAP-PAYROLL-RETURNS-02/03: blocked/failed quarters are unknown (null
+  // totals -> "—"), not "pending" with a fabricated ₹0.
+  return {
+    quarter: q,
+    status: lookup.state === "reconciliation_blocked" ? "blocked" : "not loaded",
+    filingDate: null,
+    challanRef: null,
+    totalTdsDepositedMinor: null,
+    deducteeCount: null,
+  };
+}
+
 export default async function ReturnsPage({
   searchParams,
 }: {
@@ -165,61 +208,71 @@ export default async function ReturnsPage({
   const tSummary = await getTranslations("taxReturnsSummary");
   const tQuarterForm = await getTranslations("quarterLookupForm");
   const { fy: defFy, quarter: defQuarter } = currentFyQuarter();
-  const fy = searchParams.fy && FY_RE.test(searchParams.fy) ? searchParams.fy : defFy;
-  const quarter = (QUARTERS as string[]).includes(searchParams.quarter ?? "")
-    ? (searchParams.quarter as Quarter)
-    : defQuarter;
+  // GAP-PAYROLL-RETURNS-07: an invalid ?fy= / ?quarter= falls back visibly
+  // (role="alert" naming the value used), and 2025-99 is no longer a FY.
+  const rawFy = searchParams.fy?.trim() ?? "";
+  const rawQuarter = searchParams.quarter?.trim() ?? "";
+  const fyInvalid = rawFy !== "" && !isValidFinancialYear(rawFy);
+  const quarterInvalid = rawQuarter !== "" && !(QUARTERS as string[]).includes(rawQuarter);
+  const fy = rawFy && !fyInvalid ? rawFy : defFy;
+  const quarter = rawQuarter && !quarterInvalid ? (rawQuarter as Quarter) : defQuarter;
 
-  const [f24Lookup, { data: f26, source: src26 }] = await Promise.all([
-    getForm24Q(fy, quarter, t),
+  // GAP-PAYROLL-RETURNS-02: the annual overview used to show only the
+  // selected quarter and stub the other three as pending/₹0. Load all four.
+  const [lookups, { data: f26, source: src26 }] = await Promise.all([
+    Promise.all(QUARTERS.map((q) => getForm24Q(fy, q, t))),
     getForm26Q(fy, quarter),
   ]);
+  const f24Lookup = lookups[QUARTERS.indexOf(quarter)];
 
   const overallSource: "api" | "error" =
     f24Lookup.state === "error" || src26 === "error" ? "error" : "api";
 
-  const rows24 = f24Lookup.state === "ok" ? f24Lookup.data.deductees.map((d) => ({ ...d })) : [];
-  const cols24: { key: keyof Deductee24Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
+  const rows24 = f24Lookup.state === "ok"
+    // Review fix (PR #1762): the raw pan/panFlag are dropped here. DataTable
+    // is a client component, so every field on a row is serialised into the
+    // RSC payload -- spreading `d` shipped every full PAN to the browser even
+    // though the visible column was masked.
+    ? f24Lookup.data.deductees.map(({ pan, panFlag, ...rest }) => ({
+        ...rest,
+        id: rest.employeeId,
+        panMasked: pan ? maskPan(pan) : "—",
+        panStatus: panStatus(pan, panFlag),
+      }))
+    : [];
+  const panStatusLabels = { "pan ok": t("panOk"), "pan missing": t("panMissing") };
+  const cols24: { key: keyof (typeof rows24)[number] & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status"; statusLabels?: Record<string, string> }[] = [
     { key: "name", label: t("colEmployee") },
-    { key: "pan", label: t("colPan") },
+    { key: "panMasked", label: t("colPan") },
+    { key: "panStatus", label: t("colPanStatus"), cellType: "status", statusLabels: panStatusLabels },
     { key: "tdsDeductedMinor", label: t("colTdsDeducted"), align: "right", cellType: "amount" },
     { key: "tdsDepositedMinor", label: t("colTdsDeposited"), align: "right", cellType: "amount" },
   ];
+  const panMissing24 = rows24.filter((r) => r.panStatus === "pan missing").length;
   const totalTdsDeductedMinor24 = rows24.reduce((s, d) => s + d.tdsDeductedMinor, 0);
   const totalTdsDepositedMinor24 = rows24.reduce((s, d) => s + d.tdsDepositedMinor, 0);
   const varianceMinor24 = totalTdsDeductedMinor24 - totalTdsDepositedMinor24;
 
-  const rows26 = (f26?.deductees ?? []).map((d) => ({ ...d }));
-  const totalAmountPaidMinor26 = rows26.reduce((s, d) => s + Number(d.amountPaidMinor ?? 0), 0);
-  const cols26: { key: keyof Deductee26Q & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
+  const rows26 = (f26?.deductees ?? []).map(({ pan, panFlag, ...rest }) => ({
+    ...rest,
+    id: rest.deducteeRef,
+    panMasked: pan ? maskPan(pan) : "—",
+    panStatus: panStatus(pan, panFlag),
+  }));
+  const totalAmountPaidMinor26 = sumMinor(rows26.map((d) => d.amountPaidMinor));
+  const cols26: { key: keyof (typeof rows26)[number] & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status"; statusLabels?: Record<string, string> }[] = [
     { key: "name", label: t("colDeductee") },
-    { key: "pan", label: t("colPan") },
+    { key: "panMasked", label: t("colPan") },
+    { key: "panStatus", label: t("colPanStatus"), cellType: "status", statusLabels: panStatusLabels },
     { key: "section", label: t("colSection") },
     { key: "amountPaidMinor", label: t("colAmountPaid"), align: "right", cellType: "amount" },
     { key: "tdsDeductedMinor", label: t("colTdsDeducted"), align: "right", cellType: "amount" },
   ];
 
-  // Build Q1-Q4 overview — current quarter gets real data, others stubbed as pending
-  const quarterSummaries: QuarterSummaryRow[] = QUARTERS.map((q) => {
-    if (q === quarter && f24Lookup.state === "ok") {
-      return {
-        quarter: q,
-        status: f24Lookup.data.reconciliation.matched ? "filed" : "pending",
-        filingDate: null,
-        challanRef: null,
-        totalTdsDepositedMinor: totalTdsDepositedMinor24,
-        deducteeCount: f24Lookup.data.deducteeCount,
-      };
-    }
-    return {
-      quarter: q,
-      status: q === quarter && f24Lookup.state === "reconciliation_blocked" ? "blocked" : "pending",
-      filingDate: null,
-      challanRef: null,
-      totalTdsDepositedMinor: 0,
-      deducteeCount: 0,
-    };
-  });
+  const quarterSummaries: QuarterSummaryRow[] = QUARTERS.map((q, i) => quarterSummary(q, lookups[i]));
+  const allQuartersFailed = lookups.every((l) => l.state === "error");
+  const rpuHref = (form: "form24q" | "form26q") =>
+    `/api/proxy/v1/payroll/statutory/${form}?fy=${encodeURIComponent(fy)}&quarter=${quarter}&format=file`;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -231,10 +284,20 @@ export default async function ReturnsPage({
 
       <DataSourceBadge source={overallSource} message={t("loadErrorMessage")} />
 
+      {(fyInvalid || quarterInvalid) && (
+        <p role="alert" className="pill warn" style={{ width: "fit-content" }}>
+          {fyInvalid ? t("fyInvalidFallback", { value: rawFy, fallback: fy }) : t("quarterInvalidFallback", { value: rawQuarter, fallback: quarter })}
+        </p>
+      )}
+
       {/* Q1-Q4 annual overview with filing dates, challan refs, TDS totals */}
       <Card title={t("annualOverviewTitle", { fy })}>
         <div className="pad">
-          <TaxReturnsSummary fy={fy} quarters={quarterSummaries} t={tSummary} />
+          {allQuartersFailed ? (
+            <RefreshErrorState error={toHumanError("load", { area: "TDS returns" })} backHref="/hr/payroll" />
+          ) : (
+            <TaxReturnsSummary fy={fy} quarters={quarterSummaries} t={tSummary} />
+          )}
         </div>
       </Card>
 
@@ -249,7 +312,6 @@ export default async function ReturnsPage({
             </>
           ) : f24Lookup.state === "error" ? (
             <>
-              <DataSourceBadge source="error" message={t("loadErrorMessage")} />
               <EmptyState
                 icon="⚠️"
                 title={t("form24qErrorTitle", { fy, quarter })}
@@ -269,6 +331,7 @@ iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(
                 />
                 <StatCard icon="🏦" iconBg="var(--warnbg)" label={t("statTdsDeposited")} value={formatMoney(totalTdsDepositedMinor24)} />
                 <StatCard icon="⚠️" iconBg="var(--errorbg)" label={t("statVariance")} value={formatMoney(varianceMinor24)} />
+                <StatCard icon="🪪" iconBg="var(--badbg, #fdecea)" label={t("statPanMissing")} value={panMissing24} />
               </StatGrid>
               {f24Lookup.data.reconciliation.warning && (
                 <p role="alert" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
@@ -290,12 +353,7 @@ iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(
               </div>
               <p style={{ fontSize: "12.5px", color: "var(--color-text-muted)", marginTop: 10 }}>{f24Lookup.data.note}</p>
               <p style={{ marginTop: 10 }}>
-                <a
-                  className="btn ghost sm"
-                  href={"/api/proxy/v1/payroll/statutory/form24q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter + "&format=file"}
-                >
-                  <span aria-hidden="true">⬇</span> {t("downloadRpu")}
-                </a>
+                <RpuDownloadLink href={rpuHref("form24q")} reconciled={f24Lookup.data.reconciliation.matched} />
               </p>
             </>
           )}
@@ -306,7 +364,6 @@ iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(
         <div className="pad">
           {f26 === null ? (
             <>
-              <DataSourceBadge source="error" message={t("loadErrorMessage")} />
               <EmptyState
                 icon="⚠️"
                 title={t("form26qErrorTitle", { fy, quarter })}
@@ -317,7 +374,6 @@ iconBg={f24Lookup.data.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(
             <EmptyState icon="🧾" title={t("form26qNotPopulated")} message={f26.note} />
           ) : (
             <>
-              <DataSourceBadge source={src26 === "error" ? "error" : "api"} message={t("loadErrorMessage")} />
               <StatGrid>
                 <StatCard icon="👥" iconBg="var(--infobg)" label={t("statDeductees")} value={f26.deducteeCount} />
                 <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeducted")} value={formatMoney(f26.totalTdsDeductedMinor)} />
@@ -343,12 +399,7 @@ iconBg={f26.reconciliation.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #f
               </div>
               <p style={{ fontSize: "12.5px", color: "var(--color-text-muted)", marginTop: 10 }}>{f26.note}</p>
               <p style={{ marginTop: 10 }}>
-                <a
-                  className="btn ghost sm"
-                  href={"/api/proxy/v1/payroll/statutory/form26q?fy=" + encodeURIComponent(fy) + "&quarter=" + quarter + "&format=file"}
-                >
-                  <span aria-hidden="true">⬇</span> {t("downloadRpu")}
-                </a>
+                <RpuDownloadLink href={rpuHref("form26q")} reconciled={f26.reconciliation.matched} />
               </p>
             </>
           )}

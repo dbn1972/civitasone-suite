@@ -38,7 +38,16 @@ export const idParam = z.object({ id: z.string().uuid() });
 export const createDdoBody = z.object({
   ddoCode: z.string().min(1).max(32),
   name:    z.string().min(1).max(200),
-  departmentIds: z.array(z.string().uuid()).default([]),
+  // GAP-PAYROLL-DDOS-02: with a `reason`, this is the DDO's COMPLETE
+  // department set -- departments no longer listed are unmapped (the web UI
+  // always sends the full set plus a reason, and shows the diff). Without a
+  // reason the list is add-only, as before, so an older client sending []
+  // cannot wipe the mapping. Omitted = leave the mapping untouched.
+  departmentIds: z.array(z.string().uuid()).max(500)
+    .transform((ids) => [...new Set(ids)])
+    .optional(),
+  // Recorded on the audit event (before/after department sets).
+  reason: z.string().trim().min(10).max(500).optional(),
 });
 export type CreateDdoBody = z.infer<typeof createDdoBody>;
 
@@ -211,3 +220,17 @@ export const updateSettingsBody = z.object({
   protectedNetFloorMinor: z.number().int().nonnegative(),
 });
 export type UpdateSettingsBody = z.infer<typeof updateSettingsBody>;
+
+/**
+ * GAP-PAYROLL-PAY-GROUPS-04: a pay group's timezone drives pay-day cut-offs,
+ * so only a real IANA zone name is accepted ("Mars/Base" used to be stored).
+ */
+export function isValidIanaTimeZone(tz: string): boolean {
+  if (!tz.trim()) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz });
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -4,6 +4,7 @@ import { useId, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "../../../../_components/ds";
+import { PERIOD_PATTERN, isValidPeriod } from "@/lib/payroll/period";
 
 export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) {
   const t = useTranslations("costingPeriodForm");
@@ -14,7 +15,8 @@ export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) 
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!/^\d{4}-\d{2}$/.test(period.trim())) {
+    // GAP-PAYROLL-COSTING-06: month must be 01-12 ("2026-13" used to pass).
+    if (!isValidPeriod(period)) {
       setError(t("periodFormatError"));
       return;
     }
@@ -23,13 +25,15 @@ export function CostingPeriodForm({ initialPeriod }: { initialPeriod: string }) 
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 14 }}>
+    <form onSubmit={handleSubmit} noValidate style={{ display: "flex", gap: 10, alignItems: "flex-end", flexWrap: "wrap", marginBottom: 14 }}>
       <div style={{ display: "grid", gap: 6 }}>
         <label htmlFor={fieldId} style={{ fontSize: 13, fontWeight: 600 }}>
           {t("periodLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
         </label>
         <input
           id={fieldId}
+          type="month"
+          pattern={PERIOD_PATTERN}
           value={period}
           onChange={(e) => setPeriod(e.target.value)}
           placeholder="2026-08"

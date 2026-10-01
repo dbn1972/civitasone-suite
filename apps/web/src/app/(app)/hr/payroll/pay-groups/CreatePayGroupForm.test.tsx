@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: refreshMock }),
 }));
 
-import { CreatePayGroupForm } from "./CreatePayGroupForm";
+import { CreatePayGroupForm, isValidTimeZone } from "./CreatePayGroupForm";
 
 // UX-017: CreatePayGroupForm now reads its copy through next-intl
 // (useTranslations("createPayGroupForm")), so every render needs a real
@@ -34,11 +34,10 @@ describe("CreatePayGroupForm", () => {
   });
 
   it("creates a pay group on confirm (happy path)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(
-        JSON.stringify({ data: { id: "pg1", name: "Weekly Wage Staff", frequency: "monthly", payDayOfMonth: 28, timezone: "Asia/Kolkata", status: "active" } }),
-        { status: 201 },
-      ),
+    // The real API answers 202 with a command acknowledgement and no group
+    // body; reading res.data.name used to throw after a successful create.
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "pg1", status: "accepted", correlationId: "c1" }), { status: 202 }),
     );
 
     renderForm();
@@ -52,6 +51,22 @@ describe("CreatePayGroupForm", () => {
       expect(screen.getByText(/Pay group "Weekly Wage Staff" created\./)).toBeInTheDocument();
     });
     expect(refreshMock).toHaveBeenCalled();
+    const body = JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body));
+    expect(body.timezone).toBe("Asia/Kolkata");
+  });
+
+  it("offers timezones from a list and validates IANA names (PAY-GROUPS-04)", () => {
+    renderForm();
+    expect((screen.getByLabelText(/Timezone/) as HTMLElement).tagName).toBe("SELECT");
+    expect(isValidTimeZone("Asia/Kolkata")).toBe(true);
+    expect(isValidTimeZone("Mars/Base")).toBe(false);
+  });
+
+  it("explains month-end and non-monthly pay-day behaviour (PAY-GROUPS-01)", () => {
+    renderForm();
+    expect(screen.getByText(/pay falls on its last day/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Frequency/), { target: { value: "weekly" } });
+    expect(screen.getByText(/weekday schedules are not supported yet/)).toBeInTheDocument();
   });
 
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/status (error path) (UX-020)", async () => {
