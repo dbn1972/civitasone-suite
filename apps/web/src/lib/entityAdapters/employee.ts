@@ -1,6 +1,13 @@
 import type { EntityOption } from "@/app/_components/ds";
 
-type EmployeeRow = { id: string; employeeNo?: string; name: string; department?: string };
+// GAP-HR-EMPLOYEES-DETAIL-EDIT-05: `status` was always present on the real
+// GET /v1/hrms/employees row (services/hrms-service's queries.listEmployees
+// returns id/employeeNo/name/department/employeeType/status) but unused by
+// this adapter, so a caller had no way to filter by it. Duplicated here
+// (not imported) for the same reason EditEmployeeForm.tsx's SENSITIVE_FIELDS
+// comment gives: hrms-service's employee/status.ts is a separate service,
+// across the service boundary this web app can't import across.
+type EmployeeRow = { id: string; employeeNo?: string; name: string; department?: string; status?: string };
 
 function toOption(row: EmployeeRow): EntityOption {
   return {
@@ -25,13 +32,30 @@ function toOption(row: EmployeeRow): EntityOption {
  * response field -- it does not add work-email/extension exposure either
  * (that remains GAP-HR-DIRECTORY-04's own, separate, not-yet-implemented
  * fix step), so this stays strictly within the already-safe shape.
+ *
+ * GAP-HR-EMPLOYEES-DETAIL-EDIT-05: `opts.excludeStatuses` is an optional,
+ * purely-additive client-side filter applied to the rows this endpoint
+ * already returns -- it does NOT add a new backend query param (the
+ * underlying GET /v1/hrms/employees has no status filter either, and this
+ * directory endpoint has many unrelated callers across the app, so widening
+ * its own query surface for one caller's business rule was deliberately
+ * avoided; see EditEmployeeForm.tsx's own comment on this same gap for why).
+ * Every existing caller that doesn't pass `opts` keeps today's behavior
+ * unchanged.
  */
-export async function searchEmployees(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+export async function searchEmployees(
+  query: string,
+  signal: AbortSignal,
+  opts?: { excludeStatuses?: readonly string[] },
+): Promise<EntityOption[]> {
   const res = await fetch(`/api/proxy/v1/hrms/employees?q=${encodeURIComponent(query)}&limit=20`, { signal });
   if (!res.ok) return [];
   const body = (await res.json()) as { data?: EmployeeRow[] } | EmployeeRow[];
   const rows = Array.isArray(body) ? body : (body.data ?? []);
-  return rows.map(toOption);
+  const filtered = opts?.excludeStatuses
+    ? rows.filter((r) => !r.status || !opts.excludeStatuses!.includes(r.status))
+    : rows;
+  return filtered.map(toOption);
 }
 
 /**

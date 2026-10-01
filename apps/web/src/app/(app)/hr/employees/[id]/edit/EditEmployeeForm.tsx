@@ -17,6 +17,14 @@ const PHONE_RE = /^\+?[\d\s\-()]{7,20}$/;
 // boundary). Any patch touching one of these needs a typed reason.
 const SENSITIVE_FIELDS = ["bankAccountNo", "bankIfsc", "uanNumber", "esicIpNumber", "pran"] as const;
 
+// GAP-HR-EMPLOYEES-DETAIL-EDIT-05: mirrors hrms-service's employee/status.ts
+// EXITED_STATUSES exactly (not SERVING_STATUSES -- that set is scoped to the
+// "Active" headcount stat and deliberately excludes on_leave/suspended too,
+// which are temporary and still legitimate manager picks per that file's own
+// comment). Duplicated, not imported, for the same cross-service-boundary
+// reason as SENSITIVE_FIELDS above.
+const MANAGER_INELIGIBLE_STATUSES = ["terminated", "separated", "retired"] as const;
+
 interface Props {
   employee: EmployeeDetail;
 }
@@ -372,18 +380,18 @@ export function EditEmployeeForm({ employee }: Props) {
             <EntityPicker
               value={managerId}
               onChange={(v) => setManagerId(Array.isArray(v) ? (v[0] ?? null) : v)}
-              // GAP-HR-EMPLOYEES-DETAIL-EDIT-05 (backend-verify, confirmed
-              // still real against current code): GET /v1/hrms/employees
+              // GAP-HR-EMPLOYEES-DETAIL-EDIT-05: GET /v1/hrms/employees
               // (repo.listByTenant) has no status filter and no self-
               // exclusion, so the manager picker could return a separated/
-              // terminated employee or the employee themself as an option.
-              // The separated-employee half needs a backend status filter
-              // whose blast radius on this generic, multi-caller directory
-              // endpoint I did not want to change under time pressure (left
-              // `[~]`, see PR description) -- self-exclusion is safe to do
-              // here, client-side, with no backend change at all.
+              // terminated/retired employee or the employee themself as an
+              // option, breaking approval routing. Self-exclusion was already
+              // client-side-only; the exited-status half is now closed the
+              // same way via searchEmployees' excludeStatuses option
+              // (entityAdapters/employee.ts), rather than widening the
+              // shared, multi-caller directory endpoint's own query surface.
               search={(q, signal) =>
-                searchEmployees(q, signal).then((opts) => opts.filter((o) => o.id !== employee.id))
+                searchEmployees(q, signal, { excludeStatuses: MANAGER_INELIGIBLE_STATUSES })
+                  .then((opts) => opts.filter((o) => o.id !== employee.id))
               }
               resolve={resolveEmployees}
               initialOptions={

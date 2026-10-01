@@ -32,6 +32,53 @@ describe("entityAdapters/employee", () => {
     expect(result).toEqual([]);
   });
 
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-05
+  describe("excludeStatuses", () => {
+    const ROWS = [
+      { id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", status: "confirmed" },
+      { id: "e2", employeeNo: "EMP002", name: "Vikram Singh", department: "Finance", status: "separated" },
+      { id: "e3", employeeNo: "EMP003", name: "Priya Nair", department: "Finance", status: "retired" },
+      { id: "e4", employeeNo: "EMP004", name: "Ravi Kumar", department: "Finance", status: "terminated" },
+      { id: "e5", employeeNo: "EMP005", name: "Deepa Iyer", department: "Finance", status: "on_leave" },
+    ];
+
+    beforeEach(() => {
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ data: ROWS }), { status: 200, headers: { "content-type": "application/json" } }),
+      );
+    });
+
+    it("drops rows whose status is in excludeStatuses, keeping everyone else", async () => {
+      const result = await searchEmployees("a", new AbortController().signal, {
+        excludeStatuses: ["terminated", "separated", "retired"],
+      });
+      expect(result.map((o) => o.id)).toEqual(["e1", "e5"]);
+    });
+
+    it("keeps on_leave/suspended (not in the exclude list) -- still legitimate manager picks", async () => {
+      const result = await searchEmployees("a", new AbortController().signal, {
+        excludeStatuses: ["terminated", "separated", "retired"],
+      });
+      expect(result.some((o) => o.id === "e5")).toBe(true);
+    });
+
+    it("without opts, behaves exactly as before (no filtering)", async () => {
+      const result = await searchEmployees("a", new AbortController().signal);
+      expect(result).toHaveLength(ROWS.length);
+    });
+
+    it("keeps a row with no status field at all rather than excluding it", async () => {
+      fetchMock.mockResolvedValue(
+        new Response(JSON.stringify({ data: [{ id: "e9", name: "No Status Row" }] }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        }),
+      );
+      const result = await searchEmployees("a", new AbortController().signal, { excludeStatuses: ["separated"] });
+      expect(result.map((o) => o.id)).toEqual(["e9"]);
+    });
+  });
+
   it("resolveEmployees batches ids into one comma-separated request", async () => {
     fetchMock.mockResolvedValue(
       new Response(JSON.stringify({ data: [{ id: "e1", name: "Asha Rao" }] }), {
