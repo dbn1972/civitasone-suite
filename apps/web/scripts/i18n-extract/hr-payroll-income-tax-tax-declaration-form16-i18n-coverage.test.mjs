@@ -90,7 +90,6 @@ describe("hr/payroll income-tax/tax-declaration/form16 i18n coverage (UX-017 tra
       "form16",
       "fyLookupForm",
       "form16Wizard",
-      "generateForm16Form",
       "verifyForm16Form",
     ];
 

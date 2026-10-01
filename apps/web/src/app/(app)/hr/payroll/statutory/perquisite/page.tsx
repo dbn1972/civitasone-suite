@@ -1,15 +1,22 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState, Masked } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { EmployeeFyLookup } from "./EmployeeFyLookup";
 import { PerquisiteComponentForm } from "./PerquisiteComponentForm";
+import { PerquisiteTable } from "./PerquisiteTable";
 
 type PerquisiteLine = {
   sl: number;
   nature: string;
   description?: string;
+  valueByEmployerMinor?: number;
+  amountRecoveredMinor?: number;
   taxableValueMinor: number;
   value: number;
 };
@@ -39,27 +46,52 @@ async function getForm12BA(employeeId: string, fy: string): Promise<LoaderResult
 
 export default async function PerquisitePage({ searchParams }: { searchParams?: { employeeId?: string; fy?: string } }) {
   const t = await getTranslations("perquisite");
+
+  // GAP-PAYROLL-STATUTORY-PERQUISITE-02/04: GET form12ba is self-service-
+  // scoped server-side (enforceEmployeeOwnership -- an "employee" caller can
+  // only ever fetch their OWN record), but this page's UI is an admin lookup
+  // of an ARBITRARY typed-in employeeId plus an admin-only add-component
+  // form (POST perquisite-components requires payroll_admin/payroll_officer/
+  // super_admin -- statutory-returns/routes.ts's STATUTORY_ROLES, no
+  // "employee" at all). Gating at PAYROLL_STATUTORY_ADMIN_ROLES (the
+  // privileged tier common to both reads and writes here) avoids inviting
+  // self-service use of a tool that isn't built for it, rather than widening
+  // to match the narrowest individual endpoint.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
+    return <PermissionDenied module="Form 12BA / perquisites" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />;
+  }
+
   const employeeId = searchParams?.employeeId?.trim();
   const fy = searchParams?.fy?.trim();
   const canLookup = !!employeeId && !!fy;
 
   const result = canLookup ? await getForm12BA(employeeId!, fy!) : null;
-  const source = result?.source ?? "api";
+  const source = result?.source;
+  const status = result?.status;
   const form12ba = result?.data ?? null;
   const perqCount = form12ba?.perquisites?.length ?? 0;
   const totalPerqMinor = form12ba?.totalPerquisitesMinor ?? 0;
   const maxPerqMinor = form12ba && form12ba.perquisites.length > 0
     ? Math.max(...form12ba.perquisites.map((p) => p.taxableValueMinor))
     : 0;
+  // GAP-PAYROLL-STATUTORY-PERQUISITE-01: fetchJson returns data:null for
+  // BOTH a real "no Form 12BA for this employee/FY" and any fetch error
+  // (source:"error") -- a null `form12ba` alone can't tell them apart, so an
+  // outage used to render the same "No Form 12BA data" EmptyState as a
+  // genuine empty result, with no retry. A 404 is a legitimate empty result
+  // (not every employee/FY has perquisites on file); any OTHER error status
+  // (or no status at all, e.g. a network failure) gets the real error state.
+  const isLoadError = canLookup && source === "error" && status !== 404;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory" backLabel="Back to Statutory"
+        back="/hr/payroll/statutory" backLabel={t("errorBackLabel")}
       />
-      {canLookup && <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />}
+      {canLookup && !isLoadError && <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />}
 
       {canLookup && form12ba && (
         <StatGrid>
@@ -81,6 +113,8 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
             title={t("selectEmployeeFyTitle")}
             message={t("selectEmployeeFyMessage")}
           />
+        ) : isLoadError ? (
+          <RefreshErrorState error={toHumanError("load", { area: t("loadErrorArea") })} backHref="/hr/payroll/statutory" />
         ) : !form12ba ? (
           <EmptyState
             icon="📄"
@@ -91,39 +125,35 @@ export default async function PerquisitePage({ searchParams }: { searchParams?: 
           <div style={{ display: "grid", gap: 14 }}>
             <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
               <div>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("employerLabel")}</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.employer.name}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("employerTanLabel")}</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.employer.tan}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("assessmentYearLabel")}</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.assessmentYear}</div>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+              <div>
                 <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("employeeLabel")}</div>
                 <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.employee.name || form12ba.employee.employeeId}</div>
               </div>
               <div>
                 <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("panLabel")}</div>
-                <div style={{ fontSize: 15, fontWeight: 600 }}>{form12ba.employee.pan || form12ba.employee.panFlag}</div>
+                <div style={{ fontSize: 15, fontWeight: 600 }}>
+                  <Masked value={form12ba.employee.pan} kind="pan" fallback={form12ba.employee.panFlag} />
+                </div>
               </div>
               <div>
                 <div style={{ fontSize: 12, color: "var(--ink2)" }}>{t("totalPerquisitesLabel")}</div>
                 <div style={{ fontSize: 15, fontWeight: 700 }}>{formatMoney(form12ba.totalPerquisitesMinor)}</div>
               </div>
             </div>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <caption className="sr-only">{t("tableCaption")}</caption>
-              <thead>
-                <tr>
-                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>{t("colSl")}</th>
-                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>{t("colNature")}</th>
-                  <th scope="col" style={{ textAlign: "left", padding: "6px 8px", fontSize: 13 }}>{t("colDescription")}</th>
-                  <th scope="col" style={{ textAlign: "right", padding: "6px 8px", fontSize: 13 }}>{t("colTaxableValue")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {form12ba.perquisites.map((p) => (
-                  <tr key={p.sl}>
-                    <td style={{ padding: "6px 8px", fontSize: 13 }}>{p.sl}</td>
-                    <td style={{ padding: "6px 8px", fontSize: 13 }}>{p.nature}</td>
-                    <td style={{ padding: "6px 8px", fontSize: 13 }}>{p.description || "—"}</td>
-                    <td style={{ padding: "6px 8px", fontSize: 13, textAlign: "right" }}>{formatMoney(p.taxableValueMinor)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <PerquisiteTable perquisites={form12ba.perquisites} />
             <p style={{ fontSize: 12, color: "var(--ink2)" }}>{form12ba.note}</p>
           </div>
         )}

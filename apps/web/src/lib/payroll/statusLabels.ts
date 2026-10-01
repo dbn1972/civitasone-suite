@@ -45,3 +45,24 @@ export function salarySlipStatusLabel(status: string, t: TFn): string {
     ? t(`status.${status}` as Parameters<TFn>[0])
     : status;
 }
+
+/**
+ * GAP-PAYROLL-INCOME-TAX-04: /v1/payroll/income-tax's row status (payroll-
+ * service's tax/routes.ts) only ever actually produces "submitted" (a
+ * declaration on file -- tax/consumer.ts's submitDeclaration always writes
+ * status:"submitted", on both insert and update) or the route's own literal
+ * "pending" default when no declaration exists for that employee+FY at all
+ * (tax/routes.ts: `status: dec?.status ?? "pending"`) -- traced from the
+ * actual backend source, not assumed. "draft"/"finalized"/"completed" are
+ * tolerated here defensively (the DB column's own schema default is "draft",
+ * and a future review/approval stage may one day add "finalized"/
+ * "completed") but are not currently reachable from any code path.
+ */
+const INCOME_TAX_STATUSES = ["submitted", "pending", "draft", "finalized", "completed"] as const;
+
+/** Income-tax declaration row status (payroll-service tax/routes.ts). */
+export function incomeTaxStatusLabel(status: string, t: TFn): string {
+  return (INCOME_TAX_STATUSES as readonly string[]).includes(status)
+    ? t(`status.${status}` as Parameters<TFn>[0])
+    : status;
+}

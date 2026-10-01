@@ -190,3 +190,59 @@ export const HR_ROLES = [
  *    roles that can't use it (see leave/page.tsx's canManagePolicies).
  */
 export const LEAVE_POLICY_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];
+
+/**
+ * GAP-PAYROLL-INCOME-TAX-02 / GAP-PAYROLL-FORM16-06: hr/layout.tsx's broad
+ * HR_ROLES admits "manager" and "employee" to every /hr/payroll/* URL (by
+ * design — see HR_ROLES's own doc comment), but income-tax and Form 16 are
+ * individual salary/tax detail screens that need their own tighter,
+ * page-level gate, the same way hr/payroll/page.tsx already has its own
+ * local `PAYROLL_ADMIN_ROLES` check.
+ *
+ * Re-derived from payroll-service's actual route guards rather than
+ * assumed: this exact 6-role list is `READER_ROLES` in
+ * services/payroll-service/src/modules/tax/routes.ts (income-tax,
+ * tax/computation, tax/form16, tax-declarations) AND in
+ * modules/statutory-returns/routes.ts (form12ba) AND in
+ * modules/form16-pdf/routes.ts (the single-employee Form 16 PDF route) —
+ * three independent backend files agreeing on the identical list. Critically,
+ * "manager" is NOT in any of them (a manager gets a flat 403), and "employee"
+ * is scoped server-side to their own record (`enforceEmployeeOwnership` /
+ * `isSelfServiceEmployee`) regardless of what id the request names — so an
+ * `employee` caller reaching one of these pages only ever gets back their own
+ * row, never a tenant-wide list. This constant exists so the WEB page stops
+ * fetching (and a `manager` session stops seeing a confusing 403/empty page)
+ * before that backend call ever runs, not because the backend itself was
+ * leaking cross-employee data — it wasn't.
+ */
+export const PAYROLL_TAX_READER_ROLES = [
+  "payroll_admin",
+  "payroll_officer",
+  "super_admin",
+  "hr_admin",
+  "finance_officer",
+  "employee",
+];
+
+/**
+ * GAP-PAYROLL-STATUTORY-PERQUISITE-04 / GAP-PAYROLL-STATUTORY-NPS-03: the
+ * statutory PF/ESI/TDS/Gratuity/GPF/NPS *report* endpoints
+ * (services/payroll-service/src/modules/statutory/routes.ts's own
+ * `READER_ROLES`) are tenant-wide listings with no self-service scoping at
+ * all (unlike PAYROLL_TAX_READER_ROLES's tax/form12ba endpoints) — "employee"
+ * is deliberately absent here, matching the backend exactly, not widened to
+ * match the broader constant above. Perquisite's own form12ba GET does
+ * support a self-scoped "employee" caller (see PAYROLL_TAX_READER_ROLES),
+ * but that page's UI is an admin lookup-by-arbitrary-employee-id tool plus an
+ * admin-only add-component form (statutory-returns/routes.ts's
+ * `STATUTORY_ROLES`, which is narrower still — payroll_admin/payroll_officer/
+ * super_admin only), so gating the whole page at this privileged tier avoids
+ * inviting self-service use of a tool that isn't built for it.
+ */
+export const PAYROLL_STATUTORY_ADMIN_ROLES = [
+  "payroll_admin",
+  "payroll_officer",
+  "super_admin",
+  "hr_admin",
+  "finance_officer",
+];

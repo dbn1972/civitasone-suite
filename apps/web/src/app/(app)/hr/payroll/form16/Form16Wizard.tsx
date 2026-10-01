@@ -1,23 +1,13 @@
 "use client";
 
 import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button } from "@/app/_components/ds";
+import { Button, ConfirmDialog, EntityPicker } from "@/app/_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { isValidFy } from "@/lib/validators/fy";
 
-// Stable, untranslated identifiers -- only used for React keys / field ids /
-// dropdown key-lookup, never displayed. Display labels are resolved via
-// DEDUCTION_LABEL_KEYS + t() inside the component (UX-017).
-const DEDUCTION_SECTIONS = ["12B", "80C", "80D", "80E", "80G", "24B", "10HRA"] as const;
-type DeductionSection = (typeof DEDUCTION_SECTIONS)[number];
-const DEDUCTION_LABEL_KEYS: Record<DeductionSection, string> = {
-  "12B": "deduction12b",
-  "80C": "deduction80c",
-  "80D": "deduction80d",
-  "80E": "deduction80e",
-  "80G": "deduction80g",
-  "24B": "deduction24b",
-  "10HRA": "deductionHra",
-};
+type BulkStatus = { status: string } | null;
 
 function StepBar({ step, steps, ariaLabel }: { step: number; steps: string[]; ariaLabel: string }) {
   return (
@@ -54,7 +44,17 @@ function StepBar({ step, steps, ariaLabel }: { step: number; steps: string[]; ar
   );
 }
 
-function TdsReconciliationTable({ fy, t }: { fy: string; t: ReturnType<typeof useTranslations> }) {
+/**
+ * GAP-PAYROLL-FORM16-02: this table used to synthesize a plausible-looking
+ * challan reference ("CHLN-FY{fy}-Q{n}") for all four quarters out of thin
+ * air, with Gross Salary/TDS Deducted hard-coded "—" -- read as if it were
+ * real 24Q challan data. No challan-reference endpoint is wired to this
+ * wizard (the per-quarter TDS amounts GET /v1/payroll/tax/form16 returns are
+ * real, but it has no challan serial/CIN -- those live in a separate
+ * statutory-returns challan table this wizard doesn't query), so the table
+ * now honestly shows "Not available" instead of a fabricated reference.
+ */
+function TdsReconciliationTable({ t }: { t: ReturnType<typeof useTranslations> }) {
   const columnHeaders = [t("colQuarter"), t("colGrossSalary"), t("colTdsDeducted"), t("colChallanRef")];
   const quarters = [t("quarterQ1"), t("quarterQ2"), t("quarterQ3"), t("quarterQ4")];
   return (
@@ -68,13 +68,13 @@ function TdsReconciliationTable({ fy, t }: { fy: string; t: ReturnType<typeof us
           </tr>
         </thead>
         <tbody>
-          {quarters.map((q, i) => (
+          {quarters.map((q) => (
             <tr key={q} style={{ borderBottom: "1px solid var(--line2)" }}>
               <td style={{ padding: "8px 10px" }}>{q}</td>
               <td style={{ padding: "8px 10px", textAlign: "end", color: "var(--ink2)" }}>—</td>
               <td style={{ padding: "8px 10px", textAlign: "end", color: "var(--ink2)" }}>—</td>
-              <td style={{ padding: "8px 10px", fontFamily: "monospace", fontSize: 12, color: "var(--ink2)" }}>
-                CHLN-FY{fy.replace("-", "")}-Q{i + 1}
+              <td style={{ padding: "8px 10px", fontSize: 12, color: "var(--ink2)" }}>
+                {t("challanRefNotAvailable")}
               </td>
             </tr>
           ))}
@@ -92,31 +92,35 @@ function TdsReconciliationTable({ fy, t }: { fy: string; t: ReturnType<typeof us
 
 export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
   const t = useTranslations("form16Wizard");
+  const router = useRouter();
   const [step, setStep] = useState(0);
   const [fy, setFy] = useState(defaultFy);
-  const [employeeId, setEmployeeId] = useState("");
-  const DEDUCTIONS = DEDUCTION_SECTIONS.map((section) => ({ section, label: t(DEDUCTION_LABEL_KEYS[section]) }));
-  const [deductionVals, setDeductionVals] = useState<Record<string, string>>(
-    Object.fromEntries(DEDUCTION_SECTIONS.map((section) => [section, ""])),
-  );
+  const [fyError, setFyError] = useState(false);
+  // GAP-PAYROLL-FORM16-03: blank employeeId used to silently mean "every
+  // employee", with no explicit choice and no confirmation. Scope is now an
+  // explicit radio; "one" requires picking a real employee via the shared
+  // EntityPicker (ds/EntityPicker.tsx + the existing employee directory
+  // adapter) instead of pasting a raw id.
+  const [scope, setScope] = useState<"all" | "one">("all");
+  const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [jobId, setJobId] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  // GAP-PAYROLL-FORM16-04: polls bulk-status (the same endpoint page.tsx's
+  // server-side status card already uses) instead of showing the download
+  // link the instant the job is queued -- generation is asynchronous, so
+  // that link was dead until the run actually finished.
+  const [bulkStatus, setBulkStatus] = useState<BulkStatus>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const fyId = useId();
-  const empId = useId();
 
   const STEP_NAMES = useMemo(
-    () => [t("stepSelectFy"), t("stepReviewDeductions"), t("stepGenerateDownload")],
+    () => [t("stepSelectFy"), t("stepReview"), t("stepGenerateDownload")],
     [t],
   );
 
-  // Focus management + step-change announcement (WCAG 2.4.3 / 4.1.3): moving
-  // between steps today re-renders in place with nothing to tell a keyboard
-  // or screen-reader user the step actually changed. On every step change
-  // (not the initial mount — that would steal focus from normal page load)
-  // move focus to the new step's panel and announce it via a polite live
-  // region, a standard low-risk wizard pattern.
   const panelRef = useRef<HTMLDivElement>(null);
   const [announcement, setAnnouncement] = useState("");
   const isFirstRender = useRef(true);
@@ -131,12 +135,73 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
     );
   }, [step, t, STEP_NAMES]);
 
+  // GAP-PAYROLL-FORM16-04: cap polling (2.5 min at 5s) so a stuck job can't
+  // poll forever; stop on completed/failed either way.
+  useEffect(() => {
+    if (step !== 2 || !jobId) return;
+    let attempts = 0;
+    async function poll() {
+      attempts += 1;
+      try {
+        const res = await fetch(`/api/proxy/v1/payroll/tax/form16/bulk-status?fy=${encodeURIComponent(fy)}`);
+        if (res.ok) {
+          const d = (await res.json()) as { data?: { status?: string } };
+          const status = d?.data?.status;
+          if (status) {
+            setBulkStatus({ status });
+            if (status === "completed" || status === "failed") {
+              if (pollRef.current) clearInterval(pollRef.current);
+              router.refresh();
+              return;
+            }
+          }
+        }
+      } catch {
+        // transient network error: let the next tick retry
+      }
+      if (attempts >= 30 && pollRef.current) clearInterval(pollRef.current);
+    }
+    void poll();
+    pollRef.current = setInterval(() => void poll(), 5000);
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
+  }, [step, jobId, fy, router]);
+
+  function handleNext() {
+    if (!isValidFy(fy)) {
+      setFyError(true);
+      return;
+    }
+    setFyError(false);
+    // GAP-PAYROLL-FORM16-07: the wizard's own FY field used to be
+    // independent of the URL/status-card FY entirely. Syncing here means a
+    // changed FY takes effect; because page.tsx keys the wizard on `fy`
+    // (key={fy}), this remounts the wizard once the URL updates -- the
+    // remounted instance starts over at step 0 with the new FY already
+    // filled in (not stranded on the old step), so the user clicks Next
+    // once more to actually proceed. When the FY is unchanged from
+    // `defaultFy`, no remount happens and this advances immediately.
+    if (fy !== defaultFy) {
+      router.replace(`?fy=${encodeURIComponent(fy)}`);
+      return;
+    }
+    setStep(1);
+  }
+
   async function generateForm16() {
     setBusy(true);
     setError(undefined);
     try {
       const body: Record<string, unknown> = { fy };
-      if (employeeId.trim()) body.employeeIds = [employeeId.trim()];
+      if (scope === "one") {
+        if (!employeeId) {
+          setError(t("employeeRequiredError"));
+          setBusy(false);
+          return;
+        }
+        body.employeeIds = [employeeId];
+      }
       const res = await fetch("/api/proxy/v1/payroll/tax/form16/bulk-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -145,84 +210,95 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       if (!res.ok) {
         const d = await res.json().catch(() => ({})) as { error?: { message?: string } };
         setError(d?.error?.message ?? t("generationFailedDefault"));
+        setConfirmOpen(false);
         return;
       }
       const d = await res.json().catch(() => ({})) as { data?: { jobId?: string } };
       setJobId(d?.data?.jobId ?? null);
+      setBulkStatus(null);
+      setConfirmOpen(false);
       setStep(2);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("networkErrorDefault"));
+      setConfirmOpen(false);
     } finally {
       setBusy(false);
     }
   }
 
+  const canDownload = bulkStatus?.status === "completed";
+  const generationFailed = bulkStatus?.status === "failed";
+
   return (
     <div style={{ padding: "20px 24px" }}>
       <StepBar step={step} steps={STEP_NAMES} ariaLabel={t("stepAriaLabel")} />
-      {/* Announces "Step 2 of 3: Review Deductions" etc. whenever `step`
-          changes — sighted keyboard users get the same cue visually via
-          StepBar's aria-current="step" circle, but that's silent to a
-          screen reader unless something explicitly speaks the change. */}
       <div aria-live="polite" className="sr-only">{announcement}</div>
 
       {/* Step 0 — Select FY */}
       {step === 0 && (
         <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[0] ?? ""} style={{ display: "grid", gap: 16 }}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, maxWidth: 500 }}>
-            <div>
-              <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>{t("financialYearLabel")}</label>
-              <input id={fyId} type="text" className="input" value={fy} onChange={(e) => setFy(e.target.value)} placeholder="2024-25" />
-              <p style={{ fontSize: 11, color: "var(--ink2)", marginTop: 4 }}>{t("financialYearFormatHint")}</p>
-            </div>
-            <div>
-              <label htmlFor={empId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>
-                {t("employeeIdLabel")} <span style={{ color: "var(--ink2)", fontWeight: 400 }}>{t("employeeIdOptional")}</span>
-              </label>
-              <input id={empId} type="text" className="input" value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} placeholder={t("employeeIdPlaceholder")} />
-            </div>
+          <div style={{ maxWidth: 260 }}>
+            <label htmlFor={fyId} style={{ fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 }}>{t("financialYearLabel")}</label>
+            <input
+              id={fyId}
+              type="text"
+              className="input"
+              value={fy}
+              onChange={(e) => { setFy(e.target.value); setFyError(false); }}
+              placeholder="2024-25"
+              aria-invalid={fyError || undefined}
+            />
+            <p style={{ fontSize: 11, color: fyError ? "var(--bad, #c0392b)" : "var(--ink2)", marginTop: 4 }}>
+              {fyError ? t("financialYearInvalidError") : t("financialYearFormatHint")}
+            </p>
           </div>
           <div>
-            <Button onClick={() => setStep(1)}>{t("nextBtn")}</Button>
+            <Button onClick={handleNext}>{t("nextBtn")}</Button>
           </div>
         </div>
       )}
 
-      {/* Step 1 — Review deductions + TDS reconciliation */}
+      {/* Step 1 — Review scope + TDS reconciliation */}
       {step === 1 && (
         <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[1] ?? ""} style={{ display: "grid", gap: 22 }}>
           <div>
-            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{t("deductionFiguresHeading", { fy })}</h3>
-            <div style={{ display: "grid", gap: 8, maxWidth: 540 }}>
-              {DEDUCTIONS.map((d) => (
-                <div key={d.section} style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 12, alignItems: "center" }}>
-                  <label htmlFor={`f16-deduction-${d.section}`} style={{ fontSize: 13, color: "var(--ink2)" }}>{d.label}</label>
-                  <input
-                    id={`f16-deduction-${d.section}`}
-                    type="number"
-                    className="input"
-                    style={{ width: 160, textAlign: "end" }}
-                    value={deductionVals[d.section] ?? ""}
-                    onChange={(e) => setDeductionVals((prev) => ({ ...prev, [d.section]: e.target.value }))}
-                    placeholder="0.00"
-                    min="0"
+            <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 12 }}>{t("scopeHeading")}</h3>
+            <fieldset style={{ border: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+              <legend className="sr-only">{t("scopeHeading")}</legend>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                <input type="radio" name="form16-scope" checked={scope === "all"} onChange={() => setScope("all")} />
+                {t("scopeAllLabel")}
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13 }}>
+                <input type="radio" name="form16-scope" checked={scope === "one"} onChange={() => setScope("one")} />
+                {t("scopeOneLabel")}
+              </label>
+              {scope === "one" && (
+                <div style={{ maxWidth: 360, marginLeft: 24 }}>
+                  <EntityPicker
+                    value={employeeId}
+                    onChange={(v) => setEmployeeId(Array.isArray(v) ? (v[0] ?? null) : v)}
+                    search={searchEmployees}
+                    resolve={resolveEmployees}
+                    aria-label={t("scopeOneLabel")}
+                    placeholder={t("employeePickerPlaceholder")}
                   />
                 </div>
-              ))}
-            </div>
+              )}
+            </fieldset>
           </div>
 
           <div>
             <h3 style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>{t("annualTdsReconciliationHeading", { fy })}</h3>
             <p style={{ fontSize: 12, color: "var(--ink2)", marginBottom: 10 }}>{t("tdsReconciliationNote")}</p>
-            <TdsReconciliationTable fy={fy} t={t} />
+            <TdsReconciliationTable t={t} />
           </div>
 
           {error && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13 }}>{error}</p>}
           <div style={{ display: "flex", gap: 10 }}>
             <Button variant="ghost" onClick={() => setStep(0)}>{t("backBtn")}</Button>
-            <Button onClick={() => void generateForm16()} disabled={busy} loading={busy}>
-              {busy ? t("generatingBtn") : t("generateBtn")}
+            <Button onClick={() => setConfirmOpen(true)} disabled={busy}>
+              {t("generateBtn")}
             </Button>
           </div>
         </div>
@@ -231,24 +307,43 @@ export function Form16Wizard({ defaultFy }: { defaultFy: string }) {
       {/* Step 2 — Download */}
       {step === 2 && (
         <div ref={panelRef} tabIndex={-1} role="group" aria-label={STEP_NAMES[2] ?? ""} style={{ display: "grid", gap: 16 }}>
-          <div style={{ background: "var(--goodbg, #e6f7f0)", borderRadius: 12, padding: "28px", textAlign: "center" }}>
-            <p style={{ fontSize: 36, margin: "0 0 10px" }}>✅</p>
-            <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{t("generationStartedTitle")}</p>
-            {jobId && <p style={{ fontSize: 13, fontFamily: "monospace", color: "var(--ink2)" }}>{t("jobIdLabel", { jobId })}</p>}
-            <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 8 }}>
-              {t("generationAsyncNote")}
+          <div style={{ background: canDownload ? "var(--goodbg, #e6f7f0)" : "var(--panel)", borderRadius: 12, padding: "28px", textAlign: "center" }}>
+            <p style={{ fontSize: 36, margin: "0 0 10px" }}>{canDownload ? "✅" : generationFailed ? "⚠️" : "⏳"}</p>
+            <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>
+              {canDownload ? t("generationCompleteTitle") : generationFailed ? t("generationFailedTitle") : t("generationStartedTitle")}
             </p>
+            {jobId && <p style={{ fontSize: 12, fontFamily: "monospace", color: "var(--ink2)" }}>{t("jobIdLabel", { jobId })}</p>}
+            {!canDownload && !generationFailed && (
+              <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 8 }} aria-live="polite">
+                {t("generationAsyncNote")}
+              </p>
+            )}
             <div style={{ marginTop: 16, display: "flex", gap: 10, justifyContent: "center", flexWrap: "wrap" }}>
-              <a className="btn" href={`/api/proxy/v1/payroll/tax/form16/bulk-download?fy=${encodeURIComponent(fy)}`}>
-                {t("downloadZipBtn")}
-              </a>
-              <Button variant="ghost" onClick={() => { setStep(0); setJobId(null); setError(undefined); }}>
+              {canDownload && (
+                <a className="btn" href={`/api/proxy/v1/payroll/tax/form16/bulk-download?fy=${encodeURIComponent(fy)}`}>
+                  {t("downloadZipBtn")}
+                </a>
+              )}
+              <Button variant="ghost" onClick={() => { setStep(0); setJobId(null); setBulkStatus(null); setError(undefined); }}>
                 {t("generateAnotherBtn")}
               </Button>
             </div>
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title={t("confirmTitle")}
+        confirmLabel={t("confirmLabel")}
+        busy={busy}
+        errorMessage={error}
+        description={scope === "all"
+          ? t.rich("confirmDescriptionAll", { strong: (chunks) => <strong>{chunks}</strong>, fy })
+          : t.rich("confirmDescriptionOne", { strong: (chunks) => <strong>{chunks}</strong>, fy, employeeId: employeeId ?? "" })}
+        onConfirm={() => void generateForm16()}
+        onCancel={() => !busy && setConfirmOpen(false)}
+      />
     </div>
   );
 }

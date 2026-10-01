@@ -1,13 +1,18 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { NpsHistoryTable } from "./NpsHistoryTable";
 
 type NpsRow = {
   id: string;
   employeeId: string;
+  employeeName: string | null;
   period: string;
   basicMinor: number;
   empContribPct: number;
@@ -28,6 +33,20 @@ async function getData(): Promise<LoaderResult<NpsRow[]>> {
 
 export default async function NpsStatutoryPage() {
   const t = await getTranslations("nps");
+
+  // GAP-PAYROLL-STATUTORY-NPS-03: payroll-service's statutory/routes.ts
+  // READER_ROLES for GET /v1/payroll/statutory/nps is
+  // [payroll_admin, payroll_officer, super_admin, hr_admin, finance_officer]
+  // -- no "employee", no self-service scoping (unlike income-tax/form12ba),
+  // so an employee/manager reaching this page today gets a flat backend 403
+  // on every row, not a leak. PAYROLL_STATUTORY_ADMIN_ROLES mirrors that
+  // list exactly; this page-level gate turns that 403 into a clear message
+  // instead of a blank/broken table.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
+    return <PermissionDenied module="NPS contributions" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("backToStatutoryLabel")} />;
+  }
+
   const { data: rows, source } = await getData();
   const errored = source === "error";
 
@@ -35,22 +54,12 @@ export default async function NpsStatutoryPage() {
   const totalErContribMinor = rows.reduce((s, r) => s + Number(r.erContribMinor ?? 0), 0);
   const totalNpsMinor = totalEmpContribMinor + totalErContribMinor;
 
-  const columns: { key: keyof NpsRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "employeeId", label: t("colEmployee") },
-    { key: "period", label: t("colPeriod") },
-    { key: "basicMinor", label: t("colBasicPay"), align: "right", cellType: "amount" },
-    { key: "empContribPct", label: t("colEmployeeRatePercent"), align: "right" },
-    { key: "erContribPct", label: t("colEmployerRatePercent"), align: "right" },
-    { key: "empContribMinor", label: t("colEmployeeNps"), align: "right", cellType: "amount" },
-    { key: "erContribMinor", label: t("colEmployerNps"), align: "right", cellType: "amount" },
-  ];
-
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory" backLabel="Back to Statutory"
+        back="/hr/payroll/statutory" backLabel={t("backToStatutoryLabel")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
@@ -62,20 +71,13 @@ export default async function NpsStatutoryPage() {
       <Card title={t("historyCardTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "nps" })} backHref="/hr/payroll/statutory" />
+            {/* GAP-PAYROLL-STATUTORY-NPS-06: "nps" was a bare, untranslated
+                token interpolated straight into the "We couldn't load {area}"
+                sentence. */}
+            <RefreshErrorState error={toHumanError("load", { area: t("loadErrorArea") })} backHref="/hr/payroll/statutory" />
           </div>
         ) : (
-          <DataTable<NpsRow>
-          columns={columns}
-          rows={rows}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="📊"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+          <NpsHistoryTable rows={rows} />
         )}
       </Card>
     </div>

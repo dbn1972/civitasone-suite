@@ -1,22 +1,17 @@
 import { PageHeader, Card, RefreshErrorState } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
-import { currentFinancialYear } from "@/lib/fiscalYear";
 
 export default async function TaxConfigPage() {
   try {
     const t = await getTranslations("payrollTaxConfig");
-    // GAP-PAYROLL-TAX-DECLARATION-06: this used to compute FY locally with
-    // `new Date()` in the HOST timezone (host runs UTC), which reads the
-    // previous FY for the first 5.5 hours of 1 April IST. currentFinancialYear
-    // is IST-aware and is what every sibling payroll screen uses.
-    const fy = currentFinancialYear();
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />
 
         <div className="grid g-2">
           <Card title={t("cardNewRegime")} padding>
+            <div style={{ overflowX: "auto" }}>
             <table className="tbl" style={{ fontSize: 13 }}>
               <thead><tr><th>{t("thSlabAnnual")}</th><th>{t("thRate")}</th></tr></thead>
               <tbody>
@@ -28,10 +23,12 @@ export default async function TaxConfigPage() {
                 <tr><td>{t("newAbove15L")}</td><td>30%</td></tr>
               </tbody>
             </table>
+            </div>
             <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>{t("newRegimeNote")}</p>
           </Card>
 
           <Card title={t("cardOldRegime")} padding>
+            <div style={{ overflowX: "auto" }}>
             <table className="tbl" style={{ fontSize: 13 }}>
               <thead><tr><th>{t("thSlabAnnual")}</th><th>{t("thRate")}</th></tr></thead>
               <tbody>
@@ -41,10 +38,12 @@ export default async function TaxConfigPage() {
                 <tr><td>{t("oldAbove10L")}</td><td>30%</td></tr>
               </tbody>
             </table>
+            </div>
             <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>{t("oldRegimeNote")}</p>
           </Card>
 
           <Card title={t("cardDeductionLimits")} padding>
+            <div style={{ overflowX: "auto" }}>
             <table className="tbl" style={{ fontSize: 13 }}>
               <thead><tr><th>{t("thSection")}</th><th>{t("thLimit")}</th><th>{t("thDescription")}</th></tr></thead>
               <tbody>
@@ -56,9 +55,11 @@ export default async function TaxConfigPage() {
                 <tr><td>HRA</td><td>{t("hraLimitLabel")}</td><td>{t("hraDescription")}</td></tr>
               </tbody>
             </table>
+            </div>
           </Card>
 
           <Card title={t("cardSurchargeCess")} padding>
+            <div style={{ overflowX: "auto" }}>
             <table className="tbl" style={{ fontSize: 13 }}>
               <thead><tr><th>{t("thIncome")}</th><th>{t("thSurcharge")}</th></tr></thead>
               <tbody>
@@ -67,12 +68,13 @@ export default async function TaxConfigPage() {
                 <tr><td>{t("aboveTwoCr")}</td><td>25%</td></tr>
               </tbody>
             </table>
+            </div>
             <p style={{ marginTop: 8, fontSize: 12, color: "var(--mut)" }}>{t("cessNote")}</p>
           </Card>
         </div>
 
         <p style={{ marginTop: 16, color: "var(--mut)", fontSize: 13 }}>
-          {t("footerNote", { fy })}
+          {t("footerNote")}
         </p>
       </div>
     );
