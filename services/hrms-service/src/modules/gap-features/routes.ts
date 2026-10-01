@@ -859,29 +859,64 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
   // ── Gap: Staffing Plan (manpower vacancy analysis) ─────────────────────────
   app.get("/v1/hrms/staffing-plan", async (req, reply) => {
     const ctx = resolveContext(req); requireRole(ctx, HR_ROLES);
+    // GAP-HR-STAFFING-PLAN-04: this query previously had no year filter at
+    // all (ORDER BY plan_year DESC only, no WHERE on it, and plan_year was
+    // not even in the SELECT list), so the page's stats silently summed
+    // every plan_year (and status) together -- a real correctness bug for
+    // vacancy/hiring decisions. `?year=` scopes to one plan_year;
+    // omitted/invalid falls back to the most recent plan_year this tenant
+    // has any plan for.
+    const q = z.object({
+      year: z.coerce.number().int().min(2000).max(2100).optional(),
+    }).parse(req.query);
     // manpower.current_tenant_id() requires app.tenant_id; use a transaction with SET LOCAL.
     // NOTE: `SET LOCAL x = $1` is not valid Postgres syntax — SET does not accept a bind
     // parameter (always failed with "syntax error at or near \"$1\"", a 500 on every call).
     // set_config() is a regular function call and DOES accept one; the same
     // technique wrapWithTenantGuc() (packages/db/src/wrap-tenant-db.ts)
     // already uses to inject the GUC into a Drizzle transaction.
-    const rows = await sqlClient.begin(async (sql) => {
+    const { rows, years, resolvedYear } = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
-      return sql.unsafe(`
-        SELECT p.id, COALESCE(d.name, p.cadre) AS department, p.cadre,
+      const yearRows = await sql.unsafe(
+        `SELECT DISTINCT plan_year AS "planYear" FROM manpower.plans WHERE tenant_id = $1 ORDER BY "planYear" DESC`,
+        [ctx.tenantId],
+      );
+      const planYears = yearRows.map((r) => Number(r.planYear));
+      const targetYear = q.year ?? planYears[0] ?? new Date().getFullYear();
+      // GAP-HR-STAFFING-PLAN-03: `department` is now `d.name` alone
+      // (nullable) rather than the old COALESCE(d.name, p.cadre) -- that
+      // COALESCE meant `cadre` was effectively swallowed into `department`
+      // whenever a department link existed, even though `cadre` is also
+      // selected as its own column. Returning the two independently lets
+      // the web layer combine or split them instead of guessing.
+      // GAP-HR-STAFFING-PLAN-02: `lastReview` was p.updated_at -- a plain
+      // row-touch timestamp, not an actual review date (no dedicated
+      // review-date column exists). manpower.plans IS a maker-checker
+      // workflow table (submitted_at/approved_at alongside updated_at --
+      // see manpower-planning/schema.ts), so this reframes "last review" as
+      // whichever workflow milestone most recently touched the row
+      // (approved > submitted > updated) rather than renaming the field to
+      // a plain "last updated" -- a draft never submitted still only has
+      // updated_at, which remains a reasonable fallback for that case.
+      // GAP-HR-STAFFING-PLAN-01: explicit ::float8 cast so postgres-js
+      // returns a real JS number over the wire instead of a numeric-as-
+      // string (the web side's mapRows also defensively coerces).
+      const dataRows = await sql.unsafe(`
+        SELECT p.id, d.name AS department, p.cadre, p.plan_year AS "planYear",
                p.sanctioned_strength AS "sanctionedPosts", p.filled_strength AS filled,
                GREATEST(p.sanctioned_strength - p.filled_strength, 0) AS vacant,
                CASE WHEN p.sanctioned_strength > 0
-                 THEN ROUND((p.filled_strength::numeric / p.sanctioned_strength) * 100, 1)
-                 ELSE 0 END AS "fillPercentage",
-               p.updated_at AS "lastReview", p.status
+                 THEN ROUND((p.filled_strength::numeric / p.sanctioned_strength) * 100, 1)::float8
+                 ELSE 0::float8 END AS "fillPercentage",
+               COALESCE(p.approved_at, p.submitted_at, p.updated_at) AS "lastReview", p.status
         FROM manpower.plans p
         LEFT JOIN employee.hrms_departments d ON d.id = p.unit_id AND d.tenant_id = $1
-        WHERE p.tenant_id = $1
-        ORDER BY p.plan_year DESC, "fillPercentage" ASC LIMIT 200
-      `, [ctx.tenantId]);
+        WHERE p.tenant_id = $1 AND p.plan_year = $2
+        ORDER BY "fillPercentage" ASC LIMIT 200
+      `, [ctx.tenantId, targetYear]);
+      return { rows: dataRows, years: planYears, resolvedYear: targetYear };
     });
-    return reply.send({ data: rows });
+    return reply.send({ data: rows, meta: { planYear: resolvedYear, availableYears: years } });
   });
 
   // ── Gap: Vigilance (major disciplinary cases) ──────────────────────────────
