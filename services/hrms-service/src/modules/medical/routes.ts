@@ -314,6 +314,29 @@ export async function medicalClaimsRoutes(app: FastifyInstance): Promise<void> {
         throw new HttpError(409, "WRONG_STATE", `claim is '${existing.status}', expected 'pending'`);
       }
 
+      // Money-integrity fix (GAP-HR-MEDICAL-05): a client-supplied
+      // approvedAmountMinor was previously accepted with only min(0)
+      // validation (see approveBody above) -- nothing compared it to the
+      // claim's own amount_minor, so any HR_ROLES caller hitting this route
+      // directly (not just through the UI, which always passes the
+      // original claimed amount through unmodified) could record an
+      // approved amount exceeding what was actually claimed, silently: no
+      // error, no warning. Reject up front, before `amount` is computed or
+      // the row is touched, matching this handler's existing
+      // fetch-then-validate-then-write shape and its sibling HttpError
+      // (status, code, message) convention above.
+      if (
+        body.status === "approved" &&
+        body.approvedAmountMinor !== undefined &&
+        body.approvedAmountMinor > Number(existing.amount_minor)
+      ) {
+        throw new HttpError(
+          400,
+          "APPROVED_AMOUNT_EXCEEDS_CLAIMED",
+          `approvedAmountMinor (${body.approvedAmountMinor}) exceeds claim amount_minor (${existing.amount_minor})`,
+        );
+      }
+
       const amount = body.status === "approved"
         ? (body.approvedAmountMinor ?? Number(existing.amount_minor))
         : 0;

@@ -488,6 +488,36 @@ describe("PATCH /v1/hrms/medical/claims/:id/approve — HR approve/reject", () =
     await app.close();
   });
 
+  // GAP-HR-MEDICAL-05 money-integrity fix: approving more than what was
+  // actually claimed must not be allowed to pass silently. These two cover
+  // the business-rule boundary at the mocked-route level; the real-DB round
+  // trip (medical-claims-real-db.test.ts) proves the same thing against a
+  // real disposable Postgres, not mocked.
+  it("returns 400 APPROVED_AMOUNT_EXCEEDS_CLAIMED when approvedAmountMinor exceeds the claim's own amount_minor (GAP-HR-MEDICAL-05)", async () => {
+    H.sqlClientQuery.mockReturnValueOnce([claimRow({ status: "pending", amount_minor: "50000" })]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/medical/claims/${CLAIM_ID}/approve`,
+      headers: auth(), payload: { status: "approved", approvedAmountMinor: 50001 },
+    });
+    expect(r.statusCode).toBe(400);
+    expect(r.json().code).toBe("APPROVED_AMOUNT_EXCEEDS_CLAIMED");
+    await app.close();
+  });
+
+  it("approvedAmountMinor exactly equal to the claim's amount_minor still succeeds (boundary, 200)", async () => {
+    H.sqlClientQuery.mockReturnValueOnce([claimRow({ status: "pending", amount_minor: "50000" })]);
+    H.sqlClientQuery.mockReturnValueOnce([{ id: CLAIM_ID }]); // guarded UPDATE ... RETURNING id
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/medical/claims/${CLAIM_ID}/approve`,
+      headers: auth(), payload: { status: "approved", approvedAmountMinor: 50000 },
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.approvedAmountMinor).toBe(50000);
+    await app.close();
+  });
+
   it("returns 409 WRONG_STATE when the guarded UPDATE matches zero rows (lost a concurrent race) even though the initial read saw 'pending'", async () => {
     // Simulates exactly the race window this fix closes: the existing-check
     // SELECT still observes 'pending' (a concurrent approver hadn't
