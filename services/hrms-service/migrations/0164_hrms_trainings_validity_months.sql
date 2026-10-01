@@ -22,6 +22,17 @@
 ALTER TABLE training.hrms_trainings
   ADD COLUMN IF NOT EXISTS validity_months integer;
 
-ALTER TABLE training.hrms_trainings
-  ADD CONSTRAINT hrms_trainings_validity_months_positive
-    CHECK (validity_months IS NULL OR validity_months > 0);
+-- FIXED 2026-10-01: a bare `ADD CONSTRAINT` has no `IF NOT EXISTS` form in
+-- PostgreSQL, so re-running this migration (CI's "Quality Gates -- Schema
+-- Integrity (L3)" job bootstraps the full migration set twice) threw
+-- `ERROR: constraint "hrms_trainings_validity_months_positive" already
+-- exists` on the second pass. Rewritten to the idempotent DO/
+-- duplicate_object form already used ~100+ times elsewhere in this repo for
+-- this exact bug class (e.g. crm-service/migrations/0083_lead_score_column.sql,
+-- admin-service/migrations/0007_check_constraints_status_columns.sql).
+DO $$ BEGIN
+  ALTER TABLE training.hrms_trainings
+    ADD CONSTRAINT hrms_trainings_validity_months_positive
+      CHECK (validity_months IS NULL OR validity_months > 0);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;

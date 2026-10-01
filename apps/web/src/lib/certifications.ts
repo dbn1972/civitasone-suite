@@ -17,6 +17,8 @@
  *    boundaries via a single compiled regex.
  */
 
+import { IST_OFFSET_MS } from "./formatters";
+
 export type CertificationStatus = "valid" | "expiring_soon" | "expired" | "no_expiry";
 
 const EXPIRING_SOON_WINDOW_DAYS = 30;
@@ -49,23 +51,38 @@ export function isMandatory(certificationName: string | null | undefined): boole
 }
 
 /**
- * Whole calendar days from `now` until `expiryDate`, treated as a bare
- * calendar day (not an instant) at UTC-midnight granularity -- the same
- * date-only treatment lib/formatters.ts's formatIndianDate/daysUntilIST
- * already give due/expiry-style dates elsewhere in this app (hr/confirmation,
- * hr/onboarding, hr/transfer), so this never shifts by a day depending on
- * wall-clock time of day. `expiryDate` may be a bare "YYYY-MM-DD" string or a
- * full ISO timestamp (the first 10 characters are used either way) --
- * resilient to either shape the API happens to serialize a SQL `date` as.
+ * Whole calendar days from `now` until `expiryDate`, at IST calendar-day
+ * granularity -- the same date-only treatment lib/formatters.ts's
+ * daysUntilIST already gives due/expiry-style dates elsewhere in this app
+ * (hr/confirmation, hr/onboarding, hr/transfer). `IST_OFFSET_MS` is imported
+ * from formatters.ts rather than reimplemented, so there is one source of
+ * truth for IST-day-boundary math:
+ *
+ * - `expiryDate` may be a bare "YYYY-MM-DD" string or a full ISO timestamp
+ *   (the first 10 characters are used either way) -- resilient to either
+ *   shape the API happens to serialize a SQL `date` as. A bare date already
+ *   names one specific calendar day, so (as in daysUntilIST) no IST shift is
+ *   applied to it.
+ * - `now` is always a real instant (a timestamp, not a calendar-date
+ *   string), so it IS shifted by IST_OFFSET_MS before its calendar day is
+ *   read off. Without this shift, a `now` between 18:30 and 23:59:59 UTC
+ *   (already past midnight, into the next day, in IST) would read its
+ *   calendar day as one day BEHIND the real IST calendar day, understating
+ *   how overdue/expired a certification is.
  *
  *   daysUntilExpiry("2026-10-31", new Date("2026-10-01T00:00:00Z")) -> 30
  *   daysUntilExpiry("2026-09-30", new Date("2026-10-01T00:00:00Z")) -> -1
+ *   daysUntilExpiry("2026-10-01", new Date("2026-10-01T19:00:00Z")) -> -1
+ *     (19:00 UTC on 1 Oct is 00:30 IST on 2 Oct -- the cert expired
+ *     yesterday by IST calendar day, even though `now`'s UTC calendar day
+ *     is still 1 Oct)
  */
 export function daysUntilExpiry(expiryDate: string, now: Date = new Date()): number {
   const datePart = expiryDate.slice(0, 10);
   const [y, m, d] = datePart.split("-").map(Number);
   const expiryUtcMidnight = Date.UTC(y, m - 1, d);
-  const nowUtcMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+  const nowIst = new Date(now.getTime() + IST_OFFSET_MS);
+  const nowUtcMidnight = Date.UTC(nowIst.getUTCFullYear(), nowIst.getUTCMonth(), nowIst.getUTCDate());
   return Math.round((expiryUtcMidnight - nowUtcMidnight) / 86_400_000);
 }
 
