@@ -2676,7 +2676,7 @@
     "resourceTypeLabel": "संसाधन प्रकार",
     "allResourceTypes": "सभी प्रकार",
     "actorLabel": "कर्ता",
-    "actorPlaceholder": "नाम, ईमेल या यूज़र आईडी"
+    "actorPlaceholder": "यूज़र आईडी (सटीक)"
   },
   "icc": {
     "title": "ICC शिकायतें",

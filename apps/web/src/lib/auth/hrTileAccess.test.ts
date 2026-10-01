@@ -63,6 +63,7 @@ const UNIQUE_HR_HUB_HREFS = Array.from(new Set(ALL_HR_HUB_HREFS));
 const HIDDEN_FROM_EMPLOYEE = [
   "/hr/advances",
   "/hr/icc",
+  "/hr/employee-types",
   "/hr/id-cards",
   "/hr/leave-policies",
   "/hr/onboarding",

@@ -1,6 +1,7 @@
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, LoadErrorState } from "../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "@/app/_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
 
 type EmpType = {
@@ -34,7 +35,19 @@ async function getTypes(): Promise<LoaderResult<EmpType[]>> {
  */
 const EMPLOYEE_TYPE_ADMIN_ROLES = ["hr_admin", "super_admin", "admin"];
 
+/**
+ * GAP-HR-EMPLOYEE-TYPES-04 (steps 3-4): mirrors the backend GET guard
+ * (employee-types-routes.ts: HR_ROLES + manager + officer) 1:1, so a role the
+ * API would 403 gets PermissionDenied before any fetch. Widening this list
+ * (hr_officer, payroll_*) remains an open policy decision.
+ */
+const EMPLOYEE_TYPE_READ_ROLES = [...EMPLOYEE_TYPE_ADMIN_ROLES, "manager", "officer"];
+
 export default async function EmployeeTypesPage() {
+  const roles = getSessionRoles();
+  if (!roles.some((r: string) => EMPLOYEE_TYPE_READ_ROLES.includes(r))) {
+    return <PermissionDenied module="employee types" requiredRoles={EMPLOYEE_TYPE_READ_ROLES} />;
+  }
   const t = await getTranslations("employeeTypes");
   const PAY_MODE_LABELS: Record<string, string> = {
     monthly: t("payModeMonthly"),
@@ -62,7 +75,6 @@ export default async function EmployeeTypesPage() {
   const result = await getTypes();
   const { data: types } = result;
   const errored = result.source === "error";
-  const roles = getSessionRoles();
   const canManage = roles.some((r: string) => EMPLOYEE_TYPE_ADMIN_ROLES.includes(r));
 
   const active = errored ? null : types.filter((et) => et.isActive).length;

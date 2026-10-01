@@ -2786,7 +2786,7 @@
     "resourceTypeLabel": "Resource type",
     "allResourceTypes": "All types",
     "actorLabel": "Actor",
-    "actorPlaceholder": "Name, email or user id"
+    "actorPlaceholder": "User ID (exact)"
   },
   "icc": {
     "title": "ICC Complaints",
