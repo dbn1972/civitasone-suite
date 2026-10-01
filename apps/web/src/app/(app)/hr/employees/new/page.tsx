@@ -37,6 +37,21 @@ async function getDesignations(): Promise<LoaderResult<Desig[]>> {
   });
 }
 
+// GAP-HR-EMPLOYEES-NEW-06: the tenant's real employee-types master (any
+// tenant-defined code, e.g. "PSU-DEPUTEE") instead of Step2's old
+// hard-coded 4-option list. An explicit empty array here (fetch genuinely
+// failed, or the tenant has configured none) is passed straight through to
+// Step2, which shows a disabled control + inline error rather than silently
+// falling back to those four options.
+type EmployeeTypeOption = { code: string; name: string };
+
+async function getEmployeeTypes(): Promise<LoaderResult<EmployeeTypeOption[]>> {
+  return fetchJson<unknown, EmployeeTypeOption[]>("/api/v1/hrms/employee-types", [], {
+    telemetryKey: "hr.new-employee.employee-types",
+    mapResponse: (p) => (p as { data: EmployeeTypeOption[] })?.data ?? null,
+  });
+}
+
 export default async function NewEmployeePage() {
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
@@ -46,17 +61,20 @@ export default async function NewEmployeePage() {
   }
 
   const t = await getTranslations("employeeWizard");
-  const [deptResult, desigResult] = await Promise.all([
+  const [deptResult, desigResult, empTypesResult] = await Promise.all([
     getDepartments(),
     getDesignations(),
+    getEmployeeTypes(),
   ]);
 
   const departments = deptResult.data ?? [];
   const designations = desigResult.data ?? [];
+  const employeeTypes = empTypesResult.data ?? [];
 
   const hasError =
     deptResult.source === "error" ||
-    desigResult.source === "error";
+    desigResult.source === "error" ||
+    empTypesResult.source === "error";
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -74,6 +92,7 @@ export default async function NewEmployeePage() {
       <AddEmployeeWizard
         departments={departments}
         designations={designations}
+        employeeTypes={employeeTypes}
       />
     </div>
   );

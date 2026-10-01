@@ -1721,6 +1721,7 @@
     "empTypeContractual": "संविदा",
     "empTypeDeputation": "प्रतिनियुक्ति",
     "empTypeApprenticeTrainee": "प्रशिक्षु / ट्रेनी",
+    "employmentTypeLoadError": "कर्मचारी प्रकार लोड नहीं हो सके — पुनः प्रयास के लिए पेज रीलोड करें।",
     "step3Heading": "चरण 3 — नियुक्ति विवरण",
     "reportingManagerLabel": "रिपोर्टिंग प्रबंधक",
     "selectManager": "प्रबंधक चुनें",

@@ -6,7 +6,6 @@ import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { isServingStatus, isExitedStatus } from "@/lib/employeeStatus";
-import { EditEmployeeToggle } from "./EditEmployeeToggle";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
@@ -107,6 +106,10 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   const { data: employee, source, status, errorMessage } = await getEmployeeById(params.id);
   const errored = source === "error";
   const t = await getTranslations("employeeDetail");
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: this reuses the edit route's own
+  // translated label (`employeeEdit.editButton`) rather than inventing a
+  // second copy of the same string under a different key.
+  const tEdit = await getTranslations("employeeEdit");
 
   // GAP-HR-EMPLOYEES-DETAIL-07: a real 404 (nonexistent/deleted id) used to
   // fall into the same branch as a 500/network failure, showing "We
@@ -202,7 +205,19 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
       <PageHeader
         title={employee.name}
         back="/hr/employees" backLabel="Back to Employees"
-        actions={<EditEmployeeToggle employee={employee} canAdminister={canAdminister} />}
+        // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: this used to render the whole
+        // EditEmployeeForm card inline, inside PageHeader's `actions` slot --
+        // which sits in a flex row right next to the page title (ph-act,
+        // PageHeader.tsx), not below it. A plain Link to the already-
+        // role-gated /edit route (edit/page.tsx mirrors this exact
+        // EMPLOYEE_ADMIN_ROLES check server-side) is the gap's own
+        // "simplest" fix option and removes the duplicate inline mount of
+        // the form entirely.
+        actions={canAdminister ? (
+          <Link href={`/hr/employees/${params.id}/edit`} className="btn ghost" style={{ minHeight: 44 }}>
+            {tEdit("editButton")}
+          </Link>
+        ) : undefined}
       />
       <DataSourceBadge source={source} />
 

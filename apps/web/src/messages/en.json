@@ -1797,6 +1797,7 @@
     "empTypeContractual": "Contractual",
     "empTypeDeputation": "Deputation",
     "empTypeApprenticeTrainee": "Apprentice / Trainee",
+    "employmentTypeLoadError": "Couldn't load employee types — reload the page to try again.",
     "step3Heading": "Step 3 — Assignment",
     "reportingManagerLabel": "Reporting Manager",
     "selectManager": "Select manager",

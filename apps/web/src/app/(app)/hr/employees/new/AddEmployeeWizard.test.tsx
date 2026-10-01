@@ -399,3 +399,46 @@ describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-08 date-of-birth age check"
     expect(await screen.findByText(/step 2 of/i)).toBeInTheDocument();
   });
 });
+
+/** GAP-HR-EMPLOYEES-NEW-06 */
+describe("AddEmployeeWizard — GAP-HR-EMPLOYEES-NEW-06 real employee-types list", () => {
+  async function goToStep2(employeeTypes?: { code: string; name: string }[]) {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AddEmployeeWizard departments={DEPARTMENTS} designations={DESIGNATIONS} employeeTypes={employeeTypes} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/full name/i), { target: { value: "Priya Sharma" } });
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    await screen.findByLabelText(/employee id/i);
+  }
+
+  it("renders the tenant's real employee types, including a custom code with no translated label", async () => {
+    await goToStep2([
+      { code: "permanent", name: "Permanent" },
+      { code: "psu_deputee", name: "PSU Deputee" },
+    ]);
+
+    const select = screen.getByLabelText(/employment type/i);
+    expect(select).not.toBeDisabled();
+    expect(screen.getByRole("option", { name: "PSU Deputee" })).toBeInTheDocument();
+    expect(screen.queryByText(/couldn't load employee types/i)).not.toBeInTheDocument();
+  });
+
+  it("shows a disabled control and a load-error message instead of a silent 4-option fallback when the list is genuinely empty", async () => {
+    await goToStep2([]);
+
+    const select = screen.getByLabelText(/employment type/i);
+    expect(select).toBeDisabled();
+    expect(screen.getByText(/couldn't load employee types/i)).toBeInTheDocument();
+  });
+
+  it("falls back to the historical 4-option list when the prop is omitted entirely (existing callers unaffected)", async () => {
+    await goToStep2(undefined);
+
+    const select = screen.getByLabelText(/employment type/i);
+    expect(select).not.toBeDisabled();
+    expect(screen.getByRole("option", { name: "Permanent" })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "Apprentice / Trainee" })).toBeInTheDocument();
+  });
+});
