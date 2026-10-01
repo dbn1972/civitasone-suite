@@ -603,6 +603,77 @@ describe("medical claims — real round-trip against medical.hrms_medical_claims
     expect(r.statusCode).toBe(409);
     expect(JSON.parse(r.body).code).toBe("WRONG_STATE");
   });
+
+  // GAP-HR-MEDICAL-05 money-integrity fix: approving more than what was
+  // actually claimed must not be allowed to pass silently -- a client-
+  // supplied approvedAmountMinor was previously validated only as
+  // z.coerce.number().int().min(0), with nothing comparing it to the
+  // claim's own amount_minor. Proven here against a real disposable
+  // Postgres (not mocked), each test seeding its own fresh 'pending' claim
+  // since claimId above is already 'approved' by the test right above.
+  it("PATCH .../approve — rejects an approvedAmountMinor that exceeds the claim's own amount_minor (GAP-HR-MEDICAL-05, real Postgres)", async () => {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        employeeId: EMPLOYEE_ID,
+        claimType: "outdoor",
+        amountMinor: 100000,
+        hospitalName: "AIIMS Test Wing",
+        diagnosis: "Money-integrity ceiling regression test",
+        documents: [],
+      }),
+    });
+    expect(createRes.statusCode).toBe(201);
+    const ceilingClaimId = JSON.parse(createRes.body).data.id as string;
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/medical/claims/${ceilingClaimId}/approve`,
+      headers: { authorization: `Bearer ${hrToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ status: "approved", approvedAmountMinor: 100001 }),
+    });
+    expect(r.statusCode).toBe(400);
+    expect(JSON.parse(r.body).code).toBe("APPROVED_AMOUNT_EXCEEDS_CLAIMED");
+
+    // Prove this failed CLOSED against the real row -- the claim must still
+    // be 'pending', not silently approved at the inflated amount.
+    const [dbRow] = await asTenant((tx) => tx`
+      SELECT status, approved_amount_minor::text AS approved_amount_minor
+      FROM medical.hrms_medical_claims WHERE id = ${ceilingClaimId}
+    `);
+    if (!dbRow) throw new Error(`expected a row in medical.hrms_medical_claims for id ${ceilingClaimId}`);
+    expect(dbRow.status).toBe("pending");
+    expect(dbRow.approved_amount_minor).toBeNull();
+  });
+
+  it("PATCH .../approve — approvedAmountMinor exactly equal to the claim's amount_minor still succeeds (boundary, real Postgres)", async () => {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/medical/claims",
+      headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+      body: JSON.stringify({
+        employeeId: EMPLOYEE_ID,
+        claimType: "outdoor",
+        amountMinor: 120000,
+        hospitalName: "AIIMS Test Wing",
+        diagnosis: "Money-integrity ceiling boundary regression test",
+        documents: [],
+      }),
+    });
+    expect(createRes.statusCode).toBe(201);
+    const boundaryClaimId = JSON.parse(createRes.body).data.id as string;
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/medical/claims/${boundaryClaimId}/approve`,
+      headers: { authorization: `Bearer ${hrToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ status: "approved", approvedAmountMinor: 120000 }),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(JSON.parse(r.body).data.approvedAmountMinor).toBe(120000);
+  });
 });
 
 // ── GAP-HR-MEDICAL-01 regression suite ────────────────────────────────────
