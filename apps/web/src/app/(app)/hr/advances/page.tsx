@@ -48,6 +48,20 @@ export default async function AdvancesPage() {
   const selfServiceOnly = roles.includes("employee")
     && !roles.some((r) => ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer"].includes(r));
 
+  // GAP-HR-ADVANCES-05: mirrors employee/routes.ts's DIRECTORY_ROLES exactly
+  // (READER_ROLES = HR_ROLES + manager, then + employee) -- the roles GET
+  // /v1/hrms/employees actually admits. "officer" and "finance_admin" are in
+  // ADVANCE_ROLES (can reach this page) but NOT in DIRECTORY_ROLES, so a
+  // session holding only one of those two can neither self-file (not
+  // selfServiceOnly -- that requires the "employee" role specifically) nor
+  // pick a colleague (the picker's fetch would always 403). Computed here,
+  // before ever attempting that doomed fetch, rather than letting
+  // RequestAdvanceForm render an interactive-looking picker that can only
+  // ever fail.
+  const DIRECTORY_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
+  const canPickEmployees = roles.some((r) => DIRECTORY_ROLES.includes(r));
+  const canRequestAdvance = selfServiceOnly || canPickEmployees;
+
   const t = await getTranslations("advances");
   const { data: items, source } = await getData();
   const errored = source === "error";
@@ -75,7 +89,18 @@ export default async function AdvancesPage() {
         <StatCard icon="❌" iconBg="var(--badbg, #fdecea)" label={t("statRejected")} value={errored ? null : rejected} />
       </StatGrid>
 
-      <RequestAdvanceForm selfServiceOnly={selfServiceOnly} />
+      {canRequestAdvance ? (
+        <RequestAdvanceForm selfServiceOnly={selfServiceOnly} />
+      ) : (
+        // GAP-HR-ADVANCES-05: role has ADVANCE_ROLES page access but no path
+        // to file a request (no directory access to pick a colleague, and no
+        // "employee" role to self-file) -- an explanatory note instead of a
+        // form that can only ever 403, same pattern as transfer/page.tsx's
+        // view-only note for roles outside TRANSFER_ROLES.
+        <p role="note" style={{ fontSize: 13, color: "var(--mut,#64748b)", margin: "0 0 16px" }}>
+          {t("viewOnlyNoDirectoryAccess")}
+        </p>
+      )}
 
       <Card title={t("cardTitle")}>
         {errored ? (

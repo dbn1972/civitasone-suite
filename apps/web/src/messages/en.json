@@ -5715,7 +5715,8 @@
     "formPlaceholderPurpose": "Reason for advance request (min 2 chars)",
     "formPurposeInvalid": "Purpose must be at least 2 characters.",
     "formSubmitting": "Submitting…",
-    "formSubmit": "Submit Request"
+    "formSubmit": "Submit Request",
+    "viewOnlyNoDirectoryAccess": "You have view-only access to salary advances. Ask an HR admin or your manager to file a request on your behalf."
   },
   "payrollPeriod": {
     "title": "Payroll Periods",
