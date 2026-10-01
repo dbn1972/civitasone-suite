@@ -582,11 +582,86 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ id, status: "pending" });
   });
 
-  /** GET /v1/hrms/travel-requests — list my travel requests */
+  /**
+   * GET /v1/hrms/travel-requests — list my travel requests, or (?scope=team)
+   * the pending/decided requests an approver (manager/HR) needs to act on.
+   *
+   * GAP-HR-TRAVEL-01: this was ALWAYS self-scoped (WHERE employee_id =
+   * ctx.actorId, unconditionally) even though approve/reject existed for
+   * manager/HR -- there was no way for an approver to ever see anyone
+   * else's pending request to act on. `?scope=team` adds that queue: HR
+   * gets the full tenant, a manager gets only their own direct reports'.
+   *
+   * NOTE on id spaces: employee_id on this table is ctx.actorId (the JWT
+   * subject), NOT hrms_employees.id -- see this route's own POST handler,
+   * which inserts ctx.actorId directly, and the existing reporting-manager
+   * notification lookup just above, which already reads employee.
+   * hrms_employees keyed by user_ref for exactly this reason. The two
+   * lookups below (this file has no Drizzle schema of its own -- see this
+   * module's header comment -- so this mirrors that same lookup's raw,
+   * cross-schema `pool.query` shape rather than introducing a different
+   * access pattern) resolve manager-scope and requester display names the
+   * same way.
+   */
   app.get("/v1/hrms/travel-requests", async (req, reply) => {
     const ctx = resolveContext(req);
+    const q = z.object({ scope: z.enum(["me", "team"]).optional() }).parse(req.query);
+
+    if (q.scope === "team") {
+      const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+      if (!isHrActor && !ctx.roles.includes("manager")) {
+        throw new HttpError(403, "FORBIDDEN", "team scope requires a manager or HR role");
+      }
+
+      let reportUserRefs: string[] | null = null; // null = HR, unrestricted (tenant-wide)
+      if (!isHrActor) {
+        reportUserRefs = await withTenantGuc(ctx.tenantId, async (pool) => {
+          const mgr = await pool.query(
+            `SELECT id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
+            [ctx.actorId, ctx.tenantId],
+          );
+          const managerEmpId = mgr.rows[0]?.id as string | undefined;
+          if (!managerEmpId) return [];
+          const reports = await pool.query(
+            `SELECT user_ref FROM employee.hrms_employees WHERE manager_id = $1 AND tenant_id = $2 AND user_ref IS NOT NULL`,
+            [managerEmpId, ctx.tenantId],
+          );
+          return reports.rows.map((r: { user_ref: string }) => r.user_ref);
+        });
+        if (reportUserRefs.length === 0) return reply.send({ data: [] });
+      }
+
+      const rows = await withTenantGuc(ctx.tenantId, (pool) => (reportUserRefs
+        ? pool.query(
+            `SELECT id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at, rejection_reason
+             FROM claims.hrms_travel_requests
+             WHERE tenant_id = $1 AND employee_id = ANY($2::uuid[])
+             ORDER BY created_at DESC`,
+            [ctx.tenantId, reportUserRefs],
+          )
+        : pool.query(
+            `SELECT id, employee_id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at, rejection_reason
+             FROM claims.hrms_travel_requests
+             WHERE tenant_id = $1
+             ORDER BY created_at DESC`,
+            [ctx.tenantId],
+          )));
+      const requesterIds = [...new Set(rows.rows.map((r: { employee_id: string }) => r.employee_id))];
+      const nameByActorId = new Map<string, string>();
+      if (requesterIds.length > 0) {
+        const empRows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+          `SELECT user_ref, full_name FROM employee.hrms_employees WHERE tenant_id = $1 AND user_ref = ANY($2::text[])`,
+          [ctx.tenantId, requesterIds],
+        ));
+        for (const r of empRows.rows as Array<{ user_ref: string; full_name: string }>) {
+          nameByActorId.set(r.user_ref, r.full_name);
+        }
+      }
+      return reply.send({ data: rows.rows.map((r: { employee_id: string }) => ({ ...r, employeeName: nameByActorId.get(r.employee_id) })) });
+    }
+
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at
+      `SELECT id, purpose, destination, from_date, to_date, advance_required, mode, status, created_at, approved_by, approved_at, rejection_reason
        FROM claims.hrms_travel_requests
        WHERE tenant_id = $1 AND employee_id = $2
        ORDER BY created_at DESC`,
@@ -608,8 +683,29 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         `SELECT employee_id FROM claims.hrms_travel_requests WHERE id = $1 AND tenant_id = $2`,
         [id, ctx.tenantId],
       );
-      if (check.rows[0]?.employee_id === ctx.actorId) {
+      const requesterId = check.rows[0]?.employee_id as string | undefined;
+      if (!requesterId) throw new HttpError(404, "NOT_FOUND", "Travel request not found or already processed");
+      if (requesterId === ctx.actorId) {
         throw new HttpError(403, "SELF_APPROVAL", "Cannot approve your own travel request");
+      }
+      // GAP-HR-TRAVEL-01: previously any manager/HR could approve ANY
+      // employee's travel request -- only self-approval was blocked. A
+      // non-HR manager must now actually BE the requester's reporting
+      // manager (employee.hrms_employees.manager_id), mirroring the
+      // existing reporting-manager lookup this file already uses for the
+      // create-notification (same raw cross-schema query shape, no JOIN
+      // keyword, no TS import of the employee module's repo/schema).
+      const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+      if (!isHrActor) {
+        const link = await pool.query(
+          `SELECT 1 FROM employee.hrms_employees requester
+           WHERE requester.user_ref = $1 AND requester.tenant_id = $2
+             AND requester.manager_id = (SELECT id FROM employee.hrms_employees WHERE user_ref = $3 AND tenant_id = $2)`,
+          [requesterId, ctx.tenantId, ctx.actorId],
+        );
+        if ((link.rowCount ?? 0) === 0) {
+          throw new HttpError(403, "FORBIDDEN", "you may only decide your own direct reports' travel requests");
+        }
       }
 
       const result = await pool.query(
@@ -647,10 +743,35 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["manager", "hr_admin", "hr_officer", "super_admin"]);
     const { id } = req.params as { id: string };
-    const { reason } = (req.body as any) ?? {};
+    const { reason } = z.object({ reason: z.string().max(500).optional() }).parse(req.body ?? {});
     const now = new Date().toISOString();
 
     await withTenantGuc(ctx.tenantId, async (pool) => {
+      // GAP-HR-TRAVEL-01: this route had no self-decision guard at all
+      // (approve did; reject didn't) and, like approve, let any manager/HR
+      // decide any employee's request. Same two checks as approve above.
+      const check = await pool.query(
+        `SELECT employee_id FROM claims.hrms_travel_requests WHERE id = $1 AND tenant_id = $2`,
+        [id, ctx.tenantId],
+      );
+      const requesterId = check.rows[0]?.employee_id as string | undefined;
+      if (!requesterId) throw new HttpError(404, "NOT_FOUND", "Travel request not found or already processed");
+      if (requesterId === ctx.actorId) {
+        throw new HttpError(403, "SELF_APPROVAL", "Cannot reject your own travel request");
+      }
+      const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+      if (!isHrActor) {
+        const link = await pool.query(
+          `SELECT 1 FROM employee.hrms_employees requester
+           WHERE requester.user_ref = $1 AND requester.tenant_id = $2
+             AND requester.manager_id = (SELECT id FROM employee.hrms_employees WHERE user_ref = $3 AND tenant_id = $2)`,
+          [requesterId, ctx.tenantId, ctx.actorId],
+        );
+        if ((link.rowCount ?? 0) === 0) {
+          throw new HttpError(403, "FORBIDDEN", "you may only decide your own direct reports' travel requests");
+        }
+      }
+
       const result = await pool.query(
         `UPDATE claims.hrms_travel_requests SET status = 'rejected', rejection_reason = $1, approved_by = $2, approved_at = $3, updated_at = $3
          WHERE id = $4 AND tenant_id = $5 AND status = 'pending' RETURNING employee_id`,
