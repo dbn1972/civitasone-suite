@@ -64,6 +64,22 @@ export async function errorMessageFromResponse(
   return `${human.what} ${human.next}`;
 }
 
+/**
+ * The machine-readable `code` from a failed API response body (e.g.
+ * "SELF_DISBURSE_FORBIDDEN"), or null when absent/unparseable. For callers
+ * that map a few KNOWN codes to their own translated copy -- never display
+ * the code itself; fall back to errorMessageFromResponse for anything else.
+ * Reads a clone, so the response can still be consumed afterwards.
+ */
+export async function errorCodeFromResponse(res: Response): Promise<string | null> {
+  try {
+    const body = (await res.clone().json()) as { code?: unknown } | null;
+    return body && typeof body.code === "string" ? body.code : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function browserJson<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await browserFetch(path, init);
   if (!res.ok) throw new Error(await errorMessageFromResponse(res));
