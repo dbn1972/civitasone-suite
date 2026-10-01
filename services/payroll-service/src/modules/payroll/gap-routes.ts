@@ -18,6 +18,7 @@ import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
 import { stateRulesBody, findPtSlabOverlap } from "./state-rules.js";
 import { assertElectionWithinPlan } from "./adjustment-guards.js";
+import { isValidIanaTimeZone } from "./validators.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -182,7 +183,8 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       name: z.string().min(1).max(128),
       frequency: z.enum(["monthly", "bi_weekly", "weekly"]),
       payDayOfMonth: z.number().int().min(1).max(31).default(28),
-      timezone: z.string().max(64).default("Asia/Kolkata"),
+      timezone: z.string().max(64).default("Asia/Kolkata")
+        .refine(isValidIanaTimeZone, "must be an IANA timezone name, e.g. Asia/Kolkata"),
     }).parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPayGroup(ctx, body));
   });
@@ -319,12 +321,25 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/) }).parse(req.query);
+    // Bug fix (found with GAP-PAYROLL-COSTING-01): the period condition sat on
+    // a LEFT JOIN to payroll_runs, which never filters payroll_slips -- so
+    // every rule allocated split% of ALL slips the tenant ever had, in every
+    // period. The slip set is now restricted to runs of the requested month.
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT cr.employee_group, cr.cost_center_id, cr.split_pct,
-        COALESCE(SUM(s.gross_minor * cr.split_pct / 100), 0)::bigint AS allocated_minor
+        COALESCE(SUM(ps.gross_minor * cr.split_pct / 100), 0)::bigint AS allocated_minor
       FROM payroll.costing_rules cr
-      LEFT JOIN payroll.payroll_slips s ON s.tenant_id = cr.tenant_id
-      LEFT JOIN payroll.payroll_runs r ON r.id = s.run_id AND r.month = ${q.period}
+      LEFT JOIN (
+        SELECT s.tenant_id, s.gross_minor
+        FROM payroll.payroll_slips s
+        JOIN payroll.payroll_runs r ON r.id = s.run_id AND r.tenant_id = s.tenant_id
+        WHERE s.tenant_id = ${ctx.tenantId}::uuid AND r.month = ${q.period}
+          -- Review fix (PR #1762): only finalised runs -- the same set the YTD
+          -- TDS query uses (consumer.ts resolveTdsYtdMinorsTx). A failed run
+          -- keeps its slips and a rerun is allowed for the same month, so
+          -- without this the month's gross was allocated twice.
+          AND r.status IN ('approved', 'disbursed')
+      ) ps ON ps.tenant_id = cr.tenant_id
       WHERE cr.tenant_id = ${ctx.tenantId}::uuid AND cr.status = 'active'
       GROUP BY cr.employee_group, cr.cost_center_id, cr.split_pct
       ORDER BY cr.employee_group

@@ -1,11 +1,20 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../../_components/ds";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreatePayGroupForm } from "./CreatePayGroupForm";
 import { PayGroupCard } from "./PayGroupCard";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 
+/**
+ * GET /v1/payroll/pay-groups (payroll-service gap-routes.ts) returns only
+ * id/name/frequency/pay_day_of_month/timezone/status/created_at, and only
+ * ACTIVE groups. employeeCount / salaryStructureName / lastRevisionDate are
+ * optional because the API does not send them today.
+ */
 type Row = {
   id: string;
   name: string;
@@ -30,31 +39,49 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 
 export default async function PayGroupsPage() {
   const t = await getTranslations("payrollPayGroups");
+
+  // GAP-PAYROLL-PAY-GROUPS-04: GET is READER_ROLES and POST is PAYROLL_ROLES
+  // in payroll-service; hr/layout.tsx admits employee/manager too.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
+    return (
+      <div className="page-main wrap">
+        <PermissionDenied module="pay groups" requiredRoles={PAYROLL_READER_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
+      </div>
+    );
+  }
+  const canAdminister = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
+
   const result = await getData();
   const { data: groups } = result;
   const resource = toResourceState(result);
   const errored = resource.status === "error";
 
-  const activeCount = errored ? null : groups.filter((g) => g.status === "active").length;
+  // GAP-PAYROLL-PAY-GROUPS-03: the API lists active groups only and has no
+  // edit/deactivate endpoint, so an "Inactive" count was always 0 and
+  // "Active" always equalled the total. Break down by frequency instead.
   const monthlyCount = errored ? null : groups.filter((g) => g.frequency === "monthly").length;
-  const inactiveCount = errored ? null : groups.filter((g) => g.status !== "active").length;
+  const biWeeklyCount = errored ? null : groups.filter((g) => g.frequency === "bi_weekly").length;
+  const weeklyCount = errored ? null : groups.filter((g) => g.frequency === "weekly").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={t("backLabel")}
       />
+      {/* GAP-PAYROLL-PAY-GROUPS-05: same data-source badge as sibling pages. */}
+      <DataSourceBadge source={result.source} message={t("loadErrorMessage")} />
 
       <StatGrid>
-        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? "—" : groups.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={activeCount ?? "—"} />
-        <StatCard icon="📅" iconBg="var(--warnbg)" label={t("statMonthly")} value={monthlyCount ?? "—"} />
-        <StatCard icon="⏸️" iconBg="var(--panel)" label={t("statInactive")} value={inactiveCount ?? "—"} />
+        <StatCard icon="👥" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : groups.length} />
+        <StatCard icon="📅" iconBg="var(--warnbg)" label={t("statMonthly")} value={monthlyCount} />
+        <StatCard icon="📆" iconBg="var(--goodbg)" label={t("statBiWeekly")} value={biWeeklyCount} />
+        <StatCard icon="🗓️" iconBg="var(--panel)" label={t("statWeekly")} value={weeklyCount} />
       </StatGrid>
 
-      <CreatePayGroupForm />
+      {canAdminister && <CreatePayGroupForm />}
 
       {errored ? (
         <Card title={t("cardTitle")}>
@@ -72,11 +99,13 @@ export default async function PayGroupsPage() {
         </Card>
       ) : (
         <Card title={t("cardsTitle")}>
+          <p style={{ margin: "12px 16px 0", fontSize: 13, color: "var(--mut)" }}>{t("readOnlyNote")}</p>
           <div
             style={{
               display: "grid",
               gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))",
               gap: 16,
+              padding: 16,
             }}
           >
             {groups.map((g) => (
@@ -88,9 +117,9 @@ export default async function PayGroupsPage() {
                 payDayOfMonth={g.pay_day_of_month}
                 timezone={g.timezone}
                 status={g.status}
-                employeeCount={Number(g.employeeCount) || 0}
-                associatedStructureName={g.salaryStructureName as string | undefined}
-                lastRevisionDate={g.lastRevisionDate as string | undefined}
+                employeeCount={typeof g.employeeCount === "number" ? g.employeeCount : undefined}
+                associatedStructureName={g.salaryStructureName}
+                lastRevisionDate={g.lastRevisionDate}
               />
             ))}
           </div>

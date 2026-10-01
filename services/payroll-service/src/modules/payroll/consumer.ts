@@ -801,7 +801,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   // CQRS lift.
 
   queue.subscribe(COMMANDS.ddoUpsert, async (msg) => {
-    const p = msg.payload as { tenantId: string; ddoCode: string; name: string; departmentIds?: string[] };
+    const p = msg.payload as { tenantId: string; ddoCode: string; name: string; departmentIds?: string[]; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await tx.execute(sql`
@@ -809,6 +809,27 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         VALUES (${p.tenantId}::uuid, ${p.ddoCode}, ${p.name})
         ON CONFLICT (tenant_id, ddo_code) DO UPDATE SET name = EXCLUDED.name, updated_at = NOW()
       `);
+      // GAP-PAYROLL-DDOS-02: an explicit departmentIds list WITH a reason
+      // REPLACES this DDO's mapping (the new UI always sends a reason and
+      // shows the diff). Without a reason -- older clients / API callers that
+      // sent `departmentIds: []` meaning "nothing to add" -- the historical
+      // add-only behaviour is kept, so they can never silently unmap every
+      // department. The before/after sets go on the audit event.
+      let before: string[] | null = null;
+      if (p.departmentIds !== undefined && p.reason) {
+        const existing = (await tx.execute(sql`
+          SELECT department_id::text AS department_id FROM payroll.payroll_ddo_departments
+          WHERE tenant_id = ${p.tenantId}::uuid AND ddo_code = ${p.ddoCode}
+        `)) as unknown as Array<{ department_id: string }>;
+        before = existing.map((r) => r.department_id);
+        const keep = new Set(p.departmentIds);
+        for (const deptId of before.filter((id) => !keep.has(id))) {
+          await tx.execute(sql`
+            DELETE FROM payroll.payroll_ddo_departments
+            WHERE tenant_id = ${p.tenantId}::uuid AND ddo_code = ${p.ddoCode} AND department_id = ${deptId}::uuid
+          `);
+        }
+      }
       for (const deptId of p.departmentIds ?? []) {
         await tx.execute(sql`
           INSERT INTO payroll.payroll_ddo_departments (tenant_id, department_id, ddo_code)
@@ -821,7 +842,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { ddoCode: p.ddoCode, name: p.name },
       });
-      await audit(tx, msg, "upsert", "payroll_ddo", p.ddoCode);
+      await audit(tx, msg, "upsert", "payroll_ddo", p.ddoCode, {
+        ...(before !== null ? { oldValue: { departmentIds: before } } : {}),
+        newValue: { name: p.name, ...(p.departmentIds !== undefined ? { departmentIds: p.departmentIds } : {}) },
+        ...(p.reason ? { reason: p.reason } : {}),
+      });
     });
   });
 

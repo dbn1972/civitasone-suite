@@ -1,7 +1,10 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
+import { StatusPill } from "../../../../_components/ds";
+import { formatIndianDate } from "@/lib/formatters";
 
 interface PayGroupCardProps {
   id: string;
@@ -10,6 +13,7 @@ interface PayGroupCardProps {
   payDayOfMonth: number;
   timezone: string;
   status: string;
+  /** Not returned by GET /v1/payroll/pay-groups today; "—" when absent, never a fabricated 0. */
   employeeCount?: number;
   associatedStructureName?: string;
   lastRevisionDate?: string;
@@ -29,29 +33,16 @@ const FREQUENCY_LABEL_KEYS: Record<string, string> = {
   weekly: "frequencyWeekly",
 };
 
+// GAP-PAYROLL-PAY-GROUPS-05: was coloured amber/green from the *browser*
+// clock (a hydration-mismatch risk in a client component) and formatted with
+// the browser's timezone. Now a neutral badge with the shared IST formatter.
 function RevisionBadge({ date }: { date?: string }) {
   const t = useTranslations("payGroupCard");
   if (!date) return null;
-  const parsed = new Date(date);
-  const now = new Date();
-  const diffMonths =
-    (now.getFullYear() - parsed.getFullYear()) * 12 + now.getMonth() - parsed.getMonth();
-  const isRecent = diffMonths <= 3;
-
+  const formatted = formatIndianDate(date);
   return (
-    <span
-      title={t("lastRevisedTitle", { date: parsed.toLocaleDateString("en-IN") })}
-      style={{
-        fontSize: 11,
-        fontWeight: 600,
-        padding: "2px 8px",
-        borderRadius: 20,
-        background: isRecent ? "var(--goodbg, #f0fdf4)" : "var(--warnbg, #fffbeb)",
-        color: isRecent ? "var(--good, #16a34a)" : "var(--warn, #d97706)",
-        border: `1px solid ${isRecent ? "var(--goodbd, #bbf7d0)" : "var(--warnbd, #fde68a)"}`,
-      }}
-    >
-      {t("revisionBadgeText", { date: parsed.toLocaleDateString("en-IN", { month: "short", year: "numeric" }) })}
+    <span className="pill mut" title={t("lastRevisedTitle", { date: formatted })}>
+      {t("revisionBadgeText", { date: formatted })}
     </span>
   );
 }
@@ -62,7 +53,7 @@ export function PayGroupCard({
   payDayOfMonth,
   timezone,
   status,
-  employeeCount = 0,
+  employeeCount,
   associatedStructureName,
   lastRevisionDate,
 }: PayGroupCardProps) {
@@ -118,7 +109,7 @@ export function PayGroupCard({
         >
           <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>{t("employeesLabel")}</p>
           <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
-            {employeeCount.toLocaleString("en-IN")}
+            {typeof employeeCount === "number" ? employeeCount.toLocaleString("en-IN") : "—"}
           </p>
         </div>
         <div
@@ -141,9 +132,10 @@ export function PayGroupCard({
           }}
         >
           <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>{t("payDayLabel")}</p>
-          <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
-            {payDayOfMonth}
-            <sup style={{ fontSize: 11 }}>th</sup>
+          <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>
+            {/* GAP-PAYROLL-PAY-GROUPS-02: locale ordinal (1st/2nd/3rd/11th/22nd),
+                not a hard-coded English "th". */}
+            {t("payDayValue", { day: payDayOfMonth })}
           </p>
         </div>
       </div>
@@ -161,7 +153,9 @@ export function PayGroupCard({
               color: "var(--mut)",
             }}
           >
-            {t.rich("structureLabel", { name: associatedStructureName, strong: (chunks) => <strong style={{ color: "var(--ink)" }}>{chunks}</strong> })}
+            <Link href="/hr/payroll/structures" style={{ color: "inherit" }}>
+              {t.rich("structureLabel", { name: associatedStructureName, strong: (chunks) => <strong style={{ color: "var(--ink)" }}>{chunks}</strong> })}
+            </Link>
           </span>
         )}
         <span
@@ -176,11 +170,8 @@ export function PayGroupCard({
         >
           {timezone}
         </span>
-        <span
-          className={`pill ${isActive ? "good" : "mut"}`}
-          style={{ marginInlineStart: "auto" }}
-        >
-          {status}
+        <span style={{ marginInlineStart: "auto" }}>
+          <StatusPill status={status} label={isActive ? t("statusActive") : status === "inactive" ? t("statusInactive") : undefined} />
         </span>
       </div>
     </div>

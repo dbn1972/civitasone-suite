@@ -159,3 +159,21 @@ describe("TaxReturnsSummary — annual Total TDS Deposited tile (UX-022)", () =>
     expect(within(tile).queryByText("₹1,000.00")).not.toBeInTheDocument();
   });
 });
+
+describe("TaxReturnsSummary — filed means a recorded filing (GAP-PAYROLL-RETURNS-01/02)", () => {
+  const four = (rows: Partial<QuarterSummaryRow>[]) =>
+    (["Q1", "Q2", "Q3", "Q4"] as const).map((q, i) => baseRow({ quarter: q, ...rows[i] }));
+
+  it("does not count a 'filed' quarter that has no filing date", () => {
+    render(<TaxReturnsSummary fy="2025-26" quarters={four([{ filingDate: null }, { status: "reconciled", filingDate: null }, {}, { status: "reconciled", filingDate: null }])} t={t} />);
+    // Only Q3 ("filed" WITH a filing date) counts.
+    expect(screen.getByText("1 / 4")).toBeInTheDocument();
+    expect(screen.getAllByText("Reconciled").length).toBe(2);
+  });
+
+  it("shows an unknown filed count when any quarter could not be loaded", () => {
+    render(<TaxReturnsSummary fy="2025-26" quarters={four([{}, { status: "not loaded", filingDate: null, totalTdsDepositedMinor: null, deducteeCount: null }, {}, {}])} t={t} />);
+    expect(screen.queryByText("3 / 4")).not.toBeInTheDocument();
+    expect(screen.getByText("Not loaded")).toBeInTheDocument();
+  });
+});

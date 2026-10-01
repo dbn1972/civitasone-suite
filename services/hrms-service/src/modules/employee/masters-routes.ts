@@ -24,6 +24,10 @@ const HR_READ_ROLES = [
   "finance_admin",
   "payroll_admin",
 ];
+// GAP-PAYROLL-DDOS-01: the DDO form maps departments by name; payroll
+// officers can write DDOs (payroll-service PAYROLL_ROLES) and need the
+// department list -- and only that list (designations stay HR_READ_ROLES).
+const DEPARTMENT_READ_ROLES = [...HR_READ_ROLES, "payroll_officer"];
 const HR_ROLES = ["hr_admin", "super_admin", "admin"];
 
 const createDeptBody = z.object({
@@ -106,7 +110,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
   // ── Departments ──
   app.get("/v1/hrms/departments", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, HR_READ_ROLES);
+    requireRole(ctx, DEPARTMENT_READ_ROLES);
     const rows = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, ctx.tenantId)));
     const counts = await countActiveEmployeesByDept(ctx.tenantId, rows.map((r) => r.id));
     return reply.send({ data: rows.map((r) => ({ ...r, employeeCount: counts.get(r.id) ?? 0 })) });

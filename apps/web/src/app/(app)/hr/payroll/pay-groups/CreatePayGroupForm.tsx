@@ -6,9 +6,31 @@ import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 
-type PayGroupResponse = {
-  data: { id: string; name: string; frequency: string; payDayOfMonth: number; timezone: string; status: string };
-};
+/**
+ * GAP-PAYROLL-PAY-GROUPS-04: IANA zones the browser knows about (with a
+ * fallback that always contains the default), so the field is a picker
+ * rather than free text that accepted "Mars/Base".
+ */
+export function timeZoneOptions(): string[] {
+  const fallback = ["Asia/Kolkata", "UTC"];
+  try {
+    const intl = Intl as unknown as { supportedValuesOf?: (key: string) => string[] };
+    const zones = intl.supportedValuesOf?.("timeZone") ?? [];
+    return zones.length ? [...new Set([...fallback, ...zones])] : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function isValidTimeZone(tz: string): boolean {
+  if (!tz.trim()) return false;
+  try {
+    new Intl.DateTimeFormat("en", { timeZone: tz.trim() });
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 // UX-017: keys are the stable backend frequency codes, never translated --
 // only used to look up which message key holds the display label. Same safe
@@ -38,12 +60,15 @@ export function CreatePayGroupForm() {
   const freqId = useId();
   const dayId = useId();
   const tzId = useId();
+  const dayHintId = useId();
   const errId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
   const dayRef = useRef<HTMLInputElement>(null);
-  const [invalidField, setInvalidField] = useState<"name" | "day" | null>(null);
+  const [invalidField, setInvalidField] = useState<"name" | "day" | "tz" | null>(null);
+  const [zones] = useState(timeZoneOptions);
   const nameInvalid = tone === "bad" && invalidField === "name";
   const dayInvalid = tone === "bad" && invalidField === "day";
+  const tzInvalid = tone === "bad" && invalidField === "tz";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -64,6 +89,12 @@ export function CreatePayGroupForm() {
       dayRef.current?.focus();
       return;
     }
+    if (!isValidTimeZone(timezone)) {
+      setTone("bad");
+      setInvalidField("tz");
+      setMessage(t("timezoneInvalidError"));
+      return;
+    }
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -72,19 +103,23 @@ export function CreatePayGroupForm() {
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<PayGroupResponse>("v1/payroll/pay-groups", {
+      // POST is async (202 + command id) and does not echo the group back:
+      // reading res.data.name threw after a successful create, showing an
+      // error for a group that had in fact been saved.
+      const createdName = name.trim();
+      await browserJson<unknown>("v1/payroll/pay-groups", {
         method: "POST",
         body: JSON.stringify({
           name: name.trim(),
           frequency,
           payDayOfMonth: parseInt(payDayOfMonth, 10),
-          timezone: timezone.trim() || "Asia/Kolkata",
+          timezone: timezone.trim(),
         }),
       });
       setConfirmOpen(false);
       setTone("good");
       setInvalidField(null);
-      setMessage(t("createdMessage", { name: res.data.name }));
+      setMessage(t("createdMessage", { name: createdName }));
       setName("");
       setPayDayOfMonth("28");
       router.refresh();
@@ -143,19 +178,30 @@ export function CreatePayGroupForm() {
               onChange={(e) => setPayDayOfMonth(e.target.value)}
               aria-required="true"
               aria-invalid={dayInvalid || undefined}
-              aria-describedby={dayInvalid ? errId : undefined}
+              aria-describedby={[dayInvalid ? errId : "", dayHintId].filter(Boolean).join(" ")}
               style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
             />
+            {/* GAP-PAYROLL-PAY-GROUPS-01: say what the server actually does
+                (payroll-service /calendar clamps 29-31 to the month's last
+                day and schedules every group by day-of-month). */}
+            <p id={dayHintId} style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
+              {frequency === "monthly" ? t("payDayHintMonthly") : t("payDayHintNonMonthly")}
+            </p>
           </div>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={tzId} style={{ fontSize: 13, fontWeight: 600 }}>{t("timezoneLabel")}</label>
-            <input
+            <select
               id={tzId}
               value={timezone}
               onChange={(e) => setTimezone(e.target.value)}
-              maxLength={64}
-              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-            />
+              aria-invalid={tzInvalid || undefined}
+              aria-describedby={tzInvalid ? errId : undefined}
+              style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "var(--panel, #fff)" }}
+            >
+              {zones.map((z) => (
+                <option key={z} value={z}>{z}</option>
+              ))}
+            </select>
           </div>
         </div>
 

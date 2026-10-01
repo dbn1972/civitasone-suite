@@ -33,7 +33,7 @@ export function maskLast4(value: string): string {
   return `•••• ${v.slice(-4)}`;
 }
 
-function maskPan(value: string): string {
+export function maskPan(value: string): string {
   // Indian PAN: 5 letters + 4 digits + 1 letter (10 chars). Show the first 5
   // and the last 1 (matches the gap's own acceptance example,
   // "ABCDE1234F" -> "ABCDE****F"); anything that doesn't look like a real

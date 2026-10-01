@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatGrid, StatCard, StatusPill } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
@@ -9,7 +10,7 @@ import { PayrollRunStepper } from "./PayrollRunStepper";
 import { MonthOverMonthCards } from "./MonthOverMonthCards";
 import { ExceptionPanel, deriveExceptions } from "./ExceptionPanel";
 import { SalarySlipsClientTable } from "./SalarySlipsClientTable";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 
 type SalarySlipRow = {
@@ -60,6 +61,9 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
   // GAP-PAYROLL-HOME-02's pattern, applied here: GET /v1/payroll/runs/:id
   // 403s every role outside PAYROLL_READER_ROLES.
   const canView = roles.some((r) => PAYROLL_READER_ROLES.includes(r));
+  // GAP-PAYROLL-REGISTER-03: link a run to its department register, only for
+  // roles the register endpoint itself admits.
+  const canViewRegister = roles.some((r) => PAYROLL_REPORT_ROLES.includes(r));
   if (!canView) {
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
@@ -114,6 +118,13 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         backLabel="Payroll Runs"
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
+      {canViewRegister && (
+        <p style={{ margin: "0 0 12px" }}>
+          <Link className="btn ghost sm" href={`/hr/payroll/register?runId=${encodeURIComponent(run.id)}`}>
+            {t("viewRegisterLink")}
+          </Link>
+        </p>
+      )}
 
       {/* 5-step horizontal progress stepper */}
       <Card>

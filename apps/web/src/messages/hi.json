@@ -3740,7 +3740,21 @@
     "emptyMessage": "दी गई अवधि या रन के लिए कोई वेतन रजिस्टर नहीं मिला। कोई भिन्न फ़िल्टर आज़माएं, या पहले इस अवधि के लिए वेतन चलाएं।",
     "loadingAriaLabel": "लोड हो रहा है…",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
-    "runIdPlaceholder": "रन यूयूआईडी"
+    "runIdPlaceholder": "रन यूयूआईडी",
+    "backLabel": "पेरोल पर वापस जाएँ",
+    "unassigned": "अनिर्दिष्ट",
+    "colOtherDeductions": "अन्य कटौतियाँ (जीपीएफ/एनपीएस आदि)",
+    "periodInvalidError": "\"{value}\" मान्य अवधि नहीं है। YYYY-MM प्रारूप में 01 से 12 तक का महीना दें।",
+    "labelRun": "पेरोल रन",
+    "allRunsOption": "सभी रन",
+    "runOption": "{period} · {count} कर्मचारी",
+    "runIdInvalidError": "चयनित रन मान्य नहीं है। सूची से कोई रन चुनें।",
+    "activeFiltersLabel": "सक्रिय फ़िल्टर",
+    "chipPeriod": "अवधि: {period}",
+    "chipRun": "रन: {period}",
+    "clearFilters": "फ़िल्टर हटाएँ",
+    "statsScopedNote": "ऊपर के योग {period} के हैं, जो दिखाई गई नवीनतम अवधि है। दूसरा महीना देखने के लिए अवधि से फ़िल्टर करें।",
+    "tableCaption": "विभागवार पेरोल रजिस्टर पंक्तियाँ — सकल, कटौतियाँ और शुद्ध वेतन"
   },
   "payrollRuns": {
     "title": "वेतन रन",
@@ -3794,7 +3808,8 @@
     "fieldNetAmount": "शुद्ध राशि",
     "salarySlipsTitle": "वेतन पर्चियां ({count})",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
-    "exceptionSalaryCalcFailed": "वेतन गणना विफल — कृपया बैंक खाता, पैन या वेतन संरचना जांचें"
+    "exceptionSalaryCalcFailed": "इस कर्मचारी की वेतन गणना विफल रही। कारण देखने के लिए उनका रिकॉर्ड खोलें।",
+    "viewRegisterLink": "विभागीय रजिस्टर देखें"
   },
   "payrollRunActions": {
     "sectionTitle": "वेतन कार्रवाइयां",
@@ -3938,7 +3953,15 @@
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
     "periodGrossLabel": "{period} सकल वेतन",
     "comparisonCardTitle": "{period1} बनाम {period2}",
-    "comparisonCaption": "{period1} और {period2} के बीच वेतन तुलना"
+    "comparisonCaption": "{period1} और {period2} के बीच वेतन तुलना",
+    "backLabel": "पेरोल पर वापस जाएँ",
+    "periodRequiredError": "यह अवधि भी दर्ज करें।",
+    "periodInvalidError": "\"{value}\" मान्य अवधि नहीं है। YYYY-MM प्रारूप में 01 से 12 तक का महीना दें।",
+    "srIncrease": "वृद्धि",
+    "srDecrease": "कमी",
+    "colDeltaPct": "परिवर्तन %",
+    "noDataBothMessage": "{period1} या {period2} के लिए कोई पेरोल रजिस्टर योग नहीं मिला।",
+    "noDataPeriodMessage": "{period} के लिए कोई पेरोल रजिस्टर योग नहीं मिला।"
   },
   "payrollCosting": {
     "title": "लागत आवंटन",
@@ -3947,8 +3970,8 @@
     "statCostCenters": "लागत केंद्र (इस अवधि में)",
     "statEmpGroups": "कर्मचारी समूह (इस अवधि में)",
     "rulesCardTitle": "लागत नियम",
-    "rulesEmptyTitle": "नियम सूची अभी उपलब्ध नहीं है",
-    "rulesEmptyMessage": "लागत-केंद्र आवंटन नियम बनाने के लिए ऊपर दिए गए फ़ॉर्म का उपयोग करें; नियम सूची दृश्य अभी नहीं जोड़ा गया है।",
+    "rulesEmptyTitle": "अभी कोई लागत नियम नहीं",
+    "rulesEmptyMessage": "किसी कर्मचारी समूह की पेरोल लागत को लागत केंद्र में आवंटित करने के लिए ऊपर नियम बनाएँ।",
     "reportCardTitle": "लागत रिपोर्ट",
     "choosePeriodTitle": "एक अवधि चुनें",
     "choosePeriodMessage": "लागत आवंटन रिपोर्ट देखने के लिए ऊपर एक अवधि (YYYY-MM) दर्ज करें।",
@@ -3960,7 +3983,15 @@
     "emptyTitle": "इस अवधि के लिए कोई आवंटन नहीं",
     "emptyMessage": "इस अवधि के लिए किसी सक्रिय लागत नियम ने आवंटन उत्पन्न नहीं किया।",
     "loadingAriaLabel": "लोड हो रहा है…",
-    "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा"
+    "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
+    "backLabel": "पेरोल पर वापस जाएँ",
+    "costCenterUnresolved": "अनसुलझा (आईडी {id})",
+    "groupTotalInvalid": "{total} (100% होना चाहिए)",
+    "groupsNot100Warning": "इन कर्मचारी समूहों का विभाजन 100% नहीं बनता: {groups}।",
+    "colGroupTotal": "समूह योग",
+    "colStatus": "स्थिति",
+    "rulesCaption": "कर्मचारी समूह अनुसार लागत-केंद्र आवंटन नियम",
+    "periodInvalidError": "\"{value}\" मान्य अवधि नहीं है। YYYY-MM प्रारूप में 01 से 12 तक का महीना दें।"
   },
   "costingPeriodForm": {
     "periodFormatError": "YYYY-MM प्रारूप में एक अवधि दर्ज करें।",
@@ -3978,7 +4009,14 @@
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
     "confirmTitle": "क्या यह लागत नियम सहेजा जाए?",
     "confirmLabel": "नियम सहेजें",
-    "confirmDescription": "कर्मचारी समूह <strong>{group}</strong> के वेतन लागत का <strong>{pct}%</strong> लागत केंद्र <strong>{center}</strong> को आवंटित करें।"
+    "confirmDescription": "कर्मचारी समूह <strong>{group}</strong> के वेतन लागत का <strong>{pct}%</strong> लागत केंद्र <strong>{center}</strong> को आवंटित करें।",
+    "costCenterLabel": "लागत केंद्र",
+    "costCenterPlaceholder": "लागत केंद्र चुनें",
+    "splitRangeError": "विभाजन % 0 से अधिक और अधिकतम 100 होना चाहिए, अधिकतम 2 दशमलव तक।",
+    "noCostCentersMessage": "अभी कोई सक्रिय लागत केंद्र नहीं है। नियम जोड़ने से पहले वित्त विभाग से एक बनवाएँ।",
+    "costCentersUnavailableMessage": "लागत केंद्र लोड नहीं हो सके, इसलिए अभी नियम नहीं बनाया जा सकता। पुनः प्रयास के लिए रीफ़्रेश करें।",
+    "groupTotalOk": "{group} का योग {total} होगा।",
+    "groupTotalWarning": "इस सहेजने के बाद {group} का योग {total} होगा (100% होना चाहिए)।"
   },
   "payrollCtc": {
     "title": "सीटीसी कॉन्फ़िगरेशन",
@@ -3995,7 +4033,7 @@
     "colEmployerCost": "नियोक्ता लागत",
     "filterPlaceholder": "कोड या घटक के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई सीटीसी कॉन्फ़िगरेशन नहीं मिला",
-    "emptyMessage": "इस टेनेंट के लिए कोई सक्रिय payroll_ctc_config पंक्तियां कॉन्फ़िगर नहीं हैं।",
+    "emptyMessage": "इस संगठन के लिए अभी कोई सीटीसी घटक कॉन्फ़िगर नहीं है।",
     "loadingAriaLabel": "लोड हो रहा है…",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
     "yes": "हां",
@@ -4003,7 +4041,10 @@
     "calcTypePctOfBasic": "मूल वेतन का %",
     "calcTypePctOfCtc": "सीटीसी का %",
     "calcTypeFixed": "निश्चित",
-    "calcTypeFormula": "सूत्र"
+    "calcTypeFormula": "सूत्र",
+    "backLabel": "पेरोल पर वापस जाएँ",
+    "statFixed": "निश्चित राशि",
+    "formulaValue": "सूत्र: {value}"
   },
   "ctcCalculatorForm": {
     "formTitle": "सीटीसी कैलकुलेटर",
@@ -4035,7 +4076,12 @@
     "emptyTitle": "अभी तक कोई डीडीओ कॉन्फ़िगर नहीं है",
     "emptyMessage": "ऊपर दिए गए फ़ॉर्म का उपयोग करके अपना पहला डीडीओ बनाएं।",
     "loadingAriaLabel": "लोड हो रहा है…",
-    "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा"
+    "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
+    "backLabel": "पेरोल पर वापस जाएँ",
+    "noDepartments": "कोई नहीं",
+    "departmentNamesUnavailable": "विभागों के नाम लोड नहीं हो सके ({count} मैप किए गए)",
+    "colDepartmentNames": "विभाग कवरेज",
+    "tableCaption": "डीडीओ और प्रत्येक द्वारा कवर किए गए विभाग। संपादित करने के लिए डीडीओ कोड चुनें।"
   },
   "createDdoForm": {
     "formTitle": "डीडीओ बनाएं",
@@ -4048,7 +4094,24 @@
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
     "confirmTitle": "क्या यह डीडीओ सहेजा जाए?",
     "confirmLabel": "सहेजने की पुष्टि करें",
-    "confirmDescription": "डीडीओ <strong>{ddoCode}</strong> — <strong>{name}</strong> सहेजें। इस डीडीओ कोड की मौजूदा विभाग मैपिंग बदल दी जाएंगी।"
+    "confirmDescription": "डीडीओ <strong>{ddoCode}</strong> — <strong>{name}</strong> सहेजें। इस डीडीओ कोड की मौजूदा विभाग मैपिंग बदल दी जाएंगी।",
+    "editFormTitle": "डीडीओ {code} संपादित करें",
+    "codeFormatError": "डीडीओ कोड में केवल अक्षर, अंक और - / _ . (बिना स्पेस) हो सकते हैं, अधिकतम 32 वर्ण।",
+    "departmentInvalidError": "चयनित विभागों में से एक मान्य नहीं है। उसे हटाकर फिर से चुनें।",
+    "departmentsUnavailable": "विभाग लोड नहीं हो सके, इसलिए विभाग मैपिंग उपलब्ध नहीं है। पुनः प्रयास के लिए रीफ़्रेश करें।",
+    "departmentsLabel": "विभाग",
+    "departmentsPlaceholder": "विभाग खोजें…",
+    "departmentsNoResults": "कोई मेल खाता विभाग नहीं",
+    "removeDepartment": "{name} हटाएँ",
+    "updateDdoBtn": "डीडीओ अपडेट करें",
+    "cancelEdit": "संपादन रद्द करें",
+    "reasonLabel": "इस बदलाव का कारण",
+    "confirmDescriptionNew": "डीडीओ <strong>{ddoCode}</strong> — <strong>{name}</strong> बनाएँ।",
+    "confirmDescriptionUpdate": "डीडीओ <strong>{ddoCode}</strong> — <strong>{name}</strong> अपडेट करें। इसकी विभाग मैपिंग नीचे के चयन से बदल दी जाएगी।",
+    "diffAdded": "जोड़े गए: {list}",
+    "diffRemoved": "हटाए गए: {list}",
+    "diffMoved": "{department} डीडीओ {from} से यहाँ स्थानांतरित होगा",
+    "diffNone": "कोई नहीं"
   },
   "payrollFlexBenefits": {
     "title": "फ्लेक्स लाभ",
@@ -4328,7 +4391,16 @@
     "loadingAriaLabel": "लोड हो रहा है…",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
     "reconciliationBlockedMessage": "काटा गया टीडीएस जमा किए गए चालानों से मेल नहीं खाता (TRACES समाधान गेट)।",
-    "backToPayrollLabel": "पेरोल पर वापस जाएँ"
+    "backToPayrollLabel": "पेरोल पर वापस जाएँ",
+    "colPanStatus": "पैन स्थिति",
+    "panOk": "पैन दर्ज है",
+    "panMissing": "पैन नहीं है (206AA)",
+    "statPanMissing": "पैन नहीं",
+    "fyInvalidFallback": "\"{value}\" मान्य वित्तीय वर्ष नहीं है (YYYY-YY प्रयोग करें, जैसे 2025-26)। इसके स्थान पर वित्तीय वर्ष {fallback} दिखाया जा रहा है।",
+    "quarterInvalidFallback": "\"{value}\" मान्य तिमाही नहीं है। इसके स्थान पर {fallback} दिखाई जा रही है।",
+    "downloadUnreconciledTitle": "असमाधानित रिटर्न डाउनलोड करें?",
+    "downloadUnreconciledDescription": "इस तिमाही में काटा गया टीडीएस जमा चालानों से मेल नहीं खाता। इस आरपीयू फ़ाइल को ऐसे ही दाखिल करने से TRACES डिफ़ॉल्ट हो सकते हैं। केवल समीक्षा के लिए डाउनलोड करें।",
+    "downloadAnyway": "फिर भी डाउनलोड करें"
   },
   "forceFileButton": {
     "fileAnywayBtn": "फिर भी फ़ाइल करें — समाधान को दरकिनार करें (बाध्य)",
@@ -4358,7 +4430,13 @@
     "challanRefText": "चालान: {ref}",
     "tdsDepositedLabel": "टीडीएस जमा किया गया",
     "deducteesLabel": "कटौतीकर्ता",
-    "viewDetailLink": "विवरण देखें"
+    "viewDetailLink": "विवरण देखें",
+    "statusFiled": "दाखिल",
+    "statusLateFiled": "विलंब से दाखिल",
+    "statusReconciled": "समाधानित",
+    "statusUnreconciled": "असमाधानित",
+    "statusBlocked": "अवरुद्ध",
+    "statusNotLoaded": "लोड नहीं हुआ"
   },
   "salarySlips": {
     "title": "वेतन पर्चियां",
@@ -6050,7 +6128,12 @@
     "cardsTitle": "वेतन समूह कार्ड",
     "emptyTitle": "अभी तक कोई वेतन समूह नहीं",
     "emptyMessage": "कर्मचारियों को एक समान वेतन अनुसूची में व्यवस्थित करने के लिए ऊपर दिए गए फ़ॉर्म का उपयोग करके अपना पहला वेतन समूह बनाएं।",
-    "loadingAriaLabel": "लोड हो रहा है…"
+    "loadingAriaLabel": "लोड हो रहा है…",
+    "backLabel": "पेरोल पर वापस जाएँ",
+    "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
+    "statBiWeekly": "पाक्षिक समूह",
+    "statWeekly": "साप्ताहिक समूह",
+    "readOnlyNote": "वेतन समूहों को अभी यहाँ संपादित या निष्क्रिय नहीं किया जा सकता; केवल सक्रिय समूह सूचीबद्ध हैं।"
   },
   "createPayGroupForm": {
     "formTitle": "वेतन समूह बनाएं",
@@ -6068,18 +6151,24 @@
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
     "confirmTitle": "क्या यह वेतन समूह बनाया जाए?",
     "confirmLabel": "वेतन समूह बनाएं",
-    "confirmDescription": "वेतन समूह <strong>{name}</strong> बनाएं ({frequencyLabel}, वेतन दिवस {payDay})।"
+    "confirmDescription": "वेतन समूह <strong>{name}</strong> बनाएं ({frequencyLabel}, वेतन दिवस {payDay})।",
+    "timezoneInvalidError": "सूची से एक मान्य समय क्षेत्र चुनें।",
+    "payDayHintMonthly": "यदि महीना छोटा है, तो वेतन उसके अंतिम दिन होगा।",
+    "payDayHintNonMonthly": "साप्ताहिक और पाक्षिक समूह अभी हर महीने के इसी दिन निर्धारित होते हैं; सप्ताह-दिवस आधारित अनुसूची अभी समर्थित नहीं है।"
   },
   "payGroupCard": {
     "lastRevisedTitle": "अंतिम बार संशोधित: {date}",
     "revisionBadgeText": "संशोधन: {date}",
     "employeesLabel": "कर्मचारी",
     "frequencyLabel": "आवृत्ति",
-    "payDayLabel": "वेतन दिवस",
+    "payDayLabel": "माह का वेतन दिवस",
     "structureLabel": "संरचना: <strong>{name}</strong>",
     "frequencyMonthly": "मासिक",
     "frequencyBiWeekly": "पाक्षिक",
-    "frequencyWeekly": "साप्ताहिक"
+    "frequencyWeekly": "साप्ताहिक",
+    "payDayValue": "{day} तारीख",
+    "statusActive": "सक्रिय",
+    "statusInactive": "निष्क्रिय"
   },
   "wfhActions": {
     "colEmployee": "कर्मचारी",

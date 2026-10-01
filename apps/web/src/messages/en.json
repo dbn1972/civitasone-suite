@@ -5829,7 +5829,21 @@
     "emptyMessage": "No payroll register found for the given period or run. Try a different filter, or run payroll for this period first.",
     "loadingAriaLabel": "Loading…",
     "loadErrorMessage": "Couldn't load — showing nothing",
-    "runIdPlaceholder": "Run UUID"
+    "runIdPlaceholder": "Run UUID",
+    "backLabel": "Back to Payroll",
+    "unassigned": "Unassigned",
+    "colOtherDeductions": "Other Deductions (GPF/NPS etc.)",
+    "periodInvalidError": "\"{value}\" is not a valid period. Use YYYY-MM with a month from 01 to 12.",
+    "labelRun": "Payroll Run",
+    "allRunsOption": "All runs",
+    "runOption": "{period} · {count} employees",
+    "runIdInvalidError": "The selected run is not valid. Choose a run from the list.",
+    "activeFiltersLabel": "Active filters",
+    "chipPeriod": "Period: {period}",
+    "chipRun": "Run: {period}",
+    "clearFilters": "Clear filters",
+    "statsScopedNote": "Totals above are for {period}, the latest period shown. Filter by period to see another month.",
+    "tableCaption": "Payroll register lines by department with gross, deductions, and net pay"
   },
   "salarySlips": {
     "title": "Salary Slips",
@@ -5987,7 +6001,15 @@
     "loadErrorMessage": "Couldn't load — showing nothing",
     "periodGrossLabel": "{period} Gross",
     "comparisonCardTitle": "{period1} vs {period2}",
-    "comparisonCaption": "Payroll comparison between {period1} and {period2}"
+    "comparisonCaption": "Payroll comparison between {period1} and {period2}",
+    "backLabel": "Back to Payroll",
+    "periodRequiredError": "Enter this period too.",
+    "periodInvalidError": "\"{value}\" is not a valid period. Use YYYY-MM with a month from 01 to 12.",
+    "srIncrease": "increase of",
+    "srDecrease": "decrease of",
+    "colDeltaPct": "Change %",
+    "noDataBothMessage": "No payroll register totals were found for {period1} or {period2}.",
+    "noDataPeriodMessage": "No payroll register totals were found for {period}."
   },
   "payrollCosting": {
     "title": "Cost Allocation",
@@ -5996,8 +6018,8 @@
     "statCostCenters": "Cost Centers (this period)",
     "statEmpGroups": "Employee Groups (this period)",
     "rulesCardTitle": "Costing Rules",
-    "rulesEmptyTitle": "Rules list not yet available",
-    "rulesEmptyMessage": "Use the form above to create a cost-center allocation rule; a rules list view is not wired up yet.",
+    "rulesEmptyTitle": "No costing rules yet",
+    "rulesEmptyMessage": "Create a rule above to allocate an employee group's payroll cost to a cost center.",
     "reportCardTitle": "Costing Report",
     "choosePeriodTitle": "Choose a period",
     "choosePeriodMessage": "Enter a period (YYYY-MM) above to view the cost allocation report.",
@@ -6009,7 +6031,15 @@
     "emptyTitle": "No allocations for this period",
     "emptyMessage": "No active costing rules produced allocations for this period.",
     "loadingAriaLabel": "Loading…",
-    "loadErrorMessage": "Couldn't load — showing nothing"
+    "loadErrorMessage": "Couldn't load — showing nothing",
+    "backLabel": "Back to Payroll",
+    "costCenterUnresolved": "Unresolved (id {id})",
+    "groupTotalInvalid": "{total} (must be 100%)",
+    "groupsNot100Warning": "Splits for these employee groups do not add up to 100%: {groups}.",
+    "colGroupTotal": "Group Total",
+    "colStatus": "Status",
+    "rulesCaption": "Cost-center allocation rules by employee group",
+    "periodInvalidError": "\"{value}\" is not a valid period. Use YYYY-MM with a month from 01 to 12."
   },
   "costingPeriodForm": {
     "periodFormatError": "Enter a period in YYYY-MM format.",
@@ -6027,7 +6057,14 @@
     "networkError": "Network error. Please try again.",
     "confirmTitle": "Save this costing rule?",
     "confirmLabel": "Save rule",
-    "confirmDescription": "Allocate <strong>{pct}%</strong> of payroll cost for employee group <strong>{group}</strong> to cost center <strong>{center}</strong>."
+    "confirmDescription": "Allocate <strong>{pct}%</strong> of payroll cost for employee group <strong>{group}</strong> to cost center <strong>{center}</strong>.",
+    "costCenterLabel": "Cost Center",
+    "costCenterPlaceholder": "Select a cost center",
+    "splitRangeError": "Split % must be more than 0 and at most 100, with up to 2 decimals.",
+    "noCostCentersMessage": "No active cost centers exist yet. Ask Finance to create one before adding a rule.",
+    "costCentersUnavailableMessage": "Cost centers couldn't be loaded, so a rule can't be created right now. Refresh to try again.",
+    "groupTotalOk": "{group} will total {total}.",
+    "groupTotalWarning": "{group} will total {total} after this save (must be 100%)."
   },
   "payrollCtc": {
     "title": "CTC Configuration",
@@ -6044,7 +6081,7 @@
     "colEmployerCost": "Employer Cost",
     "filterPlaceholder": "Filter by code or component…",
     "emptyTitle": "No CTC configuration found",
-    "emptyMessage": "No active payroll_ctc_config rows are configured for this tenant.",
+    "emptyMessage": "No CTC components are configured for this tenant yet.",
     "loadingAriaLabel": "Loading…",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "yes": "Yes",
@@ -6052,7 +6089,10 @@
     "calcTypePctOfBasic": "% of Basic",
     "calcTypePctOfCtc": "% of CTC",
     "calcTypeFixed": "Fixed",
-    "calcTypeFormula": "Formula"
+    "calcTypeFormula": "Formula",
+    "backLabel": "Back to Payroll",
+    "statFixed": "Fixed-Amount",
+    "formulaValue": "Formula: {value}"
   },
   "ctcCalculatorForm": {
     "formTitle": "CTC Calculator",
@@ -6168,7 +6208,16 @@
     "loadingAriaLabel": "Loading…",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "reconciliationBlockedMessage": "TDS deducted does not match deposited challans (TRACES reconciliation gate).",
-    "backToPayrollLabel": "Back to Payroll"
+    "backToPayrollLabel": "Back to Payroll",
+    "colPanStatus": "PAN Status",
+    "panOk": "PAN on record",
+    "panMissing": "PAN missing (206AA)",
+    "statPanMissing": "PAN Missing",
+    "fyInvalidFallback": "\"{value}\" is not a valid financial year (use YYYY-YY, e.g. 2025-26). Showing FY {fallback} instead.",
+    "quarterInvalidFallback": "\"{value}\" is not a valid quarter. Showing {fallback} instead.",
+    "downloadUnreconciledTitle": "Download an unreconciled return?",
+    "downloadUnreconciledDescription": "TDS deducted does not match the deposited challans for this quarter. Filing this RPU file as-is can lead to TRACES defaults. Download only if you intend to review it.",
+    "downloadAnyway": "Download anyway"
   },
   "forceFileButton": {
     "fileAnywayBtn": "File anyway — bypass reconciliation (force)",
@@ -6198,7 +6247,13 @@
     "challanRefText": "Challan: {ref}",
     "tdsDepositedLabel": "TDS Deposited",
     "deducteesLabel": "Deductees",
-    "viewDetailLink": "View detail"
+    "viewDetailLink": "View detail",
+    "statusFiled": "Filed",
+    "statusLateFiled": "Filed late",
+    "statusReconciled": "Reconciled",
+    "statusUnreconciled": "Unreconciled",
+    "statusBlocked": "Blocked",
+    "statusNotLoaded": "Not loaded"
   },
   "payrollStructures": {
     "title": "Pay Structures",
@@ -6586,7 +6641,8 @@
     "fieldNetAmount": "Net Amount",
     "salarySlipsTitle": "Salary Slips ({count})",
     "loadErrorMessage": "Couldn't load — showing nothing",
-    "exceptionSalaryCalcFailed": "Salary calculation failed — check bank account, PAN, or salary structure"
+    "exceptionSalaryCalcFailed": "Salary calculation failed for this employee. Open their record to review the cause.",
+    "viewRegisterLink": "View department register"
   },
   "payrollRunActions": {
     "sectionTitle": "Payroll Actions",
@@ -6680,7 +6736,12 @@
     "emptyTitle": "No DDOs configured yet",
     "emptyMessage": "Create your first DDO using the form above.",
     "loadingAriaLabel": "Loading…",
-    "loadErrorMessage": "Couldn't load — showing nothing"
+    "loadErrorMessage": "Couldn't load — showing nothing",
+    "backLabel": "Back to Payroll",
+    "noDepartments": "None",
+    "departmentNamesUnavailable": "Department names couldn't be loaded ({count} mapped)",
+    "colDepartmentNames": "Department Coverage",
+    "tableCaption": "DDOs and the departments each one covers. Select a DDO code to edit it."
   },
   "createDdoForm": {
     "formTitle": "Create DDO",
@@ -6693,7 +6754,24 @@
     "networkError": "Network error. Please try again.",
     "confirmTitle": "Save this DDO?",
     "confirmLabel": "Confirm save",
-    "confirmDescription": "Save DDO <strong>{ddoCode}</strong> — <strong>{name}</strong>. Existing department mappings for this DDO code are replaced."
+    "confirmDescription": "Save DDO <strong>{ddoCode}</strong> — <strong>{name}</strong>. Existing department mappings for this DDO code are replaced.",
+    "editFormTitle": "Edit DDO {code}",
+    "codeFormatError": "DDO code can contain only letters, digits and - / _ . (no spaces), up to 32 characters.",
+    "departmentInvalidError": "One of the selected departments is not valid. Remove it and choose again.",
+    "departmentsUnavailable": "Departments couldn't be loaded, so department mapping is unavailable. Refresh to try again.",
+    "departmentsLabel": "Departments",
+    "departmentsPlaceholder": "Search departments…",
+    "departmentsNoResults": "No matching departments",
+    "removeDepartment": "Remove {name}",
+    "updateDdoBtn": "Update DDO",
+    "cancelEdit": "Cancel edit",
+    "reasonLabel": "Reason for this change",
+    "confirmDescriptionNew": "Create DDO <strong>{ddoCode}</strong> — <strong>{name}</strong>.",
+    "confirmDescriptionUpdate": "Update DDO <strong>{ddoCode}</strong> — <strong>{name}</strong>. Its department mapping is replaced with the selection below.",
+    "diffAdded": "Added: {list}",
+    "diffRemoved": "Removed: {list}",
+    "diffMoved": "{department} moves here from DDO {from}",
+    "diffNone": "none"
   },
   "payrollFlexBenefits": {
     "title": "Flex Benefits",
@@ -6885,7 +6963,12 @@
     "cardsTitle": "Pay Group Cards",
     "emptyTitle": "No pay groups yet",
     "emptyMessage": "Create your first pay group using the form above to organize employees onto a common pay schedule.",
-    "loadingAriaLabel": "Loading…"
+    "loadingAriaLabel": "Loading…",
+    "backLabel": "Back to Payroll",
+    "loadErrorMessage": "Couldn't load — showing nothing",
+    "statBiWeekly": "Bi-weekly Groups",
+    "statWeekly": "Weekly Groups",
+    "readOnlyNote": "Pay groups can't be edited or deactivated here yet; only active groups are listed."
   },
   "createPayGroupForm": {
     "formTitle": "Create Pay Group",
@@ -6903,18 +6986,24 @@
     "networkError": "Network error. Please try again.",
     "confirmTitle": "Create this pay group?",
     "confirmLabel": "Create pay group",
-    "confirmDescription": "Create pay group <strong>{name}</strong> ({frequencyLabel}, pay day {payDay})."
+    "confirmDescription": "Create pay group <strong>{name}</strong> ({frequencyLabel}, pay day {payDay}).",
+    "timezoneInvalidError": "Choose a valid timezone from the list.",
+    "payDayHintMonthly": "If a month is shorter, pay falls on its last day.",
+    "payDayHintNonMonthly": "Weekly and bi-weekly groups are currently scheduled on this day of each month; weekday schedules are not supported yet."
   },
   "payGroupCard": {
     "lastRevisedTitle": "Last revised: {date}",
     "revisionBadgeText": "Rev. {date}",
     "employeesLabel": "Employees",
     "frequencyLabel": "Frequency",
-    "payDayLabel": "Pay Day",
+    "payDayLabel": "Pay Day of Month",
     "structureLabel": "Structure: <strong>{name}</strong>",
     "frequencyMonthly": "Monthly",
     "frequencyBiWeekly": "Bi-weekly",
-    "frequencyWeekly": "Weekly"
+    "frequencyWeekly": "Weekly",
+    "payDayValue": "{day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+    "statusActive": "Active",
+    "statusInactive": "Inactive"
   },
   "wfhActions": {
     "colEmployee": "Employee",

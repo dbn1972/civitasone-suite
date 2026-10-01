@@ -14,6 +14,7 @@ import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["finance_admin", "super_admin", "admin"];
 const READER_ROLES = [...ADMIN_ROLES, "finance_officer", "audit_officer"];
+const COST_CENTER_READER_ROLES = [...READER_ROLES, "payroll_admin", "payroll_officer", "hr_admin"];
 
 // ── Validators ──────────────────────────────────────────────────────────────
 
@@ -97,7 +98,10 @@ export async function orgStructureRoutes(app: FastifyInstance): Promise<void> {
   // ── Cost Centers ──
   app.get("/v1/finance/cost-centers", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    // GAP-PAYROLL-COSTING-01/02: payroll staff pick cost centres for costing
+    // rules and see their code/name in the costing report (read-only master
+    // data; writes stay ADMIN_ROLES).
+    requireRole(ctx, COST_CENTER_READER_ROLES);
     const rows = await scopedRead((tx) => tx.select().from(costCenters).where(eq(costCenters.tenantId, ctx.tenantId)));
     return reply.send({ data: rows });
   });

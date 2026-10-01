@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button, Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 
 type CalcComponent = { code: string; name: string; amountMinor: number; isEmployerCost: boolean };
 type CalcResult = { ctcMinor: number; grossMinor: number; employerCostMinor: number; components: CalcComponent[] };
@@ -25,13 +26,15 @@ export function CtcCalculatorForm() {
     setError(null);
     setResult(null);
 
-    const rupees = parseFloat(ctc);
-    if (Number.isNaN(rupees) || rupees <= 0) {
+    // GAP-PAYROLL-CTC-05: strict string -> paise conversion (no float
+    // multiply; more than 2 decimals is rejected, not silently rounded).
+    const minor = rupeesToMinorString(ctc);
+    const ctcMinor = minor === null ? NaN : Number(minor);
+    if (minor === null || !Number.isSafeInteger(ctcMinor)) {
       setError(t("ctcRequiredError"));
       ctcRef.current?.focus();
       return;
     }
-    const ctcMinor = Math.round(rupees * 100);
 
     setBusy(true);
     try {

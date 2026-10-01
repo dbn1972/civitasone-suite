@@ -239,6 +239,29 @@ describe("GET /v1/hrms/departments", () => {
     expect(Array.isArray(body.data)).toBe(true);
   });
 
+  it("200 — payroll_officer can list departments (GAP-PAYROLL-DDOS-01: DDO department picker)", async () => {
+    H.rows.mockReturnValue([mockDept()]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/departments",
+      headers: { authorization: `Bearer ${tok(["payroll_officer"])}` },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(200);
+  });
+
+  it("403 — payroll_officer still cannot list designations (widening is departments-only)", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/designations",
+      headers: { authorization: `Bearer ${tok(["payroll_officer"])}` },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(403);
+  });
+
   it("200 — read-only hr_officer can list departments", async () => {
     H.rows.mockReturnValue([]);
     const app = await buildApp();

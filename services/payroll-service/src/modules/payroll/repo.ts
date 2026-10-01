@@ -274,9 +274,14 @@ export async function listCtcConfig(tenantId: string) {
 
 // ─── Payroll Comparison ───────────────────────────────────────────────────────
 
-export type PeriodSummary = { gross: bigint; net: bigint; headcount: number };
+/**
+ * GAP-PAYROLL-COMPARISON-02: `hasData` is false when the register has no
+ * rows for the period. The sums COALESCE to 0, so without it a missing
+ * period was indistinguishable from a real ₹0 payroll.
+ */
+export type PeriodSummary = { gross: bigint; net: bigint; headcount: number; hasData: boolean };
 
 export async function getRegisterSummary(tenantId: string, period: string): Promise<PeriodSummary> {
-  const rows = await scopedRead((tx) => tx.execute(sql`SELECT COALESCE(SUM(total_gross_minor),0)::bigint as gross,COALESCE(SUM(total_net_minor),0)::bigint as net,COALESCE(SUM(employee_count),0)::int as headcount FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND period=${period}`));
+  const rows = await scopedRead((tx) => tx.execute(sql`SELECT COALESCE(SUM(total_gross_minor),0)::bigint as gross,COALESCE(SUM(total_net_minor),0)::bigint as net,COALESCE(SUM(employee_count),0)::int as headcount,(COUNT(*) > 0) as "hasData" FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND period=${period}`));
   return (rows as unknown[])[0] as PeriodSummary;
 }
