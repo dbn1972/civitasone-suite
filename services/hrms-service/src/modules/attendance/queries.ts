@@ -3,6 +3,7 @@ import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
+import { batchEmployees, batchDepartments } from "../../shared/batch-resolve.js";
 import type { AttendanceRow } from "./schema.js";
 
 function mapStatus(status: string): "present" | "absent" | "half_day" | "on_leave" | "holiday" {
@@ -89,6 +90,37 @@ export async function listAttendance(tenantId: string, limit: number) {
         hoursWorked: computeHoursWorked(r.inTime, r.outTime),
       };
     });
+  });
+}
+
+/**
+ * GAP-HR-CHECKIN-LOG-02 (display half — the scoping/IDOR half was already
+ * closed in routes.ts by resolveSelfScopedEmployeeId, GAP-HR-SF-16 fold-in).
+ * repo.listCheckinLog used to return a raw 8-char employeeId slice as
+ * "employee" and a permanently blank "department", with no join at all
+ * (unlike listAttendance just above). Resolves both via the shared
+ * batchEmployees/batchDepartments helpers — the established pattern for new
+ * call sites in this module (see GET /overtime-requests in routes.ts) —
+ * rather than employeeRepo.listByTenant's 500-row cap listAttendance still
+ * uses, so this does not silently miss employees beyond that cap.
+ */
+export async function listCheckinLog(tenantId: string, limit: number, employeeIds: string[] | undefined, offset = 0) {
+  const rows = await repo.listCheckinLog(tenantId, limit, employeeIds, offset);
+  const empMap = await batchEmployees(tenantId, rows.map((r) => r.employeeId));
+  const deptMap = await batchDepartments(tenantId, [...empMap.values()].map((e) => e.departmentId));
+  return rows.map((r) => {
+    const emp = empMap.get(r.employeeId);
+    return {
+      id: r.id,
+      employeeId: r.employeeId,
+      employee: emp?.fullName ?? r.employeeId.slice(0, 8),
+      department: (emp && deptMap.get(emp.departmentId)) ?? "",
+      date: r.date,
+      checkIn: r.checkIn,
+      checkOut: r.checkOut,
+      source: r.source,
+      totalHours: r.totalHours,
+    };
   });
 }
 

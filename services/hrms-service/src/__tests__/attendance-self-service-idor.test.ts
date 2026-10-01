@@ -139,15 +139,29 @@ function paramValues(sql: unknown, out: unknown[] = []): unknown[] {
  * A minimal fake Drizzle `tx` for a list-query scopedRead call: records the
  * exact `.where(...)` condition object the route built (using the real,
  * unmocked eq/and from drizzle-orm under the hood), then resolves `rows`.
+ *
+ * GAP-HR-OVERTIME-04: GET /overtime-requests now runs a SECOND query
+ * alongside the data query (a bare `count()` aggregate, no further
+ * chaining) inside the same scopedRead callback, and the data query itself
+ * now chains `.offset(...)` after `.limit(...)`. `where(cond)` returns a
+ * thenable that is ALSO chainable (`.orderBy`/`.limit`/`.offset` each return
+ * another such hybrid), so a bare `await tx.select(...).where(...)` (the
+ * count query) and any combination of further chaining (the data query)
+ * both resolve to `rows` without throwing — exactly what every OTHER
+ * capturingTx call site in this file already relied on before this gap, now
+ * just also tolerant of the two new call shapes.
  */
 function capturingTx(rows: unknown[]) {
   let captured: unknown;
-  const chain = {
-    orderBy: () => ({ limit: () => Promise.resolve(rows) }),
-    limit: () => Promise.resolve(rows),
-  };
+  function hybrid(): Promise<unknown[]> & { orderBy: () => unknown; limit: () => unknown; offset: () => unknown } {
+    const p = Promise.resolve(rows) as Promise<unknown[]> & { orderBy: () => unknown; limit: () => unknown; offset: () => unknown };
+    p.orderBy = hybrid;
+    p.limit = hybrid;
+    p.offset = hybrid;
+    return p;
+  }
   const tx = {
-    select: () => ({ from: () => ({ where: (cond: unknown) => { captured = cond; return chain; } }) }),
+    select: () => ({ from: () => ({ where: (cond: unknown) => { captured = cond; return hybrid(); } }) }),
   };
   return { tx, values: () => paramValues(captured).flat(Infinity) };
 }
@@ -232,7 +246,9 @@ describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
       headers: { authorization: `Bearer ${tok(["employee"], ACTOR_NOLINK)}` },
     });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toEqual({ data: [] });
+    // GAP-HR-OVERTIME-04: this short-circuit now also carries hasMore/total
+    // (both trivially false/0), alongside the pre-existing empty data: [].
+    expect(r.json()).toEqual({ data: [], hasMore: false, total: 0 });
     expect(scopedReadMock).not.toHaveBeenCalled();
   });
 
@@ -266,7 +282,8 @@ describe("GET /v1/hrms/overtime-requests — self-scoping", () => {
       headers: { authorization: `Bearer ${tok(["manager"], MGR_ACTOR)}` },
     });
     expect(r.statusCode).toBe(200);
-    expect(r.json()).toEqual({ data: [] });
+    // GAP-HR-OVERTIME-04: see the "no linked employee record" test above.
+    expect(r.json()).toEqual({ data: [], hasMore: false, total: 0 });
     // Only the reports-lookup scopedRead call happens -- the route must
     // short-circuit before ever building/running the data query.
     expect(scopedReadMock).toHaveBeenCalledTimes(1);
@@ -278,6 +295,9 @@ describe("POST /v1/hrms/wfh-requests — self-service IDOR", () => {
 
   it("202 — employee submits a WFH request for THEMSELVES (actorId != employeeId)", async () => {
     resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_SELF));
+    // GAP-HR-WFH-01 (partial, weekly-cap check): no existing pending/approved
+    // WFH request for this employee in the same ISO week.
+    scopedReadMock.mockResolvedValueOnce([]);
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/wfh-requests",
       headers: { authorization: `Bearer ${tok(["employee"], ACTOR_SELF)}` },
@@ -298,6 +318,9 @@ describe("POST /v1/hrms/wfh-requests — self-service IDOR", () => {
   });
 
   it("202 — HR admin can submit on behalf of any employee (privileged path unchanged)", async () => {
+    // GAP-HR-WFH-01 (partial, weekly-cap check): applies regardless of who
+    // is submitting, HR included — no existing same-week request here.
+    scopedReadMock.mockResolvedValueOnce([]);
     const r = await app.inject({
       method: "POST", url: "/v1/hrms/wfh-requests",
       headers: { authorization: `Bearer ${tok(["hr_admin"], HR_ACTOR)}` },

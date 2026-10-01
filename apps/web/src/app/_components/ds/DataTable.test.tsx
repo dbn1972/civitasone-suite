@@ -92,6 +92,51 @@ describe("DataTable", () => {
     expect(screen.queryByText("Office Supplies")).not.toBeInTheDocument();
   });
 
+  // GAP-HR-OVERTIME-07: a filter matching zero rows used to show the exact
+  // same static empty state as a genuinely empty table, with no way back to
+  // the full list short of manually clearing the filter box.
+  describe("clear-filter empty state (GAP-HR-OVERTIME-07)", () => {
+    it("shows a Clear filter button (not the caller's emptyAction) when a filter matches nothing", () => {
+      render(
+        <DataTable
+          columns={columns}
+          rows={rows}
+          filterable
+          emptyTitle="No orders"
+          emptyMessage="Create your first PO"
+          emptyAction={<button>Add your first PO</button>}
+        />,
+      );
+      fireEvent.change(screen.getByRole("searchbox"), { target: { value: "no such row" } });
+      expect(screen.getByRole("button", { name: /clear filter/i })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /add your first po/i })).not.toBeInTheDocument();
+    });
+
+    it("clicking Clear filter restores every row", () => {
+      render(<DataTable columns={columns} rows={rows} filterable />);
+      fireEvent.change(screen.getByRole("searchbox"), { target: { value: "no such row" } });
+      fireEvent.click(screen.getByRole("button", { name: /clear filter/i }));
+      expect(screen.getByText("Office Supplies")).toBeInTheDocument();
+      expect(screen.getByText("IT Equipment")).toBeInTheDocument();
+      expect(screen.getByText("Furniture")).toBeInTheDocument();
+    });
+
+    it("a genuinely empty table (no filter typed) still shows the caller's own emptyAction, unaffected", () => {
+      render(
+        <DataTable
+          columns={columns}
+          rows={[]}
+          filterable
+          emptyTitle="No orders"
+          emptyMessage="Create your first PO"
+          emptyAction={<button>Add your first PO</button>}
+        />,
+      );
+      expect(screen.getByRole("button", { name: /add your first po/i })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /clear filter/i })).not.toBeInTheDocument();
+    });
+  });
+
   // UX-014: the filter input must be a real searchbox (type="search"), with
   // an accessible name derived from the page's own filterPlaceholder rather
   // than a generic/inconsistent one, without requiring every one of the

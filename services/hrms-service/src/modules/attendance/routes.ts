@@ -17,7 +17,7 @@ import { scopedRead } from "../../shared/db.js";
 import { batchEmployees } from "../../shared/batch-resolve.js";
 import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, count, gte, lte } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 
 /**
@@ -36,6 +36,23 @@ function employeeScopeCondition(column: AnyPgColumn, scope: string | string[] | 
 /** True when a resolved scope means "authorized for nothing" -- caller must respond with an empty list, never fall through to unfiltered. */
 function isEmptyScope(scope: string | string[] | undefined | null): boolean {
   return scope === null || (Array.isArray(scope) && scope.length === 0);
+}
+
+/**
+ * The Mon-Sun calendar week (as "YYYY-MM-DD" bounds) containing `dateStr`,
+ * computed in UTC. Used by GAP-HR-WFH-01's weekly-cap check below; see that
+ * call site for why UTC (coarse) rather than IST-precise is the deliberate
+ * choice here.
+ */
+function isoWeekBoundsUtc(dateStr: string): { start: string; end: string } {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  const day = d.getUTCDay(); // 0=Sun..6=Sat
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() + mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return { start: monday.toISOString().slice(0, 10), end: sunday.toISOString().slice(0, 10) };
 }
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
@@ -141,6 +158,29 @@ async function isSelfApproval(ctx: RequestContext, ownerEmployeeId: string): Pro
   return !!approverEmp && ownerEmployeeId === approverEmp.id;
 }
 
+/**
+ * Reporting-line guard for the WFH / shift-change approve/reject routes
+ * below. Discovered, not in the original catalogue: resolveSelfScopedEmployeeId
+ * already restricts the GET /wfh-requests and /shift-requests LIST queries so
+ * a manager only ever sees self + direct reports (GAP-HR-SF-16 fold-in), but
+ * the approve/reject routes next to those GETs only ever checked
+ * isSelfApproval (cannot decide your OWN request) -- not whether the request
+ * belongs to someone in the deciding manager's reporting line at all. A
+ * manager could still approve or reject ANY other employee's pending WFH or
+ * shift-change request tenant-wide, same shape as the GET-side leak
+ * GAP-HR-SF-16 already fixed for the list views. HR is unaffected
+ * (resolveSelfScopedEmployeeId returns `requested` unchanged for HR, which is
+ * always non-empty here since ownerEmployeeId is a real row's id). Only HR
+ * and manager roles ever reach these routes (role gate above), so this is
+ * safe to call unconditionally.
+ */
+async function assertManagerOwnsReport(ctx: RequestContext, ownerEmployeeId: string, action: string): Promise<void> {
+  const scope = await resolveSelfScopedEmployeeId(ctx, ownerEmployeeId);
+  if (isEmptyScope(scope)) {
+    throw new HttpError(403, "NOT_YOUR_REPORT", `you may only ${action} for your own direct reports`);
+  }
+}
+
 export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/hrms/attendance", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -195,7 +235,10 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/attendance/checkin-log", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
-    const q = z.object({ limit: z.coerce.number().int().min(1).max(500).default(200) }).parse(req.query);
+    const q = z.object({
+      limit: z.coerce.number().int().min(1).max(500).default(200),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
     // IDOR fix (GAP-HR-SF-16 fold-in): this route had ZERO employee scoping
     // -- any manager (ALL_ROLES here is HR+manager only; no bare "employee"
     // reaches this route) got the full tenant's checkin log, not just their
@@ -204,7 +247,15 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     const scope = await resolveSelfScopedEmployeeId(ctx, undefined);
     if (isEmptyScope(scope)) return reply.send({ data: [] });
     const employeeIds = Array.isArray(scope) ? scope : scope ? [scope] : undefined;
-    return reply.send({ data: await repo.listCheckinLog(ctx.tenantId, q.limit, employeeIds) });
+    // GAP-HR-CHECKIN-LOG-02 (display half): the scoping/IDOR half of this gap
+    // was already closed above by resolveSelfScopedEmployeeId (GAP-HR-SF-16);
+    // what remained was repo.listCheckinLog returning a raw 8-char employeeId
+    // slice and a permanently blank department, with no employee/department
+    // join (unlike queries.listAttendance). queries.listCheckinLog (new)
+    // resolves both via the shared batchEmployees/batchDepartments helpers,
+    // the established pattern for new call sites in this module (see
+    // GAP-HR-OVERTIME-02's GET /overtime-requests just below).
+    return reply.send({ data: await queries.listCheckinLog(ctx.tenantId, q.limit, employeeIds, q.offset) });
   });
 
   app.get("/v1/hrms/attendance/regularisations", async (req, reply) => {
@@ -367,6 +418,11 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
       toDate: r.toDate,
       reason: r.reason ?? null,
       status: r.status,
+      // GAP-HR-WFH-04: was silently dropped from this mapping even though
+      // f3-consumer.ts's attendance_routes__7 already persists it on reject
+      // -- the requester had no way to ever see why their request was
+      // rejected.
+      rejectionReason: r.rejectionReason ?? null,
       createdAt: r.createdAt instanceof Date ? r.createdAt.toISOString() : String(r.createdAt),
     })) });
   });
@@ -420,11 +476,23 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/overtime-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "employee", "manager"]);
-    const q = z.object({ empId: z.string().uuid().optional() }).parse(req.query);
+    const q = z.object({
+      empId: z.string().uuid().optional(),
+      // GAP-HR-OVERTIME-04: the manager-scope half of this gap (a manager
+      // seeing every employee's overtime, not just direct reports) was
+      // already closed by resolveSelfScopedEmployeeId below (same shared fix
+      // as GET /wfh-requests and /shift-requests). What remained was the
+      // silent `.limit(200)` truncation with no hasMore/total signal, so a
+      // tenant with >200 rows had its stat cards computed from an
+      // incomplete, arbitrarily-ordered window with no indication anything
+      // was missing.
+      limit: z.coerce.number().int().min(1).max(200).default(200),
+      offset: z.coerce.number().int().min(0).default(0),
+    }).parse(req.query);
     // IDOR guard: employees may only read their own OT requests
     const effectiveEmpId = await resolveSelfScopedEmployeeId(ctx, q.empId);
     if (isEmptyScope(effectiveEmpId)) {
-      return reply.send({ data: [] });
+      return reply.send({ data: [], hasMore: false, total: 0 });
     }
     // FORCE-RLS fix: was a bare db.select() against attendance.hrms_overtime_requests
     // (FORCE ROW LEVEL SECURITY — migration 0148), so under the NOBYPASSRLS
@@ -433,23 +501,34 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // employee's/manager's/HR's OT list always looked empty. scopedRead is
     // already used a few lines below (the approve route) for exactly this
     // table; mirror it here.
-    const rows = await scopedRead((tx) => tx.select().from(hrmsOvertimeRequests)
-      .where(and(
-        eq(hrmsOvertimeRequests.tenantId, ctx.tenantId),
-        employeeScopeCondition(hrmsOvertimeRequests.employeeId, effectiveEmpId),
-      ))
-      .orderBy(desc(hrmsOvertimeRequests.requestDate))
-      .limit(200));
+    const whereCond = and(
+      eq(hrmsOvertimeRequests.tenantId, ctx.tenantId),
+      employeeScopeCondition(hrmsOvertimeRequests.employeeId, effectiveEmpId),
+    );
+    const [rows, totalResult] = await scopedRead(async (tx) => [
+      await tx.select().from(hrmsOvertimeRequests)
+        .where(whereCond)
+        .orderBy(desc(hrmsOvertimeRequests.requestDate))
+        .limit(q.limit + 1)
+        .offset(q.offset),
+      await tx.select({ value: count() }).from(hrmsOvertimeRequests).where(whereCond),
+    ]);
+    const hasMore = rows.length > q.limit;
+    const page = hasMore ? rows.slice(0, q.limit) : rows;
     // GAP-HR-OVERTIME-02: resolve employeeName/employeeNo via the shared
     // batch-resolution helper (same building block GAP-HR-ADVANCES-01/
     // GAP-HR-LOANS-01 already adopted) instead of the web layer showing the
     // raw employeeId.
-    const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
-    return reply.send({ data: rows.map((r) => ({
-      ...r,
-      employeeName: empMap.get(r.employeeId)?.fullName,
-      employeeNo: empMap.get(r.employeeId)?.employeeNo,
-    })) });
+    const empMap = await batchEmployees(ctx.tenantId, page.map((r) => r.employeeId));
+    return reply.send({
+      data: page.map((r) => ({
+        ...r,
+        employeeName: empMap.get(r.employeeId)?.fullName,
+        employeeNo: empMap.get(r.employeeId)?.employeeNo,
+      })),
+      hasMore,
+      total: totalResult[0]?.value ?? 0,
+    });
   });
 
   app.patch("/v1/hrms/overtime-requests/:id/approve", async (req, reply) => {
@@ -541,6 +620,33 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     // IDOR guard: employees may only submit WFH requests for themselves.
     await assertSelfOrHr(ctx, body.employeeId, "create WFH requests");
+
+    // GAP-HR-WFH-01 (partial — weekly cap only). DoPT OM 2022 caps WFH at 2
+    // days/week; the OTHER half of this gap (reject gazetted/Level>10 staff
+    // outright) is deliberately NOT enforced here and left open: neither
+    // hrms_employees nor hrms_designations exposes a column confirmed to be
+    // the GoI pay-matrix level this policy means (designations only has
+    // `level`/`payGrade`, whose mapping to it was never verified against a
+    // real data source — see this gap's catalogue entry) — guessing wrong
+    // would wrongly block or allow employees, which is worse than leaving it
+    // open. The weekly cap below is safe to enforce regardless: it only ever
+    // adds a restriction, never grants the gazetted exemption this doesn't
+    // check. Coarse Mon-Sun UTC week boundary (not IST-precise) — same
+    // "don't let this slip through" philosophy already used by the overtime
+    // future-date guard above, not a display-facing date computation.
+    const { start: weekStart, end: weekEnd } = isoWeekBoundsUtc(body.fromDate);
+    const sameWeek = await scopedRead((tx) => tx.select({ id: hrmsWfhRequests.id }).from(hrmsWfhRequests)
+      .where(and(
+        eq(hrmsWfhRequests.tenantId, ctx.tenantId),
+        eq(hrmsWfhRequests.employeeId, body.employeeId),
+        inArray(hrmsWfhRequests.status, ["pending", "approved"]),
+        gte(hrmsWfhRequests.fromDate, weekStart),
+        lte(hrmsWfhRequests.fromDate, weekEnd),
+      )));
+    if (sameWeek.length >= 2) {
+      throw new HttpError(422, "WEEKLY_WFH_CAP_REACHED", "the 2-day-per-week WFH limit (DoPT OM 2022) is already reached for this week");
+    }
+
     const id = randomUUID();
     await publishF3Write(ctx, "attendance_routes__5", id, { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> });
     return reply.code(202).send({ id, status: "pending" }) as any;
@@ -566,6 +672,10 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (await isSelfApproval(ctx, existing[0].employeeId)) {
       throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own WFH request");
     }
+    // GAP-HR-WFH-03 (approve/reject half — discovered, not in the original
+    // catalogue entry; the GET-side manager scope was already fixed). See
+    // assertManagerOwnsReport's doc comment.
+    await assertManagerOwnsReport(ctx, existing[0].employeeId, "approve or reject WFH requests");
     if (existing[0].status !== "pending") {
       throw new HttpError(404, "NOT_FOUND", "WFH request not found or already decided");
     }
@@ -592,6 +702,8 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (await isSelfApproval(ctx, existing[0].employeeId)) {
       throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own WFH request");
     }
+    // GAP-HR-WFH-03 (approve/reject half) — see assertManagerOwnsReport's doc comment.
+    await assertManagerOwnsReport(ctx, existing[0].employeeId, "approve or reject WFH requests");
     if (existing[0].status !== "pending") {
       throw new HttpError(404, "NOT_FOUND", "WFH request not found or already decided");
     }
@@ -650,6 +762,8 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (await isSelfApproval(ctx, existing[0].employeeId)) {
       throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own shift-change request");
     }
+    // Discovered, not in the original catalogue — see assertManagerOwnsReport's doc comment.
+    await assertManagerOwnsReport(ctx, existing[0].employeeId, "approve or reject shift-change requests");
     if (existing[0].status !== "pending") {
       throw new HttpError(404, "NOT_FOUND", "shift-change request not found or already decided");
     }
@@ -676,6 +790,8 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     if (await isSelfApproval(ctx, existing[0].employeeId)) {
       throw new HttpError(403, "FORBIDDEN", "you cannot approve or reject your own shift-change request");
     }
+    // Discovered, not in the original catalogue — see assertManagerOwnsReport's doc comment.
+    await assertManagerOwnsReport(ctx, existing[0].employeeId, "approve or reject shift-change requests");
     if (existing[0].status !== "pending") {
       throw new HttpError(404, "NOT_FOUND", "shift-change request not found or already decided");
     }

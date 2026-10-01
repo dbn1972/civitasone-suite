@@ -4,7 +4,26 @@
  */
 "use client";
 
+import { useTranslations } from "next-intl";
 import { StatusPill } from "@/app/_components/ds";
+
+/**
+ * GAP-HR-SHIFTS-04: ShiftCard.test.tsx (pre-existing, 7 cases) renders this
+ * component directly with no `<NextIntlClientProvider>` — useTranslations()
+ * throws synchronously without one. Mirrors DataTable.tsx's own
+ * useSafeTranslations helper (same problem, same fix, not exported from
+ * there to import — each component that hits this rolls its own local
+ * fallback) so the real page (always wrapped by the root layout) gets the
+ * translated string, and every existing test keeps passing unchanged with
+ * the plain-English literal it already asserts on.
+ */
+function useSafeTranslations(namespace: string, fallback: Record<string, string>): (key: string) => string {
+  try {
+    return useTranslations(namespace);
+  } catch {
+    return (key: string) => fallback[key] ?? key;
+  }
+}
 
 export interface ShiftCardProps {
   id: string;
@@ -34,6 +53,11 @@ function shiftIcon(name: string): string {
 }
 
 export function ShiftCard({ name, startTime, endTime, breakDuration, workingHours, applicableTo, status }: ShiftCardProps) {
+  // GAP-HR-SHIFTS-04: TimeSlot labels below were hard-coded English literals
+  // while the rest of this page (shifts/page.tsx) is next-intl.
+  const t = useSafeTranslations("shifts", {
+    cardStart: "Start", cardEnd: "End", cardBreak: "Break", cardTotal: "Total",
+  });
   return (
     <article
       className="shift-card"
@@ -69,10 +93,10 @@ export function ShiftCard({ name, startTime, endTime, breakDuration, workingHour
           borderRadius: 6,
         }}
       >
-        <TimeSlot label="Start" value={startTime} />
-        <TimeSlot label="End" value={endTime} />
-        <TimeSlot label="Break" value={breakDuration} />
-        <TimeSlot label="Total" value={workingHours} highlight />
+        <TimeSlot label={t("cardStart")} value={startTime} />
+        <TimeSlot label={t("cardEnd")} value={endTime} />
+        <TimeSlot label={t("cardBreak")} value={breakDuration} />
+        <TimeSlot label={t("cardTotal")} value={workingHours} highlight />
       </dl>
     </article>
   );

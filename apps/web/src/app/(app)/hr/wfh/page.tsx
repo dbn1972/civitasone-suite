@@ -27,6 +27,35 @@ import { WfhRequestsTable, type WfhRow } from "../_components/WfhRequestsTable";
  */
 const WFH_APPROVER_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin"];
 
+/**
+ * GAP-HR-WFH-01 (partial — see routes.ts POST /wfh-requests for what's
+ * enforced server-side and what's deliberately left open). Mon-Sun week
+ * containing `dateStr`, in UTC — a client-side hint only (the server is
+ * authoritative and uses the identical coarse boundary), not a display-facing
+ * date computation.
+ */
+function isoWeekBoundsUtc(dateStr: string): { start: string; end: string } {
+  const d = new Date(`${dateStr}T00:00:00.000Z`);
+  const day = d.getUTCDay();
+  const mondayOffset = day === 0 ? -6 : 1 - day;
+  const monday = new Date(d);
+  monday.setUTCDate(d.getUTCDate() + mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return { start: monday.toISOString().slice(0, 10), end: sunday.toISOString().slice(0, 10) };
+}
+
+/** Count of this employee's own pending/approved WFH requests whose fromDate falls in the current ISO week. */
+function countWeeklyWfh(items: WfhRow[], employeeId: string | undefined): number | undefined {
+  if (!employeeId) return undefined;
+  const { start, end } = isoWeekBoundsUtc(new Date().toISOString().slice(0, 10));
+  return items.filter((i) =>
+    i.employeeId === employeeId &&
+    (i.status === "pending" || i.status === "approved") &&
+    i.fromDate >= start && i.fromDate <= end,
+  ).length;
+}
+
 async function getData(): Promise<LoaderResult<WfhRow[]>> {
   return fetchJson<unknown, WfhRow[]>("/api/v1/hrms/wfh-requests", [], {
     telemetryKey: "hr.wfh-requests",
@@ -80,6 +109,11 @@ export default async function WfhPage() {
   const approved = items.filter((i) => i.status === "approved").length;
   const pending = items.filter((i) => i.status === "pending").length;
   const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
+  // GAP-HR-WFH-01: lets the form's existing weekly-cap banner/submit-disable
+  // actually fire instead of never receiving a count at all. Only computable
+  // for the self-service prefill case — items is already scoped to "my own
+  // requests" there (resolveSelfScopedEmployeeId), same scope this counts.
+  const weeklyWfhCount = countWeeklyWfh(items, prefillEmployeeId);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -90,10 +124,10 @@ export default async function WfhPage() {
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="🏠" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApprovedLabel")} value={errored ? "—" : approved} />
-        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? "—" : pending} />
-        <StatCard icon="❌" iconBg="var(--badbg, #fff0f0)" label={t("statRejectedLabel")} value={errored ? "—" : rejected} />
+        <StatCard icon="🏠" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? null : items.length} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApprovedLabel")} value={errored ? null : approved} />
+        <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPendingLabel")} value={errored ? null : pending} />
+        <StatCard icon="❌" iconBg="var(--badbg, #fff0f0)" label={t("statRejectedLabel")} value={errored ? null : rejected} />
       </StatGrid>
 
       <Card title={t("cardNewRequest")}>
@@ -102,7 +136,7 @@ export default async function WfhPage() {
             {t("noLinkedProfileMessage")}
           </div>
         ) : (
-          <WFHRequestForm employeeId={prefillEmployeeId} redirectHref="/hr/wfh" />
+          <WFHRequestForm employeeId={prefillEmployeeId} weeklyWfhCount={weeklyWfhCount} redirectHref="/hr/wfh" />
         )}
       </Card>
 
