@@ -249,4 +249,29 @@ describe("PATCH /v1/hrms/salary-advances/:id/approve — maker-checker", () => {
     });
     expect(r.statusCode).toBe(404);
   });
+
+  // GAP-HR-SF09A-015: loans-routes.ts's HR_ROLES (used for this approve
+  // route) = [hr_admin, finance_admin, super_admin, hr_officer] -- narrower
+  // than ALL_ROLES (used for list/request), which also admits manager and
+  // officer. The web page's own ADVANCE_ROLES admits manager/officer to
+  // VIEW and REQUEST advances, but not to approve them -- confirmed
+  // intentional action-tiering (an approval step correctly excluding the
+  // requester's own tier), not a bug. These two tests lock that tiering in.
+  it("GAP-HR-SF09A-015: manager (page-level ADVANCE_ROLES, but not backend HR_ROLES) cannot approve", async () => {
+    const advId = await seedAdvance({ employeeId: report1EmpId, createdBy: HR1_ACTOR });
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/salary-advances/${advId}/approve`,
+      headers: auth(MANAGER_ACTOR, ["manager"]),
+    });
+    expect(r.statusCode).toBe(403);
+  });
+
+  it("GAP-HR-SF09A-015: finance_admin (named directly in loans-routes.ts HR_ROLES) can approve", async () => {
+    const advId = await seedAdvance({ employeeId: report1EmpId, createdBy: HR1_ACTOR });
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/salary-advances/${advId}/approve`,
+      headers: auth(HR2_ACTOR, ["finance_admin"]),
+    });
+    expect(r.statusCode).toBe(202);
+  });
 });

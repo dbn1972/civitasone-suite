@@ -7,15 +7,12 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { getTranslations } from "next-intl/server";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
-// GAP-HR-WORK-SUMMARY-04 (already fixed elsewhere, not repeated here):
-// "employee" belongs in this list too -- the backend already self-scopes
-// and admits `employee` on GET /v1/hrms/work-summaries, so this was a
-// pure UI oversight. That exact one-line addition is already in flight on
-// open PR #1672 (GAP-HR-SF09A-016 -- the same underlying bug, tracked
-// under this campaign's separate role-matrix-drift catalogue). Adding it
-// here too would either conflict with that PR or silently no-op once it
-// merges, so it's deliberately left out of this change.
-const WORK_SUMMARY_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin"];
+// GAP-HR-SF09A-016 / GAP-HR-WORK-SUMMARY-04: GET /v1/hrms/work-summaries
+// (gap-features/routes.ts READER_ROLES) already includes "employee" and
+// self-scopes them server-side (resolveOwnEmployeeIdIfNonHr) -- this array
+// omitted it, so a plain employee got PermissionDenied before the backend's
+// own, already-correct self-service check ever ran.
+const WORK_SUMMARY_ROLES = ["hr_admin", "hr_officer", "manager", "super_admin", "employee"];
 
 const SERVER_PAGE_SIZE = 500;
 

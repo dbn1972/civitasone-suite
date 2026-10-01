@@ -24,6 +24,16 @@ import { APAR_STATUSES, stageLabelKey } from "@/lib/apar/stages";
 // own auth checks, matching the pattern on the RTI page.
 const APAR_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
 
+// GAP-HR-SF09A-010 / GAP-HR-APAR-04: mirrors the backend's OWN, narrower
+// HR_ROLES (apar/routes.ts) used specifically for POST /v1/hrms/apar and
+// POST /v1/hrms/apar/:id/finalise -- unlike the rest of the APAR flow
+// (self-appraisal/reporting/reviewing/accept/representation, all
+// ACTOR_ROLES), initiating and finalising an APAR is HR-only. Kept in sync
+// with the identical const in ./new/page.tsx (that page's own server-side
+// gate) -- see this app's role-matrix contract test
+// (scripts/contract/hr-role-matrix.mjs) for the two routes this covers.
+const APAR_INITIATE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+
 interface AparListCounts {
   selfPending: number;
   inReview: number;
@@ -81,6 +91,11 @@ export default async function AparListPage({
   if (!canAccess) {
     return <PermissionDenied module="APAR appraisals" requiredRoles={APAR_ROLES} />;
   }
+  // GAP-HR-SF09A-010 / GAP-HR-APAR-04: manager/employee can view this list
+  // (APAR_ROLES above) but POST /v1/hrms/apar is HR-only -- don't offer a
+  // button that always 403s on arrival at /hr/apar/new (also gated there,
+  // see that page).
+  const canInitiate = roles.some((r) => APAR_INITIATE_ROLES.includes(r));
 
   const t = await getTranslations("apar");
   // Reuses the stage-label strings already defined for the detail page
@@ -103,9 +118,11 @@ export default async function AparListPage({
         back="/hr" backLabel="Back to HR"
         help="hr"
         actions={
-          <Link href="/hr/apar/new" className="btn primary">
-            {t("initiateBtn")}
-          </Link>
+          canInitiate ? (
+            <Link href="/hr/apar/new" className="btn primary">
+              {t("initiateBtn")}
+            </Link>
+          ) : undefined
         }
       />
       <DataSourceBadge source={result.source} />

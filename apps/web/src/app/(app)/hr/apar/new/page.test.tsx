@@ -7,14 +7,18 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-import AparNewPage from "./page";
+// GAP-HR-SF09A-010 / GAP-HR-APAR-NEW-01: the form body moved from page.tsx
+// (now a server-component role gate, tested separately below) to
+// AparNewForm.tsx. These pre-existing behavior tests just follow the move --
+// no behavior under test changed.
+import AparNewForm from "./AparNewForm";
 
 /**
  * UX-016: this used to show the raw backend `message` (falling back to
  * `Error ${res.status}`) verbatim — the same class of leak useFormError
  * closes fleet-wide (UX-003).
  */
-describe("AparNewPage — UX-016 clerk-safe errors", () => {
+describe("AparNewForm — UX-016 clerk-safe errors", () => {
   const fetchMock = vi.fn();
   beforeEach(() => {
     fetchMock.mockReset();
@@ -22,14 +26,14 @@ describe("AparNewPage — UX-016 clerk-safe errors", () => {
   });
   afterEach(() => vi.unstubAllGlobals());
 
-  // UX-017: AparNewPage now reads its copy through next-intl
+  // UX-017: AparNewForm now reads its copy through next-intl
   // (useTranslations("aparNew")), so it needs a real provider in the tree —
   // same pattern as citizen/grievances/GrievancesTable.test.tsx and
   // hr/employees/[id]/edit/EditEmployeeForm.test.tsx.
   function renderPage() {
     render(
       <NextIntlClientProvider locale="en" messages={enMessages}>
-        <AparNewPage />
+        <AparNewForm />
       </NextIntlClientProvider>,
     );
   }
@@ -75,5 +79,53 @@ describe("AparNewPage — UX-016 clerk-safe errors", () => {
     fillAndSubmit();
 
     expect(await screen.findByText("Employee not found.")).toBeInTheDocument();
+  });
+});
+
+// GAP-HR-SF09A-010 / GAP-HR-APAR-NEW-01: page.tsx's own new server-side gate.
+// Same mocking convention as hr/disciplinary/page.test.tsx: control the
+// session role directly at the roleGuard module boundary.
+let mockRoles: string[] = ["hr_admin"];
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => mockRoles,
+}));
+
+import AparNewPage from "./page";
+
+describe("AparNewPage — GAP-HR-APAR-NEW-01 role gate", () => {
+  beforeEach(() => {
+    mockRoles = ["hr_admin"];
+  });
+
+  it("shows PermissionDenied for manager, without ever rendering the form (used to 403 only on submit)", () => {
+    mockRoles = ["manager"];
+    render(<AparNewPage />);
+    expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/employee id/i)).not.toBeInTheDocument();
+  });
+
+  it("shows PermissionDenied for a plain employee", () => {
+    mockRoles = ["employee"];
+    render(<AparNewPage />);
+    expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
+  });
+
+  it("renders the form for hr_officer", () => {
+    mockRoles = ["hr_officer"];
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AparNewPage />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByLabelText(/employee id/i)).toBeInTheDocument();
+  });
+
+  it("renders the form for hr_admin", () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <AparNewPage />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByLabelText(/employee id/i)).toBeInTheDocument();
   });
 });
