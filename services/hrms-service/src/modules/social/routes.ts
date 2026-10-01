@@ -5,9 +5,28 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { cache, queue } from "../../shared/infra.js";
 import { sqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { presignedGetUrl } from "@civitasone/storage";
+import { writeAuditLog } from "../../shared/audit.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
+// GAP-HR-EXPENSES-02/03/04: who may approve/reject an expense claim, see its
+// pending approvals queue, or fetch another employee's receipt. Matches the
+// already-shipped PATCH .../approve route's role list exactly (this constant
+// didn't exist before -- that route inlined the same four roles; extracted
+// here so approve/reject/pending-scope/receipt can't drift from each other).
+//
+// NOTE (flagged for human review, not fixed here -- out of scope for this
+// gap cluster): unlike claims.hrms_travel_requests' approve/reject routes
+// just above (GAP-HR-TRAVEL-01), which restrict a non-HR "manager" to their
+// own direct reports via employee.hrms_employees.manager_id, expense-claim
+// approve/reject only checks self-approval (SoD), not reporting-line. A
+// "manager" role holder can decide ANY employee's expense claim, not just
+// their own reports. This gap predates this change (the existing approve
+// route already had this shape) and reproducing GAP-HR-TRAVEL-01's fix here
+// was judged out of scope for the 5 gap items this change covers -- see the
+// PR description.
+const EXPENSE_DECIDE_ROLES = ["manager", "hr_admin", "finance_officer", "super_admin"];
 
 /**
  * Social Feed Module — peer recognition (kudos), birthdays, new joinees,
@@ -104,6 +123,24 @@ const expenseClaimSchema = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   receiptKey: z.string().optional(),
   travelRequestId: z.string().uuid().optional(),
+});
+
+// GAP-HR-EXPENSES-02: unlike travel-requests' reject (reason optional), an
+// expense claim's reject requires one -- this is money leaving "Pending"
+// with no further workflow step, so the reason is the only record of why.
+const expenseRejectSchema = z.object({
+  reason: z.string().trim().min(3, "Reason must be at least 3 characters").max(500),
+});
+
+const expenseListQuerySchema = z.object({
+  // GAP-HR-EXPENSES-02/03: "approvals" lists OTHER employees' pending claims
+  // for an approver to act on (GET /v1/hrms/expenses otherwise only ever
+  // returns the caller's own claims -- see GAP-HR-EXPENSES-03). Named
+  // "approvals" rather than travel-requests' "team" (GAP-HR-TRAVEL-01)
+  // because expense approval is NOT restricted to an approver's own direct
+  // reports (see EXPENSE_DECIDE_ROLES' doc comment) -- "team" would overstate
+  // the actual scope.
+  scope: z.enum(["approvals"]).optional(),
 });
 
 // ─── Routes ─────────────────────────────────────────────────────────────────
@@ -801,9 +838,50 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     return reply.code(202).send({ id, status: "pending" });
   });
 
-  /** GET /v1/hrms/expenses — list my expense claims */
+  /**
+   * GET /v1/hrms/expenses — list my expense claims, or (?scope=approvals)
+   * other employees' pending claims for an approver to decide.
+   *
+   * GAP-HR-EXPENSES-02/03: previously this route ONLY ever filtered
+   * employee_id = actorId with no role branch at all -- every role,
+   * including hr_admin/manager, could only ever see their own claims, with
+   * no way for an approver to even reach a pending claim from the API, let
+   * alone the UI. ?scope=approvals below is additive: the default (no
+   * scope, or any other value) behavior is completely unchanged.
+   */
   app.get("/v1/hrms/expenses", async (req, reply) => {
     const ctx = resolveContext(req);
+    const q = expenseListQuerySchema.parse(req.query);
+
+    if (q.scope === "approvals") {
+      requireRole(ctx, EXPENSE_DECIDE_ROLES);
+      const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+        `SELECT id, employee_id, category, amount, description, expense_date AS date, receipt_key AS "receiptKey", status, created_at
+         FROM claims.hrms_expense_claims
+         WHERE tenant_id = $1 AND status = 'pending' AND employee_id != $2
+         ORDER BY created_at ASC`,
+        [ctx.tenantId, ctx.actorId],
+      ));
+      // Resolve requester display names the same way claims.hrms_travel_requests'
+      // own ?scope=team branch above does (this file has no Drizzle schema
+      // of its own -- see this module's header comment -- so this mirrors
+      // that same lookup's raw, cross-schema `pool.query` shape).
+      const employeeIds = [...new Set(rows.rows.map((r: { employee_id: string }) => r.employee_id))];
+      const nameByActorId = new Map<string, string>();
+      if (employeeIds.length > 0) {
+        const empRows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+          `SELECT user_ref, full_name FROM employee.hrms_employees WHERE tenant_id = $1 AND user_ref = ANY($2::text[])`,
+          [ctx.tenantId, employeeIds],
+        ));
+        for (const r of empRows.rows as Array<{ user_ref: string; full_name: string }>) {
+          nameByActorId.set(r.user_ref, r.full_name);
+        }
+      }
+      return reply.send({
+        data: rows.rows.map((r: { employee_id: string }) => ({ ...r, employeeName: nameByActorId.get(r.employee_id) })),
+      });
+    }
+
     const rows = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `SELECT id, category, amount, description, expense_date AS date, receipt_key AS "receiptKey", status, created_at
        FROM claims.hrms_expense_claims
@@ -817,7 +895,7 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/expenses/:id/approve — approve expense claim */
   app.patch("/v1/hrms/expenses/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ["manager", "hr_admin", "finance_officer", "super_admin"]);
+    requireRole(ctx, EXPENSE_DECIDE_ROLES);
     const { id } = req.params as { id: string };
     const now = new Date().toISOString();
 
@@ -845,6 +923,101 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     });
 
     return reply.send({ id, status: "approved" });
+  });
+
+  /**
+   * PATCH /v1/hrms/expenses/:id/reject — reject expense claim.
+   *
+   * GAP-HR-EXPENSES-02: no reject endpoint existed at all for an expense
+   * claim (unlike travel-requests, which has had one since this same
+   * module's original cut) -- the "Rejected" stat tile on the web page could
+   * therefore never be non-zero. A reason is mandatory here (unlike
+   * travel-requests' optional one): this is money leaving "Pending" with no
+   * further workflow step, so the reason is the only record of why.
+   */
+  app.patch("/v1/hrms/expenses/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, EXPENSE_DECIDE_ROLES);
+    const { id } = req.params as { id: string };
+    const body = expenseRejectSchema.parse(req.body);
+    const now = new Date().toISOString();
+
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      // SoD: verify approver is not the submitter — same check, and the same
+      // SELF_APPROVAL code, as approve above (travel-requests' own reject
+      // handler reuses its approve's code the same way).
+      const check = await pool.query(
+        `SELECT employee_id FROM claims.hrms_expense_claims WHERE id = $1 AND tenant_id = $2`,
+        [id, ctx.tenantId],
+      );
+      if (check.rows[0]?.employee_id === ctx.actorId) {
+        throw new HttpError(403, "SELF_APPROVAL", "Cannot reject your own expense claim");
+      }
+
+      const result = await pool.query(
+        `UPDATE claims.hrms_expense_claims SET status = 'rejected', rejection_reason = $1, approved_by = $2, approved_at = $3, updated_at = $3
+         WHERE id = $4 AND tenant_id = $5 AND status = 'pending' RETURNING id`,
+        [body.reason, ctx.actorId, now, id, ctx.tenantId],
+      );
+      if (result.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Expense claim not found or already processed");
+    });
+
+    return reply.send({ id, status: "rejected" });
+  });
+
+  /**
+   * GET /v1/hrms/expenses/:id/receipt — short-lived presigned download URL
+   * for a claim's receipt.
+   *
+   * GAP-HR-EXPENSES-04: receiptKey was already returned by the list route
+   * but never shown anywhere, and no route existed to turn it into something
+   * downloadable (it's an object-storage key, not a URL). Receipts may carry
+   * PII, so this returns a short-lived SigV4 link (@civitasone/storage,
+   * same presign helper used by services/hrms-service/src/modules/employee/
+   * commands.ts for the employee-document upload side of this same pattern)
+   * rather than ever exposing a permanent/public one, and is restricted to
+   * the claim's own owner or an approver role.
+   */
+  app.get("/v1/hrms/expenses/:id/receipt", async (req, reply) => {
+    const ctx = resolveContext(req);
+    const { id } = req.params as { id: string };
+
+    const claim = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
+      `SELECT employee_id, receipt_key FROM claims.hrms_expense_claims WHERE id = $1 AND tenant_id = $2`,
+      [id, ctx.tenantId],
+    ));
+    const row = claim.rows[0] as { employee_id: string; receipt_key: string | null } | undefined;
+    if (!row) throw new HttpError(404, "NOT_FOUND", "Expense claim not found");
+
+    const isOwner = row.employee_id === ctx.actorId;
+    const isApprover = EXPENSE_DECIDE_ROLES.some((r) => ctx.roles.includes(r));
+    if (!isOwner && !isApprover) {
+      throw new HttpError(403, "FORBIDDEN", "You may only view a receipt you own or are authorized to approve");
+    }
+    if (!row.receipt_key) throw new HttpError(404, "NO_RECEIPT", "This claim has no receipt on file");
+
+    const url = await presignedGetUrl({ key: row.receipt_key, expiresIn: 300 });
+
+    // GAP-HR-EXPENSES-04 (DPDP): data-access audit event on every fetch of a
+    // possibly-PII-bearing receipt link. This is a GET, so the fleet-wide
+    // audit `onResponse` hook (app.ts) never fires for it (it explicitly
+    // skips GET/HEAD/OPTIONS) -- logged explicitly here instead, the same
+    // way apar/routes.ts's own appraisal-detail GET does for the same reason.
+    // writeAuditLog is fire-and-forget and never throws (shared/audit.ts): a
+    // logging failure must never turn a successful read into a 500.
+    await writeAuditLog({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorType: null,
+      actorRoles: ctx.roles,
+      method: req.method,
+      path: req.url,
+      statusCode: 200,
+      requestId: (req.headers["x-correlation-id"] as string) ?? req.id,
+      ipAddr: req.ip,
+    });
+
+    return reply.send({ url, expiresIn: 300 });
   });
 
   // ─── PUSH NOTIFICATION DEVICE REGISTRATION ──────────────────────────────

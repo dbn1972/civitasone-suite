@@ -9,6 +9,8 @@ export type ApiExpense = {
   receiptKey?: string;
   status: string;
   created_at: string;
+  /** GAP-HR-EXPENSES-02: present only on an approvals-scope row (GET ?scope=approvals). */
+  employeeName?: string;
 };
 
 export type Row = {
@@ -18,6 +20,10 @@ export type Row = {
   description: string;
   date: string | null;
   status: string;
+  /** GAP-HR-EXPENSES-04: drives the Receipt column's link vs. "No receipt" state. */
+  hasReceipt: boolean;
+  /** GAP-HR-EXPENSES-02: only set on an approvals-scope row; absent (not just empty) on "my claims" rows. */
+  employee?: string;
 } & Record<string, unknown>;
 
 /**
@@ -52,5 +58,7 @@ export function mapExpenses(rows: ApiExpense[]): Row[] {
     description: e.description ?? "—",
     date: e.date ?? e.created_at ?? null,
     status: e.status,
+    hasReceipt: Boolean(e.receiptKey),
+    ...(e.employeeName ? { employee: e.employeeName } : {}),
   }));
 }

@@ -51,3 +51,28 @@ describe("mapExpenses — GAP-HR-EXPENSES-05 category/date display", () => {
     expect(row.description).toBe("—");
   });
 });
+
+describe("mapExpenses — GAP-HR-EXPENSES-04 receipt presence", () => {
+  it("hasReceipt is true when the API row carries a receiptKey", () => {
+    const [row] = mapExpenses([apiExpense({ receiptKey: "tenant/expenses/receipt.pdf" })]);
+    expect(row.hasReceipt).toBe(true);
+  });
+
+  it("hasReceipt is false when receiptKey is absent", () => {
+    const [row] = mapExpenses([apiExpense({})]);
+    expect(row.hasReceipt).toBe(false);
+  });
+});
+
+describe("mapExpenses — GAP-HR-EXPENSES-02 approvals-scope employee name", () => {
+  it("carries employeeName through as 'employee' on an approvals-scope row", () => {
+    const [row] = mapExpenses([apiExpense({ employeeName: "Priya Sharma" })]);
+    expect(row.employee).toBe("Priya Sharma");
+  });
+
+  it("omits 'employee' entirely (not an empty string) on a 'my claims' row with no employeeName", () => {
+    const [row] = mapExpenses([apiExpense({})]);
+    expect(row.employee).toBeUndefined();
+    expect("employee" in row).toBe(false);
+  });
+});
