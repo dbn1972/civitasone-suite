@@ -43,3 +43,65 @@ describe("POST /v1/locations/cadastral/parcels — auth", () => {
     expect(res.statusCode).toBe(403);
   });
 });
+
+// ═══ GAP-HR-LOCATIONS-06 — GET /v1/locations read-role widening ═══
+//
+// apps/web's /hr layout (hr/layout.tsx HR_ROLES) admits hr_officer, manager
+// and employee to /hr/locations, which fetches this route unconditionally;
+// before this gap's fix, only LOCATION_ROLES (location_user/location_admin/
+// super_admin/admin/hr_admin) could read it, so those three roles got a
+// 403 the web page rendered as a generic "couldn't load" error. Mutation
+// stays on the original, narrower role list -- only the read path widened.
+describe("GET /v1/locations — read-role widening (GAP-HR-LOCATIONS-06)", () => {
+  it("200 for hr_officer (previously 403)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET", url: "/v1/locations",
+      headers: { authorization: `Bearer ${token(["hr_officer"])}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("200 for manager (previously 403)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET", url: "/v1/locations",
+      headers: { authorization: `Bearer ${token(["manager"])}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("200 for employee (previously 403)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET", url: "/v1/locations",
+      headers: { authorization: `Bearer ${token(["employee"])}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("POST /v1/locations still 403 for hr_officer -- read widening must not widen write", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/locations",
+      headers: { authorization: `Bearer ${token(["hr_officer"])}` },
+      payload: { name: "Should Be Rejected" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(403);
+  });
+
+  it("POST /v1/locations still 202 for location_user -- original write role untouched", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST", url: "/v1/locations",
+      headers: { authorization: `Bearer ${token(["location_user"])}` },
+      payload: { name: "Test Office" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+  });
+});
