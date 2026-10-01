@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, desc, sql } from "drizzle-orm";
+import { eq, and, gte, lte, desc, sql, inArray } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { runWithTenant } from "@civitasone/db";
 import { db } from "../../shared/db.js";
@@ -79,13 +79,43 @@ export async function findLatestForTenantTx(tx: Writer, tenantId: string): Promi
   return rows[0] ? toView(rows[0]) : null;
 }
 
-export async function listEvents(tenantId: string, from: Date, to: Date, type?: string, limit = 50, offset = 0): Promise<AuditEventView[]> {
+/**
+ * Optional narrowing filters for listEvents (GAP-HR-AUDIT-LOG-07/08). All
+ * three match fields the producers already write: `payload.service` and
+ * `payload.resourceType` (every hrms/payroll consumer's audit payload carries
+ * both) and the `actor` jsonb ({actorId, email?, name?}).
+ */
+export interface ListEventsFilters {
+  /** payload->>'service' IN (...) -- e.g. ["hrms", "payroll"] for the HR audit log. */
+  services?: string[];
+  /** payload->>'resourceType' = ... */
+  resourceType?: string;
+  /** Exact actorId, or a case-insensitive substring of the actor's email/name. */
+  actor?: string;
+}
+
+/** Escapes LIKE wildcards so user input is matched literally. */
+function escapeLike(v: string): string {
+  return v.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+export async function listEvents(tenantId: string, from: Date, to: Date, type?: string, limit = 50, offset = 0, filters: ListEventsFilters = {}): Promise<AuditEventView[]> {
   const conditions = [
     eq(auditEvents.tenantId, tenantId),
     gte(auditEvents.occurredAt, from),
     lte(auditEvents.occurredAt, to),
   ];
   if (type) conditions.push(eq(auditEvents.type, type));
+  if (filters.services && filters.services.length > 0) {
+    conditions.push(inArray(sql<string>`${auditEvents.payload}->>'service'`, filters.services));
+  }
+  if (filters.resourceType) {
+    conditions.push(sql`${auditEvents.payload}->>'resourceType' = ${filters.resourceType}`);
+  }
+  if (filters.actor) {
+    const like = `%${escapeLike(filters.actor)}%`;
+    conditions.push(sql`(${auditEvents.actor}->>'actorId' = ${filters.actor} OR ${auditEvents.actor}->>'email' ILIKE ${like} OR ${auditEvents.actor}->>'name' ILIKE ${like})`);
+  }
   const rows = await runWithTenant(tenantId, () => db.transaction((tx) => tx.select().from(auditEvents)
     .where(and(...conditions))
     .orderBy(desc(auditEvents.occurredAt))

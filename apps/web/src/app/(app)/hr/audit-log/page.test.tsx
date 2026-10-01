@@ -15,7 +15,7 @@ vi.mock("@/app/_data/apiClient", () => ({
 
 import HrAuditLogPage from "./page";
 
-async function renderPage(searchParams?: { page?: string; from?: string; to?: string }) {
+async function renderPage(searchParams?: { page?: string; from?: string; to?: string; resourceType?: string; actor?: string }) {
   return render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
       {await HrAuditLogPage({ searchParams })}
@@ -125,5 +125,48 @@ describe("HrAuditLogPage — unknown resource label (GAP-HR-AUDIT-LOG-05)", () =
     fetchJsonMock.mockResolvedValue({ data: [{ ...EVENT, resource: "unknown" }], source: "api" });
     await renderPage();
     expect(screen.getByText("Unknown resource")).toBeInTheDocument();
+  });
+});
+
+/**
+ * GAP-HR-AUDIT-LOG-05/07/08: HR-scoped query, server-side resource type /
+ * actor filters, "Type · id" resource text, and a link to the entity.
+ */
+describe("HrAuditLogPage — filters, scope and resource detail (GAP-HR-AUDIT-LOG-05/07/08)", () => {
+  beforeEach(() => { mockRoles = ["audit_officer"]; fetchJsonMock.mockReset(); fetchJsonMock.mockResolvedValue({ data: [EVENT], source: "api" }); });
+
+  it("always scopes the query to the HR services (08)", async () => {
+    await renderPage();
+    const [url] = fetchJsonMock.mock.calls[0] as [string];
+    expect(new URL(url, "http://x").searchParams.get("service")).toBe("hrms,payroll");
+  });
+
+  it("forwards a known resourceType and an actor into the request (07)", async () => {
+    await renderPage({ resourceType: "payroll_run", actor: "  asha@gov.in " });
+    const [url] = fetchJsonMock.mock.calls[0] as [string];
+    const sp = new URL(url, "http://x").searchParams;
+    expect(sp.get("resourceType")).toBe("payroll_run");
+    expect(sp.get("actor")).toBe("asha@gov.in");
+  });
+
+  it("ignores an unknown resourceType instead of forwarding it (07)", async () => {
+    await renderPage({ resourceType: "not_a_type" });
+    const [url] = fetchJsonMock.mock.calls[0] as [string];
+    expect(new URL(url, "http://x").searchParams.has("resourceType")).toBe(false);
+  });
+
+  it("shows 'Type · id' and links an employee event to the employee page (05)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [{ ...EVENT, resourceType: "employee", resourceId: "11111111-2222-3333-4444-555555555555" }], source: "api" });
+    await renderPage();
+    expect(screen.getByText("Employee · 11111111-2222-3333-4444-555555555555")).toBeInTheDocument();
+    const link = document.querySelector('a[href="/hr/employees/11111111-2222-3333-4444-555555555555"]');
+    expect(link).not.toBeNull();
+  });
+
+  it("the loader's mapper keeps resourceType/resourceId from the raw audit-service row (05)", async () => {
+    await renderPage();
+    const opts = fetchJsonMock.mock.calls[0]![2] as { mapResponse: (p: unknown) => Array<{ resourceType?: string; resourceId?: string }> | null };
+    const mapped = opts.mapResponse([{ actor: { email: "a@gov.in", actorId: "u1" }, type: "hrms.employee.update", target: "emp-9", payload: { resourceType: "employee", service: "hrms" }, severity: "info", occurredAt: "2026-09-29T10:15:00.000Z" }]);
+    expect(mapped?.[0]).toMatchObject({ resourceType: "employee", resourceId: "emp-9" });
   });
 });
