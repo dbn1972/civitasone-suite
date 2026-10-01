@@ -4,6 +4,7 @@ import Link from "next/link";
 import { DataTable } from "../../../_components/ds";
 import { useTranslations } from "next-intl";
 import { ClaimActions } from "./ClaimActions";
+import { humanizeStatus } from "@/lib/formatters";
 
 export type MedicalClaimRow = {
   id: string;
@@ -45,7 +46,7 @@ export function MedicalClaimsTable({ rows, canApprove }: { rows: MedicalClaimRow
     {
       key: "claimType",
       label: t("colClaimType"),
-      render: (r) => <span>{(CLAIM_TYPE_KEYS as readonly string[]).includes(r.claimType) ? t(`claimType.${r.claimType}`) : r.claimType}</span>,
+      render: (r) => <span>{(CLAIM_TYPE_KEYS as readonly string[]).includes(r.claimType) ? t(`claimType.${r.claimType}`) : humanizeStatus(r.claimType)}</span>,
     },
     { key: "hospital", label: t("colHospital") },
     { key: "amount", label: t("colClaimedAmount"), cellType: "amount" },

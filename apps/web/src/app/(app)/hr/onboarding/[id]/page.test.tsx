@@ -203,10 +203,10 @@ describe("OnboardingDetailPage", () => {
     render(await OnboardingDetailPage({ params: { id: "emp-1" } }));
 
     expect(screen.getByText("Government ID Proof")).toBeInTheDocument();
-    expect(screen.getAllByText("UPLOADED")).toHaveLength(1);
-    expect(screen.getAllByText("PENDING")).toHaveLength(5);
-    expect(screen.queryByText("VERIFIED")).not.toBeInTheDocument();
-    expect(screen.queryByText("REJECTED")).not.toBeInTheDocument();
+    expect(screen.getAllByText("Uploaded")).toHaveLength(1);
+    expect(screen.getAllByText("Pending")).toHaveLength(5);
+    expect(screen.queryByText("Verified")).not.toBeInTheDocument();
+    expect(screen.queryByText("Rejected")).not.toBeInTheDocument();
   });
 
   it("renders employee 2's own real document checklist, independent of employee 1's state (one verified, one rejected, four pending)", async () => {
@@ -217,11 +217,11 @@ describe("OnboardingDetailPage", () => {
     });
     render(await OnboardingDetailPage({ params: { id: "emp-2" } }));
 
-    expect(screen.getAllByText("VERIFIED")).toHaveLength(1);
-    expect(screen.getAllByText("REJECTED")).toHaveLength(1);
-    expect(screen.getAllByText("PENDING")).toHaveLength(4);
+    expect(screen.getAllByText("Verified")).toHaveLength(1);
+    expect(screen.getAllByText("Rejected")).toHaveLength(1);
+    expect(screen.getAllByText("Pending")).toHaveLength(4);
     // Employee 1's uploaded government-ID state must not leak into employee 2.
-    expect(screen.queryByText("UPLOADED")).not.toBeInTheDocument();
+    expect(screen.queryByText("Uploaded")).not.toBeInTheDocument();
     // Confirms this test truly used employee 2's own identity, not employee 1's.
     expect(screen.getByText(/Onboarding — Rahul Verma/)).toBeInTheDocument();
   });

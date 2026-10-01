@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "./Button";
+import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
 import { formatMoney, formatRupees, formatIndianDate } from "@/lib/formatters";
@@ -138,6 +139,15 @@ interface DataTableProps<T extends Record<string, unknown>> {
   exportable?: boolean;
   /** Filename for CSV export (without extension). */
   exportFilename?: string;
+  /**
+   * GAP-HR-LOANS-02: called with the exported row count and the active text
+   * filter right before the CSV download starts, so a caller can record the
+   * export (e.g. an audit event). Fire-and-forget: a failing callback must
+   * never block the user's own download.
+   */
+  onExport?: (info: { rowCount: number; filter: string }) => void;
+  /** GAP-HR-LOANS-02: when set, the CSV button opens a confirm dialog first (e.g. a sensitive-data notice). */
+  exportConfirm?: { title: string; description: string; confirmLabel?: string };
   /** Screen-reader-only <caption> describing the table's purpose/scope. */
   caption?: string;
   /**
@@ -286,6 +296,8 @@ export function DataTable<T extends Record<string, unknown>>({
   emptyAction,
   exportable = false,
   exportFilename = "export",
+  onExport,
+  exportConfirm,
   caption,
   mobileStack = false,
   rowKey,
@@ -306,6 +318,7 @@ export function DataTable<T extends Record<string, unknown>>({
   const [sortKey, setSortKey] = useState<(keyof T & string) | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filter, setFilter] = useState("");
+  const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
   const [page, setPage] = useState(0);
 
   const resolveHref = (row: T): string | undefined => {
@@ -376,6 +389,11 @@ export function DataTable<T extends Record<string, unknown>>({
   }
 
   function downloadCsv() {
+    try {
+      onExport?.({ rowCount: sorted.length, filter });
+    } catch {
+      /* never block the download on an audit-callback failure */
+    }
     const header = columns.map((c) => c.label).join(",");
     const csvRows = sorted.map((row) =>
       columns.map((col) => {
@@ -413,9 +431,19 @@ export function DataTable<T extends Record<string, unknown>>({
             </div>
           )}
           {exportable && sorted.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={downloadCsv} style={{ whiteSpace: "nowrap" }}>
+            <Button variant="ghost" size="sm" onClick={exportConfirm ? () => setExportConfirmOpen(true) : downloadCsv} style={{ whiteSpace: "nowrap" }}>
               ⬇ CSV
             </Button>
+          )}
+          {exportConfirm && (
+            <ConfirmDialog
+              open={exportConfirmOpen}
+              title={exportConfirm.title}
+              description={exportConfirm.description}
+              confirmLabel={exportConfirm.confirmLabel}
+              onConfirm={() => { setExportConfirmOpen(false); downloadCsv(); }}
+              onCancel={() => setExportConfirmOpen(false)}
+            />
           )}
         </div>
       )}

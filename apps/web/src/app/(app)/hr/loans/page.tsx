@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, LoadErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../_components/ds";
+import { LoansTable } from "./LoansTable";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
@@ -138,7 +139,7 @@ export default async function LoansPage() {
             <LoadErrorState result={rawResult} area="loans" backHref="/hr" requiredRoles={LOANS_ROLES} />
           </div>
         ) : (
-          <DataTable<Row> columns={columns} rows={items} sortable filterable exportable={canExport}
+          <LoansTable<Row> columns={columns} rows={items} sortable filterable exportable={canExport}
           filterPlaceholder={t("filterPlaceholder")}
             pageSize={15}
             emptyIcon="💳"

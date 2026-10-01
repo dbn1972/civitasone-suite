@@ -2,7 +2,7 @@ import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { and, eq } from "drizzle-orm";
 import { db } from "../../shared/db.js";
-import { markProcessed } from "../../shared/outbox.js";
+import { markProcessed, enqueue } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { pgSchema, uuid, varchar, integer, bigint, timestamp, text, date } from "drizzle-orm/pg-core";
 
@@ -49,7 +49,27 @@ const hrmsSalaryAdvances = employeeSchema.table("hrms_salary_advances", {
   version: integer("version").notNull().default(1),
 });
 
+const AUDIT = "audit.event.record";
+
 export function registerLoanConsumers(q: Queue): void {
+  // GAP-HR-LOANS-02: audit-on-export. Mirrors medical/consumer.ts's
+  // medicalClaimsListRead subscriber (routes may not write to Postgres).
+  q.subscribe(COMMANDS.loanExportRecorded, async (msg) => {
+    const p = msg.payload as { rowCount?: number; filter?: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: "export", resourceType: "loan", resourceId: "tenant_list",
+          outcome: "success", rowCount: p.rowCount ?? 0, ...(p.filter ? { filter: p.filter } : {}),
+        },
+      });
+    });
+    log.info({ messageId: msg.messageId }, "loans export audit recorded");
+  });
+
   q.subscribe(COMMANDS.loanCreate, async (msg) => {
     const p = msg.payload as Record<string, any>;
     await db.transaction(async (tx) => {

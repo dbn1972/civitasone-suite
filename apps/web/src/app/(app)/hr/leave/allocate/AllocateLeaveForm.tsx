@@ -62,6 +62,8 @@ export function AllocateLeaveForm() {
   // shown so a clerk isn't allocating blind — plus the selected leave
   // type's policy maxDays, for a soft (non-blocking) over-cap warning.
   const [context, setContext] = useState<LeaveContext | null>(null);
+  // GAP-HR-LEAVE-ALLOCATE-01: the confirm dialog names the chosen employee.
+  const [employeeLabel, setEmployeeLabel] = useState<string | null>(null);
   const [contextLoading, setContextLoading] = useState(false);
 
   const empId = useId();
@@ -102,6 +104,15 @@ export function AllocateLeaveForm() {
       })
       .finally(() => setContextLoading(false));
     return () => controller.abort();
+  }, [employeeId]);
+
+  useEffect(() => {
+    if (!employeeId) { setEmployeeLabel(null); return; }
+    let cancelled = false;
+    resolveEmployees([employeeId])
+      .then((opts) => { if (!cancelled) setEmployeeLabel(opts[0]?.label ?? null); })
+      .catch(() => { if (!cancelled) setEmployeeLabel(null); });
+    return () => { cancelled = true; };
   }, [employeeId]);
 
   function clearErr(field: string) {
@@ -159,6 +170,9 @@ export function AllocateLeaveForm() {
   const selectedLeaveType = leaveTypes.find((lt) => lt.id === leaveTypeId);
   const selectedTypeMaxDays = context?.leaveTypes.find((lt) => lt.id === leaveTypeId)?.maxDays ?? 0;
   const daysNum = parseInt(totalDays, 10);
+  // GAP-HR-LEAVE-ALLOCATE-03: soft warning when this employee already has an
+  // allocation of the same type and FY (the server rejects duplicates with 409).
+  const alreadyAllocated = !!leaveTypeId && !!context?.allocations.some((a) => a.leaveTypeId === leaveTypeId && a.fy === fy);
   const overCap = selectedTypeMaxDays > 0 && !isNaN(daysNum) && daysNum > selectedTypeMaxDays;
 
   return (
@@ -288,6 +302,11 @@ export function AllocateLeaveForm() {
             {invalid.has("days") && (
               <p id={`${daysId}-err`} role="alert" style={fieldErrStyle}>{t("daysRangeError")}</p>
             )}
+            {!invalid.has("days") && alreadyAllocated && (
+              <p role="status" data-testid="already-allocated-warning" style={{ color: "var(--warn-d, #92620a)", fontSize: 12, margin: "3px 0 0" }}>
+                {t("alreadyAllocatedWarning", { typeName: selectedLeaveType?.name ?? "", fy })}
+              </p>
+            )}
             {!invalid.has("days") && overCap && (
               <p id={`${daysId}-cap-warn`} role="status" style={{ color: "var(--warn-d, #92620a)", fontSize: 12, margin: "3px 0 0" }}>
                 {t("overCapWarning", { maxDays: selectedTypeMaxDays, typeName: selectedLeaveType?.name ?? "" })}
@@ -316,6 +335,7 @@ export function AllocateLeaveForm() {
           days: totalDays,
           typeName: selectedLeaveType?.name ?? "",
           fy,
+          employee: employeeLabel ?? t("thisEmployee"),
         })}
         onConfirm={() => void submitAllocation()}
         onCancel={() => { if (status !== "submitting") { setConfirmOpen(false); setSubmitError(undefined); } }}

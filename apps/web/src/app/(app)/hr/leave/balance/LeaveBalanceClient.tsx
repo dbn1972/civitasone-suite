@@ -60,6 +60,7 @@ interface Props {
 
 export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmployeeId, noLinkedProfile, profileSource }: Props) {
   const t = useTranslations("leaveBalance");
+  const tc = useTranslations("common");
   const isAdminOrManager = roles.some((r) => ADMIN_OR_MANAGER_ROLES.includes(r));
   const canAllocate = roles.some((r) => HR_ROLES.includes(r));
 
@@ -114,7 +115,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
   if (!isAdminOrManager && noLinkedProfile) {
     return (
       <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel="Back to Leave" />
+        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel={tc("backToLeave")} />
         <Card title={t("entitlementCard")}>
           <EmptyState icon="🪪" title={t("noLinkedProfileTitle")} message={t("noLinkedProfileMessage")} />
         </Card>
@@ -124,7 +125,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
   if (!isAdminOrManager && profileSource === "error") {
     return (
       <div className="page-main wrap leave-balance-print" aria-labelledby="page-heading">
-        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel="Back to Leave" />
+        <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel={tc("backToLeave")} />
         <Card title={t("entitlementCard")}>
           <ErrorState error={toHumanError("load", { area: "your profile" })} onRetry={() => setReloadTick((n) => n + 1)} />
         </Card>
@@ -137,7 +138,7 @@ export default function LeaveBalanceClient({ roles, myEmployeeId, initialEmploye
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/leave" backLabel="Back to Leave"
+        back="/hr/leave" backLabel={tc("backToLeave")}
       />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8, flexWrap: "wrap", gap: 8 }} className="no-print">
         <DataSourceBadge source={profileSource} />

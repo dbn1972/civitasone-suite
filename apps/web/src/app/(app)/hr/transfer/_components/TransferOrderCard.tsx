@@ -7,11 +7,12 @@
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { StatusPill, ConfirmDialog, Button } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useToast } from "@/app/_components/ds/Toast";
 import { useFormError } from "@/lib/useFormError";
-import { transferStatusLabel, isEofficeStatus, DIRECT_PIPELINE, directPipelineIndex } from "@/lib/hr/transferStatus";
+import { isEofficeStatus, DIRECT_PIPELINE, directPipelineIndex } from "@/lib/hr/transferStatus";
 
 export type TransferRow = {
   id: string;
@@ -57,19 +58,22 @@ function todayIST(): string {
 }
 
 export function TransferOrderCard({ transfer, onAction }: Props) {
+  // GAP-HR-TRANSFER-10: all copy comes from the transferUi namespace.
+  const tr = useTranslations("transferUi");
+  const statusText = (s: string) => (tr.has(`status.${s}`) ? tr(`status.${s}`) : s);
   const { toast } = useToast();
   const router = useRouter();
   const [acting, setActing] = useState(false);
   const [pending, setPending] = useState<PendingStage | null>(null);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const formError = useFormError("transfer order");
-  const statusLabel = transferStatusLabel(transfer.status);
+  const statusLabel = statusText(transfer.status);
   const currentIdx = directPipelineIndex(transfer.status);
   const today = todayIST();
   const isClosed = ["joined", "completed", "cancelled"].includes(transfer.status);
   const isCancelled = transfer.status === "cancelled";
   const isEoffice = isEofficeStatus(transfer.status);
-  const empLabel = transfer.employee ?? transfer.employeeId ?? "Unknown";
+  const empLabel = transfer.employee ?? transfer.employeeId ?? tr("unknown");
 
   const postAction = async (path: string, body: Record<string, string>) => {
     setActing(true);
@@ -83,7 +87,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
         const resolved = await formError.fromResponse(res, "save");
         throw new Error(resolved.message);
       }
-      toast.success("Transfer updated. Change will reflect shortly.");
+      toast.success(tr("updatedToast"));
       router.refresh();
       setPending(null);
       onAction?.();
@@ -98,7 +102,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
   const toLabel   = transfer.toOffice   ?? transfer.toDeptId   ?? "—";
 
   return (
-    <div className="card" style={{ marginBottom: 0 }} aria-label={`Transfer order for ${empLabel}`}>
+    <div className="card" style={{ marginBottom: 0 }} aria-label={tr("cardAria", { name: empLabel })}>
       <div className="card-h" style={{ alignItems: "flex-start", gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>{empLabel}</h3>
@@ -113,31 +117,31 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
         <div className="fields" style={{ marginTop: 8 }}>
           {transfer.orderNo != null && (
             <div className="fld">
-              <span className="l">Order No.</span>
+              <span className="l">{tr("orderNo")}</span>
               <span className="v" style={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>{transfer.orderNo}</span>
             </div>
           )}
           {transfer.orderDate && (
             <div className="fld">
-              <span className="l">Order Date</span>
+              <span className="l">{tr("orderDate")}</span>
               <span className="v">{formatIndianDate(transfer.orderDate)}</span>
             </div>
           )}
           {(transfer.effectiveDate ?? transfer.transferDate) && (
             <div className="fld">
-              <span className="l">Effective / Joining Date</span>
+              <span className="l">{tr("effectiveJoining")}</span>
               <span className="v">{formatIndianDate((transfer.effectiveDate ?? transfer.transferDate) as string)}</span>
             </div>
           )}
           {transfer.relievedDate && (
             <div className="fld">
-              <span className="l">Relieved On</span>
+              <span className="l">{tr("relievedOn")}</span>
               <span className="v">{formatIndianDate(transfer.relievedDate)}</span>
             </div>
           )}
           {transfer.joinedDate && (
             <div className="fld">
-              <span className="l">Joined On</span>
+              <span className="l">{tr("joinedOn")}</span>
               <span className="v">{formatIndianDate(transfer.joinedDate)}</span>
             </div>
           )}
@@ -155,20 +159,19 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
             at all -- shown as plain status text instead. */}
         {isCancelled ? (
           <p style={{ margin: "16px 0 6px", fontSize: "0.8125rem", color: "var(--ink2)" }}>
-            This transfer order was cancelled before completing the pipeline below.
+            {tr("cancelledNote")}
           </p>
         ) : isEoffice ? (
           <p style={{ margin: "16px 0 6px", fontSize: "0.8125rem", color: "var(--ink2)" }}>
-            {transfer.status === "pending_approval"
-              ? "Awaiting eOffice decision."
-              : "Approved by eOffice — effective on the recorded date; the posting will be applied automatically."}
+            {transfer.status === "pending_approval" ? tr("awaitingEoffice") : tr("approvedEoffice")}
           </p>
         ) : (
         <ol
-          aria-label="Transfer status timeline"
+          aria-label={tr("timelineAria")}
           style={{ display: "flex", alignItems: "flex-start", margin: "16px 0 6px", overflowX: "auto", paddingBottom: 4, paddingInlineStart: 0, listStyle: "none" }}
         >
-          {DIRECT_PIPELINE.map(({ key, label }, i) => {
+          {DIRECT_PIPELINE.map(({ key }, i) => {
+            const label = statusText(key);
             const done   = i < currentIdx;
             const active = i === currentIdx;
             const bg  = done ? "var(--good, #16a34a)" : active ? "var(--info, #2563eb)" : "var(--line, #e2e8f0)";
@@ -203,7 +206,7 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                   }}>
                     {label}
                     <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
-                      {done ? " — completed" : active ? " — current" : " — upcoming"}
+                      {done ? tr("stepCompleted") : active ? tr("stepCurrent") : tr("stepUpcoming")}
                     </span>
                   </span>
                 </div>
@@ -233,11 +236,11 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                 onClick={() => setPending({
                   path: "issue-order",
                   body: { orderNo: `TO-${transfer.id.slice(0, 8).toUpperCase()}`, orderDate: today },
-                  label: "Issue Order",
-                  title: "Issue the transfer order?",
-                  description: `This issues a formal transfer order for ${empLabel} (${fromLabel} → ${toLabel}), dated ${today}. The order number cannot be un-issued once created.`,
+                  label: tr("issueOrder"),
+                  title: tr("issueTitle"),
+                  description: tr("issueDesc", { name: empLabel, from: fromLabel, to: toLabel, date: today }),
                 })}>
-                {acting ? "Processing…" : "Issue Order"}
+                {acting ? tr("processing") : tr("issueOrder")}
               </Button>
             )}
             {transfer.status === "ordered" && !transfer.relievedDate && (
@@ -245,11 +248,11 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                 onClick={() => setPending({
                   path: "relieve",
                   body: { relievedDate: today },
-                  label: "Mark Relieved",
-                  title: "Mark this employee relieved?",
-                  description: `This records ${empLabel} as relieved from ${fromLabel} effective ${today}, ending their tenure at the current post.`,
+                  label: tr("markRelieved"),
+                  title: tr("relieveTitle"),
+                  description: tr("relieveDesc", { name: empLabel, from: fromLabel, date: today }),
                 })}>
-                {acting ? "Processing…" : "Mark Relieved"}
+                {acting ? tr("processing") : tr("markRelieved")}
               </Button>
             )}
             {transfer.status === "relieved" && !transfer.joinedDate && (
@@ -257,11 +260,11 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
                 onClick={() => setPending({
                   path: "join",
                   body: { joinedDate: today },
-                  label: "Mark Joined",
-                  title: "Mark this employee joined?",
-                  description: `This records ${empLabel} as joined at ${toLabel} effective ${today} and completes the transfer.`,
+                  label: tr("markJoined"),
+                  title: tr("joinTitle"),
+                  description: tr("joinDesc", { name: empLabel, to: toLabel, date: today }),
                 })}>
-                {acting ? "Processing…" : "Mark Joined"}
+                {acting ? tr("processing") : tr("markJoined")}
               </Button>
             )}
           </div>
@@ -270,9 +273,9 @@ export function TransferOrderCard({ transfer, onAction }: Props) {
 
       <ConfirmDialog
         open={pending !== null}
-        title={pending?.title ?? "Confirm"}
+        title={pending?.title ?? tr("confirm")}
         description={pending?.description}
-        confirmLabel={pending?.label ?? "Confirm"}
+        confirmLabel={pending?.label ?? tr("confirm")}
         busy={acting}
         errorMessage={dialogError}
         onConfirm={() => pending && void postAction(pending.path, pending.body)}

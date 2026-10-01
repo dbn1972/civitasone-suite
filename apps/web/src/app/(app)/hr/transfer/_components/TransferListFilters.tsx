@@ -5,10 +5,10 @@
  * Renders TransferOrderCard grid for filtered results.
  */
 import { useMemo, useState, useCallback } from "react";
+import { useTranslations } from "next-intl";
 import type { TransferRow } from "./TransferOrderCard";
 import { TransferOrderCard } from "./TransferOrderCard";
 import { Button } from "@/app/_components/ds";
-import { TRANSFER_STATUS_LABEL, transferStatusLabel } from "@/lib/hr/transferStatus";
 
 interface Props {
   transfers: TransferRow[];
@@ -25,6 +25,9 @@ function csvCell(value: unknown): string {
 }
 
 export function TransferListFilters({ transfers }: Props) {
+  // GAP-HR-TRANSFER-10: all copy comes from the transferUi namespace.
+  const tr = useTranslations("transferUi");
+  const statusText = (s: string) => (tr.has(`status.${s}`) ? tr(`status.${s}`) : s);
   const [query, setQuery]           = useState("");
   const [deptFilter, setDeptFilter] = useState("");
   const [fromDate, setFromDate]     = useState("");
@@ -58,7 +61,7 @@ export function TransferListFilters({ transfers }: Props) {
   }, [transfers, query, deptFilter, fromDate, toDate, statusFilter]);
 
   const exportCsv = useCallback(() => {
-    const headers = ["Employee","From Office","To Office","Order No.","Order Date","Effective Date","Relieved Date","Joined Date","Status"];
+    const headers = [tr("csvEmployee"), tr("csvFromOffice"), tr("csvToOffice"), tr("csvOrderNo"), tr("csvOrderDate"), tr("csvEffectiveDate"), tr("csvRelievedDate"), tr("csvJoinedDate"), tr("csvStatus")];
     const rows = filtered.map((t) => [
       t.employee ?? t.employeeId ?? "",
       t.fromOffice ?? "",
@@ -68,7 +71,7 @@ export function TransferListFilters({ transfers }: Props) {
       t.effectiveDate ?? t.transferDate ?? "",
       t.relievedDate  ?? "",
       t.joinedDate    ?? "",
-      transferStatusLabel(t.status),
+      statusText(t.status),
     ]);
     const csv = [headers, ...rows].map((r) => r.map(csvCell).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
@@ -76,7 +79,8 @@ export function TransferListFilters({ transfers }: Props) {
     const a    = document.createElement("a");
     a.href = url; a.download = `transfers-${new Date().toISOString().split("T")[0]}.csv`;
     a.click(); URL.revokeObjectURL(url);
-  }, [filtered]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- tr/statusText are stable per render for a given locale
+  }, [filtered, tr]);
 
   // GAP-HR-TRANSFER-07: the status dropdown used to render the raw enum
   // value verbatim (e.g. "order_issued") while the cards showed a humanised
@@ -98,29 +102,29 @@ export function TransferListFilters({ transfers }: Props) {
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search employee, office or order…"
-          aria-label="Search transfers"
+          placeholder={tr("searchPlaceholder")}
+          aria-label={tr("searchAria")}
           style={{ flex: "1 1 200px", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: "0.875rem" }}
         />
         <input
           type="text"
           value={deptFilter}
           onChange={(e) => setDeptFilter(e.target.value)}
-          placeholder="Department…"
-          aria-label="Filter by department"
+          placeholder={tr("deptPlaceholder")}
+          aria-label={tr("deptAria")}
           style={{ flex: "0 0 160px", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: "0.875rem" }}
         />
         <select
           value={statusFilter}
           onChange={(e) => setStatus(e.target.value)}
-          aria-label="Filter by status"
+          aria-label={tr("statusAria")}
           style={{ flex: "0 0 160px", padding: "8px 12px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: "0.875rem" }}
         >
-          <option value="">All statuses</option>
-          {statuses.map((s) => <option key={s} value={s}>{TRANSFER_STATUS_LABEL[s] ?? transferStatusLabel(s)}</option>)}
+          <option value="">{tr("allStatuses")}</option>
+          {statuses.map((s) => <option key={s} value={s}>{statusText(s)}</option>)}
         </select>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <label htmlFor="transfer-filter-from-date" style={{ fontSize: "0.8125rem", color: "var(--ink2)", whiteSpace: "nowrap" }}>From date</label>
+          <label htmlFor="transfer-filter-from-date" style={{ fontSize: "0.8125rem", color: "var(--ink2)", whiteSpace: "nowrap" }}>{tr("fromDate")}</label>
           {/* GAP-HR-TRANSFER-11: aria-label duplicated (and overrode) this
               same-page visible <label> with slightly different wording
               ("From") -- redundant naming. The visible label now IS the
@@ -129,7 +133,7 @@ export function TransferListFilters({ transfers }: Props) {
             style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: "0.875rem" }} />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-          <label htmlFor="transfer-filter-to-date" style={{ fontSize: "0.8125rem", color: "var(--ink2)" }}>To date</label>
+          <label htmlFor="transfer-filter-to-date" style={{ fontSize: "0.8125rem", color: "var(--ink2)" }}>{tr("toDate")}</label>
           <input id="transfer-filter-to-date" type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
             style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, fontSize: "0.875rem" }} />
         </div>
@@ -137,23 +141,23 @@ export function TransferListFilters({ transfers }: Props) {
           variant="ghost"
           onClick={exportCsv}
           style={{ fontSize: 13, whiteSpace: "nowrap" }}
-          aria-label="Export filtered transfers to CSV"
+          aria-label={tr("exportAria")}
         >
-          ⬇ Export CSV
+          {tr("exportBtn")}
         </Button>
       </div>
 
       {/* Result count */}
       <p style={{ fontSize: "0.8125rem", color: "var(--ink3)", margin: "0 0 12px" }}>
-        Showing {filtered.length} of {transfers.length} transfers
+        {tr("showing", { shown: filtered.length, total: transfers.length })}
       </p>
 
       {/* Card grid */}
       {filtered.length === 0 ? (
         <div style={{ textAlign: "center", padding: "40px 20px", color: "var(--ink3)" }}>
           <div style={{ fontSize: 36, marginBottom: 10 }}>🔍</div>
-          <p style={{ margin: 0, fontWeight: 600 }}>No transfers match your filters</p>
-          <p style={{ margin: "6px 0 0", fontSize: "0.875rem" }}>Try clearing the search or adjusting the date range.</p>
+          <p style={{ margin: 0, fontWeight: 600 }}>{tr("noMatchTitle")}</p>
+          <p style={{ margin: "6px 0 0", fontSize: "0.875rem" }}>{tr("noMatchHint")}</p>
         </div>
       ) : (
         <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))" }}>

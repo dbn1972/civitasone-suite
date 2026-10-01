@@ -28,10 +28,11 @@ import { getTranslations } from "next-intl/server";
  */
 export default async function OutsourcedPage() {
   const t = await getTranslations("outsourced");
+  const tc = await getTranslations("common");
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel={tc("backToHr")} />
       <Card title={t("cardTitle")}>
         <EmptyState
           icon="🏢"

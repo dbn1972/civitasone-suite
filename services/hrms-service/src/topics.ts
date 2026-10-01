@@ -52,6 +52,9 @@ export const COMMANDS = {
   nominationComplete:       "hrms.nomination.complete",
   loanCreate:               "hrms.loan.create",
   loanEmiPaid:              "hrms.loan.emi_paid",
+  // GAP-HR-LOANS-02: audit-on-export for the HR loans CSV (same async shape as
+  // medicalClaimsListRead: route publishes, consumer writes the audit outbox).
+  loanExportRecorded:       "hrms.loan.export_recorded",
   salaryAdvanceCreate:      "hrms.salary_advance.create",
   salaryAdvanceApprove:     "hrms.salary_advance.approve",
   salaryAdvanceReject:      "hrms.salary_advance.reject",

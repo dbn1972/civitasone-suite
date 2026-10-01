@@ -10,6 +10,7 @@ export default async function ApplyLeavePage({
   searchParams?: { empId?: string };
 }) {
   const t = await getTranslations("leaveApply");
+  const tc = await getTranslations("common");
   // Try the admin employees list first (works for hr_admin / hr_officer / manager).
   // A plain `employee` role is correctly 403'd from that endpoint (see
   // READER_ROLES in hrms-service's employee/routes.ts — by design, they have
@@ -68,7 +69,7 @@ export default async function ApplyLeavePage({
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/leave" backLabel="Back to Leave"
+        back="/hr/leave" backLabel={tc("backToLeave")}
       />
       <DataSourceBadge source={resolvedSource} />
       {/* The employee profile's "Apply Leave" quick action links here with

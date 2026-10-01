@@ -55,6 +55,7 @@ interface Props {
 
 export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmployeeId, noLinkedProfile, profileSource }: Props) {
   const t = useTranslations("leaveHistory");
+  const tc = useTranslations("common");
   const isAdminOrManager = roles.some((r) => ADMIN_OR_MANAGER_ROLES.includes(r));
 
   // GAP-HR-LEAVE-HISTORY-04: initialise to the deep-linked id, else the
@@ -209,7 +210,7 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/leave" backLabel="Back to Leave"
+        back="/hr/leave" backLabel={tc("backToLeave")}
         actions={<Link href="/hr/leave/apply" className="btn primary">{t("applyLeaveAction")}</Link>}
       />
       <div className="no-print" style={{ marginBottom: 8 }}>

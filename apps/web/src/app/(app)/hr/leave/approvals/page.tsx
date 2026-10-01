@@ -15,6 +15,7 @@ const LEAVE_APPROVAL_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager"
 
 export default async function LeaveApprovalsPage() {
   const t = await getTranslations("leaveApprovals");
+  const tc = await getTranslations("common");
   const roles = getSessionRoles();
   const canApprove = roles.some((r: string) => LEAVE_APPROVAL_ROLES.includes(r));
 
@@ -24,7 +25,7 @@ export default async function LeaveApprovalsPage() {
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel="Back to Leave" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/leave" backLabel={tc("backToLeave")} />
       <LeaveApprovalsPanel />
     </div>
   );
