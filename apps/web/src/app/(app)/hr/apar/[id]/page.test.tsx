@@ -239,8 +239,8 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
 
     expect(screen.queryByText("2026-04-14T20:00:00Z")).not.toBeInTheDocument();
     expect(screen.queryByText("2026-04-29")).not.toBeInTheDocument();
-    // Both dates render as dd/MM/yyyy (formatIndianDate's current format).
-    expect(screen.getAllByText(/\d{2}\/\d{2}\/2026/).length).toBeGreaterThanOrEqual(2);
+    // Both dates render as "dd Mon yyyy" (formatIndianDate's current format).
+    expect(screen.getAllByText(/\d{2} [A-Z][a-z]{2} 2026/).length).toBeGreaterThanOrEqual(2);
   });
 
   it("DETAIL-07: shows the confidentiality banner on every render, independent of viewer role", async () => {
