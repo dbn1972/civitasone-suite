@@ -31,10 +31,15 @@ type Dept = { id: string; name: string };
 // `level` feeds Step2's computed Service Group (GAP-HR-EMPLOYEES-NEW-05).
 type Desig = { id: string; name: string; level?: number | null };
 type EmpSummary = { id: string; name: string; designationName?: string };
+// GAP-HR-EMPLOYEES-NEW-06: see Step2.tsx's own doc comment -- optional so
+// every existing caller/test that doesn't exercise this field keeps
+// compiling unchanged; new/page.tsx always passes a real array.
+type EmployeeTypeOption = { code: string; name: string };
 
 interface Props {
   departments: Dept[];
   designations: Desig[];
+  employeeTypes?: EmployeeTypeOption[];
 }
 
 const TOTAL_STEPS = 5;
@@ -137,7 +142,7 @@ function buildPayload(data: WizardData): Record<string, unknown> {
 }
 
 // ── Wizard component ─────────────────────────────────────────────────────────
-export function AddEmployeeWizard({ departments, designations }: Props) {
+export function AddEmployeeWizard({ departments, designations, employeeTypes }: Props) {
   const t = useTranslations("employeeWizard");
   const [step, setStep] = useState(1);
   const [data, setData] = useState<WizardData>(WIZARD_INIT);
@@ -400,6 +405,7 @@ export function AddEmployeeWizard({ departments, designations }: Props) {
             errors={errors}
             departments={departments}
             designations={designations}
+            employeeTypes={employeeTypes}
             onChange={onChange}
             onBlur={onBlur}
           />

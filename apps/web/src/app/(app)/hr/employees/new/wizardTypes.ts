@@ -22,7 +22,11 @@ export type WizardData = {
   designationId: string;
   grade: string;
   dateOfJoining: string;
-  employeeType: "permanent" | "contractual" | "deputation" | "apprentice";
+  // GAP-HR-EMPLOYEES-NEW-06: widened from a 4-value closed union to a
+  // plain string -- the tenant employee-types master (and the legacy
+  // engagement-policy codes it accepts) can contain any code, not just
+  // these four hard-coded ones (see new/steps/Step2.tsx).
+  employeeType: string;
   // GAP-HR-EMPLOYEES-NEW-02: rupees, as typed (e.g. "44900.50") -- converted
   // to paise via lib/money.ts's rupeesToMinorString in buildPayload, never
   // Number(x)*100. payStructureId is intentionally not collected here yet;

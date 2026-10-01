@@ -98,7 +98,9 @@ describe("EmployeeDetailPage", () => {
     const ui = await EmployeeDetailPage({ params: { id: "e1" } });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
-    expect(screen.queryByRole("button", { name: /edit/i })).not.toBeInTheDocument();
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: Edit is now a plain Link to
+    // /edit, not an inline-toggle Button.
+    expect(screen.queryByRole("link", { name: /edit/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /initiate transfer/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /initiate promotion/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /initiate separation/i })).not.toBeInTheDocument();
@@ -113,7 +115,11 @@ describe("EmployeeDetailPage", () => {
     const ui = await EmployeeDetailPage({ params: { id: "e1" } });
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
-    expect(screen.getByRole("button", { name: /edit/i })).toBeInTheDocument();
+    // GAP-HR-EMPLOYEES-DETAIL-EDIT-07: Edit is now a plain Link to the
+    // already role-gated /edit route, not an inline-toggle Button that
+    // mounted the whole form inside PageHeader's actions slot.
+    const editLink = screen.getByRole("link", { name: /edit/i });
+    expect(editLink).toHaveAttribute("href", "/hr/employees/e1/edit");
     expect(screen.getByRole("link", { name: /initiate transfer/i })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Lifecycle (HR only)" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /initiate separation/i })).toBeInTheDocument();
