@@ -228,15 +228,12 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // requireRole call at all -- any authenticated caller in the tenant got
     // every employee whose birthday is today (name/department/designation)
     // plus the rest of the combined feed. Adds the same role set the
-    // feature is meant for (HR, manager, employee); whether birthdays
-    // should additionally need an opt-in consent flag before display at all
-    // is a separate, still-open product decision tracked elsewhere -- this
-    // is just the missing containment gate.
+    // feature is meant for (HR, manager, employee).
     requireRole(ctx, ALL_ROLES);
     const limit = Math.min(Number((req.query as any)?.limit ?? 30), 50);
     const feed: any[] = [];
 
-    const { kudos, birthdays, newJoinees, announcements } = await withTenantGuc(ctx.tenantId, async (pool) => {
+    const { kudos, birthdays, newJoinees, announcements, counts } = await withTenantGuc(ctx.tenantId, async (pool) => {
       // 1. Recent kudos (last 7 days)
       const kudos = await pool.query(
         `SELECT id, giver_name, receiver_name, badge, message, created_at
@@ -246,28 +243,38 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
       );
 
       // 2. Today's birthdays.
-      // Audit: this is the confirmed, live-verified root cause of
-      // /hr/social-feed 500ing for every role/tenant -- first_name/
-      // last_name/department/designation/photo_url don't exist on
-      // employee.hrms_employees (only full_name + department_id/
+      // Audit: first_name/last_name/department/designation/photo_url don't
+      // exist on employee.hrms_employees (only full_name + department_id/
       // designation_id FKs; there is no per-employee photo column at all),
       // status='active' was never a legal value (see
       // migrations/0025_employee_status_contract.sql), and joining_date
       // isn't a column either -- the real one is date_of_joining. Any one of
-      // these threw inside this handler's withTenantGuc call, uncaught,
-      // 500ing the whole combined feed (kudos/announcements included).
-      const today = new Date();
-      const mm = String(today.getMonth() + 1).padStart(2, "0");
-      const dd = String(today.getDate()).padStart(2, "0");
+      // these used to throw inside this handler's withTenantGuc call,
+      // uncaught, 500ing the whole combined feed (kudos/announcements
+      // included) -- fixed as part of the same pass that added the role gate.
+      //
+      // GAP-HR-SOCIAL-FEED-01 (remaining part, after the role-gate above):
+      // "today" is now computed in Asia/Kolkata server-side (a server
+      // running in a different zone/DST offset used to disagree with what
+      // an IST viewer considers "today"), and the query now requires
+      // e.share_birthday = true (added by migration 0159, default false) —
+      // per the decision packet's recommended default ("add an opt-in flag,
+      // default off; only show birthdays for employees who've actively
+      // opted in"), an employee's birthday, department and designation are
+      // no longer shown tenant-wide unless they've actively opted in. There
+      // is not yet a self-service UI for setting that flag (a separate,
+      // larger piece of work); until one ships this closes the exposure by
+      // defaulting everyone out rather than leaving the feature half-built
+      // and unsafe in the meantime.
       const birthdays = await pool.query(
         `SELECT e.id, e.full_name, d.name AS department, ds.name AS designation
          FROM employee.hrms_employees e
          LEFT JOIN employee.hrms_departments d ON d.id = e.department_id AND d.tenant_id = e.tenant_id
          LEFT JOIN employee.hrms_designations ds ON ds.id = e.designation_id AND ds.tenant_id = e.tenant_id
-         WHERE e.tenant_id = $1 AND e.status = 'confirmed'
-           AND EXTRACT(MONTH FROM e.date_of_birth) = $2
-           AND EXTRACT(DAY FROM e.date_of_birth) = $3`,
-        [ctx.tenantId, Number(mm), Number(dd)],
+         WHERE e.tenant_id = $1 AND e.status = 'confirmed' AND e.share_birthday = true
+           AND EXTRACT(MONTH FROM (NOW() AT TIME ZONE 'Asia/Kolkata')::date) = EXTRACT(MONTH FROM e.date_of_birth)
+           AND EXTRACT(DAY FROM (NOW() AT TIME ZONE 'Asia/Kolkata')::date) = EXTRACT(DAY FROM e.date_of_birth)`,
+        [ctx.tenantId],
       );
 
       // 3. New joinees (last 30 days)
@@ -291,7 +298,23 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
         [ctx.tenantId],
       );
 
-      return { kudos, birthdays, newJoinees, announcements };
+      // GAP-HR-SOCIAL-FEED-02: the stat cards used to just count the
+      // already-truncated slice above (so e.g. "New Joinees" could never
+      // read above 5, the LIMIT), implying a period total they weren't.
+      // These are real COUNT(*) totals over the same window, independent of
+      // the LIMITs the *displayed* feed still applies.
+      const counts = await pool.query(
+        `SELECT
+           (SELECT COUNT(*) FROM employee.hrms_social_kudos WHERE tenant_id = $1 AND created_at > NOW() - INTERVAL '7 days') AS kudos7d,
+           (SELECT COUNT(*) FROM employee.hrms_employees WHERE tenant_id = $1 AND status = 'confirmed' AND share_birthday = true
+              AND EXTRACT(MONTH FROM (NOW() AT TIME ZONE 'Asia/Kolkata')::date) = EXTRACT(MONTH FROM date_of_birth)
+              AND EXTRACT(DAY FROM (NOW() AT TIME ZONE 'Asia/Kolkata')::date) = EXTRACT(DAY FROM date_of_birth)) AS "birthdaysToday",
+           (SELECT COUNT(*) FROM employee.hrms_employees WHERE tenant_id = $1 AND status = 'confirmed' AND date_of_joining > CURRENT_DATE - INTERVAL '30 days') AS "joinees30d",
+           (SELECT COUNT(*) FROM employee.hrms_social_announcements WHERE tenant_id = $1 AND (expires_at IS NULL OR expires_at > NOW())) AS "announcementsActive"`,
+        [ctx.tenantId],
+      );
+
+      return { kudos, birthdays, newJoinees, announcements, counts };
     });
 
     for (const k of kudos.rows) {
@@ -338,7 +361,16 @@ export async function socialRoutes(app: FastifyInstance): Promise<void> {
     // Sort combined feed by date descending
     feed.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
-    return reply.send({ data: feed.slice(0, limit) });
+    const c = counts.rows[0] ?? {};
+    return reply.send({
+      data: feed.slice(0, limit),
+      counts: {
+        kudos7d: Number(c.kudos7d ?? 0),
+        birthdaysToday: Number(c.birthdaysToday ?? 0),
+        joinees30d: Number(c.joinees30d ?? 0),
+        announcementsActive: Number(c.announcementsActive ?? 0),
+      },
+    });
   });
 
   // ─── ANNOUNCEMENTS ──────────────────────────────────────────────────────

@@ -79,6 +79,13 @@ export const hrmsEmployees = employeeSchema.table("hrms_employees", {
   projectManagerId: uuid("project_manager_id"),
   fitnessStatus:    varchar("fitness_status", { length: 16 }).default("pending"),
   photoKey:       text("photo_key"),
+  // GAP-HR-SOCIAL-FEED-01: an employee's birthday (name/department/
+  // designation, derived from date_of_birth) is only shown on the /hr
+  // social feed when this is explicitly true. Defaults false (opt-in, per
+  // the decision packet's recommended default) -- migration
+  // 0159_hrms_employees_share_birthday.sql backfills every existing row to
+  // false, so shipping this doesn't itself expose anyone.
+  shareBirthday:  boolean("share_birthday").notNull().default(false),
   category:         varchar("category", { length: 8 }),
   disability:       boolean("disability").default(false),
   userRef:          text("user_ref"),
