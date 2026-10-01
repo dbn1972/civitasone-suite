@@ -15,9 +15,9 @@ import { redirect } from "next/navigation";
  * approver or a compensation mode. Those two extra fields are sent but
  * silently dropped -- they were never real functionality to preserve, so
  * this is a genuine duplicate, not a case of redirecting away working
- * behavior. OvertimeClaimForm becomes unreferenced dead code as a result
- * (left in place, untouched, same as the appraisals module's backend was
- * left untouched by PR #1571 -- out of scope for a frontend routing fix).
+ * behavior. GAP-HR-WORKFORCE-OVERTIME-NEW-01: OvertimeClaimForm was left in
+ * place as unreferenced dead code when this redirect first shipped; it has
+ * since been deleted (along with its test file) now that nothing renders it.
  *
  * /hr/overtime/new is otherwise equivalent (same endpoint, same required
  * fields, its own client-side hours>0 guard mirrored by the HTML

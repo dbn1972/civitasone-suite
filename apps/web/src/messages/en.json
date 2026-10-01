@@ -5107,32 +5107,6 @@
     "emptyTitle": "No outsourced staff records",
     "emptyMessage": "Outsourced workforce records appear here, tracking vendor-supplied staff per GFR 2017 Chapter 8 contractor management requirements."
   },
-  "workforceOvertime": {
-    "title": "Overtime Requests",
-    "subtitle": "Review and approve overtime claims. CCS Rules: OT compensated as cash or comp-off leave.",
-    "newRequest": "+ New Request",
-    "statTotalClaims": "Total Claims",
-    "statPendingApproval": "Pending Approval",
-    "statApproved": "Approved",
-    "statTotalHours": "Total Hours",
-    "cardTitle": "Overtime Claims",
-    "colEmployee": "Employee",
-    "colDate": "Date",
-    "colHours": "Hours",
-    "colPurpose": "Purpose",
-    "colApprovedBy": "Approved By",
-    "colStatus": "Status",
-    "filterPlaceholder": "Filter by date, status or employee…",
-    "emptyTitle": "No overtime requests yet",
-    "emptyMessage": "Overtime claims submitted by employees appear here for duty officer approval.",
-    "emptyFilteredTitle": "No matching records",
-    "emptyFilteredMessage": "Adjust your filter to find the overtime request."
-  },
-  "workforceOvertimeNew": {
-    "title": "New Overtime Claim",
-    "subtitle": "Submit an overtime claim for duty officer approval. CCS Rules apply.",
-    "cardTitle": "Claim Details"
-  },
   "workforceWfh": {
     "title": "Work From Home",
     "subtitle": "Submit and track WFH requests. DoPT policy: eligible cadres may WFH up to 2 days/week.",
@@ -5634,6 +5608,7 @@
     "title": "New Overtime Request",
     "subtitle": "Submit an overtime claim for HR approval.",
     "cardTitle": "Request Details",
+    "approverInfo": "Reviewed and approved by HR (hr_admin / hr_officer), not a specific named officer.",
     "labelEmployee": "Employee",
     "labelDate": "Date of Overtime",
     "labelHours": "Hours Requested",

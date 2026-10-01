@@ -70,15 +70,23 @@ describe("hr/workforce i18n coverage (UX-017 tranche 6)", () => {
     const en = JSON.parse(fs.readFileSync(path.join(webRoot, "src/messages/en.json"), "utf8"));
     const hi = JSON.parse(fs.readFileSync(path.join(webRoot, "src/messages/hi.json"), "utf8"));
 
+    // "workforceOvertime"/"workforceOvertimeNew" were deleted outright
+    // (GAP-HR-WORKFORCE-OVERTIME-01): both were orphaned copy with zero
+    // `useTranslations`/code references anywhere in the tree (the pages that
+    // used to render them are redirect stubs to /hr/overtime and
+    // /hr/overtime/new, which have their own "overtime"/"overtimeNew"
+    // namespaces) -- keeping them listed here would make this very
+    // regression guard the only thing still requiring their existence.
+    // "workforceStaffingPlan" was already deleted by GAP-HR-STAFFING-PLAN-05
+    // (PR #1738, same day) for the identical reason (zero references); this
+    // test just hadn't been updated in that PR, so it was failing on main
+    // before this change -- confirmed by running it prior to this edit.
     const HR_WORKFORCE_NAMESPACES = [
       "workforce",
       "workforceAnalytics",
       "workforceContractual",
       "workforceInterns",
       "workforceOutsourced",
-      "workforceOvertime",
-      "workforceOvertimeNew",
-      "workforceStaffingPlan",
       "workforceWfh",
       "workforceWorkSummary",
     ];

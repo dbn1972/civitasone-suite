@@ -11,6 +11,11 @@ import { redirect } from "next/navigation";
 // HRMS peripheral medium findings, item 1: /hr/workforce/wfh (this route's
 // parent) is itself now a redirect stub to /hr/wfh, so this repoints
 // straight at the canonical page instead of chaining through that redirect.
+//
+// GAP-HR-WORKFORCE-WFH-NEW-01: the plain "/hr/wfh" target above landed a
+// visitor on the list page with no indication the form they followed a
+// "/new" link for is the "New Request" card partway down -- the #new-request
+// anchor (hr/wfh/page.tsx) scrolls straight to it instead.
 export default function WfhNewRedirect() {
-  redirect("/hr/wfh");
+  redirect("/hr/wfh#new-request");
 }

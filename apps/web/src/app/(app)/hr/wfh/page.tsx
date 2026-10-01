@@ -130,6 +130,11 @@ export default async function WfhPage() {
         <StatCard icon="❌" iconBg="var(--badbg, #fff0f0)" label={t("statRejectedLabel")} value={errored ? null : rejected} />
       </StatGrid>
 
+      {/* GAP-HR-WORKFORCE-WFH-NEW-01: anchor target for /hr/workforce/wfh/new's
+          redirect (and anyone else's deep link), which otherwise lands a
+          visitor on this list page with no indication where the "new
+          request" form they followed a /new link for actually is. */}
+      <div id="new-request">
       <Card title={t("cardNewRequest")}>
         {noLinkedProfile ? (
           <div role="alert" style={{ padding: "20px 24px", fontSize: 13, color: "var(--warn-text, #92400e)" }}>
@@ -139,6 +144,7 @@ export default async function WfhPage() {
           <WFHRequestForm employeeId={prefillEmployeeId} weeklyWfhCount={weeklyWfhCount} redirectHref="/hr/wfh" />
         )}
       </Card>
+      </div>
 
       <div style={{ marginTop: 16 }}>
         <Card title={t("cardTitle")}>
