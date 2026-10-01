@@ -489,6 +489,52 @@ describe("7th CPC pay matrix + annual increment (idempotent, async F3)", () => {
   });
 });
 
+// ── 5b. Pay-matrix annual-increment gate: PAY_MATRIX_OFFICIAL ────────
+// Every test in section 5 above runs with PAY_MATRIX_OFFICIAL forced
+// "true" at module scope (see the comment at the top of this file), so
+// none of them ever exercises the `if (!isPayMatrixOfficial() &&
+// !body.dryRun)` gate in routes.ts itself (GAP-HR-PAY-MATRIX-01) -- a
+// regression there (e.g. `&&` flipped to `||`, or the check reordered
+// after the first DB read) would pass this file's suite undetected.
+// This block unsets the flag for just its own duration (saving/
+// restoring it around itself via beforeAll/afterAll, so sections 6-8
+// below are unaffected) and proves the gate's three cases directly
+// against the real route, matching what was verified manually:
+// unofficial+dryRun:false -> 409, unofficial+dryRun:true -> 200,
+// dryRun-omitted -> 409 (the zod default is `false`, not a silent
+// bypass).
+describe("Pay-matrix annual-increment gate: PAY_MATRIX_OFFICIAL enforcement", () => {
+  const ORIGINAL_FLAG = process.env.PAY_MATRIX_OFFICIAL;
+  beforeAll(() => {
+    delete process.env.PAY_MATRIX_OFFICIAL;
+  });
+  afterAll(() => {
+    if (ORIGINAL_FLAG === undefined) delete process.env.PAY_MATRIX_OFFICIAL;
+    else process.env.PAY_MATRIX_OFFICIAL = ORIGINAL_FLAG;
+  });
+
+  it("blocks a live run (dryRun: false) with 409 PAY_MATRIX_NOT_OFFICIAL when the matrix is not marked official", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT },
+      payload: { effectiveDate: "2027-07-01", dryRun: false } });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("PAY_MATRIX_NOT_OFFICIAL");
+  });
+
+  it("allows a preview (dryRun: true) through with 200 while the matrix is not marked official", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT },
+      payload: { effectiveDate: "2027-07-01", dryRun: true } });
+    expect(r.statusCode).toBe(200);
+    expect(Array.isArray(r.json().results)).toBe(true);
+  });
+
+  it("defaults dryRun to false when omitted entirely (zod default) -- blocks the live run, not a silent bypass", async () => {
+    const r = await app.inject({ method: "POST", url: "/v1/hrms/pay-matrix/annual-increment", headers: { ...HR, ...CT },
+      payload: {} });
+    expect(r.statusCode).toBe(409);
+    expect(r.json().code).toBe("PAY_MATRIX_NOT_OFFICIAL");
+  });
+});
+
 // ── 6. Pension / DCRG (GPF defined benefit) ──────────────────────────
 describe("Pension / DCRG computation", () => {
   it("computes defined-benefit pension + DCRG for a GPF employee", async () => {
