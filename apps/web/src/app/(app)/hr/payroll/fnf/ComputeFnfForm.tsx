@@ -1,11 +1,14 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
+import { Button, Card, ConfirmDialog, EntityPicker, type EntityOption } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
+import { nonNegativeRupeesToMinorString } from "@/lib/money";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { searchEmployees } from "@/lib/entityAdapters/employee";
 
 const SEPARATION_TYPES = ["retirement", "superannuation", "resignation", "retrenchment", "vrs", "death"] as const;
 const EMPLOYEE_CATEGORIES = ["govt", "non_govt_covered", "non_govt_uncovered"] as const;
@@ -18,8 +21,7 @@ type MoneyField =
 const REQUIRED_MONEY_FIELDS: MoneyField[] = ["lastDrawnWages", "avgSalaryLast10Months", "salaryYtd", "tdsYtd"];
 
 // UX-017: keys are stable field identities, never translated -- only used to
-// look up which message key holds the display label. Same safe pattern as
-// salary-revisions/page.tsx's REVISION_TYPE_KEYS.
+// look up which message key holds the display label.
 const MONEY_FIELD_KEYS: Record<MoneyField, string> = {
   noticeBuyout: "noticeBuyoutLabel",
   leaveEncashmentGross: "leaveEncashmentGrossLabel",
@@ -39,16 +41,39 @@ const MONEY_FIELD_KEYS: Record<MoneyField, string> = {
 
 const MONEY_FIELDS = Object.keys(MONEY_FIELD_KEYS) as MoneyField[];
 
-// Non-money required fields, in tab/focus order, so the "first invalid field"
-// lookup below can walk one flat list instead of a chain of if/else.
 const REQUIRED_TOP_FIELDS = ["employeeId", "separationDate", "completedYears", "leaveBalanceDays", "fyStartYear"] as const;
 type TopField = (typeof REQUIRED_TOP_FIELDS)[number];
-type FieldKey = TopField | MoneyField;
+type FieldKey = TopField | MoneyField | "overrideReason";
 
-function toMinorString(rupees: string): string {
-  const n = Number(rupees || "0");
-  return Math.round((Number.isFinite(n) ? n : 0) * 100).toString();
-}
+/** Record-derived inputs: pre-filled from HR records, editable only via an explicit override. */
+type OverridableField = "completedYears" | "leaveBalanceDays";
+
+/**
+ * GAP-PAYROLL-FNF-03: what hrms-service derives from the employee's own
+ * records for this separation date (POST /v1/hrms/employees/:id/
+ * fnf-calculate -- a read-only calculation, nothing is persisted).
+ */
+type HrSnapshot = {
+  completedYears: number;
+  leaveBalanceDays: number;
+  basicMonthlyMinor: number;
+  gratuityEstimateMinor: number;
+  leaveEncashmentEstimateMinor: number;
+};
+
+type FnfCalculateResponse = {
+  basicMonthlyMinor?: number;
+  breakdown?: {
+    leaveEncashment?: { leaveBalanceDays?: number; amountMinor?: number };
+    gratuity?: { completedYears?: number; amountMinor?: number };
+  };
+};
+
+export const MIN_OVERRIDE_REASON = 10;
+
+type SnapshotState = "idle" | "loading" | "loaded" | "unavailable";
+type LabelMap = Map<string, string>;
+const NO_OVERRIDES: Record<OverridableField, boolean> = { completedYears: false, leaveBalanceDays: false };
 
 export function ComputeFnfForm() {
   const t = useTranslations("computeFnfForm");
@@ -69,7 +94,7 @@ export function ComputeFnfForm() {
     non_govt_uncovered: t("employeeCategoryNonGovtUncovered"),
   };
   const router = useRouter();
-  const [employeeId, setEmployeeId] = useState("");
+  const [employeeId, setEmployeeId] = useState(null as string | null);
   const [separationDate, setSeparationDate] = useState("");
   const [separationType, setSeparationType] = useState<(typeof SEPARATION_TYPES)[number]>("resignation");
   const [employeeCategory, setEmployeeCategory] = useState<(typeof EMPLOYEE_CATEGORIES)[number]>("non_govt_covered");
@@ -81,12 +106,27 @@ export function ComputeFnfForm() {
   const [money, setMoney] = useState<Record<MoneyField, string>>(
     Object.fromEntries(MONEY_FIELDS.map((f) => [f, ""])) as Record<MoneyField, string>,
   );
+  const [snapshot, setSnapshot] = useState(null as HrSnapshot | null);
+  const [snapshotState, setSnapshotState] = useState("idle" as SnapshotState);
+  const [override, setOverride] = useState(NO_OVERRIDES);
+  const [overrideReason, setOverrideReason] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
   const [invalidFields, setInvalidFields] = useState<Set<FieldKey>>(new Set());
   const formError = useFormError("F&F settlement");
+
+  // GAP-PAYROLL-FNF-05: remember the label of every option the picker has
+  // shown, so the confirm dialog names the employee instead of a UUID.
+  const employeeLabels = useRef(new Map() as LabelMap);
+  const [directoryForbidden, setDirectoryForbidden] = useState(false);
+  async function searchAndRemember(query: string, signal: AbortSignal): Promise<EntityOption[]> {
+    const options = await searchEmployees(query, signal, { onForbidden: () => setDirectoryForbidden(true) });
+    for (const o of options) employeeLabels.current.set(o.id, o.label);
+    return options;
+  }
+  const employeeLabel = employeeId ? employeeLabels.current.get(employeeId) ?? t("selectedEmployeeFallback") : "";
 
   const baseId = useId();
   const empIdField = useId();
@@ -98,13 +138,71 @@ export function ComputeFnfForm() {
   const leaveField = useId();
   const remainingField = useId();
   const fyField = useId();
+  const reasonField = useId();
   const errId = useId();
 
   const topFieldRefs = useRef<Partial<Record<TopField, HTMLInputElement | null>>>({});
   const moneyFieldRefs = useRef<Partial<Record<MoneyField, HTMLInputElement | null>>>({});
+  const reasonRef = useRef<HTMLTextAreaElement | null>(null);
 
-  function setMoneyField(field: MoneyField, value: string) {
-    setMoney((prev) => ({ ...prev, [field]: value }));
+  // GAP-PAYROLL-FNF-03: once an employee and a separation date are chosen,
+  // pull the record-derived inputs (completed years of service, leave
+  // balance) from HR instead of trusting hand-typed numbers. Those fields
+  // become read-only unless the clerk explicitly overrides them, which then
+  // requires a reason that is persisted with the settlement and audited.
+  useEffect(() => {
+    if (!employeeId || !separationDate) {
+      setSnapshot(null);
+      setSnapshotState("idle");
+      return;
+    }
+    let cancelled = false;
+    setSnapshotState("loading");
+    browserJson<FnfCalculateResponse>(`v1/hrms/employees/${encodeURIComponent(employeeId)}/fnf-calculate`, {
+      method: "POST",
+      body: JSON.stringify({ separationDate }),
+    })
+      .then((res) => {
+        if (cancelled) return;
+        const years = res.breakdown?.gratuity?.completedYears;
+        const leave = res.breakdown?.leaveEncashment?.leaveBalanceDays;
+        if (typeof years !== "number" || typeof leave !== "number") {
+          setSnapshot(null);
+          setSnapshotState("unavailable");
+          return;
+        }
+        const snap: HrSnapshot = {
+          completedYears: years,
+          leaveBalanceDays: leave,
+          basicMonthlyMinor: res.basicMonthlyMinor ?? 0,
+          gratuityEstimateMinor: res.breakdown?.gratuity?.amountMinor ?? 0,
+          leaveEncashmentEstimateMinor: res.breakdown?.leaveEncashment?.amountMinor ?? 0,
+        };
+        setSnapshot(snap);
+        setSnapshotState("loaded");
+        setCompletedYears(String(snap.completedYears));
+        setLeaveBalanceDays(String(snap.leaveBalanceDays));
+        setOverride(NO_OVERRIDES);
+        setOverrideReason("");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setSnapshot(null);
+        setSnapshotState("unavailable");
+      });
+    return () => { cancelled = true; };
+  }, [employeeId, separationDate]);
+
+  /** Overridden record-derived fields whose value actually differs from HR's. */
+  function overriddenFields(): OverridableField[] {
+    if (!snapshot) return [];
+    const out: OverridableField[] = [];
+    if (override.completedYears && completedYears !== String(snapshot.completedYears)) out.push("completedYears");
+    if (override.leaveBalanceDays && leaveBalanceDays !== String(snapshot.leaveBalanceDays)) out.push("leaveBalanceDays");
+    return out;
+  }
+
+  function clearInvalid(field: FieldKey) {
     if (invalidFields.has(field)) {
       setInvalidFields((prev) => {
         const next = new Set(prev);
@@ -114,14 +212,24 @@ export function ComputeFnfForm() {
     }
   }
 
-  function clearTopInvalid(field: TopField) {
-    if (invalidFields.has(field)) {
-      setInvalidFields((prev) => {
-        const next = new Set(prev);
-        next.delete(field);
-        return next;
-      });
-    }
+  function setMoneyField(field: MoneyField, value: string) {
+    setMoney((prev) => ({ ...prev, [field]: value }));
+    clearInvalid(field);
+  }
+
+  /** Paise string for a money input; blank optional fields are "0"; null = invalid. */
+  function minorFor(field: MoneyField): string | null {
+    const raw = money[field].trim();
+    if (!raw) return REQUIRED_MONEY_FIELDS.includes(field) ? null : "0";
+    return nonNegativeRupeesToMinorString(raw);
+  }
+
+  function focusField(key: FieldKey) {
+    if (key === "overrideReason") reasonRef.current?.focus();
+    else if ((REQUIRED_TOP_FIELDS as readonly string[]).includes(key)) {
+      if (key === "employeeId") document.getElementById(empIdField)?.focus();
+      else topFieldRefs.current[key as TopField]?.focus();
+    } else moneyFieldRefs.current[key as MoneyField]?.focus();
   }
 
   function openConfirm(e: React.FormEvent) {
@@ -130,7 +238,7 @@ export function ComputeFnfForm() {
     setMessage(null);
 
     const missing = new Set<FieldKey>();
-    if (!employeeId.trim()) missing.add("employeeId");
+    if (!employeeId) missing.add("employeeId");
     if (!separationDate) missing.add("separationDate");
     if (!completedYears) missing.add("completedYears");
     if (!leaveBalanceDays) missing.add("leaveBalanceDays");
@@ -138,55 +246,71 @@ export function ComputeFnfForm() {
     for (const f of REQUIRED_MONEY_FIELDS) {
       if (!money[f].trim()) missing.add(f);
     }
-
-    setInvalidFields(missing);
-
     if (missing.size > 0) {
+      setInvalidFields(missing);
       setError(t("requiredFieldsError"));
-      const orderedKeys: FieldKey[] = [...REQUIRED_TOP_FIELDS, ...REQUIRED_MONEY_FIELDS];
-      const firstInvalid = orderedKeys.find((k) => missing.has(k));
-      if (firstInvalid) {
-        if ((REQUIRED_TOP_FIELDS as readonly string[]).includes(firstInvalid)) {
-          topFieldRefs.current[firstInvalid as TopField]?.focus();
-        } else {
-          moneyFieldRefs.current[firstInvalid as MoneyField]?.focus();
-        }
-      }
+      const ordered: FieldKey[] = [...REQUIRED_TOP_FIELDS, ...REQUIRED_MONEY_FIELDS];
+      const first = ordered.find((k) => missing.has(k));
+      if (first) focusField(first);
       return;
     }
+
+    // GAP-PAYROLL-FNF-03: every money input must be a plain rupee amount
+    // with at most 2 decimals (string-parsed, no float drift); anything else
+    // blocks submit rather than being silently rounded or zeroed.
+    const badMoney = MONEY_FIELDS.filter((f) => minorFor(f) === null);
+    if (badMoney.length > 0) {
+      setInvalidFields(new Set(badMoney));
+      setError(t("amountFormatError"));
+      focusField(badMoney[0]!);
+      return;
+    }
+
+    if (overriddenFields().length > 0 && overrideReason.trim().length < MIN_OVERRIDE_REASON) {
+      setInvalidFields(new Set<FieldKey>(["overrideReason"]));
+      setError(t("overrideReasonError", { min: MIN_OVERRIDE_REASON }));
+      focusField("overrideReason");
+      return;
+    }
+
+    setInvalidFields(new Set());
     setConfirmOpen(true);
   }
 
   async function compute() {
+    if (!employeeId) return;
     setBusy(true);
     setError(undefined);
+    const m = (f: MoneyField) => minorFor(f) ?? "0";
+    const overridden = overriddenFields();
     try {
       const res = await browserJson<{ data: { message: string; employeeId: string } }>("v1/payroll/fnf/compute", {
         method: "POST",
         body: JSON.stringify({
-          employeeId: employeeId.trim(),
+          employeeId,
           separationDate,
           separationType,
           employeeCategory,
-          noticeBuyoutMinor: toMinorString(money.noticeBuyout),
-          leaveEncashmentGrossMinor: toMinorString(money.leaveEncashmentGross),
-          gratuityGrossMinor: toMinorString(money.gratuityGross),
-          retrenchmentCompMinor: toMinorString(money.retrenchmentComp),
-          vrsCompMinor: toMinorString(money.vrsComp),
-          arrearsMinor: toMinorString(money.arrears),
-          lastDrawnWagesMinor: toMinorString(money.lastDrawnWages),
+          noticeBuyoutMinor: m("noticeBuyout"),
+          leaveEncashmentGrossMinor: m("leaveEncashmentGross"),
+          gratuityGrossMinor: m("gratuityGross"),
+          retrenchmentCompMinor: m("retrenchmentComp"),
+          vrsCompMinor: m("vrsComp"),
+          arrearsMinor: m("arrears"),
+          lastDrawnWagesMinor: m("lastDrawnWages"),
           completedYears: Number(completedYears),
-          avgSalaryLast10MonthsMinor: toMinorString(money.avgSalaryLast10Months),
+          avgSalaryLast10MonthsMinor: m("avgSalaryLast10Months"),
           leaveBalanceDays: Number(leaveBalanceDays),
-          priorLeaveEncashExemptionMinor: toMinorString(money.priorLeaveEncashExemption),
+          priorLeaveEncashExemptionMinor: m("priorLeaveEncashExemption"),
           remainingMonthsToRetirement: Number(remainingMonthsToRetirement || "0"),
           taxRegime,
-          salaryYtdMinor: toMinorString(money.salaryYtd),
-          tdsYtdMinor: toMinorString(money.tdsYtd),
-          deductions80cMinor: toMinorString(money.deductions80c),
-          deductions80dMinor: toMinorString(money.deductions80d),
-          otherDeductionsMinor: toMinorString(money.otherDeductions),
+          salaryYtdMinor: m("salaryYtd"),
+          tdsYtdMinor: m("tdsYtd"),
+          deductions80cMinor: m("deductions80c"),
+          deductions80dMinor: m("deductions80d"),
+          otherDeductionsMinor: m("otherDeductions"),
           fyStartYear: Number(fyStartYear),
+          ...(overridden.length > 0 ? { overrides: { fields: overridden, reason: overrideReason.trim() } } : {}),
         }),
       });
       setConfirmOpen(false);
@@ -199,6 +323,48 @@ export function ComputeFnfForm() {
     }
   }
 
+  const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
+  const lockedStyle = { ...inputStyle, background: "var(--panel)" } as const;
+  const overridden = overriddenFields();
+
+  function overridableInput(field: OverridableField, id: string, labelKey: string, value: string, setValue: (v: string) => void) {
+    const locked = snapshot !== null && !override[field];
+    return (
+      <div style={{ display: "grid", gap: 6 }}>
+        <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
+          {t(labelKey)} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+        </label>
+        <input
+          id={id}
+          ref={(el) => { topFieldRefs.current[field] = el; }}
+          type="number"
+          min={0}
+          value={value}
+          readOnly={locked}
+          onChange={(e) => { setValue(e.target.value); clearInvalid(field); }}
+          aria-required="true"
+          aria-invalid={invalidFields.has(field) || undefined}
+          aria-describedby={invalidFields.has(field) ? errId : undefined}
+          style={locked ? lockedStyle : inputStyle}
+        />
+        {snapshot && (
+          <label style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--ink2)" }}>
+            <input
+              type="checkbox"
+              checked={override[field]}
+              onChange={(e) => {
+                const on = e.target.checked;
+                setOverride((prev) => ({ ...prev, [field]: on }));
+                if (!on) setValue(String(snapshot[field]));
+              }}
+            />
+            {t("overrideToggle", { value: snapshot[field] })}
+          </label>
+        )}
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={openConfirm} style={{ marginBottom: 16 }}>
       <Card title={t("formTitle")} padding>
@@ -206,18 +372,21 @@ export function ComputeFnfForm() {
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={empIdField} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("employeeIdLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+                {t("employeeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input
+              {/* GAP-PAYROLL-FNF-05: was a raw "Employee ID (UUID)" text box. */}
+              <EntityPicker
                 id={empIdField}
-                ref={(el) => { topFieldRefs.current.employeeId = el; }}
                 value={employeeId}
-                onChange={(e) => { setEmployeeId(e.target.value); clearTopInvalid("employeeId"); }}
-                aria-required="true"
-                aria-invalid={invalidFields.has("employeeId") || undefined}
-                aria-describedby={invalidFields.has("employeeId") ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                onChange={(v) => { setEmployeeId(typeof v === "string" ? v : null); clearInvalid("employeeId"); }}
+                search={searchAndRemember}
+                placeholder={t("employeePlaceholder")}
               />
+              {directoryForbidden && (
+                <p role="alert" className="pill warn" style={{ width: "fit-content", margin: 0, fontSize: 12 }}>
+                  {t("directoryForbidden")}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={dateField} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -228,69 +397,37 @@ export function ComputeFnfForm() {
                 ref={(el) => { topFieldRefs.current.separationDate = el; }}
                 type="date"
                 value={separationDate}
-                onChange={(e) => { setSeparationDate(e.target.value); clearTopInvalid("separationDate"); }}
+                onChange={(e) => { setSeparationDate(e.target.value); clearInvalid("separationDate"); }}
                 aria-required="true"
                 aria-invalid={invalidFields.has("separationDate") || undefined}
                 aria-describedby={invalidFields.has("separationDate") ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                style={inputStyle}
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={sepTypeField} style={{ fontSize: 13, fontWeight: 600 }}>{t("separationTypeLabel")}</label>
-              <select id={sepTypeField} value={separationType} onChange={(e) => setSeparationType(e.target.value as (typeof SEPARATION_TYPES)[number])} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}>
+              <select id={sepTypeField} value={separationType} onChange={(e) => setSeparationType(e.target.value as (typeof SEPARATION_TYPES)[number])} style={inputStyle}>
                 {SEPARATION_TYPES.map((v) => <option key={v} value={v}>{SEPARATION_TYPE_LABELS[v]}</option>)}
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={catField} style={{ fontSize: 13, fontWeight: 600 }}>{t("employeeCategoryLabel")}</label>
-              <select id={catField} value={employeeCategory} onChange={(e) => setEmployeeCategory(e.target.value as (typeof EMPLOYEE_CATEGORIES)[number])} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}>
+              <select id={catField} value={employeeCategory} onChange={(e) => setEmployeeCategory(e.target.value as (typeof EMPLOYEE_CATEGORIES)[number])} style={inputStyle}>
                 {EMPLOYEE_CATEGORIES.map((c) => <option key={c} value={c}>{EMPLOYEE_CATEGORY_LABELS[c]}</option>)}
               </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={regimeField} style={{ fontSize: 13, fontWeight: 600 }}>{t("taxRegimeLabel")}</label>
-              <select id={regimeField} value={taxRegime} onChange={(e) => setTaxRegime(e.target.value as "old" | "new")} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}>
+              <select id={regimeField} value={taxRegime} onChange={(e) => setTaxRegime(e.target.value as "old" | "new")} style={inputStyle}>
                 <option value="old">{t("taxRegimeOld")}</option>
                 <option value="new">{t("taxRegimeNew")}</option>
               </select>
             </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={yearsField} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("completedYearsLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={yearsField}
-                ref={(el) => { topFieldRefs.current.completedYears = el; }}
-                type="number"
-                min={0}
-                value={completedYears}
-                onChange={(e) => { setCompletedYears(e.target.value); clearTopInvalid("completedYears"); }}
-                aria-required="true"
-                aria-invalid={invalidFields.has("completedYears") || undefined}
-                aria-describedby={invalidFields.has("completedYears") ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-            </div>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={leaveField} style={{ fontSize: 13, fontWeight: 600 }}>
-                {t("leaveBalanceLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={leaveField}
-                ref={(el) => { topFieldRefs.current.leaveBalanceDays = el; }}
-                type="number"
-                min={0}
-                value={leaveBalanceDays}
-                onChange={(e) => { setLeaveBalanceDays(e.target.value); clearTopInvalid("leaveBalanceDays"); }}
-                aria-required="true"
-                aria-invalid={invalidFields.has("leaveBalanceDays") || undefined}
-                aria-describedby={invalidFields.has("leaveBalanceDays") ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
-            </div>
+            {overridableInput("completedYears", yearsField, "completedYearsLabel", completedYears, setCompletedYears)}
+            {overridableInput("leaveBalanceDays", leaveField, "leaveBalanceLabel", leaveBalanceDays, setLeaveBalanceDays)}
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={remainingField} style={{ fontSize: 13, fontWeight: 600 }}>{t("remainingMonthsLabel")}</label>
-              <input id={remainingField} type="number" min={0} value={remainingMonthsToRetirement} onChange={(e) => setRemainingMonthsToRetirement(e.target.value)} style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+              <input id={remainingField} type="number" min={0} value={remainingMonthsToRetirement} onChange={(e) => setRemainingMonthsToRetirement(e.target.value)} style={inputStyle} />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fyField} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -301,14 +438,38 @@ export function ComputeFnfForm() {
                 ref={(el) => { topFieldRefs.current.fyStartYear = el; }}
                 type="number"
                 value={fyStartYear}
-                onChange={(e) => { setFyStartYear(e.target.value); clearTopInvalid("fyStartYear"); }}
+                onChange={(e) => { setFyStartYear(e.target.value); clearInvalid("fyStartYear"); }}
                 aria-required="true"
                 aria-invalid={invalidFields.has("fyStartYear") || undefined}
                 aria-describedby={invalidFields.has("fyStartYear") ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                style={inputStyle}
               />
             </div>
           </div>
+
+          {snapshotState === "loading" && <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("hrRecordsLoading")}</p>}
+          {snapshotState === "loaded" && <p role="status" style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("hrRecordsLoaded")}</p>}
+          {snapshotState === "unavailable" && <p role="status" className="pill warn" style={{ width: "fit-content", margin: 0 }}>{t("hrRecordsUnavailable")}</p>}
+
+          {overridden.length > 0 && (
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={reasonField} style={{ fontSize: 13, fontWeight: 600 }}>
+                {t("overrideReasonLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              </label>
+              <textarea
+                id={reasonField}
+                ref={reasonRef}
+                value={overrideReason}
+                onChange={(e) => { setOverrideReason(e.target.value); clearInvalid("overrideReason"); }}
+                rows={2}
+                maxLength={500}
+                aria-required="true"
+                aria-invalid={invalidFields.has("overrideReason") || undefined}
+                aria-describedby={invalidFields.has("overrideReason") ? errId : undefined}
+                style={{ ...inputStyle, minHeight: 64 }}
+              />
+            </div>
+          )}
 
           <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 14 }}>
             <legend style={{ fontSize: 13, fontWeight: 700, padding: "0 6px" }}>{t("amountsLegend")}</legend>
@@ -317,6 +478,12 @@ export function ComputeFnfForm() {
                 const id = `${baseId}-${f}`;
                 const required = REQUIRED_MONEY_FIELDS.includes(f);
                 const invalid = invalidFields.has(f);
+                const hint = snapshot
+                  ? f === "gratuityGross" ? snapshot.gratuityEstimateMinor
+                  : f === "leaveEncashmentGross" ? snapshot.leaveEncashmentEstimateMinor
+                  : f === "lastDrawnWages" ? snapshot.basicMonthlyMinor
+                  : null
+                  : null;
                 return (
                   <div key={f} style={{ display: "grid", gap: 6 }}>
                     <label htmlFor={id} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -325,16 +492,18 @@ export function ComputeFnfForm() {
                     <input
                       id={id}
                       ref={(el) => { moneyFieldRefs.current[f] = el; }}
-                      type="number"
-                      min={0}
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       value={money[f]}
                       onChange={(e) => setMoneyField(f, e.target.value)}
                       aria-required={required}
                       aria-invalid={invalid || undefined}
                       aria-describedby={invalid ? errId : undefined}
-                      style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                      style={inputStyle}
                     />
+                    {hint !== null && (
+                      <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("systemEstimateHint", { amount: formatMoney(hint) })}</span>
+                    )}
                   </div>
                 );
               })}
@@ -363,12 +532,29 @@ export function ComputeFnfForm() {
         confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={t.rich("confirmDescription", {
-          employeeId,
-          separationType: SEPARATION_TYPE_LABELS[separationType],
-          separationDate,
-          strong: (chunks) => <strong>{chunks}</strong>,
-        })}
+        description={
+          <>
+            {t.rich("confirmDescription", {
+              employee: employeeLabel,
+              separationType: SEPARATION_TYPE_LABELS[separationType],
+              separationDate: formatIndianDate(separationDate),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
+            {snapshot && overridden.length > 0 && (
+              <ul style={{ margin: "8px 0 0", paddingInlineStart: 18 }}>
+                {overridden.map((f) => (
+                  <li key={f}>
+                    {t("confirmOverrideLine", {
+                      field: t(f === "completedYears" ? "completedYearsLabel" : "leaveBalanceLabel"),
+                      system: snapshot[f],
+                      entered: f === "completedYears" ? completedYears : leaveBalanceDays,
+                    })}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        }
         onConfirm={() => void compute()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

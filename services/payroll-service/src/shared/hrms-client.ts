@@ -130,7 +130,7 @@ export async function fetchPendingPayrollRuns(tenantId: string): Promise<number>
   return rows.filter((r) => r.status === "processing" || r.status === "draft").length;
 }
 
-export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<string, { fullName: string; departmentName: string }>> {
+export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
   const url = `${HRMS_URL}/v1/hrms/internal/employee-summaries`;
   try {
     const res = await fetch(url, {
@@ -138,8 +138,29 @@ export async function fetchEmployeeSummaries(tenantId: string): Promise<Map<stri
       signal: AbortSignal.timeout(5000),
     });
     if (!res.ok) return new Map();
-    const rows = await res.json() as Array<{ id: string; fullName: string; departmentName: string }>;
-    return new Map(rows.map((r) => [r.id, { fullName: r.fullName, departmentName: r.departmentName }]));
+    const rows = await res.json() as Array<{ id: string; fullName: string; departmentName: string; employeeNo?: string | null }>;
+    return new Map(rows.map((r) => [r.id, { fullName: r.fullName, departmentName: r.departmentName, employeeNo: r.employeeNo ?? null }]));
+  } catch {
+    return new Map();
+  }
+}
+
+/**
+ * GAP-PAYROLL-NPS-02: last four characters of each employee's PRAN, keyed by
+ * employeeId. hrms-service only ever returns the last four (the full PRAN
+ * never crosses the service boundary). Display enrichment only, so this
+ * fails OPEN to an empty Map exactly like fetchEmployeeSummaries above.
+ */
+export async function fetchNpsPranLast4(tenantId: string): Promise<Map<string, string>> {
+  const url = `${HRMS_URL}/v1/hrms/internal/nps-pran-last4`;
+  try {
+    const res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return new Map();
+    const rows = await res.json() as Array<{ employeeId: string; pranLast4: string }>;
+    return new Map(rows.map((r) => [r.employeeId, r.pranLast4]));
   } catch {
     return new Map();
   }

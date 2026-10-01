@@ -1,24 +1,52 @@
 "use client";
 
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "../../../../../_components/ds";
+import { browserFetch } from "@/lib/api/browserClient";
+import { rupeesToMinorString, nonNegativeRupeesToMinorString } from "@/lib/money";
+import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
+import { Button, ConfirmDialog, maskLast4 } from "../../../../../_components/ds";
 
+// Same rules payroll-service's createPensionerBody enforces server-side
+// (payroll/validators.ts) -- GAP-PAYROLL-PENSIONERS-NEW-02.
 const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+const BANK_ACCOUNT_REGEX = /^\d{9,18}$/;
 
 // Matches the shared design-system look used by sibling HR/payroll forms
 // (RequestAdvanceForm, TravelRequestForm, CreateFlexPlanForm, …) instead of
-// hardcoded Tailwind slate/indigo classes, which rendered visually
-// inconsistent with the rest of the app (different border/focus colors, and
-// not theme-aware since --line/--ink etc. were bypassed).
+// hardcoded Tailwind slate/indigo classes.
 const inputStyle: CSSProperties = {
   width: "100%", padding: "10px 12px", borderRadius: 10,
   border: "1px solid var(--line)", minHeight: 44, fontSize: 14,
 };
 const labelStyle: CSSProperties = { fontSize: 13, fontWeight: 600, display: "block", marginBottom: 6 };
+
+type FieldKey =
+  | "ppoNo" | "fullName" | "dateOfBirth" | "basicPension" | "commutedPension" | "commutationDate"
+  | "medicalAllowance" | "bankAccountNo" | "bankIfsc" | "pan";
+
+type Payload = {
+  ppoNo: string;
+  fullName: string;
+  dateOfBirth: string;
+  basicPensionMinor: string;
+  commutedPensionMinor: string;
+  commutationDate?: string;
+  medicalAllowanceMinor: string;
+  ddoCode?: string;
+  bankAccountNo?: string;
+  bankIfsc?: string;
+  pan?: string;
+  taxRegime: "old" | "new";
+};
+
+function RequiredMark() {
+  return <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>;
+}
 
 export function CreatePensionerForm() {
   const t = useTranslations("createPensionerForm");
@@ -38,187 +66,259 @@ export function CreatePensionerForm() {
   const [taxRegime, setTaxRegime] = useState<"old" | "new">("new");
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
+  const [invalidField, setInvalidField] = useState(null as FieldKey | null);
+  // GAP-PAYROLL-PENSIONERS-NEW-02: validated payload awaiting confirmation.
+  const [pending, setPending] = useState(null as Payload | null);
+  const [dialogError, setDialogError] = useState(undefined as string | undefined);
   const formError = useFormError("pensioner");
 
-  const ppoFieldId = useId();
-  const nameFieldId = useId();
-  const dobFieldId = useId();
-  const basicFieldId = useId();
-  const commutedFieldId = useId();
-  const commDateFieldId = useId();
-  const medFieldId = useId();
-  const ddoFieldId = useId();
-  const bankAccFieldId = useId();
-  const ifscFieldId = useId();
-  const panFieldId = useId();
-  const taxRegimeId = useId();
-  const statusMsgId = useId();
+  const ids = {
+    ppoNo: useId(), fullName: useId(), dateOfBirth: useId(), basicPension: useId(), commutedPension: useId(),
+    commutationDate: useId(), medicalAllowance: useId(), ddoCode: useId(), bankAccountNo: useId(),
+    bankIfsc: useId(), pan: useId(), taxRegime: useId(), statusMsg: useId(), dpdpNotice: useId(),
+  };
+  const fieldRefs = useRef<Partial<Record<FieldKey, HTMLInputElement | null>>>({});
 
-  function toMinorUnits(rupees: string): number {
-    const val = parseFloat(rupees);
-    if (Number.isNaN(val)) return 0;
-    return Math.round(val * 100);
+  function fail(field: FieldKey, msgKey: string) {
+    setStatus("error");
+    setMessage(t(msgKey));
+    setInvalidField(field);
+    fieldRefs.current[field]?.focus();
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  function fieldA11y(field: FieldKey) {
+    const invalid = invalidField === field;
+    return {
+      "aria-invalid": invalid || undefined,
+      "aria-describedby": invalid ? ids.statusMsg : undefined,
+    } as const;
+  }
+
+  /** Returns the validated payload, or null after flagging the first invalid field. */
+  function validate(): Payload | null {
+    const today = todayIST();
+    if (!ppoNo.trim()) { fail("ppoNo", "requiredError"); return null; }
+    if (!fullName.trim()) { fail("fullName", "requiredError"); return null; }
+    if (!dateOfBirth) { fail("dateOfBirth", "requiredError"); return null; }
+    // GAP-PAYROLL-PENSIONERS-NEW-01: DOB cannot be in the future.
+    if (dateOfBirth > today) { fail("dateOfBirth", "dobFutureError"); return null; }
+
+    // GAP-PAYROLL-PENSIONERS-NEW-01: basic pension is required and > 0. The
+    // old toMinorUnits() turned a blank/NaN into 0, creating an "active"
+    // pensioner at ₹0.00. String-based parsing -- no float rounding.
+    const basicMinor = rupeesToMinorString(basicPension);
+    if (!basicMinor) { fail("basicPension", "basicPensionError"); return null; }
+
+    let commutedMinor = "0";
+    if (commutedPension.trim()) {
+      const parsed = nonNegativeRupeesToMinorString(commutedPension);
+      if (parsed === null) { fail("commutedPension", "amountFormatError"); return null; }
+      commutedMinor = parsed;
+    }
+    // GAP-PAYROLL-PENSIONERS-NEW-04: commuted amount and commutation date are
+    // a pair -- both or neither.
+    const hasCommutedAmount = BigInt(commutedMinor) > 0n;
+    if (hasCommutedAmount && !commutationDate) { fail("commutationDate", "commutationPairError"); return null; }
+    if (!hasCommutedAmount && commutationDate) { fail("commutedPension", "commutationPairError"); return null; }
+    if (commutationDate && commutationDate < dateOfBirth) { fail("commutationDate", "commutationBeforeDobError"); return null; }
+    if (commutationDate && commutationDate > today) { fail("commutationDate", "commutationFutureError"); return null; }
+
+    let medicalMinor = "0";
+    if (medicalAllowance.trim()) {
+      const parsed = nonNegativeRupeesToMinorString(medicalAllowance);
+      if (parsed === null) { fail("medicalAllowance", "amountFormatError"); return null; }
+      medicalMinor = parsed;
+    }
+
+    // GAP-PAYROLL-PENSIONERS-NEW-02: bank/PAN format checks.
+    const account = bankAccountNo.trim();
+    const ifsc = bankIfsc.trim().toUpperCase();
+    const panValue = pan.trim().toUpperCase();
+    if (account && !BANK_ACCOUNT_REGEX.test(account)) { fail("bankAccountNo", "bankAccountFormatError"); return null; }
+    if (ifsc && !IFSC_REGEX.test(ifsc)) { fail("bankIfsc", "ifscFormatError"); return null; }
+    if (panValue && !PAN_REGEX.test(panValue)) { fail("pan", "panFormatError"); return null; }
+
+    return {
+      ppoNo: ppoNo.trim(),
+      fullName: fullName.trim(),
+      dateOfBirth,
+      basicPensionMinor: basicMinor,
+      commutedPensionMinor: commutedMinor,
+      commutationDate: commutationDate || undefined,
+      medicalAllowanceMinor: medicalMinor,
+      ddoCode: ddoCode.trim() || undefined,
+      bankAccountNo: account || undefined,
+      bankIfsc: ifsc || undefined,
+      pan: panValue || undefined,
+      taxRegime,
+    };
+  }
+
+  function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-
-    if (!ppoNo.trim() || !fullName.trim() || !dateOfBirth) {
-      setStatus("error");
-      setMessage(t("requiredError"));
-      return;
-    }
-
-    if (pan.trim() && !PAN_REGEX.test(pan.trim().toUpperCase())) {
-      setStatus("error");
-      setMessage(t("panFormatError"));
-      return;
-    }
-
-    setStatus("submitting");
+    setInvalidField(null);
     setMessage("");
+    setStatus("idle");
+    const payload = validate();
+    if (!payload) return;
+    setDialogError(undefined);
+    setPending(payload);
+  }
 
+  async function confirmCreate() {
+    if (!pending) return;
+    setStatus("submitting");
+    setDialogError(undefined);
     try {
-      const res = await fetch("/api/proxy/v1/payroll/pensioners", {
+      // GAP-PAYROLL-PENSIONERS-NEW-03: browserFetch (not a bare fetch) so the
+      // device-trust headers every other payroll form sends are included.
+      const res = await browserFetch("v1/payroll/pensioners", {
         method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          ppoNo: ppoNo.trim(),
-          fullName: fullName.trim(),
-          dateOfBirth,
-          basicPensionMinor: toMinorUnits(basicPension),
-          commutedPensionMinor: commutedPension ? toMinorUnits(commutedPension) : 0,
-          commutationDate: commutationDate || undefined,
-          medicalAllowanceMinor: medicalAllowance ? toMinorUnits(medicalAllowance) : 0,
-          ddoCode: ddoCode.trim() || undefined,
-          bankAccountNo: bankAccountNo.trim() || undefined,
-          bankIfsc: bankIfsc.trim() || undefined,
-          pan: pan.trim().toUpperCase() || undefined,
-          taxRegime,
-        }),
+        body: JSON.stringify(pending),
       });
-
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
-        setMessage(resolved.message);
+        setDialogError(resolved.message);
         return;
       }
-
+      setPending(null);
       setStatus("success");
       setMessage(t("successMessage"));
       router.push("/hr/payroll/pensioners");
+      router.refresh();
     } catch {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setDialogError(formError.fromException("save").message);
     }
   }
 
   return (
     <div className="card" style={{ maxWidth: 640 }}>
-      <form onSubmit={handleSubmit} className="pad" style={{ display: "grid", gap: 16 }}>
+      <form onSubmit={handleSubmit} className="pad" style={{ display: "grid", gap: 16 }} noValidate>
         <div>
-          <label htmlFor={ppoFieldId} style={labelStyle}>
-            {t("ppoNoLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+          <label htmlFor={ids.ppoNo} style={labelStyle}>
+            {t("ppoNoLabel")} <RequiredMark />
           </label>
           <input
-            id={ppoFieldId}
+            id={ids.ppoNo}
+            ref={(el) => { fieldRefs.current.ppoNo = el; }}
             type="text"
             value={ppoNo}
             onChange={(e) => setPpoNo(e.target.value)}
             placeholder={t("ppoNoPlaceholder")}
             style={inputStyle}
             required
+            aria-required="true"
+            {...fieldA11y("ppoNo")}
           />
         </div>
 
         <div>
-          <label htmlFor={nameFieldId} style={labelStyle}>
-            {t("fullNameLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+          <label htmlFor={ids.fullName} style={labelStyle}>
+            {t("fullNameLabel")} <RequiredMark />
           </label>
           <input
-            id={nameFieldId}
+            id={ids.fullName}
+            ref={(el) => { fieldRefs.current.fullName = el; }}
             type="text"
             value={fullName}
             onChange={(e) => setFullName(e.target.value)}
             placeholder={t("fullNamePlaceholder")}
             style={inputStyle}
             required
+            aria-required="true"
+            {...fieldA11y("fullName")}
           />
         </div>
 
         <div>
-          <label htmlFor={dobFieldId} style={labelStyle}>
-            {t("dobLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #ef4444)" }}>*</span>
+          <label htmlFor={ids.dateOfBirth} style={labelStyle}>
+            {t("dobLabel")} <RequiredMark />
           </label>
           <input
-            id={dobFieldId}
+            id={ids.dateOfBirth}
+            ref={(el) => { fieldRefs.current.dateOfBirth = el; }}
             type="date"
             value={dateOfBirth}
+            max={todayIST()}
             onChange={(e) => setDateOfBirth(e.target.value)}
             style={inputStyle}
             required
+            aria-required="true"
+            {...fieldA11y("dateOfBirth")}
           />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
           <div>
-            <label htmlFor={basicFieldId} style={labelStyle}>{t("basicPensionLabel")}</label>
+            <label htmlFor={ids.basicPension} style={labelStyle}>
+              {t("basicPensionLabel")} <RequiredMark />
+            </label>
             <input
-              id={basicFieldId}
-              type="number"
-              min="0"
-              step="0.01"
+              id={ids.basicPension}
+              ref={(el) => { fieldRefs.current.basicPension = el; }}
+              type="text"
+              inputMode="decimal"
               value={basicPension}
               onChange={(e) => setBasicPension(e.target.value)}
               placeholder={t("basicPensionPlaceholder")}
               style={inputStyle}
+              required
+              aria-required="true"
+              {...fieldA11y("basicPension")}
             />
           </div>
 
           <div>
-            <label htmlFor={commutedFieldId} style={labelStyle}>{t("commutedPensionLabel")}</label>
+            <label htmlFor={ids.commutedPension} style={labelStyle}>{t("commutedPensionLabel")}</label>
             <input
-              id={commutedFieldId}
-              type="number"
-              min="0"
-              step="0.01"
+              id={ids.commutedPension}
+              ref={(el) => { fieldRefs.current.commutedPension = el; }}
+              type="text"
+              inputMode="decimal"
               value={commutedPension}
               onChange={(e) => setCommutedPension(e.target.value)}
               placeholder={t("commutedPensionPlaceholder")}
               style={inputStyle}
+              {...fieldA11y("commutedPension")}
             />
           </div>
 
           <div>
-            <label htmlFor={commDateFieldId} style={labelStyle}>{t("commutationDateLabel")}</label>
+            <label htmlFor={ids.commutationDate} style={labelStyle}>{t("commutationDateLabel")}</label>
             <input
-              id={commDateFieldId}
+              id={ids.commutationDate}
+              ref={(el) => { fieldRefs.current.commutationDate = el; }}
               type="date"
               value={commutationDate}
+              min={dateOfBirth || undefined}
+              max={todayIST()}
               onChange={(e) => setCommutationDate(e.target.value)}
               style={inputStyle}
+              {...fieldA11y("commutationDate")}
             />
           </div>
 
           <div>
-            <label htmlFor={medFieldId} style={labelStyle}>{t("medicalAllowanceLabel")}</label>
+            <label htmlFor={ids.medicalAllowance} style={labelStyle}>{t("medicalAllowanceLabel")}</label>
             <input
-              id={medFieldId}
-              type="number"
-              min="0"
-              step="0.01"
+              id={ids.medicalAllowance}
+              ref={(el) => { fieldRefs.current.medicalAllowance = el; }}
+              type="text"
+              inputMode="decimal"
               value={medicalAllowance}
               onChange={(e) => setMedicalAllowance(e.target.value)}
               placeholder={t("medicalAllowancePlaceholder")}
               style={inputStyle}
+              {...fieldA11y("medicalAllowance")}
             />
           </div>
 
           <div>
-            <label htmlFor={ddoFieldId} style={labelStyle}>{t("ddoCodeLabel")}</label>
+            <label htmlFor={ids.ddoCode} style={labelStyle}>{t("ddoCodeLabel")}</label>
             <input
-              id={ddoFieldId}
+              id={ids.ddoCode}
               type="text"
               value={ddoCode}
               onChange={(e) => setDdoCode(e.target.value)}
@@ -226,48 +326,68 @@ export function CreatePensionerForm() {
               style={inputStyle}
             />
           </div>
-
-          <div>
-            <label htmlFor={bankAccFieldId} style={labelStyle}>{t("bankAccountLabel")}</label>
-            <input
-              id={bankAccFieldId}
-              type="text"
-              value={bankAccountNo}
-              onChange={(e) => setBankAccountNo(e.target.value)}
-              placeholder={t("bankAccountPlaceholder")}
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label htmlFor={ifscFieldId} style={labelStyle}>{t("ifscLabel")}</label>
-            <input
-              id={ifscFieldId}
-              type="text"
-              value={bankIfsc}
-              onChange={(e) => setBankIfsc(e.target.value)}
-              placeholder={t("ifscPlaceholder")}
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label htmlFor={panFieldId} style={labelStyle}>{t("panLabel")}</label>
-            <input
-              id={panFieldId}
-              type="text"
-              value={pan}
-              onChange={(e) => setPan(e.target.value)}
-              placeholder={t("panPlaceholder")}
-              maxLength={10}
-              style={inputStyle}
-            />
-          </div>
         </div>
+
+        {/* GAP-PAYROLL-PENSIONERS-NEW-02: sensitive bank/PAN group, with a
+            DPDP purpose notice and autofill disabled. */}
+        <fieldset aria-describedby={ids.dpdpNotice} style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12, display: "grid", gap: 14 }}>
+          <legend style={{ fontSize: 13, fontWeight: 600, padding: "0 4px" }}>{t("bankPanLegend")}</legend>
+          <p id={ids.dpdpNotice} style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("dpdpNotice")}</p>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 14 }}>
+            <div>
+              <label htmlFor={ids.bankAccountNo} style={labelStyle}>{t("bankAccountLabel")}</label>
+              <input
+                id={ids.bankAccountNo}
+                ref={(el) => { fieldRefs.current.bankAccountNo = el; }}
+                type="text"
+                inputMode="numeric"
+                autoComplete="off"
+                maxLength={18}
+                value={bankAccountNo}
+                onChange={(e) => setBankAccountNo(e.target.value)}
+                placeholder={t("bankAccountPlaceholder")}
+                style={inputStyle}
+                {...fieldA11y("bankAccountNo")}
+              />
+            </div>
+
+            <div>
+              <label htmlFor={ids.bankIfsc} style={labelStyle}>{t("ifscLabel")}</label>
+              <input
+                id={ids.bankIfsc}
+                ref={(el) => { fieldRefs.current.bankIfsc = el; }}
+                type="text"
+                autoComplete="off"
+                maxLength={11}
+                value={bankIfsc}
+                onChange={(e) => setBankIfsc(e.target.value.toUpperCase())}
+                placeholder={t("ifscPlaceholder")}
+                style={{ ...inputStyle, textTransform: "uppercase" }}
+                {...fieldA11y("bankIfsc")}
+              />
+            </div>
+
+            <div>
+              <label htmlFor={ids.pan} style={labelStyle}>{t("panLabel")}</label>
+              <input
+                id={ids.pan}
+                ref={(el) => { fieldRefs.current.pan = el; }}
+                type="text"
+                autoComplete="off"
+                value={pan}
+                onChange={(e) => setPan(e.target.value.toUpperCase())}
+                placeholder={t("panPlaceholder")}
+                maxLength={10}
+                style={{ ...inputStyle, textTransform: "uppercase" }}
+                {...fieldA11y("pan")}
+              />
+            </div>
+          </div>
+        </fieldset>
 
         <fieldset style={{ border: "1px solid var(--line)", borderRadius: 10, padding: 12 }}>
           <legend style={{ fontSize: 13, fontWeight: 600, padding: "0 4px" }}>{t("taxRegimeLegend")}</legend>
-          <div style={{ display: "flex", gap: 24 }} id={taxRegimeId}>
+          <div style={{ display: "flex", gap: 24 }} id={ids.taxRegime}>
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
               <input
                 type="radio"
@@ -301,7 +421,7 @@ export function CreatePensionerForm() {
 
         {message && (
           <p
-            id={statusMsgId}
+            id={ids.statusMsg}
             role={status === "error" ? "alert" : "status"}
             aria-live={status === "error" ? "assertive" : "polite"}
             className={`pill ${status === "error" ? "bad" : "good"}`}
@@ -312,6 +432,31 @@ export function CreatePensionerForm() {
           </p>
         )}
       </form>
+
+      <ConfirmDialog
+        open={pending !== null}
+        title={t("confirmTitle")}
+        confirmLabel={t("submitButton")}
+        busy={status === "submitting"}
+        errorMessage={dialogError}
+        description={
+          pending ? (
+            <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "4px 12px", margin: 0 }}>
+              <dt>{t("ppoNoLabel")}</dt><dd style={{ margin: 0 }}><strong>{pending.ppoNo}</strong></dd>
+              <dt>{t("fullNameLabel")}</dt><dd style={{ margin: 0 }}>{pending.fullName}</dd>
+              <dt>{t("dobLabel")}</dt><dd style={{ margin: 0 }}>{formatIndianDate(pending.dateOfBirth)}</dd>
+              <dt>{t("confirmBasicPension")}</dt><dd style={{ margin: 0 }}><strong>{formatMoney(pending.basicPensionMinor)}</strong></dd>
+              {pending.bankAccountNo && (
+                <>
+                  <dt>{t("confirmBankAccount")}</dt><dd style={{ margin: 0, fontFamily: "monospace" }}>{maskLast4(pending.bankAccountNo)}</dd>
+                </>
+              )}
+            </dl>
+          ) : null
+        }
+        onConfirm={() => void confirmCreate()}
+        onCancel={() => { if (status !== "submitting") { setPending(null); setStatus("idle"); } }}
+      />
     </div>
   );
 }

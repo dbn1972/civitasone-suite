@@ -17,33 +17,54 @@ import { fnfSettlements } from "./schema.js";
 import { exemptionCeilings } from "./schema.js";
 import { eq, and } from "drizzle-orm";
 import { computeFnfSettlement, type FnfInput } from "./domain.js";
+import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
 
 const FNF_ROLES = ["payroll_admin", "hr_admin", "super_admin", "finance_officer"];
+
+// GAP-PAYROLL-FNF-03: every money field used to be
+// `z.string().transform((v) => BigInt(v))` -- BigInt("1234.5") /
+// BigInt("abc") threw a raw SyntaxError out of the transform (an unhandled
+// 500, not a 400) and a negative "-5" was accepted as a negative payout
+// input. Now a whole, non-negative paise integer string only.
+const minor = () => z.string().regex(/^\d{1,15}$/, "must be a whole number of paise").transform((v) => BigInt(v));
+
+/** Fields the web form pre-fills from HR records and lets the user override (with a reason). */
+export const FNF_OVERRIDABLE_FIELDS = ["completedYears", "leaveBalanceDays"] as const;
+
+// GAP-PAYROLL-FNF-03: when the clerk overrides a record-derived input, the
+// reason travels with the compute command and is persisted in the
+// settlement's computation_detail + the audit event, so a hand-typed value
+// that decides a final payout is never silent.
+const overridesSchema = z.object({
+  fields: z.array(z.enum(FNF_OVERRIDABLE_FIELDS)).min(1),
+  reason: z.string().trim().min(10).max(500),
+});
 
 const computeFnfBody = z.object({
   employeeId: z.string().uuid(),
   separationDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   separationType: z.enum(["retirement", "superannuation", "resignation", "retrenchment", "vrs", "death"]),
   employeeCategory: z.enum(["govt", "non_govt_covered", "non_govt_uncovered"]),
-  noticeBuyoutMinor: z.string().transform((v) => BigInt(v)).default("0"),
-  leaveEncashmentGrossMinor: z.string().transform((v) => BigInt(v)).default("0"),
-  gratuityGrossMinor: z.string().transform((v) => BigInt(v)).default("0"),
-  retrenchmentCompMinor: z.string().transform((v) => BigInt(v)).default("0"),
-  vrsCompMinor: z.string().transform((v) => BigInt(v)).default("0"),
-  arrearsMinor: z.string().transform((v) => BigInt(v)).default("0"),
-  lastDrawnWagesMinor: z.string().transform((v) => BigInt(v)),
+  noticeBuyoutMinor: minor().default("0"),
+  leaveEncashmentGrossMinor: minor().default("0"),
+  gratuityGrossMinor: minor().default("0"),
+  retrenchmentCompMinor: minor().default("0"),
+  vrsCompMinor: minor().default("0"),
+  arrearsMinor: minor().default("0"),
+  lastDrawnWagesMinor: minor(),
   completedYears: z.number().int().min(0),
-  avgSalaryLast10MonthsMinor: z.string().transform((v) => BigInt(v)),
+  avgSalaryLast10MonthsMinor: minor(),
   leaveBalanceDays: z.number().int().min(0),
-  priorLeaveEncashExemptionMinor: z.string().transform((v) => BigInt(v)).default("0"),
+  priorLeaveEncashExemptionMinor: minor().default("0"),
   remainingMonthsToRetirement: z.number().int().min(0).default(0),
   taxRegime: z.enum(["old", "new"]),
-  salaryYtdMinor: z.string().transform((v) => BigInt(v)),
-  tdsYtdMinor: z.string().transform((v) => BigInt(v)),
-  deductions80cMinor: z.string().transform((v) => BigInt(v)).default("0"),
-  deductions80dMinor: z.string().transform((v) => BigInt(v)).default("0"),
-  otherDeductionsMinor: z.string().transform((v) => BigInt(v)).default("0"),
+  salaryYtdMinor: minor(),
+  tdsYtdMinor: minor(),
+  deductions80cMinor: minor().default("0"),
+  deductions80dMinor: minor().default("0"),
+  otherDeductionsMinor: minor().default("0"),
   fyStartYear: z.number().int(),
+  overrides: overridesSchema.optional(),
 });
 
 const idParamSchema = z.object({ id: z.string().uuid() });
@@ -125,6 +146,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
         deductions80dMinor: body.deductions80dMinor.toString(),
         otherDeductionsMinor: body.otherDeductionsMinor.toString(),
         fyStartYear: body.fyStartYear,
+        ...(body.overrides ? { overrides: body.overrides } : {}),
       },
     });
 
@@ -151,7 +173,8 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "settlement not found");
     }
 
-    return reply.send({ data: serializeSettlement(rows[0]!) });
+    const empMap = await fetchEmployeeSummaries(ctx.tenantId);
+    return reply.send({ data: serializeSettlement(rows[0]!, empMap) });
   });
 
   /**
@@ -176,7 +199,13 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
       .limit(q.limit)
       .offset(q.offset));
 
-    return reply.send({ data: rows.map(serializeSettlement), meta: { limit: q.limit, offset: q.offset } });
+    // GAP-PAYROLL-FNF-05: enrich with the employee's name and employee number
+    // the same best-effort way statutory/queries.ts#listGpfReport does --
+    // fetchEmployeeSummaries fails open to an empty Map on an unreachable
+    // HRMS, so this never gates the list (the card then shows a neutral
+    // "Unknown employee" label, never the raw UUID).
+    const empMap = await fetchEmployeeSummaries(ctx.tenantId);
+    return reply.send({ data: rows.map((r) => serializeSettlement(r, empMap)), meta: { limit: q.limit, offset: q.offset } });
   });
 
   /**
@@ -265,11 +294,17 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
 }
 
 /** Serialize bigint fields to string for JSON transport. */
-function serializeSettlement(row: typeof fnfSettlements.$inferSelect): Record<string, unknown> {
+function serializeSettlement(
+  row: typeof fnfSettlements.$inferSelect,
+  empMap: Map<string, { fullName: string; employeeNo?: string | null }> = new Map(),
+): Record<string, unknown> {
+  const emp = empMap.get(row.employeeId);
   return {
     id: row.id,
     tenantId: row.tenantId,
     employeeId: row.employeeId,
+    employeeName: emp?.fullName ?? null,
+    employeeCode: emp?.employeeNo ?? null,
     runId: row.runId,
     separationType: row.separationType,
     separationDate: row.separationDate,

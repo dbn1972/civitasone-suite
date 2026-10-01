@@ -1,5 +1,5 @@
 import * as repo from "./repo.js";
-import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
+import { fetchEmployeeSummaries, fetchNpsPranLast4 } from "../../shared/hrms-client.js";
 
 export async function listPfReport(tenantId: string, limit: number) {
   const rows = await repo.listPfByTenant(tenantId, limit);
@@ -68,6 +68,9 @@ export async function listGpfReport(tenantId: string, limit: number) {
     id: r.id,
     employeeId: r.employeeId,
     employeeName: empMap.get(r.employeeId)?.fullName ?? null,
+    // GAP-PAYROLL-GPF-02: the real HR employee number (best-effort, null when
+    // HRMS has no match) -- replaces the web's fabricated UUID-prefix "code".
+    employeeCode: empMap.get(r.employeeId)?.employeeNo ?? null,
     period: r.period,
     basicMinor: Number(r.basicMinor),
     contribPct: r.contribPct,
@@ -77,14 +80,18 @@ export async function listGpfReport(tenantId: string, limit: number) {
 
 export async function listNpsReport(tenantId: string, limit: number) {
   // UX-021: see listGpfReport above -- same best-effort employeeName enrichment.
-  const [rows, empMap] = await Promise.all([
+  const [rows, empMap, pranMap] = await Promise.all([
     repo.listNpsByTenant(tenantId, limit),
     fetchEmployeeSummaries(tenantId),
+    fetchNpsPranLast4(tenantId),
   ]);
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
     employeeName: empMap.get(r.employeeId)?.fullName ?? null,
+    // GAP-PAYROLL-NPS-02: real employee number + masked PRAN (last 4 only).
+    employeeCode: empMap.get(r.employeeId)?.employeeNo ?? null,
+    pranLast4: pranMap.get(r.employeeId) ?? null,
     period: r.period,
     basicMinor: Number(r.basicMinor),
     empContribPct: r.empContribPct,

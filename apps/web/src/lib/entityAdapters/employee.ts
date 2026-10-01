@@ -46,9 +46,14 @@ function toOption(row: EmployeeRow): EntityOption {
 export async function searchEmployees(
   query: string,
   signal: AbortSignal,
-  opts?: { excludeStatuses?: readonly string[] },
+  opts?: { excludeStatuses?: readonly string[]; onForbidden?: () => void },
 ): Promise<EntityOption[]> {
   const res = await fetch(`/api/proxy/v1/hrms/employees?q=${encodeURIComponent(query)}&limit=20`, { signal });
+  // GAP-PAYROLL-FNF-05 review: GET /v1/hrms/employees is DIRECTORY_ROLES-gated,
+  // so e.g. a payroll_admin/finance_officer-only user gets a 403. Callers that
+  // pass `onForbidden` can say so explicitly instead of showing a silent
+  // "no results"; behavior for every other caller is unchanged.
+  if (res.status === 403) opts?.onForbidden?.();
   if (!res.ok) return [];
   const body = (await res.json()) as { data?: EmployeeRow[] } | EmployeeRow[];
   const rows = Array.isArray(body) ? body : (body.data ?? []);

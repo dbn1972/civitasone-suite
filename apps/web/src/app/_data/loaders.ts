@@ -4568,7 +4568,11 @@ export async function getNotificationDeliveries(): Promise<LoaderResult<Notifica
   });
 }
 
-export type StatutoryRow = { id: string; employeeId: string; employeeName?: string | null; period: string; empContribMinor?: number; erContribMinor?: number; basicMinor?: number };
+// GAP-PAYROLL-GPF-02 / NPS-02: employeeCode is the real HR employee number
+// payroll-service now enriches from hrms (null when unresolved), and
+// pranLast4 (NPS only) is the last four characters of the PRAN -- the full
+// PRAN never leaves hrms-service.
+export type StatutoryRow = { id: string; employeeId: string; employeeName?: string | null; employeeCode?: string | null; pranLast4?: string | null; period: string; empContribMinor?: number | null; erContribMinor?: number | null; basicMinor?: number };
 
 export async function getGpfStatements(): Promise<LoaderResult<StatutoryRow[]>> {
   return fetchJson<unknown, StatutoryRow[]>("/api/v1/payroll/statutory/gpf", [], {
@@ -4652,9 +4656,11 @@ export async function getAttendanceListByMonth(month?: string): Promise<LoaderRe
 
 // ── Pensioner loaders ─────────────────────────────────────────────────────────
 
+// GAP-PAYROLL-PENSIONERS-05 / PENSIONERS-NEW-03: no `revalidateSeconds`
+// any more (was 120) -- a payroll money list, like its sibling loaders, so a
+// pensioner just created on /new is not hidden behind a 2-minute data cache.
 export async function getPensioners(): Promise<LoaderResult<PensionerSummary[]>> {
   return fetchJson<unknown, PensionerSummary[]>("/api/v1/payroll/pensioners", [], {
-    revalidateSeconds: 120,
     telemetryKey: "payroll.pensioners",
     mapResponse: (p) => getArrayPayload(p) as PensionerSummary[] | null,
   });

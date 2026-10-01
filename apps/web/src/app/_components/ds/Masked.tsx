@@ -12,7 +12,26 @@
  * directly inside a Server Component (e.g. perquisite/page.tsx) with no
  * client-boundary wrapper required.
  */
-export type MaskedKind = "pan" | "account";
+export type MaskedKind = "pan" | "account" | "last4";
+
+/**
+ * GAP-PAYROLL-PENSIONERS-NEW-02 / GAP-PAYROLL-NPS-02: show only the last four
+ * characters of an account-style identifier (bank account number, PRAN).
+ * Works whether the caller holds the full value or -- as for PRAN, which
+ * hrms-service never sends in full -- only the last four already. Exported
+ * as a plain function too, so Server Components can pre-format a DataTable
+ * cell string (DataTable cells cannot take a component across the client
+ * boundary).
+ *
+ *   maskLast4("123456789012") -> "•••• 9012"
+ *   maskLast4("9012")         -> "•••• 9012"
+ *   maskLast4("12")           -> "••••"
+ */
+export function maskLast4(value: string): string {
+  const v = value.trim();
+  if (v.length < 4) return "••••";
+  return `•••• ${v.slice(-4)}`;
+}
 
 function maskPan(value: string): string {
   // Indian PAN: 5 letters + 4 digits + 1 letter (10 chars). Show the first 5
@@ -47,7 +66,7 @@ export interface MaskedProps {
 
 export function Masked({ value, kind, fallback = null, className, ariaLabel }: MaskedProps) {
   if (!value) return <>{fallback}</>;
-  const masked = kind === "pan" ? maskPan(value) : kind === "account" ? maskAccount(value) : "****";
+  const masked = kind === "pan" ? maskPan(value) : kind === "account" ? maskAccount(value) : maskLast4(value);
   return (
     <span className={className} style={{ fontFamily: "monospace" }} aria-label={ariaLabel}>
       {masked}

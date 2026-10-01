@@ -1,74 +1,80 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../../_components/ds";
+import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState, maskLast4 } from "../../../../_components/ds";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getNpsStatements } from "../../../../_data/loaders";
-import { Chart } from "../../../../_components/Chart";
+import { MoneyChart } from "../_components/MoneyChart";
 import { toResourceState } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
+import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 
 type NpsRow = {
   id: string;
   employeeId: string;
   employeeCode: string;
   employeeName: string;
+  pran: string;
   period: string;
-  emp: number;
-  er: number;
+  // GAP-PAYROLL-NPS-03: null = no figure in the statement (DataTable's
+  // formatMoney renders "—"); 0 = a real zero contribution.
+  emp: number | null;
+  er: number | null;
 } & Record<string, unknown>;
-
-// NPS return assumption: 9.5% p.a. (PFRDA-reported long-term median across Tier-I schemes)
-const ASSUMED_ANNUAL_RETURN = 0.095;
-
-function projectCorpus(totalContribMinor: number, yearsRemaining: number): number {
-  // FV of lump-sum at assumed rate
-  return totalContribMinor * Math.pow(1 + ASSUMED_ANNUAL_RETURN, yearsRemaining);
-}
 
 export default async function NpsStatementsPage() {
   const t = await getTranslations("npsStatements");
+  // GAP-PAYROLL-NPS-05: hr/layout.tsx admits employee/manager to every
+  // /hr/payroll* route, and this ledger lists every subscriber's
+  // contributions. Gate on payroll-service's own READER_ROLES for GET
+  // /v1/payroll/statutory/nps (statutory/routes.ts), before any fetch.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
+    return <PermissionDenied module="nps" requiredRoles={PAYROLL_READER_ROLES} />;
+  }
+
   const result = await getNpsStatements();
   const { data: rows } = result;
   const resource = toResourceState(result);
   const errored = resource.status === "error";
 
-  const tableRows: NpsRow[] = rows.map((r) => {
-    const employeeCode = r.employeeId.slice(0, 8).toUpperCase();
-    return {
-      id: r.id,
-      employeeId: r.employeeId,
-      employeeCode,
-      // UX-021: see hr/payroll/gpf/page.tsx -- same best-effort fallback.
-      employeeName: r.employeeName ?? employeeCode,
-      period: r.period,
-      emp: r.empContribMinor ?? 0,
-      er: r.erContribMinor ?? 0,
-    };
-  });
+  const tableRows: NpsRow[] = rows.map((r) => ({
+    id: r.id,
+    employeeId: r.employeeId,
+    // GAP-PAYROLL-NPS-02: was employeeId.slice(0, 8).toUpperCase() -- a
+    // fabricated UUID prefix shown as "Code" and as the name fallback. Now
+    // the real HR employee number and a masked PRAN (payroll-service only
+    // ever receives the last 4 PRAN characters from hrms).
+    employeeCode: r.employeeCode ?? "—",
+    employeeName: r.employeeName ?? t("unknownEmployee"),
+    pran: r.pranLast4 ? maskLast4(r.pranLast4) : "—",
+    period: r.period,
+    emp: r.empContribMinor ?? null,
+    er: r.erContribMinor ?? null,
+  }));
 
   const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
-  // Raw (not gated): tableRows is already [] on a real fetch failure, so
-  // these stay true 0s — projectCorpus() below needs a real number either way.
-  const totalEmp = tableRows.reduce((s, r) => s + (Number(r.emp) || 0), 0);
-  const totalEr = tableRows.reduce((s, r) => s + (Number(r.er) || 0), 0);
-  const totalCorpus = totalEmp + totalEr; // simplified: total accumulated so far
+  // Totals skip missing figures (GAP-PAYROLL-NPS-03) -- unchanged for
+  // complete data; rows with a missing figure are counted and surfaced.
+  const totalEmp = tableRows.reduce((s, r) => s + (r.emp ?? 0), 0);
+  const totalEr = tableRows.reduce((s, r) => s + (r.er ?? 0), 0);
+  // GAP-PAYROLL-NPS-04: this is a contributions total, not a corpus (no
+  // NAV/returns), and is labelled as such.
+  const totalContributions = totalEmp + totalEr;
+  const missingCount = tableRows.filter((r) => r.emp === null || r.er === null).length;
 
   // Period-wise trend data (last 6 periods)
   const periodMap = new Map<string, number>();
   for (const r of tableRows) {
-    const key = r.period;
-    periodMap.set(key, (periodMap.get(key) ?? 0) + (Number(r.emp) || 0) + (Number(r.er) || 0));
+    periodMap.set(r.period, (periodMap.get(r.period) ?? 0) + (r.emp ?? 0) + (r.er ?? 0));
   }
   const sortedPeriods = Array.from(periodMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-6);
+  // GAP-PAYROLL-NPS-06: paise values, labelled by MoneyChart's formatMoney.
   const trendChartData = sortedPeriods.map(([label, value]) => ({
     label: label.slice(2), // "2026-06" → "26-06"
-    value: Math.round(value / 100), // minor to rupees
+    value,
   }));
-
-  // Projection: assume average 25 years remaining to retirement
-  const AVG_YEARS_TO_RETIRE = 25;
-  const projectedCorpus = projectCorpus(totalCorpus, AVG_YEARS_TO_RETIRE);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -85,7 +91,17 @@ export default async function NpsStatementsPage() {
         <StatCard icon="🏛️" iconBg="var(--panel)" label={t("statTotalEmployer")} value={errored ? "—" : formatMoney(totalEr)} />
       </StatGrid>
 
-      {/* NPS Corpus Dashboard */}
+      {!errored && missingCount > 0 && (
+        <p role="note" className="pill warn" style={{ width: "fit-content", margin: "4px 0 12px" }}>
+          {t("missingContribNote", { count: missingCount })}
+        </p>
+      )}
+
+      {/* GAP-PAYROLL-NPS-04: the old "Projected Corpus at Retirement" tile
+          (the tenant-wide contributions total compounded 25 years at an
+          assumed 9.5%) is removed -- a corpus is shown only from a real
+          balance source (per-subscriber balances live on hrms-service's
+          GET /v1/hrms/employees/:id/nps). */}
       <div
         style={{
           display: "grid",
@@ -94,36 +110,20 @@ export default async function NpsStatementsPage() {
           marginTop: 4,
         }}
       >
-        {/* Current corpus */}
-        <div
-          style={{
-            background: "var(--panel)",
-            border: "1px solid var(--line)",
-            borderRadius: 12,
-            padding: "18px 20px",
-          }}
-        >
+        <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px" }}>
           <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
-            {t("accumulatedCorpusLabel")}
+            {t("totalContributionsLabel")}
           </p>
           <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 800, color: "var(--ink)" }}>
-            {errored ? "—" : formatMoney(totalCorpus)}
+            {errored ? "—" : formatMoney(totalContributions)}
           </p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
             {t("accumulatedCorpusNote")}
           </p>
         </div>
 
-        {/* Last period contribution */}
         {sortedPeriods.length > 0 && (
-          <div
-            style={{
-              background: "var(--panel)",
-              border: "1px solid var(--line)",
-              borderRadius: 12,
-              padding: "18px 20px",
-            }}
-          >
+          <div style={{ background: "var(--panel)", border: "1px solid var(--line)", borderRadius: 12, padding: "18px 20px" }}>
             <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
               {t("lastPeriodLabel")}
             </p>
@@ -135,32 +135,11 @@ export default async function NpsStatementsPage() {
             </p>
           </div>
         )}
-
-        {/* Projected corpus */}
-        <div
-          style={{
-            background: "var(--goodbg, #f0fdf4)",
-            border: "1px solid var(--goodbd, #bbf7d0)",
-            borderRadius: 12,
-            padding: "18px 20px",
-          }}
-        >
-          <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--good, #14532d)", textTransform: "uppercase" }}>
-            {t("projectedCorpusLabel")}
-          </p>
-          <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "var(--good, #16a34a)" }}>
-            {errored ? "—" : formatMoney(projectedCorpus)}
-          </p>
-          <p style={{ margin: 0, fontSize: 11, color: "var(--good, #14532d)" }}>
-            {t("projectionNote", { years: AVG_YEARS_TO_RETIRE })}
-          </p>
-        </div>
       </div>
 
-      {/* Contribution trend */}
       {trendChartData.length > 1 && (
         <Card title={t("trendCardTitle")}>
-          <Chart type="bar" data={trendChartData} height={180} />
+          <MoneyChart type="bar" data={trendChartData} height={180} />
         </Card>
       )}
 
@@ -180,6 +159,7 @@ export default async function NpsStatementsPage() {
             columns={[
               { key: "employeeName", label: t("colEmployee") },
               { key: "employeeCode", label: t("colCode") },
+              { key: "pran", label: t("colPran") },
               { key: "period", label: t("colPeriod") },
               { key: "emp", label: t("colEmployeeContrib"), align: "right", cellType: "amount" },
               { key: "er", label: t("colEmployerContrib"), align: "right", cellType: "amount" },

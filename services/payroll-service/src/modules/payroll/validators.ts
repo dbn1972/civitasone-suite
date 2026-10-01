@@ -43,20 +43,67 @@ export const createDdoBody = z.object({
 export type CreateDdoBody = z.infer<typeof createDdoBody>;
 
 // Pensioner master admin. Money is paise (bigint, sent as integer string/number).
-const paise = z.union([z.string(), z.number()]).transform((v) => BigInt(v));
+// GAP-PAYROLL-PENSIONERS-NEW-01: was `z.union([z.string(), z.number()])
+// .transform(BigInt)` -- BigInt("12.5") / BigInt("abc") threw a raw
+// SyntaxError out of the transform (a 500, not a 400), and negatives passed.
+// Now a whole, non-negative paise integer only.
+const paise = z.union([
+  z.string().regex(/^\d{1,15}$/, "must be a whole number of paise"),
+  z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+]).transform((v) => BigInt(v));
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD");
+/**
+ * Today as YYYY-MM-DD in Asia/Kolkata (UTC+5:30, no DST) -- the same calendar
+ * the web form uses (lib/formatters todayIST), so a date entered on the IST
+ * morning before UTC midnight isn't rejected by one side only. ISO date
+ * strings compare correctly as text.
+ */
+const IST_OFFSET_MS = 330 * 60 * 1000;
+const todayIso = (): string => new Date(Date.now() + IST_OFFSET_MS).toISOString().slice(0, 10);
+// GAP-PAYROLL-PENSIONERS-NEW-02: format rules for the bank/PAN fields. The
+// web form enforces the same rules client-side; the server must still check.
+export const IFSC_REGEX = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+export const BANK_ACCOUNT_REGEX = /^\d{9,18}$/;
+export const PAN_REGEX = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
 export const createPensionerBody = z.object({
   ppoNo:                 z.string().min(1).max(64),
   fullName:              z.string().min(1).max(200),
-  dateOfBirth:           z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
-  basicPensionMinor:     paise,
+  dateOfBirth:           isoDate,
+  // GAP-PAYROLL-PENSIONERS-NEW-01: a blank web field used to arrive as 0 and
+  // create an "active" pensioner with a ₹0.00 basic pension.
+  basicPensionMinor:     paise.refine((v) => v > 0n, "basic pension must be greater than zero"),
   commutedPensionMinor:  paise.optional(),
-  commutationDate:       z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  commutationDate:       isoDate.optional(),
   medicalAllowanceMinor: paise.optional(),
   ddoCode:               z.string().min(1).max(32).optional(),
-  bankAccountNo:         z.string().max(64).optional(),
-  bankIfsc:              z.string().max(16).optional(),
-  pan:                   z.string().max(16).optional(),
+  bankAccountNo:         z.string().regex(BANK_ACCOUNT_REGEX, "bank account must be 9-18 digits").optional(),
+  bankIfsc:              z.string().regex(IFSC_REGEX, "invalid IFSC").optional(),
+  pan:                   z.string().regex(PAN_REGEX, "invalid PAN").optional(),
   taxRegime:             z.enum(["old", "new"]).default("new"),
+}).superRefine((b, ctx) => {
+  // GAP-PAYROLL-PENSIONERS-NEW-01: DOB must not be in the future.
+  if (b.dateOfBirth > todayIso()) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["dateOfBirth"], message: "date of birth cannot be in the future" });
+  }
+  // GAP-PAYROLL-PENSIONERS-NEW-04: commuted amount and commutation date are a
+  // pair -- both (amount > 0 and a date) or neither.
+  const hasCommutedAmount = (b.commutedPensionMinor ?? 0n) > 0n;
+  const hasCommutationDate = b.commutationDate !== undefined;
+  if (hasCommutedAmount !== hasCommutationDate) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: [hasCommutedAmount ? "commutationDate" : "commutedPensionMinor"],
+      message: "commuted pension and commutation date must be given together",
+    });
+  }
+  if (b.commutationDate !== undefined) {
+    if (b.commutationDate < b.dateOfBirth) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["commutationDate"], message: "commutation date cannot be before date of birth" });
+    }
+    if (b.commutationDate > todayIso()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["commutationDate"], message: "commutation date cannot be in the future" });
+    }
+  }
 });
 export type CreatePensionerBody = z.infer<typeof createPensionerBody>;
 

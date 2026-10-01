@@ -5,79 +5,99 @@ const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
-vi.mock("../../../../_components/Chart", () => ({
-  Chart: () => null,
+vi.mock("../_components/MoneyChart", () => ({
+  MoneyChart: () => null,
+}));
+const getSessionRolesMock = vi.fn(() => ["payroll_officer"]);
+vi.mock("@/lib/auth/roleGuard", async (io) => ({
+  ...(await io<typeof import("@/lib/auth/roleGuard")>()),
+  getSessionRoles: () => getSessionRolesMock(),
 }));
 
 import GpfStatementsPage from "./page";
 
-const MOCK_ROWS = [
-  { id: "g1", employeeId: "emp-00000001", period: "2026-08", empContribMinor: 500000 },
-];
+const UUID = "3f2a9c1e-0000-4000-8000-000000000001";
 
 function mockGpf(result: { data: unknown; source: "api" | "error" }) {
   fetchJsonMock.mockImplementation((path: unknown) => {
-    if (typeof path === "string" && path.includes("/payroll/statutory/gpf")) {
-      return Promise.resolve(result);
-    }
+    if (typeof path === "string" && path.includes("/payroll/statutory/gpf")) return Promise.resolve(result);
     return Promise.resolve({ data: [], source: "api" });
   });
 }
 
 describe("GpfStatementsPage", () => {
-  beforeEach(() => fetchJsonMock.mockReset());
-
-  it("renders the GPF ledger and real stat counts on success", async () => {
-    mockGpf({ data: MOCK_ROWS, source: "api" });
-    render(await GpfStatementsPage());
-    expect(screen.getByText("Statements").parentElement).toHaveTextContent("1");
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["payroll_officer"]);
   });
 
-  it("shows the honest empty state when a tenant genuinely has zero GPF statements (source: api, [])", async () => {
+  it("renders the GPF ledger and real stat counts on success", async () => {
+    mockGpf({ data: [{ id: "g1", employeeId: UUID, period: "2026-08", empContribMinor: 500000 }], source: "api" });
+    render(await GpfStatementsPage());
+    const statLabel = screen.getAllByText("Statements").find((el) => el.classList.contains("lab"));
+    expect(statLabel?.parentElement).toHaveTextContent("1");
+  });
+
+  it("shows the honest empty state when a tenant genuinely has zero GPF statements", async () => {
     mockGpf({ data: [], source: "api" });
     render(await GpfStatementsPage());
     expect(screen.getByText("No GPF statements")).toBeInTheDocument();
-    // A real zero corpus — ₹0.00 — is an honest reading of zero
-    // contributions, not a dash. It legitimately appears twice (the stat
-    // card and the "Accumulated Corpus" dashboard box), and a third
-    // "₹0.00" projected-value box only when there is at least one period
-    // of history, so assert presence rather than count. (Uses the shared
-    // @/lib/formatters formatMoney, which always renders 2 decimal places
-    // — see the shadowed-formatter fix in this same page.)
     expect(screen.getAllByText("₹0.00").length).toBeGreaterThan(0);
   });
 
-  it("shows the error state and hides the fabricated ₹0 corpus on a real fetch failure (source: error)", async () => {
+  it("shows the error state and no fabricated ₹0 on a real fetch failure", async () => {
     mockGpf({ data: [], source: "error" });
     render(await GpfStatementsPage());
     expect(screen.getByText("We couldn't load GPF statements.")).toBeInTheDocument();
-    expect(screen.queryByText("No GPF statements")).not.toBeInTheDocument();
-    // Accumulated Corpus / stat cards show "—", never a fabricated ₹0.00
-    // derived from the empty error payload.
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
-    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
   });
 
-  // UX-021: the ledger's row-link/Employee column used to show the raw
-  // truncated employeeId under an "Employee" label; it now shows the real
-  // name payroll-service resolves via hrms-client (best-effort).
-  it("shows the employee's real name in the Employee column when hrms-client resolved it (UX-021)", async () => {
-    mockGpf({
-      data: [{ id: "g1", employeeId: "emp-00000001", employeeName: "Priya Verma", period: "2026-08", empContribMinor: 500000 }],
-      source: "api",
-    });
+  it("shows the employee's real name and HR employee code (UX-021, GAP-PAYROLL-GPF-02)", async () => {
+    mockGpf({ data: [{ id: "g1", employeeId: UUID, employeeName: "Priya Verma", employeeCode: "EMP-0042", period: "2026-08", empContribMinor: 500000 }], source: "api" });
     render(await GpfStatementsPage());
     expect(screen.getByText("Priya Verma")).toBeInTheDocument();
+    expect(screen.getByText("EMP-0042")).toBeInTheDocument();
   });
 
-  it("falls back to the employee code when employeeName is null -- hrms-client had no match, fails open rather than breaking the ledger (UX-021)", async () => {
+  it("GAP-PAYROLL-GPF-02: never shows UUID-derived text; a missing name reads 'Unknown employee'", async () => {
+    mockGpf({ data: [{ id: "g1", employeeId: UUID, employeeName: null, employeeCode: null, period: "2026-08", empContribMinor: 500000 }], source: "api" });
+    const { container } = render(await GpfStatementsPage());
+    expect(screen.getByText("Unknown employee")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("3F2A9C1E");
+    expect(container.textContent?.toLowerCase()).not.toContain("3f2a9c1e");
+  });
+
+  it("GAP-PAYROLL-GPF-04: a missing contribution renders — (not ₹0.00) and is flagged; a real zero renders ₹0.00", async () => {
     mockGpf({
-      data: [{ id: "g1", employeeId: "emp-00000001", employeeName: null, period: "2026-08", empContribMinor: 500000 }],
+      data: [
+        { id: "g1", employeeId: UUID, employeeName: "A", employeeCode: "E1", period: "2026-08" },
+        { id: "g2", employeeId: "3f2a9c1e-0000-4000-8000-000000000002", employeeName: "B", employeeCode: "E2", period: "2026-08", empContribMinor: 0 },
+      ],
       source: "api",
     });
     render(await GpfStatementsPage());
-    // Both the Employee and Code columns fall back to the same derived
-    // code when there is no resolved name, so there are two matches.
-    expect(screen.getAllByText("EMP-0000").length).toBe(2);
+    const rowA = screen.getByText("A").closest("tr")!;
+    const rowB = screen.getByText("B").closest("tr")!;
+    expect(rowA).toHaveTextContent("—");
+    expect(rowA).not.toHaveTextContent("₹0.00");
+    expect(rowB).toHaveTextContent("₹0.00");
+    expect(screen.getByText(/1 statement has no contribution figure/)).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-GPF-03: no duplicate/mislabelled corpus tiles and no hard-coded rate in the column header", async () => {
+    mockGpf({ data: [{ id: "g1", employeeId: UUID, employeeName: "A", period: "2026-08", empContribMinor: 500000 }], source: "api" });
+    const { container } = render(await GpfStatementsPage());
+    expect(screen.queryByText(/Accumulated Corpus/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Projected Value/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("Total Contributions")).toHaveLength(1);
+    expect(screen.getByText("Employee GPF")).toBeInTheDocument();
+    expect(container.textContent).not.toContain("(10%)");
+  });
+
+  it("GAP-PAYROLL-GPF-05: an employee-role session sees PermissionDenied and no statutory fetch is made", async () => {
+    getSessionRolesMock.mockReturnValue(["employee"]);
+    render(await GpfStatementsPage());
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("GPF Ledger")).not.toBeInTheDocument();
   });
 });

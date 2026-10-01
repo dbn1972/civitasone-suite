@@ -75,3 +75,30 @@ export function percentToBps(input: string): number | null {
   const bps = Number(`${wholePart}${paddedFrac}`);
   return Number.isFinite(bps) ? bps : null;
 }
+
+/**
+ * Like rupeesToMinorString, but ZERO is a valid amount -- for money inputs
+ * where ₹0 is a legitimate, meaningful value (e.g. "TDS deducted so far this
+ * year" on an F&F settlement, or an optional component the clerk leaves at
+ * nil). Same string-based, float-free parsing and the same rejections
+ * (non-numeric, negative, more than 2 decimal places); only the
+ * "must be > 0" rule is dropped.
+ *
+ * GAP-PAYROLL-FNF-03: replaces ComputeFnfForm's float-based
+ * `Math.round(Number(v) * 100)` conversion.
+ *
+ *   nonNegativeRupeesToMinorString("0")       -> "0"
+ *   nonNegativeRupeesToMinorString("1234.56") -> "123456"
+ *   nonNegativeRupeesToMinorString("0.1")     -> "10"
+ *   nonNegativeRupeesToMinorString("1.005")   -> null
+ *   nonNegativeRupeesToMinorString("-5")      -> null
+ *   nonNegativeRupeesToMinorString("")        -> null
+ */
+export function nonNegativeRupeesToMinorString(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const match = /^(\d+)(?:\.(\d{1,2}))?$/.exec(trimmed);
+  if (!match) return null;
+  const [, wholePart, fracPart = ""] = match;
+  return BigInt(`${wholePart}${fracPart.padEnd(2, "0")}`).toString();
+}
