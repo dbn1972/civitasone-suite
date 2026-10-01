@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -33,6 +35,13 @@ const BASE_APPRAISAL = {
   representation: null,
   representationDue: null,
 };
+
+// GAP-HR-APAR-DETAIL-01: GET /:id now always returns `actions` (computed
+// server-side -- see apar/routes.ts's computeAparActions); the page
+// destructures it unconditionally, so every fixture below needs one. This
+// default (nothing actionable) keeps all of these pre-existing tests on
+// the same "read-only notice" branch they exercised before DETAIL-01.
+const BASE_ACTIONS = { expectedStage: "self_pending", canAct: false, isOverride: false, canFinalise: false };
 
 /**
  * UX-009 follow-up: a genuine 404 ("this APAR record doesn't exist") and a
@@ -88,7 +97,7 @@ describe("AparDetailPage — not-found vs load-error (UX-009 follow-up)", () => 
   it("renders the real APAR detail on a genuine successful load (regression guard)", async () => {
     fetchJsonMock.mockResolvedValue({
       source: "api",
-      data: { appraisal: BASE_APPRAISAL, scores: [], history: [] },
+      data: { appraisal: BASE_APPRAISAL, scores: [], history: [], actions: BASE_ACTIONS },
     });
 
     const ui = await AparDetailPage({ params: { id: "a1" } });
@@ -113,6 +122,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       data: {
         appraisal: { ...BASE_APPRAISAL, status: "disclosed", reviewingRemarks: "Concurs with rating.", acceptingRemarks: "Well justified." },
         scores: [], history: [],
+        actions: BASE_ACTIONS,
       },
     });
 
@@ -132,6 +142,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
         // disclosure: the officer-only fields come back null.
         appraisal: { ...BASE_APPRAISAL, status: "reporting_officer", reportingPenPicture: null, reviewingRemarks: null, acceptingRemarks: null, overallGrade: null },
         scores: [], history: [],
+        actions: BASE_ACTIONS,
       },
     });
 
@@ -155,6 +166,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
             remarks: "override note", createdAt: "2026-04-17T08:35:00Z",
           },
         ],
+        actions: BASE_ACTIONS,
       },
     });
 
@@ -176,6 +188,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
         history: [
           { id: "h1", fromStage: "self_pending", toStage: "reporting_officer", actorId: "actor-1", actorRole: "appraisee", override: false, remarks: null, createdAt: "2026-04-01T00:00:00Z" },
         ],
+        actions: BASE_ACTIONS,
       },
     });
 
@@ -195,6 +208,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
           { id: "s2", attribute: "Timeliness", weight: "40", score: "2", remarks: null },
         ],
         history: [],
+        actions: BASE_ACTIONS,
       },
     });
 
@@ -214,6 +228,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
         appraisal: { ...BASE_APPRAISAL, status: "disclosed", overallGrade: "7.50", overallBand: "Very Good" },
         scores: [{ id: "s1", attribute: "Quality", weight: "100", score: "8", remarks: null }],
         history: [],
+        actions: BASE_ACTIONS,
       },
     });
 
@@ -231,6 +246,7 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
       data: {
         appraisal: { ...BASE_APPRAISAL, status: "representation", disclosedAt: "2026-04-14T20:00:00Z", representationDue: "2026-04-29" },
         scores: [], history: [],
+        actions: BASE_ACTIONS,
       },
     });
 
@@ -246,12 +262,156 @@ describe("AparDetailPage — GAP-HR-APAR-DETAIL-03/04/05/06/07", () => {
   it("DETAIL-07: shows the confidentiality banner on every render, independent of viewer role", async () => {
     fetchJsonMock.mockResolvedValue({
       source: "api",
-      data: { appraisal: BASE_APPRAISAL, scores: [], history: [] },
+      data: { appraisal: BASE_APPRAISAL, scores: [], history: [], actions: BASE_ACTIONS },
     });
 
     const ui = await AparDetailPage({ params: { id: "a1" } });
     render(ui);
 
     expect(screen.getByText(/Confidential — APAR/)).toBeInTheDocument();
+  });
+});
+
+describe("AparDetailPage — GAP-HR-APAR-DETAIL-02 name enrichment", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionNameMock.mockReset();
+    getSessionNameMock.mockReturnValue("H R Officer");
+  });
+
+  it("shows employee + officer names, never a raw UUID, when the backend resolved them", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: {
+          ...BASE_APPRAISAL,
+          employeeName: "A Kumar", employeeNo: "E101",
+          reportingOfficerId: "ro-1", reportingOfficerName: "B Singh",
+          reviewingOfficerId: "rv-1", reviewingOfficerName: "C Rao",
+          acceptingAuthorityId: "aa-1", acceptingAuthorityName: "D Iyer",
+        },
+        scores: [], history: [], actions: BASE_ACTIONS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.getByText(/A Kumar \(E101\)/)).toBeInTheDocument();
+    expect(screen.getByText("B Singh")).toBeInTheDocument();
+    expect(screen.getByText("C Rao")).toBeInTheDocument();
+    expect(screen.getByText("D Iyer")).toBeInTheDocument();
+    expect(screen.queryByText("E100")).not.toBeInTheDocument(); // BASE_APPRAISAL's raw employeeId
+    expect(screen.queryByText("ro-1")).not.toBeInTheDocument();
+  });
+
+  it("falls back to '—' for an officer id the backend had no name for, never the raw id", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, reportingOfficerId: "ro-unresolved" },
+        scores: [], history: [], actions: BASE_ACTIONS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.queryByText("ro-unresolved")).not.toBeInTheDocument();
+    // '—' also appears for the always-rendered Grade field when null, so
+    // this only proves SOME fallback rendered, not which one -- the real
+    // regression guard is the raw-id assertion above.
+    expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("history rows show the resolved actor name, not just actorId", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: BASE_APPRAISAL,
+        scores: [],
+        history: [{ id: "h1", fromStage: null, toStage: "self_pending", actorId: "E100", actorRole: "appraisee", actorName: "A Kumar", override: false, remarks: null, createdAt: "2026-04-01T00:00:00Z" }],
+        actions: BASE_ACTIONS,
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.getByText("A Kumar")).toBeInTheDocument();
+  });
+});
+
+describe("AparDetailPage — GAP-HR-APAR-DETAIL-01 stage-action wiring", () => {
+  beforeEach(() => {
+    fetchJsonMock.mockReset();
+    getSessionNameMock.mockReset();
+    getSessionNameMock.mockReturnValue("H R Officer");
+  });
+
+  function renderWithIntl(ui: React.ReactElement) {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+  }
+
+  it("renders the workflow action form (not the static API notice) when actions.canAct is true", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: BASE_APPRAISAL, scores: [], history: [],
+        actions: { expectedStage: "self_pending", canAct: true, isOverride: false, canFinalise: false },
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    renderWithIntl(ui);
+
+    expect(screen.getByRole("heading", { name: "Workflow Action" })).toBeInTheDocument();
+    // { exact: false }: this is a `required` Field, whose label renders a
+    // trailing " *" marker (Field.tsx).
+    expect(screen.getByLabelText("Self Appraisal", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByText(/performed via the APAR workflow API/)).not.toBeInTheDocument();
+  });
+
+  it("shows the static API notice (not the action form) when the viewer cannot act", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { appraisal: BASE_APPRAISAL, scores: [], history: [], actions: BASE_ACTIONS },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    render(ui);
+
+    expect(screen.queryByRole("heading", { name: "Workflow Action" })).not.toBeInTheDocument();
+    expect(screen.getByText(/performed via the APAR workflow API/)).toBeInTheDocument();
+  });
+
+  it("shows the override notice when actions.isOverride is true", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "reporting_officer" }, scores: [], history: [],
+        actions: { expectedStage: "reporting_officer", canAct: true, isOverride: true, canFinalise: false },
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    renderWithIntl(ui);
+
+    expect(screen.getByText(/privileged override/)).toBeInTheDocument();
+  });
+
+  it("shows the Finalise action when actions.canFinalise is true, even with no owned stage action", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        appraisal: { ...BASE_APPRAISAL, status: "disclosed" }, scores: [], history: [],
+        actions: { expectedStage: "disclosed", canAct: false, isOverride: false, canFinalise: true },
+      },
+    });
+
+    const ui = await AparDetailPage({ params: { id: "a1" } });
+    renderWithIntl(ui);
+
+    expect(screen.getByRole("button", { name: "Finalise APAR" })).toBeInTheDocument();
   });
 });

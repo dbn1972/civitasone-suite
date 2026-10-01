@@ -46,11 +46,19 @@ const log = pino({ name: "hrms-f3-apar" });
  *  - Stage-ownership (403) and stage-order (409) checks the route already ran in
  *    `assertStageOwner` are not repeated; only write-time data is rebuilt.
  *
- * KNOWN REMAINING DEFECT (route-side, out of scope for this file): POST
- * /v1/hrms/apar mints its own uuid, returns it to the caller, then publishes an
- * unrelated `randomUUID()` — so the id the caller receives is not the id
- * persisted here and the caller cannot drive the chain on the APAR it just
- * created. `disciplinary_routes__3` shows the intended fix.
+ * RESOLVED (was "KNOWN REMAINING DEFECT" here): this paragraph used to
+ * document a route-side bug where POST /v1/hrms/apar minted one uuid for
+ * the caller's response but published a second, unrelated `randomUUID()`
+ * for the queued write, so the id the caller got back could never be
+ * driven through the chain. `git blame` on apar/routes.ts's create handler
+ * shows that was fixed same-day (commit c9bed41bd5, 2026-09-02 10:06,
+ * ~8h after this comment was written at 4c2a308160, 01:53) by publishing
+ * the SAME `id` variable used in the response -- this file's own case
+ * `apar_routes__0` below already relies on that (`id, tenantId: ...`
+ * inserts under the id the route returned). Left as a dated note, not
+ * deleted outright, since a future reader hitting a real id-mismatch bug
+ * here should know one of this exact shape existed and was fixed before
+ * assuming they found something new.
  */
 
 /**
@@ -234,12 +242,27 @@ export function registerF3_apar_Consumers(queue: Queue): void {
               attribute: s.attribute, weight: Number(s.weight), score: s.score,
             }));
             const grade = computeOverallGrade(scores);
+            const disclosedAt = new Date();
+            // GAP-HR-APAR-DETAIL-01 (fix step 5) / GAP-HR-APAR-DETAIL-06:
+            // representationDue was never written here, so the disclosure
+            // window's own due-date display (DETAIL-06) had nothing to
+            // show and the window itself did not functionally exist. 15
+            // days is this module's own documented rule (see this file's
+            // header comment: "disclosure with 15-day representation
+            // window"), not a new invented figure -- but it is still a
+            // statutory timing rule, not a pure code fix: [HUMAN REVIEW]
+            // please confirm 15 calendar days (vs. working days, vs. a
+            // different figure) against the actual DoPT/SPARROW APAR
+            // instructions before this ships.
+            const representationDue = new Date(disclosedAt.getTime() + 15 * 24 * 60 * 60 * 1000)
+              .toISOString().slice(0, 10); // date-only column, "YYYY-MM-DD"
             await repo.updateAppraisal(tx, appraisalId, {
                     acceptingRemarks: body.remarks,
                     overallGrade: String(grade.overallGrade),
                     overallBand: grade.band,
                     status: "disclosed",
-                    disclosedAt: new Date(),
+                    disclosedAt,
+                    representationDue,
                     updatedBy: msg.actorId,
                   }, a.version);
                   await repo.appendHistory(tx, {

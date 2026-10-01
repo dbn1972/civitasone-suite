@@ -6,6 +6,7 @@ import { toHumanError } from "@/lib/messages";
 import { formatIndianDate } from "@/lib/formatters";
 import { STAGE_LABEL_KEYS } from "@/lib/apar/stages";
 import { getSessionName } from "@/lib/auth/roleGuard";
+import { AparStageActions, type AparActions } from "./AparStageActions";
 
 type Score = {
   id: string;
@@ -20,10 +21,12 @@ type StageHistory = {
   fromStage: string | null;
   toStage: string;
   actorId: string;
-  // GAP-HR-APAR-DETAIL-04: present on hrms_apar_stage_history and already
-  // returned by GET /apar/:id (repo.listHistory selects the whole row) —
-  // just never surfaced on this page before.
+  // GAP-HR-APAR-DETAIL-04: actorRole/override shipped via PR #1694; the
+  // actor's NAME (actorName) now comes from the same batchEmployees
+  // enrichment as GAP-HR-APAR-DETAIL-02, unblocked the same way (see that
+  // gap's comment on the appraisal type below).
   actorRole: string;
+  actorName?: string;
   override: boolean;
   remarks: string | null;
   createdAt: string;
@@ -33,6 +36,16 @@ type AparDetail = {
   appraisal: {
     id: string;
     employeeId: string;
+    // GAP-HR-APAR-DETAIL-02: employeeName/employeeNo and the three officer
+    // names, resolved server-side via the shared batchEmployees helper.
+    // The 3-way circular depends_on with GAP-HR-APAR-02/GAP-HR-ADVANCES-01
+    // is resolved -- GAP-HR-ADVANCES-01 (PR #1698, merged) proved the
+    // helper safe to reuse without ever touching apar/ itself.
+    employeeName?: string;
+    employeeNo?: string;
+    reportingOfficerName?: string;
+    reviewingOfficerName?: string;
+    acceptingAuthorityName?: string;
     appraisalPeriod: string;
     status: string;
     selfAppraisal: string | null;
@@ -50,6 +63,9 @@ type AparDetail = {
   };
   scores: Score[];
   history: StageHistory[];
+  // GAP-HR-APAR-DETAIL-01: so this page never has to guess stage ownership
+  // itself -- see apar/routes.ts's computeAparActions.
+  actions: AparActions;
 };
 
 async function getApar(id: string): Promise<LoaderResult<AparDetail | null>> {
@@ -145,7 +161,7 @@ export default async function AparDetailPage({
     );
   }
 
-  const { appraisal, scores, history } = detail;
+  const { appraisal, scores, history, actions } = detail;
   const stageLabelKeyForStatus = STAGE_LABEL_KEYS[appraisal.status as keyof typeof STAGE_LABEL_KEYS];
   const stageLabel = stageLabelKeyForStatus ? t(stageLabelKeyForStatus) : appraisal.status;
   const scoredCount = scores.filter((s) => !!s.score).length;
@@ -177,13 +193,14 @@ export default async function AparDetailPage({
     overrideLabel: h.override ? t("overrideYes") : "",
   }));
 
+  // GAP-HR-APAR-DETAIL-04: never a raw actor UUID -- a plain '—' when this
+  // tenant's directory has no name for that id, same fallback convention as
+  // the appraisal-level names below.
+  const historyRowsWithActorName = historyRows.map((h) => ({ ...h, actorName: h.actorName ?? "—" }));
+
   const HISTORY_COLS = [
     { key: "toStage" as const,      label: t("colStage"), cellType: "status" as const },
-    // GAP-HR-APAR-DETAIL-04: actorRole was already returned by GET /apar/:id
-    // (hrms_apar_stage_history has the column) but never shown. The actor's
-    // NAME is deliberately not added here yet — that needs the same
-    // employee-name-enrichment helper as GAP-HR-APAR-DETAIL-02, which is
-    // cross-lane blocked on GAP-HR-ADVANCES-01 (see this PR's description).
+    { key: "actorName" as const,    label: t("colActor") },
     { key: "actorRole" as const,    label: t("colActorRole") },
     { key: "overrideLabel" as const, label: t("colOverride") },
     { key: "remarks" as const,      label: t("colRemarks") },
@@ -216,7 +233,12 @@ export default async function AparDetailPage({
 
       <PageHeader
         title={t("titleWithPeriod", { period: appraisal.appraisalPeriod })}
-        subtitle={t("subtitleEmployeeStage", { employeeId: appraisal.employeeId, stageLabel })}
+        subtitle={t("subtitleEmployeeStage", {
+          employeeName: appraisal.employeeName
+            ? (appraisal.employeeNo ? `${appraisal.employeeName} (${appraisal.employeeNo})` : appraisal.employeeName)
+            : "—",
+          stageLabel,
+        })}
         back="/hr/apar" backLabel="Back to APAR"
       />
       <DataSourceBadge source={result.source} />
@@ -259,9 +281,11 @@ export default async function AparDetailPage({
             </span>
           </div>
           {appraisal.overallBand && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("bandLabel")}</span><strong>{appraisal.overallBand}</strong></div>}
-          {appraisal.reportingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reportingOfficerLabel")}</span>{appraisal.reportingOfficerId}</div>}
-          {appraisal.reviewingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reviewingOfficerLabel")}</span>{appraisal.reviewingOfficerId}</div>}
-          {appraisal.acceptingAuthorityId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("acceptingAuthorityLabel")}</span>{appraisal.acceptingAuthorityId}</div>}
+          {/* GAP-HR-APAR-DETAIL-02: names, never the raw UUID; '—' when this
+              tenant's directory has no name for the id. */}
+          {appraisal.reportingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reportingOfficerLabel")}</span>{appraisal.reportingOfficerName ?? "—"}</div>}
+          {appraisal.reviewingOfficerId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("reviewingOfficerLabel")}</span>{appraisal.reviewingOfficerName ?? "—"}</div>}
+          {appraisal.acceptingAuthorityId && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("acceptingAuthorityLabel")}</span>{appraisal.acceptingAuthorityName ?? "—"}</div>}
           {appraisal.disclosedAt && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("disclosedAtLabel")}</span>{formatIndianDate(appraisal.disclosedAt)}</div>}
           {appraisal.representationDue && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("representationDueLabel")}</span>{formatIndianDate(appraisal.representationDue)}</div>}
         </div>
@@ -326,9 +350,9 @@ export default async function AparDetailPage({
         {history.length === 0 ? (
           <EmptyState icon="🕓" title={t("noHistoryTitle")} message={t("noHistoryMessage")} />
         ) : (
-          <DataTable<StageHistory & { overrideLabel: string }>
+          <DataTable<StageHistory & { overrideLabel: string; actorName: string }>
             columns={HISTORY_COLS}
-            rows={historyRows}
+            rows={historyRowsWithActorName}
             sortable
             filterable
             emptyIcon="🕓"
@@ -339,11 +363,26 @@ export default async function AparDetailPage({
       </Card>
       </div>
 
-      <div style={{ marginTop: 16, padding: "12px 20px", background: "var(--bg2)", borderRadius: 8, fontSize: 13, color: "var(--mut)" }}>
-        {t("workflowNoticeLine1")}
-        {" "}
-        {t("workflowNoticeLine2")}
-      </div>
+      {/* GAP-HR-APAR-DETAIL-01: the six backend stage-transition routes
+          (self-appraisal/reporting/reviewing/accept/representation/
+          finalise) previously had no web caller at all -- this page only
+          ever showed the static notice below, so the core APAR workflow
+          could not be performed from the UI. `actions` (computed
+          server-side by apar/routes.ts's computeAparActions, never guessed
+          here) says whether THIS viewer can act right now; the read-only
+          notice is kept as the fallback for everyone else (an unrelated
+          viewer, or a genuinely closed/finalised record). */}
+      {actions.canAct || actions.canFinalise ? (
+        <div style={{ marginTop: 16 }}>
+          <AparStageActions appraisalId={appraisal.id} status={appraisal.status} actions={actions} />
+        </div>
+      ) : (
+        <div style={{ marginTop: 16, padding: "12px 20px", background: "var(--bg2)", borderRadius: 8, fontSize: 13, color: "var(--mut)" }}>
+          {t("workflowNoticeLine1")}
+          {" "}
+          {t("workflowNoticeLine2")}
+        </div>
+      )}
     </div>
   );
 }

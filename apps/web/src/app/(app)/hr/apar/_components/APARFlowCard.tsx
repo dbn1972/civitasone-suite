@@ -22,6 +22,13 @@
  * GAP-HR-APAR-05: stage labels now use DoPT/SPARROW terminology throughout
  * (Reporting Officer, Reviewing Officer, Accepting Authority) instead of
  * the old "Counter-signing Officer" / "Under Review" mix — see stages.ts.
+ *
+ * GAP-HR-APAR-02: employeeName/employeeNo (and the three officer names, so
+ * the footer can name the current stage owner) are now populated by GET
+ * /v1/hrms/apar — the 3-way circular depends_on with GAP-HR-APAR-DETAIL-02/
+ * GAP-HR-ADVANCES-01 is resolved (GAP-HR-ADVANCES-01/PR #1698 proved the
+ * shared batchEmployees helper safe to reuse without touching apar/ at
+ * all) -- this is the first consumer of it here.
  */
 import { useTranslations } from "next-intl";
 import { formatIndianDate } from "@/lib/formatters";
@@ -31,6 +38,10 @@ export type AparRecord = {
   id: string;
   employeeId?: string;
   employeeName?: string;
+  employeeNo?: string;
+  reportingOfficerName?: string;
+  reviewingOfficerName?: string;
+  acceptingAuthorityName?: string;
   appraisalPeriod: string;
   status: string;
   overallBand?: string | null;
@@ -38,17 +49,39 @@ export type AparRecord = {
   updatedAt: string;
 } & Record<string, unknown>;
 
+/** GAP-HR-APAR-02 fix step 3: the name to show for whoever currently owns
+ * the active stage, mirroring the backend's own stageOwner() switch
+ * (apar/routes.ts) so the card never has to guess which officer is "up". */
+function stageOwnerName(record: AparRecord): string | undefined {
+  switch (record.status) {
+    case "self_pending":
+    case "disclosed":
+    case "representation":
+      return record.employeeName;
+    case "reporting_officer":
+      return record.reportingOfficerName;
+    case "reviewing_officer":
+      return record.reviewingOfficerName;
+    case "accepting_authority":
+      return record.acceptingAuthorityName;
+    default:
+      return undefined;
+  }
+}
+
 function APARCard({ record }: { record: AparRecord }) {
   const t = useTranslations("aparFlowCard");
   const si = stageIndex(record.status);
-  // GAP-HR-APAR-02 (deferred — see PR description): employeeName is not yet
-  // populated by the backend, so this still falls back to the raw
-  // employeeId. Left unchanged here deliberately; fixing it needs the
-  // shared employee-name-enrichment helper tracked under GAP-HR-ADVANCES-01
-  // (cross-lane, not yet dispatched).
-  const empLabel = record.employeeName ?? record.employeeId ?? "Unknown";
+  // GAP-HR-APAR-02: never the raw UUID -- a translated "unavailable" string
+  // when the backend had no name for this id (e.g. a stale/deleted
+  // employee), exactly like the DETAIL page and every other enriched
+  // consumer of batchEmployees in this codebase.
+  const empLabel = record.employeeName
+    ? (record.employeeNo ? `${record.employeeName} (${record.employeeNo})` : record.employeeName)
+    : t("employeeUnavailable");
   const isRepresentation = isRepresentationFiled(record.status);
   const isClosed = isFinal(record.status);
+  const ownerName = !isClosed ? stageOwnerName(record) : undefined;
 
   return (
     <article
@@ -192,6 +225,9 @@ function APARCard({ record }: { record: AparRecord }) {
               ? t("statusFinalised")
               : t(APAR_STAGE_GROUPS[si].labelKey)}
           </strong>
+          {/* GAP-HR-APAR-02 fix step 3: name the officer (or the employee,
+              for self/disclosure stages) the ball is currently with. */}
+          {ownerName && <span> — {ownerName}</span>}
         </span>
         <span>{t("updatedPrefix", { date: formatIndianDate(record.updatedAt) })}</span>
       </div>
