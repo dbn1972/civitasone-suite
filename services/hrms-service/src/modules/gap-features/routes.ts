@@ -12,6 +12,7 @@ import { resolveEmployeeForActor } from "../employee/actor-link.js";
 import * as employeeRepo from "../employee/repo.js";
 import { emitAudit } from "../recruitment/audit-emit.js";
 import { captureError } from "@civitasone/observability";
+import { VIGILANCE_STATUS_GROUPS } from "../disciplinary/state-machine.js";
 
 const HR_ROLES = ["hr_admin", "super_admin", "hr_officer"];
 const READER_ROLES = [...HR_ROLES, "manager", "employee"];
@@ -983,20 +984,24 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       `, [ctx.tenantId, limit, offset]);
     });
     // GAP-HR-VIGILANCE-02/04: stat-card buckets computed server-side, over
-    // the whole tenant's major cases — not just the current page's rows, so
-    // they stay exact once results are paginated. Mutually exclusive and
-    // exhaustive over all 10 CaseStatus values (see disciplinary/
-    // state-machine.ts); "dropped" always counts toward total/closed here
-    // (a plain number, not a row of PII) even when includeDropped=false
-    // hides the underlying rows from the list above.
+    // the whole tenant's major cases -- not just the current page's rows, so
+    // they stay exact once results are paginated. Groups come from
+    // VIGILANCE_STATUS_GROUPS (mutually exclusive, exhaustive over all 10
+    // CaseStatus values); "dropped" always counts toward total here (a plain
+    // number, not a row of PII) even when includeDropped=false hides the
+    // underlying rows from the list above. The IN lists interpolate only
+    // those compile-time constants -- no request input reaches this SQL.
+    const inList = (statuses: readonly string[]) => statuses.map((st) => `'${st}'`).join(",");
+    const G = VIGILANCE_STATUS_GROUPS;
     const vigilanceStatsRows = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       return sql.unsafe(`
         SELECT COUNT(*)::int AS total,
-               COUNT(*) FILTER (WHERE status IN ('opened','charge_memo_issued'))::int AS charge_memo_stage,
-               COUNT(*) FILTER (WHERE status IN ('inquiry_appointed','finding_recorded','pending_approval','penalty_imposed','appeal_filed','appeal_decided'))::int AS under_inquiry,
-               COUNT(*) FILTER (WHERE status IN ('closed','dropped'))::int AS closed,
-               COUNT(*) FILTER (WHERE status = 'dropped')::int AS dropped_count
+               COUNT(*) FILTER (WHERE status IN (${inList(G.chargeMemoStage)}))::int AS charge_memo_stage,
+               COUNT(*) FILTER (WHERE status IN (${inList(G.underInquiry)}))::int AS under_inquiry,
+               COUNT(*) FILTER (WHERE status IN (${inList(G.penaltyAndAppeal)}))::int AS penalty_and_appeal,
+               COUNT(*) FILTER (WHERE status IN (${inList(G.closed)}))::int AS closed,
+               COUNT(*) FILTER (WHERE status IN (${inList(G.dropped)}))::int AS dropped_count
         FROM disciplinary.hrms_disciplinary_cases
         WHERE tenant_id = $1 AND proceeding_type = 'major'
       `, [ctx.tenantId]);
@@ -1027,7 +1032,9 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       stats: {
         chargeMemoStage: stats.charge_memo_stage,
         underInquiry: stats.under_inquiry,
+        penaltyAndAppeal: stats.penalty_and_appeal,
         closed: stats.closed,
+        dropped: stats.dropped_count,
         total: stats.total,
       },
     });

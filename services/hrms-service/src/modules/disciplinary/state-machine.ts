@@ -28,6 +28,20 @@ export type CaseStatus =
   | "pending_approval" | "penalty_imposed" | "appeal_filed" | "appeal_decided"
   | "closed" | "dropped";
 
+/**
+ * GAP-HR-VIGILANCE-02: the vigilance register's stat-card buckets. Mutually
+ * exclusive and jointly exhaustive over every CaseStatus (enforced by
+ * state-machine tests), so the cards always sum to the total. Penalty and
+ * appeal stages are NOT "under inquiry" -- the inquiry is over by then.
+ */
+export const VIGILANCE_STATUS_GROUPS = {
+  chargeMemoStage: ["opened", "charge_memo_issued"],
+  underInquiry: ["inquiry_appointed", "finding_recorded"],
+  penaltyAndAppeal: ["pending_approval", "penalty_imposed", "appeal_filed", "appeal_decided"],
+  closed: ["closed"],
+  dropped: ["dropped"],
+} as const satisfies Record<string, readonly CaseStatus[]>;
+
 export type CaseAction =
   | "issue_charge_memo" | "appoint_inquiry" | "record_finding" | "submit_for_approval"
   | "impose_penalty" | "file_appeal" | "decide_appeal" | "close" | "drop";

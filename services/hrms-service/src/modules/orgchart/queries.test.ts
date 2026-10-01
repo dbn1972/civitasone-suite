@@ -11,7 +11,7 @@ const listByTenantMock = vi.fn();
 const findDesignationsByIdsMock = vi.fn();
 const findDepartmentsByIdsMock = vi.fn();
 vi.mock("../employee/repo.js", () => ({
-  listByTenant: (...args: unknown[]) => listByTenantMock(...args),
+  listPageAfterId: (...args: unknown[]) => listByTenantMock(...args),
   findDesignationsByIds: (...args: unknown[]) => findDesignationsByIdsMock(...args),
   findDepartmentsByIds: (...args: unknown[]) => findDepartmentsByIdsMock(...args),
 }));
@@ -114,5 +114,24 @@ describe("getOrgChart", () => {
     const child = root.children![0]!;
     expect(child.id).toBe("report");
     expect(child.reportsTo).toBe("mgr");
+  });
+
+  // GAP-HR-ORG-CHART-05: used to read a single 2000-row slice, silently
+  // dropping everyone past it.
+  it("pages through every employee, not just the first 2000", async () => {
+    const page1 = Array.from({ length: 2000 }, (_, i) => emp({ id: `a${String(i).padStart(5, "0")}`, managerId: i === 0 ? null : "a00000" }));
+    const page2 = Array.from({ length: 500 }, (_, i) => emp({ id: `b${String(i).padStart(5, "0")}`, managerId: "a00000" }));
+    listByTenantMock.mockReset();
+    listByTenantMock.mockResolvedValueOnce(page1).mockResolvedValueOnce(page2);
+    findDesignationsByIdsMock.mockResolvedValue([]);
+    findDepartmentsByIdsMock.mockResolvedValue([]);
+
+    const tree = await getOrgChart(TENANT);
+
+    expect(listByTenantMock).toHaveBeenCalledTimes(2);
+    expect(listByTenantMock.mock.calls[0]).toEqual([TENANT, null, 2000]);
+    expect(listByTenantMock.mock.calls[1]).toEqual([TENANT, "a01999", 2000]);
+    expect(tree).toHaveLength(1);
+    expect(tree[0]!.children).toHaveLength(1999 + 500);
   });
 });

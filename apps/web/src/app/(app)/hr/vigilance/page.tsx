@@ -36,10 +36,12 @@ type RawRow = {
 
 type Row = RawRow & { caseRef: string };
 
-type Stats = { chargeMemoStage: number; underInquiry: number; closed: number; total: number };
+type Stats = {
+  chargeMemoStage: number; underInquiry: number; penaltyAndAppeal: number; closed: number; dropped: number; total: number;
+};
 type ListPage = { items: RawRow[]; total: number; hasMore: boolean; stats: Stats };
 
-const EMPTY_STATS: Stats = { chargeMemoStage: 0, underInquiry: 0, closed: 0, total: 0 };
+const EMPTY_STATS: Stats = { chargeMemoStage: 0, underInquiry: 0, penaltyAndAppeal: 0, closed: 0, dropped: 0, total: 0 };
 
 async function getData(offset: number): Promise<LoaderResult<ListPage>> {
   return fetchJson<unknown, ListPage>(
@@ -54,7 +56,7 @@ async function getData(offset: number): Promise<LoaderResult<ListPage>> {
           items: body.data,
           total: body.total ?? body.data.length,
           hasMore: body.hasMore ?? false,
-          stats: body.stats ?? EMPTY_STATS,
+          stats: { ...EMPTY_STATS, ...(body.stats ?? {}) },
         };
       },
     },
@@ -94,18 +96,15 @@ export default async function VigilancePage({
     caseRef: r.caseNo ?? "—",
   }));
 
-  // GAP-HR-VIGILANCE-02: stat-card buckets are now computed server-side
-  // (services/hrms-service/.../gap-features/routes.ts), over every major
-  // case in the tenant -- not just whatever page is currently loaded, so
-  // they stay exact once results are paginated (GAP-HR-VIGILANCE-04). The
-  // three buckets remain mutually exclusive and jointly exhaustive over all
-  // 10 CaseStatus values (disciplinary/state-machine.ts) -- this keeps the
-  // prior fix's own documented choice of 3 cards (matching each existing
-  // card's original intent/label) rather than the catalog's alternative
-  // "four cards" suggestion; "closed" still means closed-or-dropped by
-  // design (a plain count, not a row of PII, so it is not subject to the
-  // includeDropped row-visibility default above).
-  const { chargeMemoStage, underInquiry, closed } = data.stats;
+  // GAP-HR-VIGILANCE-02: stat-card buckets are computed server-side
+  // (services/hrms-service/.../gap-features/routes.ts, from
+  // VIGILANCE_STATUS_GROUPS), over every major case in the tenant -- not just
+  // whatever page is currently loaded, so they stay exact once results are
+  // paginated (GAP-HR-VIGILANCE-04). Charge memo / under inquiry / penalty &
+  // appeal / closed / dropped are mutually exclusive and exhaustive over all
+  // 10 CaseStatus values and sum to Total; penalty and appeal stages are
+  // deliberately NOT counted as "under inquiry".
+  const { chargeMemoStage, underInquiry, penaltyAndAppeal, closed, dropped } = data.stats;
 
   const columns: { key: keyof Row & string; label: string; cellType?: "status" | "date" }[] = [
     { key: "caseRef", label: t("colCaseRef") },
@@ -150,7 +149,9 @@ export default async function VigilancePage({
         <StatCard icon="⚖️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalCasesLabel")} value={errored ? null : data.stats.total} />
         <StatCard icon="🔴" iconBg="var(--badbg, #fff1f0)" label={t("statChargeMemoStageLabel")} value={errored ? null : chargeMemoStage} />
         <StatCard icon="🔍" iconBg="var(--warnbg, #fffbe6)" label={t("statUnderInquiryLabel")} value={errored ? null : underInquiry} />
-        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statDisposedClosedLabel")} value={errored ? null : closed} />
+        <StatCard icon="⚖️" iconBg="var(--primary-soft, #faf5ff)" label={t("statPenaltyAppealLabel")} value={errored ? null : penaltyAndAppeal} />
+        <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statClosedLabel")} value={errored ? null : closed} />
+        <StatCard icon="🚫" iconBg="var(--bg, #f5f5f5)" label={t("statDroppedLabel")} value={errored ? null : dropped} />
       </StatGrid>
       {/* GAP-HR-VIGILANCE-01 (PII/DPDP): purpose/confidentiality notice above
           the table -- mirrors the styling of the existing DPDP notice in

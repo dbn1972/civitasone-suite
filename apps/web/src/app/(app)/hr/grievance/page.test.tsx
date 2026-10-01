@@ -83,4 +83,30 @@ describe("GrievancePage", () => {
     render(ui);
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
   });
+
+  // GAP-HR-GRIEVANCE-06: an unlisted status used to vanish from every stat
+  // card; it now counts as Open so the cards reconcile to Total.
+  it("counts an unknown status under Open so Open + Under Inquiry + Disposed equals Total", async () => {
+    const base = { department: "Revenue", category: "Pay", filedDate: "2026-01-01", assignedTo: "HR", description: "x" };
+    fetchJsonMock.mockResolvedValue({
+      data: {
+        items: [
+          { ...base, id: "a1111111-1111-1111-1111-111111111111", employee: "A", status: "opened" },
+          { ...base, id: "b1111111-1111-1111-1111-111111111111", employee: "B", status: "escalated" },
+          { ...base, id: "c1111111-1111-1111-1111-111111111111", employee: "C", status: "under_inquiry" },
+          { ...base, id: "d1111111-1111-1111-1111-111111111111", employee: "D", status: "dropped" },
+          { ...base, id: "e1111111-1111-1111-1111-111111111111", employee: "E", status: "closed" },
+        ],
+        notBuilt: false,
+      },
+      source: "api",
+    });
+    render(await GrievancePage());
+    const val = (label: string) =>
+      Array.from(document.querySelectorAll(".stat")).find((el) => el.textContent?.includes(label))?.querySelector(".val")?.textContent;
+    expect(val("Open")).toBe("2");
+    expect(val("Under Inquiry")).toBe("1");
+    expect(val("Disposed")).toBe("2");
+    expect(val("Total Cases")).toBe("5");
+  });
 });
