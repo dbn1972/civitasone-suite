@@ -23,6 +23,11 @@ export const hrmsTrainings = trainingSchema.table("hrms_trainings", {
   category:            varchar("category", { length: 16 }),
   mode:                varchar("mode", { length: 16 }),
   enrollmentDeadline:  date("enrollment_deadline"),
+  // GAP-HR-CERTIFICATIONS-01 (migration 0164): the basis for computing a real
+  // certification expiryDate (completed_date + validity_months) in
+  // gap-features/routes.ts, replacing a hard-coded NULL expiry/'valid'
+  // status. NULL on every pre-existing row -- never backfilled to a guess.
+  validityMonths:      integer("validity_months"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),
