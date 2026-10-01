@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
+import { idempotentId } from "@civitasone/auth";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
@@ -23,12 +24,24 @@ export async function createLoan(ctx: RequestContext, body: CreateLoanBody): Pro
   // scoped and advisory-locked, immediately before the insert -- see that
   // file and policy.ts for the full rationale.
   // GAP-PAYROLL-LOANS-05: honour a client x-idempotency-key -- a retried
-  // submit maps to the same loan id / messageId, so the consumer's inbox
-  // dedup (markProcessed) files the loan once. Without a key, behaviour is
-  // unchanged (fresh id per call).
-  const id = ctx.idempotencyKey
-    ? deterministicUuid(`payroll-loan-create:${ctx.tenantId}:${ctx.idempotencyKey}`)
-    : randomUUID();
+  // submit maps to the same loan id / messageId (tenant-scoped hash, the
+  // shared @civitasone/auth helper), so the consumer's inbox dedup
+  // (markProcessed) files the loan once. No key => fresh random id.
+  const id = idempotentId(ctx);
+
+  // A loan already filed under this key: same request => answer as before;
+  // a DIFFERENT loan under a reused key => 409, never a silent 202 that
+  // drops the second loan. (Only detectable once the first create has been
+  // consumed; before that, the queue's messageId dedup applies.)
+  if (ctx.idempotencyKey) {
+    const prior = await repo.findLoanById(id, ctx.tenantId);
+    if (prior) {
+      if (prior.loanNo !== body.loanNo || prior.employeeId !== body.employeeId) {
+        throw new HttpError(409, "IDEMPOTENCY_KEY_REUSED", "this idempotency key was already used for a different loan");
+      }
+      return { id, status: "accepted", correlationId: ctx.correlationId };
+    }
+  }
 
   const [existingLoans, grossMinor, duplicateLoanId] = await Promise.all([
     repo.findLoansByEmployee(ctx.tenantId, body.employeeId),
@@ -36,12 +49,10 @@ export async function createLoan(ctx: RequestContext, body: CreateLoanBody): Pro
     repo.findLoanIdByLoanNo(ctx.tenantId, body.loanNo),
   ]);
   // GAP-PAYROLL-LOANS-05: loan numbers are typed by hand; reject a number
-  // already used in this tenant instead of silently filing a second loan
-  // under it. Not race-safe (no UNIQUE constraint exists yet) -- see
-  // repo.findLoanIdByLoanNo.
+  // already used in this tenant up front. The UNIQUE (tenant_id, loan_no)
+  // constraint (migrations/0001_init.sql) is the race-safe backstop --
+  // consumer.ts turns a violation into a NonRetryableError.
   if (duplicateLoanId) {
-    // The same idempotent request already landed: answer as before.
-    if (duplicateLoanId === id) return { id, status: "accepted", correlationId: ctx.correlationId };
     throw new HttpError(409, "LOAN_NO_TAKEN", `loan number ${body.loanNo} is already in use`);
   }
   const existingEmiMinor = sumActiveEmiMinor(existingLoans);

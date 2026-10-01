@@ -24,9 +24,37 @@ export type LoanFormErrorCode =
   | "rateInvalid"
   | "emiTooLow";
 
+/**
+ * Non-blocking advisories shown in the confirm dialog -- never a reason to
+ * refuse a submit (GAP-PAYROLL-LOANS-05 step 2: the exact upper bound needs
+ * business sign-off, so this only flags it for the officer to double-check).
+ */
+export type LoanFormWarnings = {
+  /**
+   * EMI x tenure exceeds principal x (1 + rate x tenure / 1200) -- i.e. more
+   * than principal plus SIMPLE interest at the entered annual rate. Reducing-
+   * balance EMIs always total less than that, so exceeding it usually means a
+   * mistyped EMI or rate.
+   */
+  emiAboveSimpleInterest?: { totalMinor: bigint; boundMinor: bigint };
+};
+
+/**
+ * Simple-interest ceiling on total repayment, in paise, rounded UP so a
+ * borderline EMI is never flagged by rounding alone:
+ *   principal x (1 + (bps/100) x tenure / 1200)
+ *   = principal + ceil(principal x bps x tenure / 120000)
+ */
+export function simpleInterestBoundMinor(principalMinor: bigint, rateBps: number, tenureMonths: number): bigint {
+  const num = principalMinor * BigInt(rateBps) * BigInt(tenureMonths);
+  const interest = (num + 119_999n) / 120_000n;
+  return principalMinor + interest;
+}
+
 export type LoanFormResult =
   | {
       ok: true;
+      warnings: LoanFormWarnings;
       value: {
         loanNo: string;
         employeeId: string;
@@ -94,8 +122,14 @@ export function validateLoanForm(input: LoanFormInput): LoanFormResult {
   if (Object.keys(errors).length > 0 || !("minor" in principal) || !("minor" in emi) || bps === null) {
     return { ok: false, errors };
   }
+  const warnings: LoanFormWarnings = {};
+  const totalMinor = emi.minor * BigInt(tenureMonths);
+  const boundMinor = simpleInterestBoundMinor(principal.minor, bps, tenureMonths);
+  if (totalMinor > boundMinor) warnings.emiAboveSimpleInterest = { totalMinor, boundMinor };
+
   return {
     ok: true,
+    warnings,
     value: {
       loanNo,
       employeeId,

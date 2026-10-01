@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -68,6 +68,27 @@ describe("CreateLoanForm", () => {
     expect(dialog).toHaveTextContent("Asha Rao (EMP-001)");
     expect(dialog).toHaveTextContent("₹10,000.50");
     expect(dialog).not.toHaveTextContent(EMP_ID);
+  });
+
+  it("shows a non-blocking warning when EMI x tenure exceeds the simple-interest bound (GAP-PAYROLL-LOANS-05)", async () => {
+    renderForm();
+    await fillFields({ principal: "1000", emi: "100", tenure: "12" });
+    fireEvent.change(screen.getByLabelText(/Interest Rate/), { target: { value: "12" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    const note = within(dialog).getByRole("note");
+    expect(note).toHaveTextContent("₹1,200.00");
+    expect(note).toHaveTextContent("₹1,120.00");
+    expect(within(dialog).getByRole("button", { name: "Create loan" })).toBeEnabled();
+  });
+
+  it("shows no warning for an ordinary interest-free loan", async () => {
+    renderForm();
+    await fillFields({ emi: "1000", tenure: "10" }); // 1000 x 10 = principal exactly
+    fireEvent.click(screen.getByRole("button", { name: "Create Loan" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).queryByRole("note")).not.toBeInTheDocument();
   });
 
   it("rejects EMI x tenure below principal (GAP-PAYROLL-LOANS-05)", async () => {

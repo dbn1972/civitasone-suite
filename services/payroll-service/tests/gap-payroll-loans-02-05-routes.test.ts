@@ -12,13 +12,13 @@ import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
-import { signToken } from "@civitasone/auth";
+import { signToken, idempotentId } from "@civitasone/auth";
 import { db, sqlClient } from "../src/shared/db.js";
 import { queue } from "../src/shared/infra.js";
 import { buildApp } from "../src/app.js";
 import { payrollLoans } from "../src/modules/loans/schema.js";
 import { COMMANDS } from "../src/topics.js";
-import { deterministicUuid } from "../src/shared/deterministic-id.js";
+import { isUniqueViolation } from "../src/modules/loans/consumer.js";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -172,7 +172,7 @@ describe("POST /v1/payroll/loans duplicate loan number (GAP-PAYROLL-LOANS-05)", 
 
   it("answers 202 (not 409) when the idempotent retry's loan already landed", async () => {
     const key = randomUUID();
-    const landedId = deterministicUuid(`payroll-loan-create:${TENANT}:${key}`);
+    const landedId = idempotentId({ idempotencyKey: key, tenantId: TENANT });
     const loanNo = `${LOAN_NO_TAKEN}-LANDED-${key.slice(0, 6)}`;
     await runWithTenant(TENANT, () => db.transaction(async (tx) => {
       await tx.insert(payrollLoans).values(loanRow(landedId, TENANT, "applied", loanNo));
@@ -190,6 +190,33 @@ describe("POST /v1/payroll/loans duplicate loan number (GAP-PAYROLL-LOANS-05)", 
     await app.close();
     expect(res.statusCode).toBe(202);
     expect(res.json().id).toBe(landedId);
+  });
+
+  it("409s reuse of an idempotency key for a DIFFERENT loan (not a silent 202)", async () => {
+    const key = randomUUID();
+    const landedId = idempotentId({ idempotencyKey: key, tenantId: TENANT });
+    await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(payrollLoans).values(loanRow(landedId, TENANT, "applied", `${LOAN_NO_TAKEN}-K1-${key.slice(0, 6)}`));
+    }));
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/payroll/loans",
+      headers: { authorization: `Bearer ${token(MAKER)}`, "x-idempotency-key": key },
+      payload: {
+        loanNo: `${LOAN_NO_TAKEN}-K2-${key.slice(0, 6)}`, employeeId: EMP, loanType: "personal",
+        principalMinor: 100_000, emiMinor: 10_000, tenureMonths: 10, interestRatePct: 0, currency: "INR",
+      },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("IDEMPOTENCY_KEY_REUSED");
+  });
+
+  it("the UNIQUE (tenant_id, loan_no) constraint backs the pre-check", async () => {
+    await expect(runWithTenant(TENANT, () => db.transaction(async (tx) => {
+      await tx.insert(payrollLoans).values(loanRow(randomUUID(), TENANT, "applied", LOAN_NO_TAKEN));
+    }))).rejects.toSatisfy((e: unknown) => isUniqueViolation(e));
   });
 
   it("accepts a fresh loan number", async () => {

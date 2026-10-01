@@ -56,7 +56,7 @@ export function registerLoansConsumers(queue: Queue): void {
           );
         }
 
-        await repo.insertLoan(tx, {
+        await insertLoanOrReject(tx, p.loanNo, {
           id: p.id, tenantId: p.tenantId, loanNo: p.loanNo, employeeId: p.employeeId,
           loanType: p.loanType, principalMinor: BigInt(p.principalMinor),
           outstandingMinor: BigInt(p.principalMinor), emiMinor: BigInt(p.emiMinor),
@@ -107,6 +107,33 @@ export function registerLoansConsumers(queue: Queue): void {
       throw err;
     }
   });
+}
+
+/**
+ * GAP-PAYROLL-LOANS-05: the UNIQUE (tenant_id, loan_no) constraint
+ * (migrations/0001_init.sql) is the race-safe duplicate-loan-number guard
+ * behind commands.ts's plain-SELECT pre-check. A violation is a permanent
+ * business rejection -- retrying can never succeed -- so surface it as a
+ * NonRetryableError (straight to the DLQ, logged below) instead of a
+ * generic error the queue would retry until it gives up.
+ */
+async function insertLoanOrReject(tx: Parameters<typeof repo.insertLoan>[0], loanNo: string, row: Parameters<typeof repo.insertLoan>[1]): Promise<void> {
+  try {
+    await repo.insertLoan(tx, row);
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new NonRetryableError(`LOAN_NO_TAKEN: loan number ${loanNo} is already in use in this tenant`);
+    }
+    throw err;
+  }
+}
+
+export function isUniqueViolation(err: unknown): boolean {
+  const codeOf = (e: unknown): unknown => (e && typeof e === "object" ? (e as { code?: unknown }).code : undefined);
+  if (codeOf(err) === "23505") return true;
+  // drizzle may wrap the driver error (DrizzleQueryError.cause).
+  const cause = err && typeof err === "object" ? (err as { cause?: unknown }).cause : undefined;
+  return codeOf(cause) === "23505";
 }
 
 /**

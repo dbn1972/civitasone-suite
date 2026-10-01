@@ -118,9 +118,11 @@ export async function findLoanByIdTx(tx: Writer, id: string): Promise<LoanRow | 
 }
 
 /**
- * GAP-PAYROLL-LOANS-05: duplicate loan-number pre-check for createLoan.
- * loans.payroll_loans has no UNIQUE (tenant_id, loan_no) constraint, so this
- * is a best-effort guard for the ordinary (non-race) case only.
+ * GAP-PAYROLL-LOANS-05: duplicate loan-number pre-check for createLoan, so
+ * the caller gets an immediate 409 instead of a 202 whose insert later fails.
+ * The authoritative guard is the UNIQUE (tenant_id, loan_no) constraint
+ * (migrations/0001_init.sql); consumer.ts maps a violation of it (the race
+ * this plain SELECT cannot see) to a NonRetryableError.
  */
 export async function findLoanIdByLoanNo(tenantId: string, loanNo: string): Promise<string | null> {
   const rows = await scopedRead((tx) => tx.select({ id: payrollLoans.id }).from(payrollLoans)

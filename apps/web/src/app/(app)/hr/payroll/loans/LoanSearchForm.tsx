@@ -9,7 +9,8 @@ import { EmployeePicker } from "../../../../_components/EmployeePicker";
 /**
  * GAP-PAYROLL-LOANS-01: search by employee name / code via EmployeePicker
  * instead of a pasted "Employee ID (UUID)". Choosing an employee navigates
- * straight to ?empId=<id>, so the id lives only in the URL.
+ * straight to ?empId=<id>, so the id lives only in the URL; clearing the
+ * selection navigates back to the bare /hr/payroll/loans.
  */
 export function LoanSearchForm({
   initialEmpId,
@@ -30,9 +31,10 @@ export function LoanSearchForm({
         <EmployeePicker
           value={empId}
           initialOption={initialEmployee}
+          clearable
           onChange={(id) => {
             setEmpId(id);
-            if (id) router.push(`/hr/payroll/loans?empId=${encodeURIComponent(id)}`);
+            router.push(id ? `/hr/payroll/loans?empId=${encodeURIComponent(id)}` : "/hr/payroll/loans");
           }}
         />
       </Field>

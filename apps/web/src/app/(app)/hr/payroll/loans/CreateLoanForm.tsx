@@ -271,14 +271,27 @@ export function CreateLoanForm({ currentEmpId = "" }: { currentEmpId?: string })
         confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={t.rich("confirmDescription", {
-          loanNo: validation.ok ? validation.value.loanNo : loanNo,
-          employee: employee?.label ?? "",
-          principal: validation.ok ? formatMoney(validation.value.principalMinor) : "",
-          emi: validation.ok ? formatMoney(validation.value.emiMinor) : "",
-          tenure: validation.ok ? validation.value.tenureMonths : 0,
-          strong: (chunks) => <strong>{chunks}</strong>,
-        })}
+        description={
+          <>
+            {t.rich("confirmDescription", {
+              loanNo: validation.ok ? validation.value.loanNo : loanNo,
+              employee: employee?.label ?? "",
+              principal: validation.ok ? formatMoney(validation.value.principalMinor) : "",
+              emi: validation.ok ? formatMoney(validation.value.emiMinor) : "",
+              tenure: validation.ok ? validation.value.tenureMonths : 0,
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
+            {validation.ok && validation.warnings.emiAboveSimpleInterest && (
+              // Advisory only (GAP-PAYROLL-LOANS-05): Confirm stays enabled.
+              <span role="note" className="pill warn" style={{ display: "block", marginTop: 10, width: "fit-content" }}>
+                {t("emiAboveInterestBoundWarning", {
+                  total: formatMoney(validation.warnings.emiAboveSimpleInterest.totalMinor),
+                  bound: formatMoney(validation.warnings.emiAboveSimpleInterest.boundMinor),
+                })}
+              </span>
+            )}
+          </>
+        }
         onConfirm={() => void createLoan()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

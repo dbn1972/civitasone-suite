@@ -1139,7 +1139,8 @@
     "tenureInvalidError": "Tenure must be a whole number of months from 1 to 360.",
     "rateInvalidError": "Interest rate must be between 0 and 100 with at most 2 decimal places.",
     "emiTooLowError": "EMI × tenure must cover at least the principal.",
-    "loanNoTakenError": "Loan number {loanNo} is already in use. Enter a different loan number."
+    "loanNoTakenError": "Loan number {loanNo} is already in use. Enter a different loan number.",
+    "emiAboveInterestBoundWarning": "Check the EMI: EMI × tenure ({total}) is more than the principal plus simple interest at this rate ({bound}). You can still create the loan."
   },
   "createOffCycleForm": {
     "formTitle": "Create Off-Cycle Run",
@@ -6893,6 +6894,8 @@
   "employeePicker": {
     "placeholder": "Type a name or employee code…",
     "searching": "Searching…",
-    "noResults": "No matching employees"
+    "noResults": "No matching employees",
+    "clear": "Clear",
+    "clearAriaLabel": "Clear selected employee"
   }
 }

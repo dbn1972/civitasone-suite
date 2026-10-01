@@ -2,7 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { useTranslations } from "next-intl";
-import { EntityPicker, type EntityOption } from "./ds";
+import { Button, EntityPicker, type EntityOption } from "./ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 export interface EmployeePickerProps {
@@ -22,6 +22,13 @@ export interface EmployeePickerProps {
   /** Explicit input id (falls back to an ancestor Field's id). */
   id?: string;
   "aria-label"?: string;
+  /**
+   * Show a "Clear" button while an employee is selected. EntityPicker's
+   * single mode has no way to deselect (erasing the text only edits the
+   * search query), so this is the explicit way back to "nobody chosen";
+   * it calls onChange(null, null).
+   */
+  clearable?: boolean;
 }
 
 /**
@@ -40,6 +47,7 @@ export function EmployeePicker({
   disabled,
   id,
   "aria-label": ariaLabel,
+  clearable = false,
 }: EmployeePickerProps) {
   const t = useTranslations("employeePicker");
   const knownRef = useRef<Map<string, EntityOption>>(
@@ -60,7 +68,7 @@ export function EmployeePicker({
     [remember],
   );
 
-  return (
+  const picker = (
     <EntityPicker
       value={value}
       onChange={(v) => {
@@ -77,5 +85,24 @@ export function EmployeePicker({
       id={id}
       aria-label={ariaLabel}
     />
+  );
+
+  if (!clearable) return picker;
+  return (
+    <div style={{ display: "flex", gap: 8, alignItems: "flex-start" }}>
+      <div style={{ flex: 1, minWidth: 0 }}>{picker}</div>
+      {value && (
+        <Button
+          type="button"
+          variant="secondary"
+          style={{ minHeight: 44 }}
+          aria-label={t("clearAriaLabel")}
+          disabled={disabled}
+          onClick={() => onChange(null, null)}
+        >
+          {t("clear")}
+        </Button>
+      )}
+    </div>
   );
 }

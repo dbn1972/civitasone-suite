@@ -53,7 +53,7 @@ vi.mock("../src/modules/tax/schema.js", () => ({
   taxDeclarations: { tenantId: "tid", employeeId: "eid", fy: "fy" },
 }));
 
-import { registerLoansConsumers } from "../src/modules/loans/consumer.js";
+import { registerLoansConsumers, isUniqueViolation } from "../src/modules/loans/consumer.js";
 import { registerTaxConsumers } from "../src/modules/tax/consumer.js";
 import { COMMANDS, EVENTS } from "../src/topics.js";
 import { cache } from "../src/shared/infra.js";
@@ -111,6 +111,30 @@ describe("loanCreate command — EMI cap (BUG-1)", () => {
 
     await q.stop();
     errorSpy.mockRestore();
+  });
+});
+
+describe("loanCreate command — duplicate loan number (GAP-PAYROLL-LOANS-05)", () => {
+  it("maps a UNIQUE(tenant_id, loan_no) violation to a non-retryable, logged LOAN_NO_TAKEN", async () => {
+    insertLoanMock.mockRejectedValueOnce(Object.assign(new Error("duplicate key value violates unique constraint"), { code: "23505" }));
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const q = new MemoryQueue(); registerLoansConsumers(q); await q.start();
+    await q.publish(COMMANDS.loanCreate, makeMsg(COMMANDS.loanCreate, {
+      id: randomUUID(), tenantId: TENANT, loanNo: "LN/DUP", employeeId: randomUUID(),
+      loanType: "personal", principalMinor: 100000, emiMinor: 10000,
+      tenureMonths: 10, interestRatePct: 0, currency: "INR",
+    }));
+    await settle();
+    // Non-retryable: attempted once, not retried.
+    expect(insertLoanMock).toHaveBeenCalledTimes(1);
+    expect(errorSpy.mock.calls.map((c) => String(c[0])).some((l) => l.includes("LOAN_NO_TAKEN"))).toBe(true);
+    await q.stop();
+    errorSpy.mockRestore();
+  });
+
+  it("recognises a driver-wrapped unique violation (cause.code)", () => {
+    expect(isUniqueViolation({ cause: { code: "23505" } })).toBe(true);
+    expect(isUniqueViolation(new Error("other"))).toBe(false);
   });
 });
 

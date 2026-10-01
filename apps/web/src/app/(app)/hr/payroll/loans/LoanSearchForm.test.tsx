@@ -48,6 +48,18 @@ describe("LoanSearchForm (GAP-PAYROLL-LOANS-01)", () => {
     expect(pushMock).toHaveBeenCalledWith(`/hr/payroll/loans?empId=${EMP_ID}`);
   });
 
+  it("clearing the selection navigates back to the unfiltered page", () => {
+    renderForm({ initialEmpId: EMP_ID, initialEmployee: { id: EMP_ID, label: "Asha Rao (EMP-001)" } });
+    fireEvent.click(screen.getByRole("button", { name: "Clear selected employee" }));
+    expect(pushMock).toHaveBeenCalledWith("/hr/payroll/loans");
+    expect(screen.queryByRole("button", { name: "Clear selected employee" })).not.toBeInTheDocument();
+  });
+
+  it("offers no Clear button when nobody is selected", () => {
+    renderForm();
+    expect(screen.queryByRole("button", { name: "Clear selected employee" })).not.toBeInTheDocument();
+  });
+
   it("shows the already-searched employee by name, not by id", () => {
     renderForm({ initialEmpId: EMP_ID, initialEmployee: { id: EMP_ID, label: "Asha Rao (EMP-001)" } });
     expect(screen.getByLabelText("Employee")).toHaveValue("Asha Rao (EMP-001)");
