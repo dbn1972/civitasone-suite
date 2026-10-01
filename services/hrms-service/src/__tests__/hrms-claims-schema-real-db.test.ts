@@ -47,6 +47,7 @@
  * failure cannot roll back a travel request or announcement that should
  * otherwise succeed — that decoupling is covered below.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
@@ -69,6 +70,31 @@ const selfToken = tok(["employee"], SELF_ID);
 const approverToken = tok(["hr_admin"], APPROVER_ID);
 const otherToken = tok(["employee"], OTHER_ID);
 
+// GAP-HR-EXPENSES-SOD-01: two managers in two separate reporting lines, for
+// the manager-reporting-line-scope tests further below. MANAGER_A_ID /
+// MANAGER_B_ID / REPORT_A_ID / REPORT_B_ID are JWT subs -- these equal both
+// employee_id on claims.hrms_expense_claims AND employee.hrms_employees.
+// user_ref (see this file's own id-space note in the travel-requests describe
+// block below); the *_EMP_ROW_ID constants are the separate
+// employee.hrms_employees.id primary keys those fixture rows live under.
+const MANAGER_A_ID = "cccccccc-0115-4000-8000-0000000000e4";
+const MANAGER_B_ID = "cccccccc-0115-4000-8000-0000000000e5";
+const REPORT_A_ID = "cccccccc-0115-4000-8000-0000000000e6"; // reports to Manager A
+const REPORT_B_ID = "cccccccc-0115-4000-8000-0000000000e7"; // reports to Manager B
+const MANAGER_A_EMP_ROW_ID = "cccccccc-0115-4000-8001-0000000000e4";
+const MANAGER_B_EMP_ROW_ID = "cccccccc-0115-4000-8001-0000000000e5";
+const REPORT_A_EMP_ROW_ID = "cccccccc-0115-4000-8001-0000000000e6";
+const REPORT_B_EMP_ROW_ID = "cccccccc-0115-4000-8001-0000000000e7";
+const SEED_ACTOR = "cccccccc-0115-4000-8000-0000000000e0";
+
+const managerAToken = tok(["manager"], MANAGER_A_ID);
+const managerBToken = tok(["manager"], MANAGER_B_ID);
+const reportAToken = tok(["employee"], REPORT_A_ID);
+const reportBToken = tok(["employee"], REPORT_B_ID);
+// EXPENSE_DECIDE_ROLES member that is NOT in this file's module-level
+// HR_ROLES -- see EXPENSE_BYPASS_ROLES' doc comment in routes.ts.
+const financeOfficerToken = tok(["finance_officer"], APPROVER_ID);
+
 let app: Awaited<ReturnType<typeof buildApp>>;
 
 // All six tables are FORCE RLS: verification queries need the same
@@ -82,6 +108,14 @@ async function cleanup(): Promise<void> {
   await asTenant((tx) => tx`DELETE FROM claims.hrms_travel_requests WHERE tenant_id = ${TENANT}`);
   await asTenant((tx) => tx`DELETE FROM employee.hrms_social_announcements WHERE tenant_id = ${TENANT}`);
   await asTenant((tx) => tx`DELETE FROM employee.hrms_push_devices WHERE tenant_id = ${TENANT}`);
+  // GAP-HR-EXPENSES-SOD-01 fixtures (see MANAGER_A_ID etc. above) -- scoped to
+  // these exact ids, never a blanket DELETE on employee.hrms_employees, so a
+  // real employee row in this tenant could never be touched by this file.
+  await asTenant((tx) => tx`
+    DELETE FROM employee.hrms_employees
+    WHERE tenant_id = ${TENANT}
+      AND id = ANY(ARRAY[${MANAGER_A_EMP_ROW_ID}, ${MANAGER_B_EMP_ROW_ID}, ${REPORT_A_EMP_ROW_ID}, ${REPORT_B_EMP_ROW_ID}]::uuid[])
+  `);
 }
 
 beforeAll(async () => {
@@ -109,6 +143,34 @@ beforeAll(async () => {
   }
 
   await cleanup();
+
+  // GAP-HR-EXPENSES-SOD-01 fixtures: two managers in separate reporting
+  // lines (Manager A owns Report A; Manager B owns Report B) for the
+  // manager-reporting-line-scope describe block further below.
+  // department_id/designation_id have no FK on employee.hrms_employees
+  // (verified: zero foreign keys on this table in this schema), so
+  // arbitrary uuids are fine for columns this suite never reads.
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+    VALUES (${MANAGER_A_EMP_ROW_ID}, ${TENANT}, 'SOD-MGR-A', 'Manager A (SOD test)', ${randomUUID()}, ${randomUUID()}, '2020-01-01', ${MANAGER_A_ID}, NULL, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+    VALUES (${MANAGER_B_EMP_ROW_ID}, ${TENANT}, 'SOD-MGR-B', 'Manager B (SOD test)', ${randomUUID()}, ${randomUUID()}, '2020-01-01', ${MANAGER_B_ID}, NULL, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+    VALUES (${REPORT_A_EMP_ROW_ID}, ${TENANT}, 'SOD-RPT-A', 'Report A (SOD test)', ${randomUUID()}, ${randomUUID()}, '2021-03-01', ${REPORT_A_ID}, ${MANAGER_A_EMP_ROW_ID}, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+    VALUES (${REPORT_B_EMP_ROW_ID}, ${TENANT}, 'SOD-RPT-B', 'Report B (SOD test)', ${randomUUID()}, ${randomUUID()}, '2021-03-01', ${REPORT_B_ID}, ${MANAGER_B_EMP_ROW_ID}, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+
   app = await buildApp();
 });
 
@@ -475,6 +537,159 @@ describe("expense claims — real round-trip against claims.hrms_expense_claims"
       });
       expect(r.statusCode).toBe(404);
     });
+  });
+});
+
+describe("expense claims — GAP-HR-EXPENSES-SOD-01 manager reporting-line scope", () => {
+  // Each test below POSTs its own fresh claim (same convention as the reject
+  // describe block above) so approve/reject/receipt/list tests never contend
+  // over the same row's 'pending' status.
+
+  it("a manager CANNOT approve a non-report's pending expense claim (403, not 200), but the real reporting manager CAN", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "travel", amount: 50000, date: "2026-08-10" }),
+    });
+    const id = JSON.parse(created.body).id;
+
+    const denied = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/approve`,
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(JSON.parse(denied.body).code).toBe("FORBIDDEN");
+
+    // Not actually decided by the denied attempt -- Report B's real reporting
+    // manager (Manager B) can still act on the same still-pending claim.
+    const approved = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/approve`,
+      headers: { authorization: `Bearer ${managerBToken}` },
+    });
+    expect(approved.statusCode).toBe(200);
+  });
+
+  it("a manager CANNOT reject a non-report's pending expense claim (403, not 200), but the real reporting manager CAN", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "food", amount: 20000, date: "2026-08-11" }),
+    });
+    const id = JSON.parse(created.body).id;
+
+    const denied = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/reject`,
+      headers: { authorization: `Bearer ${managerAToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ reason: "not my report to decide" }),
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(JSON.parse(denied.body).code).toBe("FORBIDDEN");
+
+    const rejected = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/reject`,
+      headers: { authorization: `Bearer ${managerBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ reason: "valid rejection by the actual reporting manager" }),
+    });
+    expect(rejected.statusCode).toBe(200);
+  });
+
+  it("a manager CAN approve their own direct report's pending expense claim (200)", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportAToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "transport", amount: 15000, date: "2026-08-12" }),
+    });
+    const id = JSON.parse(created.body).id;
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/approve`,
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+  });
+
+  it("GET /v1/hrms/expenses?scope=approvals — a manager only sees their own direct reports' pending claims, not another manager's report's", async () => {
+    const mine = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportAToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "stationery", amount: 5000, date: "2026-08-13" }),
+    });
+    const mineId = JSON.parse(mine.body).id;
+    const theirs = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "stationery", amount: 6000, date: "2026-08-13" }),
+    });
+    const theirsId = JSON.parse(theirs.body).id;
+
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/expenses?scope=approvals",
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(mineId);
+    expect(ids).not.toContain(theirsId);
+  });
+
+  it("GET /v1/hrms/expenses/:id/receipt — a manager CANNOT view a non-report's receipt (403), but CAN view their own report's (200)", async () => {
+    const theirs = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "travel", amount: 30000, date: "2026-08-14", receiptKey: "receipts/sod-test-b.pdf" }),
+    });
+    const theirsId = JSON.parse(theirs.body).id;
+    const mine = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportAToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "travel", amount: 30000, date: "2026-08-14", receiptKey: "receipts/sod-test-a.pdf" }),
+    });
+    const mineId = JSON.parse(mine.body).id;
+
+    const deniedReceipt = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/expenses/${theirsId}/receipt`,
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(deniedReceipt.statusCode).toBe(403);
+
+    const allowedReceipt = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/expenses/${mineId}/receipt`,
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(allowedReceipt.statusCode).toBe(200);
+    expect(JSON.parse(allowedReceipt.body).url).toBeTruthy();
+  });
+
+  it("finance_officer (an EXPENSE_DECIDE_ROLES member that is NOT in this file's module-level HR_ROLES) still bypasses the reporting-line scope tenant-wide", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "medical", amount: 7000, date: "2026-08-15" }),
+    });
+    const id = JSON.parse(created.body).id;
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/approve`,
+      headers: { authorization: `Bearer ${financeOfficerToken}` },
+    });
+    expect(r.statusCode).toBe(200);
   });
 });
 
