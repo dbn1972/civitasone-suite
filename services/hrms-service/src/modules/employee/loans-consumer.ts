@@ -42,6 +42,8 @@ const hrmsSalaryAdvances = employeeSchema.table("hrms_salary_advances", {
   requestDate: date("request_date").notNull(),
   approvedBy: uuid("approved_by"),
   status: varchar("status", { length: 16 }).notNull().default("pending"),
+  rejectedBy: uuid("rejected_by"),
+  rejectionReason: varchar("rejection_reason", { length: 500 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
   version: integer("version").notNull().default(1),
@@ -115,8 +117,39 @@ export function registerLoanConsumers(q: Queue): void {
     const p = msg.payload as { id: string; tenantId: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      await tx.update(hrmsSalaryAdvances).set({ status: "active", approvedBy: msg.actorId })
-        .where(and(eq(hrmsSalaryAdvances.id, p.id), eq(hrmsSalaryAdvances.tenantId, p.tenantId)));
+      // Status-guard: only a still-"pending" advance may be approved -- the
+      // route's own pre-check (loans-routes.ts) already rejects a decided
+      // advance synchronously, but the async write is the actual authority,
+      // so it must re-assert the same guard atomically rather than trust
+      // the route's read to still be true by the time this runs.
+      const updated = await tx.update(hrmsSalaryAdvances).set({ status: "active", approvedBy: msg.actorId })
+        .where(and(
+          eq(hrmsSalaryAdvances.id, p.id),
+          eq(hrmsSalaryAdvances.tenantId, p.tenantId),
+          eq(hrmsSalaryAdvances.status, "pending"),
+        )).returning({ id: hrmsSalaryAdvances.id });
+      if (!updated[0]) {
+        log.warn({ advanceId: p.id, messageId: msg.messageId }, "salary advance already decided before async approve");
+      }
+    });
+  });
+  // GAP-HR-ADVANCES-02: no reject path existed at all before. Mirrors the
+  // approve consumer above exactly (same status-guard, same benign-race
+  // handling), writing rejectedBy/rejectionReason instead of approvedBy.
+  q.subscribe(COMMANDS.salaryAdvanceReject, async (msg) => {
+    const p = msg.payload as { id: string; tenantId: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const updated = await tx.update(hrmsSalaryAdvances).set({
+        status: "rejected", rejectedBy: msg.actorId, rejectionReason: p.reason,
+      }).where(and(
+        eq(hrmsSalaryAdvances.id, p.id),
+        eq(hrmsSalaryAdvances.tenantId, p.tenantId),
+        eq(hrmsSalaryAdvances.status, "pending"),
+      )).returning({ id: hrmsSalaryAdvances.id });
+      if (!updated[0]) {
+        log.warn({ advanceId: p.id, messageId: msg.messageId }, "salary advance already decided before async reject");
+      }
     });
   });
 }

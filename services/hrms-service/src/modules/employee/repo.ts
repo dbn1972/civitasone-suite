@@ -267,12 +267,13 @@ export async function updateEmployeeVersioned(
 export async function findManyByIds(
   tenantId: string,
   ids: string[],
-): Promise<Array<{ id: string; fullName: string; departmentId: string; designationId: string }>> {
+): Promise<Array<{ id: string; fullName: string; employeeNo: string; departmentId: string; designationId: string }>> {
   if (ids.length === 0) return [];
   return scopedRead((tx) => tx
     .select({
       id: hrmsEmployees.id,
       fullName: hrmsEmployees.fullName,
+      employeeNo: hrmsEmployees.employeeNo,
       departmentId: hrmsEmployees.departmentId,
       designationId: hrmsEmployees.designationId,
     })

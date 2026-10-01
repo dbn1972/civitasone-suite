@@ -3108,7 +3108,19 @@
     "filterPlaceholder": "Filter by employee, loan type or status…",
     "emptyTitle": "No employee loans",
     "emptyMessage": "Employee salary advances and loans appear here. Loans are created via the Payroll › Loans module.",
-    "backToHr": "Back to HR"
+    "backToHr": "Back to HR",
+    "colEmiProgress": "EMI Progress",
+    "statOtherLabel": "Other",
+    "emptyActionLink": "Go to Payroll › Loans",
+    "types": {
+      "hba": "House Building Advance",
+      "motor_car": "Motor Car",
+      "computer": "Computer",
+      "festival": "Festival",
+      "personal": "Personal",
+      "medical": "Medical",
+      "other": "Other"
+    }
   },
   "loansTable": {
     "colLoanNo": "Loan No.",
@@ -5501,7 +5513,29 @@
     "colStatus": "Status",
     "filterPlaceholder": "Filter by employee or status…",
     "emptyTitle": "No salary advances",
-    "emptyMessage": "Salary advance requests appear here once employees raise them. Advances are approved by HR and adjusted against subsequent salary."
+    "emptyMessage": "Salary advance requests appear here once employees raise them. Advances are approved by HR and adjusted against subsequent salary.",
+    "colActions": "Actions",
+    "formHeading": "Request Advance",
+    "formCancel": "✕ Cancel",
+    "formNewRequest": "+ New Request",
+    "formSuccessMessage": "Advance request submitted.",
+    "formLabelEmployee": "Employee",
+    "formSelectEmployee": "— Select employee —",
+    "formEmployeeListForbidden": "You do not have permission to pick employees.",
+    "formEmployeeListError": "Could not load employee list. Refresh and try again.",
+    "formEmployeeRequired": "Please select an employee.",
+    "formLabelAmount": "Amount (₹)",
+    "formPlaceholderAmount": "e.g. 10000",
+    "formAmountInvalid": "Enter a valid amount.",
+    "formLabelMonths": "Recovery Months",
+    "formMonthsInvalid": "Enter 1–12 months.",
+    "formMonthsHint": "Max 12 months",
+    "formLabelDate": "Request Date",
+    "formLabelPurpose": "Purpose",
+    "formPlaceholderPurpose": "Reason for advance request (min 2 chars)",
+    "formPurposeInvalid": "Purpose must be at least 2 characters.",
+    "formSubmitting": "Submitting…",
+    "formSubmit": "Submit Request"
   },
   "payrollPeriod": {
     "title": "Payroll Periods",

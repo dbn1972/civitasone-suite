@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -9,6 +11,19 @@ vi.mock("next/navigation", () => ({
 import { RequestAdvanceForm } from "./RequestAdvanceForm";
 
 const EMPLOYEES = [{ id: "e1", name: "Test Employee", employeeNo: "EMP001" }];
+
+// GAP-HR-ADVANCES-07: this component now renders through useTranslations
+// (next-intl's client entry, not the next-intl/server mock apps/web's
+// vitest.setup.ts provides) -- every render needs a real
+// NextIntlClientProvider, the same convention GrievancesTable.test.tsx
+// already established for "use client" components with real i18n.
+function renderForm(props: Parameters<typeof RequestAdvanceForm>[0] = {}) {
+  return render(
+    <NextIntlClientProvider locale="en" messages={enMessages}>
+      <RequestAdvanceForm {...props} />
+    </NextIntlClientProvider>,
+  );
+}
 
 /**
  * UX-016: this used to show the raw backend `message` (falling back to
@@ -32,7 +47,7 @@ describe("RequestAdvanceForm — UX-016 clerk-safe errors", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   async function openAndFillForm() {
-    render(<RequestAdvanceForm />);
+    renderForm();
     fireEvent.click(screen.getByRole("button", { name: /new request/i }));
     await waitFor(() => expect(screen.getByRole("option", { name: /test employee/i })).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText(/employee/i), { target: { value: "e1" } });
@@ -87,5 +102,37 @@ describe("RequestAdvanceForm — UX-016 clerk-safe errors", () => {
     await openAndFillForm();
 
     expect(await screen.findByText("Purpose contains disallowed characters.")).toBeInTheDocument();
+  });
+});
+
+describe("RequestAdvanceForm — GAP-HR-ADVANCES-03 self-service", () => {
+  beforeEach(() => {
+    fetchMock2.mockReset();
+    vi.stubGlobal("fetch", fetchMock2);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  const fetchMock2 = vi.fn();
+
+  it("selfServiceOnly hides the employee picker and never calls the employees endpoint", async () => {
+    renderForm({ selfServiceOnly: true });
+    fireEvent.click(screen.getByRole("button", { name: /new request/i }));
+
+    expect(screen.queryByLabelText(/employee/i)).not.toBeInTheDocument();
+    expect(fetchMock2).not.toHaveBeenCalledWith(expect.stringContaining("/hrms/employees"), expect.anything());
+  });
+
+  it("selfServiceOnly submits without an employeeId in the request body", async () => {
+    fetchMock2.mockResolvedValue(new Response(JSON.stringify({ id: "adv-1", status: "pending" }), { status: 202 }));
+    renderForm({ selfServiceOnly: true });
+    fireEvent.click(screen.getByRole("button", { name: /new request/i }));
+    fireEvent.change(screen.getByLabelText(/amount/i), { target: { value: "2000" } });
+    fireEvent.change(screen.getByLabelText(/purpose/i), { target: { value: "Festival advance" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit request/i }));
+
+    await waitFor(() => expect(fetchMock2).toHaveBeenCalledWith("/api/proxy/v1/hrms/salary-advances", expect.anything()));
+    const [, init] = fetchMock2.mock.calls.find(([url]) => url === "/api/proxy/v1/hrms/salary-advances")!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.employeeId).toBeUndefined();
   });
 });

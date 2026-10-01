@@ -19,6 +19,12 @@
  * ON DELETE RESTRICT FK to hrms_employees (migration 0124) — unlike
  * attendance's tables, cleanup must delete the loan row(s) before the
  * employee row or the FK rejects the delete.
+ *
+ * GAP-HR-ADVANCES-02 (added below): the new reject consumer, exercised the
+ * same way (real MemoryQueue, real DB, read the row back afterward) --
+ * `app.inject()`-based route tests (loans-advances-identity-and-reject-
+ * real-db.test.ts) cannot observe this, since that harness's buildApp()
+ * does not wire up registerLoanConsumers -- see that file's own comment.
  */
 import { describe, it, expect } from "vitest";
 import { randomUUID } from "node:crypto";
@@ -53,6 +59,24 @@ const hrmsLoans = employeeSchema.table("hrms_loans", {
   lastEmiDate: date("last_emi_date"),
   purpose: text("purpose"),
   status: varchar("status", { length: 16 }).notNull().default("active"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy: uuid("created_by").notNull(),
+  version: integer("version").notNull().default(1),
+});
+const hrmsSalaryAdvances = employeeSchema.table("hrms_salary_advances", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  tenantId: uuid("tenant_id").notNull(),
+  employeeId: uuid("employee_id").notNull(),
+  amountMinor: bigint("amount_minor", { mode: "bigint" }).notNull().default(0n),
+  purpose: varchar("purpose", { length: 200 }).notNull(),
+  recoveryMonths: integer("recovery_months").notNull().default(1),
+  emiMinor: bigint("emi_minor", { mode: "bigint" }).notNull().default(0n),
+  recoveredMinor: bigint("recovered_minor", { mode: "bigint" }).notNull().default(0n),
+  requestDate: date("request_date").notNull(),
+  approvedBy: uuid("approved_by"),
+  status: varchar("status", { length: 16 }).notNull().default("pending"),
+  rejectedBy: uuid("rejected_by"),
+  rejectionReason: varchar("rejection_reason", { length: 500 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
   version: integer("version").notNull().default(1),
@@ -102,6 +126,7 @@ async function cleanupEmployee(tenantId: string, employeeId: string): Promise<vo
     // attendance's tables, the loan row(s) must go first or this delete
     // fails with a foreign-key violation.
     await tx.delete(hrmsLoans).where(eq(hrmsLoans.employeeId, employeeId));
+    await tx.delete(hrmsSalaryAdvances).where(eq(hrmsSalaryAdvances.employeeId, employeeId));
     await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.id, employeeId));
   }));
 }
@@ -136,11 +161,39 @@ async function getLoan(tenantId: string, id: string) {
   }));
 }
 
+async function seedAdvance(tenantId: string, employeeId: string, actorId: string, status: "pending" | "rejected" = "pending"): Promise<string> {
+  const id = randomUUID();
+  await runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    await tx.insert(hrmsSalaryAdvances).values({
+      id, tenantId, employeeId, amountMinor: 500000n, purpose: "Medical",
+      recoveryMonths: 6, emiMinor: 83334n, recoveredMinor: 0n,
+      requestDate: "2026-01-15", status, createdBy: actorId,
+    });
+  }));
+  return id;
+}
+
+async function getAdvance(tenantId: string, id: string) {
+  return runWithTenant(tenantId, () => db.transaction(async (tx) => {
+    const [row] = await tx.select().from(hrmsSalaryAdvances).where(eq(hrmsSalaryAdvances.id, id));
+    return row;
+  }));
+}
+
 async function publishEmiPaid(q: MemoryQueue, tenantId: string, actorId: string, loanId: string): Promise<void> {
   await q.publish(COMMANDS.loanEmiPaid, {
     messageId: randomUUID(), type: COMMANDS.loanEmiPaid,
     tenantId, actorId, correlationId: randomUUID(), schemaVersion: "1.0",
     payload: { id: loanId, tenantId },
+  });
+  await q.drain();
+}
+
+async function publishAdvanceReject(q: MemoryQueue, tenantId: string, actorId: string, advanceId: string, reason: string): Promise<void> {
+  await q.publish(COMMANDS.salaryAdvanceReject, {
+    messageId: randomUUID(), type: COMMANDS.salaryAdvanceReject,
+    tenantId, actorId, correlationId: randomUUID(), schemaVersion: "1.0",
+    payload: { id: advanceId, tenantId, reason },
   });
   await q.drain();
 }
@@ -203,6 +256,45 @@ describe("EMI payment recording — no payment against a non-active loan", () =>
       expect(after?.emisPaid).toBe(6);
       expect(after?.outstandingMinor).toBe(3000000n);
       expect(after?.status).toBe("active");
+    } finally {
+      await cleanupEmployee(tenantId, employeeId);
+    }
+  });
+});
+
+describe("GAP-HR-ADVANCES-02: salary advance reject consumer", () => {
+  it("a pending advance is written to 'rejected' with rejectedBy/rejectionReason set", async () => {
+    const { tenantId, employeeId, actorId } = await seedEmployee();
+    const rejectorId = randomUUID();
+    try {
+      const advanceId = await seedAdvance(tenantId, employeeId, actorId, "pending");
+
+      const q = await buildQueue();
+      await publishAdvanceReject(q, tenantId, rejectorId, advanceId, "Exceeds monthly recovery cap");
+
+      const after = await getAdvance(tenantId, advanceId);
+      expect(after?.status).toBe("rejected");
+      expect(after?.rejectedBy).toBe(rejectorId);
+      expect(after?.rejectionReason).toBe("Exceeds monthly recovery cap");
+    } finally {
+      await cleanupEmployee(tenantId, employeeId);
+    }
+  });
+
+  it("an already-rejected advance is left untouched by a second reject (status-guard, no double-write)", async () => {
+    const { tenantId, employeeId, actorId } = await seedEmployee();
+    try {
+      const advanceId = await seedAdvance(tenantId, employeeId, actorId, "rejected");
+
+      const q = await buildQueue();
+      await publishAdvanceReject(q, tenantId, randomUUID(), advanceId, "Second attempt");
+
+      const after = await getAdvance(tenantId, advanceId);
+      // Still "rejected" from the original seed, and NOT overwritten with
+      // the second attempt's reason -- the guarded UPDATE's WHERE
+      // status='pending' matched zero rows.
+      expect(after?.status).toBe("rejected");
+      expect(after?.rejectionReason).toBeNull();
     } finally {
       await cleanupEmployee(tenantId, employeeId);
     }

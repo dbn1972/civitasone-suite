@@ -28,6 +28,13 @@ export interface EmployeeSummary {
   fullName: string;
   departmentId: string;
   designationId: string;
+  // GAP-HR-ADVANCES-01 / GAP-HR-LOANS-01: consumers that render "Name
+  // (EmpNo)" (the established convention elsewhere in this codebase, e.g.
+  // RequestAdvanceForm.tsx's own employee picker) need the employee number
+  // alongside the name. Additive: employeeRepo.findManyByIds now selects it
+  // too (see that function's own comment); every existing consumer that
+  // destructures only {fullName, departmentId, designationId} is unaffected.
+  employeeNo: string;
 }
 
 function uniqIds(ids: ReadonlyArray<string | null | undefined>): string[] {
@@ -51,7 +58,7 @@ export async function batchNames(
   return new Map(rows.map((r) => [r.id, r.name]));
 }
 
-/** Batch-resolve employee ids to {id, fullName, departmentId, designationId}. Tenant-scoped. */
+/** Batch-resolve employee ids to {id, fullName, employeeNo, departmentId, designationId}. Tenant-scoped. */
 export async function batchEmployees(
   tenantId: string,
   employeeIds: ReadonlyArray<string | null | undefined>,

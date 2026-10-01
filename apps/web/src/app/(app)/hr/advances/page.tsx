@@ -1,7 +1,8 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RequestAdvanceForm } from "./RequestAdvanceForm";
+import { AdvancesTable } from "./AdvancesTable";
 import { mapAdvances, type ApiAdvance, type Row } from "./mapAdvances";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
@@ -9,11 +10,18 @@ import { PermissionDenied } from "../../../_components/PermissionDenied";
 
 import { getTranslations } from "next-intl/server";
 
-// Matches ALL_ROLES on the backend (services/hrms-service/src/modules/employee/
-// loans-routes.ts) -- this page had no client-side gate at all, so any
-// authenticated user could reach a form whose employee picker posts directly
-// to POST /v1/hrms/salary-advances (now separately IDOR-guarded server-side).
-const ADVANCE_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer"];
+// Matches ADVANCE_ROLES on the backend (services/hrms-service/src/modules/
+// employee/loans-routes.ts) -- this page had no client-side gate at all, so
+// any authenticated user could reach a form whose employee picker posts
+// directly to POST /v1/hrms/salary-advances (now separately IDOR-guarded
+// server-side). GAP-HR-ADVANCES-03 (decision packet, recommended default
+// applied): "employee" added for self-service -- the backend forces their
+// own employeeId server-side regardless of what the form sends.
+const ADVANCE_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer", "employee"];
+
+// GAP-HR-ADVANCES-02: only these roles may approve/reject -- mirrors the
+// backend's own HR_ROLES for the approve/reject routes exactly (loans-routes.ts).
+const ADVANCE_DECIDE_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer"];
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/salary-advances", [], {
@@ -33,42 +41,33 @@ export default async function AdvancesPage() {
   if (!canAccess) {
     return <PermissionDenied module="salary advances" requiredRoles={ADVANCE_ROLES} />;
   }
+  const canDecide = roles.some((r) => ADVANCE_DECIDE_ROLES.includes(r));
+  // GAP-HR-ADVANCES-03: a session with ONLY "employee" (no HR/manager/officer
+  // overlap) can only ever file for themselves -- the form hides the picker
+  // entirely for this case rather than show one whose selection is ignored.
+  const selfServiceOnly = roles.includes("employee")
+    && !roles.some((r) => ["hr_admin", "finance_admin", "super_admin", "hr_officer", "manager", "officer"].includes(r));
 
   const t = await getTranslations("advances");
   const { data: items, source } = await getData();
   const errored = source === "error";
 
-  const pending = items.filter((i) => i.status === "pending").length;
+  // GAP-HR-ADVANCES-02: the API/DB status stays "active" on approve (see
+  // mapAdvances.ts); this counts the same web-display field mapAdvances
+  // already remapped to "approved", so the stat card and the table's
+  // Status column always agree.
+  const pending = items.filter((i) => i.rawStatus === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
-  const rejected = items.filter((i) => i.status === "rejected").length;
-
-  // Audit: AdvancesPage is a Server Component. `amount`/`recovered` used to
-  // carry a `render: (r) => formatMoney(r.amount)` closure -- DataTable is a
-  // "use client" component, and React cannot serialize a function across
-  // that Server->Client boundary ("Functions cannot be passed directly to
-  // Client Components..."), so the whole page failed to render for every
-  // role, every time, with only a generic digest-coded error reaching the
-  // browser console (the real cause only appears in the server's own log).
-  // DataTable's `cellType: "amount"` exists exactly for this: it formats
-  // row[key] with formatMoney() *inside* the client component, so only the
-  // raw number crosses the boundary -- also correct where `render` was not,
-  // since it keeps `amount`/`recovered` numeric for the sortable column
-  // (compareValues sorts numbers numerically; a pre-formatted "₹10,000"
-  // string would have sorted lexicographically instead).
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" }[] = [
-    { key: "employee", label: t("colEmployee") },
-    { key: "amount", label: t("colAmount"), cellType: "amount" },
-    { key: "purpose", label: t("colPurpose") },
-    { key: "recoveryMonths", label: t("colRecovery") },
-    { key: "recovered", label: t("colRecovered"), cellType: "amount" },
-    { key: "requestDate", label: t("colDate") },
-    { key: "status", label: t("colStatus"), cellType: "status" },
-  ];
+  const rejected = items.filter((i) => i.rawStatus === "rejected").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr" backLabel="Back to HR" />
-      <DataSourceBadge source={source} message="Couldn't load — showing nothing" />
+      {/* GAP-HR-ADVANCES-08: the banner used to claim "showing nothing" even
+          though RequestAdvanceForm below stays fully usable on a list-load
+          failure (it doesn't depend on this GET) -- reworded to describe
+          what actually failed. */}
+      <DataSourceBadge source={source} message="Couldn't load the advances list — you can still submit a new request below" />
       <StatGrid>
 <StatCard icon="💰" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : items.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
@@ -76,7 +75,7 @@ export default async function AdvancesPage() {
         <StatCard icon="❌" iconBg="var(--badbg, #fdecea)" label={t("statRejected")} value={errored ? null : rejected} />
       </StatGrid>
 
-      <RequestAdvanceForm />
+      <RequestAdvanceForm selfServiceOnly={selfServiceOnly} />
 
       <Card title={t("cardTitle")}>
         {errored ? (
@@ -84,12 +83,24 @@ export default async function AdvancesPage() {
             <RefreshErrorState error={toHumanError("load", { area: "advances" })} backHref="/hr" />
           </div>
         ) : (
-          <DataTable<Row> columns={columns} rows={items} sortable filterable filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="💰"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
+          <AdvancesTable
+            rows={items}
+            canDecide={canDecide}
+            filterPlaceholder={t("filterPlaceholder")}
+            emptyIcon="💰"
+            emptyTitle={t("emptyTitle")}
+            emptyMessage={t("emptyMessage")}
+            labels={{
+              employee: t("colEmployee"),
+              amount: t("colAmount"),
+              purpose: t("colPurpose"),
+              recovery: t("colRecovery"),
+              recovered: t("colRecovered"),
+              date: t("colDate"),
+              status: t("colStatus"),
+              actions: t("colActions"),
+            }}
+          />
         )}
       </Card>
     </div>

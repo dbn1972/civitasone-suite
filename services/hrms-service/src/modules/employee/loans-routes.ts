@@ -6,7 +6,6 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { RequestContext } from "@civitasone/types";
 import { z, ZodError } from "zod";
-import { randomUUID } from "node:crypto";
 import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
@@ -16,6 +15,7 @@ import * as loanCommands from "./loans-commands.js";
 import { pgSchema, uuid, varchar, integer, bigint, timestamp, text, date } from "drizzle-orm/pg-core";
 import { hrmsEmployees } from "./schema.js";
 import { resolveEmployeeForActor } from "./actor-link.js";
+import { batchEmployees, batchDepartments } from "../../shared/batch-resolve.js";
 
 // "hr_officer" is treated as an HR-tier role everywhere else in this codebase
 // (medical/routes.ts, employee/routes.ts both fold it into their own
@@ -26,6 +26,17 @@ import { resolveEmployeeForActor } from "./actor-link.js";
 // (who may call these routes at all) is unchanged.
 const HR_ROLES = ["hr_admin", "finance_admin", "super_admin", "hr_officer"];
 const ALL_ROLES = [...HR_ROLES, "manager", "officer"];
+
+// GAP-HR-ADVANCES-03 (decision packet theme 3, recommended default: "Turn on
+// self-service -- amount and employee id always resolved server-side from
+// the logged-in session, never accepted from the client"): salary advances
+// (unlike loans, which stay HR-created only -- see GAP-HR-LOANS-05's empty
+// copy) admit a plain "employee" caller, scoped to their own record only.
+// Kept as its own list (not folded into ALL_ROLES above) so loans' GET/POST
+// are untouched -- widening the shared ALL_ROLES would also open GET/POST
+// /v1/hrms/loans to "employee", which nothing in this campaign's catalog or
+// decision packet asked for.
+const ADVANCE_ROLES = [...ALL_ROLES, "employee"];
 
 /**
  * SEC finding: GET /v1/hrms/loans and GET /v1/hrms/salary-advances gave
@@ -46,7 +57,7 @@ const ALL_ROLES = [...HR_ROLES, "manager", "officer"];
  *  - null       caller is manager/officer-only with NO resolvable employee
  *               link -- fail CLOSED (empty results), never tenant-wide.
  */
-async function resolveManagerScope(ctx: RequestContext, req: FastifyRequest): Promise<string | null | undefined> {
+async function resolveManagerScope(ctx: RequestContext, _req: FastifyRequest): Promise<string | null | undefined> {
   const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
   if (isHrActor) return undefined;
   const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
@@ -58,6 +69,34 @@ async function directReportIds(tenantId: string, managerId: string): Promise<str
   const rows = await scopedRead((tx) => tx.select({ id: hrmsEmployees.id }).from(hrmsEmployees)
     .where(and(eq(hrmsEmployees.tenantId, tenantId), eq(hrmsEmployees.managerId, managerId))));
   return rows.map((r) => r.id);
+}
+
+/**
+ * GAP-HR-ADVANCES-03 read/write scope for the salary-advances routes only.
+ * Unlike resolveManagerScope above (which treats every non-HR caller as a
+ * manager, scoped to direct reports), a bare "employee" role is not a
+ * manager of anyone -- directReportIds(tenantId, self) would return their
+ * OWN reports (empty, for almost everyone), not their own advances. This
+ * distinguishes the three cases explicitly:
+ *  - "all"     caller holds an HR_ROLES role -- unrestricted, tenant-wide.
+ *  - "reports" caller holds manager/officer -- restrict to direct reports.
+ *  - "self"    caller holds only "employee" -- restrict to their own row.
+ *  - "denied"  no resolvable hrms_employees link -- fail CLOSED.
+ */
+type AdvanceScope =
+  | { kind: "all" }
+  | { kind: "reports"; managerId: string }
+  | { kind: "self"; employeeId: string }
+  | { kind: "denied" };
+
+async function resolveAdvanceScope(ctx: RequestContext): Promise<AdvanceScope> {
+  const isHrActor = HR_ROLES.some((r) => ctx.roles.includes(r));
+  if (isHrActor) return { kind: "all" };
+  const isManagerActor = ctx.roles.includes("manager") || ctx.roles.includes("officer");
+  const actorEmp = await resolveEmployeeForActor(ctx.tenantId, ctx.actorId);
+  if (!actorEmp) return { kind: "denied" };
+  if (isManagerActor) return { kind: "reports", managerId: actorEmp.id };
+  return { kind: "self", employeeId: actorEmp.id };
 }
 
 const employeeSchema = pgSchema("employee");
@@ -96,6 +135,11 @@ const hrmsSalaryAdvances = employeeSchema.table("hrms_salary_advances", {
   requestDate: date("request_date").notNull(),
   approvedBy: uuid("approved_by"),
   status: varchar("status", { length: 16 }).notNull().default("pending"),
+  // GAP-HR-ADVANCES-02: reject was previously impossible -- no columns to
+  // record who rejected an advance or why. Nullable/additive: existing rows
+  // are unaffected, only ever set by the new reject route below.
+  rejectedBy: uuid("rejected_by"),
+  rejectionReason: varchar("rejection_reason", { length: 500 }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy: uuid("created_by").notNull(),
   version: integer("version").notNull().default(1),
@@ -115,11 +159,22 @@ const createLoanBody = z.object({
 });
 
 const createAdvanceBody = z.object({
-  employeeId: z.string().uuid(),
+  // GAP-HR-ADVANCES-03: optional, not required -- a self-service "employee"
+  // caller's form hides the employee picker entirely and sends no
+  // employeeId at all (the server derives it below); HR/manager/officer
+  // still name whom they're filing for, and that path enforces employeeId
+  // is actually present (see the handler below). Never trust this field
+  // for authorization even when present -- it's re-checked against the
+  // caller's own scope every time.
+  employeeId: z.string().uuid().optional(),
   amountMinor: z.number().int().positive(),
   purpose: z.string().min(2).max(200),
   recoveryMonths: z.number().int().min(1).max(12).default(1),
   requestDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+const rejectAdvanceBody = z.object({
+  reason: z.string().min(1).max(500),
 });
 
 export async function loansRoutes(app: FastifyInstance): Promise<void> {
@@ -136,7 +191,26 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
       eq(hrmsLoans.tenantId, ctx.tenantId),
       ...(reportIds ? [inArray(hrmsLoans.employeeId, reportIds)] : []),
     )));
-    return reply.send({ data: rows.map(r => ({ ...r, sanctionedAmountMinor: Number(r.sanctionedAmountMinor), disbursedAmountMinor: Number(r.disbursedAmountMinor), outstandingMinor: Number(r.outstandingMinor), emiMinor: Number(r.emiMinor) })) });
+    // GAP-HR-LOANS-01: the web page (loans/page.tsx) has expected
+    // employeeName/department on each row for a while -- mapLoans() already
+    // falls back to the raw UUID / "--" when they're absent, which is
+    // exactly what every row did, since this handler never actually sent
+    // them. Reuses the shared GAP-HR-SF-17 batch-resolution helper (no
+    // cross-module schema import -- goes through employee/repo.ts's own
+    // findManyByIds), the same building block GAP-HR-ADVANCES-01 below and
+    // lifecycle/routes.ts already use.
+    const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
+    const deptMap = await batchDepartments(ctx.tenantId, [...empMap.values()].map((e) => e.departmentId));
+    return reply.send({ data: rows.map((r) => ({
+      ...r,
+      sanctionedAmountMinor: Number(r.sanctionedAmountMinor),
+      disbursedAmountMinor: Number(r.disbursedAmountMinor),
+      outstandingMinor: Number(r.outstandingMinor),
+      emiMinor: Number(r.emiMinor),
+      employeeName: empMap.get(r.employeeId)?.fullName,
+      employeeNo: empMap.get(r.employeeId)?.employeeNo,
+      department: deptMap.get(empMap.get(r.employeeId)?.departmentId ?? ""),
+    })) });
   });
 
   app.post("/v1/hrms/loans", async (req, reply) => {
@@ -174,47 +248,75 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/hrms/salary-advances", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
-    const managerScope = await resolveManagerScope(ctx, req);
-    if (managerScope === null) return reply.send({ data: [] });
-    const reportIds = managerScope === undefined ? undefined : await directReportIds(ctx.tenantId, managerScope);
-    if (reportIds && reportIds.length === 0) return reply.send({ data: [] });
+    requireRole(ctx, ADVANCE_ROLES);
+    const scope = await resolveAdvanceScope(ctx);
+    if (scope.kind === "denied") return reply.send({ data: [] });
+    let idFilter: string[] | undefined;
+    if (scope.kind === "self") {
+      idFilter = [scope.employeeId];
+    } else if (scope.kind === "reports") {
+      idFilter = await directReportIds(ctx.tenantId, scope.managerId);
+      if (idFilter.length === 0) return reply.send({ data: [] });
+    }
     const rows = await scopedRead((tx) => tx.select().from(hrmsSalaryAdvances).where(and(
       eq(hrmsSalaryAdvances.tenantId, ctx.tenantId),
-      ...(reportIds ? [inArray(hrmsSalaryAdvances.employeeId, reportIds)] : []),
+      ...(idFilter ? [inArray(hrmsSalaryAdvances.employeeId, idFilter)] : []),
     )));
-    return reply.send({ data: rows.map(r => ({ ...r, amountMinor: Number(r.amountMinor), emiMinor: Number(r.emiMinor), recoveredMinor: Number(r.recoveredMinor) })) });
+    // GAP-HR-ADVANCES-01: same shared batch-resolution helper as GET
+    // /v1/hrms/loans above -- the web mapAdvances() falls back to the raw
+    // UUID whenever employeeName is absent, which was every row.
+    const empMap = await batchEmployees(ctx.tenantId, rows.map((r) => r.employeeId));
+    return reply.send({ data: rows.map((r) => ({
+      ...r,
+      amountMinor: Number(r.amountMinor),
+      emiMinor: Number(r.emiMinor),
+      recoveredMinor: Number(r.recoveredMinor),
+      employeeName: empMap.get(r.employeeId)?.fullName,
+      employeeNo: empMap.get(r.employeeId)?.employeeNo,
+    })) });
   });
 
   app.post("/v1/hrms/salary-advances", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, ALL_ROLES);
+    requireRole(ctx, ADVANCE_ROLES);
     const body = createAdvanceBody.parse(req.body);
 
     // IDOR fix: the UI's employee picker fetches every employee in the
     // tenant, letting any manager/officer submit an advance request naming
     // an arbitrary co-worker's employeeId -- zero ownership check existed
     // (body.employeeId was inserted raw by the consumer). HR/finance roles
-    // stay unrestricted (HR-assisted requests on behalf of any employee is
-    // the only way this endpoint is reachable for a bare "employee" role
-    // today -- "employee" is not in ALL_ROLES above, so there is no
-    // self-service caller to force onto their own id yet). manager/officer
-    // may only name one of their own direct reports, mirroring the list
-    // routes' scoping above rather than inventing a second shape.
-    const managerScope = await resolveManagerScope(ctx, req);
-    if (managerScope !== undefined) {
-      if (managerScope === null) {
-        throw new HttpError(403, "FORBIDDEN", "no linked employee record for this account");
+    // stay unrestricted. manager/officer may only name one of their own
+    // direct reports. GAP-HR-ADVANCES-03: a bare "employee" caller's
+    // employeeId is IGNORED entirely and forced to their own linked
+    // hrms_employees row -- the client can send anything (or omit it) and
+    // it is never trusted for this role, matching the decision packet's
+    // "amount and employee id always resolved server-side" default.
+    const scope = await resolveAdvanceScope(ctx);
+    let employeeId: string;
+    if (scope.kind === "denied") {
+      throw new HttpError(403, "FORBIDDEN", "no linked employee record for this account");
+    } else if (scope.kind === "self") {
+      // Self-service: the client sends no employeeId at all (the form hides
+      // the picker entirely) -- whatever it sent, if anything, is ignored.
+      employeeId = scope.employeeId;
+    } else {
+      // HR ("all") or manager/officer ("reports"): employeeId is required --
+      // this is the "file on behalf of" path, so there must be a target.
+      if (!body.employeeId) {
+        throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
       }
-      const reportIds = await directReportIds(ctx.tenantId, managerScope);
-      if (!reportIds.includes(body.employeeId)) {
-        throw new HttpError(403, "FORBIDDEN", "you may only request an advance for your own direct reports");
+      if (scope.kind === "reports") {
+        const reportIds = await directReportIds(ctx.tenantId, scope.managerId);
+        if (!reportIds.includes(body.employeeId)) {
+          throw new HttpError(403, "FORBIDDEN", "you may only request an advance for your own direct reports");
+        }
       }
+      employeeId = body.employeeId;
     }
 
     const emi = Math.ceil(body.amountMinor / body.recoveryMonths);
     return sendAccepted(reply, acceptedResponseSchema, await loanCommands.createAdvance(ctx, {
-      ...body, emiMinor: emi, requestDate: body.requestDate ?? new Date().toISOString().slice(0, 10),
+      ...body, employeeId, emiMinor: emi, requestDate: body.requestDate ?? new Date().toISOString().slice(0, 10),
     }));
   });
 
@@ -237,11 +339,40 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
       .limit(1));
     const advance = rows[0];
     if (!advance) throw new HttpError(404, "NOT_FOUND", "salary advance not found");
+    if (advance.status !== "pending") {
+      throw new HttpError(404, "NOT_FOUND", "salary advance not found or already decided");
+    }
     if (advance.createdBy === ctx.actorId) {
       throw new HttpError(403, "FORBIDDEN", "you may not approve a salary advance you created yourself");
     }
 
     return sendAccepted(reply, acceptedResponseSchema, await loanCommands.approveAdvance(ctx, id));
+  });
+
+  // Reject advance (GAP-HR-ADVANCES-02: this route did not exist at all --
+  // the page's "Rejected" stat card had no way to ever become non-zero).
+  // Mirrors the approve route's pending-status + maker-checker guards
+  // exactly, so a rejection is held to the same standard as an approval.
+  app.patch("/v1/hrms/salary-advances/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = rejectAdvanceBody.parse(req.body);
+
+    const rows = await scopedRead((tx) => tx.select({ id: hrmsSalaryAdvances.id, status: hrmsSalaryAdvances.status, createdBy: hrmsSalaryAdvances.createdBy })
+      .from(hrmsSalaryAdvances)
+      .where(and(eq(hrmsSalaryAdvances.id, id), eq(hrmsSalaryAdvances.tenantId, ctx.tenantId)))
+      .limit(1));
+    const advance = rows[0];
+    if (!advance) throw new HttpError(404, "NOT_FOUND", "salary advance not found");
+    if (advance.status !== "pending") {
+      throw new HttpError(404, "NOT_FOUND", "salary advance not found or already decided");
+    }
+    if (advance.createdBy === ctx.actorId) {
+      throw new HttpError(403, "FORBIDDEN", "you may not reject a salary advance you created yourself");
+    }
+
+    return sendAccepted(reply, acceptedResponseSchema, await loanCommands.rejectAdvance(ctx, id, body.reason));
   });
 
   app.setErrorHandler((err, req, reply) => {

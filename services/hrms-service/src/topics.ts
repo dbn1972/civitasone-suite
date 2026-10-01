@@ -52,6 +52,7 @@ export const COMMANDS = {
   loanEmiPaid:              "hrms.loan.emi_paid",
   salaryAdvanceCreate:      "hrms.salary_advance.create",
   salaryAdvanceApprove:     "hrms.salary_advance.approve",
+  salaryAdvanceReject:      "hrms.salary_advance.reject",
 
   // deputation
   deputationCreate:     "hrms.deputation.create",

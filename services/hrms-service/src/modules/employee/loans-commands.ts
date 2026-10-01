@@ -22,3 +22,7 @@ export const createAdvance = (ctx: RequestContext, body: Record<string, unknown>
   pub(ctx, COMMANDS.salaryAdvanceCreate, randomUUID(), body);
 export const approveAdvance = (ctx: RequestContext, id: string) =>
   pub(ctx, COMMANDS.salaryAdvanceApprove, id, {});
+// GAP-HR-ADVANCES-02: reject command -- mirrors approveAdvance, carrying the
+// mandatory rejection reason through to the consumer.
+export const rejectAdvance = (ctx: RequestContext, id: string, reason: string) =>
+  pub(ctx, COMMANDS.salaryAdvanceReject, id, { reason });
