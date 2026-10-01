@@ -110,4 +110,31 @@ describe("AparListPage", () => {
     expect(screen.getByRole("alert")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Apply" })).not.toBeInTheDocument();
   });
+
+  // GAP-HR-SF09A-010 / GAP-HR-APAR-04 (PR #1672): APAR_ROLES admits
+  // manager/employee to this list, but POST /v1/hrms/apar (create) is
+  // HR-only on the backend -- offering a button that always 403s on
+  // arrival at /hr/apar/new is its own small UX bug on top of the role
+  // mismatch. canInitiate (APAR_INITIATE_ROLES) controls the button here;
+  // no test anywhere else in this PR or on main covered it directly.
+  it("GAP-HR-SF09A-010: shows the Initiate APAR button for hr_admin", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { records: [], total: 0, hasMore: false, counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 } },
+    });
+    await renderPage({});
+    expect(screen.getByRole("link", { name: "+ Initiate APAR" })).toBeInTheDocument();
+  });
+
+  it("GAP-HR-SF09A-010: hides the Initiate APAR button for manager and employee (can view the list, cannot create)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { records: [], total: 0, hasMore: false, counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 } },
+    });
+    for (const role of ["manager", "employee"]) {
+      getSessionRolesMock.mockReturnValue([role]);
+      await renderPage({});
+      expect(screen.queryByRole("link", { name: "+ Initiate APAR" })).not.toBeInTheDocument();
+    }
+  });
 });
