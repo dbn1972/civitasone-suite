@@ -150,13 +150,14 @@ async function removeSponsorConfig() {
 // CSV backward compatibility
 // ═══════════════════════════════════════════════════════════════════
 
-describe("GET /v1/payroll/runs/:id/bank-file?format=csv (backward compat)", () => {
+describe("POST /v1/payroll/runs/:id/bank-file format=csv (default)", () => {
   it("returns CSV with default format (no query param)", async () => {
     await seedPensionerMaster();
     const token = makeToken();
     const res = await app.inject({
-      method: "GET",
+      method: "POST",
       url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(200);
@@ -169,8 +170,9 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=csv (backward compat)", () =
   it("returns CSV with explicit format=csv", async () => {
     const token = makeToken();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=csv`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(200);
@@ -182,14 +184,15 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=csv (backward compat)", () =
 // NACH format
 // ═══════════════════════════════════════════════════════════════════
 
-describe("GET /v1/payroll/runs/:id/bank-file?format=nach", () => {
+describe("POST /v1/payroll/runs/:id/bank-file format=nach", () => {
   it("returns text/plain with .txt filename when sponsor config exists", async () => {
     await seedPensionerMaster();
     await seedSponsorConfig();
     const token = makeToken();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=nach`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "nach", reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(200);
@@ -220,8 +223,9 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=nach", () => {
     await removeSponsorConfig();
     const token = makeToken();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=nach`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "nach", reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(422);
@@ -240,8 +244,9 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=nach", () => {
 
     const token = makeToken();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=nach`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "nach", reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(422);
@@ -261,13 +266,14 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=nach", () => {
 // APBS format
 // ═══════════════════════════════════════════════════════════════════
 
-describe("GET /v1/payroll/runs/:id/bank-file?format=apbs", () => {
+describe("POST /v1/payroll/runs/:id/bank-file format=apbs", () => {
   it("returns 422 APBS_NOT_ENABLED when apbs_enabled=false", async () => {
     await seedSponsorConfig({ apbsEnabled: false });
     const token = makeToken();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=apbs`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "apbs", reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(422);
@@ -279,8 +285,9 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=apbs", () => {
     await removeSponsorConfig();
     const token = makeToken();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=apbs`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "apbs", reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(422);
@@ -312,8 +319,9 @@ describe("GET /v1/payroll/runs/:id/bank-file?format=apbs", () => {
 
     const token = makeToken();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=apbs`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "apbs", reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token}` },
     });
 

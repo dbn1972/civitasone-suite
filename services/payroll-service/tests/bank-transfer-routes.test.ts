@@ -1,7 +1,8 @@
 /**
- * bank-transfer route tests — GET /v1/payroll/runs/:id/bank-file
+ * bank-transfer route tests — POST /v1/payroll/runs/:id/bank-file
+ * (GAP-PAYROLL-DISBURSEMENT-02: was a reason-less GET; GET now answers 410)
  *
- * Covers: 200 (CSV happy path), 200 (NACH format), 400 (invalid state),
+ * Covers: 200 (CSV happy path), 200 (NACH format), 409 (invalid state),
  * 401 (no token), 403 (wrong role), 404 (run not found / no slips),
  * 422 (missing bank details / sponsor config / APBS not enabled).
  */
@@ -12,6 +13,7 @@ const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-1111-4000-8000-000000000077";
 const ACTOR = "aaaaaaaa-bbbb-4000-8000-000000000077";
 const RUN_ID = "cccccccc-dddd-4000-8000-000000000077";
+const REASON = "September salary NEFT batch for SBI";
 
 function adminToken(roles = ["payroll_admin"]) {
   return signToken({ sub: ACTOR, tid: TENANT, roles, sid: "s1" }, SECRET);
@@ -82,9 +84,13 @@ function makeSlip(overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe("GET /v1/payroll/runs/:id/bank-file", () => {
+describe("POST /v1/payroll/runs/:id/bank-file", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // clearAllMocks keeps queued mockResolvedValueOnce values; a test that
+    // returns before consuming its queued run/slips (e.g. a 400) would leak
+    // them into the next test.
+    mockScopedRead.mockReset();
     mockDbTransaction.mockImplementation(async (fn: (tx: unknown) => unknown) => fn({}));
   });
 
@@ -98,8 +104,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
+      method: "POST",
       url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { reason: REASON },
     });
     await app.close();
     expect(res.statusCode).toBe(401);
@@ -110,8 +117,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
+      method: "POST",
       url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { reason: REASON },
       headers: { authorization: `Bearer ${adminToken(["employee"])}` },
     });
     await app.close();
@@ -124,8 +132,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
+      method: "POST",
       url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -134,32 +143,34 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
   });
 
   // ═══ 400 — invalid state (draft) ═════════════════════════════════════════
-  it("returns 400 when run is in draft state", async () => {
+  it("returns 409 when run is in draft state (unapproved)", async () => {
     mockScopedRead.mockResolvedValueOnce([makeRun({ status: "draft" })]);
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
+      method: "POST",
       url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("INVALID_STATE");
   });
 
   // ═══ 400 — invalid state (processing) ════════════════════════════════════
-  it("returns 400 when run is in processing state", async () => {
+  it("returns 409 when run is in processing state (unapproved)", async () => {
     mockScopedRead.mockResolvedValueOnce([makeRun({ status: "processing" })]);
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
+      method: "POST",
       url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(400);
+    expect(res.statusCode).toBe(409);
     expect(res.json().code).toBe("INVALID_STATE");
   });
 
@@ -171,8 +182,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=csv`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -197,8 +209,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=csv`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -224,8 +237,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=csv`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -244,8 +258,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=nach`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "nach", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -268,8 +283,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=apbs`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "apbs", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -294,8 +310,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=apbs`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "apbs", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -325,8 +342,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=nach`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "nach", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -373,8 +391,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=nach`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "nach", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -425,8 +444,9 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=nach`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "nach", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
@@ -441,13 +461,165 @@ describe("GET /v1/payroll/runs/:id/bank-file", () => {
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=xml`,
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "xml", reason: REASON },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
     // Zod validation error — not caught by HttpError handler, returned as 500
     expect(res.statusCode).toBeGreaterThanOrEqual(400);
     expect(res.statusCode).toBeLessThan(600);
+  });
+
+  // ═══ GAP-PAYROLL-DISBURSEMENT-02/03/06 ═══════════════════════════════════
+  async function mockCsvHappyPath(runOverrides: Record<string, unknown> = {}) {
+    const { fetchPayrollInput } = await import("../src/shared/hrms-client.js");
+    vi.mocked(fetchPayrollInput).mockResolvedValue({
+      month: "2025-06",
+      employees: [{ id: "emp-001", employeeNo: "EMP001", fullName: "John Doe",
+        basicMinor: "5000", payStructureId: null,
+        bankAccountNo: "1234567890", bankIfsc: "SBIN0001234",
+        pan: null, uan: null, cityClass: "X" as const,
+        taxRegime: "new" as const, departmentId: "d1", pensionScheme: "NPS" as const }],
+      lopDays: {},
+    });
+    mockScopedRead
+      .mockResolvedValueOnce([makeRun(runOverrides)])
+      .mockResolvedValueOnce([makeSlip()]);
+  }
+
+  async function auditCalls() {
+    const { queue } = await import("../src/shared/infra.js");
+    return vi.mocked(queue.publish).mock.calls.filter(([topic]) => topic === "audit.event.record");
+  }
+
+  it("[DISB-02] the old GET no longer generates a file (410 USE_POST) and reads nothing", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file?format=csv`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(410);
+    expect(res.json().code).toBe("USE_POST");
+    expect(mockScopedRead).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["missing", {}],
+    ["too short", { reason: "short" }],
+    ["whitespace padded to 10", { reason: "   abc    " }],
+  ])("[DISB-02] rejects a %s reason with 400 before touching the run", async (_label, payload) => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+    expect(mockScopedRead).not.toHaveBeenCalled();
+  });
+
+  it("[DISB-02] CSV generation writes an audit row with actor, reason and totals (the CSV path used to write none)", async () => {
+    await mockCsvHappyPath();
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: REASON },
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    const calls = await auditCalls();
+    expect(calls).toHaveLength(1);
+    const msg = calls[0][1] as { actorId: string; tenantId: string; payload: { action: string; resourceId: string; detail: Record<string, unknown> } };
+    expect(msg.actorId).toBe(ACTOR);
+    expect(msg.tenantId).toBe(TENANT);
+    expect(msg.payload.action).toBe("bank_file_generated");
+    expect(msg.payload.resourceId).toBe(RUN_ID);
+    expect(msg.payload.detail).toMatchObject({
+      format: "csv", recordCount: 1, totalAmountMinor: "8000", reason: REASON, reissue: false, signed: false,
+    });
+  });
+
+  it("[DISB-02] a file for a disbursed (paid) run is audited as a re-issue", async () => {
+    await mockCsvHappyPath({ status: "disbursed" });
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: "Re-issue after SBI rejected batch 3" },
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    const calls = await auditCalls();
+    const msg = calls[0][1] as { payload: { action: string; detail: Record<string, unknown> } };
+    expect(msg.payload.action).toBe("bank_file_reissued");
+    expect(msg.payload.detail.reissue).toBe(true);
+  });
+
+  it("[DISB-02] no audit row is written when generation is refused (unapproved run)", async () => {
+    mockScopedRead.mockResolvedValueOnce([makeRun({ status: "draft" })]);
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { reason: REASON },
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(409);
+    expect(await auditCalls()).toHaveLength(0);
+  });
+
+  it("[DISB-03] every generated file states x-bank-file-signed: false (the route does not sign)", async () => {
+    await mockCsvHappyPath();
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { reason: REASON },
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.headers["x-bank-file-signed"]).toBe("false");
+  });
+
+  it("[DISB-06] refuses a NACH file when the sponsor config has NACH switched off", async () => {
+    const { findByTenantId } = await import("../src/modules/sponsor-config/repo.js");
+    vi.mocked(findByTenantId).mockResolvedValue({
+      id: "cfg-1", tenantId: TENANT, sponsorCode: "SPON",
+      sponsorIfsc: "SBIN0000001", sponsorAccount: "9999999999",
+      utilityCode: "UTIL01", userNumber: "USR001",
+      settlementOffsetDays: 1, nachEnabled: false, apbsEnabled: false,
+      maxRecordsPerFile: 100000, maxAmountPerFileMinor: 1000000000n,
+      createdAt: new Date(), updatedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR,
+    } as never);
+    mockScopedRead.mockResolvedValueOnce([makeRun()]);
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "POST",
+      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "nach", reason: REASON },
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe("NACH_NOT_ENABLED");
+    expect(await auditCalls()).toHaveLength(0);
   });
 });

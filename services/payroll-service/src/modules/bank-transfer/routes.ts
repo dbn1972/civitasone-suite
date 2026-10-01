@@ -20,9 +20,65 @@ const pathParamSchema = z.object({
   id: z.string().uuid(),
 });
 
-const querySchema = z.object({
+/**
+ * GAP-PAYROLL-DISBURSEMENT-02: generating a salary payment file is an audited
+ * action that requires a stated reason (min 10 chars, same bar as the web
+ * ConfirmDialog). The reason travels in a POST body rather than a GET query
+ * string so free text never lands in URL access logs.
+ */
+const generateBodySchema = z.object({
   format: z.enum(["csv", "nach", "apbs"]).default("csv"),
+  reason: z.string().trim().min(10, "reason must be at least 10 characters").max(500),
 });
+
+/**
+ * GAP-PAYROLL-DISBURSEMENT-03: the bank-file path does not sign files with the
+ * tenant DSC today (the DSC is only used for Form 16 PDFs). Every response
+ * carries this header so a client can show "Signed"/"UNSIGNED" from the
+ * server's own statement instead of assuming; it flips to "true" only when
+ * real signing is implemented here.
+ */
+export const BANK_FILE_SIGNED_HEADER = "x-bank-file-signed";
+
+type BankFileAuditDetail = {
+  format: "csv" | "nach" | "apbs";
+  recordCount: number;
+  totalAmountMinor: bigint;
+  fileCount: number;
+  reason: string;
+  reissue: boolean;
+};
+
+async function publishBankFileAudit(
+  ctx: ReturnType<typeof resolveContext>,
+  runId: string,
+  detail: BankFileAuditDetail,
+): Promise<void> {
+  await queue.publish(AUDIT_TOPIC, {
+    messageId: randomUUID(),
+    type: AUDIT_TOPIC,
+    tenantId: ctx.tenantId,
+    actorId: ctx.actorId,
+    correlationId: ctx.correlationId,
+    schemaVersion: "1.0",
+    payload: {
+      service: "payroll",
+      action: detail.reissue ? "bank_file_reissued" : "bank_file_generated",
+      resourceType: "payroll_run",
+      resourceId: runId,
+      outcome: "success",
+      detail: {
+        format: detail.format,
+        recordCount: detail.recordCount,
+        totalAmountMinor: detail.totalAmountMinor.toString(),
+        fileCount: detail.fileCount,
+        reason: detail.reason,
+        reissue: detail.reissue,
+        signed: false,
+      },
+    },
+  });
+}
 
 /**
  * NEFT/RTGS bank-transfer file for salary disbursement. Beneficiary account,
@@ -31,12 +87,25 @@ const querySchema = z.object({
  * appended so the bank can reconcile the batch before processing.
  */
 export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
-  app.get("/v1/payroll/runs/:id/bank-file", async (req, reply) => {
+  /**
+   * GAP-PAYROLL-DISBURSEMENT-02: the old reason-less GET is kept registered
+   * (so the API drift check doesn't treat it as a silent removal) but no
+   * longer generates a file -- a GET would bypass the mandatory reason and
+   * audit trail. Callers must use POST with { format, reason }.
+   */
+  app.get("/v1/payroll/runs/:id/bank-file", async (req) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAYROLL_ROLES);
+    throw new HttpError(410, "USE_POST",
+      "bank file generation now requires POST /v1/payroll/runs/:id/bank-file with { format, reason }");
+  });
+
+  app.post("/v1/payroll/runs/:id/bank-file", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
 
     const { id } = pathParamSchema.parse(req.params);
-    const { format } = querySchema.parse(req.query);
+    const { format, reason } = generateBodySchema.parse(req.body ?? {});
 
     // Verify the run exists and belongs to this tenant
     const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)
@@ -45,9 +114,14 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
     const run = runRows[0];
     if (!run) throw new HttpError(404, "NOT_FOUND", "payroll run not found");
 
+    // Maker-checker: a payment file only exists for an APPROVED run (API
+    // status "completed") or, as an audited re-issue, a DISBURSED one (API
+    // status "paid"). 409: the request is valid but the run is in the wrong
+    // state for it.
     if (run.status !== "approved" && run.status !== "disbursed") {
-      throw new HttpError(400, "INVALID_STATE", "bank file can only be generated for approved or disbursed runs");
+      throw new HttpError(409, "INVALID_STATE", "bank file can only be generated for approved or disbursed runs");
     }
+    const reissue = run.status === "disbursed";
 
     // ─── NACH / APBS path ────────────────────────────────────────────────
     if (format === "nach" || format === "apbs") {
@@ -55,6 +129,13 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       const sponsorConfig = await findByTenantId(ctx.tenantId);
       if (!sponsorConfig) {
         throw new HttpError(422, "SPONSOR_CONFIG_MISSING", "sponsor bank configuration is required for NACH/APBS file generation");
+      }
+
+      // GAP-PAYROLL-DISBURSEMENT-06: honour the sponsor's own NACH switch the
+      // same way APBS already was -- a tenant that turned NACH off must not
+      // be able to emit a NACH credit file anyway.
+      if (format === "nach" && !sponsorConfig.nachEnabled) {
+        throw new HttpError(422, "NACH_NOT_ENABLED", "NACH is not enabled for this tenant");
       }
 
       // APBS-specific check
@@ -157,32 +238,20 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       for (const b of beneficiaries) totalAmountMinor += b.amountMinor;
 
       // Emit audit event
-      await queue.publish(AUDIT_TOPIC, {
-        messageId: randomUUID(),
-        type: AUDIT_TOPIC,
-        tenantId: ctx.tenantId,
-        actorId: ctx.actorId,
-        correlationId: ctx.correlationId,
-        schemaVersion: "1.0",
-        payload: {
-            service: "payroll",
-            action: "bank_file_generated",
-            resourceType: "payroll_run",
-            resourceId: id,
-            outcome: "success",
-            detail: {
-              format,
-              recordCount: beneficiaries.length,
-              totalAmountMinor: totalAmountMinor.toString(),
-              fileCount: result.type === "multi" ? result.parts.length : 1,
-            },
-          },
+      await publishBankFileAudit(ctx, id, {
+        format,
+        recordCount: beneficiaries.length,
+        totalAmountMinor,
+        fileCount: result.type === "multi" ? result.parts.length : 1,
+        reason,
+        reissue,
       });
 
       if (result.type === "single") {
         return reply
           .header("content-type", result.contentType)
           .header("content-disposition", `attachment; filename="${result.filename}"`)
+          .header(BANK_FILE_SIGNED_HEADER, "false")
           .send(result.content);
       }
 
@@ -191,6 +260,7 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
       return reply
         .header("content-type", "application/zip")
         .header("content-disposition", `attachment; filename="${result.archiveName}"`)
+        .header(BANK_FILE_SIGNED_HEADER, "false")
         .send(zipBuffer);
     }
 
@@ -266,9 +336,22 @@ export async function bankTransferRoutes(app: FastifyInstance): Promise<void> {
     const csvContent = [csvHeader, ...csvRows, trailer].join("\r\n");
     const filename = `bank_transfer_${run.runNo}_${run.month}.csv`;
 
+    // GAP-PAYROLL-DISBURSEMENT-02: the CSV path previously wrote NO audit
+    // event at all (only the NACH path did) -- every NEFT/RTGS salary file
+    // left the system untraced.
+    await publishBankFileAudit(ctx, id, {
+      format: "csv",
+      recordCount: slips.length,
+      totalAmountMinor: totalNetMinor,
+      fileCount: 1,
+      reason,
+      reissue,
+    });
+
     return reply
       .header("content-type", "text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="${filename}"`)
+      .header(BANK_FILE_SIGNED_HEADER, "false")
       .send(csvContent);
   });
 }

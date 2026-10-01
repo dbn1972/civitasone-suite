@@ -48,7 +48,8 @@ const getRoutes = [
   `/v1/payroll/runs/${FAKE}`,
   `/v1/payroll/slips/${FAKE}`,
   `/v1/payroll/slips/${FAKE}/pdf`,
-  `/v1/payroll/runs/${FAKE}/bank-file`,
+  // bank-file is POST-only now (GAP-PAYROLL-DISBURSEMENT-02: GET answers 410
+  // USE_POST); the POST is covered in "Bank transfer & ECR" below.
   `/v1/payroll/loans?empId=${FAKE}`,
   `/v1/payroll/tax-declarations?employeeId=${FAKE}&fy=2025-26`,
   `/v1/payroll/tax/computation?employeeId=${FAKE}&fy=2025-26`,
@@ -882,11 +883,12 @@ describe("Tax route — validation error paths", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("Bank transfer & ECR — handler reachability", () => {
-  it("GET /v1/payroll/runs/:id/bank-file — 404 for unknown run", async () => {
+  it("POST /v1/payroll/runs/:id/bank-file — 404 for unknown run", async () => {
     const app = await buildApp();
     const res = await app.inject({
-      method: "GET",
+      method: "POST",
       url: `/v1/payroll/runs/${randomUUID()}/bank-file`,
+      payload: { reason: "Regression test bank-file reason" },
       headers: { authorization: `Bearer ${token()}` },
     });
     await app.close();
