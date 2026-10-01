@@ -5180,7 +5180,20 @@
     "statExpired": "Expired",
     "cardTitle": "Certifications Register",
     "emptyTitle": "No certifications recorded yet",
-    "emptyMessage": "Certifications appear here once employees complete external courses or government training programmes."
+    "emptyMessage": "Certifications appear here once employees complete external courses or government training programmes.",
+    "backToHr": "Back to HR",
+    "alertBanner": "{expired} expired and {expiringSoon} expiring within 30 days — action required.",
+    "noExpiryTracking": "No expiry tracking configured for these records yet.",
+    "mandatory": "Mandatory",
+    "obtained": "Obtained",
+    "expires": "Expires",
+    "noExpiry": "No expiry",
+    "statusValid": "Valid",
+    "statusExpiringSoon": "Expiring Soon",
+    "statusExpired": "Expired",
+    "bannerSoon": "Expires in {days, plural, one {# day} other {# days}} — renewal required",
+    "bannerExpired": "Certification expired — please renew immediately",
+    "renew": "Renew Now"
   },
   "competency": {
     "title": "Competency Framework",

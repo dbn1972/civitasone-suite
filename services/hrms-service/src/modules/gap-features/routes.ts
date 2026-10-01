@@ -796,7 +796,23 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       return sql.unsafe(`
         SELECT n.id, e.full_name AS employee, COALESCE(d.name,'—') AS department,
                t.title AS certification, COALESCE(t.facilitator,'Internal') AS "issuingBody",
-               n.completed_date AS "issuedDate", NULL::date AS "expiryDate", 'valid' AS status
+               n.training_id AS "trainingId",
+               n.completed_date AS "issuedDate",
+               -- GAP-HR-CERTIFICATIONS-01: was hard-coded NULL::date/'valid',
+               -- so expiry tracking (banner, Expiring Soon/Expired stats, red
+               -- cards, sorting) could never fire against live data. Now
+               -- computed from the new training.hrms_trainings.validity_months
+               -- (migration 0164) when both it and completed_date are known;
+               -- otherwise NULL -- genuinely "no expiry tracking configured",
+               -- never a fabricated date or a silently-assumed "valid".
+               -- Status itself is deliberately NOT computed here: the client
+               -- derives it from expiryDate via the single shared
+               -- lib/certifications.ts (GAP-HR-CERTIFICATIONS-06) so there is
+               -- exactly one status-derivation implementation, not a SQL copy
+               -- and a TS copy that can drift apart.
+               CASE WHEN t.validity_months IS NOT NULL AND n.completed_date IS NOT NULL
+                    THEN (n.completed_date + (t.validity_months || ' months')::interval)::date
+                    ELSE NULL END AS "expiryDate"
         FROM training.hrms_nominations n
         JOIN training.hrms_trainings t ON t.id = n.training_id AND t.tenant_id = $1
         JOIN employee.hrms_employees e ON e.id = n.employee_id AND e.tenant_id = $1

@@ -158,7 +158,7 @@ export function addDaysIST(date: string | Date | null | undefined, days: number)
   return `${yyyy}-${mm}-${dd}`;
 }
 
-const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+export const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
 
 /**
  * GAP-HR-CONFIRMATION-06: whole calendar days from today (Asia/Kolkata)
