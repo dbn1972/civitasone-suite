@@ -134,7 +134,7 @@ export const WIZARD_STEPS: WizardStep[] = [
     example: "e.g. Basic pay, HRA, and standard deductions",
     cta: "Set up pay",
     required: false,
-    entryHref: "/hr/salary-structure",
+    entryHref: "/hr/payroll/structures",
     moduleKey: "hrms",
   },
 ];

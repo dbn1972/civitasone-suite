@@ -62,7 +62,6 @@ export default async function Page() {
 				{ title: t("salarySlips"), href: "/hr/payroll/salary-slips", description: t("salarySlipsDesc") },
 				{ title: t("payStructures"), href: "/hr/payroll/structures", description: t("payStructuresDesc") },
 				{ title: t("payMatrix"), href: "/hr/pay-matrix", description: t("payMatrixDesc") },
-				{ title: t("salaryStructures"), href: "/hr/salary-structure", description: t("salaryStructuresDesc") },
 				{ title: t("gpf"), href: "/hr/payroll/gpf", description: t("gpfDesc") },
 				{ title: t("nps"), href: "/hr/payroll/nps", description: t("npsDesc") },
 				{ title: t("pensioners"), href: "/hr/payroll/pensioners", description: t("pensionersDesc") },

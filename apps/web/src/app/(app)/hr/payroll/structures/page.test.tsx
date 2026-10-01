@@ -11,11 +11,23 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+// GAP-HR-SALARY-STRUCTURE-05: defaults to a role that passes both the
+// page's view gate and its create-structure gate, so every pre-existing
+// test below (written before this page had any role gate at all) keeps
+// exercising the same behaviour unchanged. Individual tests override via
+// getSessionRolesMock.mockReturnValue([...]).
+const getSessionRolesMock = vi.fn();
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => getSessionRolesMock(),
+}));
+
 import PayStructuresPage from "./page";
 
 describe("PayStructuresPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    getSessionRolesMock.mockReset();
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
   });
 
   it("renders salary structure cards with structure names", async () => {
@@ -91,4 +103,56 @@ describe("PayStructuresPage", () => {
     expect(screen.getByText("2")).toBeInTheDocument(); // total or active
     expect(screen.getByText("Total Structures")).toBeInTheDocument();
   });
+
+  // GAP-HR-SALARY-STRUCTURE-05 regression coverage: this page used to
+  // render the full structures/components data for ANY authenticated
+  // session, with no gate at all.
+  it("shows PermissionDenied to an employee session and never calls the data loaders", async () => {
+    getSessionRolesMock.mockReturnValue(["employee"]);
+
+    const ui = await PayStructuresPage();
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+    expect(screen.getByText("Access restricted")).toBeInTheDocument();
+    expect(fetchJsonMock).not.toHaveBeenCalled();
+  });
+
+  it.each([["payroll_officer"], ["payroll_admin"], ["super_admin"]])(
+    "lets a %s session through to the structures table",
+    async (role) => {
+      getSessionRolesMock.mockReturnValue([role]);
+      fetchJsonMock
+        .mockResolvedValueOnce({
+          data: [{ id: "s1", name: "Viewable Structure", isDefault: true, status: "active" }],
+          source: "api",
+        })
+        .mockResolvedValueOnce({ data: [], source: "api" });
+
+      const ui = await PayStructuresPage();
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+      expect(screen.queryByText("Access restricted")).not.toBeInTheDocument();
+      expect(screen.getByText("Viewable Structure")).toBeInTheDocument();
+    },
+  );
+
+  it.each([["hr_admin"], ["finance_officer"]])(
+    "lets a %s session view structures (backend READER_ROLES) but hides the create-structure form (backend PAYROLL_ROLES is narrower)",
+    async (role) => {
+      getSessionRolesMock.mockReturnValue([role]);
+      fetchJsonMock
+        .mockResolvedValueOnce({
+          data: [{ id: "s1", name: "Viewable Structure", isDefault: true, status: "active" }],
+          source: "api",
+        })
+        .mockResolvedValueOnce({ data: [], source: "api" });
+
+      const ui = await PayStructuresPage();
+      render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+      expect(screen.queryByText("Access restricted")).not.toBeInTheDocument();
+      expect(screen.getByText("Viewable Structure")).toBeInTheDocument();
+      expect(screen.queryByText("Create Pay Structure")).not.toBeInTheDocument();
+    },
+  );
 });

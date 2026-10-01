@@ -3,7 +3,7 @@ import { HR_TILE_ROLE_OVERRIDES, hasHrTileAccess } from "./hrTileAccess";
 
 /**
  * The complete set of tile hrefs on the HR hub (hr/page.tsx's hrCategories),
- * copied verbatim (88 slots across 13 categories, 86 unique hrefs -- leave
+ * copied verbatim (87 slots across 13 categories, 85 unique hrefs -- leave
  * policies and holidays each appear once under their own category and once
  * again under Setup). Kept as a flat literal here, independent of
  * hrCategories itself, because hr/page.tsx cannot export that array (Next.js
@@ -21,9 +21,9 @@ const ALL_HR_HUB_HREFS = [
   "/hr/shift-requests", "/hr/wfh", "/hr/holidays",
   // catLeave
   "/hr/leave", "/hr/leave/apply", "/hr/leave-policies", "/hr/overtime",
-  // catPayroll (31)
+  // catPayroll (30)
   "/hr/payroll", "/hr/payroll/salary-slips", "/hr/payroll/structures", "/hr/pay-matrix",
-  "/hr/salary-structure", "/hr/payroll/gpf", "/hr/payroll/nps", "/hr/payroll/pensioners",
+  "/hr/payroll/gpf", "/hr/payroll/nps", "/hr/payroll/pensioners",
   "/hr/payroll/form16", "/hr/payroll/statutory", "/hr/payroll/ddos", "/hr/payroll/fnf",
   "/hr/payroll/loans", "/hr/payroll/off-cycle", "/hr/payroll/tax-declaration",
   "/hr/payroll/income-tax", "/hr/payroll/returns", "/hr/payroll/tax-config",
@@ -74,15 +74,16 @@ const HIDDEN_FROM_EMPLOYEE = [
   "/hr/audit-log",
   "/hr/payroll/salary-slips",
   "/hr/payroll/pensioners",
+  "/hr/payroll/structures",
 ];
 
 describe("hasHrTileAccess", () => {
-  it("has exactly 88 tile slots / 86 unique hrefs today (update ALL_HR_HUB_HREFS if hr/page.tsx's hrCategories changes)", () => {
-    expect(ALL_HR_HUB_HREFS.length).toBe(88);
-    expect(UNIQUE_HR_HUB_HREFS.length).toBe(86);
+  it("has exactly 87 tile slots / 85 unique hrefs today (update ALL_HR_HUB_HREFS if hr/page.tsx's hrCategories changes)", () => {
+    expect(ALL_HR_HUB_HREFS.length).toBe(87);
+    expect(UNIQUE_HR_HUB_HREFS.length).toBe(85);
   });
 
-  it("GAP-HR-HOME-01 acceptance: hr_admin still sees all 88 tiles", () => {
+  it("GAP-HR-HOME-01 acceptance: hr_admin still sees all 85 tiles", () => {
     for (const href of UNIQUE_HR_HUB_HREFS) {
       expect(hasHrTileAccess(href, ["hr_admin"])).toBe(true);
     }
