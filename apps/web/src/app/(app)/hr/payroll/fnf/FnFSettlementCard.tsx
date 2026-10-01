@@ -1,128 +1,155 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { StatusPill, ConfirmDialog, Button } from "../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { StatusPill, Button } from "../../../../_components/ds";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
+/**
+ * One F&F settlement as payroll-service's GET /v1/payroll/fnf/settlements
+ * actually returns it (fnf/routes.ts serializeSettlement). Money fields are
+ * paise as decimal strings (bigint on the server) -- never coerced with
+ * Number() here.
+ *
+ * GAP-PAYROLL-FNF-06: this type used to declare lastSalaryMinor /
+ * gratuityMinor / leaveEncashmentMinor / bonusArrearsMinor / deductionsMinor,
+ * none of which the API sends -- so the breakdown was always empty. It now
+ * mirrors the real component fields.
+ */
 export type FnFCardRow = {
   id: string;
   employeeId: string;
-  employeeName?: string;
+  employeeName?: string | null;
+  employeeCode?: string | null;
   separationType: string;
   separationDate: string;
   status: string;
-  netPayableMinor: number | string;
-  lastSalaryMinor?: number;
-  gratuityMinor?: number;
-  leaveEncashmentMinor?: number;
-  bonusArrearsMinor?: number;
-  deductionsMinor?: number;
+  netPayableMinor: string | number;
+  noticeBuyoutMinor?: string | number | null;
+  leaveEncashmentGrossMinor?: string | number | null;
+  gratuityGrossMinor?: string | number | null;
+  retrenchmentCompMinor?: string | number | null;
+  vrsCompMinor?: string | number | null;
+  arrearsMinor?: string | number | null;
+  tdsOnSeparationMinor?: string | number | null;
+  gratuityExemptMinor?: string | number | null;
+  leaveEncashExemptMinor?: string | number | null;
 };
 
-const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+type Money = string | number | null | undefined;
 
-function rupees(minor: number) { return inrFmt.format(minor / 100); }
-
-// UX-017: keys are the stable backend status codes, never translated -- only
-// used to look up which message keys hold the next-action button/dialog text
-// and the display label. Same safe pattern as salary-revisions/page.tsx's
-// REVISION_TYPE_KEYS.
-const NEXT_ACTION_KEYS: Record<string, { labelKey: string; endpoint: string; confirmKey: string } | undefined> = {
-  draft: { labelKey: "actionSubmitForApproval", endpoint: "submit", confirmKey: "confirmSubmitForApproval" },
-  manager_approved: { labelKey: "actionFinanceApprove", endpoint: "finance-approve", confirmKey: "confirmFinanceApprove" },
-  finance_approved: { labelKey: "actionMarkDisbursed", endpoint: "disburse", confirmKey: "confirmMarkDisbursed" },
+const SEPARATION_TYPE_KEYS: Record<string, string> = {
+  retirement: "separationTypeRetirement",
+  superannuation: "separationTypeSuperannuation",
+  resignation: "separationTypeResignation",
+  retrenchment: "separationTypeRetrenchment",
+  vrs: "separationTypeVrs",
+  death: "separationTypeDeath",
 };
 
-const STATUS_LABEL_KEYS: Record<string, string> = {
-  draft: "statusDraft",
-  manager_approved: "statusManagerApproved",
-  finance_approved: "statusFinanceApproved",
-  disbursed: "statusDisbursed",
-  computed: "statusComputed",
-  settled: "statusSettled",
-  paid: "statusPaid",
-};
+/** Paise as bigint, or null when the value is missing/unparseable. */
+function toMinor(v: Money): bigint | null {
+  if (v === null || v === undefined || v === "") return null;
+  try {
+    return typeof v === "number" ? BigInt(Math.round(v)) : BigInt(v.trim());
+  } catch {
+    return null;
+  }
+}
 
-function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRow) => void }) {
+/**
+ * GAP-PAYROLL-FNF-06: footing check. payroll-service computes
+ * netPayable = (noticeBuyout + leaveEncashmentGross + gratuityGross +
+ * retrenchmentComp + vrsComp + arrears) - tdsOnSeparation (fnf/domain.ts).
+ * Returns true when the displayed rows sum to the displayed net payable.
+ */
+export function settlementFoots(row: FnFCardRow): boolean {
+  const gross = [row.noticeBuyoutMinor, row.leaveEncashmentGrossMinor, row.gratuityGrossMinor, row.retrenchmentCompMinor, row.vrsCompMinor, row.arrearsMinor]
+    .reduce<bigint>((s, v) => s + (toMinor(v) ?? 0n), 0n);
+  const tds = toMinor(row.tdsOnSeparationMinor) ?? 0n;
+  const net = toMinor(row.netPayableMinor);
+  return net !== null && gross - tds === net;
+}
+
+function FnFCard({ row }: { row: FnFCardRow }) {
   const t = useTranslations("fnFSettlementCard");
+  const tf = useTranslations("computeFnfForm");
   const [expanded, setExpanded] = useState(false);
 
-  const components: { label: string; amountMinor: number }[] = [
-    ...(row.lastSalaryMinor ? [{ label: t("lastSalaryLabel"), amountMinor: row.lastSalaryMinor }] : []),
-    ...(row.gratuityMinor ? [{ label: t("gratuityLabel"), amountMinor: row.gratuityMinor }] : []),
-    ...(row.leaveEncashmentMinor ? [{ label: t("leaveEncashmentLabel"), amountMinor: row.leaveEncashmentMinor }] : []),
-    ...(row.bonusArrearsMinor ? [{ label: t("bonusArrearsLabel"), amountMinor: row.bonusArrearsMinor }] : []),
-    ...(row.deductionsMinor ? [{ label: t("deductionsLabel"), amountMinor: -Math.abs(row.deductionsMinor) }] : []),
+  // GAP-PAYROLL-FNF-06: every component row is shown, including zeros
+  // (formatMoney renders "₹0.00" for 0 and "—" for a missing value), and
+  // the single "Deductions" line is replaced by the one deduction the
+  // service actually computes: TDS on separation.
+  const earnings: { key: string; label: string; amount: Money }[] = [
+    { key: "notice", label: t("noticeBuyoutLabel"), amount: row.noticeBuyoutMinor },
+    { key: "leave", label: t("leaveEncashmentLabel"), amount: row.leaveEncashmentGrossMinor },
+    { key: "gratuity", label: t("gratuityLabel"), amount: row.gratuityGrossMinor },
+    { key: "retrenchment", label: t("retrenchmentCompLabel"), amount: row.retrenchmentCompMinor },
+    { key: "vrs", label: t("vrsCompLabel"), amount: row.vrsCompMinor },
+    { key: "arrears", label: t("arrearsLabel"), amount: row.arrearsMinor },
   ];
+  const foots = settlementFoots(row);
 
-  const nextActionKeys = NEXT_ACTION_KEYS[row.status];
-  const nextAction = nextActionKeys ? { ...nextActionKeys, label: t(nextActionKeys.labelKey), confirm: t(nextActionKeys.confirmKey) } : undefined;
-  const statusKey = STATUS_LABEL_KEYS[row.status];
-  const statusLabel = statusKey ? t(statusKey) : row.status;
+  const separationKey = SEPARATION_TYPE_KEYS[row.separationType];
+  const separationLabel = separationKey ? tf(separationKey) : row.separationType;
+  // GAP-PAYROLL-FNF-05: never print the raw employee UUID -- the name and
+  // HR employee number come from payroll-service's hrms enrichment.
+  const name = row.employeeName ?? t("unknownEmployee");
+  const meta = [row.employeeCode, separationLabel, formatIndianDate(row.separationDate)].filter(Boolean).join(" · ");
 
   return (
     <div style={{ border: "1px solid var(--line2)", borderRadius: 12, overflow: "hidden" }}>
-      {/* Header row */}
       <div style={{ background: "var(--panel)", padding: "14px 18px", display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
         <div>
-          <div style={{ fontWeight: 700, fontSize: 14 }}>{row.employeeName ?? row.employeeId}</div>
-          <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>
-            {row.employeeId} · {row.separationType.replace(/_/g, " ")} · {row.separationDate}
-          </div>
+          <div style={{ fontWeight: 700, fontSize: 14 }}>{name}</div>
+          <div style={{ fontSize: 12, color: "var(--ink2)", marginTop: 2 }}>{meta}</div>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-          <StatusPill status={row.status} />
-          {nextAction && (
-            <Button
-              variant="primary"
-              style={{ minHeight: 32, fontSize: 12, padding: "0 14px" }}
-              onClick={() => onAction(row)}
-            >
-              {nextAction.label}
-            </Button>
-          )}
-        </div>
+        <StatusPill status={row.status} />
       </div>
 
-      {/* Net payable + breakdown toggle */}
       <div style={{ padding: "12px 18px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
         <div>
           <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("netPayableLabel")}</div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>{rupees(Number(row.netPayableMinor))}</div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>{formatMoney(row.netPayableMinor)}</div>
         </div>
-        {components.length > 0 && (
-          <Button
-            variant="ghost"
-            style={{ fontSize: 12, minHeight: 30 }}
-            onClick={() => setExpanded((e) => !e)}
-            aria-expanded={expanded}
-          >
-            {expanded ? t("hideBreakdownBtn") : t("showBreakdownBtn")}
-          </Button>
-        )}
+        <Button
+          variant="ghost"
+          style={{ fontSize: 12, minHeight: 30 }}
+          onClick={() => setExpanded((e) => !e)}
+          aria-expanded={expanded}
+        >
+          {expanded ? t("hideBreakdownBtn") : t("showBreakdownBtn")}
+        </Button>
       </div>
 
-      {/* Component breakdown */}
       {expanded && (
         <div style={{ padding: "0 18px 16px", borderTop: "1px solid var(--line2)" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 10 }}>
             <tbody>
-              {components.map((c) => (
-                <tr key={c.label} style={{ borderBottom: "1px solid var(--line2)" }}>
-                  <td style={{ padding: "7px 0", color: c.amountMinor < 0 ? "var(--bad, #c0392b)" : "var(--ink2)" }}>{c.label}</td>
-                  <td style={{ padding: "7px 0", textAlign: "end", fontWeight: 600, color: c.amountMinor < 0 ? "var(--bad, #c0392b)" : "inherit" }}>
-                    {c.amountMinor < 0 ? "−" : ""}{rupees(Math.abs(c.amountMinor))}
-                  </td>
+              {earnings.map((c) => (
+                <tr key={c.key} style={{ borderBottom: "1px solid var(--line2)" }}>
+                  <th scope="row" style={{ padding: "7px 0", color: "var(--ink2)", fontWeight: 400, textAlign: "start" }}>{c.label}</th>
+                  <td style={{ padding: "7px 0", textAlign: "end", fontWeight: 600 }}>{formatMoney(c.amount)}</td>
                 </tr>
               ))}
+              <tr style={{ borderBottom: "1px solid var(--line2)" }}>
+                <th scope="row" style={{ padding: "7px 0", color: "var(--bad, #c0392b)", fontWeight: 400, textAlign: "start" }}>{t("tdsOnSeparationLabel")}</th>
+                <td style={{ padding: "7px 0", textAlign: "end", fontWeight: 600, color: "var(--bad, #c0392b)" }}>
+                  {toMinor(row.tdsOnSeparationMinor) === null ? "—" : `−${formatMoney(row.tdsOnSeparationMinor)}`}
+                </td>
+              </tr>
               <tr style={{ borderTop: "2px solid var(--line2)" }}>
-                <td style={{ padding: "8px 0", fontWeight: 700 }}>{t("netPayableLabel")}</td>
-                <td style={{ padding: "8px 0", textAlign: "end", fontWeight: 700 }}>{rupees(Number(row.netPayableMinor))}</td>
+                <th scope="row" style={{ padding: "8px 0", fontWeight: 700, textAlign: "start" }}>{t("netPayableLabel")}</th>
+                <td style={{ padding: "8px 0", textAlign: "end", fontWeight: 700 }}>{formatMoney(row.netPayableMinor)}</td>
               </tr>
             </tbody>
           </table>
+          <p style={{ margin: "8px 0 0", fontSize: 12, color: "var(--ink2)" }}>
+            {t("exemptionsNote", { gratuity: formatMoney(row.gratuityExemptMinor), leave: formatMoney(row.leaveEncashExemptMinor) })}
+          </p>
+          {!foots && (
+            <p role="note" className="pill warn" style={{ width: "fit-content", marginTop: 8 }}>{t("footingWarning")}</p>
+          )}
         </div>
       )}
     </div>
@@ -131,27 +158,6 @@ function FnFCard({ row, onAction }: { row: FnFCardRow; onAction: (row: FnFCardRo
 
 export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
   const t = useTranslations("fnFSettlementCard");
-  const router = useRouter();
-  const [pendingAction, setPendingAction] = useState<{ row: FnFCardRow; action: { label: string; endpoint: string; confirm: string } } | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [dialogError, setDialogError] = useState<string | undefined>();
-  const [message, setMessage] = useState<string | null>(null);
-
-  async function executeAction() {
-    if (!pendingAction) return;
-    setBusy(true);
-    setDialogError(undefined);
-    try {
-      await browserJson(`v1/payroll/fnf/settlements/${pendingAction.row.id}/${pendingAction.action.endpoint}`, { method: "POST" });
-      setMessage(t("actionCompletedMessage", { action: pendingAction.action.label, name: pendingAction.row.employeeName ?? pendingAction.row.employeeId }));
-      setPendingAction(null);
-      router.refresh();
-    } catch (err) {
-      setDialogError(err instanceof Error ? err.message : t("networkError"));
-    } finally {
-      setBusy(false);
-    }
-  }
 
   if (rows.length === 0) {
     return (
@@ -165,47 +171,19 @@ export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
 
   return (
     <>
-      {message && (
-        <p role="status" className="pill good" style={{ width: "fit-content", marginBottom: 12 }}>
-          {message}
-        </p>
-      )}
+      {/* GAP-PAYROLL-FNF-01/02: the per-card "Submit for Approval" / "Finance
+          Approve" / "Mark Disbursed" buttons POSTed to
+          /v1/payroll/fnf/settlements/:id/{submit,finance-approve,disburse},
+          none of which exist in payroll-service (fnf/routes.ts has only
+          compute + read routes), so every click failed -- and with no role
+          or maker-checker control. They are removed until a real approval /
+          payment workflow exists server-side; this note says so honestly. */}
+      <p role="note" style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 12px" }}>{t("workflowUnavailableNote")}</p>
       <div style={{ display: "grid", gap: 14 }}>
         {rows.map((row) => (
-          <FnFCard
-            key={row.id}
-            row={row}
-            onAction={(r) => {
-              const actionKeys = NEXT_ACTION_KEYS[r.status];
-              if (actionKeys) {
-                setDialogError(undefined);
-                setPendingAction({ row: r, action: { ...actionKeys, label: t(actionKeys.labelKey), confirm: t(actionKeys.confirmKey) } });
-              }
-            }}
-          />
+          <FnFCard key={row.id} row={row} />
         ))}
       </div>
-
-      <ConfirmDialog
-        open={pendingAction !== null}
-        title={pendingAction?.action.confirm ?? t("confirmActionFallbackTitle")}
-        confirmLabel={pendingAction?.action.label ?? t("confirmFallbackLabel")}
-        busy={busy}
-        errorMessage={dialogError}
-        description={
-          pendingAction ? (
-            <>
-              <strong>{pendingAction.row.employeeName ?? pendingAction.row.employeeId}</strong>
-              {" ("}
-              {pendingAction.row.separationType.replace(/_/g, " ")},{" "}
-              {pendingAction.row.separationDate}
-              {")"}
-            </>
-          ) : null
-        }
-        onConfirm={() => void executeAction()}
-        onCancel={() => !busy && setPendingAction(null)}
-      />
     </>
   );
 }

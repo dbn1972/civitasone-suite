@@ -1,10 +1,12 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, Card, DataTable, EmptyState, StatGrid, StatCard, RefreshErrorState, Term } from "../../../../_components/ds";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { getGpfStatements } from "../../../../_data/loaders";
-import { Chart } from "../../../../_components/Chart";
+import { MoneyChart } from "../_components/MoneyChart";
 import { toResourceState } from "../../../../_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
+import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 
 type GpfRow = {
   id: string;
@@ -12,61 +14,62 @@ type GpfRow = {
   employeeCode: string;
   employeeName: string;
   period: string;
-  contrib: number | string;
+  // GAP-PAYROLL-GPF-04: null = no contribution figure in the statement
+  // (rendered "—" by DataTable's formatMoney); 0 = a real zero month.
+  contrib: number | null;
 } & Record<string, unknown>;
-
-// GPF earns interest at GoI-declared rate; currently 7.1% p.a. (as of Q1 FY 2026-27)
-const GPF_INTEREST_RATE = 0.071;
-
-function projectGpfCorpus(totalMinor: number, yearsRemaining: number): number {
-  return totalMinor * Math.pow(1 + GPF_INTEREST_RATE, yearsRemaining);
-}
 
 export default async function GpfStatementsPage() {
   const t = await getTranslations("gpfStatements");
+  // GAP-PAYROLL-GPF-05: hr/layout.tsx admits employee/manager to every
+  // /hr/payroll* route, and this ledger lists every employee's GPF
+  // contributions. Gate on the same READER_ROLES payroll-service enforces on
+  // GET /v1/payroll/statutory/gpf (statutory/routes.ts) BEFORE fetching.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
+    return <PermissionDenied module="gpf" requiredRoles={PAYROLL_READER_ROLES} />;
+  }
+
   const result = await getGpfStatements();
   const { data: rows } = result;
   const resource = toResourceState(result);
   const errored = resource.status === "error";
 
-  const tableRows: GpfRow[] = rows.map((r) => {
-    const employeeCode = r.employeeId.slice(0, 8).toUpperCase();
-    return {
-      id: r.id,
-      employeeId: r.employeeId,
-      employeeCode,
-      // UX-021: employeeName is best-effort (payroll-service enriches via
-      // hrms-client, which fails open on an unreachable HRMS); fall back to
-      // the code so the identifying column -- and its row-link accessible
-      // name -- always shows something rather than a raw "null".
-      employeeName: r.employeeName ?? employeeCode,
-      period: r.period,
-      contrib: r.empContribMinor ?? 0,
-    };
-  });
+  const tableRows: GpfRow[] = rows.map((r) => ({
+    id: r.id,
+    employeeId: r.employeeId,
+    // GAP-PAYROLL-GPF-02: was employeeId.slice(0, 8).toUpperCase() -- a UUID
+    // prefix presented as a "code" and as the name fallback. Now the real HR
+    // employee number payroll-service resolves from hrms (best-effort), or a
+    // neutral "—" / "Unknown employee" -- never UUID-derived text.
+    employeeCode: r.employeeCode ?? "—",
+    employeeName: r.employeeName ?? t("unknownEmployee"),
+    period: r.period,
+    contrib: r.empContribMinor ?? null,
+  }));
 
   const uniqueEmps = errored ? null : new Set(tableRows.map((r) => r.employeeId)).size;
   const uniquePeriods = errored ? null : new Set(tableRows.map((r) => r.period)).size;
-  // Raw (not gated): tableRows is already [] on a real fetch failure (the
-  // loader's empty fallback), so this stays a true 0 rather than needing a
-  // null placeholder — projectGpfCorpus() below needs a real number either way.
-  const totalContrib = tableRows.reduce((s, r) => s + (Number(r.contrib) || 0), 0);
+  // GAP-PAYROLL-GPF-04: totals skip missing figures (they are not zeros);
+  // how many rows had no figure is surfaced below instead of hidden.
+  const totalContrib = tableRows.reduce((s, r) => s + (r.contrib ?? 0), 0);
+  const missingCount = tableRows.filter((r) => r.contrib === null).length;
 
   // Period-wise trend
   const periodMap = new Map<string, number>();
   for (const r of tableRows) {
-    periodMap.set(r.period, (periodMap.get(r.period) ?? 0) + (Number(r.contrib) || 0));
+    periodMap.set(r.period, (periodMap.get(r.period) ?? 0) + (r.contrib ?? 0));
   }
   const sortedPeriods = Array.from(periodMap.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
     .slice(-6);
+  // GAP-PAYROLL-GPF-06: values stay in paise (no Math.round(value / 100),
+  // which dropped paise and rendered bare "18330"); MoneyChart labels them
+  // with formatMoney (₹ + lakh grouping).
   const trendChartData = sortedPeriods.map(([label, value]) => ({
     label: label.slice(2),
-    value: Math.round(value / 100),
+    value,
   }));
-
-  const AVG_YEARS_TO_RETIRE = 20;
-  const projectedCorpus = projectGpfCorpus(totalContrib, AVG_YEARS_TO_RETIRE);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -84,78 +87,44 @@ export default async function GpfStatementsPage() {
         <StatCard icon="📅" iconBg="var(--panel)" label={t("statPeriods")} value={uniquePeriods ?? "—"} />
       </StatGrid>
 
-      {/* GPF Corpus Dashboard */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))",
-          gap: 16,
-          marginTop: 4,
-        }}
-      >
+      {/* GAP-PAYROLL-GPF-03: the "Accumulated Corpus" tile (a duplicate of
+          the Total Contributions stat above, mislabelled as a corpus with no
+          opening balance, interest or withdrawals) and the compounded
+          "Projected Value at Retirement" tile (a tenant-wide contributions
+          total projected 20 years at a single rate) are removed. A corpus
+          belongs here only once the API returns real per-account balances. */}
+      {!errored && missingCount > 0 && (
+        <p role="note" className="pill warn" style={{ width: "fit-content", margin: "4px 0 12px" }}>
+          {t("missingContribNote", { count: missingCount })}
+        </p>
+      )}
+
+      {sortedPeriods.length > 0 && (
         <div
           style={{
             background: "var(--panel)",
             border: "1px solid var(--line)",
             borderRadius: 12,
             padding: "18px 20px",
+            marginTop: 4,
+            maxWidth: 360,
           }}
         >
           <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
-            {t("accumulatedCorpusLabel")}
+            {t("lastPeriodLabel")}
           </p>
-          <p style={{ margin: "0 0 4px", fontSize: 26, fontWeight: 800, color: "var(--ink)" }}>
-            {errored ? "—" : formatMoney(totalContrib)}
+          <p style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
+            {formatMoney(sortedPeriods[sortedPeriods.length - 1][1])}
           </p>
           <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
-            {t("accumulatedCorpusNote")}
+            {t("periodValue", { period: sortedPeriods[sortedPeriods.length - 1][0] })}
           </p>
         </div>
-
-        {sortedPeriods.length > 0 && (
-          <div
-            style={{
-              background: "var(--panel)",
-              border: "1px solid var(--line)",
-              borderRadius: 12,
-              padding: "18px 20px",
-            }}
-          >
-            <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--mut)", textTransform: "uppercase" }}>
-              {t("lastPeriodLabel")}
-            </p>
-            <p style={{ margin: "0 0 2px", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
-              {formatMoney(sortedPeriods[sortedPeriods.length - 1][1])}
-            </p>
-            <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
-              {t("periodValue", { period: sortedPeriods[sortedPeriods.length - 1][0] })}
-            </p>
-          </div>
-        )}
-
-        <div
-          style={{
-            background: "var(--infobg, #eff6ff)",
-            border: "1px solid var(--infobd, #bfdbfe)",
-            borderRadius: 12,
-            padding: "18px 20px",
-          }}
-        >
-          <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 600, color: "var(--info, #1e40af)", textTransform: "uppercase" }}>
-            {t("projectedValueLabel")}
-          </p>
-          <p style={{ margin: "0 0 2px", fontSize: 22, fontWeight: 800, color: "var(--info, #1d4ed8)" }}>
-            {errored ? "—" : formatMoney(projectedCorpus)}
-          </p>
-          <p style={{ margin: 0, fontSize: 11, color: "var(--info, #1e40af)" }}>
-            {t("projectionNote", { years: AVG_YEARS_TO_RETIRE })}
-          </p>
-        </div>
-      </div>
+      )}
 
       {trendChartData.length > 1 && (
         <Card title={t("trendCardTitle")}>
-          <Chart type="line" data={trendChartData} height={180} />
+          <MoneyChart type="line" data={trendChartData} height={180} />
         </Card>
       )}
 

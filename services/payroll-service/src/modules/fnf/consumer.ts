@@ -44,6 +44,8 @@ export function registerFnfConsumers(queue: Queue): void {
       // DIC engagement terminal-benefit gates (default true when absent).
       eligibleForGratuity?: boolean;
       leaveEncashmentEligible?: boolean;
+      /** GAP-PAYROLL-FNF-03: record-derived inputs the clerk overrode, with the reason. */
+      overrides?: { fields: string[]; reason: string };
     };
 
     await db.transaction(async (tx) => {
@@ -145,6 +147,7 @@ export function registerFnfConsumers(queue: Queue): void {
           tdsAlreadyDeductedMinor: result.tdsAlreadyDeductedMinor.toString(),
           totalGrossMinor: result.totalGrossMinor.toString(),
           totalExemptMinor: result.totalExemptMinor.toString(),
+          ...(p.overrides ? { overrides: p.overrides } : {}),
         },
         status: "draft",
         currency: "INR",
@@ -198,6 +201,7 @@ export function registerFnfConsumers(queue: Queue): void {
           resourceType: "fnf_settlement",
           resourceId: settlementId,
           outcome: "success",
+          ...(p.overrides ? { metadata: { overriddenFields: p.overrides.fields, overrideReason: p.overrides.reason } } : {}),
         },
       });
     });

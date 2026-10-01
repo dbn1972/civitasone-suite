@@ -24,6 +24,7 @@ const H = vi.hoisted(() => ({
   listGpfMock: vi.fn(),
   listNpsMock: vi.fn(),
   fetchEmployeeSummariesMock: vi.fn(),
+  fetchNpsPranLast4Mock: vi.fn(),
 }));
 
 vi.mock("../src/modules/statutory/repo.js", () => ({
@@ -48,6 +49,8 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
 // tests below override it to exercise the hit/miss enrichment paths.
 vi.mock("../src/shared/hrms-client.js", () => ({
   fetchEmployeeSummaries: (...a: unknown[]) => H.fetchEmployeeSummariesMock(...a),
+  // GAP-PAYROLL-NPS-02: masked-PRAN enrichment (last 4 only), same fail-open contract.
+  fetchNpsPranLast4: (...a: unknown[]) => H.fetchNpsPranLast4Mock(...a),
 }));
 
 vi.mock("../src/shared/infra.js", async (io) => {
@@ -93,6 +96,7 @@ beforeEach(() => {
   H.listGratuityMock.mockResolvedValue([]);
   H.listGpfMock.mockResolvedValue([]);
   H.listNpsMock.mockResolvedValue([]);
+  H.fetchNpsPranLast4Mock.mockResolvedValue(new Map());
   H.fetchEmployeeSummariesMock.mockResolvedValue(new Map());
 });
 
@@ -275,6 +279,60 @@ describe("Statutory queries — employeeName enrichment", () => {
     });
     await app.close();
     expect(res.json()[0].employeeName).toBe("Ravi Kumar");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GAP-PAYROLL-GPF-02 / NPS-02 — real employee code + masked PRAN
+// ═══════════════════════════════════════════════════════════════════════════════
+
+describe("Statutory queries — employeeCode / masked PRAN enrichment (GAP-PAYROLL-GPF-02, NPS-02)", () => {
+  it("GPF report carries the HR employee number as employeeCode, null when unresolved", async () => {
+    H.listGpfMock.mockResolvedValue([
+      { id: "gpf-1", employeeId: "emp-1", period: "2025-06", basicMinor: 8000000n, contribPct: 12, empContribMinor: 960000n },
+      { id: "gpf-2", employeeId: "emp-x", period: "2025-06", basicMinor: 8000000n, contribPct: 12, empContribMinor: 960000n },
+    ]);
+    H.fetchEmployeeSummariesMock.mockResolvedValue(
+      new Map([["emp-1", { fullName: "Anita Sharma", departmentName: "Finance", employeeNo: "EMP-0042" }]]),
+    );
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/payroll/statutory/gpf", headers: { authorization: `Bearer ${token()}` } });
+    await app.close();
+    const body = res.json();
+    expect(body[0].employeeCode).toBe("EMP-0042");
+    expect(body[1].employeeCode).toBeNull();
+  });
+
+  it("NPS report carries employeeCode and only the last 4 PRAN characters", async () => {
+    H.listNpsMock.mockResolvedValue([{
+      id: "nps-1", employeeId: "emp-1", period: "2025-06",
+      basicMinor: 7000000n, empContribPct: 10, erContribPct: 14,
+      empContribMinor: 700000n, erContribMinor: 980000n,
+    }]);
+    H.fetchEmployeeSummariesMock.mockResolvedValue(
+      new Map([["emp-1", { fullName: "Ravi Kumar", departmentName: "Estates", employeeNo: "EMP-0007" }]]),
+    );
+    H.fetchNpsPranLast4Mock.mockResolvedValue(new Map([["emp-1", "9012"]]));
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/payroll/statutory/nps", headers: { authorization: `Bearer ${token()}` } });
+    await app.close();
+    const row = res.json()[0];
+    expect(row.employeeCode).toBe("EMP-0007");
+    expect(row.pranLast4).toBe("9012");
+    expect(row).not.toHaveProperty("pran");
+  });
+
+  it("NPS report fails open (pranLast4 null) when hrms has no PRAN for the employee", async () => {
+    H.listNpsMock.mockResolvedValue([{
+      id: "nps-2", employeeId: "emp-2", period: "2025-06",
+      basicMinor: 7000000n, empContribPct: 10, erContribPct: 14,
+      empContribMinor: 700000n, erContribMinor: 980000n,
+    }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/payroll/statutory/nps", headers: { authorization: `Bearer ${token()}` } });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.json()[0].pranLast4).toBeNull();
   });
 });
 

@@ -256,7 +256,7 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     const { hrmsEmployees, hrmsDepartments } = await import("../employee/schema.js");
     const { eq, and } = await import("drizzle-orm");
     const employees = await scopedRead((tx) =>
-      tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, departmentId: hrmsEmployees.departmentId })
+      tx.select({ id: hrmsEmployees.id, fullName: hrmsEmployees.fullName, employeeNo: hrmsEmployees.employeeNo, departmentId: hrmsEmployees.departmentId })
         .from(hrmsEmployees)
         .where(eq(hrmsEmployees.tenantId, ctx.tenantId))
         .limit(2000),
@@ -266,7 +266,32 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       ? await scopedRead((tx) => tx.select({ id: hrmsDepartments.id, name: hrmsDepartments.name }).from(hrmsDepartments).where(and(eq(hrmsDepartments.tenantId, ctx.tenantId))))
       : [];
     const deptMap = new Map(depts.map((d) => [d.id, d.name]));
-    return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, departmentName: deptMap.get(e.departmentId) ?? "" })));
+    // GAP-PAYROLL-GPF-02/NPS-02/FNF-05: employeeNo (the HR-assigned employee
+    // code, not PII) is added so payroll's statutory ledgers and F&F cards
+    // can show a real code instead of a fabricated UUID prefix. Additive --
+    // every existing caller ignores unknown fields.
+    return reply.send(employees.map((e) => ({ id: e.id, fullName: e.fullName, employeeNo: e.employeeNo, departmentName: deptMap.get(e.departmentId) ?? "" })));
+  });
+
+  // GAP-PAYROLL-NPS-02: payroll-service's NPS statutory ledger is per
+  // subscriber but showed no PRAN at all. Only the LAST FOUR characters of
+  // each PRAN cross this internal boundary -- the full PRAN (DPDP-sensitive)
+  // never leaves hrms-service, so payroll can only ever display a masked
+  // form. Same internal service-account gate + best-effort contract as
+  // employee-summaries above (display enrichment only).
+  app.get("/v1/hrms/internal/nps-pran-last4", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const { scopedRead } = await import("../../shared/db.js");
+    const { hrmsNpsAccounts } = await import("../nps/schema.js");
+    const { eq } = await import("drizzle-orm");
+    const rows = await scopedRead((tx) =>
+      tx.select({ employeeId: hrmsNpsAccounts.employeeId, pran: hrmsNpsAccounts.pran })
+        .from(hrmsNpsAccounts)
+        .where(eq(hrmsNpsAccounts.tenantId, ctx.tenantId))
+        .limit(5000),
+    );
+    return reply.send(rows.map((r) => ({ employeeId: r.employeeId, pranLast4: r.pran.slice(-4) })));
   });
 
   // round2 review fix: payroll-service's employee-existence check (arrears/

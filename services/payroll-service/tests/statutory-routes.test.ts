@@ -26,6 +26,7 @@ const H = vi.hoisted(() => ({
   listGpfMock: vi.fn(),
   listNpsMock: vi.fn(),
   fetchEmployeeSummariesMock: vi.fn(),
+  fetchNpsPranLast4Mock: vi.fn(),
 }));
 
 vi.mock("../src/modules/statutory/repo.js", () => ({
@@ -43,6 +44,8 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
 // route tests stay hermetic; fails open in production the same way.
 vi.mock("../src/shared/hrms-client.js", () => ({
   fetchEmployeeSummaries: (...a: unknown[]) => H.fetchEmployeeSummariesMock(...a),
+  // GAP-PAYROLL-NPS-02: masked-PRAN enrichment (last 4 only), same fail-open contract.
+  fetchNpsPranLast4: (...a: unknown[]) => H.fetchNpsPranLast4Mock(...a),
 }));
 
 vi.mock("../src/shared/infra.js", async (io) => {
@@ -123,6 +126,7 @@ beforeEach(() => {
   H.listGpfMock.mockResolvedValue([gpfRow]);
   H.listNpsMock.mockResolvedValue([npsRow]);
   H.fetchEmployeeSummariesMock.mockResolvedValue(new Map());
+  H.fetchNpsPranLast4Mock.mockResolvedValue(new Map());
 });
 
 // ═══════════════════════════════════════════════════════════════════

@@ -97,3 +97,29 @@ describe("entityAdapters/employee", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 });
+
+describe("searchEmployees onForbidden (GAP-PAYROLL-FNF-05 review)", () => {
+  it("calls onForbidden on a 403 and still returns []", async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(null, { status: 403 })) as typeof fetch;
+    const onForbidden = vi.fn();
+    try {
+      await expect(searchEmployees("ab", new AbortController().signal, { onForbidden })).resolves.toEqual([]);
+      expect(onForbidden).toHaveBeenCalledTimes(1);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
+  it("does not call onForbidden on other failures", async () => {
+    const original = globalThis.fetch;
+    globalThis.fetch = (async () => new Response(null, { status: 500 })) as typeof fetch;
+    const onForbidden = vi.fn();
+    try {
+      await searchEmployees("ab", new AbortController().signal, { onForbidden });
+      expect(onForbidden).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});
