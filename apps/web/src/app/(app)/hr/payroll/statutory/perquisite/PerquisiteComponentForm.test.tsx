@@ -27,10 +27,21 @@ describe("PerquisiteComponentForm", () => {
     refreshMock.mockReset();
   });
 
-  it("requires an employee ID before opening the confirm dialog", () => {
+  // GAP-PAYROLL-STATUTORY-PERQUISITE-05: employeeId/FY are no longer a
+  // second, independently-typable copy of the lookup form's own fields --
+  // this form now only ever acts on whatever has already been looked up,
+  // and shows a prompt instead of a save form until that has happened.
+  it("prompts to look up an employee first when no employee/FY is selected yet", () => {
     renderForm({ defaultEmployeeId: "", defaultFy: "" });
-    fireEvent.click(screen.getByRole("button", { name: "Save Component" }));
-    expect(screen.getByText("Employee ID and financial year are required.")).toBeInTheDocument();
+    expect(screen.getByText("Look up an employee first")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Save Component" })).not.toBeInTheDocument();
+  });
+
+  it("shows the looked-up employee/FY read-only once both are selected", () => {
+    renderForm({ defaultEmployeeId: "e1", defaultFy: "2026-27" });
+    expect(screen.getByText("e1")).toBeInTheDocument();
+    expect(screen.getByText("2026-27")).toBeInTheDocument();
+    expect(screen.queryByText("Look up an employee first")).not.toBeInTheDocument();
   });
 
   it("saves a perquisite component on confirm (happy path)", async () => {
@@ -45,8 +56,11 @@ describe("PerquisiteComponentForm", () => {
     await waitFor(() => expect(screen.getByText("Save this perquisite component?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Confirm & Save"));
 
+    // GAP-PAYROLL-STATUTORY-PERQUISITE-07: the saved message now shows the
+    // sentence-cased, translated nature label ("Accommodation"), not the
+    // raw backend key ("accommodation").
     await waitFor(() => {
-      expect(screen.getByText(/Perquisite component "accommodation" saved for e1\./)).toBeInTheDocument();
+      expect(screen.getByText(/Perquisite component "Accommodation" saved for e1\./)).toBeInTheDocument();
     });
     expect(refreshMock).toHaveBeenCalled();
   });
@@ -67,10 +81,27 @@ describe("PerquisiteComponentForm", () => {
     expect(screen.queryByText(/API_ERROR: 400/)).not.toBeInTheDocument();
   });
 
-  it("flags only the invalid field as aria-invalid, independent of locale text (UX-017 bug-class regression)", () => {
-    renderForm({ defaultEmployeeId: "", defaultFy: "" });
+  it("flags the value field as aria-invalid on a bad amount, without touching the (now read-only) employee/FY display", () => {
+    renderForm({ defaultEmployeeId: "e1", defaultFy: "2026-27" });
     fireEvent.click(screen.getByRole("button", { name: "Save Component" }));
-    expect(screen.getByLabelText(/Employee ID/)).toHaveAttribute("aria-invalid", "true");
-    expect(screen.getByLabelText(/Value by Employer/)).not.toHaveAttribute("aria-invalid");
+    expect(screen.getByLabelText(/Value by Employer/)).toHaveAttribute("aria-invalid", "true");
+  });
+
+  it("posts valueByEmployer/amountRecovered as plain rupee floats under their original (non-Minor) field names (GAP-PAYROLL-STATUTORY-PERQUISITE-03: verified against payroll-service's own consumer, not a unit bug)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ message: "ok" }), { status: 201 }),
+    );
+
+    renderForm({ defaultEmployeeId: "e1", defaultFy: "2026-27" });
+    fireEvent.change(screen.getByLabelText(/Value by Employer/), { target: { value: "1500.50" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Component" }));
+    await waitFor(() => expect(screen.getByText("Save this perquisite component?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Confirm & Save"));
+
+    await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+    const [, init] = fetchSpy.mock.calls[0]!;
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.valueByEmployer).toBe(1500.5);
+    expect(body).not.toHaveProperty("valueByEmployerMinor");
   });
 });

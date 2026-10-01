@@ -9,7 +9,7 @@ export default function ErrorBoundary({ error, reset }: { error: Error & { diges
     <RouteError
       error={error}
       reset={reset}
-      backHref="/hr"
+      backHref="/hr/payroll"
       backLabel={t("errorBackLabel")}
       area={t("errorArea")}
     />
