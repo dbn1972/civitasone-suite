@@ -13,6 +13,8 @@ export interface UpsertDscBody {
   notBefore: string;
   notAfter: string;
   sha256Fingerprint: string;
+  /** GAP-PAYROLL-DISBURSEMENT-04: operator-stated reason, recorded on the audit event. */
+  reason?: string | null;
 }
 
 export async function upsertDscConfig(ctx: RequestContext, body: UpsertDscBody): Promise<Accepted> {
@@ -29,7 +31,7 @@ export async function upsertDscConfig(ctx: RequestContext, body: UpsertDscBody):
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function removeDscConfig(ctx: RequestContext): Promise<Accepted> {
+export async function removeDscConfig(ctx: RequestContext, reason: string | null = null): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.dscConfigRemove, {
     messageId: id,
@@ -38,7 +40,7 @@ export async function removeDscConfig(ctx: RequestContext): Promise<Accepted> {
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId },
+    payload: { id, tenantId: ctx.tenantId, reason },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

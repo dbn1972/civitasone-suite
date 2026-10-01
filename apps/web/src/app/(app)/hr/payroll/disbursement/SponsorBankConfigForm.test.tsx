@@ -35,8 +35,8 @@ describe("SponsorBankConfigForm", () => {
     expect(screen.getByText("Sponsor code, IFSC and sponsor account are required.")).toBeInTheDocument();
   });
 
-  it("saves the configuration on confirm (happy path)", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
+  it("saves the configuration on confirm with an audited reason (happy path)", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ status: "ok" }), { status: 200 }));
 
     renderForm(null);
     fireEvent.change(screen.getByLabelText(/Sponsor Code/), { target: { value: "SBIN" } });
@@ -45,12 +45,17 @@ describe("SponsorBankConfigForm", () => {
     fireEvent.click(screen.getByText("Save Configuration"));
 
     await waitFor(() => expect(screen.getByText("Save sponsor bank configuration?")).toBeInTheDocument());
+    // GAP-PAYROLL-DISBURSEMENT-04: confirm stays disabled until a >= 10 char reason.
+    expect(screen.getByText("Save configuration").closest("button")).toBeDisabled();
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "New sponsor bank per treasury order" } });
     fireEvent.click(screen.getByText("Save configuration"));
 
     await waitFor(() => {
       expect(screen.getByText("Sponsor bank configuration saved.")).toBeInTheDocument();
     });
     expect(refreshMock).toHaveBeenCalled();
+    const body = JSON.parse(String((fetchSpy.mock.calls[0][1] as RequestInit).body));
+    expect(body.reason).toBe("New sponsor bank per treasury order");
   });
 
   it("surfaces a server error on the confirm dialog (error path)", async () => {
@@ -63,6 +68,7 @@ describe("SponsorBankConfigForm", () => {
     fireEvent.click(screen.getByText("Save Configuration"));
 
     await waitFor(() => expect(screen.getByText("Save sponsor bank configuration?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: "New sponsor bank per treasury order" } });
     fireEvent.click(screen.getByText("Save configuration"));
 
     await waitFor(() => {

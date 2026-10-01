@@ -16,6 +16,8 @@ export interface UpsertSponsorBody {
   apbsEnabled: boolean;
   maxRecordsPerFile: number;
   maxAmountPerFileMinor: string;
+  /** GAP-PAYROLL-DISBURSEMENT-04: operator-stated reason, recorded on the audit event. */
+  reason?: string | null;
 }
 
 export async function upsertSponsorConfig(ctx: RequestContext, body: UpsertSponsorBody): Promise<Accepted> {

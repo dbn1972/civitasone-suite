@@ -74,19 +74,23 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
     setConfirmOpen(true);
   }
 
-  async function upload() {
+  async function upload(reason: string) {
     const file = fileRef.current?.files?.[0];
     if (!file) return;
     setBusy(true);
     setError(undefined);
     try {
       const p12Base64 = await fileToBase64(file, t("p12ReadError"));
-      const res = await browserJson<{ data: DscConfig }>("v1/payroll/dsc-config", {
+      // The API answers 202 Accepted ({ id, status, correlationId }) -- the
+      // certificate is persisted asynchronously, so there is no subjectCn /
+      // notAfter in the response. The old code read res.data.subjectCn and
+      // threw on every successful upload, showing an error for a success.
+      await browserJson<{ id: string; status: string }>("v1/payroll/dsc-config", {
         method: "PUT",
-        body: JSON.stringify({ p12Base64, passphrase }),
+        body: JSON.stringify({ p12Base64, passphrase, reason }),
       });
       setConfirmOpen(false);
-      setMessage(t("uploadedMessage", { subjectCn: res.data.subjectCn, date: formatIndianDate(res.data.notAfter) }));
+      setMessage(t("uploadAcceptedMessage"));
       setPassphrase("");
       if (fileRef.current) fileRef.current.value = "";
       router.refresh();
@@ -97,11 +101,11 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
     }
   }
 
-  async function remove() {
+  async function remove(reason: string) {
     setBusy(true);
     setDeleteError(undefined);
     try {
-      await browserJson("v1/payroll/dsc-config", { method: "DELETE" });
+      await browserJson("v1/payroll/dsc-config", { method: "DELETE", body: JSON.stringify({ reason }) });
       setDeleteConfirmOpen(false);
       setMessage(t("removedMessage"));
       router.refresh();
@@ -219,8 +223,17 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
           busy={busy}
           errorMessage={error}
           description={initial ? t("uploadConfirmDescriptionReplace") : t("uploadConfirmDescriptionNew")}
-          onConfirm={() => void upload()}
-          onCancel={() => !busy && setConfirmOpen(false)}
+          requireReason
+          minReasonLength={10}
+          maxReasonLength={500}
+          reasonLabel={t("confirmReasonLabel")}
+          onConfirm={(reason) => void upload(reason ?? "")}
+          onCancel={() => {
+            if (busy) return;
+            setConfirmOpen(false);
+            // Cancelling abandons this upload attempt: drop the passphrase.
+            setPassphrase("");
+          }}
         />
 
         <ConfirmDialog
@@ -231,7 +244,11 @@ export function DscConfigForm({ initial }: { initial: DscConfig | null }) {
           busy={busy}
           errorMessage={deleteError}
           description={t("removeConfirmDescription")}
-          onConfirm={() => void remove()}
+          requireReason
+          minReasonLength={10}
+          maxReasonLength={500}
+          reasonLabel={t("confirmReasonLabel")}
+          onConfirm={(reason) => void remove(reason ?? "")}
           onCancel={() => !busy && setDeleteConfirmOpen(false)}
         />
       </form>

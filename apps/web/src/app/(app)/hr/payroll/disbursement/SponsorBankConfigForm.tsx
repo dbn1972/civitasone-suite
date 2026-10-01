@@ -67,7 +67,7 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
     setConfirmOpen(true);
   }
 
-  async function save() {
+  async function save(reason: string) {
     setBusy(true);
     setError(undefined);
     try {
@@ -80,6 +80,8 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
           settlementOffsetDays,
           nachEnabled,
           apbsEnabled,
+          // GAP-PAYROLL-DISBURSEMENT-04: recorded on the server audit event.
+          reason,
         }),
       });
       setConfirmOpen(false);
@@ -205,7 +207,11 @@ export function SponsorBankConfigForm({ initial }: { initial: SponsorConfig | nu
         busy={busy}
         errorMessage={error}
         description={t("confirmDescription")}
-        onConfirm={() => void save()}
+        requireReason
+        minReasonLength={10}
+        maxReasonLength={500}
+        reasonLabel={t("confirmReasonLabel")}
+        onConfirm={(reason) => void save(reason ?? "")}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
     </form>

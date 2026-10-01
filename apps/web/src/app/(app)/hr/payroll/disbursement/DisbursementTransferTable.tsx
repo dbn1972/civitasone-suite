@@ -3,14 +3,24 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Button, StatusPill, ConfirmDialog } from "../../../../_components/ds";
+import { Button, StatusPill, ConfirmDialog, Masked } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { formatRupees } from "@/lib/formatters";
 
-export type TransferRow = {
+/**
+ * Raw row as returned by GET /v1/payroll/disbursement/transfers. Only ever
+ * read on the SERVER (page.tsx) -- it is never passed to this client
+ * component as-is, because a client component's props are serialised into
+ * the RSC payload: a full account number handed to the browser is exposed
+ * even if the table renders it masked (GAP-PAYROLL-DISBURSEMENT-01).
+ */
+export type RawTransferRow = {
   id: string;
-  employeeId: string;
+  employeeId?: string;
   employeeName: string;
-  accountNumber: string;
+  accountNumber?: string | null;
+  /** Preferred: a server-side masked/last-4 field, when the API provides one. */
+  accountNumberMasked?: string | null;
   ifsc: string;
   amountRupees: number;
   status: "pending" | "processing" | "credited" | "failed" | string;
@@ -18,9 +28,47 @@ export type TransferRow = {
   failureReason: string | null;
 };
 
+/** The client-safe row: account reduced to its last 4 digits, no employee UUID. */
+export type TransferRow = {
+  id: string;
+  employeeName: string;
+  accountLast4: string | null;
+  ifsc: string;
+  amountRupees: number;
+  status: "pending" | "processing" | "credited" | "failed" | string;
+  nachBatchId: string | null;
+  failureReason: string | null;
+};
+
+/** Server-side reduction of a raw transfer row to the client-safe shape. */
+export function toClientTransferRow(raw: RawTransferRow): TransferRow {
+  // A server-masked value (e.g. "••••1234" or "XXXXXXXX1234") already shows
+  // only its tail: take its last 4 digits directly. A raw account number
+  // needs more than 4 characters, otherwise there is nothing safe to show.
+  const maskedDigits = (raw.accountNumberMasked ?? "").replace(/[^0-9]/g, "");
+  const rawSource = (raw.accountNumber ?? "").replace(/[^0-9A-Za-z]/g, "");
+  const accountLast4 = maskedDigits.length >= 4
+    ? maskedDigits.slice(-4)
+    : rawSource.length > 4 ? rawSource.slice(-4) : null;
+  return {
+    id: raw.id,
+    employeeName: raw.employeeName,
+    accountLast4,
+    ifsc: raw.ifsc,
+    amountRupees: raw.amountRupees,
+    status: raw.status,
+    nachBatchId: raw.nachBatchId,
+    failureReason: raw.failureReason,
+  };
+}
+
 type RetryResponse = { data: { id: string; status: string } };
 
-const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+function newIdempotencyKey(): string {
+  return typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : `retry-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
 
 function ProgressRing({
   done,
@@ -65,6 +113,10 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
   const t = useTranslations("disbursementTransferTable");
   const router = useRouter();
   const [pendingRetry, setPendingRetry] = useState<TransferRow | null>(null);
+  // GAP-PAYROLL-DISBURSEMENT-07: one idempotency key per opened retry
+  // dialog, so a double-submit or a network-retry of the same confirmation
+  // is recognisable server-side as the same request, not a second credit.
+  const [idempotencyKey, setIdempotencyKey] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
@@ -78,14 +130,18 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
   const total = transfers.reduce((sum, tx) => sum + tx.amountRupees, 0);
   const pct = transfers.length > 0 ? Math.round((done / transfers.length) * 100) : 0;
 
-  async function retryTransfer() {
+  async function retryTransfer(reason: string) {
     if (!pendingRetry) return;
     setBusy(true);
     setDialogError(undefined);
     try {
       await browserJson<RetryResponse>(
-        "v1/payroll/disbursement/transfers/" + pendingRetry.id + "/retry",
-        { method: "POST" },
+        "v1/payroll/disbursement/transfers/" + encodeURIComponent(pendingRetry.id) + "/retry",
+        {
+          method: "POST",
+          headers: { "x-idempotency-key": idempotencyKey },
+          body: JSON.stringify({ reason }),
+        },
       );
       setMessage(t("retryMessage", { name: pendingRetry.employeeName }));
       setPendingRetry(null);
@@ -135,7 +191,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 12, flex: 1 }}>
           <div style={{ background: "var(--infobg)", borderRadius: 10, padding: "12px 16px" }}>
             <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("totalAmountLabel")}</p>
-            <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{inrFmt.format(total)}</p>
+            <p style={{ margin: "4px 0 0", fontSize: 18, fontWeight: 700 }}>{formatRupees(total)}</p>
           </div>
           <div style={{ background: "var(--goodbg)", borderRadius: 10, padding: "12px 16px" }}>
             <p style={{ margin: 0, fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("creditedLabel")}</p>
@@ -167,13 +223,21 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
               <tr key={tx.id} style={{ borderBottom: "1px solid var(--line2)" }}>
                 <td style={{ padding: "10px 12px" }}>
                   <div style={{ fontWeight: 600 }}>{tx.employeeName}</div>
-                  <div style={{ fontSize: 11, color: "var(--ink2)" }}>{tx.employeeId}</div>
                 </td>
                 <td style={{ padding: "10px 12px" }}>
-                  <div className="mono" style={{ fontSize: 12 }}>{tx.accountNumber}</div>
+                  <div style={{ fontSize: 12 }}>
+                    {/* GAP-PAYROLL-DISBURSEMENT-01: last 4 only. No reveal control:
+                        there is no audited reveal endpoint to back one (see Masked.tsx). */}
+                    <Masked
+                      kind="account"
+                      value={tx.accountLast4 ? `XXXX${tx.accountLast4}` : null}
+                      ariaLabel={tx.accountLast4 ? t("accountEndingAria", { last4: tx.accountLast4 }) : undefined}
+                      fallback={<span style={{ color: "var(--ink2)" }}>—</span>}
+                    />
+                  </div>
                   <div style={{ fontSize: 11, color: "var(--ink2)" }}>{tx.ifsc}</div>
                 </td>
-                <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 600 }}>{inrFmt.format(tx.amountRupees)}</td>
+                <td style={{ padding: "10px 12px", textAlign: "end", fontWeight: 600 }}>{formatRupees(tx.amountRupees)}</td>
                 <td style={{ padding: "10px 12px" }}>
                   {tx.nachBatchId
                     ? <span className="mono" style={{ fontSize: 12 }}>{tx.nachBatchId}</span>
@@ -192,7 +256,7 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
                       variant="primary"
                       style={{ minHeight: 32, fontSize: 12 }}
                       aria-label={t("retryAriaLabel", { name: tx.employeeName })}
-                      onClick={() => { setDialogError(undefined); setPendingRetry(tx); }}
+                      onClick={() => { setDialogError(undefined); setIdempotencyKey(newIdempotencyKey()); setPendingRetry(tx); }}
                     >
                       {t("retryBtn")}
                     </Button>
@@ -212,20 +276,23 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
         confirmLabel={t("retryConfirmLabel")}
         busy={busy}
         errorMessage={dialogError}
+        requireReason
+        minReasonLength={10}
+        maxReasonLength={500}
+        reasonLabel={t("retryReasonLabel")}
         description={
           pendingRetry ? (
             <>
               {t.rich("retryConfirmDescription", {
                 name: pendingRetry.employeeName,
-                employeeId: pendingRetry.employeeId,
-                amount: inrFmt.format(pendingRetry.amountRupees),
+                amount: formatRupees(pendingRetry.amountRupees),
                 strong: (chunks) => <strong>{chunks}</strong>,
               })}
               {pendingRetry.failureReason ? " " + t("retryConfirmFailureReason", { reason: pendingRetry.failureReason }) : null}
             </>
           ) : null
         }
-        onConfirm={() => void retryTransfer()}
+        onConfirm={(reason) => void retryTransfer(reason ?? "")}
         onCancel={() => !busy && setPendingRetry(null)}
       />
     </div>

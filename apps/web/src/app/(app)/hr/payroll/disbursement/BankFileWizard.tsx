@@ -4,20 +4,47 @@ import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { browserFetch } from "@/lib/api/browserClient";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "@/app/_components/ds";
+import { formatRupees, formatIndianDate, daysUntilIST } from "@/lib/formatters";
+import { Button, ConfirmDialog } from "@/app/_components/ds";
 
-type RunOption = { id: string; payPeriod: string; netAmount: number };
+/**
+ * A run eligible for a bank file. API status "completed" == DB "approved"
+ * (first file); "paid" == DB "disbursed" (an audited RE-ISSUE) -- see
+ * payroll-service queries.ts mapRunStatus and bank-transfer/routes.ts.
+ * netAmountRupees is RUPEES (the runs-list API divides by 100).
+ */
+export type RunOption = {
+  id: string;
+  payPeriod: string;
+  netAmountRupees: number;
+  employeeCount: number;
+  status: "completed" | "paid";
+};
 type Format = "csv" | "nach" | "apbs";
 
-export type DscConfig = {
-  subjectCn: string;
-  notAfter: string;
-  sha256Fingerprint: string;
-} | null;
+/**
+ * What the page knows about the tenant DSC:
+ *  - configured: metadata loaded
+ *  - none: the API said no DSC is configured
+ *  - restricted: the viewer's role cannot read DSC config (admin-only API)
+ *  - unavailable: the DSC loader failed
+ */
+export type DscStatus =
+  | { kind: "configured"; subjectCn: string; notAfter: string; sha256Fingerprint: string }
+  | { kind: "none" }
+  | { kind: "restricted" }
+  | { kind: "unavailable" };
+
+/**
+ * Which formats the sponsor-bank config allows. `null` = unknown (config not
+ * readable by this role, or failed to load) -- the server still enforces it.
+ */
+export type FormatAvailability = { nachEnabled: boolean | null };
 
 const STEP_KEYS = ["stepSelectPeriod", "stepPreviewFile", "stepDscSigning", "stepDownload"] as const;
 
-const inrFmt = new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 2 });
+/** GAP-PAYROLL-DISBURSEMENT-03: warn this many days before the DSC expires. */
+const DSC_EXPIRY_WARN_DAYS = 30;
 
 function StepBar({ step, steps, stepsAriaLabel }: { step: number; steps: readonly string[]; stepsAriaLabel: string }) {
   return (
@@ -54,12 +81,24 @@ function StepBar({ step, steps, stepsAriaLabel }: { step: number; steps: readonl
   );
 }
 
-export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConfig: DscConfig }) {
+export function BankFileWizard({
+  runs,
+  dsc,
+  availability = { nachEnabled: null },
+}: {
+  runs: RunOption[];
+  dsc: DscStatus;
+  availability?: FormatAvailability;
+}) {
   const t = useTranslations("bankFileWizard");
   const [step, setStep] = useState(0);
   const [runId, setRunId] = useState(runs[0]?.id ?? "");
-  const [format, setFormat] = useState<Format>("nach");
+  // GAP-PAYROLL-DISBURSEMENT-06: default to NEFT/RTGS CSV -- the one format
+  // every tenant can generate without NACH sponsor setup.
+  const [format, setFormat] = useState<Format>("csv");
   const [filename, setFilename] = useState<string | null>(null);
+  const [signed, setSigned] = useState<boolean | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const formError = useFormError("bank file");
@@ -70,18 +109,35 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
   const steps = STEP_KEYS.map((k) => t(k));
   // UX-017: moved out of module scope (it needs `t`) -- was previously a
   // top-level FORMAT_LABELS constant.
-  const formatLabels: Record<Format, { label: string; desc: string }> = {
-    csv: { label: t("formatCsvLabel"), desc: t("formatCsvDesc") },
-    nach: { label: t("formatNachLabel"), desc: t("formatNachDesc") },
-    apbs: { label: t("formatApbsLabel"), desc: t("formatApbsDesc") },
+  const formatLabels: Record<Format, { label: string; desc: string; layout: string }> = {
+    csv: { label: t("formatCsvLabel"), desc: t("formatCsvDesc"), layout: t("formatCsvLayout") },
+    nach: { label: t("formatNachLabel"), desc: t("formatNachDesc"), layout: t("formatNachLayout") },
+    apbs: { label: t("formatApbsLabel"), desc: t("formatApbsDesc"), layout: t("formatApbsLayout") },
+  };
+  // Why a format can't be chosen right now (null = selectable).
+  const formatDisabledReason: Record<Format, string | null> = {
+    csv: null,
+    nach: availability.nachEnabled === false ? t("formatNachDisabled") : null,
+    // payroll-service rejects every APBS request (APBS_DATA_UNAVAILABLE):
+    // Aadhaar + destination-bank IIN are not captured for any beneficiary.
+    apbs: t("formatApbsUnavailable"),
   };
 
-  async function downloadFile() {
+  const dscDaysLeft = dsc.kind === "configured" ? daysUntilIST(dsc.notAfter) : null;
+  const dscExpired = dscDaysLeft !== null && dscDaysLeft < 0;
+  const dscExpiringSoon = dscDaysLeft !== null && !dscExpired && dscDaysLeft <= DSC_EXPIRY_WARN_DAYS;
+
+  async function downloadFile(reason: string) {
     if (!runId) return;
     setBusy(true);
     setError(undefined);
     try {
-      const res = await browserFetch(`v1/payroll/runs/${runId}/bank-file?format=${format}`, { method: "GET" });
+      // GAP-PAYROLL-DISBURSEMENT-02: POST with a mandatory reason; the server
+      // audits every generation (and flags a re-issue for a paid run).
+      const res = await browserFetch(`v1/payroll/runs/${encodeURIComponent(runId)}/bank-file`, {
+        method: "POST",
+        body: JSON.stringify({ format, reason }),
+      });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
         setError(resolved.message);
@@ -89,7 +145,12 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
       }
       const disposition = res.headers.get("content-disposition") ?? "";
       const match = /filename="?([^";]+)"?/.exec(disposition);
-      const fn = match?.[1] ?? `bank_transfer_${runId}.${format === "csv" ? "csv" : "txt"}`;
+      const contentType = res.headers.get("content-type") ?? "";
+      const ext = contentType.includes("zip") ? "zip" : format === "csv" ? "csv" : "txt";
+      const fn = match?.[1] ?? `bank_transfer_${runId}.${ext}`;
+      // GAP-PAYROLL-DISBURSEMENT-03: only the server can say whether it
+      // signed the file. Anything other than an explicit "true" is UNSIGNED.
+      setSigned(res.headers.get("x-bank-file-signed") === "true");
       setFilename(fn);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -98,7 +159,7 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
       a.download = fn;
       a.click();
       URL.revokeObjectURL(url);
-      setStep(3);
+      setConfirmOpen(false);
     } catch {
       setError(formError.fromException("save").message);
     } finally {
@@ -129,32 +190,52 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
             </label>
             <select id={runSelectId} className="input" value={runId} onChange={(e) => setRunId(e.target.value)} style={{ maxWidth: 380 }}>
               {runs.map((r) => (
-                <option key={r.id} value={r.id}>{r.payPeriod} — {inrFmt.format(r.netAmount)}</option>
+                <option key={r.id} value={r.id}>
+                  {r.payPeriod} — {formatRupees(r.netAmountRupees)}{r.status === "paid" ? ` (${t("runPaidSuffix")})` : ""}
+                </option>
               ))}
             </select>
+            {selectedRun?.status === "paid" && (
+              <p role="note" style={{ fontSize: 12, color: "var(--warn, #b45309)", margin: "6px 0 0" }}>
+                {t("reissueNote")}
+              </p>
+            )}
           </div>
-          <div>
-            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("bankFileFormatLabel")}</p>
+          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>{t("bankFileFormatLabel")}</legend>
             <div style={{ display: "grid", gap: 8, maxWidth: 420 }}>
-              {(Object.entries(formatLabels) as [Format, { label: string; desc: string }][]).map(([f, meta]) => (
-                <label
-                  key={f}
-                  style={{
-                    display: "flex", alignItems: "center", gap: 10, cursor: "pointer",
-                    padding: "10px 14px", borderRadius: 8,
-                    border: `2px solid ${format === f ? "var(--accent, #2563eb)" : "var(--line2)"}`,
-                    background: format === f ? "var(--infobg)" : "transparent",
-                  }}
-                >
-                  <input type="radio" name="wiz-format" value={f} checked={format === f} onChange={() => setFormat(f)} aria-label={meta.label} style={{ accentColor: "var(--accent)" }} />
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{meta.label}</div>
-                    <div style={{ fontSize: 12, color: "var(--ink2)" }}>{meta.desc}</div>
-                  </div>
-                </label>
-              ))}
+              {(Object.entries(formatLabels) as [Format, { label: string; desc: string }][]).map(([f, meta]) => {
+                const disabledReason = formatDisabledReason[f];
+                const disabled = disabledReason !== null;
+                return (
+                  <label
+                    key={f}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, cursor: disabled ? "not-allowed" : "pointer",
+                      padding: "10px 14px", borderRadius: 8, opacity: disabled ? 0.6 : 1,
+                      border: `2px solid ${format === f ? "var(--accent, #2563eb)" : "var(--line2)"}`,
+                      background: format === f ? "var(--infobg)" : "transparent",
+                    }}
+                  >
+                    <input
+                      type="radio"
+                      name="wiz-format"
+                      value={f}
+                      checked={format === f}
+                      disabled={disabled}
+                      onChange={() => setFormat(f)}
+                      aria-label={meta.label}
+                      style={{ accentColor: "var(--accent)" }}
+                    />
+                    <div>
+                      <div style={{ fontWeight: 600, fontSize: 13 }}>{meta.label}</div>
+                      <div style={{ fontSize: 12, color: "var(--ink2)" }}>{disabledReason ?? meta.desc}</div>
+                    </div>
+                  </label>
+                );
+              })}
             </div>
-          </div>
+          </fieldset>
           <div>
             <Button disabled={!runId} onClick={() => setStep(1)}>
               {t("nextPreviewBtn")}
@@ -163,7 +244,7 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
         </div>
       )}
 
-      {/* Step 1 — Preview */}
+      {/* Step 1 — Preview (GAP-PAYROLL-DISBURSEMENT-05: real figures only) */}
       {step === 1 && selectedRun && (
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ background: "var(--panel)", borderRadius: 10, padding: "18px 20px" }}>
@@ -173,9 +254,9 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
                 {[
                   [t("previewPayPeriod"), selectedRun.payPeriod],
                   [t("previewFormat"), formatLabels[format].label],
-                  [t("previewNetAmount"), inrFmt.format(selectedRun.netAmount)],
+                  [t("previewNetAmount"), formatRupees(selectedRun.netAmountRupees)],
+                  [t("previewRecordCount"), String(selectedRun.employeeCount)],
                   [t("previewRunId"), selectedRun.id],
-                  [t("previewRecordCount"), "—"],
                 ].map(([k, v]) => (
                   <tr key={k} style={{ borderBottom: "1px solid var(--line2)" }}>
                     <td style={{ padding: "8px 0", color: "var(--ink2)", width: "40%" }}>{k}</td>
@@ -184,10 +265,10 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
                 ))}
               </tbody>
             </table>
-            <div style={{ marginTop: 12, padding: "12px 14px", background: "var(--line2)", borderRadius: 6, fontFamily: "monospace", fontSize: 12, color: "var(--ink2)" }}>
-              {t("previewSampleHeader")}<br />
-              EMP001 | {selectedRun.payPeriod} | CREDIT | {inrFmt.format(selectedRun.netAmount)} | SALARY
-            </div>
+            <p style={{ marginTop: 12, fontSize: 12, color: "var(--ink2)" }}>
+              <strong>{t("previewLayoutLabel")}</strong> {formatLabels[format].layout}
+            </p>
+            <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--ink2)" }}>{t("previewNotAvailable")}</p>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <Button variant="ghost" onClick={() => setStep(0)}>{t("backBtn")}</Button>
@@ -196,23 +277,25 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
         </div>
       )}
 
-      {/* Step 2 — DSC signing */}
+      {/* Step 2 — DSC (GAP-PAYROLL-DISBURSEMENT-03: no false signing claim) */}
       {step === 2 && (
         <div style={{ display: "grid", gap: 16 }}>
           <div style={{ background: "var(--panel)", borderRadius: 10, padding: "20px" }}>
             <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>{t("dscTitle")}</h3>
-            {dscConfig ? (
+            {dsc.kind === "configured" ? (
               <>
                 <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-                  <span style={{ fontSize: 20 }}>✅</span>
-                  <span style={{ fontWeight: 600, color: "var(--good, #27ae60)" }}>{t("dscActiveReady")}</span>
+                  <span aria-hidden="true" style={{ fontSize: 20 }}>{dscExpired ? "⛔" : dscExpiringSoon ? "⚠️" : "✅"}</span>
+                  <span style={{ fontWeight: 600, color: dscExpired ? "var(--bad, #c0392b)" : dscExpiringSoon ? "var(--warn, #b45309)" : "var(--good, #27ae60)" }}>
+                    {dscExpired ? t("dscExpired") : dscExpiringSoon ? t("dscExpiringSoon", { days: dscDaysLeft ?? 0 }) : t("dscOnFile")}
+                  </span>
                 </div>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <tbody>
                     {[
-                      [t("dscSubjectCn"), dscConfig.subjectCn],
-                      [t("dscValidUntil"), new Date(dscConfig.notAfter).toLocaleDateString("en-IN")],
-                      [t("dscSha256"), dscConfig.sha256Fingerprint.slice(0, 24) + "…"],
+                      [t("dscSubjectCn"), dsc.subjectCn],
+                      [t("dscValidUntil"), formatIndianDate(dsc.notAfter)],
+                      [t("dscSha256"), dsc.sha256Fingerprint.slice(0, 24) + "…"],
                     ].map(([k, v]) => (
                       <tr key={k} style={{ borderBottom: "1px solid var(--line2)" }}>
                         <td style={{ padding: "7px 0", color: "var(--ink2)", width: "40%" }}>{k}</td>
@@ -223,16 +306,23 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
                 </table>
               </>
             ) : (
-              <div style={{ display: "flex", gap: 10, color: "var(--warn, #f39c12)" }}>
-                <span style={{ fontSize: 20 }}>⚠️</span>
+              <div style={{ display: "flex", gap: 10, color: "var(--warn, #b45309)" }}>
+                <span aria-hidden="true" style={{ fontSize: 20 }}>⚠️</span>
                 <div>
-                  <p style={{ margin: 0, fontWeight: 600 }}>{t("dscNotConfiguredTitle")}</p>
-                  <p style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>
-                    {t("dscNotConfiguredMessage")}
+                  <p style={{ margin: 0, fontWeight: 600 }}>
+                    {dsc.kind === "none" ? t("dscNotConfiguredTitle") : dsc.kind === "restricted" ? t("dscRestrictedTitle") : t("dscUnavailableTitle")}
                   </p>
+                  {dsc.kind === "none" && (
+                    <p style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>
+                      <a href="#dsc-config">{t("dscConfigureLink")}</a>
+                    </p>
+                  )}
                 </div>
               </div>
             )}
+            <p role="note" style={{ margin: "12px 0 0", fontSize: 12, color: "var(--ink2)" }}>
+              {t("dscNotAppliedNote")}
+            </p>
           </div>
           <div style={{ display: "flex", gap: 10 }}>
             <Button variant="ghost" onClick={() => setStep(1)}>{t("backBtn")}</Button>
@@ -247,22 +337,29 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
           <div style={{ background: "var(--panel)", borderRadius: 10, padding: "28px", textAlign: "center" }}>
             {filename ? (
               <>
-                <p style={{ fontSize: 36, margin: "0 0 10px" }}>✅</p>
+                <p aria-hidden="true" style={{ fontSize: 36, margin: "0 0 10px" }}>✅</p>
                 <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 4 }}>{t("downloadedTitle")}</p>
                 <p style={{ fontSize: 13, fontFamily: "monospace", color: "var(--ink2)" }}>{filename}</p>
+                {signed ? (
+                  <p className="pill good" style={{ display: "inline-block", marginTop: 8 }}>{t("signedBadge")}</p>
+                ) : (
+                  <p role="status" className="pill bad" style={{ display: "inline-block", marginTop: 8, fontWeight: 700 }}>
+                    {t("unsignedBadge")}
+                  </p>
+                )}
                 <p style={{ fontSize: 13, color: "var(--ink2)", marginTop: 10 }}>
                   {t("downloadedHint")}
                 </p>
               </>
             ) : (
               <>
-                <p style={{ fontSize: 36, margin: "0 0 10px" }}>⬇️</p>
+                <p aria-hidden="true" style={{ fontSize: 36, margin: "0 0 10px" }}>⬇️</p>
                 <p style={{ fontWeight: 700, fontSize: 16, marginBottom: 12 }}>{t("readyTitle")}</p>
-                {error && (
+                {error && !confirmOpen && (
                   <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 13, marginBottom: 10 }}>{error}</p>
                 )}
-                <Button onClick={() => void downloadFile()} disabled={busy} loading={busy}>
-                  {busy ? t("generatingBtn") : t("downloadBtn")}
+                <Button onClick={() => { setError(undefined); setConfirmOpen(true); }} disabled={busy || !selectedRun}>
+                  {t("downloadBtn")}
                 </Button>
               </>
             )}
@@ -270,13 +367,42 @@ export function BankFileWizard({ runs, dscConfig }: { runs: RunOption[]; dscConf
           <div style={{ display: "flex", gap: 10 }}>
             {!filename && <Button variant="ghost" onClick={() => setStep(2)}>{t("backBtn")}</Button>}
             {filename && (
-              <Button variant="ghost" onClick={() => { setStep(0); setFilename(null); setError(undefined); }}>
+              <Button variant="ghost" onClick={() => { setStep(0); setFilename(null); setSigned(null); setError(undefined); }}>
                 {t("generateAnotherBtn")}
               </Button>
             )}
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmOpen && !!selectedRun}
+        title={selectedRun?.status === "paid" ? t("confirmReissueTitle") : t("confirmTitle")}
+        confirmLabel={busy ? t("generatingBtn") : t("confirmLabel")}
+        danger={selectedRun?.status === "paid"}
+        busy={busy}
+        errorMessage={confirmOpen ? error : undefined}
+        requireReason
+        minReasonLength={10}
+        maxReasonLength={500}
+        reasonLabel={t("confirmReasonLabel")}
+        description={
+          selectedRun ? (
+            <>
+              {t("confirmDescription", {
+                period: selectedRun.payPeriod,
+                format: formatLabels[format].label,
+                amount: formatRupees(selectedRun.netAmountRupees),
+                count: selectedRun.employeeCount,
+              })}
+              {selectedRun.status === "paid" ? " " + t("confirmReissueWarning") : null}
+              {" " + t("confirmUnsignedNote")}
+            </>
+          ) : null
+        }
+        onConfirm={(reason) => void downloadFile(reason ?? "")}
+        onCancel={() => { if (!busy) { setConfirmOpen(false); setError(undefined); } }}
+      />
     </div>
   );
 }

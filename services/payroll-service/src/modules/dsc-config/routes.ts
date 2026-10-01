@@ -25,7 +25,17 @@ const putBodySchema = z.object({
   p12Base64: z.string().min(1, "p12Base64 is required"),
   /** Passphrase for the P12 keystore */
   passphrase: z.string().min(1, "passphrase is required"),
+  /**
+   * GAP-PAYROLL-DISBURSEMENT-04: why the signing key is being installed or
+   * replaced -- recorded on the audit event. Optional so non-UI callers keep
+   * working; the web ConfirmDialog always requires it (min 10 chars).
+   */
+  reason: z.string().trim().min(10).max(500).optional(),
 });
+
+const deleteBodySchema = z.object({
+  reason: z.string().trim().min(10).max(500).optional(),
+}).optional();
 
 export async function dscConfigRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -99,6 +109,7 @@ export async function dscConfigRoutes(app: FastifyInstance): Promise<void> {
       notBefore: certInfo.notBefore.toISOString(),
       notAfter: certInfo.notAfter.toISOString(),
       sha256Fingerprint: certInfo.sha256Fingerprint,
+      reason: body.reason ?? null,
     }));
   });
 
@@ -109,6 +120,7 @@ export async function dscConfigRoutes(app: FastifyInstance): Promise<void> {
   app.delete("/v1/payroll/dsc-config", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
+    const reason = deleteBodySchema.parse(req.body ?? undefined)?.reason ?? null;
 
     const row = await repo.findByTenantId(ctx.tenantId);
     if (!row) {
@@ -118,7 +130,7 @@ export async function dscConfigRoutes(app: FastifyInstance): Promise<void> {
     // Remove S3 object
     await deleteObject(row.storageRef);
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.removeDscConfig(ctx));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.removeDscConfig(ctx, reason));
   });
 
   // ── Error handler ──────────────────────────────────────────────────────────

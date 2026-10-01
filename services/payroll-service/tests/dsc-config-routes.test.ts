@@ -677,3 +677,71 @@ describe("PUT /v1/payroll/dsc-config — role-based access", () => {
     expect(res.statusCode).toBe(202);
   });
 });
+
+// ═══════════════════════════════════════════════════════════════════
+// GAP-PAYROLL-DISBURSEMENT-04: operator reason travels to the command
+// ═══════════════════════════════════════════════════════════════════
+
+describe("dsc-config — audit reason", () => {
+  const cert = {
+    subjectCN: "Reason Signer",
+    serialNumber: "R1",
+    notBefore: new Date("2024-06-01T00:00:00Z"),
+    notAfter: new Date("2027-06-01T00:00:00Z"),
+    sha256Fingerprint: "abcd",
+    keyUsage: ["digitalSignature"],
+  };
+
+  it("PUT forwards the reason into the published command payload", async () => {
+    H.mockValidateDsc.mockReturnValue(cert);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/payroll/dsc-config",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { p12Base64: Buffer.from("p12").toString("base64"), passphrase: "pw", reason: "Annual renewal per IT cell" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+    expect(queue.publish).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ payload: expect.objectContaining({ reason: "Annual renewal per IT cell" }) }),
+    );
+  });
+
+  it("PUT rejects a reason shorter than 10 characters", async () => {
+    H.mockValidateDsc.mockReturnValue(cert);
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "PUT",
+      url: "/v1/payroll/dsc-config",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { p12Base64: Buffer.from("p12").toString("base64"), passphrase: "pw", reason: "short" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(400);
+    expect(queue.publish).not.toHaveBeenCalled();
+  });
+
+  it("DELETE forwards the reason from the JSON body", async () => {
+    mockFindByTenantId.mockResolvedValue({
+      tenantId: TENANT, storageRef: `dsc/${TENANT}/signing.p12`, subjectCn: "X", serialNumber: "Y",
+      notBefore: new Date("2024-01-01"), notAfter: new Date("2027-12-31"), sha256Fingerprint: "fp",
+      createdAt: new Date(), updatedAt: new Date(), createdBy: UUID, updatedBy: UUID,
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "DELETE",
+      url: "/v1/payroll/dsc-config",
+      headers: { authorization: `Bearer ${adminToken()}` },
+      payload: { reason: "Key compromised, revoked by CA" },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(202);
+    expect(queue.publish).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ payload: expect.objectContaining({ reason: "Key compromised, revoked by CA" }) }),
+    );
+  });
+});
+

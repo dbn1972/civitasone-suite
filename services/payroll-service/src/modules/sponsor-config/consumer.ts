@@ -25,6 +25,7 @@ export function registerSponsorConfigConsumers(queue: Queue): void {
       apbsEnabled: boolean;
       maxRecordsPerFile: number;
       maxAmountPerFileMinor: string;
+      reason?: string | null;
     };
 
     try {
@@ -83,6 +84,17 @@ export function registerSponsorConfigConsumers(queue: Queue): void {
             resourceType: "sponsor_bank_config",
             resourceId: p.tenantId,
             outcome: "success",
+            // GAP-PAYROLL-DISBURSEMENT-04: who changed the sponsor account and
+            // why. Only the last 4 of the account is recorded -- the audit
+            // log is not a second copy of the bank details.
+            detail: {
+              sponsorCode: p.sponsorCode,
+              sponsorIfsc: p.sponsorIfsc,
+              sponsorAccountLast4: p.sponsorAccount.slice(-4),
+              nachEnabled: p.nachEnabled,
+              apbsEnabled: p.apbsEnabled,
+              reason: p.reason ?? null,
+            },
           },
         });
       });
