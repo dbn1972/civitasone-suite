@@ -3,7 +3,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
-import { createLoanBody, idParam, loanQueryParams } from "./validators.js";
+import { createLoanBody, disburseLoanBody, idParam, loanQueryParams } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
@@ -23,7 +23,8 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
     const { id } = idParam.parse(req.params);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.disburseLoan(ctx, id));
+    const body = disburseLoanBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.disburseLoan(ctx, id, body));
   });
 
   app.get("/v1/payroll/loans", async (req, reply) => {

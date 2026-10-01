@@ -1104,7 +1104,6 @@
   "createLoanForm": {
     "cardTitle": "ऋण बनाएं",
     "loanNoLabel": "ऋण सं.",
-    "employeeIdLabel": "कर्मचारी आईडी (यूयूआईडी)",
     "loanTypeLabel": "ऋण प्रकार",
     "optionPersonal": "व्यक्तिगत",
     "optionVehicle": "वाहन",
@@ -1116,11 +1115,12 @@
     "interestRateLabel": "ब्याज दर (%)",
     "requiredError": "ऋण संख्या, कर्मचारी, मूलधन, ईएमआई और अवधि आवश्यक हैं।",
     "submitButton": "ऋण बनाएं",
-    "submittedMessage": "ऋण {loanNo} सबमिट किया गया (आईडी {id})। इसे अतुल्यकालिक रूप से संसाधित किया जा रहा है।",
+    "submittedMessage": "{employee} के लिए ऋण {loanNo} सबमिट किया गया। इसे पृष्ठभूमि में संसाधित किया जा रहा है और प्रसंस्करण पूरा होने पर यह सूची में दिखाई देगा।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
     "confirmTitle": "क्या यह ऋण बनाएं?",
     "confirmLabel": "ऋण बनाएं",
-    "confirmDescription": "कर्मचारी <strong>{employeeId}</strong> के लिए ऋण <strong>{loanNo}</strong> मूलधन ₹{principal}, ईएमआई ₹{emi} के साथ {tenure} माह की अवधि हेतु बनाएं।"
+    "confirmDescription": "<strong>{employee}</strong> के लिए ऋण <strong>{loanNo}</strong> मूलधन {principal}, ईएमआई {emi} के साथ {tenure} माह की अवधि हेतु बनाएं।",
+    "employeeLabel": "कर्मचारी"
   },
   "createOffCycleForm": {
     "formTitle": "ऑफ़-साइकिल रन बनाएं",
@@ -3159,9 +3159,7 @@
     }
   },
   "loanSearchForm": {
-    "fieldLabel": "कर्मचारी आईडी (यूयूआईडी)",
-    "requiredError": "खोजने के लिए एक कर्मचारी आईडी दर्ज करें।",
-    "searchButton": "खोजें"
+    "fieldLabel": "कर्मचारी"
   },
   "loans": {
     "title": "कर्मचारी ऋण",
@@ -3632,7 +3630,7 @@
     "searchCardTitle": "कर्मचारी द्वारा ऋण खोजें",
     "loansCardTitle": "ऋण",
     "searchEmptyTitle": "उनके ऋण देखने के लिए एक कर्मचारी खोजें",
-    "searchEmptyMessage": "किसी कर्मचारी के सक्रिय और पूर्व ऋण, बकाया शेष और ईएमआई विवरण देखने के लिए कर्मचारी आईडी दर्ज करें।",
+    "searchEmptyMessage": "किसी कर्मचारी के सक्रिय और पूर्व ऋण, बकाया शेष और ईएमआई विवरण देखने के लिए कर्मचारी का नाम या कोड खोजें।",
     "recoveryCardTitle": "वसूली अनुसूची",
     "recoveryEmptyTitle": "वसूली अनुसूची अभी उपलब्ध नहीं है",
     "recoveryEmptyMessage": "अभी तक कोई प्रति-किस्त पुनर्भुगतान अनुसूची एंडपॉइंट नहीं है। ऊपर दिया गया ईएमआई कुल ऋण रिकॉर्ड से परिकलित है; व्यक्तिगत देय तिथियां इस दृश्य में ट्रैक नहीं की जातीं।"

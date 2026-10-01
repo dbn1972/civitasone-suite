@@ -1124,7 +1124,6 @@
   "createLoanForm": {
     "cardTitle": "Create Loan",
     "loanNoLabel": "Loan No.",
-    "employeeIdLabel": "Employee ID (UUID)",
     "loanTypeLabel": "Loan Type",
     "optionPersonal": "Personal",
     "optionVehicle": "Vehicle",
@@ -1136,11 +1135,20 @@
     "interestRateLabel": "Interest Rate (%)",
     "requiredError": "Loan number, employee, principal, EMI and tenure are required.",
     "submitButton": "Create Loan",
-    "submittedMessage": "Loan {loanNo} submitted (id {id}). It is processed asynchronously.",
+    "submittedMessage": "Loan {loanNo} for {employee} submitted. It is processed in the background and appears in the list once processing finishes — refresh in a few seconds if it is not there yet.",
     "networkError": "Network error. Please try again.",
     "confirmTitle": "Create this loan?",
     "confirmLabel": "Create loan",
-    "confirmDescription": "Create loan <strong>{loanNo}</strong> for employee <strong>{employeeId}</strong> with principal ₹{principal}, EMI ₹{emi} over {tenure} month(s)."
+    "confirmDescription": "Create loan <strong>{loanNo}</strong> for <strong>{employee}</strong> with principal {principal}, EMI {emi} over {tenure} month(s).",
+    "employeeLabel": "Employee",
+    "employeeRequiredError": "Choose the employee this loan is for.",
+    "amountInvalidError": "Enter amounts in rupees as a positive number with at most 2 decimal places (e.g. 1250.50).",
+    "amountTooLargeError": "Amounts cannot exceed ₹10,00,00,000.",
+    "tenureInvalidError": "Tenure must be a whole number of months from 1 to 360.",
+    "rateInvalidError": "Interest rate must be between 0 and 100 with at most 2 decimal places.",
+    "emiTooLowError": "EMI × tenure must cover at least the principal.",
+    "loanNoTakenError": "Loan number {loanNo} is already in use. Enter a different loan number.",
+    "emiAboveInterestBoundWarning": "Check the EMI: EMI × tenure ({total}) is more than the principal plus simple interest at this rate ({bound}). You can still create the loan."
   },
   "createOffCycleForm": {
     "formTitle": "Create Off-Cycle Run",
@@ -3266,9 +3274,7 @@
     }
   },
   "loanSearchForm": {
-    "fieldLabel": "Employee ID (UUID)",
-    "requiredError": "Enter an employee ID to search.",
-    "searchButton": "Search"
+    "fieldLabel": "Employee"
   },
   "loans": {
     "title": "Employee Loans",
@@ -3320,7 +3326,15 @@
     "emptyMessage": "This employee has no loans on record.",
     "confirmTitle": "Disburse this loan?",
     "confirmLabel": "Disburse loan",
-    "confirmDescription": "This releases funds for loan <strong>{loanNo}</strong>. This action is irreversible."
+    "confirmDescription": "This releases funds for loan <strong>{loanNo}</strong>. This action is irreversible.",
+    "typePersonal": "Personal",
+    "typeVehicle": "Vehicle",
+    "typeHouseBuilding": "House Building",
+    "typeFestival": "Festival Advance",
+    "reasonLabel": "Reason / sanction reference (recorded in the audit log)",
+    "ownLoanNote": "Created by you — another officer must disburse",
+    "selfDisburseError": "You created this loan, so another payroll officer must disburse it.",
+    "notDisbursableError": "This loan can no longer be disbursed — it is not in 'applied' status. Refresh to see its current status."
   },
   "locations": {
     "title": "Locations",
@@ -3767,16 +3781,19 @@
     "subtitle": "Search, create and disburse employee loans and view the sanctioned amount, EMI and outstanding balance.",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "statTotalLoans": "Total Loans",
-    "statActiveDisbursed": "Active / Disbursed",
-    "statTotalOutstanding": "Total Outstanding",
-    "statMonthlyEmiTotal": "Monthly EMI Total",
+    "statActiveDisbursed": "Active (disbursed)",
+    "statTotalOutstanding": "Outstanding (active loans)",
+    "statMonthlyEmiTotal": "Monthly EMI (active loans)",
     "searchCardTitle": "Search Loans by Employee",
     "loansCardTitle": "Loans",
     "searchEmptyTitle": "Search for an employee to see their loans",
-    "searchEmptyMessage": "Enter an employee ID to view their active and past loans, outstanding balance, and EMI details.",
+    "searchEmptyMessage": "Search by employee name or code to view their active and past loans, outstanding balance, and EMI details.",
     "recoveryCardTitle": "Recovery Schedule",
     "recoveryEmptyTitle": "Recovery schedule not yet available",
-    "recoveryEmptyMessage": "There is no per-installment repayment schedule endpoint yet. The EMI total above is computed from the loan record; individual due dates are not tracked in this view."
+    "recoveryEmptyMessage": "There is no per-installment repayment schedule endpoint yet. The EMI total above is computed from the loan record; individual due dates are not tracked in this view.",
+    "statPendingDisbursement": "Pending disbursement",
+    "loansCardTitleFor": "Loans — {employee}",
+    "loansCardTitleUnknown": "Loans — employee name unavailable"
   },
   "payrollTaxConfig": {
     "title": "Income Tax Reference",
@@ -6899,5 +6916,12 @@
     "advanceInvalid": "Enter a valid amount (up to 2 decimals).",
     "submitting": "Submitting…",
     "submitRequest": "Submit Request"
+  },
+  "employeePicker": {
+    "placeholder": "Type a name or employee code…",
+    "searching": "Searching…",
+    "noResults": "No matching employees",
+    "clear": "Clear",
+    "clearAriaLabel": "Clear selected employee"
   }
 }

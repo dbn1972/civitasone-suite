@@ -29,6 +29,14 @@ export const createLoanBody = z.object({
 });
 export type CreateLoanBody = z.infer<typeof createLoanBody>;
 
+// GAP-PAYROLL-LOANS-02: optional free-text justification recorded on the
+// disbursal audit event. Optional (not required) so existing API callers that
+// send no body keep working; the web UI requires it via ConfirmDialog.
+export const disburseLoanBody = z.object({
+  reason: z.string().trim().min(1).max(500).optional(),
+}).strict();
+export type DisburseLoanBody = z.infer<typeof disburseLoanBody>;
+
 export const idParam = z.object({ id: z.string().uuid() });
 
 export const loanQueryParams = z.object({

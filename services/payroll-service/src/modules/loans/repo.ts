@@ -117,6 +117,34 @@ export async function findLoanByIdTx(tx: Writer, id: string): Promise<LoanRow | 
   return rows[0] ?? null;
 }
 
+/**
+ * GAP-PAYROLL-LOANS-05: duplicate loan-number pre-check for createLoan, so
+ * the caller gets an immediate 409 instead of a 202 whose insert later fails.
+ * The authoritative guard is the UNIQUE (tenant_id, loan_no) constraint
+ * (migrations/0001_init.sql); consumer.ts maps a violation of it (the race
+ * this plain SELECT cannot see) to a NonRetryableError.
+ */
+export async function findLoanIdByLoanNo(tenantId: string, loanNo: string): Promise<string | null> {
+  const rows = await scopedRead((tx) => tx.select({ id: payrollLoans.id }).from(payrollLoans)
+    .where(and(eq(payrollLoans.tenantId, tenantId), eq(payrollLoans.loanNo, loanNo)))
+    .limit(1));
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * GAP-PAYROLL-LOANS-02: tenant-scoped, row-locked read for the disburse
+ * consumer. findLoanByIdTx above filters on id only; the disbursal re-check
+ * must (a) never act on another tenant's loan id and (b) hold the row so two
+ * concurrent disburse commands cannot both see status "applied".
+ */
+export async function findLoanByIdForUpdateTx(tx: Writer, id: string, tenantId: string): Promise<LoanRow | null> {
+  const rows = await (tx as typeof db).select().from(payrollLoans)
+    .where(and(eq(payrollLoans.id, id), eq(payrollLoans.tenantId, tenantId)))
+    .for("update")
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertRepayment(tx: Writer, row: typeof payrollLoanRepayments.$inferInsert): Promise<void> {
   await tx.insert(payrollLoanRepayments).values(row);
 }

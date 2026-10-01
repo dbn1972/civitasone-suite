@@ -46,6 +46,19 @@ export function getSessionName(): string | null {
   return typeof payload.name === "string" && payload.name.length > 0 ? payload.name : null;
 }
 
+/**
+ * The signed-in user's id (JWT `sub`) -- the same value services see as
+ * ctx.actorId and stamp into created_by. Used for UI-side maker-checker
+ * hints (e.g. GAP-PAYROLL-LOANS-02: hide Disburse on a loan you created);
+ * the server remains the authority. Null when not signed in.
+ */
+export function getSessionUserId(): string | null {
+  const token = cookies().get(COOKIE.ACCESS)?.value;
+  if (!token) return null;
+  const payload = decodeJwtPayload(token);
+  return typeof payload.sub === "string" && payload.sub.length > 0 ? payload.sub : null;
+}
+
 export function requireAnyRole(allowed: string[], redirectTo = "/dashboard"): void {
   const sessionRoles = getSessionRoles();
   const hasRole = allowed.some((r) => sessionRoles.includes(r));

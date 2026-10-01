@@ -71,3 +71,44 @@ export function sumActiveEmiMinor(
     0n,
   );
 }
+
+/**
+ * GAP-PAYROLL-LOANS-02 (maker-checker on loan disbursal): disbursal releases
+ * money, so the officer who CREATED the loan (payroll_loans.created_by) may
+ * not also disburse it, and only a loan still in "applied" can be disbursed
+ * (previously any status -- including "closed" -- was flipped back to
+ * "disbursed", re-emitting payroll.loan.disbursed). Mirrors
+ * payroll/consumer.ts's runApprove SELF_APPROVAL_FORBIDDEN rule.
+ *
+ * Pure (no DB) so routes/commands.ts's synchronous pre-check (immediate
+ * 403/409 to the caller) and consumer.ts's authoritative, row-locked re-check
+ * evaluate exactly the same rule.
+ */
+export const DISBURSABLE_LOAN_STATUSES: readonly string[] = ["applied"];
+
+export type DisbursalDecision =
+  | { allowed: true }
+  | { allowed: false; status: 403 | 409; code: "SELF_DISBURSE_FORBIDDEN" | "LOAN_NOT_DISBURSABLE"; message: string };
+
+export function decideDisbursal(
+  loan: { status: string; createdBy: string },
+  actorId: string,
+): DisbursalDecision {
+  if (loan.createdBy === actorId) {
+    return {
+      allowed: false,
+      status: 403,
+      code: "SELF_DISBURSE_FORBIDDEN",
+      message: "a loan must be disbursed by a different officer than the one who created it",
+    };
+  }
+  if (!DISBURSABLE_LOAN_STATUSES.includes(loan.status)) {
+    return {
+      allowed: false,
+      status: 409,
+      code: "LOAN_NOT_DISBURSABLE",
+      message: `loan in status '${loan.status}' cannot be disbursed`,
+    };
+  }
+  return { allowed: true };
+}

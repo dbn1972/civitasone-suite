@@ -6,7 +6,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
-import { decideCombinedEmiCap, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
+import { decideCombinedEmiCap, decideDisbursal, sumActiveEmiMinor, MAX_COMBINED_LOAN_EMI_PCT_OF_GROSS } from "./policy.js";
 
 const AUDIT = "audit.event.record";
 
@@ -56,7 +56,7 @@ export function registerLoansConsumers(queue: Queue): void {
           );
         }
 
-        await repo.insertLoan(tx, {
+        await insertLoanOrReject(tx, p.loanNo, {
           id: p.id, tenantId: p.tenantId, loanNo: p.loanNo, employeeId: p.employeeId,
           loanType: p.loanType, principalMinor: BigInt(p.principalMinor),
           outstandingMinor: BigInt(p.principalMinor), emiMinor: BigInt(p.emiMinor),
@@ -75,26 +75,65 @@ export function registerLoansConsumers(queue: Queue): void {
 
   queue.subscribe(COMMANDS.loanDisburse, async (msg) => {
     try {
-      const p = msg.payload as { id: string; tenantId: string };
+      const p = msg.payload as { id: string; tenantId: string; employeeId?: string; reason?: string };
+      let employeeId = p.employeeId ?? "";
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        const loan = await repo.findLoanByIdTx(tx, p.id);
-        if (!loan) throw new Error(`loan ${p.id} not found`);
+        // GAP-PAYROLL-LOANS-02: tenant-scoped + FOR UPDATE (was id-only, no
+        // lock), then the authoritative maker-checker / status re-check --
+        // commands.ts's pre-check is not race-safe on its own.
+        const loan = await repo.findLoanByIdForUpdateTx(tx, p.id, p.tenantId);
+        if (!loan) throw new NonRetryableError(`loan ${p.id} not found`);
+        employeeId = loan.employeeId;
+        const decision = decideDisbursal(loan, msg.actorId);
+        if (!decision.allowed) {
+          throw new NonRetryableError(`${decision.code}: ${decision.message} (loan ${p.id})`);
+        }
         await repo.updateLoan(tx, p.id, { status: "disbursed", disbursedAt: new Date(), updatedBy: msg.actorId });
         await enqueue(tx, {
           topic: EVENTS.loanDisbursed, eventType: EVENTS.loanDisbursed,
           tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
           payload: { loanId: p.id, employeeId: loan.employeeId, principalMinor: loan.principalMinor.toString() },
         });
-        await audit(tx, msg, "disburse", "loan", p.id);
+        await audit(tx, msg, "disburse", "loan", p.id, p.reason ? { reason: p.reason } : undefined);
       });
       await cache.invalidate(cache.makeKey(msg.tenantId, "payroll_loan", p.id));
-      await cache.invalidate(cache.makeKey(msg.tenantId, "loans_emp", (msg.payload as any).employeeId ?? ""));
+      // Was keyed on payload.employeeId, which the disburse command never
+      // carried -- so the per-employee list cache was never invalidated and
+      // the loans page kept showing "applied" until the cache TTL expired.
+      if (employeeId) await cache.invalidate(cache.makeKey(msg.tenantId, "loans_emp", employeeId));
     } catch (err) {
       logConsumerError(COMMANDS.loanDisburse, msg, err);
       throw err;
     }
   });
+}
+
+/**
+ * GAP-PAYROLL-LOANS-05: the UNIQUE (tenant_id, loan_no) constraint
+ * (migrations/0001_init.sql) is the race-safe duplicate-loan-number guard
+ * behind commands.ts's plain-SELECT pre-check. A violation is a permanent
+ * business rejection -- retrying can never succeed -- so surface it as a
+ * NonRetryableError (straight to the DLQ, logged below) instead of a
+ * generic error the queue would retry until it gives up.
+ */
+async function insertLoanOrReject(tx: Parameters<typeof repo.insertLoan>[0], loanNo: string, row: Parameters<typeof repo.insertLoan>[1]): Promise<void> {
+  try {
+    await repo.insertLoan(tx, row);
+  } catch (err) {
+    if (isUniqueViolation(err)) {
+      throw new NonRetryableError(`LOAN_NO_TAKEN: loan number ${loanNo} is already in use in this tenant`);
+    }
+    throw err;
+  }
+}
+
+export function isUniqueViolation(err: unknown): boolean {
+  const codeOf = (e: unknown): unknown => (e && typeof e === "object" ? (e as { code?: unknown }).code : undefined);
+  if (codeOf(err) === "23505") return true;
+  // drizzle may wrap the driver error (DrizzleQueryError.cause).
+  const cause = err && typeof err === "object" ? (err as { cause?: unknown }).cause : undefined;
+  return codeOf(cause) === "23505";
 }
 
 /**
@@ -128,10 +167,10 @@ function logConsumerError(topic: string, msg: CommandEnvelope, err: unknown): vo
   );
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, extra?: Record<string, string>): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT, eventType: AUDIT,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "payroll", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "payroll", action, resourceType, resourceId, outcome: "success", ...extra },
   });
 }
