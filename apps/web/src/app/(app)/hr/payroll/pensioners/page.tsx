@@ -6,7 +6,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErr
 import { getPensioners } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "../../../../../lib/auth/roleGuard";
 import type { PensionerSummary } from "@civitasone/types";
 
 type Row = PensionerSummary;
@@ -19,13 +19,23 @@ type DisplayRow = Row & { basicPensionDisplay: string };
 // The "Add Pensioner" button uses the narrower create list so a viewer who
 // cannot create never sees a button that would land on PermissionDenied.
 
+// Named page-level constants (PENSIONER_VIEW_ROLES / PENSIONER_CREATE_ROLES)
+// built from roleGuard's shared payroll lists via a RELATIVE import: the
+// static web-vs-backend analyzer (scripts/contract/hr-role-matrix.mjs) looks
+// these names up in this file and only follows relative imports, so an
+// "@/..." alias import made both gates resolve to [] (a false DRIFT after
+// #1760). Values are unchanged: they mirror payroll-service READER_ROLES /
+// PAYROLL_ROLES for GET / POST /v1/payroll/pensioners.
+const PENSIONER_VIEW_ROLES = [...PAYROLL_READER_ROLES];
+const PENSIONER_CREATE_ROLES = [...PAYROLL_ADMIN_ROLES];
+
 export default async function PensionersPage() {
   const t = await getTranslations("pensioners");
   const roles = getSessionRoles();
-  if (!roles.some((r) => PAYROLL_READER_ROLES.includes(r))) {
-    return <PermissionDenied module="pensioners" requiredRoles={PAYROLL_READER_ROLES} />;
+  if (!roles.some((r) => PENSIONER_VIEW_ROLES.includes(r))) {
+    return <PermissionDenied module="pensioners" requiredRoles={PENSIONER_VIEW_ROLES} />;
   }
-  const canCreate = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
+  const canCreate = roles.some((r) => PENSIONER_CREATE_ROLES.includes(r));
   const { data: pensioners, source } = await getPensioners();
   // GAP-PAYROLL-PENSIONERS-01: getPensioners() falls back to [] on failure,
   // which used to render 0 / ₹0.00 stats and a "no records match your
