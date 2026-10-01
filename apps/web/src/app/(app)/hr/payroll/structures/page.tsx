@@ -6,6 +6,29 @@ import { SalaryStructureCard } from "./SalaryStructureCard";
 import { ComponentGrid } from "./ComponentGrid";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+
+// GAP-HR-SALARY-STRUCTURE-05: this page rendered the full pay-structure
+// list, the per-structure component composition, the full component
+// catalog, AND the create-structure form for ANY authenticated session --
+// no gate at all (the sibling /hr/salary-structure page being redirected
+// here, GAP-HR-SALARY-STRUCTURE-02, had the identical gap). Matches the
+// backend's own READER_ROLES for GET /v1/payroll/structures and
+// GET /v1/payroll/components (payroll-service payroll/routes.ts), which
+// already 403 everyone outside this list -- same convention as
+// payroll/pensioners/page.tsx's PENSIONER_VIEW_ROLES and
+// payroll/salary-slips/page.tsx's SALARY_ADMIN_ROLES.
+const STRUCTURES_VIEW_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+
+// Matches the backend's PAYROLL_ROLES for POST /v1/payroll/structures
+// (payroll-service payroll/routes.ts) -- a strict subset of
+// STRUCTURES_VIEW_ROLES above. Without this, an hr_admin/finance_officer
+// viewer (who can VIEW structures but not create one, per the backend)
+// would see a "Create Structure" form that always 403s on submit -- same
+// bug class already found and fixed on payroll/pensioners/page.tsx
+// (PENSIONER_CREATE_ROLES vs PENSIONER_VIEW_ROLES).
+const STRUCTURES_CREATE_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 
 type Row = {
   id: string;
@@ -45,6 +68,12 @@ async function getComponents(): Promise<LoaderResult<ComponentRow[]>> {
 
 export default async function PayStructuresPage() {
   const t = await getTranslations("payrollStructures");
+  const roles = getSessionRoles();
+  if (!roles.some((r) => STRUCTURES_VIEW_ROLES.includes(r))) {
+    return <PermissionDenied module="pay structures" requiredRoles={STRUCTURES_VIEW_ROLES} />;
+  }
+  const canCreate = roles.some((r) => STRUCTURES_CREATE_ROLES.includes(r));
+
   const [structuresResult, componentsResult] = await Promise.all([getData(), getComponents()]);
   const { data: structures, source: structuresSource } = structuresResult;
   const { data: rawComponents, source: componentsSource } = componentsResult;
@@ -78,7 +107,7 @@ export default async function PayStructuresPage() {
         <StatCard icon="🧩" iconBg="var(--panel)" label={t("statComponents")} value={componentsErrored ? "—" : rawComponents.length} />
       </StatGrid>
 
-      <CreateStructureForm />
+      {canCreate && <CreateStructureForm />}
 
       {structuresErrored ? (
         <Card title={t("structuresCardTitle")}>

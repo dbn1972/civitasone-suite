@@ -991,10 +991,6 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/salary-structure"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/service-book"
     },
     {
