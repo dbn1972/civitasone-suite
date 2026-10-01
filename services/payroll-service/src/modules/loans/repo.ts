@@ -117,6 +117,32 @@ export async function findLoanByIdTx(tx: Writer, id: string): Promise<LoanRow | 
   return rows[0] ?? null;
 }
 
+/**
+ * GAP-PAYROLL-LOANS-05: duplicate loan-number pre-check for createLoan.
+ * loans.payroll_loans has no UNIQUE (tenant_id, loan_no) constraint, so this
+ * is a best-effort guard for the ordinary (non-race) case only.
+ */
+export async function findLoanIdByLoanNo(tenantId: string, loanNo: string): Promise<string | null> {
+  const rows = await scopedRead((tx) => tx.select({ id: payrollLoans.id }).from(payrollLoans)
+    .where(and(eq(payrollLoans.tenantId, tenantId), eq(payrollLoans.loanNo, loanNo)))
+    .limit(1));
+  return rows[0]?.id ?? null;
+}
+
+/**
+ * GAP-PAYROLL-LOANS-02: tenant-scoped, row-locked read for the disburse
+ * consumer. findLoanByIdTx above filters on id only; the disbursal re-check
+ * must (a) never act on another tenant's loan id and (b) hold the row so two
+ * concurrent disburse commands cannot both see status "applied".
+ */
+export async function findLoanByIdForUpdateTx(tx: Writer, id: string, tenantId: string): Promise<LoanRow | null> {
+  const rows = await (tx as typeof db).select().from(payrollLoans)
+    .where(and(eq(payrollLoans.id, id), eq(payrollLoans.tenantId, tenantId)))
+    .for("update")
+    .limit(1);
+  return rows[0] ?? null;
+}
+
 export async function insertRepayment(tx: Writer, row: typeof payrollLoanRepayments.$inferInsert): Promise<void> {
   await tx.insert(payrollLoanRepayments).values(row);
 }
