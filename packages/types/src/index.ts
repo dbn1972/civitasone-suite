@@ -565,6 +565,10 @@ export interface AuditRowSummary {
    * provided one. Optional (not every caller of this shared row shape
    * populates it) so adding it here cannot break an existing consumer. */
   at?: string | null;
+  /** GAP-HR-AUDIT-LOG-05: audited entity type (payload.resourceType), when the event carries one. */
+  resourceType?: string;
+  /** GAP-HR-AUDIT-LOG-05: audited entity id (event target / payload.resourceId). */
+  resourceId?: string;
 }
 
 export type HelpdeskTicketPriority = 'Low' | 'Medium' | 'High' | 'Critical';
@@ -776,6 +780,8 @@ export type HRDashboard = {
   // rows -- distinct from departmentBreakdown.length, which is capped to a
   // top-6-plus-"Others" bucket and so understates the true department count.
   totalDepartments: number;
+  /** GAP-HR-EMPLOYEES-01: tenant-wide currently-serving employees (probation/confirmed/deputation); null/absent = not reported. */
+  servingCount?: number | null;
 };
 
 export type LeaveInboxItem = {

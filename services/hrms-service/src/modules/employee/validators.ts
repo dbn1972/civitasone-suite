@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { listQuerySchema } from "@civitasone/schemas/common";
+import { employeeStatusEnum } from "./status.js";
 
 // GET /v1/hrms/employees query params: standard pagination plus an optional
 // tenant-scoped employeeType filter (see repo.listByTenant / queries.listEmployees).
@@ -9,6 +10,9 @@ import { listQuerySchema } from "@civitasone/schemas/common";
 // insertions are identical so whichever PR merges second should merge cleanly.
 export const employeeListQuery = listQuerySchema.extend({
   employeeType: z.string().min(1).max(32).optional(),
+  // GAP-HR-EMPLOYEES-06: optional server-side status filter (canonical
+  // lowercase EMPLOYEE_STATUSES) -- e.g. ?status=separated lists only separated.
+  status: employeeStatusEnum.optional(),
   // GAP-HR-SF-06 (EntityPicker): optional free-text search for the picker's
   // search(q) adapter -- matches fullName/employeeNo (ILIKE, repo.ts), same
   // DIRECTORY_ROLES gate and PII-free response shape as the existing list

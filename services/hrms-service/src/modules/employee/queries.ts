@@ -188,7 +188,7 @@ export async function getEmployeeDetail(id: string, tenantId: string): Promise<E
  * cannot be added yet (no column); see docs/SECURITY.md's Directory Fields
  * note for the recorded policy and this gap.
  */
-export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[]): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string; dateOfJoining: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
+export async function listEmployees(tenantId: string, limit: number, offset: number, employeeType?: string, managerScope?: string | null, q?: string, ids?: string[], status?: string): Promise<{ data: Array<{ id: string; name: string; department: string; status: string; designation?: string; grade?: string; email?: string; dateOfJoining: string }>; pagination: { hasMore: boolean; pageSize: number; cursor?: string } }> {
   if (managerScope === null) {
     return { data: [], pagination: { hasMore: false, pageSize: limit } };
   }
@@ -234,8 +234,8 @@ export async function listEmployees(tenantId: string, limit: number, offset: num
   // shared "employee" resource prefix also used by getEmployee/
   // getEmployeeDetail's single-record cache keys (makeKey), which this
   // change does not affect and must not invalidate.
-  return cache.listOrLoad(tenantId, "employee", `list:v2:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}`, async () => {
-    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q);
+  return cache.listOrLoad(tenantId, "employee", `list:v2:${limit}:${offset}:${employeeType ?? "all"}:${managerScope ?? "all"}:${q ?? ""}:${status ?? ""}`, async () => {
+    const rows = await repo.listByTenant(tenantId, limit, offset, employeeType, managerScope, q, status);
     const depts = await scopedRead((tx) => tx.select().from(hrmsDepartments).where(eq(hrmsDepartments.tenantId, tenantId)));
     const deptNameById = new Map(depts.map((d) => [d.id, d.name]));
     const desigs = await scopedRead((tx) => tx.select().from(hrmsDesignations).where(eq(hrmsDesignations.tenantId, tenantId)));

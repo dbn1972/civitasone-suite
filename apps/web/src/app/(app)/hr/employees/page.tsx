@@ -4,6 +4,7 @@ import { getEmployees, getHRDashboard } from "../../../_data/loaders";
 import { EmployeesTable, type EmpRow } from "./EmployeesTable";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { humanizeStatus } from "@/lib/formatters";
 
 const PAGE_SIZE = 50;
 
@@ -38,9 +39,19 @@ function humanizeTypeCode(code: string): string {
  */
 const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
-function empPageHref(type: string, p: number, q: string): string {
+/**
+ * GAP-HR-EMPLOYEES-06: canonical lowercase statuses the server-side ?status=
+ * filter accepts (services/hrms-service employee/status.ts EMPLOYEE_STATUSES --
+ * keep in sync). Anything else in the URL is ignored rather than forwarded.
+ */
+const STATUS_FILTERS = [
+  "probation", "confirmed", "on_leave", "suspended", "deputation", "retired", "separated", "terminated", "no_show",
+] as const;
+
+function empPageHref(type: string, p: number, q: string, status = ""): string {
   const qs: string[] = [];
   if (type !== "all") qs.push("type=" + encodeURIComponent(type));
+  if (status) qs.push("status=" + encodeURIComponent(status));
   if (p > 0) qs.push("page=" + p);
   if (q) qs.push("q=" + encodeURIComponent(q));
   return "/hr/employees" + (qs.length ? "?" + qs.join("&") : "");
@@ -53,8 +64,10 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   // (see loaders.ts's getEmployees) instead of only ever filtering whatever
   // 50 rows happened to be on the current server page.
   const q = (searchParams?.q ?? "").trim();
+  const rawStatus = searchParams?.status ?? "";
+  const statusFilter = (STATUS_FILTERS as readonly string[]).includes(rawStatus) ? rawStatus : "";
   const [{ data: rawEmployees, source }, { data: hrDashboard, source: dashboardSource }] = await Promise.all([
-    getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter, q || undefined),
+    getEmployees(PAGE_SIZE, page * PAGE_SIZE, typeFilter === "all" ? undefined : typeFilter, q || undefined, statusFilter || undefined),
     getHRDashboard(),
   ]);
   const t = await getTranslations("employees");
@@ -87,21 +100,16 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   // the tenant total on purpose -- must not be mistaken for "genuinely
   // empty roster" the way an un-searched empty page 0 is.
   const total = page === 0 && !q && !(source === "error") && employees.length === 0 ? 0 : (hrDashboard.headcount || employees.length);
-  // GAP-HR-EMPLOYEES-01: active/others below still derive from the current
-  // page only, same page-scoped-math class as the type-tabs bug fixed
-  // earlier -- there is no existing tenant-wide "serving" aggregate to
-  // source them from. NOT fixed in this pass: the natural backend home for
-  // that aggregate (dashboard/queries.ts's getDashboard, same transaction
-  // as headcount/onLeave) is being actively extended by open PR #1702
-  // (GAP-HR-DASHBOARD-06/07) in the exact same destructured-query-result
-  // pattern a new "servingCount" field would also need to touch --
-  // implementing it here now would create a near-certain merge conflict on
-  // shared lines. Deferring until #1702 lands, then this becomes a small,
-  // additive follow-up instead of a competing edit to code already under
-  // review. `onLeave` is unaffected (already tenant-wide via the dashboard).
-  const active = employees.filter((e) => SERVING.has(e.status)).length;
+  // GAP-HR-EMPLOYEES-01: all four cards are tenant-wide aggregates from the
+  // HR dashboard (headcount / serving / onLeave) and so identical on every
+  // ?page=, ?type=, ?status= and ?q= view -- Active used to count only the
+  // 50 rows on the current page and Others subtracted that page count from
+  // the tenant total. servingCount is null when the backend did not report
+  // it; the cards then show a dash rather than a computed guess.
+  const servingCount = hrDashboard.servingCount ?? null;
+  const active = servingCount;
   const onLeave = hrDashboard.onLeave;
-  const others = total - active - onLeave;
+  const others = servingCount === null ? null : Math.max(0, total - servingCount - onLeave);
 
   // Tenant-wide, independent of pagination -- see dashboard/queries.ts employeeTypeBreakdown.
   const countByType: Record<string, number> = Object.fromEntries(
@@ -135,7 +143,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
   // know without a dedicated count query -- rather than show a wrong
   // "Showing 1-50 of <tenant total>" while searching, pagination controls
   // are keyed off how many rows this page actually got back.
-  const filteredTotal = q ? undefined : (typeFilter === "all" ? total : (countByType[typeFilter] ?? 0));
+  const filteredTotal = q || statusFilter ? undefined : (typeFilter === "all" ? total : (countByType[typeFilter] ?? 0));
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -178,29 +186,45 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           from the employees page; OnLeave only from the dashboard. */}
       <StatGrid>
         <StatCard icon="👥" iconBg="var(--goodbg, #e6f7f0)" label={t("statTotal")} value={source === "error" || dashboardSource === "error" ? "—" : total} />
-        <StatCard icon="✅" iconBg="var(--infobg, #e6f0ff)" label={t("statActiveShown")} value={source === "error" ? "—" : active} />
+        <StatCard icon="✅" iconBg="var(--infobg, #e6f0ff)" label={t("statActive")} value={dashboardSource === "error" || active === null ? "—" : active} />
         <StatCard icon="🌴" iconBg="var(--warnbg, #fffbe6)" label={t("statOnLeave")} value={dashboardSource === "error" ? "—" : onLeave} />
-        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOthersShown")} value={source === "error" || dashboardSource === "error" ? "—" : others} />
+        <StatCard icon="📋" iconBg="var(--bg, #f5f5f5)" label={t("statOthers")} value={source === "error" || dashboardSource === "error" || others === null ? "—" : others} />
       </StatGrid>
+      {/* GAP-HR-EMPLOYEES-06: "Others" had no legend -- say what it contains. */}
+      <p style={{ margin: "-4px 0 12px", fontSize: 12, color: "var(--mut)" }}>{t("othersLegend")}</p>
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
         {TYPE_TABS.map((tab) => (
           <Link
             key={tab.key}
-            href={tab.key === "all" ? "/hr/employees" : `/hr/employees?type=${tab.key}`}
-            className={typeFilter === tab.key ? "chip chip-active" : "chip"}
+            href={empPageHref(tab.key, 0, "", statusFilter)}
+            className="chip chip-link"
             aria-current={typeFilter === tab.key ? "page" : undefined}
-            style={{
-              fontSize: 13, padding: "5px 12px", borderRadius: 20,
-              background: typeFilter === tab.key ? "var(--primary)" : "var(--bg2)",
-              color: typeFilter === tab.key ? "var(--panel, #fff)" : "var(--ink)",
-              textDecoration: "none", fontWeight: typeFilter === tab.key ? 600 : 400,
-              border: "1px solid var(--line)",
-            }}
           >
             {tab.label}
           </Link>
         ))}
       </div>
+
+      {/* GAP-HR-EMPLOYEES-06: server-side status filter (second chip row). */}
+      <nav aria-label={t("statusFilterLabel")} style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 12 }}>
+        <Link
+          href={empPageHref(typeFilter, 0, "")}
+          className="chip chip-link"
+          aria-current={statusFilter === "" ? "page" : undefined}
+        >
+          {t("statusAll")}
+        </Link>
+        {STATUS_FILTERS.map((st) => (
+          <Link
+            key={st}
+            href={empPageHref(typeFilter, 0, "", st)}
+            className="chip chip-link"
+            aria-current={statusFilter === st ? "page" : undefined}
+          >
+            {humanizeStatus(st)}
+          </Link>
+        ))}
+      </nav>
 
       {/* GAP-HR-EMPLOYEES-04: server-side search form -- preserves the
           current type tab (page resets to 0, a new search is a new result
@@ -211,6 +235,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         style={{ display: "flex", gap: 8, marginBottom: 12, maxWidth: 420 }}
       >
         {typeFilter !== "all" && <input type="hidden" name="type" value={typeFilter} />}
+        {statusFilter && <input type="hidden" name="status" value={statusFilter} />}
         <label htmlFor="employees-search" style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>
           {t("search")}
         </label>
@@ -224,7 +249,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         />
         <button type="submit" className="btn">{t("search")}</button>
         {q && (
-          <Link href={empPageHref(typeFilter, 0, "")} className="btn ghost">Clear</Link>
+          <Link href={empPageHref(typeFilter, 0, "", statusFilter)} className="btn ghost">Clear</Link>
         )}
       </form>
 
@@ -236,7 +261,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         <nav aria-label={t("paginationAriaLabel")} style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
           {page > 0 && (
             <Link
-              href={empPageHref(typeFilter, page - 1, q)}
+              href={empPageHref(typeFilter, page - 1, q, statusFilter)}
               className="btn"
             >
               {"←"} {t("prevLabel")}
@@ -247,7 +272,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           </span>
           {(page + 1) * PAGE_SIZE < filteredTotal && (
             <Link
-              href={empPageHref(typeFilter, page + 1, q)}
+              href={empPageHref(typeFilter, page + 1, q, statusFilter)}
               className="btn"
             >
               {t("nextLabel")} {"→"}
@@ -259,10 +284,10 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
           might have more matches beyond it -- filteredTotal is intentionally
           unknown while searching (see above), so offer a plain "next page of
           results" link rather than a false-precision total. */}
-      {q && filteredTotal === undefined && filtered.length === PAGE_SIZE && (
+      {(q || statusFilter) && filteredTotal === undefined && filtered.length === PAGE_SIZE && (
         <nav aria-label={t("paginationAriaLabel")} style={{ display: "flex", alignItems: "center", gap: 12, marginTop: 12, fontSize: 13 }}>
-          {page > 0 && <Link href={empPageHref(typeFilter, page - 1, q)} className="btn">{"←"} {t("prevLabel")}</Link>}
-          <Link href={empPageHref(typeFilter, page + 1, q)} className="btn">{t("nextLabel")} {"→"}</Link>
+          {page > 0 && <Link href={empPageHref(typeFilter, page - 1, q, statusFilter)} className="btn">{"←"} {t("prevLabel")}</Link>}
+          <Link href={empPageHref(typeFilter, page + 1, q, statusFilter)} className="btn">{t("nextLabel")} {"→"}</Link>
         </nav>
       )}
     </div>

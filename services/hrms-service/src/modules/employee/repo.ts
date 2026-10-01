@@ -1,4 +1,4 @@
-import { eq, and, or, ilike, sql, inArray, desc } from "drizzle-orm";
+import { eq, and, or, ilike, sql, inArray, desc, asc, gt } from "drizzle-orm";
 import { pino } from "pino";
 import { db, scopedRead} from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
@@ -51,8 +51,10 @@ export async function findByNo(employeeNo: string, tenantId: string): Promise<Em
  * exists, we use it as reporting officer" comment in
  * migrations/0007_geo_attendance_ro.sql).
  */
-export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string): Promise<EmployeeRow[]> {
+export async function listByTenant(tenantId: string, limit = 100, offset = 0, employeeType?: string, managerId?: string, q?: string, status?: string): Promise<EmployeeRow[]> {
   const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
+  // GAP-HR-EMPLOYEES-06: exact status match (canonical lowercase, see status.ts).
+  if (status) conditions.push(eq(hrmsEmployees.status, status));
   if (employeeType) conditions.push(eq(hrmsEmployees.employeeType, employeeType));
   if (managerId) conditions.push(eq(hrmsEmployees.managerId, managerId));
   // GAP-HR-SF-06 (EntityPicker): optional free-text search over name/employee
@@ -66,6 +68,21 @@ export async function listByTenant(tenantId: string, limit = 100, offset = 0, em
     .where(and(...conditions))
     .limit(limit)
     .offset(offset));
+}
+
+/**
+ * Keyset page over a tenant's employees (ordered by id), for callers that
+ * must see EVERY row -- GAP-HR-ORG-CHART-05's org tree. listByTenant has no
+ * ORDER BY, so offset-paging it is not stable; this pages by `id > afterId`
+ * instead, which is stable and index-friendly.
+ */
+export async function listPageAfterId(tenantId: string, afterId: string | null, limit: number): Promise<EmployeeRow[]> {
+  const conditions = [eq(hrmsEmployees.tenantId, tenantId)];
+  if (afterId) conditions.push(gt(hrmsEmployees.id, afterId));
+  return scopedRead((tx) => tx.select().from(hrmsEmployees)
+    .where(and(...conditions))
+    .orderBy(asc(hrmsEmployees.id))
+    .limit(limit));
 }
 
 /**

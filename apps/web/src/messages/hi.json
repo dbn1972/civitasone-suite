@@ -1886,8 +1886,9 @@
     "prevLabel": "पिछला",
     "nextLabel": "अगला",
     "showingRange": "{total} में से {from}–{to} कर्मचारी दिखाए जा रहे हैं",
-    "statActiveShown": "सक्रिय (प्रदर्शित)",
-    "statOthersShown": "अन्य (प्रदर्शित)"
+    "othersLegend": "अन्य: वे कर्मचारी जो न सेवारत (परिवीक्षा, पुष्टि, प्रतिनियुक्ति) हैं और न अवकाश पर — जैसे निलंबित, सेवानिवृत्त, बर्खास्त, अनुपस्थित।",
+    "statusFilterLabel": "स्थिति के अनुसार छाँटें",
+    "statusAll": "सभी स्थितियाँ"
   },
   "employeesTable": {
     "colEmpCode": "कर्मचारी कोड",
@@ -2671,7 +2672,11 @@
     "colOutcome": "परिणाम",
     "filterPlaceholder": "लेखा-परीक्षा ट्रेल खोजें…",
     "emptyTitle": "कोई लेखा-परीक्षा रिकॉर्ड नहीं",
-    "emptyMessage": "कर्मचारी, अवकाश या वेतन में परिवर्तन होने पर मानव संसाधन कार्रवाइयाँ यहाँ दिखाई देंगी।"
+    "emptyMessage": "कर्मचारी, अवकाश या वेतन में परिवर्तन होने पर मानव संसाधन कार्रवाइयाँ यहाँ दिखाई देंगी।",
+    "resourceTypeLabel": "संसाधन प्रकार",
+    "allResourceTypes": "सभी प्रकार",
+    "actorLabel": "कर्ता",
+    "actorPlaceholder": "नाम, ईमेल या यूज़र आईडी"
   },
   "icc": {
     "title": "ICC शिकायतें",
@@ -5700,7 +5705,6 @@
     "statTotalCasesLabel": "कुल मामले",
     "statChargeMemoStageLabel": "आरोप पत्र चरण",
     "statUnderInquiryLabel": "जांच में",
-    "statDisposedClosedLabel": "निपटाए / बंद",
     "cardTitle": "सतर्कता मामला रजिस्टर",
     "filterPlaceholder": "कर्मचारी, विभाग या जांच अधिकारी के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई सतर्कता मामला दर्ज नहीं",
@@ -5709,7 +5713,10 @@
     "confidentialBannerBody": "इस रजिस्टर में सतर्कता कार्यवाही के अंतर्गत नामित कर्मचारियों से संबंधित संवेदनशील व्यक्तिगत डेटा है, जिसमें बाद में वापस लिए गए मामले भी शामिल हैं। पहुंच केवल अधिकृत HR/सतर्कता भूमिकाओं तक सीमित है और लॉग की जाती है।",
     "allDisciplinary": "सभी अनुशासनिक मामले",
     "prevBatch": "पिछले 200",
-    "nextBatch": "अगले 200"
+    "nextBatch": "अगले 200",
+    "statPenaltyAppealLabel": "दंड एवं अपील",
+    "statClosedLabel": "बंद",
+    "statDroppedLabel": "वापस लिए गए"
   },
   "wfhForm": {
     "ariaLabel": "घर से काम अनुरोध फ़ॉर्म",

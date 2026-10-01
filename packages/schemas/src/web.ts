@@ -737,6 +737,10 @@ export const HRDashboardSchema = z.object({
   // distinct from departmentBreakdown.length, which is capped to a top-6-
   // plus-"Others" bucket and understates the true department count.
   totalDepartments: z.number().default(0),
+  // GAP-HR-EMPLOYEES-01: tenant-wide count of currently-serving employees
+  // (probation/confirmed/deputation). null = backend did not report it (older
+  // service) -- consumers must show "—", never a computed guess.
+  servingCount: z.number().nullable().default(null),
 });
 
 export const AttendanceSummaryItemSchema = z.object({

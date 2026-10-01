@@ -11,7 +11,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
 
-const cats = [
+type TestCat = { title: string; icon: string; tiles: { title: string; href: string; description?: string }[] };
+const cats: TestCat[] = [
   { title: "Core", icon: "👥", tiles: [
     { title: "Dashboard", href: "/hr/dashboard", description: "d" },
     { title: "Employees", href: "/hr/employees", description: "e" },
@@ -21,7 +22,7 @@ const cats = [
   { title: "Pay", icon: "💰", tiles: [{ title: "Payroll", href: "/hr/payroll", description: "p" }] },
 ];
 
-function renderHub(categories = cats, messages: object = en, locale = "en") {
+function renderHub(categories: TestCat[] = cats, messages: object = en, locale = "en") {
   return render(
     <NextIntlClientProvider locale={locale} messages={messages}>
       <HRHubNavigation categories={categories} />
@@ -69,7 +70,7 @@ describe("HRHubNavigation (GAP-HR-HOME-02/04/05/06)", () => {
 
   it("does not warn about duplicate keys and lists a duplicated href once in search (HOME-04)", () => {
     const err = vi.spyOn(console, "error").mockImplementation(() => {});
-    const dup = [
+    const dup: TestCat[] = [
       cats[0]!,
       { title: "Setup", icon: "⚙️", tiles: [{ title: "Holidays", href: "/hr/holidays" }] },
       { title: "Time", icon: "📅", tiles: [{ title: "Holidays", href: "/hr/holidays" }] },

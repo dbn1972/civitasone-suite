@@ -92,7 +92,7 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, DIRECTORY_ROLES);
     const q = employeeListQuery.parse(req.query);
     const managerScope = await resolveManagerScope(ctx, req);
-    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids));
+    sendValidated(reply, employeesListSchema, await queries.listEmployees(ctx.tenantId, q.limit, q.offset, q.employeeType, managerScope, q.q, q.ids, q.status));
   });
 
   app.post("/v1/hrms/employees", async (req, reply) => {

@@ -221,6 +221,9 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .fld .v{display:block;font-size:14px;font-weight:600;margin-top:3px}.field{background:var(--panel);padding:13px 16px}.field .lbl{display:block;font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.04em;font-weight:600}.field .val{display:block;font-size:14px;font-weight:600;margin-top:3px}
 .donut-wrap{display:flex;align-items:center;gap:16px}
 .chip{display:inline-flex;align-items:center;gap:6px;background:var(--line2);border-radius:8px;padding:6px 11px;font-size:12.5px;font-weight:600;color:var(--ink2)}
+/* GAP-HR-EMPLOYEES-08: link-style filter chip; the active one is driven by aria-current so server-rendered tab rows need no inline styles. */
+.chip-link{text-decoration:none;border:1px solid var(--line);border-radius:20px;background:var(--bg2)}
+.chip-link[aria-current="page"]{background:var(--primary);color:var(--panel,#fff);border-color:var(--primary)}
 
 /* ---------------- MOBILE ---------------- */
 .mobile{display:grid;place-items:center;min-height:100vh;background:#0b1220;padding:26px}
