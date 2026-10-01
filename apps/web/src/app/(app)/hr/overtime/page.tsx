@@ -1,54 +1,43 @@
 import Link from "next/link";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { OvertimeTable } from "./OvertimeTable";
+import { mapOvertime, sumHoursHundredths, type ApiOTRequest, type Row } from "./mapOvertime";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
-type OTRequest = {
-  id: string;
-  employeeId: string;
-  requestDate: string;
-  hoursRequested: string;
-  reason: string | null;
-  status: string;
-  approvedBy: string | null;
-  approvedAt: string | null;
-} & Record<string, unknown>;
+// GAP-HR-OVERTIME-01: only these roles may approve/reject -- mirrors the
+// backend's own HR_ROLES for the approve/reject routes exactly
+// (attendance/routes.ts).
+const OVERTIME_DECIDE_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
-async function getOvertimeRequests(): Promise<LoaderResult<OTRequest[]>> {
-  return fetchJson<unknown, OTRequest[]>("/api/v1/hrms/overtime-requests", [], {
+async function getOvertimeRequests(): Promise<LoaderResult<Row[]>> {
+  return fetchJson<unknown, Row[]>("/api/v1/hrms/overtime-requests", [], {
     telemetryKey: "overtime.list",
     mapResponse: (p) => {
       const arr = (p as Record<string, unknown>)?.data;
-      return Array.isArray(arr) ? (arr as OTRequest[]) : null;
+      return Array.isArray(arr) ? mapOvertime(arr as ApiOTRequest[]) : null;
     },
   });
 }
 
 export default async function OvertimePage() {
   const t = await getTranslations("overtime");
-  const COLUMNS: { key: keyof OTRequest & string; label: string; cellType?: "status" }[] = [
-    { key: "employeeId",     label: t("colEmployee") },
-    { key: "requestDate",    label: t("colDate") },
-    { key: "hoursRequested", label: t("colHours") },
-    { key: "reason",         label: t("colReason") },
-    { key: "status",         label: t("colStatus"), cellType: "status" },
-  ];
+  const roles = getSessionRoles();
+  const canDecide = roles.some((r) => OVERTIME_DECIDE_ROLES.includes(r));
+
   const result = await getOvertimeRequests();
   const requests = result.data;
-  // Fabricated-data fix: this was the only one of the attendance-adjacent
-  // self-service pages whose stat cards weren't gated on fetch failure --
-  // requests defaults to [] on error (see getOvertimeRequests' fetchJson
-  // fallback), so every stat below silently rendered as a genuine "0"
-  // instead of the honest "we don't know" the sibling pages already show
-  // (work-summary/page.tsx, travel/page.tsx, advances/page.tsx, loans/page.tsx,
-  // expenses/page.tsx all gate the same way). StatCard's own displayValue
-  // renders null as "—", so this is a value-level guard, not a new render path.
   const errored = result.source === "error";
   const pending = requests.filter((r) => r.status === "pending").length;
   const approved = requests.filter((r) => r.status === "approved").length;
-  const totalHrs = requests.reduce((s, r) => s + (parseFloat(String(r.hoursRequested)) || 0), 0);
+
+  // GAP-HR-OVERTIME-05/06: "Total Hours" used to sum every status (pending +
+  // approved + rejected), overstating payable overtime; now only approved
+  // hours count, summed as integer hundredths to avoid float drift.
+  const approvedHrs = sumHoursHundredths(requests, (s) => s === "approved");
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -65,7 +54,7 @@ export default async function OvertimePage() {
 <StatCard icon="⏱️" iconBg="var(--infobg, #e6f0ff)" label={t("statTotal")} value={errored ? null : requests.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg, #fffbe6)" label={t("statPending")} value={errored ? null : pending} />
         <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statApproved")} value={errored ? null : approved} />
-        <StatCard icon="🕐" iconBg="var(--bg, #f5f5f5)" label={t("statHours")} value={errored ? null : `${totalHrs.toFixed(1)} h`} />
+        <StatCard icon="🕐" iconBg="var(--bg, #f5f5f5)" label={t("statApprovedHours")} value={errored ? null : `${approvedHrs.toFixed(2)} h`} />
       </StatGrid>
       <Card title={t("cardTitle")}>
         {errored ? (
@@ -78,16 +67,21 @@ export default async function OvertimePage() {
             action={<Link href="/hr/overtime/new" className="btn primary">{t("newRequest")}</Link>}
           />
         ) : (
-          <DataTable<OTRequest>
-            columns={COLUMNS}
+          <OvertimeTable
             rows={requests}
-            sortable
-            filterable
+            canDecide={canDecide}
             filterPlaceholder={t("filterPlaceholder")}
-            pageSize={20}
             emptyIcon="⏱️"
             emptyTitle={t("emptyTitle")}
             emptyMessage={t("emptyMessage")}
+            labels={{
+              employee: t("colEmployee"),
+              date: t("colDate"),
+              hours: t("colHours"),
+              reason: t("colReason"),
+              status: t("colStatus"),
+              actions: t("colActions"),
+            }}
           />
         )}
       </Card>

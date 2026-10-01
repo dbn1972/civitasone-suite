@@ -28,12 +28,9 @@ export interface EmployeeSummary {
   fullName: string;
   departmentId: string;
   designationId: string;
-  // GAP-HR-ADVANCES-01 / GAP-HR-LOANS-01: consumers that render "Name
-  // (EmpNo)" (the established convention elsewhere in this codebase, e.g.
-  // RequestAdvanceForm.tsx's own employee picker) need the employee number
-  // alongside the name. Additive: employeeRepo.findManyByIds now selects it
-  // too (see that function's own comment); every existing consumer that
-  // destructures only {fullName, departmentId, designationId} is unaffected.
+  // GAP-HR-ADVANCES-01 / GAP-HR-LOANS-01 / GAP-HR-OVERTIME-02: consumers
+  // that render "Name (EmpNo)" need the employee number alongside the
+  // name. Additive: employeeRepo.findManyByIds now selects it too.
   employeeNo: string;
 }
 
