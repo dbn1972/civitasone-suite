@@ -2229,7 +2229,7 @@
     "filterPlaceholder": "Search UCs…"
   },
   "expenses": {
-    "title": "Expense Claims",
+    "title": "My Expense Claims",
     "subtitle": "Employee expense claims with approval tracking.",
     "dataSourceErrorMessage": "Couldn't load — showing nothing",
     "colCategory": "Category",
@@ -2241,10 +2241,10 @@
     "statApprovedLabel": "Approved",
     "statPendingLabel": "Pending",
     "statRejectedLabel": "Rejected",
-    "cardTitle": "Expense Claims",
+    "cardTitle": "My Expense Claims",
     "filterPlaceholder": "Filter by category or status…",
     "emptyTitle": "No expense claims",
-    "emptyMessage": "Expense claims appear here once employees submit bills for travel, medical, or official expenses."
+    "emptyMessage": "Your expense claims will appear here once you submit a bill for travel, medical, or official expenses."
   },
   "finance": {
     "title": "Finance",

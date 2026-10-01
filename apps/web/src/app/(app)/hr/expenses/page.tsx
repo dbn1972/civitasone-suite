@@ -3,37 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
-
-type ApiExpense = {
-  id: string;
-  category: string;
-  amount: number;
-  description: string;
-  date: string;
-  receiptKey?: string;
-  status: string;
-  created_at: string;
-};
-
-type Row = {
-  id: string;
-  category: string;
-  amount: number;
-  description: string;
-  date: string;
-  status: string;
-} & Record<string, unknown>;
-
-function mapExpenses(rows: ApiExpense[]): Row[] {
-  return rows.map((e) => ({
-    id: e.id,
-    category: e.category ?? "—",
-    amount: e.amount ?? 0,
-    description: e.description ?? "—",
-    date: e.date ?? e.created_at ?? "—",
-    status: e.status,
-  }));
-}
+import { mapExpenses, type ApiExpense, type Row } from "./mapExpenses";
 
 async function getData(): Promise<LoaderResult<Row[]>> {
   const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/expenses", [], {
@@ -61,11 +31,17 @@ export default async function ExpensesPage() {
   // `cellType: "amount"` is server-safe: it formats a minor-units (paise)
   // value via formatMoney(), the exact same convention already used by the
   // sibling hr/loans, hr/advances, and hr/medical pages.
-  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" }[] = [
+  //
+  // GAP-HR-EXPENSES-05: `date` now uses cellType:"date" (was unset, so it
+  // rendered the raw ISO string verbatim) -- same convention as hr/advances'
+  // requestDate column. See mapExpenses.ts's doc comment for why this is
+  // cellType-driven rather than pre-formatted in the mapper (sort
+  // correctness).
+  const columns: { key: keyof Row & string; label: string; cellType?: "status" | "amount" | "date" }[] = [
     { key: "category", label: t("colCategory") },
     { key: "amount", label: t("colAmount"), cellType: "amount" },
     { key: "description", label: t("colDescription") },
-    { key: "date", label: t("colClaimDate") },
+    { key: "date", label: t("colClaimDate"), cellType: "date" },
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
