@@ -82,17 +82,12 @@ export default async function ShiftsPage() {
   const errored = source === "error";
 
   const active = errored ? 0 : items.filter((i) => i.status === "active").length;
-  const departments = errored
-    ? 0
-    : new Set(
-        items.flatMap((i) => i.applicableTo.split(",").map((d) => d.trim())).filter((d) => d && d !== "—"),
-      ).size;
 
   const COLUMNS: { key: keyof Row & string; label: string; cellType?: "status" }[] = [
     { key: "name", label: t("colName") },
     { key: "startTime", label: t("colStart") },
     { key: "endTime", label: t("colEnd") },
-    { key: "breakDuration", label: t("colBreak") },
+    { key: "breakDuration", label: t("colGrace") },
     { key: "workingHours", label: t("colWorkingHours") },
     { key: "applicableTo", label: t("colApplicableTo") },
     { key: "status", label: t("colStatus"), cellType: "status" },
@@ -100,6 +95,12 @@ export default async function ShiftsPage() {
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
+      {/* GAP-HR-SHIFTS-01: subtitle (en.json shifts.subtitle) no longer says
+          "Manage shift schedules..." — there is no POST/PATCH for shifts
+          anywhere in attendance/routes.ts, so shifts can only be seeded in
+          the DB today. Building real create/edit (role-gated, audited,
+          effective-dated) is a real feature, not a copy fix — left open
+          rather than built here; flagged separately. */}
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -114,7 +115,12 @@ export default async function ShiftsPage() {
       <StatGrid>
         <StatCard icon="🕐" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalShifts")} value={errored ? "—" : items.length} />
         <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActive")} value={errored ? "—" : active} />
-        <StatCard icon="👥" iconBg="var(--warnbg, #fffbe6)" label={t("statDepartments")} value={errored ? "—" : departments} />
+        {/* GAP-HR-SHIFTS-03: this used to count comma-split applicableTo
+            substrings, but the API has only ever returned the literal
+            constant "All" (no shift-to-department assignment data model
+            exists) — the stat was always 1 (or 0), never real. Removed
+            until a real assignment exists, rather than keep showing a
+            number with no data behind it. */}
         <StatCard icon="⏰" iconBg="var(--bg, #f5f5f5)" label={t("statStdHours")} value={t("stdHoursValue")} />
       </StatGrid>
 

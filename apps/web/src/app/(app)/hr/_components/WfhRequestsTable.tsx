@@ -29,6 +29,8 @@ export type WfhRow = {
   toDate: string;
   reason?: string | null;
   status: string;
+  /** GAP-HR-WFH-04: present on a rejected row once the backend returns it. */
+  rejectionReason?: string | null;
 } & Record<string, unknown>;
 
 type Decision = "approve" | "reject";
@@ -74,7 +76,11 @@ export function WfhRequestsTable({
       const res = await fetch(`/api/proxy/v1/hrms/wfh-requests/${id}/${decision}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ reason }),
+        // GAP-HR-WFH-04: the backend has no column to persist an approval
+        // remark (only rejectionReason exists on hrms_wfh_requests) and
+        // silently discarded it; only send `reason` on reject, where it is
+        // actually stored and shown back to the requester below.
+        body: JSON.stringify(decision === "reject" ? { reason } : {}),
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
@@ -100,15 +106,31 @@ export function WfhRequestsTable({
     { key: "employeeName", label: t("colEmployee") },
     { key: "fromDate", label: t("colFrom"), render: (r) => formatIndianDate(r.fromDate) },
     { key: "toDate", label: t("colTo"), render: (r) => formatIndianDate(r.toDate) },
-    { key: "reason", label: t("colReason"), render: (r) => r.reason ?? "—" },
-    { key: "status", label: t("colStatus"), cellType: "status" },
     {
-      key: "id",
+      key: "reason",
+      label: t("colReason"),
+      // GAP-HR-WFH-04: surface the rejection note (now returned by the API)
+      // under the original reason for rejected rows, so a requester can see
+      // why — it was previously captured on reject but never shown anywhere.
+      render: (r) => (
+        <>
+          {r.reason ?? "—"}
+          {r.status === "rejected" && r.rejectionReason && (
+            <div style={{ marginTop: 4, fontSize: 12, color: "var(--mut)" }}>
+              {t("rejectionNoteLine", { reason: r.rejectionReason })}
+            </div>
+          )}
+        </>
+      ),
+    },
+    { key: "status", label: t("colStatus"), cellType: "status" },
+    // GAP-HR-WFH-05: only approvers ever act on a row, so non-approvers
+    // previously saw a Decision column that was always a column of "—".
+    ...(canApprove ? [{
+      key: "id" as const,
       label: t("colDecision"),
-      render: (row) =>
-        !canApprove ? (
-          <span style={{ color: "var(--mut)", fontSize: 12 }}>—</span>
-        ) : row.status === "pending" ? (
+      render: (row: WfhRow) =>
+        row.status === "pending" ? (
           <div style={{ display: "flex", gap: 8 }}>
             <Button
               variant="primary"
@@ -130,7 +152,7 @@ export function WfhRequestsTable({
         ) : (
           <span style={{ color: "var(--mut)", fontSize: 12 }}>—</span>
         ),
-    },
+    }] : []),
   ];
 
   const days = pending ? calcDays(pending.row.fromDate, pending.row.toDate) : "—";
@@ -158,8 +180,12 @@ export function WfhRequestsTable({
         open={pending !== null}
         title={pending?.decision === "approve" ? t("confirmApproveTitle") : t("confirmRejectTitle")}
         danger={pending?.decision === "reject"}
-        requireReason
-        reasonLabel={pending?.decision === "approve" ? t("approvalRemarksLabel") : t("rejectionReasonLabel")}
+        // GAP-HR-WFH-04: a reason was mandatory for BOTH decisions, but the
+        // backend has nowhere to store an approval remark (only
+        // rejectionReason exists) and silently dropped it — only reject
+        // actually persists and shows it, so only reject asks for one.
+        requireReason={pending?.decision === "reject"}
+        reasonLabel={t("rejectionReasonLabel")}
         confirmLabel={pending?.decision === "approve" ? t("approveBtn") : t("rejectBtn")}
         busy={busy}
         errorMessage={dialogError}

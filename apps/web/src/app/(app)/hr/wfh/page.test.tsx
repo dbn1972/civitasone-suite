@@ -120,4 +120,28 @@ describe("WfhPage (/hr/wfh)", () => {
     expect(screen.getByRole("button", { name: /^approve$/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /^reject$/i })).toBeInTheDocument();
   });
+
+  // GAP-HR-WFH-01 (partial — weekly cap only, see routes.ts for what's
+  // deliberately left open). The form used to never receive a
+  // weeklyWfhCount at all, so its existing weekly-cap banner/submit-disable
+  // could never fire even once the backend started enforcing the cap.
+  it("GAP-HR-WFH-01: wires a real weeklyWfhCount into the form so the weekly-cap banner can actually fire", async () => {
+    const today = new Date().toISOString().slice(0, 10);
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { id: "w1", employeeId: "emp-self", employeeName: "Self Employee", fromDate: today, toDate: today, reason: "WFH 1", status: "approved" },
+        { id: "w2", employeeId: "emp-self", employeeName: "Self Employee", fromDate: today, toDate: today, reason: "WFH 2", status: "pending" },
+      ],
+      source: "api",
+    });
+    getEmployeesMock.mockResolvedValue({ data: [], source: "api" });
+    getMyProfileMock.mockResolvedValue({ data: { id: "emp-self", name: "Self Employee", department: "IT", employeeNo: "E-1", status: "active", designation: "Officer" }, source: "api" });
+
+    await render(WfhPage());
+
+    // Two existing pending/approved requests already in this ISO week ->
+    // weeklyWfhCount=2 -> the form's own weekly-cap banner/disable fires.
+    expect(screen.getByTestId("weekly-cap-error")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /submit request/i })).toBeDisabled();
+  });
 });

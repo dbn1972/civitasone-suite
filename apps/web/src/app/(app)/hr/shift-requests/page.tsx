@@ -73,7 +73,9 @@ export default async function ShiftRequestsPage() {
   const errored = source === "error";
   const pending = items.filter((i) => i.status === "pending").length;
   const approved = items.filter((i) => i.status === "approved").length;
-  const rejected = items.filter((i) => ["rejected", "declined"].includes(i.status)).length;
+  // GAP-HR-SHIFT-REQUESTS-02: "declined" is a dead branch — the backend
+  // (f3-consumer.ts attendance_routes__10) only ever writes "rejected".
+  const rejected = items.filter((i) => i.status === "rejected").length;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -90,31 +92,50 @@ export default async function ShiftRequestsPage() {
         <StatCard icon="❌" iconBg="var(--badbg, #fff0f0)" label={t("statRejectedLabel")} value={errored ? "—" : rejected} />
       </StatGrid>
 
-      <Card title={t("cardNewRequest")}>
-        {noLinkedProfile ? (
-          <div role="alert" style={{ padding: "20px 24px", fontSize: 13, color: "var(--warn-text, #92400e)" }}>
-            {t("noLinkedProfileMessage")}
-          </div>
+      {(() => {
+        const formCard = (
+          <Card title={t("cardNewRequest")}>
+            {noLinkedProfile ? (
+              <div role="alert" style={{ padding: "20px 24px", fontSize: 13, color: "var(--warn-text, #92400e)" }}>
+                {t("noLinkedProfileMessage")}
+              </div>
+            ) : (
+              <ShiftChangeRequestForm employeeId={prefillEmployeeId} redirectHref="/hr/shift-requests" />
+            )}
+          </Card>
+        );
+        const listCard = (
+          <Card title={t("cardTitle")}>
+            {source === "error" ? (
+              <RefreshErrorState error={toHumanError("load", { area: "shift requests" })} backHref="/hr" />
+            ) : (
+              <ShiftRequestsTable
+                rows={items}
+                canApprove={canApprove}
+                filterPlaceholder={t("filterPlaceholder")}
+                emptyTitle={t("emptyTitle")}
+                emptyMessage={t("emptyMessage")}
+              />
+            )}
+          </Card>
+        );
+        // GAP-HR-SHIFT-REQUESTS-03: the form rendered above the list for
+        // every role, including approvers, who had to scroll past a create
+        // form to reach the approval queue (their main task on this page).
+        // Employees (non-approvers) keep the original form-first order,
+        // since creating a request is their main task here.
+        return canApprove ? (
+          <>
+            {listCard}
+            <div style={{ marginTop: 16 }}>{formCard}</div>
+          </>
         ) : (
-          <ShiftChangeRequestForm employeeId={prefillEmployeeId} redirectHref="/hr/shift-requests" />
-        )}
-      </Card>
-
-      <div style={{ marginTop: 16 }}>
-        <Card title={t("cardTitle")}>
-          {source === "error" ? (
-            <RefreshErrorState error={toHumanError("load", { area: "shift requests" })} backHref="/hr" />
-          ) : (
-            <ShiftRequestsTable
-              rows={items}
-              canApprove={canApprove}
-              filterPlaceholder={t("filterPlaceholder")}
-              emptyTitle={t("emptyTitle")}
-              emptyMessage={t("emptyMessage")}
-            />
-          )}
-        </Card>
-      </div>
+          <>
+            {formCard}
+            <div style={{ marginTop: 16 }}>{listCard}</div>
+          </>
+        );
+      })()}
     </div>
   );
 }

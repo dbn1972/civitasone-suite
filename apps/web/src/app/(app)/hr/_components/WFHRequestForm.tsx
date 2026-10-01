@@ -11,6 +11,7 @@ import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { useAsyncMutation } from "@/lib/useAsyncMutation";
 import { Button } from "../../../_components/ds";
+import { todayIST } from "@/lib/formatters";
 
 type CreatedRequest = { id: string };
 type WfhRequestsList = { data: Array<{ id: string }> };
@@ -263,7 +264,12 @@ export function WFHRequestForm({
             onChange={(e) => setFromDate(e.target.value)}
             required
             aria-required="true"
-            min={new Date().toISOString().split("T")[0]}
+            // GAP-HR-WFH-06: was new Date().toISOString().split("T")[0] — the
+            // UTC calendar date, which is still "yesterday" in India between
+            // 00:00 and 05:30 IST, so the min bound (and the matching To-date
+            // min below) silently blocked "today" for the first 5.5 hours of
+            // every IST day. todayIST() is the drop-in IST-correct equivalent.
+            min={todayIST()}
             aria-describedby={formError.fieldError("fromDate") ? "wfh-from-err" : undefined}
           />
           {formError.fieldError("fromDate") && (
@@ -282,7 +288,7 @@ export function WFHRequestForm({
             onChange={(e) => setToDate(e.target.value)}
             required
             aria-required="true"
-            min={fromDate || new Date().toISOString().split("T")[0]}
+            min={fromDate || todayIST()}
             aria-describedby={formError.fieldError("toDate") ? "wfh-to-err" : undefined}
           />
           {formError.fieldError("toDate") && (

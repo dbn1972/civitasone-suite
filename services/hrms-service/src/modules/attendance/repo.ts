@@ -1,4 +1,4 @@
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, desc } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks, hrmsShifts,
@@ -200,21 +200,28 @@ export async function updateOvertimeStatus(
   return updated[0] ?? null;
 }
 
-/** Checkin-log: attendance rows with inTime/outTime formatted for the UI. */
-export async function listCheckinLog(tenantId: string, limit = 200, employeeIds?: string[]) {
+/**
+ * Checkin-log: attendance rows with inTime/outTime formatted for the UI.
+ * GAP-HR-CHECKIN-LOG-04: added a stable (date, inTime) DESC ordering —
+ * previously no ORDER BY at all, so with the 200-row default limit the
+ * returned window was an arbitrary slice with no guaranteed order.
+ * employeeId is a secondary tiebreaker so two identical calls return
+ * identical order even when dates/times tie exactly.
+ */
+export async function listCheckinLog(tenantId: string, limit = 200, employeeIds?: string[], offset = 0) {
   const rows = await scopedRead((tx) =>
     tx.select().from(hrmsAttendance)
       .where(and(
         eq(hrmsAttendance.tenantId, tenantId),
         employeeIds && employeeIds.length > 0 ? inArray(hrmsAttendance.employeeId, employeeIds) : undefined,
       ))
+      .orderBy(desc(hrmsAttendance.attendanceDate), desc(hrmsAttendance.inTime), hrmsAttendance.employeeId)
       .limit(limit)
+      .offset(offset)
   );
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
-    employee: r.employeeId.slice(0, 8),
-    department: "",
     date: r.attendanceDate,
     checkIn: r.inTime ?? null,
     checkOut: r.outTime ?? null,
@@ -231,26 +238,38 @@ export async function listCheckinLog(tenantId: string, limit = 200, employeeIds?
   }));
 }
 
-/** List shift definitions for a tenant. */
+/**
+ * List shift definitions for a tenant.
+ * GAP-HR-SHIFTS-02: used to pre-format breakDuration/workingHours as display
+ * strings here (mislabeling the grace period as a "break", and returning
+ * "—" for any cross-midnight (night) shift instead of wrapping past
+ * midnight). Now returns plain numeric minutes — graceMinutes / workingMinutes
+ * — and the web layer (shifts/page.tsx's mapShifts, which already anticipated
+ * exactly this shape) formats them for display. applicableTo/status remain
+ * hardcoded ("All"/"active"): no department-assignment or shift-status data
+ * model exists yet (see GAP-HR-SHIFTS-01/03, left open / addressed on the web
+ * side respectively).
+ */
 export async function listShifts(tenantId: string) {
   const rows = await scopedRead((tx) =>
     tx.select().from(hrmsShifts).where(eq(hrmsShifts.tenantId, tenantId))
   );
-  return rows.map((r) => ({
-    id: r.id,
-    name: r.name,
-    startTime: r.startTime,
-    endTime: r.endTime,
-    breakDuration: r.graceMins ? `${r.graceMins} min grace` : "—",
-    workingHours: (() => {
-      const [sh, sm] = r.startTime.split(":").map(Number) as [number, number];
-      const [eh, em] = r.endTime.split(":").map(Number) as [number, number];
-      const mins = (eh * 60 + em) - (sh * 60 + sm);
-      return mins > 0 ? `${Math.floor(mins / 60)}h ${mins % 60}m` : "—";
-    })(),
-    applicableTo: "All",
-    status: "active",
-  }));
+  return rows.map((r) => {
+    const [sh, sm] = r.startTime.split(":").map(Number) as [number, number];
+    const [eh, em] = r.endTime.split(":").map(Number) as [number, number];
+    let workingMinutes = (eh * 60 + em) - (sh * 60 + sm);
+    if (workingMinutes <= 0) workingMinutes += 1440; // cross-midnight (night) shift
+    return {
+      id: r.id,
+      name: r.name,
+      startTime: r.startTime,
+      endTime: r.endTime,
+      graceMinutes: r.graceMins,
+      workingMinutes,
+      applicableTo: "All",
+      status: "active",
+    };
+  });
 }
 
 // ── DEF-AT-001: attendance period lock ─────────────────────────────────────

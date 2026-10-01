@@ -129,14 +129,37 @@ describe("PATCH /v1/hrms/wfh-requests/:id/approve — self-approval guard", () =
     expect(r.statusCode).toBe(403);
   });
 
-  it("202 — a genuinely DIFFERENT manager can approve a different employee's WFH request", async () => {
-    scopedReadMock.mockResolvedValueOnce([wfhRow(EMP_TARGET)]);
+  it("202 — a genuinely DIFFERENT manager can approve their OWN DIRECT REPORT's WFH request", async () => {
+    scopedReadMock.mockResolvedValueOnce([wfhRow(EMP_TARGET)]); // existing lookup
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR)); // isSelfApproval's resolution
+    // GAP-HR-WFH-03 (approve/reject half, discovered): assertManagerOwnsReport
+    // resolves the manager's own employee id a second time, then looks up
+    // their direct reports — EMP_TARGET must be in that set for a manager
+    // (not HR) to be allowed to decide it at all.
     resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    scopedReadMock.mockResolvedValueOnce([{ id: EMP_TARGET }]); // reports lookup
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/wfh-requests/${WFH_REQ_ID}/approve`,
       headers: { authorization: `Bearer ${tok(["manager"], ACTOR_OTHER_MGR)}` },
     });
     expect(r.statusCode).toBe(202);
+  });
+
+  // GAP-HR-WFH-03 (approve/reject half, discovered — not in the original
+  // catalogue): a manager deciding an employee who is NOT their direct
+  // report must now be denied, even though they are not the request's own
+  // owner (that's a separate, independent guard — isSelfApproval above).
+  it("403 — a DIFFERENT manager CANNOT approve an employee who is not their direct report", async () => {
+    scopedReadMock.mockResolvedValueOnce([wfhRow(EMP_TARGET)]);
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    scopedReadMock.mockResolvedValueOnce([]); // no direct reports at all
+    const r = await app.inject({
+      method: "PATCH", url: `/v1/hrms/wfh-requests/${WFH_REQ_ID}/approve`,
+      headers: { authorization: `Bearer ${tok(["manager"], ACTOR_OTHER_MGR)}` },
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("NOT_YOUR_REPORT");
   });
 
   it("202 — an approver with NO linked employee record can still approve someone else's request (guard cannot apply)", async () => {
@@ -163,9 +186,11 @@ describe("PATCH /v1/hrms/wfh-requests/:id/reject — self-approval guard", () =>
     expect(r.json().code).toBe("FORBIDDEN");
   });
 
-  it("202 — a genuinely different manager can reject a different employee's WFH request", async () => {
+  it("202 — a genuinely different manager can reject their OWN DIRECT REPORT's WFH request", async () => {
     scopedReadMock.mockResolvedValueOnce([wfhRow(EMP_TARGET)]);
     resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    scopedReadMock.mockResolvedValueOnce([{ id: EMP_TARGET }]);
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/wfh-requests/${WFH_REQ_ID}/reject`,
       headers: { authorization: `Bearer ${tok(["manager"], ACTOR_OTHER_MGR)}` },
@@ -187,9 +212,11 @@ describe("PATCH /v1/hrms/shift-requests/:id/approve — self-approval guard", ()
     expect(r.json().code).toBe("FORBIDDEN");
   });
 
-  it("202 — a genuinely DIFFERENT manager can approve a different employee's shift-change request", async () => {
+  it("202 — a genuinely DIFFERENT manager can approve their OWN DIRECT REPORT's shift-change request", async () => {
     scopedReadMock.mockResolvedValueOnce([shiftRow(EMP_TARGET)]);
     resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    scopedReadMock.mockResolvedValueOnce([{ id: EMP_TARGET }]);
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/shift-requests/${SHIFT_REQ_ID}/approve`,
       headers: { authorization: `Bearer ${tok(["manager"], ACTOR_OTHER_MGR)}` },
@@ -210,9 +237,11 @@ describe("PATCH /v1/hrms/shift-requests/:id/reject — self-approval guard", () 
     expect(r.statusCode).toBe(403);
   });
 
-  it("202 — a genuinely different manager can reject a different employee's shift-change request", async () => {
+  it("202 — a genuinely different manager can reject their OWN DIRECT REPORT's shift-change request", async () => {
     scopedReadMock.mockResolvedValueOnce([shiftRow(EMP_TARGET)]);
     resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    resolveEmployeeForActorMock.mockResolvedValueOnce(empRow(EMP_OTHER_MGR));
+    scopedReadMock.mockResolvedValueOnce([{ id: EMP_TARGET }]);
     const r = await app.inject({
       method: "PATCH", url: `/v1/hrms/shift-requests/${SHIFT_REQ_ID}/reject`,
       headers: { authorization: `Bearer ${tok(["manager"], ACTOR_OTHER_MGR)}` },

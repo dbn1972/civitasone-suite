@@ -288,7 +288,7 @@ export function DataTable<T extends Record<string, unknown>>({
   // reuse like this) rather than adding a third, DataTable-specific
   // namespace; only "records" is new (added to "common" alongside its
   // existing page/of/rows/total pagination vocabulary).
-  const tAction = useSafeTranslations("action", { previous: "Previous", next: "Next" });
+  const tAction = useSafeTranslations("action", { previous: "Previous", next: "Next", clearFilter: "Clear filter" });
   const tCommon = useSafeTranslations("common", { page: "Page", of: "of", records: "records" });
 
   const [sortKey, setSortKey] = useState<(keyof T & string) | null>(null);
@@ -409,7 +409,25 @@ export function DataTable<T extends Record<string, unknown>>({
       )}
 
       {visible.length === 0 ? (
-        <EmptyState icon={emptyIcon} title={emptyTitle} message={emptyMessage} action={emptyAction} />
+        // GAP-HR-OVERTIME-07: a filter that matches nothing showed the same
+        // static empty state as a genuinely empty table, with no way back to
+        // the full list except manually clearing the filter box — this is
+        // the one case where DataTable knows something the caller's own
+        // emptyAction doesn't (that `filter` itself is the reason), so it
+        // takes over the action slot only in this specific, narrow state;
+        // every other caller's existing emptyAction is unaffected.
+        <EmptyState
+          icon={emptyIcon}
+          title={emptyTitle}
+          message={emptyMessage}
+          action={
+            filterable && filter.trim() ? (
+              <Button variant="ghost" size="sm" onClick={() => { setFilter(""); setPage(0); }}>
+                {tAction("clearFilter")}
+              </Button>
+            ) : emptyAction
+          }
+        />
       ) : (
         <div className="tbl-wrap">
         <table className={mobileStack ? "tbl tbl--stack" : "tbl"}>

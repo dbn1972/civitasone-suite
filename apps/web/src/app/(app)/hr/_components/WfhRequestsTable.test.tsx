@@ -43,18 +43,40 @@ describe("WfhRequestsTable", () => {
     expect(screen.queryByRole("button", { name: /reject/i })).not.toBeInTheDocument();
   });
 
+  // GAP-HR-WFH-05: a non-approver used to still get a "Decision" column,
+  // just permanently full of "—" — confusing, not merely undecorated.
+  it("GAP-HR-WFH-05: omits the Decision column header entirely for a non-approver", () => {
+    renderTable([PENDING], false);
+    expect(screen.queryByText("Decision")).not.toBeInTheDocument();
+  });
+
+  it("GAP-HR-WFH-05: still shows the Decision column header for an approver", () => {
+    renderTable([PENDING], true);
+    expect(screen.getByText("Decision")).toBeInTheDocument();
+  });
+
+  // GAP-HR-WFH-04: a rejection reason was captured on reject but never
+  // shown anywhere in the list once the API started returning it.
+  it("GAP-HR-WFH-04: shows the rejection note on a rejected row", () => {
+    renderTable([{ ...PENDING, status: "rejected", rejectionReason: "Insufficient staffing that week" }], true);
+    expect(screen.getByText(/Rejected: Insufficient staffing that week/i)).toBeInTheDocument();
+  });
+
   it("shows no decision controls for an already-decided request even when the viewer can approve", () => {
     renderTable([{ ...PENDING, status: "approved" }], true);
     expect(screen.queryByRole("button", { name: /approve/i })).not.toBeInTheDocument();
   });
 
-  it("approves a pending request: PATCHes .../approve and shows a success toast", async () => {
+  it("approves a pending request: PATCHes .../approve with no reason field at all, and shows a success toast", async () => {
+    // GAP-HR-WFH-04: an approval remark was mandatory but the backend has
+    // nowhere to store one (only rejectionReason exists) and silently
+    // discarded whatever was typed — approve no longer asks for one at all.
     fetchMock.mockResolvedValue(new Response(JSON.stringify({ id: "wfh-1", status: "approved" }), { status: 202 }));
     renderTable([PENDING], true);
 
     fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "Approved, all good" } });
+    expect(within(dialog).queryByLabelText(/approval remarks/i)).not.toBeInTheDocument();
     fireEvent.click(within(dialog).getByRole("button", { name: /^approve$/i }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(
@@ -62,7 +84,7 @@ describe("WfhRequestsTable", () => {
       expect.objectContaining({ method: "PATCH" }),
     ));
     const [, options] = fetchMock.mock.calls[0];
-    expect(JSON.parse(options.body)).toEqual({ reason: "Approved, all good" });
+    expect(JSON.parse(options.body)).toEqual({});
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/approved/i));
   });
 
@@ -90,7 +112,6 @@ describe("WfhRequestsTable", () => {
 
     fireEvent.click(screen.getByRole("button", { name: /^approve$/i }));
     const dialog = await screen.findByRole("alertdialog");
-    fireEvent.change(within(dialog).getByLabelText(/approval remarks/i), { target: { value: "ok" } });
     fireEvent.click(within(dialog).getByRole("button", { name: /^approve$/i }));
 
     await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
