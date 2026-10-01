@@ -337,8 +337,9 @@ describe("formatPercent (already-computed 0-100 percentage, e.g. Budget Utilisat
   });
 });
 
-
-import { vi, afterEach } from "vitest";
+// vi/afterEach already imported at the top of this file (added independently
+// by GAP-HR-SF-07's date-format PR, which landed on main after this block was
+// written) -- only the new symbol this block actually needs goes here.
 import { daysUntilIST } from "./formatters";
 describe("daysUntilIST (GAP-HR-CONFIRMATION-06: calendar-day diff, Asia/Kolkata)", () => {
   afterEach(() => {
