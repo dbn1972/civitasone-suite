@@ -47,6 +47,7 @@
  * failure cannot roll back a travel request or announcement that should
  * otherwise succeed — that decoupling is covered below.
  */
+import { randomUUID } from "node:crypto";
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { withRawTenantGuc } from "@civitasone/db";
@@ -57,6 +58,9 @@ const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "cccccccc-0115-4000-8000-000000000115";
 const SELF_ID = "cccccccc-0115-4000-8000-0000000000e1";
 const APPROVER_ID = "cccccccc-0115-4000-8000-0000000000e2";
+// GAP-HR-EXPENSES-02/04: a third, unrelated employee -- neither the claim
+// owner nor an approver -- for the reject-SoD and receipt-403 tests below.
+const OTHER_ID = "cccccccc-0115-4000-8000-0000000000e3";
 
 function tok(roles: string[], sub: string) {
   return signToken({ sub, tid: TENANT, roles, sid: "sess-hrms-claims-schema-test" }, SECRET);
@@ -64,6 +68,32 @@ function tok(roles: string[], sub: string) {
 
 const selfToken = tok(["employee"], SELF_ID);
 const approverToken = tok(["hr_admin"], APPROVER_ID);
+const otherToken = tok(["employee"], OTHER_ID);
+
+// GAP-HR-EXPENSES-SOD-01: two managers in two separate reporting lines, for
+// the manager-reporting-line-scope tests further below. MANAGER_A_ID /
+// MANAGER_B_ID / REPORT_A_ID / REPORT_B_ID are JWT subs -- these equal both
+// employee_id on claims.hrms_expense_claims AND employee.hrms_employees.
+// user_ref (see this file's own id-space note in the travel-requests describe
+// block below); the *_EMP_ROW_ID constants are the separate
+// employee.hrms_employees.id primary keys those fixture rows live under.
+const MANAGER_A_ID = "cccccccc-0115-4000-8000-0000000000e4";
+const MANAGER_B_ID = "cccccccc-0115-4000-8000-0000000000e5";
+const REPORT_A_ID = "cccccccc-0115-4000-8000-0000000000e6"; // reports to Manager A
+const REPORT_B_ID = "cccccccc-0115-4000-8000-0000000000e7"; // reports to Manager B
+const MANAGER_A_EMP_ROW_ID = "cccccccc-0115-4000-8001-0000000000e4";
+const MANAGER_B_EMP_ROW_ID = "cccccccc-0115-4000-8001-0000000000e5";
+const REPORT_A_EMP_ROW_ID = "cccccccc-0115-4000-8001-0000000000e6";
+const REPORT_B_EMP_ROW_ID = "cccccccc-0115-4000-8001-0000000000e7";
+const SEED_ACTOR = "cccccccc-0115-4000-8000-0000000000e0";
+
+const managerAToken = tok(["manager"], MANAGER_A_ID);
+const managerBToken = tok(["manager"], MANAGER_B_ID);
+const reportAToken = tok(["employee"], REPORT_A_ID);
+const reportBToken = tok(["employee"], REPORT_B_ID);
+// EXPENSE_DECIDE_ROLES member that is NOT in this file's module-level
+// HR_ROLES -- see EXPENSE_BYPASS_ROLES' doc comment in routes.ts.
+const financeOfficerToken = tok(["finance_officer"], APPROVER_ID);
 
 let app: Awaited<ReturnType<typeof buildApp>>;
 
@@ -78,6 +108,14 @@ async function cleanup(): Promise<void> {
   await asTenant((tx) => tx`DELETE FROM claims.hrms_travel_requests WHERE tenant_id = ${TENANT}`);
   await asTenant((tx) => tx`DELETE FROM employee.hrms_social_announcements WHERE tenant_id = ${TENANT}`);
   await asTenant((tx) => tx`DELETE FROM employee.hrms_push_devices WHERE tenant_id = ${TENANT}`);
+  // GAP-HR-EXPENSES-SOD-01 fixtures (see MANAGER_A_ID etc. above) -- scoped to
+  // these exact ids, never a blanket DELETE on employee.hrms_employees, so a
+  // real employee row in this tenant could never be touched by this file.
+  await asTenant((tx) => tx`
+    DELETE FROM employee.hrms_employees
+    WHERE tenant_id = ${TENANT}
+      AND id = ANY(ARRAY[${MANAGER_A_EMP_ROW_ID}, ${MANAGER_B_EMP_ROW_ID}, ${REPORT_A_EMP_ROW_ID}, ${REPORT_B_EMP_ROW_ID}]::uuid[])
+  `);
 }
 
 beforeAll(async () => {
@@ -105,6 +143,34 @@ beforeAll(async () => {
   }
 
   await cleanup();
+
+  // GAP-HR-EXPENSES-SOD-01 fixtures: two managers in separate reporting
+  // lines (Manager A owns Report A; Manager B owns Report B) for the
+  // manager-reporting-line-scope describe block further below.
+  // department_id/designation_id have no FK on employee.hrms_employees
+  // (verified: zero foreign keys on this table in this schema), so
+  // arbitrary uuids are fine for columns this suite never reads.
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+    VALUES (${MANAGER_A_EMP_ROW_ID}, ${TENANT}, 'SOD-MGR-A', 'Manager A (SOD test)', ${randomUUID()}, ${randomUUID()}, '2020-01-01', ${MANAGER_A_ID}, NULL, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+    VALUES (${MANAGER_B_EMP_ROW_ID}, ${TENANT}, 'SOD-MGR-B', 'Manager B (SOD test)', ${randomUUID()}, ${randomUUID()}, '2020-01-01', ${MANAGER_B_ID}, NULL, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+    VALUES (${REPORT_A_EMP_ROW_ID}, ${TENANT}, 'SOD-RPT-A', 'Report A (SOD test)', ${randomUUID()}, ${randomUUID()}, '2021-03-01', ${REPORT_A_ID}, ${MANAGER_A_EMP_ROW_ID}, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+  await asTenant((tx) => tx`
+    INSERT INTO employee.hrms_employees
+      (id, tenant_id, employee_no, full_name, department_id, designation_id, date_of_joining, user_ref, manager_id, created_by, updated_by)
+    VALUES (${REPORT_B_EMP_ROW_ID}, ${TENANT}, 'SOD-RPT-B', 'Report B (SOD test)', ${randomUUID()}, ${randomUUID()}, '2021-03-01', ${REPORT_B_ID}, ${MANAGER_B_EMP_ROW_ID}, ${SEED_ACTOR}, ${SEED_ACTOR})
+  `);
+
   app = await buildApp();
 });
 
@@ -211,6 +277,419 @@ describe("expense claims — real round-trip against claims.hrms_expense_claims"
   it("GET /v1/hrms/expenses — 401 without a token", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/hrms/expenses" });
     expect([401, 403]).toContain(r.statusCode);
+  });
+
+  // GAP-HR-EXPENSES-02/03: no money-float-drift. The amount this test
+  // exercises -- ₹1234.56 -- would silently round to 123455 or 123457 paise
+  // with a naive `Math.round(Number(rupees) * 100)` under certain floating-
+  // point inputs. The web-side parser (parseRupeesToPaise.ts) is unit-tested
+  // directly for this; this is the full-stack companion: zod's z.number().
+  // int() validation, the BIGINT column, and the round-trip back out, using
+  // an amount that is deliberately NOT a round number of rupees.
+  it("POST then GET /v1/hrms/expenses — paise amount round-trips exactly, no float drift", async () => {
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "food", amount: 123456, description: "Paise precision check", date: "2026-08-02" }),
+    });
+    expect(r.statusCode).toBe(202);
+    const id = JSON.parse(r.body).id;
+
+    const [dbRow] = await asTenant((tx) => tx`SELECT amount FROM claims.hrms_expense_claims WHERE id = ${id}`);
+    if (!dbRow) throw new Error("expected expense claim row not found");
+    expect(Number(dbRow.amount)).toBe(123456);
+
+    const list = await app.inject({ method: "GET", url: "/v1/hrms/expenses", headers: { authorization: `Bearer ${selfToken}` } });
+    const found = (JSON.parse(list.body).data as Array<{ id: string; amount: number | string }>).find((c) => c.id === id);
+    // BIGINT columns come back from the `postgres` driver as a string (to
+    // avoid precision loss above Number.MAX_SAFE_INTEGER), not a JS number --
+    // Number(...) here is just normalizing the driver's wire type for the
+    // assertion, not the thing under test (float drift in the paise VALUE,
+    // which this test is really guarding against).
+    expect(Number(found?.amount)).toBe(123456);
+  });
+
+  describe("GET /v1/hrms/expenses?scope=approvals — GAP-HR-EXPENSES-02/03 approvals queue", () => {
+    it("403s for a non-approver role (plain employee)", async () => {
+      const r = await app.inject({
+        method: "GET",
+        url: "/v1/hrms/expenses?scope=approvals",
+        headers: { authorization: `Bearer ${selfToken}` },
+      });
+      expect(r.statusCode).toBe(403);
+    });
+
+    it("200s for an approver role, lists another employee's pending claim with their name resolved, and excludes the approver's own claims", async () => {
+      const mine = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 5000, description: "Approvals-scope visibility check", date: "2026-08-03" }),
+      });
+      const mineId = JSON.parse(mine.body).id;
+
+      const approverOwn = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${approverToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 6000, description: "Approver's own claim — must not appear in their own queue", date: "2026-08-03" }),
+      });
+      const approverOwnId = JSON.parse(approverOwn.body).id;
+
+      const r = await app.inject({
+        method: "GET",
+        url: "/v1/hrms/expenses?scope=approvals",
+        headers: { authorization: `Bearer ${approverToken}` },
+      });
+      expect(r.statusCode).toBe(200);
+      const rows = JSON.parse(r.body).data as Array<{ id: string; employeeName?: string }>;
+      expect(rows.some((c) => c.id === mineId)).toBe(true);
+      expect(rows.some((c) => c.id === approverOwnId)).toBe(false);
+    });
+  });
+
+  describe("PATCH /v1/hrms/expenses/:id/reject — GAP-HR-EXPENSES-02", () => {
+    it("400s when reason is omitted entirely", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "reject validation", date: "2026-08-04" }),
+      });
+      const id = JSON.parse(created.body).id;
+
+      const r = await app.inject({
+        method: "PATCH",
+        url: `/v1/hrms/expenses/${id}/reject`,
+        headers: { authorization: `Bearer ${approverToken}`, "content-type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      expect(r.statusCode).toBe(400);
+    });
+
+    it("400s when reason is present but below the minimum length", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "reject validation 2", date: "2026-08-04" }),
+      });
+      const id = JSON.parse(created.body).id;
+
+      const r = await app.inject({
+        method: "PATCH",
+        url: `/v1/hrms/expenses/${id}/reject`,
+        headers: { authorization: `Bearer ${approverToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ reason: "no" }),
+      });
+      expect(r.statusCode).toBe(400);
+    });
+
+    it("403s when the approver is the submitter (SoD)", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "self-reject SoD", date: "2026-08-04" }),
+      });
+      const id = JSON.parse(created.body).id;
+
+      const r = await app.inject({
+        method: "PATCH",
+        url: `/v1/hrms/expenses/${id}/reject`,
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ reason: "Trying to reject my own claim" }),
+      });
+      expect(r.statusCode).toBe(403);
+    });
+
+    it("200s with a valid reason, persists rejection_reason, and the claim no longer shows as pending", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "real reject", date: "2026-08-04" }),
+      });
+      const id = JSON.parse(created.body).id;
+
+      const r = await app.inject({
+        method: "PATCH",
+        url: `/v1/hrms/expenses/${id}/reject`,
+        headers: { authorization: `Bearer ${approverToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ reason: "Missing original bill" }),
+      });
+      expect(r.statusCode).toBe(200);
+      expect(JSON.parse(r.body).status).toBe("rejected");
+
+      const [dbRow] = await asTenant((tx) => tx`
+        SELECT status, rejection_reason, approved_by FROM claims.hrms_expense_claims WHERE id = ${id}
+      `);
+      if (!dbRow) throw new Error("expected expense claim row not found");
+      expect(dbRow.status).toBe("rejected");
+      expect(dbRow.rejection_reason).toBe("Missing original bill");
+      expect(dbRow.approved_by).toBe(APPROVER_ID);
+    });
+
+    it("404s when the claim is already processed (reject-after-reject)", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "double reject", date: "2026-08-04" }),
+      });
+      const id = JSON.parse(created.body).id;
+      await app.inject({
+        method: "PATCH",
+        url: `/v1/hrms/expenses/${id}/reject`,
+        headers: { authorization: `Bearer ${approverToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ reason: "First rejection" }),
+      });
+
+      const r = await app.inject({
+        method: "PATCH",
+        url: `/v1/hrms/expenses/${id}/reject`,
+        headers: { authorization: `Bearer ${approverToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ reason: "Second rejection attempt" }),
+      });
+      expect(r.statusCode).toBe(404);
+    });
+  });
+
+  describe("GET /v1/hrms/expenses/:id/receipt — GAP-HR-EXPENSES-04 (PII-sensitive)", () => {
+    it("404s 'NO_RECEIPT' for the owner when the claim has no receipt on file", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "no receipt", date: "2026-08-05" }),
+      });
+      const id = JSON.parse(created.body).id;
+
+      const r = await app.inject({
+        method: "GET",
+        url: `/v1/hrms/expenses/${id}/receipt`,
+        headers: { authorization: `Bearer ${selfToken}` },
+      });
+      expect(r.statusCode).toBe(404);
+      expect(JSON.parse(r.body).code).toBe("NO_RECEIPT");
+    });
+
+    it("200s with a presigned url for the claim's own owner", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "has receipt", date: "2026-08-05", receiptKey: "tenant/expenses/receipt-owner-test.pdf" }),
+      });
+      const id = JSON.parse(created.body).id;
+
+      const r = await app.inject({
+        method: "GET",
+        url: `/v1/hrms/expenses/${id}/receipt`,
+        headers: { authorization: `Bearer ${selfToken}` },
+      });
+      expect(r.statusCode).toBe(200);
+      const body = JSON.parse(r.body);
+      expect(typeof body.url).toBe("string");
+      expect(body.url.length).toBeGreaterThan(0);
+    });
+
+    it("200s with a presigned url for an approver role (not the owner)", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "has receipt for approver", date: "2026-08-05", receiptKey: "tenant/expenses/receipt-approver-test.pdf" }),
+      });
+      const id = JSON.parse(created.body).id;
+
+      const r = await app.inject({
+        method: "GET",
+        url: `/v1/hrms/expenses/${id}/receipt`,
+        headers: { authorization: `Bearer ${approverToken}` },
+      });
+      expect(r.statusCode).toBe(200);
+    });
+
+    it("403s for a third employee who is neither the owner nor an approver", async () => {
+      const created = await app.inject({
+        method: "POST",
+        url: "/v1/hrms/expenses",
+        headers: { authorization: `Bearer ${selfToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ category: "food", amount: 1000, description: "has receipt, other employee denied", date: "2026-08-05", receiptKey: "tenant/expenses/receipt-other-test.pdf" }),
+      });
+      const id = JSON.parse(created.body).id;
+
+      const r = await app.inject({
+        method: "GET",
+        url: `/v1/hrms/expenses/${id}/receipt`,
+        headers: { authorization: `Bearer ${otherToken}` },
+      });
+      expect(r.statusCode).toBe(403);
+    });
+
+    it("404s for a receipt request against a nonexistent claim id", async () => {
+      const r = await app.inject({
+        method: "GET",
+        url: `/v1/hrms/expenses/00000000-dead-4000-8000-ffffffffffff/receipt`,
+        headers: { authorization: `Bearer ${approverToken}` },
+      });
+      expect(r.statusCode).toBe(404);
+    });
+  });
+});
+
+describe("expense claims — GAP-HR-EXPENSES-SOD-01 manager reporting-line scope", () => {
+  // Each test below POSTs its own fresh claim (same convention as the reject
+  // describe block above) so approve/reject/receipt/list tests never contend
+  // over the same row's 'pending' status.
+
+  it("a manager CANNOT approve a non-report's pending expense claim (403, not 200), but the real reporting manager CAN", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "travel", amount: 50000, date: "2026-08-10" }),
+    });
+    const id = JSON.parse(created.body).id;
+
+    const denied = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/approve`,
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(JSON.parse(denied.body).code).toBe("FORBIDDEN");
+
+    // Not actually decided by the denied attempt -- Report B's real reporting
+    // manager (Manager B) can still act on the same still-pending claim.
+    const approved = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/approve`,
+      headers: { authorization: `Bearer ${managerBToken}` },
+    });
+    expect(approved.statusCode).toBe(200);
+  });
+
+  it("a manager CANNOT reject a non-report's pending expense claim (403, not 200), but the real reporting manager CAN", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "food", amount: 20000, date: "2026-08-11" }),
+    });
+    const id = JSON.parse(created.body).id;
+
+    const denied = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/reject`,
+      headers: { authorization: `Bearer ${managerAToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ reason: "not my report to decide" }),
+    });
+    expect(denied.statusCode).toBe(403);
+    expect(JSON.parse(denied.body).code).toBe("FORBIDDEN");
+
+    const rejected = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/reject`,
+      headers: { authorization: `Bearer ${managerBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ reason: "valid rejection by the actual reporting manager" }),
+    });
+    expect(rejected.statusCode).toBe(200);
+  });
+
+  it("a manager CAN approve their own direct report's pending expense claim (200)", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportAToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "transport", amount: 15000, date: "2026-08-12" }),
+    });
+    const id = JSON.parse(created.body).id;
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/approve`,
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+  });
+
+  it("GET /v1/hrms/expenses?scope=approvals — a manager only sees their own direct reports' pending claims, not another manager's report's", async () => {
+    const mine = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportAToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "stationery", amount: 5000, date: "2026-08-13" }),
+    });
+    const mineId = JSON.parse(mine.body).id;
+    const theirs = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "stationery", amount: 6000, date: "2026-08-13" }),
+    });
+    const theirsId = JSON.parse(theirs.body).id;
+
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/expenses?scope=approvals",
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(r.statusCode).toBe(200);
+    const ids = (JSON.parse(r.body).data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(mineId);
+    expect(ids).not.toContain(theirsId);
+  });
+
+  it("GET /v1/hrms/expenses/:id/receipt — a manager CANNOT view a non-report's receipt (403), but CAN view their own report's (200)", async () => {
+    const theirs = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "travel", amount: 30000, date: "2026-08-14", receiptKey: "receipts/sod-test-b.pdf" }),
+    });
+    const theirsId = JSON.parse(theirs.body).id;
+    const mine = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportAToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "travel", amount: 30000, date: "2026-08-14", receiptKey: "receipts/sod-test-a.pdf" }),
+    });
+    const mineId = JSON.parse(mine.body).id;
+
+    const deniedReceipt = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/expenses/${theirsId}/receipt`,
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(deniedReceipt.statusCode).toBe(403);
+
+    const allowedReceipt = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/expenses/${mineId}/receipt`,
+      headers: { authorization: `Bearer ${managerAToken}` },
+    });
+    expect(allowedReceipt.statusCode).toBe(200);
+    expect(JSON.parse(allowedReceipt.body).url).toBeTruthy();
+  });
+
+  it("finance_officer (an EXPENSE_DECIDE_ROLES member that is NOT in this file's module-level HR_ROLES) still bypasses the reporting-line scope tenant-wide", async () => {
+    const created = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/expenses",
+      headers: { authorization: `Bearer ${reportBToken}`, "content-type": "application/json" },
+      body: JSON.stringify({ category: "medical", amount: 7000, date: "2026-08-15" }),
+    });
+    const id = JSON.parse(created.body).id;
+
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/expenses/${id}/approve`,
+      headers: { authorization: `Bearer ${financeOfficerToken}` },
+    });
+    expect(r.statusCode).toBe(200);
   });
 });
 
