@@ -16,6 +16,18 @@ import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
+import { queue } from "../src/shared/infra.js";
+import { registerF3_employee_Consumers } from "../src/modules/employee/f3-consumer.js";
+
+// GAP-HR-DESIGNATIONS-04: the PATCH tests below need the actual F3 consumer
+// to run (not just a 2xx from the route) to confirm the DB row itself ends
+// up with payGrade NULL -- same reasoning/pattern as src/__tests__/
+// department-routes.test.ts's injectF3/drainF3 helpers, adapted to this
+// file's real-queue (not mocked) setup.
+registerF3_employee_Consumers(queue);
+async function drainF3(): Promise<void> {
+  await (queue as unknown as import("@civitasone/queue").MemoryQueue).drain();
+}
 
 const DATABASE_URL = process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -133,5 +145,78 @@ describe("POST /v1/hrms/designations — GAP-HR-DESIGNATIONS-NEW-02 duplicate-co
     await app.close();
 
     expect(r.statusCode).toBe(202);
+  });
+});
+
+/**
+ * GAP-HR-DESIGNATIONS-04: PATCH used to be unable to actually clear
+ * payGrade -- createDesignationBody's payGrade was `.optional()` only, so an
+ * explicit `payGrade: null` 400'd (ZodError), which is why the web client
+ * sent an empty string instead (stored as a literal "", visibly different
+ * from a never-set NULL everywhere else this column is read back).
+ */
+describe("PATCH /v1/hrms/designations/:id — GAP-HR-DESIGNATIONS-04 payGrade null vs omitted", () => {
+  it("clears payGrade to real NULL when the request sends payGrade: null", async () => {
+    const desigId = await insertDesignation("CLR1");
+    await setTenant();
+    await sql`update employee.hrms_designations set pay_grade = 'PB-2' where id = ${desigId}::uuid`;
+
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/designations/${desigId}`,
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { payGrade: null },
+    });
+    await drainF3();
+    await app.close();
+
+    expect(r.statusCode).toBe(202);
+    await setTenant();
+    const rows = await sql`select pay_grade from employee.hrms_designations where id = ${desigId}::uuid`;
+    expect(rows[0]?.pay_grade).toBeNull();
+  });
+
+  it("leaves payGrade untouched when the key is omitted entirely", async () => {
+    const desigId = await insertDesignation("CLR2");
+    await setTenant();
+    await sql`update employee.hrms_designations set pay_grade = 'PB-3' where id = ${desigId}::uuid`;
+
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/designations/${desigId}`,
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { name: "Role CLR2 renamed" },
+    });
+    await drainF3();
+    await app.close();
+
+    expect(r.statusCode).toBe(202);
+    await setTenant();
+    const rows = await sql`select pay_grade from employee.hrms_designations where id = ${desigId}::uuid`;
+    expect(rows[0]?.pay_grade).toBe("PB-3");
+  });
+
+  it("accepts level 0 + payGrade null (blank pay level) and stores 0 / NULL", async () => {
+    const desigId = await insertDesignation("CLR3");
+    await setTenant();
+    await sql`update employee.hrms_designations set level = 5, pay_grade = 'PB-4' where id = ${desigId}::uuid`;
+
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/designations/${desigId}`,
+      headers: { authorization: `Bearer ${token()}` },
+      payload: { level: 0, payGrade: null },
+    });
+    await drainF3();
+    await app.close();
+
+    expect(r.statusCode).toBe(202);
+    await setTenant();
+    const rows = await sql`select level, pay_grade from employee.hrms_designations where id = ${desigId}::uuid`;
+    expect(rows[0]?.level).toBe(0);
+    expect(rows[0]?.pay_grade).toBeNull();
   });
 });

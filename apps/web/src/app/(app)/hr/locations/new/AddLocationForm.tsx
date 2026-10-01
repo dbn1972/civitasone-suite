@@ -3,11 +3,28 @@
 import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
-import { Button } from "../../../../_components/ds";
+import { Button, ConfirmDialog, HelpTip } from "../../../../_components/ds";
+
+interface MinimalLocation {
+  id: string;
+  name: string;
+  type: string;
+  parentId: string | null;
+}
 
 interface Props {
   onCancel: () => void;
   onSuccess?: () => void;
+  /**
+   * GAP-HR-LOCATIONS-NEW-01: existing locations, for the optional "Parent
+   * location" select -- without this the form could only ever create
+   * top-level locations (parentId was never sent), so the list page's
+   * State/District columns and "State-level / District-level" stats
+   * (GAP-HR-LOCATIONS-01, which derives them by walking parentId) could
+   * never be populated from this form. Optional (defaults to none) so this
+   * form still renders standalone in isolation (e.g. existing unit tests).
+   */
+  locations?: MinimalLocation[];
 }
 
 const LOCATION_TYPES = [
@@ -21,6 +38,26 @@ const LOCATION_TYPES = [
 ] as const;
 
 type LocationType = (typeof LOCATION_TYPES)[number];
+
+/**
+ * Which existing location types are valid parents for a location of a given
+ * type, mirroring the hierarchy implied by the list page's derived State/
+ * District columns (state > district > block > ward, with office/facility/
+ * branch as leaves that may sit under any of them). A state is always a
+ * top-level node. Optional everywhere else (GAP-HR-LOCATIONS-NEW-01's fix
+ * steps flag "require parent for non-state types" as its own, separate
+ * product decision -- left alone here, same as the backend's own optional
+ * parentId).
+ */
+const ELIGIBLE_PARENT_TYPES: Record<LocationType, readonly LocationType[]> = {
+  state: [],
+  district: ["state"],
+  block: ["district", "state"],
+  ward: ["block", "district"],
+  office: ["state", "district", "block", "ward"],
+  facility: ["state", "district", "block", "ward", "office"],
+  branch: ["state", "district", "block", "ward", "office"],
+};
 
 const inputStyle: React.CSSProperties = {
   width: "100%",
@@ -40,11 +77,14 @@ const labelStyle: React.CSSProperties = {
   color: "var(--ink, #0f172a)",
 };
 
-export function AddLocationForm({ onCancel, onSuccess }: Props) {
+const fieldErrorStyle: React.CSSProperties = { fontSize: 12, color: "var(--bad, #b91c1c)" };
+
+export function AddLocationForm({ onCancel, onSuccess, locations = [] }: Props) {
   const t = useTranslations("addLocationForm");
   const formId = useId();
   const [name, setName] = useState("");
   const [type, setType] = useState<LocationType>("office");
+  const [parentId, setParentId] = useState("");
   const [addressLine, setAddressLine] = useState("");
   const [city, setCity] = useState("");
   const [postalCode, setPostalCode] = useState("");
@@ -53,15 +93,22 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
   const [invalid, setInvalid] = useState<Set<string>>(new Set());
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
   const formError = useFormError("location");
 
   const nameId = `${formId}-name`;
   const typeId = `${formId}-type`;
+  const parentSelectId = `${formId}-parent`;
   const addressLineId = `${formId}-addressLine`;
   const cityId = `${formId}-city`;
   const postalCodeId = `${formId}-postalCode`;
   const lgdCodeId = `${formId}-lgdCode`;
   const statusId = `${formId}-status`;
+  const nameErrId = `${nameId}-err`;
+  const addressLineErrId = `${addressLineId}-err`;
+  const cityErrId = `${cityId}-err`;
+  const postalCodeErrId = `${postalCodeId}-err`;
+  const lgdCodeErrId = `${lgdCodeId}-err`;
 
   const typeLabels: Record<LocationType, string> = {
     state: t("typeState"),
@@ -73,15 +120,65 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
     branch: t("typeBranch"),
   };
 
-  function handleCancel() {
+  // GAP-HR-LOCATIONS-NEW-01: a state has no parent; every other type is
+  // filtered to the real-world hierarchy above it.
+  const eligibleParentTypes = ELIGIBLE_PARENT_TYPES[type];
+  const showParentField = type !== "state";
+  const parentOptions = locations.filter((l) => eligibleParentTypes.includes(l.type as LocationType));
+
+  function fieldErrorText(field: string): string | undefined {
+    if (!invalid.has(field)) return undefined;
+    switch (field) {
+      case "name": return t("nameError");
+      case "addressLine": return t("addressLineError");
+      case "city": return t("cityError");
+      case "postalCode": return t("postalCodeError");
+      case "lgdCode": return t("lgdCodeError");
+      default: return undefined;
+    }
+  }
+
+  const isDirty =
+    name.trim() !== "" ||
+    type !== "office" ||
+    parentId !== "" ||
+    addressLine.trim() !== "" ||
+    city.trim() !== "" ||
+    postalCode.trim() !== "" ||
+    lgdCode.trim() !== "";
+
+  function resetFields() {
     setName("");
     setType("office");
+    setParentId("");
     setAddressLine("");
     setCity("");
     setPostalCode("");
     setLgdCode("");
     setMessage(null);
     setInvalid(new Set());
+  }
+
+  function handleTypeChange(next: LocationType) {
+    setType(next);
+    // GAP-HR-LOCATIONS-NEW-01 fix step: selecting type "state" hides/clears
+    // the parent field; changing type at all re-filters eligible parents, so
+    // a previously-chosen parent of a now-ineligible type is cleared too
+    // rather than silently submitted anyway.
+    setParentId("");
+  }
+
+  function handleCancel() {
+    if (isDirty) {
+      setShowDiscardConfirm(true);
+      return;
+    }
+    onCancel();
+  }
+
+  function confirmDiscard() {
+    resetFields();
+    setShowDiscardConfirm(false);
     onCancel();
   }
 
@@ -99,7 +196,12 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
     if (trimName.length < 1 || trimName.length > 200) errs.add("name");
     if (trimAddressLine.length > 500) errs.add("addressLine");
     if (trimCity.length > 120) errs.add("city");
-    if (trimPostalCode && !/^\d{1,6}$/.test(trimPostalCode)) errs.add("postalCode");
+    // GAP-HR-LOCATIONS-NEW-03: an Indian PIN code is exactly 6 digits, first
+    // digit 1-9 -- this used to accept 1-6 digits of anything. location-
+    // service's own createLocationBody has no format check at all (just
+    // length <=16), so tightening this client-side cannot reject anything
+    // the backend would otherwise have accepted.
+    if (trimPostalCode && !/^[1-9]\d{5}$/.test(trimPostalCode)) errs.add("postalCode");
     if (trimLgdCode && (!/^\d+$/.test(trimLgdCode) || trimLgdCode.length > 32)) errs.add("lgdCode");
 
     if (errs.size > 0) {
@@ -111,8 +213,10 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
 
     setInvalid(new Set());
     setBusy(true);
+    formError.clear();
     try {
       const body: Record<string, string> = { name: trimName, type };
+      if (showParentField && parentId) body.parentId = parentId;
       if (trimAddressLine) body.addressLine = trimAddressLine;
       if (trimCity) body.city = trimCity;
       if (trimPostalCode) body.postalCode = trimPostalCode;
@@ -131,14 +235,11 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
         return;
       }
 
+      // resetFields() clears the message, so it must run BEFORE the success
+      // message is set or the confirmation is wiped immediately.
+      resetFields();
       setTone("success");
       setMessage(t("successMsg", { name: trimName }));
-      setName("");
-      setType("office");
-      setAddressLine("");
-      setCity("");
-      setPostalCode("");
-      setLgdCode("");
       onSuccess?.();
     } catch {
       setTone("error");
@@ -209,8 +310,15 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               required
               aria-required="true"
               aria-invalid={invalid.has("name")}
+              aria-describedby={fieldErrorText("name") ? nameErrId : undefined}
               style={inputStyle}
             />
+            {fieldErrorText("name") && (
+              <span id={nameErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("name")}</span>
+            )}
+            {formError.fieldError("name") && (
+              <span style={fieldErrorStyle}>{formError.fieldError("name")}</span>
+            )}
           </div>
 
           {/* Type */}
@@ -224,7 +332,7 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
             <select
               id={typeId}
               value={type}
-              onChange={(e) => setType(e.target.value as LocationType)}
+              onChange={(e) => handleTypeChange(e.target.value as LocationType)}
               required
               aria-required="true"
               style={inputStyle}
@@ -236,6 +344,30 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               ))}
             </select>
           </div>
+
+          {/* Parent location (GAP-HR-LOCATIONS-NEW-01) */}
+          {showParentField && (
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={parentSelectId} style={labelStyle}>
+                {t("parentLabel")}
+              </label>
+              <select
+                id={parentSelectId}
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value)}
+                aria-invalid={!!formError.fieldError("parentId")}
+                style={inputStyle}
+              >
+                <option value="">{t("parentNone")}</option>
+                {parentOptions.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+              {formError.fieldError("parentId") && (
+                <span style={fieldErrorStyle}>{formError.fieldError("parentId")}</span>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Address Line */}
@@ -251,8 +383,12 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
             placeholder={t("addressLinePlaceholder")}
             maxLength={500}
             aria-invalid={invalid.has("addressLine")}
+            aria-describedby={fieldErrorText("addressLine") ? addressLineErrId : undefined}
             style={inputStyle}
           />
+          {fieldErrorText("addressLine") && (
+            <span id={addressLineErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("addressLine")}</span>
+          )}
         </div>
 
         <div
@@ -275,8 +411,12 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               placeholder={t("cityPlaceholder")}
               maxLength={120}
               aria-invalid={invalid.has("city")}
+              aria-describedby={fieldErrorText("city") ? cityErrId : undefined}
               style={inputStyle}
             />
+            {fieldErrorText("city") && (
+              <span id={cityErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("city")}</span>
+            )}
           </div>
 
           {/* Postal Code */}
@@ -293,14 +433,19 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               placeholder={t("postalCodePlaceholder")}
               maxLength={6}
               aria-invalid={invalid.has("postalCode")}
+              aria-describedby={fieldErrorText("postalCode") ? postalCodeErrId : undefined}
               style={inputStyle}
             />
+            {fieldErrorText("postalCode") && (
+              <span id={postalCodeErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("postalCode")}</span>
+            )}
           </div>
 
           {/* LGD Code */}
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={lgdCodeId} style={labelStyle}>
               {t("lgdCodeLabel")}
+              <HelpTip term={t("lgdCodeLabel")}>{t("lgdCodeHelp")}</HelpTip>
             </label>
             <input
               id={lgdCodeId}
@@ -311,8 +456,12 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
               placeholder={t("lgdCodePlaceholder")}
               maxLength={32}
               aria-invalid={invalid.has("lgdCode")}
+              aria-describedby={fieldErrorText("lgdCode") ? lgdCodeErrId : undefined}
               style={inputStyle}
             />
+            {fieldErrorText("lgdCode") && (
+              <span id={lgdCodeErrId} role="alert" style={fieldErrorStyle}>{fieldErrorText("lgdCode")}</span>
+            )}
           </div>
         </div>
 
@@ -336,6 +485,17 @@ export function AddLocationForm({ onCancel, onSuccess }: Props) {
           </Button>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showDiscardConfirm}
+        title={t("discardConfirmTitle")}
+        confirmLabel={t("discardConfirmBtn")}
+        danger
+        onConfirm={confirmDiscard}
+        onCancel={() => setShowDiscardConfirm(false)}
+      />
     </form>
   );
 }
+
+export type { MinimalLocation };

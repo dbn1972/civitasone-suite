@@ -403,7 +403,10 @@ describe("POST /v1/hrms/departments", () => {
 
   // GAP-HR-DEPARTMENTS-03
   it("202 — creating under a parent derives level server-side (client-sent level is ignored)", async () => {
-    queueRows([mockDept({ id: OTHER_ID, level: 1 })]); // parent lookup
+    queueRows(
+      [], // GAP-HR-DEPARTMENTS-NEW-02: duplicate-code lookup (runs first) finds nothing
+      [mockDept({ id: OTHER_ID, level: 1 })], // parent lookup
+    );
     const app = await buildApp();
     const r = await injectF3(app, {
       method: "POST",
@@ -420,7 +423,10 @@ describe("POST /v1/hrms/departments", () => {
   });
 
   it("400 — creating under a non-existent parent is rejected", async () => {
-    queueRows([]); // parent lookup finds nothing
+    queueRows(
+      [], // duplicate-code lookup finds nothing
+      [], // parent lookup finds nothing
+    );
     const app = await buildApp();
     const r = await app.inject({
       method: "POST",
@@ -433,7 +439,32 @@ describe("POST /v1/hrms/departments", () => {
     });
     await app.close();
     expect(r.statusCode).toBe(400);
-    expect(r.json<{ code: string }>().code).toBe("PARENT_NOT_FOUND");
+    const body = r.json<{ code: string; fieldErrors?: Array<{ field: string; message: string }> }>();
+    expect(body.code).toBe("PARENT_NOT_FOUND");
+    // GAP-HR-DEPARTMENTS-NEW-01: surfaced under the Parent select on the
+    // client, not only as a generic top-of-form message.
+    expect(body.fieldErrors).toEqual([{ field: "parentId", message: "Selected parent department does not exist." }]);
+  });
+
+  // GAP-HR-DEPARTMENTS-NEW-02
+  it("409 DUPLICATE_CODE — refuses to create a department with a case-insensitive duplicate code, and never publishes", async () => {
+    queueRows([{ id: OTHER_ID }]); // duplicate-code lookup finds an existing row
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "POST",
+      url: "/v1/hrms/departments",
+      headers: {
+        authorization: `Bearer ${adminTok}`,
+        "content-type": "application/json",
+      },
+      payload: { code: "fin", name: "Finance Duplicate" },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(409);
+    const body = r.json<{ code: string; fieldErrors?: Array<{ field: string; message: string }> }>();
+    expect(body.code).toBe("DUPLICATE_CODE");
+    expect(body.fieldErrors?.[0]).toMatchObject({ field: "code" });
+    expect(H.insert).not.toHaveBeenCalled();
   });
 });
 
@@ -544,6 +575,27 @@ describe("PATCH /v1/hrms/departments/:id", () => {
     await app.close();
     expect(r.statusCode).toBe(202);
     expect(H.update).toHaveBeenCalledWith(expect.objectContaining({ parentId: OTHER_ID, level: 4 }));
+  });
+
+  // GAP-HR-DEPARTMENTS-NEW-01
+  it("400 — re-parenting under a non-existent parent carries a parentId field error", async () => {
+    queueRows(
+      [mockDept()],          // existence pre-check on FAKE_ID
+      [{ parentId: null }],  // isAncestor's walk: OTHER_ID isn't a cycle
+      [],                    // parent lookup finds nothing
+    );
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "PATCH",
+      url: `/v1/hrms/departments/${FAKE_ID}`,
+      headers: { authorization: `Bearer ${adminTok}`, "content-type": "application/json" },
+      payload: { parentId: OTHER_ID },
+    });
+    await app.close();
+    expect(r.statusCode).toBe(400);
+    const body = r.json<{ code: string; fieldErrors?: Array<{ field: string; message: string }> }>();
+    expect(body.code).toBe("PARENT_NOT_FOUND");
+    expect(body.fieldErrors).toEqual([{ field: "parentId", message: "Selected parent department does not exist." }]);
   });
 });
 

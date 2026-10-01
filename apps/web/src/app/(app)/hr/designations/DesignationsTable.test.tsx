@@ -128,3 +128,91 @@ describe("DesignationsTable — GAP-HR-DESIGNATIONS-01 pay level bounded 1-18", 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 });
+
+/**
+ * GAP-HR-DESIGNATIONS-04: clearing Pay Level used to silently become 0 with
+ * no indication, and clearing Pay Grade sent an empty string (stored as
+ * literal "", distinct from a never-set NULL) instead of actually clearing
+ * the field.
+ */
+describe("DesignationsTable — GAP-HR-DESIGNATIONS-04 level/payGrade edit integrity", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("shows a hint while editing and saves a cleared level as 0 (unclassified), not silently", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 200 }));
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: /^edit/i }));
+    expect(screen.getByText(/blank clears the level/i)).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText(/pay level/i), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.level).toBe(0);
+  });
+
+  it("sends payGrade as null (not an empty string) when the field is cleared", async () => {
+    fetchMock.mockResolvedValue(new Response("", { status: 200 }));
+    renderTable();
+    fireEvent.click(screen.getByRole("button", { name: /^edit/i }));
+    fireEvent.change(screen.getByLabelText(/pay grade/i), { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: /save/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const body = JSON.parse((fetchMock.mock.calls[0]?.[1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.payGrade).toBeNull();
+  });
+});
+
+/**
+ * GAP-HR-DESIGNATIONS-03: the hand-built <table> had no sort, filter or
+ * pagination; this verifies the ds DataTable migration actually wired all
+ * three up (not just swapped markup).
+ */
+describe("DesignationsTable — GAP-HR-DESIGNATIONS-03 DataTable migration (sort/filter/pagination)", () => {
+  const MANY = Array.from({ length: 16 }, (_, i) => ({
+    id: `d${i}`,
+    code: `C${String(i).padStart(2, "0")}`,
+    name: `Designation ${String(i).padStart(2, "0")}`,
+    level: (i % 18) + 1,
+    payGrade: null,
+  }));
+
+  function renderMany() {
+    return render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <DesignationsTable items={MANY} canEdit={false} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("paginates at 15 rows per page", () => {
+    renderMany();
+    expect(screen.getByText("Designation 00")).toBeInTheDocument();
+    expect(screen.queryByText("Designation 15")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /next/i }));
+    expect(screen.getByText("Designation 15")).toBeInTheDocument();
+  });
+
+  it("filters rows by the search box", () => {
+    renderMany();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "Designation 07" } });
+    expect(screen.getByText("Designation 07")).toBeInTheDocument();
+    expect(screen.queryByText("Designation 00")).not.toBeInTheDocument();
+  });
+
+  it("sorts descending by Code on a second header click, moving the last row onto page 1", () => {
+    renderMany();
+    const codeHeader = screen.getByRole("columnheader", { name: /code/i });
+    fireEvent.click(codeHeader); // ascending (already the default order)
+    fireEvent.click(codeHeader); // descending
+    expect(screen.getByText("Designation 15")).toBeInTheDocument();
+    expect(screen.queryByText("Designation 00")).not.toBeInTheDocument();
+  });
+});
