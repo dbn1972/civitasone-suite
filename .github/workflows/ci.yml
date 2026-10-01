@@ -798,7 +798,12 @@ jobs:
       - name: Build packages first
         run: pnpm turbo build --filter='./packages/*'
       - name: Build web app
-        run: pnpm --filter @civitasone/web build | tee /tmp/web-build.log
+        # pipefail: without it the step exits with tee's status, so a failed
+        # `next build` (e.g. a client component importing next/headers) reported
+        # SUCCESS. The bundle-size step below already runs with if: always().
+        run: |
+          set -o pipefail
+          pnpm --filter @civitasone/web build | tee /tmp/web-build.log
         env:
           CIVITASONE_API_BASE_URL: http://localhost:8080
           NEXT_PUBLIC_API_BASE_URL: http://localhost:8080
