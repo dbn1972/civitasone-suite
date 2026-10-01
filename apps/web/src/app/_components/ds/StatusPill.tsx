@@ -70,8 +70,15 @@ const STATUS_MAP: Record<string, PillVariant> = {
   separated: "mut",
   "no show": "bad",
 
-  // Deputation record itself (hr/deputation) -- active/pending/completed already mapped
+  // Deputation record itself (hr/deputation). Real backend enum is
+  // active|repatriated|cancelled (deputation/schema.ts) -- "active" already
+  // maps above, "cancelled" already maps below. GAP-HR-DEPUTATION-01 found
+  // "repatriated" (the actual close-out status) had no entry at all, so it
+  // fell through to the "info" default; "recalled" never existed on the
+  // backend and is left mapped (harmless) only because another caller may
+  // still reference it.
   recalled: "warn",
+  repatriated: "mut",
 
   // Disciplinary case lifecycle (migrations 0022 + 0029, hrms_disc_cases_status_check)
   opened: "warn",

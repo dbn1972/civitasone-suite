@@ -5233,9 +5233,8 @@
     "subtitle": "Officers on deputation to other government organisations.",
     "statTotal": "Total Deputations",
     "statActive": "Active",
-    "statPending": "Pending",
-    "statCompleted": "Completed",
-    "statRecalled": "Recalled",
+    "statRepatriated": "Repatriated",
+    "statCancelled": "Cancelled",
     "activeSection": "Active Deputations",
     "cardTitle": "Deputation List",
     "colEmployee": "Employee",
@@ -5247,7 +5246,31 @@
     "colStatus": "Status",
     "filterPlaceholder": "Filter by employee or organisation…",
     "emptyTitle": "No deputation orders",
-    "emptyMessage": "Deputation orders appear when an officer is posted to another organisation on temporary assignment."
+    "emptyMessage": "Deputation orders appear when an officer is posted to another organisation on temporary assignment.",
+    "card": {
+      "deputedTo": "Deputed to",
+      "startDate": "Start Date",
+      "expectedEnd": "Expected End Date",
+      "period": "Period",
+      "allowance": "Deputation Allowance",
+      "daysLeft": "{days, plural, one {# day left} other {# days left}}",
+      "overdue": "Overdue",
+      "unknownEmployee": "Unknown",
+      "ariaLabel": "Deputation for {name}",
+      "status": {
+        "active": "Active",
+        "repatriated": "Repatriated",
+        "cancelled": "Cancelled"
+      },
+      "repatriate": "Repatriate",
+      "cancel": "Cancel",
+      "repatriateConfirmTitle": "Repatriate this officer?",
+      "repatriateConfirmDescription": "{name} will be restored to their parent posting and reporting line. This is recorded in the service book.",
+      "cancelConfirmTitle": "Cancel this deputation?",
+      "cancelConfirmDescription": "{name}'s deputation will be cancelled and their parent posting restored. This is recorded in the service book.",
+      "actionFailed": "Couldn't complete this action. Please try again.",
+      "notActive": "This deputation is no longer active."
+    }
   },
   "disciplinary": {
     "title": "Disciplinary Cases",

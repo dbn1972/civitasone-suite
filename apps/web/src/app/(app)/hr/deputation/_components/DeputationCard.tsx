@@ -1,12 +1,28 @@
 "use client";
 /**
  * DeputationCard — Sprint 13 / Lifecycle Phase 1
- * Shows: deputed-to organisation, start date, expected end date,
- * revised compensation (if any), recall status.
- * Government agency names are pre-filled via a select list.
+ * Shows: deputed-to organisation, start date, expected end date, the
+ * deputation (duty) allowance, and (active-only) repatriate/cancel actions.
+ *
+ * GAP-HR-DEPUTATION-01/03/05/06 fixes, folded together since they all touch
+ * this same small file:
+ *  - status vocabulary matches the real backend enum (active|repatriated|
+ *    cancelled) -- the old "recalled"/recallStatus concept never existed on
+ *    the backend and is removed rather than left as dead UI.
+ *  - revisedCompensationMinor (never sent by the list route) is replaced by
+ *    deputationAllowanceMinor, which the backend actually stores and now
+ *    actually returns (see GAP-HR-DEPUTATION-03's fix in m7-list-routes.ts).
+ *  - the days-left urgency cue no longer relies on a hard-coded hex colour
+ *    alone (a text cue was already present; the colour now uses a design
+ *    token like its own sibling branches).
+ *  - every label is now translated (useTranslations) instead of hard-coded
+ *    English inside a "use client" component that otherwise lives in a
+ *    fully next-intl'd page.
  */
+import { useTranslations } from "next-intl";
 import { StatusPill } from "@/app/_components/ds";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { DeputationActions } from "./DeputationActions";
 
 // Standard Indian government organisations pre-filled in the select
 export const GOV_AGENCIES = [
@@ -45,26 +61,23 @@ export type DeputationRow = {
   fromDate?: string | null;
   toDate?: string | null;
   period?: string;
-  revisedCompensationMinor?: number | null;
-  recallStatus?: string | null;
+  deputationAllowanceMinor?: string | number | null;
   status: string;
   createdAt?: string;
 } & Record<string, unknown>;
 
-const STATUS_LABEL: Record<string, string> = {
-  active:    "Active",
-  pending:   "Pending",
-  completed: "Completed",
-  recalled:  "Recalled",
-  cancelled: "Cancelled",
-  expired:   "Expired",
-};
+interface Props {
+  deputation: DeputationRow;
+  /** Mirrors deputation/routes.ts's own HR_ROLES for repatriate/cancel. */
+  canManage?: boolean;
+}
 
-interface Props { deputation: DeputationRow; }
+const KNOWN_STATUSES = new Set(["active", "repatriated", "cancelled"]);
 
-export function DeputationCard({ deputation }: Props) {
-  const statusLabel = STATUS_LABEL[deputation.status] ?? deputation.status;
-  const empLabel    = deputation.employee ?? deputation.employeeId ?? "Unknown";
+export function DeputationCard({ deputation, canManage = false }: Props) {
+  const t = useTranslations("deputation");
+  const statusLabel = KNOWN_STATUSES.has(deputation.status) ? t(`card.status.${deputation.status}`) : deputation.status;
+  const empLabel    = deputation.employee ?? deputation.employeeId ?? t("card.unknownEmployee");
   const toOrg       = deputation.deputationOrg ?? "—";
   const fromOrg     = deputation.parentOrg ?? "—";
 
@@ -75,14 +88,12 @@ export function DeputationCard({ deputation }: Props) {
     daysLeft  = Math.ceil((end.getTime() - today.getTime()) / 86_400_000);
   }
 
-  const revComp = deputation.revisedCompensationMinor != null
-    ? formatMoney(Number(deputation.revisedCompensationMinor))
+  const allowance = deputation.deputationAllowanceMinor != null
+    ? formatMoney(deputation.deputationAllowanceMinor as bigint | number | string)
     : null;
 
-  const isRecalled = deputation.status === "recalled" || deputation.recallStatus === "initiated";
-
   return (
-    <div className="card" style={{ marginBottom: 0 }} aria-label={`Deputation for ${empLabel}`}>
+    <div className="card" style={{ marginBottom: 0 }} aria-label={t("card.ariaLabel", { name: empLabel })}>
       <div className="card-h" style={{ alignItems: "flex-start", gap: 12 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
           <h3 style={{ margin: 0, fontSize: "0.9375rem", fontWeight: 600 }}>{empLabel}</h3>
@@ -90,14 +101,7 @@ export function DeputationCard({ deputation }: Props) {
             {fromOrg} &rarr; {toOrg}
           </p>
         </div>
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 4 }}>
-          <StatusPill status={deputation.status} label={statusLabel} />
-          {isRecalled && (
-            <span style={{ fontSize: "0.75rem", color: "var(--bad, #dc2626)", fontWeight: 600 }}>
-              ↩ Recall Initiated
-            </span>
-          )}
-        </div>
+        <StatusPill status={deputation.status} label={statusLabel} />
       </div>
 
       <div className="pad" style={{ paddingTop: 4 }}>
@@ -107,7 +111,7 @@ export function DeputationCard({ deputation }: Props) {
           borderRadius: 8, marginBottom: 12, borderInlineStart: "3px solid var(--info, #2563eb)",
         }}>
           <p style={{ margin: 0, fontSize: "0.75rem", color: "var(--ink3)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-            Deputed to
+            {t("card.deputedTo")}
           </p>
           <p style={{ margin: "4px 0 0", fontSize: "1rem", fontWeight: 600 }}>{toOrg}</p>
         </div>
@@ -115,21 +119,21 @@ export function DeputationCard({ deputation }: Props) {
         <div className="fields">
           {deputation.fromDate && (
             <div className="fld">
-              <span className="l">Start Date</span>
+              <span className="l">{t("card.startDate")}</span>
               <span className="v">{formatIndianDate(deputation.fromDate)}</span>
             </div>
           )}
           {deputation.toDate && (
             <div className="fld">
-              <span className="l">Expected End Date</span>
+              <span className="l">{t("card.expectedEnd")}</span>
               <span className="v">
                 {formatIndianDate(deputation.toDate)}
                 {daysLeft !== null && (
                   <span style={{
                     marginInlineStart: 8, fontSize: "0.75rem", fontWeight: 600,
-                    color: daysLeft < 30 ? "var(--bad, #dc2626)" : daysLeft < 90 ? "var(--warn, #d97706)" : "#16a34a",
+                    color: daysLeft < 30 ? "var(--bad, #dc2626)" : daysLeft < 90 ? "var(--warn, #d97706)" : "var(--good, #15803d)",
                   }}>
-                    ({daysLeft > 0 ? `${daysLeft}d left` : "Overdue"})
+                    ({daysLeft > 0 ? t("card.daysLeft", { days: daysLeft }) : t("card.overdue")})
                   </span>
                 )}
               </span>
@@ -137,23 +141,23 @@ export function DeputationCard({ deputation }: Props) {
           )}
           {deputation.period && (
             <div className="fld">
-              <span className="l">Period</span>
+              <span className="l">{t("card.period")}</span>
               <span className="v">{deputation.period}</span>
             </div>
           )}
-          {revComp && (
+          {allowance && (
             <div className="fld">
-              <span className="l">Revised Compensation</span>
-              <span className="v" style={{ fontWeight: 600, color: "var(--good, #0f766e)" }}>{revComp}</span>
-            </div>
-          )}
-          {deputation.recallStatus && (
-            <div className="fld">
-              <span className="l">Recall Status</span>
-              <span className="v">{deputation.recallStatus}</span>
+              <span className="l">{t("card.allowance")}</span>
+              <span className="v" style={{ fontWeight: 600, color: "var(--good, #0f766e)" }}>{allowance}</span>
             </div>
           )}
         </div>
+
+        {deputation.status === "active" && canManage && (
+          <div style={{ marginTop: 12 }}>
+            <DeputationActions id={deputation.id} employeeLabel={empLabel} />
+          </div>
+        )}
       </div>
     </div>
   );
