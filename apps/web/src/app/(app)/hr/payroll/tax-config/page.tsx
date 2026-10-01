@@ -1,20 +1,16 @@
 import { PageHeader, Card, RefreshErrorState } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
-
-function getCurrentFY(): string {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth() + 1;
-  const start = month >= 4 ? year : year - 1;
-  const end = (start + 1) % 100;
-  return `${start}-${String(end).padStart(2, "0")}`;
-}
+import { currentFinancialYear } from "@/lib/fiscalYear";
 
 export default async function TaxConfigPage() {
   try {
     const t = await getTranslations("payrollTaxConfig");
-    const fy = getCurrentFY();
+    // GAP-PAYROLL-TAX-DECLARATION-06: this used to compute FY locally with
+    // `new Date()` in the HOST timezone (host runs UTC), which reads the
+    // previous FY for the first 5.5 hours of 1 April IST. currentFinancialYear
+    // is IST-aware and is what every sibling payroll screen uses.
+    const fy = currentFinancialYear();
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll" backLabel={t("backLabel")} />

@@ -1,4 +1,5 @@
 import { getTranslations } from "next-intl/server";
+import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -47,7 +48,13 @@ export default async function IncomeTaxPage() {
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title={t("title")} subtitle={t("subtitle", { fy })} back="/hr" backLabel="Back to HR" />
+      <PageHeader
+        title={t("title")}
+        subtitle={t("subtitle", { fy })}
+        back="/hr"
+        backLabel="Back to HR"
+        actions={<Link href="/hr/payroll/tax-declaration">{t("fileDeclarationLink")}</Link>}
+      />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
         <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
