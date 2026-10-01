@@ -1,4 +1,4 @@
-import { PageHeader } from "../../../../_components/ds";
+import { PageHeader, SkeletonTable } from "../../../../_components/ds";
 import { getTranslations } from "next-intl/server";
 
 export default async function PayrollRunsLoading() {
@@ -11,26 +11,12 @@ export default async function PayrollRunsLoading() {
         back="/hr/payroll"
         backLabel="Payroll"
       />
-      <div className="animate-pulse" style={{ display: "grid", gap: 16 }}>
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
-            gap: 12,
-          }}
-        >
-          {[1, 2, 3, 4].map((n) => (
-            <div
-              key={n}
-              style={{ height: 80, borderRadius: 12, background: "var(--panel)" }}
-            />
-          ))}
-        </div>
-        <div style={{ height: 40, borderRadius: 8, background: "var(--panel)", maxWidth: 320 }} />
-        {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => (
-          <div key={n} style={{ height: 48, borderRadius: 8, background: "var(--panel)" }} />
-        ))}
-      </div>
+      {/* GAP-PAYROLL-RUNS-05: this used to draw 4 stat blocks and a filter
+          bar the real page never rendered (it rendered only a bare table).
+          Now that the page renders PayrollRunsTable (see RUNS-02), this
+          mirrors /hr/payroll's own loading.tsx, which skeletons the same
+          table component. */}
+      <SkeletonTable rows={6} />
     </div>
   );
 }

@@ -1,12 +1,31 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => ["payroll_admin"],
+  PAYROLL_ADMIN_ROLES: ["payroll_admin", "payroll_officer", "super_admin"],
+  PAYROLL_READER_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"],
+}));
+
 import PayrollRunsPage from "./page";
+
+// GAP-PAYROLL-RUNS-02: the page now renders PayrollRunsTable (reused from
+// /hr/payroll instead of a second, bare <table>), which reads its column
+// labels and status text through next-intl's CLIENT useTranslations — so,
+// like PayrollRunActions.test.tsx and hr/payroll/page.test.tsx, any render
+// that reaches that table needs a real provider in the tree. The page's own
+// server-side getTranslations is a real (unmocked) call here, same as
+// before this fix, since no test asserts on PageHeader copy specifically.
+function renderWithProvider(ui: React.ReactNode) {
+  return render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 describe("PayrollRunsPage", () => {
   beforeEach(() => {
@@ -37,9 +56,13 @@ describe("PayrollRunsPage", () => {
     });
 
     const ui = await PayrollRunsPage();
-    render(ui);
+    renderWithProvider(ui);
 
-    expect(screen.getByRole("link", { name: "August 2026" })).toHaveAttribute("href", "/hr/payroll/run-1");
+    // DataTable gives the row link a descriptive accessible name ("Open <value>"),
+    // not the bare display text -- see DataTable.tsx's identifyingColumnKey doc
+    // comment (UX-015) -- this is an accessibility improvement from reusing
+    // PayrollRunsTable/DataTable (GAP-PAYROLL-RUNS-02), not a regression.
+    expect(screen.getByRole("link", { name: "Open August 2026" })).toHaveAttribute("href", "/hr/payroll/run-1");
     expect(screen.getByText("₹5,00,000.00")).toBeInTheDocument();
     expect(screen.getByText("₹4,30,000.00")).toBeInTheDocument();
   });
@@ -50,19 +73,22 @@ describe("PayrollRunsPage", () => {
     // /hr/payroll/period, which reads Finance's GL period-close records
     // (wrong service, wrong shape, wrong role gate) and has no create-run
     // form at all. The one real CreatePayrollRunForm lives at /hr/payroll.
+    // GAP-PAYROLL-RUNS-02/03: the CTA now comes from PayrollRunsTable's own
+    // canAdminister-gated emptyAction hint, which for this role (payroll_admin)
+    // points back at the /hr/payroll page where that form lives.
     fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
 
     const ui = await PayrollRunsPage();
-    render(ui);
+    renderWithProvider(ui);
 
-    expect(screen.getByRole("link", { name: /Create first run/ })).toHaveAttribute("href", "/hr/payroll");
+    expect(screen.getByText(/Payroll page/i)).toBeInTheDocument();
   });
 
   it("tells the truth on a fetch failure instead of a hardcoded generic error", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
 
     const ui = await PayrollRunsPage();
-    render(ui);
+    renderWithProvider(ui);
 
     // UX-013: this page used to show the exact same "showing nothing" badge
     // whether the fetch failed or a tenant genuinely had zero runs, with the

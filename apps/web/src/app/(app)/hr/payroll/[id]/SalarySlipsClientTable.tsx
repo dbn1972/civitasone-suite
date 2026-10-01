@@ -17,23 +17,6 @@ type SlipRow = {
 
 // ─── Salary Slip Preview Modal ─────────────────────────────────────────────
 
-/** Estimate GoI 7th-CPC component breakdown from gross. */
-function estimateComponents(gross: number) {
-  const basic   = Math.round(gross * 0.45);
-  const da      = Math.round(basic * 0.46);   // 46% DA
-  const hra     = Math.round(basic * 0.24);   // 24% HRA (X-city)
-  const ta      = 3600;                        // Transport Allowance (fixed)
-  const special = Math.max(0, gross - basic - da - hra - ta);
-
-  const pf      = Math.round(basic * 0.12);   // 12% EPF employee share
-  const esi     = Math.round(gross * 0.0075); // 0.75% ESI employee share
-  const pt      = 200;                        // Professional Tax
-  const tds     = Math.max(0, Math.round((gross - pf - esi - pt) * 0.05));
-
-  const totalDed = pf + esi + pt + tds;
-  return { basic, da, hra, ta, special, pf, esi, pt, tds, totalDed };
-}
-
 function SlipLine({ label, value, bold }: { label: string; value: number; bold?: boolean }) {
   return (
     <tr>
@@ -95,7 +78,17 @@ function SalarySlipModal({
   onClose: () => void;
 }) {
   const t = useTranslations("salarySlipsClientTable");
-  const c = estimateComponents(slip.gross);
+  // GAP-PAYROLL-DETAIL-01: this modal used to call a client-side
+  // estimateComponents(gross) that INVENTED a Basic/DA/HRA/TA/Special
+  // earnings split and an EPF/ESI/PT/TDS deductions split from percentages
+  // of gross alone -- numbers with no backend source, that never
+  // reconciled to the API's own slip.net, and that showed EPF/ESI lines on
+  // what the header calls a Government of India slip (state employees are
+  // on GPF/NPS, not EPF/ESI; ESI also has a wage ceiling the estimate
+  // ignored). Only the real, API-backed figures are shown now: gross,
+  // deductions and net, with an explicit check that they foot -- instead of
+  // silently hiding a mismatch behind a 10px disclaimer.
+  const reconciles = slip.gross - slip.deductions === slip.net;
 
   return (
     <div
@@ -164,7 +157,9 @@ function SalarySlipModal({
           </button>
         </div>
 
-        {/* Employee info */}
+        {/* Employee info -- GAP-PAYROLL-DETAIL-01: the raw employee UUID
+            used to be printed here; the employee's name (already shown
+            above) is the identifying information a person needs. */}
         <div
           style={{
             padding: "10px 20px",
@@ -174,28 +169,25 @@ function SalarySlipModal({
         >
           <div style={{ fontWeight: 700, fontSize: 14 }}>{slip.employeeName}</div>
           <div style={{ fontSize: 11, color: "var(--mut,#64748b)", marginTop: 2 }}>
-            {t("employeeIdPeriodLine", { employeeId: slip.employeeId, period: payPeriod })}
+            {t("employeeIdPeriodLine", { period: payPeriod })}
           </div>
         </div>
 
-        {/* Slip body */}
+        {/* Slip body -- only API-backed figures (see GAP-PAYROLL-DETAIL-01). */}
         <div style={{ padding: "14px 20px" }}>
           <SlipSection title={t("earningsSectionTitle")}>
-            <SlipLine label={t("basicPayLabel")} value={c.basic}   />
-            <SlipLine label={t("daLabel")} value={c.da}      />
-            <SlipLine label={t("hraLabel")} value={c.hra}     />
-            <SlipLine label={t("taLabel")} value={c.ta}      />
-            <SlipLine label={t("specialAllowanceLabel")} value={c.special} />
             <SlipLine label={t("grossEarningsLabel")} value={slip.gross} bold />
           </SlipSection>
 
           <SlipSection title={t("deductionsSectionTitle")}>
-            <SlipLine label={t("pfLabel")} value={c.pf}      />
-            <SlipLine label={t("esiLabel")} value={c.esi}     />
-            <SlipLine label={t("ptLabel")} value={c.pt}      />
-            <SlipLine label={t("tdsLabel")} value={c.tds}     />
-            <SlipLine label={t("totalDeductionsLabel")} value={c.totalDed} bold />
+            <SlipLine label={t("totalDeductionsLabel")} value={slip.deductions} bold />
           </SlipSection>
+
+          {!reconciles && (
+            <p role="alert" style={{ fontSize: 11.5, color: "var(--danger,#dc2626)", margin: "0 0 10px" }}>
+              {t("grossNetMismatchWarning")}
+            </p>
+          )}
 
           {/* Net Pay */}
           <div

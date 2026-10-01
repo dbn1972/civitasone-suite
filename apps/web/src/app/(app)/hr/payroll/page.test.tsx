@@ -9,6 +9,8 @@ vi.mock("@/app/_data/apiClient", () => ({
 }));
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => ["payroll_admin"],
+  PAYROLL_ADMIN_ROLES: ["payroll_admin", "payroll_officer", "super_admin"],
+  PAYROLL_READER_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"],
 }));
 vi.mock("next-intl/server", () => ({
   getTranslations: async () => (key: string) => key,
@@ -18,7 +20,6 @@ vi.mock("@/app/_components/ds/Toast", () => ({
 }));
 
 import PayrollPage from "./page";
-import { expectRupeeGroundTruthDisplayed } from "@/lib/testUtils/money";
 
 // UX-017: CreatePayrollRunForm/PayrollRunsTable (rendered inside this page)
 // now read their copy through next-intl (useTranslations), so every render
@@ -82,20 +83,24 @@ describe("PayrollPage", () => {
 
   // payroll-runs' grossAmount is already whole RUPEES (see PayrollRunsTable's
   // own COMP-019 regression test and #312, the historical fix this mirrors:
-  // a real net pay of Rs 90,000 once rendered as Rs 900). This page sums
-  // only "paid"/"completed" runs' grossAmount into the "Total Gross" stat
-  // card via formatRupees() (page.tsx's own filter) -- had no coverage
-  // asserting that stat actually renders the right magnitude, only that the
-  // page renders at all. Two distinct "paid" amounts, summing to a number
-  // that coincides with neither individually, so the stat card can't be
-  // confused with either row's own Gross Pay cell in the table below it --
-  // same collision-avoidance technique as SchemesPage's COMP-017 regression
-  // test (page.test.tsx, projects/schemes).
-  it("renders the Total Gross stat as rupees, not 100x smaller (COMP-019, historically #312)", async () => {
+  // a real net pay of Rs 90,000 once rendered as Rs 900). GAP-PAYROLL-HOME-03:
+  // this stat also used to SUM grossAmount across every paid run ever,
+  // double-counting the same employees/money every month -- it now shows
+  // only the single most recent actually-paid run. Two distinct "paid"
+  // periods are given here specifically to assert BOTH bugs stay fixed: the
+  // unit (rupees, not 100x smaller) AND the aggregation (latest run only,
+  // not the sum of both -- Rs 8,00,000 would be the old, wrong total).
+  it("renders the Total Gross stat as rupees, from the latest paid run only, not 100x smaller or summed across runs (GAP-PAYROLL-HOME-01/03, historically #312)", async () => {
     const PAID_RUN_A = { id: "pr1", payPeriod: "2026-07", employeeCount: 10, grossAmount: 500000, netAmount: 450000, status: "paid" };
     const PAID_RUN_B = { id: "pr2", payPeriod: "2026-08", employeeCount: 12, grossAmount: 300000, netAmount: 270000, status: "paid" };
     mockFetchJson({ data: [PAID_RUN_A, PAID_RUN_B], source: "api" });
     renderPage(await PayrollPage());
-    expectRupeeGroundTruthDisplayed(screen, 80000000n); // Rs 8,00,000 = 500000 + 300000 rupees
+    // Latest period (2026-08) is PAID_RUN_B: Rs 3,00,000 -- which, by
+    // design, now appears TWICE (the stat card and that same run's own
+    // Gross Pay cell in the table below), so this asserts directly rather
+    // than via expectRupeeGroundTruthDisplayed (which assumes one match).
+    expect(screen.getAllByText("₹3,00,000.00").length).toBeGreaterThan(0);
+    expect(screen.queryByText("₹3,000.00")).not.toBeInTheDocument(); // the classic 100x-smaller mistake
+    expect(screen.queryByText("₹8,00,000.00")).not.toBeInTheDocument(); // the old, wrong sum of both runs
   });
 });

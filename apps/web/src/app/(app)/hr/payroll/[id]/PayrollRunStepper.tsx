@@ -10,20 +10,31 @@ const STEPS = [
   { key: "disburse" },
 ] as const;
 
+/**
+ * GAP-PAYROLL-DETAIL-08: the wire status enum (payroll-service queries.ts
+ * mapRunStatus) is only ever draft/processing/completed/paid/failed --
+ * "approved" and "disbursed" are internal-only values the backend remaps to
+ * "completed"/"paid" before the API responds, so a branch keyed on the
+ * literal string "approved" can never match a real run; it used to point
+ * the stepper at the Approve step (index 3) for what is actually a run
+ * already past Approve and awaiting Disburse. "completed" now correctly
+ * maps past Approve to the Disburse step, and "failed" -- only reachable
+ * from "processing" per payroll-service domain.ts
+ * assertRunStatusTransition -- now points at Calculate, not Approve.
+ */
 function statusToStepIndex(status: string): number {
   switch (status) {
     case "draft":      return 0;
     case "processing": return 1;
-    case "completed":  return 2;
-    case "approved":   return 3;
-    case "paid":
-    case "disbursed":  return 4;
-    case "failed":     return 3;
+    case "completed":  return 4;
+    case "paid":       return 4;
+    case "disbursed":  return 4; // defensive synonym; not sent by this endpoint
+    case "failed":     return 1;
     default:           return 0;
   }
 }
 
-type StepState = "done" | "current" | "error" | "pending";
+type StepState = "done" | "current" | "current-waiting" | "error" | "pending";
 
 function Spinner() {
   return (
@@ -58,9 +69,18 @@ export function PayrollRunStepper({ status }: { status: string }) {
   const stateOf = (i: number): StepState => {
     if (allDone)       return "done";
     if (i < curIdx)    return "done";
-    if (i === curIdx)  return failed ? "error" : "current";
+    if (i === curIdx) {
+      if (failed) return "error";
+      // GAP-PAYROLL-DETAIL-08: only "processing" is an actual background
+      // computation in flight; "draft" and "completed" are both resting,
+      // waiting on a human to start the run or to click Disburse -- a
+      // perpetual spinner there implied work was happening when it was not.
+      return status === "processing" ? "current" : "current-waiting";
+    }
     return "pending";
   };
+
+  const isActive = (st: StepState) => st === "current" || st === "current-waiting";
 
   return (
     <div style={{ padding: "16px 0 8px" }}>
@@ -72,32 +92,33 @@ export function PayrollRunStepper({ status }: { status: string }) {
         style={{ display: "flex", listStyle: "none", margin: 0, padding: 0 }}
       >
         {STEPS.map((step, i) => {
-          const st    = stateOf(i);
+          const st     = stateOf(i);
           const isLast = i === STEPS.length - 1;
+          const active = isActive(st);
 
           const circleColor =
-            st === "done"    ? "var(--success,#16a34a)"   :
-            st === "current" ? "var(--primary,#2563eb)"   :
-            st === "error"   ? "var(--danger,#dc2626)"    :
-                               "var(--line,#cbd5e1)";
+            st === "done"  ? "var(--success,#16a34a)" :
+            active         ? "var(--primary,#2563eb)" :
+            st === "error" ? "var(--danger,#dc2626)"  :
+                             "var(--line,#cbd5e1)";
 
           const circleBg =
-            st === "done"    ? "var(--goodbg,#f0fdf4)"   :
-            st === "current" ? "var(--primary,#2563eb)"  :
-            st === "error"   ? "var(--badbg,#fef2f2)"    :
-                               "var(--surface,#fff)";
+            st === "done"  ? "var(--goodbg,#f0fdf4)" :
+            active         ? "var(--primary,#2563eb)" :
+            st === "error" ? "var(--badbg,#fef2f2)"   :
+                             "var(--surface,#fff)";
 
           const circleText =
-            st === "done"    ? "var(--success,#16a34a)"  :
-            st === "current" ? "#fff"                    :
-            st === "error"   ? "var(--danger,#dc2626)"   :
-                               "var(--mut,#94a3b8)";
+            st === "done"  ? "var(--success,#16a34a)" :
+            active         ? "#fff"                   :
+            st === "error" ? "var(--danger,#dc2626)"  :
+                             "var(--mut,#94a3b8)";
 
           const labelColor =
-            st === "done"    ? "var(--success,#16a34a)"  :
-            st === "current" ? "var(--primary,#2563eb)"  :
-            st === "error"   ? "var(--danger,#dc2626)"   :
-                               "var(--mut,#94a3b8)";
+            st === "done"  ? "var(--success,#16a34a)" :
+            active         ? "var(--primary,#2563eb)" :
+            st === "error" ? "var(--danger,#dc2626)"  :
+                             "var(--mut,#94a3b8)";
 
           const lineColor  = i < curIdx ? "var(--success,#16a34a)" : "var(--line,#e2e8f0)";
 
@@ -109,7 +130,7 @@ export function PayrollRunStepper({ status }: { status: string }) {
               {/* Row: circle + connector */}
               <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
                 <div
-                  aria-current={st === "current" ? "step" : undefined}
+                  aria-current={active ? "step" : undefined}
                   style={{
                     width: 32, height: 32,
                     borderRadius: "50%",
@@ -142,7 +163,7 @@ export function PayrollRunStepper({ status }: { status: string }) {
                 style={{
                   marginTop: 6,
                   fontSize: 11,
-                  fontWeight: st === "current" || st === "done" ? 700 : 500,
+                  fontWeight: active || st === "done" ? 700 : 500,
                   color: labelColor,
                   textAlign: "center",
                   letterSpacing: "0.25px",

@@ -79,6 +79,15 @@ interface Column<T> {
   render?: (row: T) => ReactNode;
   /** Server-safe: renders StatusPill/formatMoney/formatRupees/formatIndianDate/a date+time stamp from the row value at `key` */
   cellType?: "status" | "amount" | "rupees" | "date" | "datetime";
+  /**
+   * Opt-in, server-safe: when cellType is "status", looks up the raw status
+   * value in this map to pass StatusPill a translated label instead of its
+   * own humanizeStatus(status) default. Plain data (not a function), so an
+   * async Server Component can build it and pass it straight through, the
+   * same way render cannot cross that boundary. Every existing caller omits
+   * this and keeps the exact current behavior (GAP-PAYROLL-PERIOD-05).
+   */
+  statusLabels?: Record<string, string>;
   /** Opt-in: set false to exclude a column from sorting when the table is sortable. */
   sortable?: boolean;
 }
@@ -205,7 +214,10 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
       }
     }
   }
-  if (col.cellType === "status") return <StatusPill status={String(row[col.key] ?? "")} />;
+  if (col.cellType === "status") {
+    const raw = String(row[col.key] ?? "");
+    return <StatusPill status={raw} label={col.statusLabels?.[raw]} />;
+  }
   if (col.cellType === "amount") {
     // UX-006: pass the raw value through — formatMoney() itself renders "—"
     // for null/undefined/non-finite, distinct from a genuine ₹0.00. Coercing

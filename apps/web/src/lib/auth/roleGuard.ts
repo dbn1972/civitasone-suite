@@ -51,3 +51,22 @@ export function requireAnyRole(allowed: string[], redirectTo = "/dashboard"): vo
   const hasRole = allowed.some((r) => sessionRoles.includes(r));
   if (!hasRole) redirect(redirectTo);
 }
+
+/**
+ * Roles permitted to create/approve/disburse/revert payroll runs. Mirrors
+ * payroll-service's PAYROLL_ROLES (routes.ts) -- single source of truth for
+ * every payroll page's admin-only gating (previously duplicated ad hoc per
+ * file; see GAP-PAYROLL-RUNS-03).
+ */
+export const PAYROLL_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
+
+/**
+ * Roles permitted to read payroll run data (list/detail). Mirrors
+ * payroll-service's READER_ROLES (routes.ts): PAYROLL_ADMIN_ROLES plus
+ * hr_admin/finance_officer -- deliberately NOT "employee" or "manager",
+ * which hr/layout.tsx otherwise admits to every /hr/payroll* route. A role
+ * outside this list gets a 403 from the API today regardless of what the
+ * page renders; gating on this constant shows PermissionDenied instead of
+ * an unhandled failed fetch (GAP-PAYROLL-HOME-02/RUNS-04).
+ */
+export const PAYROLL_READER_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin", "finance_officer"];
