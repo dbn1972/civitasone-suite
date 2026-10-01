@@ -13,7 +13,8 @@ vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
 
-import StaffingPlanPage, { mapRows, departmentCadreLabel } from "./page";
+import StaffingPlanPage from "./page";
+import { mapRows, departmentCadreLabel } from "./_data";
 
 async function renderPage(searchParams?: { year?: string }) {
   return render(

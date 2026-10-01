@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { SALARY_ADMIN_ROLES as listRoles } from "./page";
-import { SALARY_ADMIN_ROLES as detailRoles } from "./[id]/page";
-import { SALARY_ADMIN_ROLES as slipsDetailRoles } from "../slips/[id]/page";
+import { SALARY_ADMIN_ROLES as listRoles } from "./_salaryAdminRoles";
+import { SALARY_ADMIN_ROLES as detailRoles } from "./[id]/_salaryAdminRoles";
+import { SALARY_ADMIN_ROLES as slipsDetailRoles } from "../slips/[id]/_salaryAdminRoles";
 
 /**
  * GAP-HR-SF09A-017 regression test.
@@ -16,6 +16,12 @@ import { SALARY_ADMIN_ROLES as slipsDetailRoles } from "../slips/[id]/page";
  * sibling PENSIONER_VIEW_ROLES already had "finance_officer"; these three
  * did not) -- this test would have caught that divergence and now guards
  * against it recurring.
+ *
+ * Each array now lives in a small colocated `_salaryAdminRoles.ts` next to
+ * its page.tsx (imported by the page), rather than being declared and
+ * exported directly from page.tsx like TRAINING_ADMIN_ROLES is -- Next.js's
+ * App Router build rejects any named export from a page.tsx other than its
+ * own fixed set, and this regression test needs a real import of each copy.
  */
 describe("salary-slip pages' SALARY_ADMIN_ROLES stay identical across all 3 files", () => {
   it("all three arrays contain the exact same roles", () => {

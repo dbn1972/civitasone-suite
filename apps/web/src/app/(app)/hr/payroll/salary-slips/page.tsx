@@ -6,15 +6,7 @@ import { formatMoney } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { SalarySlipsTable } from "./SalarySlipsTable";
 import { getTranslations } from "next-intl/server";
-
-// GAP-HR-SF09A-017: kept in sync with the identical arrays in
-// ./[id]/page.tsx and ../slips/[id]/page.tsx (enforced by
-// salary-admin-roles.test.ts) -- added "finance_officer" to match the
-// sibling PENSIONER_VIEW_ROLES (../pensioners/page.tsx), which already
-// includes it for the same reason: GET /v1/payroll/salary-slips already
-// admits finance_officer server-side (payroll-service payroll/routes.ts),
-// this array was just never updated to match.
-export const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 
 export default async function SalarySlipsPage() {
   const t = await getTranslations("salarySlips");
