@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, StatusPill, ConfirmDialog } from "../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { postWithErrorCode } from "../_lib/postWithErrorCode";
 import { formatMoney } from "@/lib/formatters";
 import type { OffCycleRow } from "./OffCycleList";
 
@@ -30,13 +30,12 @@ function reasonLabelFor(t: Translator, runType: string): string {
   return key ? t(key) : runType.replace(/_/g, " ");
 }
 
-function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCycleRow) => void }) {
+function RunCard({ row, canProcess, onProcess }: { row: OffCycleRow; canProcess: boolean; onProcess: (row: OffCycleRow) => void }) {
   const t = useTranslations("offCycleCard");
   const reasonLabel = reasonLabelFor(t, row.run_type);
   const totalAmount = Number(row.total_amount_minor ?? 0);
   const netAmount = Number(row.total_net_minor ?? 0);
   const empCount = (row.employee_count as number | undefined) ?? null;
-  const approvalStatus = (row.approval_status as string | undefined) ?? row.status;
 
   return (
     <div style={{ border: "1px solid var(--line2)", borderRadius: 12, overflow: "hidden" }}>
@@ -52,7 +51,7 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <StatusPill status={row.status} />
-          {row.status === "draft" && (
+          {row.status === "draft" && canProcess && (
             <Button
               type="button"
               variant="primary"
@@ -84,16 +83,21 @@ function RunCard({ row, onProcess }: { row: OffCycleRow; onProcess: (row: OffCyc
             <div style={{ fontSize: 16, fontWeight: 700, marginTop: 3 }}>{empCount}</div>
           </div>
         )}
-        <div>
-          <div style={{ fontSize: 11, color: "var(--ink2)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".5px" }}>{t("statApprovalStatus")}</div>
-          <div style={{ marginTop: 5 }}><StatusPill status={approvalStatus} /></div>
-        </div>
       </div>
+      {/* GAP-PAYROLL-OFF-CYCLE-01: there is no separate approval_status on an
+          off-cycle run (payroll.off_cycle_runs has only `status`); the card
+          used to show a second "Approval Status" pill that just echoed
+          `status`, implying an approval step that did not exist. The real
+          control is server-side: processing is the checker step and must be
+          done by someone other than the run's creator. Say so. */}
+      {row.status === "draft" && (
+        <p style={{ margin: 0, padding: "0 18px 12px", fontSize: 12, color: "var(--ink2)" }}>{t("checkerNote")}</p>
+      )}
     </div>
   );
 }
 
-export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
+export function OffCycleCards({ rows, canProcess = false }: { rows: OffCycleRow[]; canProcess?: boolean }) {
   const t = useTranslations("offCycleCard");
   const router = useRouter();
   const [pendingRow, setPendingRow] = useState<OffCycleRow | null>(null);
@@ -106,11 +110,14 @@ export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<{ data: { id: string; totalNetMinor: number } }>(
-        "v1/payroll/off-cycle/" + pendingRow.id + "/process",
-        { method: "POST" },
-      );
-      setMessage(t("processedMessage", { period: pendingRow.period, amount: formatMoney(res.data.totalNetMinor) }));
+      // The endpoint is async (202 + {id,status,correlationId}); tax and net
+      // are computed by the worker. This used to read res.data.totalNetMinor
+      // off that envelope, which threw and showed an error on success.
+      await postWithErrorCode("v1/payroll/off-cycle/" + pendingRow.id + "/process", {}, {
+        SELF_APPROVAL_FORBIDDEN: t("selfProcessError"),
+        OFF_CYCLE_NOT_DRAFT: t("notDraftError"),
+      });
+      setMessage(t("processSubmittedMessage", { period: pendingRow.period }));
       setPendingRow(null);
       router.refresh();
     } catch (err) {
@@ -139,7 +146,7 @@ export function OffCycleCards({ rows }: { rows: OffCycleRow[] }) {
       )}
       <div style={{ display: "grid", gap: 14 }}>
         {rows.map((row) => (
-          <RunCard key={row.id} row={row} onProcess={(r) => { setDialogError(undefined); setPendingRow(r); }} />
+          <RunCard key={row.id} row={row} canProcess={canProcess} onProcess={(r) => { setDialogError(undefined); setPendingRow(r); }} />
         ))}
       </div>
 

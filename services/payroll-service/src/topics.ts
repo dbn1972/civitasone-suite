@@ -28,6 +28,7 @@ export const COMMANDS = {
   // publish + idempotent consumer; mirrors ddo/pensioner/arrear/bonus/
   // reimbursement above.
   correctionCreate:       "payroll.correction.create",
+  correctionDecide:       "payroll.correction.decide",
   payGroupCreate:         "payroll.paygroup.create",
   flexPlanCreate:         "payroll.flex_plan.create",
   flexElectionUpsert:     "payroll.flex_election.upsert",
@@ -63,6 +64,7 @@ export const EVENTS = {
   salaryRevisionCreated:  "payroll.salary_revision.created",
   settingsUpdated:        "payroll.settings.updated",
   correctionCreated:      "payroll.correction.created",
+  correctionDecided:      "payroll.correction.decided",
   payGroupCreated:        "payroll.paygroup.created",
   flexPlanCreated:        "payroll.flex_plan.created",
   flexElectionUpserted:   "payroll.flex_election.upserted",

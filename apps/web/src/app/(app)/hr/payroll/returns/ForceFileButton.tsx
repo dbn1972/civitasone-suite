@@ -9,7 +9,9 @@ import { useFormError } from "@/lib/useFormError";
 
 type ForceFileResult = {
   deducteeCount: number;
-  totalTdsDeducted: number;
+  /** Paise. GAP-PAYROLL-RETURNS-06: read from the API's own
+   *  totalTdsDeductedMinor instead of multiplying a rupee figure by 100. */
+  totalTdsDeductedMinor: number;
   warning?: string;
   note?: string;
 };
@@ -62,7 +64,7 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
       const body = await res.json().catch(() => null);
       setResult({
         deducteeCount: Number(body?.deducteeCount ?? 0),
-        totalTdsDeducted: Number(body?.totalTdsDeducted ?? 0),
+        totalTdsDeductedMinor: Number(body?.totalTdsDeductedMinor ?? 0),
         warning: body?.reconciliation?.warning,
         note: body?.note,
       });
@@ -96,7 +98,7 @@ export function ForceFileButton({ fy, quarter }: { fy: string; quarter: string }
         <p role="status" aria-live="polite" className="pill bad" style={{ width: "fit-content", marginTop: 10 }}>
           {t("filedWithOverrideText", {
             count: result.deducteeCount,
-            amount: formatMoney(Math.round(result.totalTdsDeducted * 100)),
+            amount: formatMoney(result.totalTdsDeductedMinor),
             note: result.warning ?? t("recordedAsFlaggedFallback"),
           })}
         </p>

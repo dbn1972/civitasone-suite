@@ -16,7 +16,7 @@ export default async function TaxDeclarationPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/hr/payroll"
-        backLabel="Back to Payroll"
+        backLabel={t("errorBackLabel")}
         actions={<Link href="/hr/payroll/income-tax">{t("viewIncomeTaxLink")}</Link>}
       />
       <TaxDeclarationForm />

@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { postWithErrorCode } from "../../_lib/postWithErrorCode";
 
 export function PtSlabForm() {
   const t = useTranslations("ptSlabForm");
@@ -64,13 +64,13 @@ export function PtSlabForm() {
       const fromMinor = Math.round((parseFloat(slabFrom) || 0) * 100);
       const toMinor = slabTo.trim() ? Math.round(parseFloat(slabTo) * 100) : 999999999999;
       const taxMinor = Math.round((parseFloat(ptAmount) || 0) * 100);
-      await browserJson("v1/payroll/statutory/state-rules", {
-        method: "POST",
-        body: JSON.stringify({
-          stateCode: stateCode.trim().toUpperCase(),
-          ptSlabs: [{ fromMinor, toMinor, taxMinor }],
-        }),
-      });
+      // GAP-PAYROLL-STATUTORY-PT-03: the server upserts this one slab on
+      // (state, start) and keeps the state's other slabs; a range that
+      // overlaps another slab is rejected (422 PT_SLAB_OVERLAP).
+      await postWithErrorCode("v1/payroll/statutory/state-rules", {
+        stateCode: stateCode.trim().toUpperCase(),
+        ptSlabs: [{ fromMinor, toMinor, taxMinor }],
+      }, { PT_SLAB_OVERLAP: t("overlapError") });
       setConfirmOpen(false);
       setTone("good");
       setInvalidField(null);

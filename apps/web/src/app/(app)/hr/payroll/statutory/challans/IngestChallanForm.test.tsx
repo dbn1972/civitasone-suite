@@ -87,4 +87,28 @@ describe("IngestChallanForm", () => {
     expect(screen.getByLabelText(/BSR Code/)).not.toHaveAttribute("aria-invalid");
     expect(screen.getByLabelText(/TDS Amount/)).not.toHaveAttribute("aria-invalid");
   });
+
+  it("GAP-PAYROLL-STATUTORY-CHALLANS-01: says a duplicate challan is already recorded (409 DUPLICATE_CHALLAN)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ code: "DUPLICATE_CHALLAN", message: "a challan with CIN X is already recorded" }), { status: 409 }),
+    );
+
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/BSR Code/), { target: { value: "1234567" } });
+    fireEvent.change(screen.getByLabelText(/Challan Serial/), { target: { value: "1" } });
+    fireEvent.change(screen.getByLabelText(/Deposit Date/), { target: { value: "2026-06-07" } });
+    fireEvent.change(screen.getByLabelText(/TDS Amount/), { target: { value: "35000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Ingest Challan" }));
+
+    await waitFor(() => expect(screen.getByText("Ingest this TDS challan?")).toBeInTheDocument());
+    // GAP-PAYROLL-STATUTORY-CHALLANS-06: amount and date are formatted, not echoed raw.
+    expect(screen.getByText(/TDS ₹35,000\.00 deposited on/)).toBeInTheDocument();
+    expect(screen.queryByText(/deposited on 2026-06-07/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Confirm & Ingest"));
+
+    await waitFor(() => {
+      expect(screen.getByText("A challan with this BSR code, deposit date and serial is already recorded.")).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/CIN X/)).not.toBeInTheDocument();
+  });
 });

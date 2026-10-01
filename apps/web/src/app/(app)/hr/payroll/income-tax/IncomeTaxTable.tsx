@@ -3,6 +3,7 @@
 import { useTranslations } from "next-intl";
 import { DataTable, StatusPill } from "../../../../_components/ds";
 import { incomeTaxStatusLabel } from "@/lib/payroll/statusLabels";
+import { formatRupees } from "@/lib/formatters";
 
 type Row = {
   id: string;
@@ -14,7 +15,18 @@ type Row = {
   taxableIncome: string;
   taxPayable: string;
   status: string;
+  /** GAP-PAYROLL-INCOME-TAX-05: "old" | "new" (API default "new"). */
+  regime?: string;
 } & Record<string, unknown>;
+
+/**
+ * Under the new regime payroll-service does not apply 80C/other Chapter VI-A
+ * deductions at all (tax/routes.ts always returns 0 for them), so a ₹0 there
+ * means "not applicable", not "nothing declared".
+ */
+function deductionCell(r: Row, value: string): string {
+  return r.regime === "new" ? "—" : formatRupees(value);
+}
 
 /**
  * GAP-PAYROLL-INCOME-TAX-03/04: a "use client" wrapper around DataTable --
@@ -36,9 +48,14 @@ export function IncomeTaxTable({ items }: { items: Row[] }) {
   }[] = [
     { key: "employee", label: t("colEmployee") },
     { key: "department", label: t("colDepartment") },
+    {
+      key: "regime",
+      label: t("colRegime"),
+      render: (r) => (r.regime === "old" ? t("regimeOld") : r.regime === "new" ? t("regimeNew") : "—"),
+    },
     { key: "grossIncome", label: t("colGrossIncome"), cellType: "rupees", align: "right" },
-    { key: "deductions80C", label: t("col80c"), cellType: "rupees", align: "right" },
-    { key: "otherDeductions", label: t("colOtherDed"), cellType: "rupees", align: "right" },
+    { key: "deductions80C", label: t("col80c"), align: "right", render: (r) => deductionCell(r, r.deductions80C) }, // gitleaks:allow -- column key, not a secret
+    { key: "otherDeductions", label: t("colOtherDed"), align: "right", render: (r) => deductionCell(r, r.otherDeductions) }, // gitleaks:allow -- column key, not a secret
     { key: "taxableIncome", label: t("colTaxableIncome"), cellType: "rupees", align: "right" },
     { key: "taxPayable", label: t("colTaxPayable"), cellType: "rupees", align: "right" },
     {

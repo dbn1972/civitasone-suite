@@ -191,6 +191,17 @@ export async function challanRoutes(app: FastifyInstance): Promise<void> {
     const serial5 = b.challanSerial.replace(/\D/g, "").padStart(5, "0").slice(-5);
     const cin = `${b.bsrCode}${ddmmyyyy}${serial5}`;
 
+    // GAP-PAYROLL-STATUTORY-CHALLANS-01: a challan with the same CIN
+    // (BSR + deposit date + serial) is already on file. The consumer's
+    // onConflictDoNothing used to drop the duplicate silently behind a 202,
+    // so the user believed a second deposit had been recorded. Say so instead.
+    const dup = await scopedRead((tx) => tx.select({ cin: payrollTdsChallan.cin }).from(payrollTdsChallan)
+      .where(and(eq(payrollTdsChallan.tenantId, ctx.tenantId), eq(payrollTdsChallan.cin, cin)))
+      .limit(1));
+    if (dup.length > 0) {
+      throw new HttpError(409, "DUPLICATE_CHALLAN", `a challan with CIN ${cin} is already recorded`);
+    }
+
     const paise = (v?: number): bigint => BigInt(Math.round((v ?? 0) * 100));
     const tdsMinor = paise(b.tdsAmount);
     const totalMinor = b.totalAmount != null ? paise(b.totalAmount) : tdsMinor + paise(b.interest) + paise(b.fee);

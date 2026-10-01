@@ -4,7 +4,8 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { formatIndianDate, formatRupees } from "@/lib/formatters";
+import { postWithErrorCode } from "../../_lib/postWithErrorCode";
 
 type ChallanInvalidField = "bsr" | "amt" | "serial" | "date";
 
@@ -83,16 +84,19 @@ export function IngestChallanForm({ period }: { period: string }) {
     setBusy(true);
     setDialogError(undefined);
     try {
-      await browserJson("v1/payroll/statutory/challans", {
-        method: "POST",
-        body: JSON.stringify({
-          period: challanPeriod,
-          bsrCode,
-          challanSerial: challanSerial.trim(),
-          depositDate,
-          formType,
-          tdsAmount: parseFloat(tdsAmount),
-        }),
+      // GAP-PAYROLL-STATUTORY-CHALLANS-01/06: a duplicate CIN (409) and a
+      // rejected field (400) get their own messages instead of the one
+      // generic "couldn't save" sentence for every failure.
+      await postWithErrorCode("v1/payroll/statutory/challans", {
+        period: challanPeriod,
+        bsrCode,
+        challanSerial: challanSerial.trim(),
+        depositDate,
+        formType,
+        tdsAmount: parseFloat(tdsAmount),
+      }, {
+        DUPLICATE_CHALLAN: t("duplicateChallanError"),
+        VALIDATION_FAILED: t("validationFailedError"),
       });
       setConfirmOpen(false);
       setTone("good");
@@ -234,8 +238,8 @@ export function IngestChallanForm({ period }: { period: string }) {
           period: challanPeriod,
           bsr: bsrCode,
           serial: challanSerial,
-          amount: tdsAmount || 0,
-          date: depositDate || "—",
+          amount: formatRupees(parseFloat(tdsAmount) || 0),
+          date: depositDate ? formatIndianDate(depositDate) : "—",
         })}
         onConfirm={() => void ingestChallan()}
         onCancel={() => !busy && setConfirmOpen(false)}

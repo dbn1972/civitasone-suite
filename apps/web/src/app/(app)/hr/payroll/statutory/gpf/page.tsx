@@ -4,6 +4,9 @@ import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { PermissionDenied } from "../../../../../_components/PermissionDenied";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type GpfRow = {
   id: string;
@@ -26,6 +29,14 @@ async function getData(): Promise<LoaderResult<GpfRow[]>> {
 
 export default async function GpfStatutoryPage() {
   const t = await getTranslations("gpf");
+  // GAP-PAYROLL-STATUTORY-GPF-03: hr/layout.tsx admits employee/manager to every /hr/payroll/*
+  // URL, but this page's API (GPF ledger) is READER_ROLES-only in
+  // payroll-service (no employee/manager). Gate before fetching so those
+  // roles get a clear explanation instead of a failed load.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
+    return <PermissionDenied module="GPF ledger" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("backToStatutoryLabel")} />;
+  }
   const { data: rows, source } = await getData();
   const errored = source === "error";
 
@@ -46,7 +57,7 @@ export default async function GpfStatutoryPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory" backLabel="Back to Statutory"
+        back="/hr/payroll/statutory" backLabel={t("backToStatutoryLabel")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>

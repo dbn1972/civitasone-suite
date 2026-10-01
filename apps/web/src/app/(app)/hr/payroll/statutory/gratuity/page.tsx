@@ -1,14 +1,21 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../../../_components/ds";
+import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { GratuityCalculator } from "./GratuityCalculator";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
+import { PermissionDenied } from "../../../../../_components/PermissionDenied";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type GratuityRow = {
   id: string;
   employeeId: string;
+  employeeName?: string | null;
+  /** Display-only: employeeName from the API, else the raw employeeId. */
+  employee?: string;
   yearsOfService: number | string;
   gratuityMinor: number;
   status: string;
@@ -26,8 +33,19 @@ async function getData(): Promise<LoaderResult<GratuityRow[]>> {
 
 export default async function GratuityPage() {
   const t = await getTranslations("gratuity");
+  // GAP-PAYROLL-STATUTORY-GRATUITY-02: hr/layout.tsx admits employee/manager to every /hr/payroll/*
+  // URL, but this page's API (gratuity register) is READER_ROLES-only in
+  // payroll-service (no employee/manager). Gate before fetching so those
+  // roles get a clear explanation instead of a failed load.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
+    return <PermissionDenied module="gratuity register" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />;
+  }
   const result = await getData();
-  const { data: rows } = result;
+  // GAP-PAYROLL-STATUTORY-GRATUITY-06: the register API now returns
+  // employeeName (best-effort HRMS lookup, same as the GPF/NPS reports);
+  // show it, falling back to the id only when HRMS had no name.
+  const rows = result.data.map((r) => ({ ...r, employee: r.employeeName || r.employeeId }));
   const resource = toResourceState(result);
   const errored = resource.status === "error";
   const totalGratuityMinor = rows.reduce((s, r) => s + Number(r.gratuityMinor ?? 0), 0);
@@ -43,7 +61,7 @@ export default async function GratuityPage() {
     align?: "left" | "right";
     cellType?: "amount" | "status";
   }[] = [
-    { key: "employeeId", label: t("colEmployee") },
+    { key: "employee", label: t("colEmployee") },
     { key: "yearsOfService", label: t("colYearsOfService"), align: "right" },
     { key: "gratuityMinor", label: t("colGratuityAmount"), align: "right", cellType: "amount" },
     { key: "status", label: t("colStatus"), cellType: "status" },
@@ -54,8 +72,12 @@ export default async function GratuityPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory" backLabel="Back to Statutory"
+        back="/hr/payroll/statutory" backLabel={t("errorBackLabel")}
       />
+      {/* GAP-PAYROLL-STATUTORY-GRATUITY-06: same load-failure signal as the
+          sibling statutory pages; the calculator below is client-side and
+          keeps working, which the badge message makes explicit. */}
+      <DataSourceBadge source={result.source} message={t("loadErrorMessage")} />
 
       <StatGrid>
         <StatCard icon="🎖️" iconBg="var(--infobg)" label={t("statGratuityRecords")} value={errored ? "—" : rows.length} />

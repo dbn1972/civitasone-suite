@@ -5,6 +5,9 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { PtSlabForm } from "./PtSlabForm";
 import { toHumanError } from "@/lib/messages";
+import { PermissionDenied } from "../../../../../_components/PermissionDenied";
+import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type PtSlabRow = {
   state_code: string;
@@ -24,6 +27,17 @@ async function getData(): Promise<LoaderResult<PtSlabRow[]>> {
 
 export default async function ProfessionalTaxPage() {
   const t = await getTranslations("pt");
+  // GAP-PAYROLL-STATUTORY-PT-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
+  // URL, but this page's API (professional tax slabs) is READER_ROLES-only in
+  // payroll-service (no employee/manager). Gate before fetching so those
+  // roles get a clear explanation instead of a failed load.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
+    return <PermissionDenied module="professional tax slabs" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />;
+  }
+  // GAP-PAYROLL-STATUTORY-PT-01: POST statutory/state-rules is PAYROLL_ROLES-only
+  // (payroll_admin/payroll_officer/super_admin); hr_admin/finance_officer may read.
+  const canEdit = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
   const { data: rows, source } = await getData();
   const errored = source === "error";
 
@@ -43,7 +57,7 @@ export default async function ProfessionalTaxPage() {
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory" backLabel="Back to Statutory"
+        back="/hr/payroll/statutory" backLabel={t("errorBackLabel")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
       <StatGrid>
@@ -53,7 +67,7 @@ export default async function ProfessionalTaxPage() {
         <StatCard icon="📊" iconBg="var(--goodbg)" label={t("statAvgPtPerSlab")} value={errored ? null : formatMoney(Math.round(avgPtMinor))} />
       </StatGrid>
 
-      <PtSlabForm />
+      {canEdit && <PtSlabForm />}
 
       <Card title={t("historyCardTitle")}>
         {errored ? (

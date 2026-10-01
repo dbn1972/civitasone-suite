@@ -6,6 +6,9 @@ import { formatMoney } from "@/lib/formatters";
 import { PeriodSelector } from "./PeriodSelector";
 import { IngestChallanForm } from "./IngestChallanForm";
 import { toHumanError } from "@/lib/messages";
+import { PermissionDenied } from "../../../../../_components/PermissionDenied";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 type ChallanRow = {
   cin: string;
@@ -63,6 +66,14 @@ async function getReconciliation(period: string): Promise<LoaderResult<Reconcile
 
 export default async function ChallansPage({ searchParams }: { searchParams?: { period?: string } }) {
   const t = await getTranslations("challans");
+  // GAP-PAYROLL-STATUTORY-CHALLANS-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
+  // URL, but this page's API (TDS challans) is READER_ROLES-only in
+  // payroll-service (no employee/manager). Gate before fetching so those
+  // roles get a clear explanation instead of a failed load.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
+    return <PermissionDenied module="TDS challans" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />;
+  }
   const period = searchParams?.period && /^\d{4}-\d{2}$/.test(searchParams.period) ? searchParams.period : currentPeriod();
 
   const [{ data: challans, source: challansSource }, { data: reconciliation, source: reconcileSource }] = await Promise.all([
@@ -74,11 +85,26 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
 
   const errored = source === "error";
 
-  const columns: { key: keyof ChallanRow & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status" }[] = [
+  // GAP-PAYROLL-STATUTORY-CHALLANS-06: reconcile status is a closed enum in
+  // payroll-service (challan-routes.ts Reconciliation["status"]); show a
+  // translated label instead of the raw identifier.
+  const RECONCILE_STATUS_KEY: Record<string, "reconcileMatched" | "reconcileShortfall" | "reconcileExcess" | "reconcileNoChallan" | "reconcilePendingFinalisation"> = {
+    matched: "reconcileMatched",
+    shortfall: "reconcileShortfall",
+    excess: "reconcileExcess",
+    no_challan: "reconcileNoChallan",
+    pending_finalisation: "reconcilePendingFinalisation",
+  };
+  const rawReconcileStatus = reconciliation?.perPeriod?.length ? reconciliation.perPeriod[0].status : null;
+  const reconcileStatusLabel = rawReconcileStatus && RECONCILE_STATUS_KEY[rawReconcileStatus]
+    ? t(RECONCILE_STATUS_KEY[rawReconcileStatus])
+    : t("unknownStatus");
+
+  const columns: { key: keyof ChallanRow & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status" | "date" }[] = [
     { key: "cin", label: t("colCin") },
     { key: "bsrCode", label: t("colBsrCode") },
     { key: "challanSerial", label: t("colSerial") },
-    { key: "depositDate", label: t("colDepositDate") },
+    { key: "depositDate", label: t("colDepositDate"), cellType: "date" },
     { key: "section", label: t("colSection") },
     { key: "tdsAmountMinor", label: t("colTdsAmount"), align: "right", cellType: "amount" },
     { key: "totalAmountMinor", label: t("colTotalAmount"), align: "right", cellType: "amount" },
@@ -90,7 +116,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll/statutory" backLabel="Back to Statutory"
+        back="/hr/payroll/statutory" backLabel={t("errorBackLabel")}
       />
       <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />
 
@@ -102,7 +128,7 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
           icon={reconciliation?.matched ? "✅" : "⚠️"}
           iconBg={reconciliation?.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
           label={t("statReconciliationStatus")}
-          value={errored ? "—" : (reconciliation?.perPeriod?.length ? reconciliation.perPeriod[0].status : t("unknownStatus"))}
+          value={errored ? "—" : reconcileStatusLabel}
         />
         <StatCard icon="📉" iconBg="var(--warnbg)" label={t("statVariance")} value={errored ? "—" : (reconciliation ? formatMoney(reconciliation.varianceMinor) : "—")} />
         <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTdsDeposited")} value={errored ? "—" : (reconciliation ? formatMoney(reconciliation.totalDepositedMinor) : "—")} />

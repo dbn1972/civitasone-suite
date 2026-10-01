@@ -60,4 +60,21 @@ describe("ForceFileButton — UX-016 clerk-safe errors", () => {
     await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
     expect(dialog.textContent).not.toMatch(/TDS_RECONCILIATION_FAILED/);
   });
+
+  it("GAP-PAYROLL-RETURNS-06: shows the API's paise total as-is (no rupee x100 conversion)", async () => {
+    // 1,234.56 rupees deducted = 123456 paise. The old code read the rupee
+    // field (whole rupees, rounded) and multiplied by 100.
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({
+      deducteeCount: 2, totalTdsDeducted: 1235, totalTdsDeductedMinor: 123456,
+      reconciliation: { warning: "FILED WITH UNRECONCILED TDS (forced override)" },
+    }), { status: 200 }));
+    renderButton({ fy: "2026-27", quarter: "Q2" });
+
+    fireEvent.click(screen.getByRole("button", { name: /file anyway/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/reason for overriding/i), { target: { value: "Challans pending reconciliation in TRACES" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: /file with confirmed override/i }));
+
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("₹1,234.56"));
+  });
 });

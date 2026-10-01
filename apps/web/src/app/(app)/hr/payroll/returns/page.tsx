@@ -8,6 +8,9 @@ import { ForceFileButton } from "./ForceFileButton";
 import { TaxReturnsSummary, type QuarterSummaryRow } from "./TaxReturnsSummary";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 
 /**
  * Plain-language failure message for a quarterly-return load, for this
@@ -147,6 +150,15 @@ export default async function ReturnsPage({
   searchParams: { fy?: string; quarter?: string };
 }) {
   const t = await getTranslations("payrollReturns");
+  // GAP-PAYROLL-RETURNS-04: form24q/form26q and the force-file bypass are all
+  // RETURN_FILER_ROLES in payroll-service (payroll_admin, payroll_officer,
+  // super_admin, hr_admin, finance_officer -- identical to
+  // PAYROLL_STATUTORY_ADMIN_ROLES). hr/layout.tsx also admits employee and
+  // manager, who used to see the "File anyway -- bypass reconciliation"
+  // affordance (and a failed load). Gate the page before any fetch.
+  if (!getSessionRoles().some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
+    return <PermissionDenied module="TDS returns (24Q/26Q)" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll" backLabel={t("backToPayrollLabel")} />;
+  }
   // TaxReturnsSummary/QuarterLookupForm are plain (non-async) components --
   // see their own file comments -- so this page resolves their translators
   // once, here, and passes them down as props.
@@ -214,7 +226,7 @@ export default async function ReturnsPage({
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
-        back="/hr/payroll" backLabel="Back to Payroll"
+        back="/hr/payroll" backLabel={t("backToPayrollLabel")}
       />
 
       <DataSourceBadge source={overallSource} message={t("loadErrorMessage")} />

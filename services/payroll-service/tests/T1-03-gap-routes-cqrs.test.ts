@@ -40,7 +40,7 @@ describe("FP T1-03 static source check: mutating gap routes use sendAccepted (20
 
   for (const [label, urlFragment, publisher] of cases) {
     it(`${label} publishes via ${publisher} and returns via sendAccepted`, () => {
-      const routeRe = new RegExp(`app\\.post\\("\\/v1\\/payroll\\/${urlFragment.replace(/[\\/:.-]/g, "\\$&")}[\\s\\S]{0,1500}?\\}\\);`);
+      const routeRe = new RegExp(`app\\.post\\("\\/v1\\/payroll\\/${urlFragment.replace(/[\\/:.-]/g, "\\$&")}[\\s\\S]{0,3000}?\\}\\);`);
       const m = routeRe.exec(src);
       expect(m, `${label} handler not found`).not.toBeNull();
       expect(m![0]).toContain("sendAccepted");
@@ -71,12 +71,16 @@ vi.mock("../src/shared/infra.js", () => ({
 
 const executedQueries: unknown[] = [];
 let mockMarkResult = true;
+let mockRunStatus = "draft";
+let mockRunCreatedBy = "00000000-0103-4000-8000-0000000000c2";
 const mockTx: any = {
   execute: (query: unknown) => {
     executedQueries.push(query);
-    // off-cycle process consumer reads items first; return one row so the
-    // UPDATE branch is exercised.
-    return Promise.resolve([{ id: "item-1", employee_id: EMPLOYEE, amount_minor: "1000000" }]);
+    // off-cycle process consumer first reads the run (GAP-PAYROLL-OFF-CYCLE-01
+    // maker-checker guard: status + created_by), then the items; one row
+    // carrying both shapes keeps the UPDATE branch exercised. created_by is
+    // deliberately NOT the acting user.
+    return Promise.resolve([{ id: "item-1", employee_id: EMPLOYEE, amount_minor: "1000000", status: mockRunStatus, created_by: mockRunCreatedBy }]);
   },
 };
 
@@ -118,6 +122,8 @@ beforeEach(() => {
   executedQueries.length = 0;
   mockEnqueued.length = 0;
   mockMarkResult = true;
+  mockRunStatus = "draft";
+  mockRunCreatedBy = "00000000-0103-4000-8000-0000000000c2";
 });
 
 describe("FP T1-03 correction CQRS", () => {
@@ -285,13 +291,44 @@ describe("FP T1-03 off-cycle process CQRS (tax computed in consumer)", () => {
       ...baseMsg, messageId: "m-ocp-1",
       payload: { id: "oc-1", tenantId: TENANT },
     });
-    // 1 SELECT (items) + 1 UPDATE (item) + 1 UPDATE (run) = 3 queries.
-    expect(executedQueries.length).toBe(3);
+    // 1 SELECT (run guard) + 1 SELECT (items) + 1 UPDATE (item) + 1 UPDATE (run) = 4 queries.
+    expect(executedQueries.length).toBe(4);
     const domainEvent = mockEnqueued.find((e) => e.topic === EVENTS.offCycleProcessed);
     expect(domainEvent).toBeDefined();
     // Mock tx returned one item with amount_minor "1000000"; tax = 300000, net = 700000.
     expect((domainEvent!.payload as { totalTaxMinor: string }).totalTaxMinor).toBe("300000");
     expect((domainEvent!.payload as { totalNetMinor: string }).totalNetMinor).toBe("700000");
+  });
+
+  it("GAP-PAYROLL-OFF-CYCLE-01: consumer refuses to process a run its own creator submitted", async () => {
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS, EVENTS } = await import("../src/topics.js");
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+    mockRunCreatedBy = ACTOR;
+    await handlers[COMMANDS.offCycleProcess]({
+      ...baseMsg, messageId: "m-ocp-self",
+      payload: { id: "oc-1", tenantId: TENANT },
+    });
+    // Only the guard SELECT ran — no tax UPDATEs, no event.
+    expect(executedQueries.length).toBe(1);
+    expect(mockEnqueued.find((e) => e.topic === EVENTS.offCycleProcessed)).toBeUndefined();
+  });
+
+  it("GAP-PAYROLL-OFF-CYCLE-01: consumer is a no-op for a run that is no longer draft", async () => {
+    const { registerPayrollConsumers } = await import("../src/modules/payroll/consumer.js");
+    const { COMMANDS, EVENTS } = await import("../src/topics.js");
+    const handlers: Record<string, (msg: unknown) => Promise<void>> = {};
+    const q = { subscribe: (t: string, fn: (msg: unknown) => Promise<void>) => { handlers[t] = fn; } } as any;
+    registerPayrollConsumers(q);
+    mockRunStatus = "processed";
+    await handlers[COMMANDS.offCycleProcess]({
+      ...baseMsg, messageId: "m-ocp-processed",
+      payload: { id: "oc-1", tenantId: TENANT },
+    });
+    expect(executedQueries.length).toBe(1);
+    expect(mockEnqueued.find((e) => e.topic === EVENTS.offCycleProcessed)).toBeUndefined();
   });
 });
 
