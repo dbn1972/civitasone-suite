@@ -2272,9 +2272,9 @@
     "approveLabel": "Approve",
     "rejectLabel": "Reject",
     "approveConfirmTitle": "Approve this expense claim?",
-    "approveConfirmDescription": "The employee will be notified and the claim moves to Approved.",
+    "approveConfirmDescription": "The claim moves to Approved immediately.",
     "rejectConfirmTitle": "Reject this expense claim?",
-    "rejectConfirmDescription": "The employee will be notified of the rejection and the reason below.",
+    "rejectConfirmDescription": "The claim moves to Rejected immediately. Make sure the reason is clear — the employee sees it as the record of why.",
     "reasonLabel": "Reason for rejection"
   },
   "finance": {

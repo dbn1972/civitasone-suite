@@ -2195,9 +2195,9 @@
     "approveLabel": "स्वीकृत करें",
     "rejectLabel": "अस्वीकृत करें",
     "approveConfirmTitle": "क्या इस व्यय दावे को स्वीकृत करें?",
-    "approveConfirmDescription": "कर्मचारी को सूचित किया जाएगा और दावा 'स्वीकृत' हो जाएगा।",
+    "approveConfirmDescription": "दावा तुरंत 'स्वीकृत' हो जाएगा।",
     "rejectConfirmTitle": "क्या इस व्यय दावे को अस्वीकृत करें?",
-    "rejectConfirmDescription": "कर्मचारी को अस्वीकृति और नीचे दिए गए कारण के बारे में सूचित किया जाएगा।",
+    "rejectConfirmDescription": "दावा तुरंत 'अस्वीकृत' हो जाएगा। कारण स्पष्ट रूप से लिखें — कर्मचारी इसे ही अस्वीकृति के कारण के रूप में देखेगा।",
     "reasonLabel": "अस्वीकृति का कारण"
   },
   "finance": {

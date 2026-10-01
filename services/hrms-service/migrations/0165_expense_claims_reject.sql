@@ -1,4 +1,4 @@
--- 0164_expense_claims_reject.sql
+-- 0165_expense_claims_reject.sql
 --
 -- GAP-HR-EXPENSES-02: an expense claim could never leave "Pending" via a
 -- reject path -- no reject endpoint existed, and claims.hrms_expense_claims
