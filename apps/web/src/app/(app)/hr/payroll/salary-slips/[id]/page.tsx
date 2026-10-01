@@ -9,12 +9,7 @@ import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { PrintButton } from "./PrintButton";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
-
-// GAP-HR-SF09A-017 / GAP-HR-SF09A-001: kept in sync with the identical
-// arrays in ../page.tsx and ../../slips/[id]/page.tsx (enforced by
-// salary-admin-roles.test.ts) -- see ../page.tsx's comment for why
-// "finance_officer" was added.
-export const SALARY_ADMIN_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"];
+import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 
 type SlipComponent = { code: string; name: string; type: string; amountMinor: number };
 type Slip = {
