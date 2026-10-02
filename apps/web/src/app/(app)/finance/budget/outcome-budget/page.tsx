@@ -3,16 +3,16 @@ import { getFinanceOutcomeBudget } from "@/app/_data/loaders";
 import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { OutcomeBudgetTable } from "./OutcomeBudgetTable";
+import { classifyOutcomes } from "../_lib/outcomeStats";
 
 export default async function OutcomeBudgetPage() {
   const result = await getFinanceOutcomeBudget();
   const { data: outcomes } = result;
   // GAP-FINANCE-BUDGET-OUTCOME-BUDGET-01: errored -> "—" cards + Retry state.
   const errored = toResourceState(result).status === "error";
-  // achievementBps is basis points (10000 = 100%), not a 0-100 percent.
-  const achievementPct = (o: (typeof outcomes)[number]) => Number(o.achievementBps ?? 0) / 100;
-  const achieved = outcomes.filter((o) => achievementPct(o) >= 100).length;
-  const inProgress = outcomes.filter((o) => { const p = achievementPct(o); return p > 0 && p < 100; }).length;
+  // achievementBps is basis points (10000 = 100%). Each outcome lands in exactly one
+  // bucket; a missing measurement is "not measured", not "not started" (OUTCOME-BUDGET-03).
+  const { achieved, inProgress, notStarted, notMeasured } = classifyOutcomes(outcomes);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -25,7 +25,8 @@ export default async function OutcomeBudgetPage() {
         <StatCard icon="🎯" iconBg="#e7edfd" label="Total Indicators" value={errored ? "—" : outcomes.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Achieved" value={errored ? "—" : achieved} />
         <StatCard icon="📈" iconBg="#fffaeb" label="In Progress" value={errored ? "—" : inProgress} />
-        <StatCard icon="⏳" iconBg="#eff6ff" label="Not Started" value={errored ? "—" : outcomes.length - achieved - inProgress} />
+        <StatCard icon="⏳" iconBg="#eff6ff" label="Not Started" value={errored ? "—" : notStarted} />
+        {!errored && notMeasured > 0 ? <StatCard icon="❔" iconBg="var(--panel)" label="Not Measured" value={notMeasured} /> : null}
       </StatGrid>
       {/* UX-012: the data-source badge lives inside OutcomeBudgetTable. */}
       <Card title="Outcome Indicators">

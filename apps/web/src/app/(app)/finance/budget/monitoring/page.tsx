@@ -1,10 +1,11 @@
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
-import { formatMoneyCompact } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getFinanceBudgetMonitoring, getFinanceBudgetMonitoringLines } from "@/app/_data/loaders";
-import { currentFinancialYear } from "@/lib/fiscalYear";
+import { currentFinancialYear, isValidFinancialYearLabel } from "@/lib/fiscalYear";
+import { formatMoneyCompact } from "@/lib/formatters";
 import { FyFilter } from "../../_components/FyFilter";
 import { MonitoringTable } from "./MonitoringTable";
+import { exceptionCount, onTrackCount, type MonitoringTotals as Totals } from "../_lib/monitoringTotals";
 
 export default async function BudgetMonitoringPage({
   searchParams,
@@ -15,7 +16,8 @@ export default async function BudgetMonitoringPage({
   // must resolve a concrete FY (honouring the FyFilter's ?fy=, else today's FY)
   // instead of calling the loaders bare — which always errored to empty zeros.
   const fy =
-    typeof searchParams?.fy === "string" && searchParams.fy.length > 0
+    // GAP-FINANCE-BUDGET-MONITORING-05: a malformed ?fy= falls back to the current FY.
+    typeof searchParams?.fy === "string" && isValidFinancialYearLabel(searchParams.fy)
       ? searchParams.fy
       : currentFinancialYear();
   const [summaryRes, linesRes] = await Promise.all([
@@ -32,14 +34,14 @@ export default async function BudgetMonitoringPage({
   const summary = summaryRes.data;
   const lines = linesRes.data;
 
-  const totals = (summary as Record<string, unknown> & { totals?: Record<string, unknown> })?.totals ?? {};
-  const exceptions = (totals as Record<string, Record<string, number>>).exceptions ?? {};
-  const overCommitted = exceptions.over_committed ?? 0;
-  const underUtilised = exceptions.under_utilised ?? 0;
-  const projOverspend = exceptions.projected_overspend ?? 0;
-  const onTrack = (totals as Record<string, unknown>).count
-    ? Number((totals as Record<string, unknown>).count) - overCommitted - underUtilised - projOverspend
-    : 0;
+  const totals: Totals = (summary as { totals?: Totals } | null | undefined)?.totals ?? {};
+  const exceptions = totals.exceptions ?? {};
+  const overCommitted = exceptionCount(exceptions.over_committed);
+  const underUtilised = exceptionCount(exceptions.under_utilised);
+  const projOverspend = exceptionCount(exceptions.projected_overspend);
+  const onTrack = onTrackCount(totals);
+  // Stat cards use main's compact Cr/L form (exact below 1 lakh); the table below stays exact.
+  const money = (v: unknown) => (summaryErr ? "—" : formatMoneyCompact(v as string | number | null | undefined));
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -64,19 +66,25 @@ export default async function BudgetMonitoringPage({
           icon="💰"
           iconBg="var(--panel)"
           label="Total Allocated"
-          value={summaryErr ? "—" : formatMoneyCompact(String((totals as Record<string, unknown>).allocatedMinor ?? "0"))}
+          value={money(totals.allocatedMinor)}
+        />
+        <StatCard
+          icon="🧾"
+          iconBg="var(--panel)"
+          label="Total Committed"
+          value={money(totals.committedMinor)}
         />
         <StatCard
           icon="📤"
           iconBg="var(--panel)"
           label="Total Expended"
-          value={summaryErr ? "—" : formatMoneyCompact(String((totals as Record<string, unknown>).actualMinor ?? "0"))}
+          value={money(totals.actualMinor)}
         />
         <StatCard
           icon="🟢"
           iconBg="#ecfdf3"
           label="On Track"
-          value={summaryErr ? "—" : onTrack}
+          value={summaryErr || onTrack === null ? "—" : onTrack}
         />
         <StatCard
           icon="🔴"

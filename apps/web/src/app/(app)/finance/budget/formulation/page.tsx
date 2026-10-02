@@ -6,6 +6,7 @@ import { currentFinancialYear, isValidFinancialYearLabel } from "@/lib/fiscalYea
 import { FyFilter } from "../../_components/FyFilter";
 import { FormulationTable } from "./FormulationTable";
 import { formatMoney } from "@/lib/formatters";
+import { BUDGET_STATUS_LABEL, priorYearBeByHead } from "../_lib/budgetColumns";
 
 export default async function BudgetFormulationPage({
   searchParams,
@@ -32,6 +33,9 @@ export default async function BudgetFormulationPage({
   const totalBe = budgets.reduce((s, b) => s + BigInt(b.beMinor || "0"), 0n);
   const pending = budgets.filter((b) => b.status === "pending").length;
   const approved = budgets.filter((b) => b.status === "approved").length;
+  // GAP-FINANCE-BUDGET-FORMULATION-01: last year's BE for the same head, from
+  // the previous FY's rows (absent -> the table shows "—", never a guess).
+  const priorBe = priorYearBeByHead(result.data, fy);
   const uniqueHeads = new Set(budgets.map((b) => b.majorHead)).size;
 
   return (
@@ -53,9 +57,9 @@ export default async function BudgetFormulationPage({
 
       <StatGrid>
         <StatCard icon="📝" iconBg="#e7edfd" label={`Budget Heads (FY ${fy})`} value={errored ? "—" : budgets.length} />
-        <StatCard icon="🏢" iconBg="#eff6ff" label="Major Heads" value={errored ? "—" : uniqueHeads} delta={errored ? undefined : `approved ${approved}`} up={true} />
+        <StatCard icon="🏢" iconBg="#eff6ff" label="Major Heads" value={errored ? "—" : uniqueHeads} delta={errored ? undefined : `${BUDGET_STATUS_LABEL.approved.toLowerCase()} ${approved}`} up={true} />
         <StatCard icon="💰" iconBg="#fffaeb" label={`Proposed Outlay (BE, FY ${fy})`} value={errored ? "—" : formatMoney(totalBe)} up={false} />
-        <StatCard icon="⏳" iconBg="#fef3f2" label="Pending Review" value={errored ? "—" : pending} />
+        <StatCard icon="⏳" iconBg="#fef3f2" label={BUDGET_STATUS_LABEL.pending} value={errored ? "—" : pending} />
       </StatGrid>
 
       <Card title={`Budget estimates (BE) — FY ${fy}`}>
@@ -65,7 +69,7 @@ export default async function BudgetFormulationPage({
           </div>
         ) : (
           /* UX-012: the data-source badge lives inside FormulationTable. */
-          <FormulationTable budgets={budgets} source="api" />
+          <FormulationTable budgets={budgets} source="api" priorBe={priorBe} />
         )}
       </Card>
     </>

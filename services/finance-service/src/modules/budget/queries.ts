@@ -1,7 +1,8 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as glRepo from "../gl/repo.js";
-import { sanctionAvailable, effectiveHeadType } from "./domain.js";
+import { pino } from "pino";
+import { sanctionAvailable, effectiveHeadType, isKnownSanctionStatus, mapSanctionStatus as domainMapSanctionStatus, type SanctionWebStatus } from "./domain.js";
 import type { BudgetRow, SanctionRow } from "./schema.js";
 
 const OFFICER_NAMES: Record<string, string> = {
@@ -24,10 +25,12 @@ function minorToAmount(minor: bigint | number | string | null | undefined): numb
   return Number(m) / 100;
 }
 
-function mapSanctionStatus(status: string): "approved" | "pending" | "rejected" {
-  if (status === "approved") return "approved";
-  if (status === "rejected") return "rejected";
-  return "pending";
+const sanctionLog = pino({ name: "finance-budget-queries" });
+
+/** domain mapSanctionStatus + a warning for a stored status it does not know. */
+function mapSanctionStatus(status: string): SanctionWebStatus {
+  if (!isKnownSanctionStatus(status)) sanctionLog.warn({ status }, "unknown sanction status mapped to pending");
+  return domainMapSanctionStatus(status);
 }
 
 export type AccountListItem = {

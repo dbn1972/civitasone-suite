@@ -259,3 +259,12 @@ export const ASSET_WRITE_ROLES = ["asset_manager", "asset_admin", "super_admin"]
 export function canWriteAssets(roles: readonly string[]): boolean {
   return roles.some((r) => (ASSET_WRITE_ROLES as readonly string[]).includes(r));
 }
+
+/**
+ * GAP-FINANCE-BUDGET-SANCTIONS-04: roles finance-service lets POST
+ * /v1/finance/sanctions (budget/routes.ts FINANCE_ROLES). The read-only budget
+ * roles (audit_officer, procurement_officer, ...) can open the sanctions list
+ * but get a 403 on create, so the "+ New Sanction" button is hidden for them.
+ * Mirrors that constant exactly -- keep in sync.
+ */
+export const SANCTION_CREATE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;

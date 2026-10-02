@@ -172,6 +172,12 @@ const STATUS_MAP: Record<string, PillVariant> = {
   degraded: "warn",
   down: "bad",
   standby: "mut",
+
+  // Outcome-budget indicator lifecycle (finance-service outcome-domain OutcomeStatus:
+  // draft | active | evaluated | closed; GAP-FINANCE-BUDGET-OUTCOME-BUDGET-04).
+  // draft/active/closed already map above; "evaluated" (rated, awaiting close) is
+  // neutral-informational and is listed explicitly so it is a decision, not a fallthrough.
+  evaluated: "info",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

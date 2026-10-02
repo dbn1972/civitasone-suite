@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { idempotentId } from "@civitasone/auth";
 import { ZodError } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
@@ -35,7 +36,15 @@ export async function createBudget(ctx: RequestContext, body: CreateBudgetBody):
     if (err instanceof DomainError) fieldError("headId", err.message);
     throw err;
   }
-  const id = randomUUID();
+  // A client x-idempotency-key makes a retry (network timeout, double submit)
+  // the SAME command: the consumer's markProcessed(messageId) drops the repeat.
+  // The proposal itself is folded into the key so a reused key with a DIFFERENT
+  // head/FY/amount is a new command, not silently swallowed.
+  const id = idempotentId(
+    ctx.idempotencyKey
+      ? { idempotencyKey: `budget-create:${ctx.idempotencyKey}:${body.headId}:${body.fy}:${body.beMinor}`, tenantId: ctx.tenantId }
+      : { tenantId: ctx.tenantId },
+  );
   await queue.publish(COMMANDS.budgetCreate, {
     messageId: id, type: COMMANDS.budgetCreate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",

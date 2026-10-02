@@ -2,6 +2,7 @@
 import { DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { humanizeStatus } from "@/lib/formatters";
 import type { FinanceDemandSummary } from "@civitasone/types";
 type Row = FinanceDemandSummary;
 export function DemandGrantsTable({ grants, source = "api" }: { grants: Row[]; source?: "api" | "error" }) {
@@ -18,7 +19,7 @@ export function DemandGrantsTable({ grants, source = "api" }: { grants: Row[]; s
         columns={[
           { key: "demandNo", label: "Demand No" },
           { key: "service", label: "Service" },
-          { key: "class", label: "Class" },
+          { key: "class", label: "Class", render: (r) => (r.class ? humanizeStatus(String(r.class)) : "—"), csv: (r) => String(r.class ?? "") },
           { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
           { key: "status", label: "Status", cellType: "status" },
         ]}

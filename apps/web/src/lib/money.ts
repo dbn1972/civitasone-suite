@@ -173,3 +173,31 @@ export function parseMinorOrZero(input: string): bigint | null {
   const minor = nonNegativeRupeesToMinorString(input);
   return minor === null ? null : BigInt(minor);
 }
+
+/**
+ * GAP-FINANCE-BUDGET-FUND-RELEASES-04: a paise (minor-unit) integer string as a
+ * plain machine-readable rupees decimal, for CSV export -- "125000000" ->
+ * "1250000.00", "-5" -> "-0.05". Pure BigInt string maths (no float, no
+ * grouping, no currency symbol) so a spreadsheet reads it as a number.
+ * Anything that is not an integer (null, "", "abc", "1.5") -> null.
+ */
+export function minorToDecimalString(minor: bigint | number | string | null | undefined): string | null {
+  if (minor === null || minor === undefined) return null;
+  let value: bigint;
+  try {
+    if (typeof minor === "bigint") value = minor;
+    else if (typeof minor === "number") {
+      if (!Number.isSafeInteger(minor)) return null;
+      value = BigInt(minor);
+    } else {
+      const t = minor.trim();
+      if (!/^[+-]?\d+$/.test(t)) return null;
+      value = BigInt(t);
+    }
+  } catch {
+    return null;
+  }
+  const negative = value < 0n;
+  const abs = negative ? -value : value;
+  return `${negative ? "-" : ""}${abs / 100n}.${(abs % 100n).toString().padStart(2, "0")}`;
+}
