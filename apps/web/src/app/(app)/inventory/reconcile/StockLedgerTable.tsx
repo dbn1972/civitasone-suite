@@ -20,6 +20,7 @@ const typeColors: Record<string, string> = {
   issue: "bad",
   transfer: "info",
   adjustment: "warn",
+  other: "mut",
 };
 
 export function StockLedgerTable({ rows }: { rows: LedgerEntry[] }) {
@@ -44,7 +45,7 @@ export function StockLedgerTable({ rows }: { rows: LedgerEntry[] }) {
           align: "right",
           render: (e) => {
             const qty = e.quantity as number;
-            const isNegative = e.type === "issue";
+            const isNegative = e.direction === "out";
             const sign = isNegative ? "-" : "+";
             // Variance direction is conveyed by arrow + sign + color together
             // (not color alone), per WCAG 1.4.1 use-of-color.

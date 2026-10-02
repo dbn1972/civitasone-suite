@@ -50,6 +50,23 @@ export async function cycleCountRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = approveCycleCountBody.parse(req.body);
+    // GAP-INVENTORY-CYCLE-COUNTS-DETAIL-02: synchronous pre-checks so the caller
+    // gets a real answer instead of a 202 for a command the consumer would
+    // silently drop. The consumer re-enforces all three atomically (version +
+    // status guard in its UPDATE, and the maker!=checker guard).
+    const record = await queries.getCycleCount(ctx.tenantId, id);
+    if (!record) throw new HttpError(404, "NOT_FOUND", "cycle count not found");
+    // Maker != checker: whoever created/counted the variance cannot approve the
+    // stock write-off it triggers (applies to every role, including super_admin).
+    if (record.createdBy === ctx.actorId) {
+      throw new HttpError(403, "MAKER_CHECKER", "the user who recorded a cycle count cannot approve it");
+    }
+    if (record.status !== "pending_approval") {
+      throw new HttpError(409, "NOT_PENDING_APPROVAL", `cycle count is already ${record.status}`);
+    }
+    if (record.version !== body.version) {
+      throw new HttpError(409, "VERSION_CONFLICT", "cycle count was changed by someone else; reload and retry");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveCycleCount(ctx, id, body.version));
   });
 
@@ -59,6 +76,12 @@ export async function cycleCountRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, APPROVE_ROLES);
     const { id } = idParam.parse(req.params);
     const body = rejectCycleCountBody.parse(req.body);
+    // Maker != checker applies to the decision as a whole, so reject mirrors approve.
+    const record = await queries.getCycleCount(ctx.tenantId, id);
+    if (!record) throw new HttpError(404, "NOT_FOUND", "cycle count not found");
+    if (record.createdBy === ctx.actorId) {
+      throw new HttpError(403, "MAKER_CHECKER", "the user who recorded a cycle count cannot reject it");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.rejectCycleCount(ctx, id, body.version, body.reason));
   });
 

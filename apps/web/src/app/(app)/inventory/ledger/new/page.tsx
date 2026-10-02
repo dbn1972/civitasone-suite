@@ -106,7 +106,7 @@ export default function NewStockEntryPage() {
       setQty("");
       setRate("");
       router.refresh();
-      setTimeout(() => router.push("/stock/ledger"), 700);
+      setTimeout(() => router.push("/inventory/reconcile"), 700);
     },
   });
 
@@ -122,7 +122,7 @@ export default function NewStockEntryPage() {
       <PageHeader
         title="New Stock Entry"
         subtitle="Record a receipt, issue, transfer or adjustment."
-        back="/stock/ledger"
+        back="/inventory/reconcile"
         backLabel="Stock Ledger"
       />
       {message ? (

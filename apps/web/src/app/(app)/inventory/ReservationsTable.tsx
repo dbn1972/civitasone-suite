@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
+import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryReservationRow } from "./_data";
 
 type Col = {
@@ -31,33 +32,35 @@ export function ReservationsTable({
   reservations: InventoryReservationRow[];
   source?: "api" | "error";
 }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<InventoryReservationRow[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<InventoryReservationRow[]>(
     "inventory.reservations",
     reservations,
     source,
     (d) => d.length === 0,
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${formatIndianDate(new Date(cachedAt).toISOString())}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
+  const active = rows.filter((r) => r.status === "active").length;
+  const totalQty = rows.reduce((s, r) => s + (Number(r.qty) || 0), 0);
 
   return (
-    <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
-      <DataTable<InventoryReservationRow>
-        columns={columns}
-        rows={rows}
-        sortable
-        filterable
-        filterPlaceholder="Filter reservations…"
-        pageSize={15}
-      />
-    </>
+    <div aria-label="Inventory stock reservations">
+      <StatGrid>
+          <StatCard icon="🔒" iconBg="#fef3c7" label="Reservations" value={statValue(provenance, rows.length)} />
+          <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={statValue(provenance, active)} />
+          <StatCard icon="🔢" iconBg="#f1f5f9" label="Total Qty Held" value={statValue(provenance, totalQty)} />
+      </StatGrid>
+      <Card title="Reservations">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="stock reservations">
+          <DataTable<InventoryReservationRow>
+            columns={columns}
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder="Filter reservations…"
+            pageSize={15}
+          />
+        </RegisterFrame>
+      </Card>
+    </div>
   );
 }

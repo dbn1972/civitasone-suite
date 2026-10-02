@@ -478,6 +478,7 @@ export function mapCycleCountDetail(payload: unknown): CycleCountDetail | null {
     rejectedBy: toText(payload.rejectedBy) ?? undefined,
     rejectedAt: toText(payload.rejectedAt) ?? undefined,
     rejectionReason: toText(payload.rejectionReason) ?? undefined,
+    createdBy: toText(payload.createdBy) ?? undefined,
     countedAt: toText(payload.countedAt) ?? "—",
     createdAt: toText(payload.createdAt) ?? "—",
     version: typeof payload.version === "number" ? payload.version : 1,
@@ -970,13 +971,23 @@ export function mapStockLedgerEntries(payload: unknown): StockLedgerEntry[] | nu
     if (!id) continue;
     const qtyIn = typeof row.qtyIn === "number" ? row.qtyIn : 0;
     const qtyOut = typeof row.qtyOut === "number" ? row.qtyOut : 0;
-    const quantity = qtyIn > 0 ? qtyIn : qtyOut;
-    const typeRaw = (toText(row.voucherType) ?? "receipt").toLowerCase();
+    // A row carrying both qtyIn and qtyOut displays its NET size, so the shown
+    // quantity always agrees with signedQuantity (and with the Net on reconcile).
+    const quantity = qtyIn > 0 && qtyOut > 0 ? Math.abs(qtyIn - qtyOut) : qtyIn > 0 ? qtyIn : qtyOut;
+    // GAP-INVENTORY-RECONCILE-02 / DETAIL-03: sign comes from qtyIn/qtyOut,
+    // never from the voucher type, and an unrecognised voucherType is "other"
+    // -- it must not be counted as a receipt.
+    const signedQuantity = qtyIn - qtyOut;
+    const direction: StockLedgerEntry["direction"] = signedQuantity < 0 ? "out" : "in";
+    const typeRaw = (toText(row.voucherType) ?? "").toLowerCase();
     const type: StockLedgerEntry["type"] =
-      typeRaw === "issue" ? "issue"
-        : typeRaw === "transfer" ? "transfer"
-          : typeRaw === "adjustment" ? "adjustment"
-            : "receipt";
+      typeRaw === "receipt" ? "receipt"
+        : typeRaw === "issue" ? "issue"
+          // stock-service writes transfer_in / transfer_out (voucherTypeForEntry);
+          // bare "transfer" is accepted too.
+          : typeRaw === "transfer" || typeRaw === "transfer_in" || typeRaw === "transfer_out" ? "transfer"
+            : typeRaw === "adjustment" ? "adjustment"
+              : "other";
     const unitCost = parseMinor(row.rateMinor) ?? 0;
     mapped.push({
       id,
@@ -985,6 +996,8 @@ export function mapStockLedgerEntries(payload: unknown): StockLedgerEntry[] | nu
       date: toText(row.postingDate)?.slice(0, 10) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
       type,
       quantity,
+      direction,
+      signedQuantity,
       unitCost,
       totalValue: unitCost * quantity,
       referenceNo: toText(row.entryId)?.slice(0, 8) ?? undefined,

@@ -1781,8 +1781,10 @@ export type StockItemDetail = StockItemSummary & {
   stockLedger: Array<{
     id: string;
     date: string;
-    type: "receipt" | "issue" | "transfer" | "adjustment";
+    type: StockLedgerEntry["type"];
     quantity: number;
+    direction: StockLedgerEntry["direction"];
+    signedQuantity: number;
     unitCost: number;
     totalValue: number;
     referenceNo?: string;
@@ -1796,8 +1798,14 @@ export type StockLedgerEntry = {
   itemCode: string;
   itemName: string;
   date: string;
-  type: "receipt" | "issue" | "transfer" | "adjustment";
+  /** "other" = a voucherType the web app does not recognise (never defaulted to "receipt"). */
+  type: "receipt" | "issue" | "transfer" | "adjustment" | "other";
+  /** Absolute movement size (never negative). Use `direction`/`signedQuantity` for sign. */
   quantity: number;
+  /** Whether the movement added ("in") or removed ("out") stock. */
+  direction: "in" | "out";
+  /** qtyIn - qtyOut: positive adds stock, negative removes it. */
+  signedQuantity: number;
   unitCost: number;
   totalValue: number;
   referenceNo?: string;
@@ -1829,6 +1837,8 @@ export type CycleCountDetail = {
   rejectedBy?: string;
   rejectedAt?: string;
   rejectionReason?: string;
+  /** User id (JWT sub) that recorded the count; the maker, who may not approve it. */
+  createdBy?: string;
   countedAt: string;
   createdAt: string;
   version: number;
