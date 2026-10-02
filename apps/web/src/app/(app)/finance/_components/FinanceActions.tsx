@@ -116,7 +116,13 @@ export function billPassBlockedReason(status: string, threeWayMatch?: string): s
   return null;
 }
 
-export function BillPassPayActions({ id, status, threeWayMatch }: { id: string; status: string; threeWayMatch?: string }) {
+export function BillPassPayActions({
+  id, status, threeWayMatch, canPass = true,
+}: {
+  id: string; status: string; threeWayMatch?: string;
+  /** GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-03: false hides "Pass bill" for roles the server 403s (approve is APPROVER_ROLES). */
+  canPass?: boolean;
+}) {
   const router = useRouter();
   const { toast } = useToast();
   const s = (status ?? "").toLowerCase();
@@ -124,6 +130,7 @@ export function BillPassPayActions({ id, status, threeWayMatch }: { id: string; 
   const passBlocked = billPassBlockedReason(status, threeWayMatch);
   return (
     <>
+      {canPass ? (<>
       <span title={passBlocked ?? undefined}>
         <ActionButton
           label="Pass bill"
@@ -142,6 +149,7 @@ export function BillPassPayActions({ id, status, threeWayMatch }: { id: string; 
         />
       </span>
       {passBlocked ? <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{passBlocked}</span> : null}
+      </>) : null}
       {canPay ? (
         // Releasing a payment needs the DDO, mode and the bill's net amount --
         // collected (and confirmed) on the payment form, not a one-line reason.

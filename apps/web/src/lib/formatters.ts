@@ -253,6 +253,73 @@ export function formatInternalRef(ref: string | null | undefined): string {
 }
 
 /**
+ * Utilisation as a percentage to ONE decimal (so 100.3% is not shown as a
+ * reassuring "100%"), computed in BigInt. null when there is no positive
+ * outlay. Use isOverUtilised() -- never this rounded figure -- to decide
+ * whether to flag a scheme.
+ *
+ *   utilisationPercent("1003", "1000") -> 100.3
+ *   utilisationPercent("400", "1000")  -> 40
+ */
+export function utilisationPercent(
+  utilised: bigint | number | string | null | undefined,
+  outlay: bigint | number | string | null | undefined,
+): number | null {
+  try {
+    if (utilised === null || utilised === undefined || outlay === null || outlay === undefined) return null;
+    const n = BigInt(utilised);
+    const d = BigInt(outlay);
+    if (d <= 0n || n < 0n) return null;
+    return Number((n * 2000n + d) / (2n * d)) / 10;
+  } catch {
+    return null;
+  }
+}
+
+/** Exact over-utilisation test: spend strictly above a positive outlay (BigInt, never the rounded %). */
+export function isOverUtilised(
+  utilised: bigint | number | string | null | undefined,
+  outlay: bigint | number | string | null | undefined,
+): boolean {
+  try {
+    if (utilised === null || utilised === undefined || outlay === null || outlay === undefined) return false;
+    const d = BigInt(outlay);
+    return d > 0n && BigInt(utilised) > d;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * GAP-FINANCE-EXPENDITURE-BILLS-06: a polymorphic cross-service reference such
+ * as "procurement_po:5b1c2d3e-..." is machine plumbing -- the "type:" prefix and
+ * a full UUID mean nothing to a clerk. Show the entity kind plus a short id
+ * ("PO 5b1c2d3e") instead; a non-UUID id (a human PO number) is shown as-is.
+ * Missing / "undefined" refs render "—" exactly as formatInternalRef does.
+ *
+ *   formatEntityRef("procurement_po:5b1c2d3e-0000-4000-8000-000000000000") -> "PO 5b1c2d3e"
+ *   formatEntityRef("procurement_grn:PO-2026-014")                          -> "PO-2026-014"
+ *   formatEntityRef("grn-7")                                               -> "grn-7"
+ */
+const ENTITY_REF_KIND: Record<string, string> = {
+  procurement_po: "PO",
+  procurement_grn: "GRN",
+};
+const UUID_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function formatEntityRef(ref: string | null | undefined): string {
+  const clean = formatInternalRef(ref);
+  if (clean === "—") return clean;
+  const idx = clean.indexOf(":");
+  if (idx < 0) return clean;
+  const kind = clean.slice(0, idx);
+  const id = clean.slice(idx + 1);
+  if (!id) return "—";
+  if (UUID_ID.test(id)) return `${ENTITY_REF_KIND[kind] ?? humanizeStatus(kind)} ${id.slice(0, 8)}`;
+  return id;
+}
+
+/**
  * Humanize a raw lowercase/snake_case status or enum value for display, e.g.
  * for a StatusPill/StatCard that was not given an explicit hand-written
  * label. "pending" -> "Pending", "pending_approval" -> "Pending Approval",
@@ -263,6 +330,12 @@ export function formatInternalRef(ref: string | null | undefined): string {
  */
 const STATUS_ACRONYM_LABELS: Record<string, string> = {
   na: "N/A",
+  // GAP-FINANCE-EXPENDITURE-GUARANTEES-05: treasury.finance_guarantees.type is
+  // bg | pbg | performance | advance (and EMD on the procurement surface); the
+  // generic Title Case would print "Bg" / "Pbg" / "Emd".
+  bg: "BG",
+  pbg: "PBG",
+  emd: "EMD",
 };
 
 export function humanizeStatus(status: string): string {
@@ -273,6 +346,34 @@ export function humanizeStatus(status: string): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+}
+
+/**
+ * GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-02: `numerator / denominator`
+ * as a whole-number percentage, computed in BigInt so paise values above 2^53
+ * stay exact (never `Number(minor)` division). Rounds half-up to the nearest
+ * whole percent. Returns null when the denominator is missing / not a positive
+ * integer string (so callers can render "—" rather than a fabricated 0%), and
+ * null when either side is not a base-10 integer.
+ *
+ *   percentOfMinor("120", "100")  -> 120
+ *   percentOfMinor("1", "0")      -> null
+ *   percentOfMinor("9007199254740993", "9007199254740993") -> 100
+ */
+export function percentOfMinor(
+  numerator: bigint | number | string | null | undefined,
+  denominator: bigint | number | string | null | undefined,
+): number | null {
+  try {
+    if (numerator === null || numerator === undefined || denominator === null || denominator === undefined) return null;
+    const n = BigInt(numerator);
+    const d = BigInt(denominator);
+    if (d <= 0n || n < 0n) return null;
+    // (n * 100 * 2 + d) / (2d) == round-half-up of n*100/d, all in BigInt.
+    return Number((n * 200n + d) / (2n * d));
+  } catch {
+    return null;
+  }
 }
 
 /**

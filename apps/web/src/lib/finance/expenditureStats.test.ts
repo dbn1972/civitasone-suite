@@ -54,6 +54,15 @@ describe("guaranteeStats / schemeStats", () => {
     const g = guaranteeStats([{ status: "active" }, { status: "Released" }, { status: "expired" }, { status: "invoked" }]);
     expect(g).toMatchObject({ total: 4, active: 1, released: 1, otherStatus: 2 });
   });
+  it("counts the real DB statuses: fully_released is Released, partially_released is other", () => {
+    const g = guaranteeStats([
+      { status: "active" },
+      { status: "fully_released" },
+      { status: "partially_released" },
+      { status: "cancelled" },
+    ]);
+    expect(g).toMatchObject({ total: 4, active: 1, released: 1, otherStatus: 2 });
+  });
   it("scheme other = neither active nor completed", () => {
     const s = schemeStats([{ status: "active" }, { status: "completed" }, { status: "on_hold" }, { status: "cancelled" }]);
     expect(s.otherStatus).toBe(2);

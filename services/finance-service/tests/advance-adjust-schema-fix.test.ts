@@ -86,7 +86,7 @@ describe("PATCH /v1/finance/advances/:id/adjust — consumer schema (combined HT
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       payload: {
         advanceNo: `ADV-SCHEMA-FIX-${randomUUID().slice(0, 8)}`,
-        purpose: "Field survey advance", amountMinor: "1000000", currency: "INR",
+        purpose: "Field survey advance", payee: "Field Office", amountMinor: "1000000", currency: "INR",
       },
     });
     expect(createRes.statusCode).toBe(202);
@@ -146,7 +146,7 @@ describe("PATCH /v1/finance/advances/:id/adjust — consumer schema (combined HT
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       payload: {
         advanceNo: `ADV-SCHEMA-FIX-FULL-${randomUUID().slice(0, 8)}`,
-        purpose: "Full and final adjustment", amountMinor: "50000", currency: "INR",
+        purpose: "Full and final adjustment", payee: "Field Office", amountMinor: "50000", currency: "INR",
       },
     });
     expect(createRes.statusCode).toBe(202);

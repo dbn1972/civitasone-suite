@@ -5,6 +5,8 @@ import { formatMoney } from "@/lib/formatters";
 import { billStats } from "@/lib/finance/expenditureStats";
 import { BillsTable } from "./BillsTable";
 import Link from "next/link";
+import { canWrite, BILL_CREATE_ROLES } from "@/lib/finance/writeRoles";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export default async function BillsPage() {
   const t = await getTranslations("expenditureBills");
@@ -14,6 +16,9 @@ export default async function BillsPage() {
   // Failed load with nothing to show must not read as zero bills / ₹0.00.
   const failed = result.source === "error" && bills.length === 0;
   const stats = billStats(bills);
+  // GAP-FINANCE-EXPENDITURE-BILLS-05: lodging a bill is FINANCE_ROLES-only on the
+  // server; read-only finance readers are not offered the link.
+  const mayCreate = canWrite(getSessionRoles(), BILL_CREATE_ROLES);
 
   return (
     <>
@@ -21,13 +26,10 @@ export default async function BillsPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         actions={
-          <>
-            {/* /finance/config sets up FYs/banks, not pre-audit rules — there is no
-                dedicated pre-audit-rules screen yet, so this points to the closest
-                real destination rather than promising content that doesn't exist. */}
-            <Link href="/finance/config" className="btn ghost">{t("financeConfigLink")}</Link>
-            <Link href="/finance/expenditure/bills/new" className="btn primary">{t("newBillLink")}</Link>
-          </>
+          // GAP-FINANCE-EXPENDITURE-BILLS-04: the "Finance Configuration" ghost link
+          // is gone -- /finance/config sets up FYs/banks, there is no pre-audit
+          // rules screen, and the primary action should stand alone.
+          mayCreate ? <Link href="/finance/expenditure/bills/new" className="btn primary">{t("newBillLink")}</Link> : null
         }
       />
 

@@ -97,7 +97,11 @@ export function guaranteeStats(guarantees: readonly { status: string }[]) {
   for (const g of guarantees) {
     const s = String(g.status).toLowerCase();
     if (s === "active") active += 1;
-    else if (s === "released") released += 1;
+    // finance_guarantees.status CHECK is active | partially_released |
+    // fully_released | cancelled -- a bare "released" never occurs, so the
+    // Released card was permanently 0 and fully-released guarantees were
+    // miscounted as "other". "released" kept for legacy/seeded rows.
+    else if (s === "fully_released" || s === "released") released += 1;
   }
   return { total: guarantees.length, active, released, otherStatus: guarantees.length - active - released };
 }

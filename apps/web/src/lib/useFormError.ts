@@ -118,7 +118,10 @@ export function useFormError(area: string): UseFormErrorResult {
       const fieldErrors = env.fieldErrors?.length
         ? Object.fromEntries(env.fieldErrors.map((f) => [f.field, f.message]))
         : {};
-      const resolvedKind = (env.code && CODE_TO_KIND[env.code]) || kind;
+      // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-05: a 403 from the gateway/proxy
+      // often carries no JSON envelope (so no FORBIDDEN code to map); the HTTP
+      // status alone must still say "no permission", never "try again".
+      const resolvedKind = (env.code && CODE_TO_KIND[env.code]) || (res.status === 403 ? "forbidden" : kind);
       const human = toHumanError(resolvedKind, { area });
       const next: FormErrorState = { message: `${human.what} ${human.next}`, fieldErrors };
       setState(next);

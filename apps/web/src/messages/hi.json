@@ -2157,8 +2157,8 @@
   "expenditureAdvances": {
     "title": "अग्रिम प्रबंधन",
     "subtitle": "वास्तविक व्यय के विरुद्ध अग्रिम जारी करें और वसूल करें।",
-    "printExportLabel": "आयु-विश्लेषण",
-    "printExportDocumentTitle": "अग्रिम आयु-विश्लेषण",
+    "printExportLabel": "रजिस्टर प्रिंट करें",
+    "printExportDocumentTitle": "अग्रिम रजिस्टर",
     "newAdvanceLink": "+ नया अग्रिम",
     "statOpenAdvances": "खुले अग्रिम",
     "statOutstanding": "बकाया",
@@ -2186,14 +2186,21 @@
     "confirmDescription": "यह {payee} को {amount} का अग्रिम दर्ज करता है, देय तिथि {dueDate}। यह सार्वजनिक धन की प्रतिबद्धता है और वास्तविक व्यय के विरुद्ध वसूल किया जाएगा।",
     "confirmNoPayee": "प्राप्तकर्ता",
     "confirmNoDueDate": "कोई देय तिथि निर्धारित नहीं",
-    "confirmLabel": "अग्रिम जारी करें"
+    "confirmLabel": "अग्रिम जारी करें",
+    "labelType": "अग्रिम का प्रकार",
+    "typeEmployee": "अधिकारी / कर्मचारी",
+    "typeVendor": "विक्रेता",
+    "typeOther": "अन्य पक्ष",
+    "hintAdvanceNumber": "आपके कार्यालय के लिए अद्वितीय होना चाहिए। अधिकतम 64 अक्षर।",
+    "errorPayee": "अग्रिम प्राप्त करने वाले अधिकारी या पक्ष का नाम दर्ज करें।",
+    "helpPayee": "अग्रिम प्राप्त करने वाला अधिकारी या पक्ष। अधिकृत न होने वाली भूमिकाओं को अधिकारियों के नाम छिपे हुए दिखाए जाते हैं।"
   },
   "expenditureAdvancesTable": {
     "tabAll": "सभी",
     "tabOpen": "खुला",
     "tabOverdue": "अतिदेय",
     "colAdvanceNo": "अग्रिम संख्या",
-    "colBeneficiary": "अधिकारी / पक्ष",
+    "colBeneficiary": "प्राप्तकर्ता",
     "colPurpose": "प्रयोजन",
     "colAdvance": "अग्रिम",
     "colSettled": "निपटाया गया",
@@ -2201,7 +2208,11 @@
     "colDisbursed": "वितरित",
     "colDue": "देय",
     "colStatus": "स्थिति",
-    "filterPlaceholder": "अग्रिम खोजें…"
+    "filterPlaceholder": "अग्रिम खोजें…",
+    "colType": "प्रकार",
+    "kindAll": "सभी प्राप्तकर्ता",
+    "kindOfficer": "अधिकारी",
+    "kindParty": "पक्ष"
   },
   "expenditureBillDetail": {
     "breadcrumbLabel": "ब्रेडक्रंब",
@@ -2240,7 +2251,6 @@
   "expenditureBills": {
     "title": "बिल प्रसंस्करण",
     "subtitle": "स्वीकृतियों के विरुद्ध बिल प्राप्त करें, पूर्व-लेखापरीक्षा करें, पास करें और भुगतान करें।",
-    "financeConfigLink": "वित्त कॉन्फ़िगरेशन",
     "statInProcess": "प्रक्रियाधीन बिल",
     "statTotal": "कुल बिल",
     "statValueInPipeline": "पाइपलाइन में मूल्य",
@@ -2275,7 +2285,8 @@
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
     "routeErrorArea": "वित्त पृष्ठ",
     "statOtherStatus": "समाप्त / प्रवर्तित / अन्य",
-    "areaGuarantees": "गारंटी"
+    "areaGuarantees": "गारंटी",
+    "manageInProcurementLink": "EMD और बैंक गारंटी (प्रापण)"
   },
   "expenditureGuaranteesTable": {
     "colEntity": "इकाई",
@@ -2303,7 +2314,8 @@
     "fieldCreated": "बनाया गया",
     "fieldLastUpdated": "अंतिम अद्यतन",
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
-    "routeErrorArea": "वित्त पृष्ठ"
+    "routeErrorArea": "वित्त पृष्ठ",
+    "overUtilised": "अधिक उपयोग"
   },
   "expenditureSchemeTracking": {
     "title": "योजना ट्रैकिंग",
@@ -2326,7 +2338,9 @@
     "colStatus": "स्थिति",
     "filterPlaceholder": "योजनाएं खोजें…",
     "emptyTitle": "कोई योजना नहीं",
-    "emptyMessage": "कोई योजना व्यय रिकॉर्ड नहीं मिला।"
+    "emptyMessage": "कोई योजना व्यय रिकॉर्ड नहीं मिला।",
+    "colUtilisation": "उपयोग (%)",
+    "overUtilised": "अधिक उपयोग"
   },
   "expenditureUCNew": {
     "title": "नया उपयोगिता प्रमाणपत्र",

@@ -3,6 +3,7 @@ import { useTranslations } from "next-intl";
 import { DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { humanizeStatus } from "@/lib/formatters";
 import type { FinanceGuaranteeSummary } from "@civitasone/types";
 type Row = FinanceGuaranteeSummary;
 export function GuaranteesTable({ guarantees, source = "api" }: { guarantees: Row[]; source?: "api" | "error" }) {
@@ -19,7 +20,7 @@ export function GuaranteesTable({ guarantees, source = "api" }: { guarantees: Ro
       <DataTable<Row>
         columns={[
           { key: "entity", label: t("colEntity") },
-          { key: "type", label: t("colType") },
+          { key: "type", label: t("colType"), render: (g) => humanizeStatus(String(g.type)) },
           { key: "amountMinor", label: t("colAmount"), align: "right", cellType: "amount" },
           { key: "feePct", label: t("colFeePct"), align: "right" },
           { key: "status", label: t("colStatus"), cellType: "status" },

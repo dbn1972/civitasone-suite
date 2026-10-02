@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "@/app/_components/ds";
 import { guaranteeStats } from "@/lib/finance/expenditureStats";
@@ -17,6 +18,12 @@ export default async function GuaranteesPage() {
         title={t("title")}
         subtitle={t("subtitle")}
         back="/finance"
+        actions={
+          // GAP-FINANCE-EXPENDITURE-GUARANTEES-04: this register is read-only (no
+          // create/release/invoke endpoint exists); EMD / bank-guarantee
+          // instruments are lodged and managed under Procurement, so point there.
+          <Link href="/procurement/emd-bg" className="btn ghost">{t("manageInProcurementLink")}</Link>
+        }
       />
       <StatGrid>
         <StatCard icon="🛡️" iconBg="#e7edfd" label={t("statTotal")} value={failed ? null : stats.total} />

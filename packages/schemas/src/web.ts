@@ -636,6 +636,7 @@ export const AdvanceSummarySchema = z.object({
   advanceNo: z.string(),
   beneficiary: z.string(),
   type: z.enum(["employee", "vendor", "other"]),
+  purpose: z.string().optional(),
   // Bigint-safe strings, not z.number(): payments/queries.ts's listAdvances
   // returns amount/adjustedAmount/balance via .toString() (H3: paise can
   // exceed 2^53), which a plain z.number() here would 400 on real data (it
