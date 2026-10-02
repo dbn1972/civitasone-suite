@@ -5900,7 +5900,9 @@
     "statGross": "Total Gross",
     "statNet": "Total Net",
     "statDraft": "Pending (Draft)",
-    "loadErrorMessage": "Couldn't load — showing nothing"
+    "loadErrorMessage": "Couldn't load — showing nothing",
+    "errorBackLabel": "Back to Payroll",
+    "errorArea": "Salary Slips"
   },
   "salarySlipsTable": {
     "colEmployee": "Employee",
@@ -5912,6 +5914,7 @@
     "colStatus": "Status",
     "colSlip": "Slip",
     "printLabel": "Print",
+    "printUnavailableNotFinal": "Only finalized or paid slips can be printed",
     "cardTitle": "All Salary Slips",
     "emptyTitle": "No salary slips yet",
     "emptyMessage": "Salary slips appear here once a payroll run has been processed.",
@@ -5923,11 +5926,14 @@
       "draft": "Draft",
       "finalized": "Finalized",
       "paid": "Paid",
-      "computed": "Computed"
+      "computed": "Computed",
+      "approved": "Approved",
+      "held": "On hold",
+      "exception": "Exception (negative net)"
     }
   },
   "printButton": {
-    "printSavePdfBtn": "🖨️ Print / Save PDF"
+    "printSavePdfBtn": "Print / Save PDF"
   },
   "salarySlipDetail": {
     "title": "Salary Slip",
@@ -5939,6 +5945,7 @@
     "designation": "Designation:",
     "bankAccount": "Bank A/C:",
     "paidOn": "Paid on:",
+    "notYetPaid": "Not yet paid",
     "earnings": "Earnings",
     "deductions": "Deductions",
     "grossEarnings": "Gross Earnings",
@@ -5947,16 +5954,28 @@
     "footer": "This is a system-generated salary slip. No signature required.",
     "dashboardView": "Dashboard View",
     "loadErrorMessage": "Couldn't load — showing nothing",
+    "notFoundMessage": "Salary slip not found. It may have been removed or you may not have access.",
+    "printUnavailableNotFinal": "Only finalized or paid slips can be printed",
     "brandName": "CivitasOne HRMS",
-    "printMeta": "Government of India · HR Management System · Salary Slip",
+    "printMeta": "HR Management System · Salary Slip",
     "loadingSlipDetails": "Loading slip details…"
   },
   "salarySlipDashboard": {
     "title": "Salary Slip",
     "notFoundMessage": "Salary slip not found. It may have been removed or you may not have access.",
     "titleWithPeriod": "Salary Slip — {period}",
-    "printableSlipLink": "🖨 Printable Slip",
-    "downloadPdfLink": "⬇ Download PDF",
+    "status": {
+      "draft": "Draft",
+      "finalized": "Finalized",
+      "paid": "Paid",
+      "computed": "Computed",
+      "approved": "Approved",
+      "held": "On hold",
+      "exception": "Exception (negative net)"
+    },
+    "printableSlipLink": "Printable Slip",
+    "downloadPdfLink": "Download PDF",
+    "downloadUnavailableNotFinal": "Only finalized or paid slips can be downloaded",
     "statGross": "Gross Pay",
     "statDeductions": "Total Deductions",
     "statNetPay": "Net Pay",
@@ -5979,9 +5998,14 @@
     "statutoryTitle": "Statutory Contributions",
     "pfEmployee": "PF (Employee)",
     "pfEmployer": "PF (Employer)",
+    "gpf": "GPF",
+    "npsEmployee": "NPS (Employee)",
+    "npsEmployer": "NPS (Employer)",
     "esiEmployee": "ESI (Employee)",
     "esiEmployer": "ESI (Employer)",
+    "esi": "ESI",
     "tds": "TDS",
+    "employerContributionNote": "Employer contributions are paid by the employer on your behalf and are not deducted from your pay.",
     "statutoryUnavailable": "Statutory breakdown not available for this slip."
   },
   "payrollBonus": {

@@ -14,6 +14,7 @@ import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { eq, and } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
+import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
 const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
@@ -60,6 +61,7 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
     // payslip — without this any employee could download any co-worker's slip
     // by iterating slip IDs (IDOR).
     await scopeEmployeeId(ctx, slip.employeeId, READER_STAFF_ROLES);
+    assertSlipPrintable(slip.status);
 
     const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)
       .where(and(eq(payrollRuns.id, slip.runId), eq(payrollRuns.tenantId, ctx.tenantId)))
@@ -92,6 +94,7 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
 
     const html = renderTemplate(DEFAULT_TEMPLATE, vars);
     const filename = `salary-slip-${slip.employeeNo}-${month}.html`;
+    await publishSlipDownloadAudit(ctx, slip.id, "download");
 
     return reply
       .header("content-type", "text/html; charset=utf-8")

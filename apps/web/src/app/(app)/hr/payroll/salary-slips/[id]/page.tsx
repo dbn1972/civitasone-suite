@@ -1,40 +1,15 @@
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, formatPayPeriod } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import Link from "next/link";
-import { notFound } from "next/navigation";
-import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { PageHeader, RefreshErrorState } from "../../../../../_components/ds";
+import { PageHeader, RefreshErrorState, Card, maskLast4 } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { PrintButton } from "./PrintButton";
+import { getSlipById } from "../../../../../_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
-
-type SlipComponent = { code: string; name: string; type: string; amountMinor: number };
-type Slip = {
-  id: string;
-  employeeId: string;
-  employeeName?: string;
-  employeeNo?: string;
-  department?: string;
-  designation?: string;
-  payPeriod: string;
-  basicMinor: number;
-  grossMinor: number;
-  totalDeductionsMinor: number;
-  netMinor: number;
-  components: SlipComponent[];
-  bankAccount?: string;
-  paidDate?: string;
-};
-
-async function getSlip(id: string): Promise<LoaderResult<Slip | null>> {
-  return fetchJson<unknown, Slip | null>(`/api/v1/payroll/slips/${id}`, null, {
-    telemetryKey: "payroll.slip",
-    mapResponse: (p) => (p && typeof p === "object" ? p as Slip : null),
-  });
-}
+import { isPrintableSlipStatus } from "@/lib/payroll/statusLabels";
 
 export default async function SalarySlipPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("salarySlipDetail");
@@ -48,7 +23,11 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
   }
 
-  const { data: slip, source, status } = await getSlip(params.id);
+  // GAP-PAYROLL-SALARY-SLIPS-DETAIL-01/03: read through the shared,
+  // schema-validated loader (also used by slips/[id]/page.tsx) instead of a
+  // private, unvalidated fetch -- both pages now agree on one contract for
+  // this one backend endpoint.
+  const { data: slip, source, status } = await getSlipById(params.id);
   if (status === 403) {
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
   }
@@ -56,29 +35,39 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
   if (errored) {
     return (
       <div className="page-main wrap" style={{ maxWidth: 800 }}>
-        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" />
+        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
         <div className="pad">
           <RefreshErrorState error={toHumanError("load", { area: "salary slip" })} backHref="/hr/payroll/salary-slips" />
         </div>
       </div>
     );
   }
-  if (!slip) notFound();
+  if (!slip) {
+    // GAP-PAYROLL-SALARY-SLIPS-DETAIL-06: previously called the framework's
+    // notFound(), which renders the app's generic 404 with no way back to
+    // the slips list -- unlike the sibling slips/[id] page, which already
+    // shows a proper not-found card with a back link.
+    return (
+      <div className="page-main wrap" style={{ maxWidth: 800 }}>
+        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
+        <Card padding>
+          <p style={{ textAlign: "center", color: "var(--color-text-muted)" }}>{t("notFoundMessage")}</p>
+        </Card>
+      </div>
+    );
+  }
 
   const earnings = slip.components.filter((c) => c.type === "earning");
   const deductions = slip.components.filter((c) => c.type === "deduction");
-
-  const maskedAccount = slip.bankAccount
-    ? "XXXX-XXXX-" + slip.bankAccount.slice(-4)
-    : "—";
+  const canPrint = isPrintableSlipStatus(slip.status);
 
   return (
     <div className="page-main wrap" style={{ maxWidth: 800 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
         <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <Link href={`/hr/payroll/slips/${params.id}`} className="btn secondary" style={{ minHeight: 44 }}>{t("dashboardView")}</Link>
-          <PrintButton />
+          <PrintButton disabled={!canPrint} disabledReason={canPrint ? undefined : t("printUnavailableNotFinal")} />
         </div>
       </div>
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
@@ -92,7 +81,7 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
         <div style={{ textAlign: "center", marginBottom: 24, borderBottom: "2px solid var(--ink)", paddingBottom: 16 }}>
           <h1 style={{ margin: 0, fontSize: 20, fontWeight: 800 }}>{t("heading")}</h1>
           <p style={{ margin: "4px 0 0", fontSize: 14, color: "var(--color-text-muted)" }}>
-            {t("payPeriod")} <strong>{slip.payPeriod}</strong>
+            {t("payPeriod")} <strong>{formatPayPeriod(slip.payPeriod)}</strong>
           </p>
         </div>
 
@@ -101,29 +90,34 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
           <tbody>
             <tr>
               <td style={{ padding: "4px 0" }}><strong>{t("employee")}</strong> {slip.employeeName ?? slip.employeeId}</td>
-              <td style={{ padding: "4px 0" }}><strong>{t("empNo")}</strong> {slip.employeeNo ?? "—"}</td>
+              <td style={{ padding: "4px 0" }}><strong>{t("empNo")}</strong> {slip.employeeNo}</td>
             </tr>
             <tr>
               <td style={{ padding: "4px 0" }}><strong>{t("department")}</strong> {slip.department ?? "—"}</td>
-              <td style={{ padding: "4px 0" }}><strong>{t("designation")}</strong> {slip.designation ?? "—"}</td>
+              <td style={{ padding: "4px 0" }}><strong>{t("designation")}</strong> {"—"}</td>
             </tr>
             <tr>
-              <td style={{ padding: "4px 0" }}><strong>{t("bankAccount")}</strong> {maskedAccount}</td>
-              <td style={{ padding: "4px 0" }}><strong>{t("paidOn")}</strong> {slip.paidDate ?? "—"}</td>
+              {/* GAP-PAYROLL-SALARY-SLIPS-DETAIL-05: the backend now resolves
+                  and sends ONLY the last 4 digits (queries.ts getSlip) --
+                  the full account number never reaches this page at all, so
+                  there is nothing left here to mask or to get a fixed-prefix
+                  length wrong on. */}
+              <td style={{ padding: "4px 0" }}><strong>{t("bankAccount")}</strong> {slip.bankAccountLast4 ? maskLast4(slip.bankAccountLast4) : "—"}</td>
+              <td style={{ padding: "4px 0" }}><strong>{t("paidOn")}</strong> {slip.paidDate ? formatIndianDate(slip.paidDate) : t("notYetPaid")}</td>
             </tr>
           </tbody>
         </table>
 
         {/* Earnings & Deductions side by side */}
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 24 }}>
+        <div className="slip-columns">
           <div>
             <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--good)", borderBottom: "1px solid var(--goodbd)", paddingBottom: 4, marginBottom: 8 }}>{t("earnings")}</h3>
             <table style={{ width: "100%", fontSize: 13 }}>
               <tbody>
                 {earnings.map((c) => (
                   <tr key={c.code}>
-                    <td style={{ padding: "3px 0" }}>{c.name}</td>
-                    <td style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(c.amountMinor)}</td>
+                    <td className="cmp-name" style={{ padding: "3px 0" }}>{c.name}</td>
+                    <td className="cmp-amount" style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(c.amountMinor)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: "1px solid var(--color-border)", fontWeight: 700 }}>
@@ -140,8 +134,8 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
               <tbody>
                 {deductions.map((c) => (
                   <tr key={c.code}>
-                    <td style={{ padding: "3px 0" }}>{c.name}</td>
-                    <td style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(c.amountMinor)}</td>
+                    <td className="cmp-name" style={{ padding: "3px 0" }}>{c.name}</td>
+                    <td className="cmp-amount" style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(c.amountMinor)}</td>
                   </tr>
                 ))}
                 <tr style={{ borderTop: "1px solid var(--color-border)", fontWeight: 700 }}>

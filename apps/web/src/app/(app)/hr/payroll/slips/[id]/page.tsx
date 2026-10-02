@@ -2,10 +2,12 @@ import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
-import { PageHeader, Card, StatGrid, StatCard } from "../../../../../_components/ds";
+import { PageHeader, Card, StatGrid, StatCard, RefreshErrorState } from "../../../../../_components/ds";
 import { getSlipById } from "../../../../../_data/loaders";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatPayPeriod } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { salarySlipStatusLabel, isPrintableSlipStatus } from "@/lib/payroll/statusLabels";
 import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 
 export default async function PayslipDetailPage({ params }: { params: { id: string } }) {
@@ -19,6 +21,15 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
   // to stop blocking a plain employee before that check ever runs, and
   // handle the 403 it can now legitimately get back for someone else's slip.
   const canAttempt = roles.some((r) => SALARY_ADMIN_ROLES.includes(r)) || roles.includes("employee");
+  const isAdmin = roles.some((r) => SALARY_ADMIN_ROLES.includes(r));
+  // GAP-PAYROLL-SLIPS-DETAIL-06: the list this page's own back-link pointed
+  // to (/hr/payroll/salary-slips) is admin-only -- an employee following it
+  // would land on a 403, even though THIS detail page admits them. There is
+  // no self-service "my payslips" list yet (GAP-PAYROLL-SALARY-SLIPS-04), so
+  // /hr/payroll is the one back-target every role here can actually open.
+  const backHref = isAdmin ? "/hr/payroll/salary-slips" : "/hr/payroll";
+  const backLabel = isAdmin ? "Back to Salary Slips" : "Back to Payroll";
+
   if (!canAttempt) {
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
   }
@@ -29,10 +40,27 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
     return <PermissionDenied module="salary slip details" requiredRoles={SALARY_ADMIN_ROLES} />;
   }
 
+  // GAP-PAYROLL-SLIPS-DETAIL-01: a failed fetch (source==='error', e.g. the
+  // backend unreachable or a genuine 5xx) used to fall into the exact same
+  // "may have been removed or you may not have access" branch as a real
+  // 404 -- indistinguishable to whoever's reading it, even though one is
+  // retryable and the other isn't. Only a true miss (slip is null AND the
+  // fetch itself succeeded) is a real not-found now.
+  if (source === "error" && status !== 404) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title={t("title")} back={backHref} backLabel={backLabel} />
+        <div className="pad">
+          <RefreshErrorState error={toHumanError("load", { area: "salary slip" })} backHref={backHref} />
+        </div>
+      </div>
+    );
+  }
+
   if (!slip) {
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title={t("title")} back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips" />
+        <PageHeader title={t("title")} back={backHref} backLabel={backLabel} />
         <DataSourceBadge source={source} message={t("loadErrorMessage")} />
         <Card padding>
           <p style={{ textAlign: "center", color: "var(--color-text-muted)" }}>
@@ -43,31 +71,36 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
     );
   }
 
-  // The summary type has top-level gross/deductions/net — use those for display.
-  // The API may return richer fields (earnings/deductions arrays, statutory breakdown)
-  // that are not in the typed summary but may arrive in the JSON payload.
-  const richSlip = slip as typeof slip & {
-    earnings?: Array<{ code: string; name: string; amount: number }>;
-    deductionItems?: Array<{ code: string; name: string; amount: number }>;
-    statutory?: {
-      pfEmployee?: number;
-      pfEmployer?: number;
-      esiEmployee?: number;
-      esiEmployer?: number;
-      tds?: number;
-    };
-  };
+  // GAP-PAYROLL-SLIPS-DETAIL-03: this page used to read earnings/
+  // deductionItems/statutory fields payroll-service never actually sends
+  // (a cast onto a shape that doesn't exist on the wire), so these tables
+  // showed "unavailable" for every real slip. components[] is the real
+  // field -- same one the sibling salary-slips/[id] page already reads.
+  const earnings = slip.components.filter((c) => c.type === "earning");
+  const deductions = slip.components.filter((c) => c.type === "deduction");
+  const canDownload = isPrintableSlipStatus(slip.status);
 
-  const earnings = richSlip.earnings ?? [];
-  const deductionItems = richSlip.deductionItems ?? [];
-  const stat = richSlip.statutory;
+  // GAP-PAYROLL-SLIPS-DETAIL-03: the real statutory columns, not the
+  // fictional stat.pfEmployee/esiEmployee/esiEmployer shape. Only rendered
+  // when non-zero so a slip genuinely without (say) ESI doesn't show a
+  // confusing "₹0.00 ESI" line.
+  const statutoryLines = [
+    { key: "pfEmployee", amount: slip.pfEmployeeMinor },
+    { key: "pfEmployer", amount: slip.pfEmployerMinor },
+    { key: "gpf", amount: slip.gpfMinor },
+    { key: "npsEmployee", amount: slip.npsEmployeeMinor },
+    { key: "npsEmployer", amount: slip.npsEmployerMinor },
+    { key: "esi", amount: slip.esiMinor },
+    { key: "tds", amount: slip.tdsMinor },
+  ].filter((line) => line.amount > 0);
+  const hasEmployerContribution = statutoryLines.some((l) => l.key === "pfEmployer" || l.key === "npsEmployer");
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={t("titleWithPeriod", { period: slip.payPeriod })}
-        subtitle={slip.employeeName}
-        back="/hr/payroll/salary-slips" backLabel="Back to Salary Slips"
+        title={t("titleWithPeriod", { period: formatPayPeriod(slip.payPeriod) })}
+        subtitle={slip.employeeName ?? "—"}
+        back={backHref} backLabel={backLabel}
         actions={
           <>
             <Link
@@ -77,15 +110,26 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
             >
               {t("printableSlipLink")}
             </Link>
-            <a
-              href={`/api/proxy/v1/payroll/slips/${slip.id}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="btn primary"
-              style={{ minHeight: 44 }}
-            >
-              {t("downloadPdfLink")}
-            </a>
+            {canDownload ? (
+              <a
+                href={`/api/proxy/v1/payroll/slips/${slip.id}/pdf`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn primary"
+                style={{ minHeight: 44 }}
+              >
+                {t("downloadPdfLink")}
+              </a>
+            ) : (
+              <span
+                className="btn primary"
+                aria-disabled="true"
+                title={t("downloadUnavailableNotFinal")}
+                style={{ minHeight: 44, opacity: 0.5, cursor: "not-allowed", pointerEvents: "none" }}
+              >
+                {t("downloadPdfLink")}
+              </span>
+            )}
           </>
         }
       />
@@ -94,14 +138,22 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
       {/* Summary cards */}
       <StatGrid>
-        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")} value={formatMoney(slip.gross)} />
-        <StatCard icon="📉" iconBg="var(--badbg)" label={t("statDeductions")} value={formatMoney(slip.deductions)} />
-        <StatCard icon="✅" iconBg="var(--infobg)" label={t("statNetPay")} value={formatMoney(slip.net)} />
+        <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statGross")} value={formatMoney(slip.grossMinor)} />
+        <StatCard icon="📉" iconBg="var(--badbg)" label={t("statDeductions")} value={formatMoney(slip.totalDeductionsMinor)} />
+        <StatCard icon="✅" iconBg="var(--infobg)" label={t("statNetPay")} value={formatMoney(slip.netMinor)} />
         <StatCard
           icon="📋"
           iconBg="var(--warnbg)"
           label={t("statStatus")}
-          value={slip.status.charAt(0).toUpperCase() + slip.status.slice(1)}
+          // GAP-PAYROLL-SLIPS-DETAIL-04: slip.status.charAt(0) had no guard
+          // -- an unexpected/malformed status crashed the whole page. Two
+          // layers of defense now: SalarySlipDetailSchema rejects a response
+          // whose status isn't a real slip status (draft, finalized, computed,
+          // approved, paid, held, exception) before this ever renders (surfaces as the RefreshErrorState branch above instead
+          // of a crash), and salarySlipStatusLabel (shared with
+          // SalarySlipsTable.tsx) falls back to the raw string rather than
+          // throwing for any value outside its own known set.
+          value={salarySlipStatusLabel(slip.status, t)}
         />
       </StatGrid>
 
@@ -115,17 +167,17 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
                 href={`/hr/employees/${slip.employeeId}`}
                 style={{ color: "var(--primary-d)", fontWeight: 600 }}
               >
-                {slip.employeeName}
+                {slip.employeeName ?? "—"}
               </Link>
             </span>
           </div>
           <div className="field">
             <span className="lbl">{t("fieldDepartment")}</span>
-            <span className="val">{slip.department}</span>
+            <span className="val">{slip.department ?? "—"}</span>
           </div>
           <div className="field">
             <span className="lbl">{t("fieldPayPeriod")}</span>
-            <span className="val">{slip.payPeriod}</span>
+            <span className="val">{formatPayPeriod(slip.payPeriod)}</span>
           </div>
         </div>
       </Card>
@@ -146,12 +198,12 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
                 <tr key={row.code}>
                   <td>{row.code}</td>
                   <td>{row.name}</td>
-                  <td className="num">{formatMoney(row.amount)}</td>
+                  <td className="num">{formatMoney(row.amountMinor)}</td>
                 </tr>
               ))}
               <tr style={{ fontWeight: 700, borderTop: "2px solid var(--line)" }}>
                 <td colSpan={2}>{t("totalEarnings")}</td>
-                <td className="num">{formatMoney(slip.gross)}</td>
+                <td className="num">{formatMoney(slip.grossMinor)}</td>
               </tr>
             </tbody>
           </table>
@@ -165,7 +217,7 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
       )}
 
       {/* Deductions table */}
-      {deductionItems.length > 0 ? (
+      {deductions.length > 0 ? (
         <Card title={t("deductionsTitle")}>
           <table className="tbl">
             <thead>
@@ -176,16 +228,16 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
               </tr>
             </thead>
             <tbody>
-              {deductionItems.map((row) => (
+              {deductions.map((row) => (
                 <tr key={row.code}>
                   <td>{row.code}</td>
                   <td>{row.name}</td>
-                  <td className="num">{formatMoney(row.amount)}</td>
+                  <td className="num">{formatMoney(row.amountMinor)}</td>
                 </tr>
               ))}
               <tr style={{ fontWeight: 700, borderTop: "2px solid var(--line)" }}>
                 <td colSpan={2}>{t("totalDeductions")}</td>
-                <td className="num">{formatMoney(slip.deductions)}</td>
+                <td className="num">{formatMoney(slip.totalDeductionsMinor)}</td>
               </tr>
             </tbody>
           </table>
@@ -200,38 +252,24 @@ export default async function PayslipDetailPage({ params }: { params: { id: stri
 
       {/* Statutory breakdown */}
       <Card title={t("statutoryTitle")} padding>
-        {stat ? (
+        {statutoryLines.length > 0 ? (
           <div className="fields">
-            {stat.pfEmployee != null && (
-              <div className="field">
-                <span className="lbl">{t("pfEmployee")}</span>
-                <span className="val">{formatMoney(stat.pfEmployee)}</span>
-              </div>
+            {/* GAP-PAYROLL-SLIPS-DETAIL-04: employer contributions (PF/NPS
+                employer share) are not deducted from the employee's own
+                pay -- shown here for transparency, but without this note an
+                employee viewing their own slip could easily read them as
+                money taken out of their pay. */}
+            {hasEmployerContribution && (
+              <p style={{ fontSize: 12, color: "var(--color-text-muted)", margin: "0 0 10px" }}>
+                {t("employerContributionNote")}
+              </p>
             )}
-            {stat.pfEmployer != null && (
-              <div className="field">
-                <span className="lbl">{t("pfEmployer")}</span>
-                <span className="val">{formatMoney(stat.pfEmployer)}</span>
+            {statutoryLines.map((line) => (
+              <div className="field" key={line.key}>
+                <span className="lbl">{t(line.key as Parameters<typeof t>[0])}</span>
+                <span className="val">{formatMoney(line.amount)}</span>
               </div>
-            )}
-            {stat.esiEmployee != null && (
-              <div className="field">
-                <span className="lbl">{t("esiEmployee")}</span>
-                <span className="val">{formatMoney(stat.esiEmployee)}</span>
-              </div>
-            )}
-            {stat.esiEmployer != null && (
-              <div className="field">
-                <span className="lbl">{t("esiEmployer")}</span>
-                <span className="val">{formatMoney(stat.esiEmployer)}</span>
-              </div>
-            )}
-            {stat.tds != null && (
-              <div className="field">
-                <span className="lbl">{t("tds")}</span>
-                <span className="val">{formatMoney(stat.tds)}</span>
-              </div>
-            )}
+            ))}
           </div>
         ) : (
           <p style={{ color: "var(--color-text-muted)", fontSize: 14 }}>

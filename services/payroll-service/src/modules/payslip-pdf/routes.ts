@@ -6,6 +6,8 @@ import { eq, and } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput, fetchEmployeeSummaries, fetchDefaultSlipTemplate, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { maskLast4, maskPan } from "../../shared/pii-mask.js";
+import { assertSlipPrintable, publishSlipDownloadAudit } from "./slip-gate.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
 const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
@@ -103,6 +105,9 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
     // payslip — without this, any employee could fetch any co-worker's slip
     // (gross/net/PAN/IFSC/UAN) by iterating slip ids.
     await scopeEmployeeId(ctx, slip.employeeId, READER_STAFF_ROLES);
+    // Server-side print gate (after the ownership check, so a non-owner still
+    // gets 403/404 rather than learning the slip's status).
+    assertSlipPrintable(slip.status);
 
     // Fetch the run for month info
     const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)
@@ -153,8 +158,13 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
         const emp = hrmsInput.employees.find((e) => e.id === slip.employeeId);
         if (emp) {
           employeeName = emp.fullName;
-          pan = emp.pan ?? "";
-          bankAccount = emp.bankAccountNo ?? "";
+          // PII: the payslip prints only the masked forms. The full bank
+          // account number never belongs on a payslip (last 4 identifies the
+          // credit account), and no statute requires the full PAN on a
+          // salary slip (Form 16 is the PAN-bearing document), so PAN uses
+          // the repo's standard ABCDE****F mask (web Masked.tsx maskPan).
+          pan = maskPan(emp.pan);
+          bankAccount = maskLast4(emp.bankAccountNo);
           bankIfsc = emp.bankIfsc ?? "";
           uan = emp.uan ?? "";
         } else {
@@ -237,6 +247,7 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
     };
 
     const html = renderTemplate(template, vars);
+    await publishSlipDownloadAudit(ctx, slip.id, "pdf");
     return reply
       .header("content-type", "text/html; charset=utf-8")
       .send(html);

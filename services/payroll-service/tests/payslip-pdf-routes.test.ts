@@ -29,6 +29,8 @@ function employeeToken(_ownEmployeeId = EMPLOYEE_ID) {
 const H = vi.hoisted(() => ({
   scopedReadMock: vi.fn(),
   fetchDefaultSlipTemplateMock: vi.fn(),
+  fetchPayrollInputMock: vi.fn(),
+  publishMock: vi.fn(async () => undefined),
 }));
 
 vi.mock("../src/shared/db.js", async (io) => {
@@ -58,6 +60,7 @@ vi.mock("../src/shared/hrms-client.js", async (io) => {
     fetchDefaultSlipTemplate: (...args: [string]) => H.fetchDefaultSlipTemplateMock(...args),
     resolveActorEmployeeId: vi.fn(async (_t: string, actorId: string) =>
       actorId === "aaaaaaaa-cccc-4000-8000-0000000000f2" ? "aaaaaaaa-cccc-4000-8000-000000000002" : null),
+    fetchPayrollInput: (...args: [string, string]) => H.fetchPayrollInputMock(...args),
   };
 });
 
@@ -70,7 +73,7 @@ vi.mock("../src/shared/infra.js", async (io) => {
       invalidate: async () => undefined,
       makeKey: (...parts: string[]) => parts.join(":"),
     },
-    queue: { publish: async () => undefined, subscribe: () => undefined, start: async () => undefined, stop: async () => undefined },
+    queue: { publish: (...args: unknown[]) => H.publishMock(...args), subscribe: () => undefined, start: async () => undefined, stop: async () => undefined },
   };
 });
 
@@ -118,7 +121,9 @@ function makeSlip(overrides: Record<string, unknown> = {}) {
     npsEmployerMinor: 0n,
     esiMinor: 0n,
     tdsMinor: 500000n,
-    status: "computed",
+    // Only a paid slip is printable (slip-gate.ts); non-final statuses are
+    // covered by the 409 tests below.
+    status: "paid",
     ...overrides,
   };
 }
@@ -152,6 +157,100 @@ beforeEach(() => {
   // per-test where the real seeded template path needs exercising.
   H.fetchDefaultSlipTemplateMock.mockImplementation(async () => {
     throw new HrmsUnavailableError("hrms slip-template fetch unreachable: mocked default (hrms-service not running in tests)");
+  });
+  // Same "HRMS unreachable" default for the identity lookup; overridden by
+  // the PII-masking test below.
+  H.fetchPayrollInputMock.mockImplementation(async () => {
+    throw new HrmsUnavailableError("hrms payroll-input unreachable: mocked default");
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// Server-side print gate + PII masking (GAP-PAYROLL-SALARY-SLIPS-05,
+// GAP-PAYROLL-SLIPS-DETAIL-05, GAP-PAYROLL-SALARY-SLIPS-DETAIL-05)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("payslip print gate (server-side)", () => {
+  function slipWithStatus(status: string, employeeId = EMPLOYEE_ID) {
+    H.scopedReadMock.mockImplementation(async () => {
+      callCount++;
+      if (callCount === 1) return [makeSlip({ status, employeeId })];
+      if (callCount === 2) return [makeRun()];
+      return [];
+    });
+  }
+
+  for (const route of ["pdf", "download"] as const) {
+    for (const status of ["computed", "approved", "held", "exception"]) {
+      it(`409 SLIP_NOT_FINAL — /${route} refuses a ${status} slip and audits nothing`, async () => {
+        slipWithStatus(status);
+        const app = await buildApp();
+        const res = await app.inject({
+          method: "GET",
+          url: `/v1/payroll/slips/${SLIP_ID}/${route}`,
+          headers: { authorization: `Bearer ${adminToken()}` },
+        });
+        await app.close();
+        expect(res.statusCode).toBe(409);
+        expect(res.body).toContain("SLIP_NOT_FINAL");
+        expect(H.publishMock).not.toHaveBeenCalled();
+      });
+    }
+
+    it(`200 — /${route} serves a paid slip and publishes a slip_downloaded audit event`, async () => {
+      slipWithStatus("paid");
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payroll/slips/${SLIP_ID}/${route}`,
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(200);
+      expect(H.publishMock).toHaveBeenCalledWith("audit.event.record", expect.objectContaining({
+        tenantId: TENANT,
+        actorId: ADMIN_ID,
+        payload: expect.objectContaining({
+          service: "payroll", action: "slip_downloaded", resourceType: "payroll_slip",
+          resourceId: SLIP_ID, detail: { route },
+        }),
+      }));
+    });
+
+    it(`403 — /${route} ownership check runs before the status gate (non-owner never learns the status)`, async () => {
+      slipWithStatus("computed", OTHER_EMPLOYEE_ID);
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payroll/slips/${SLIP_ID}/${route}`,
+        headers: { authorization: `Bearer ${employeeToken(EMPLOYEE_ID)}` },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(403);
+    });
+  }
+
+  it("/pdf prints only the masked bank account (last 4) and masked PAN, never the full values", async () => {
+    H.fetchPayrollInputMock.mockResolvedValue({
+      employees: [{
+        id: EMPLOYEE_ID, fullName: "Asha Verma", pan: "ABCDE1234F",
+        bankAccountNo: "123456789012", bankIfsc: "SBIN0001234", uan: "100200300400",
+      }],
+    });
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/slips/${SLIP_ID}/pdf`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toContain("Asha Verma");
+    expect(res.body).toContain("•••• 9012");
+    expect(res.body).not.toContain("123456789012");
+    expect(res.body).not.toContain("12345678");
+    expect(res.body).toContain("ABCDE****F");
+    expect(res.body).not.toContain("ABCDE1234F");
   });
 });
 

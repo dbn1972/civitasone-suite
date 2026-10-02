@@ -288,6 +288,16 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .gx-empty h4{font-size:17px;color:#e7e9f5;font-weight:750}
 .gx-empty p{font-size:13.5px;margin-top:6px}
 
+/* ===== Salary-slip detail (GAP-PAYROLL-SALARY-SLIPS-DETAIL-04) =====
+   The slip's earnings/deductions tables used a fixed 1fr 1fr grid with no
+   breakpoint: on a narrow phone each column had too little room and long
+   component names wrapped against the right-aligned monospace amounts.
+   auto-fit/minmax lets it collapse to one column below ~480px while still
+   printing as two (forced below, inside the existing @media print block). */
+.slip-columns{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:24px}
+.slip-columns td.cmp-name{overflow-wrap:anywhere}
+.slip-columns td.cmp-amount{white-space:nowrap}
+
 /* ===== Print states ===== */
 .lt-section{margin-bottom:28px}
 .lt-section-hd{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2,#667085);margin:0 0 12px;padding:0 0 6px;border-bottom:1px solid var(--line,#e5e7eb)}
