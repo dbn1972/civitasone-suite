@@ -1,5 +1,4 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState } from "@/app/_components/ds";
+import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getFinancePaymentById } from "@/app/_data/loaders";
 import { RaiseEOfficeNote } from "@/app/_components/RaiseEOfficeNote";
 import { formatMoney } from "@/lib/formatters";
@@ -25,9 +24,24 @@ function amountMinorOf(data: Record<string, unknown>, ...keys: string[]): number
 }
 
 export default async function PaymentDetailPage({ params }: { params: { id: string } }) {
-  const { data: payment, source } = await getFinancePaymentById(params.id);
+  const result = await getFinancePaymentById(params.id);
+  const { data: payment } = result;
 
   if (!payment) {
+    // A failed load is not "not found" (GAP-FINANCE-PAYMENTS-DETAIL-01): only a
+    // real 404 says the payment does not exist.
+    if (result.source === "error" && result.status !== 404) {
+      return (
+        <>
+          <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+            <a href="/finance">Finance</a> <span aria-hidden="true">›</span>{" "}
+            <a href="/finance/payments">Payments</a> <span aria-hidden="true">›</span> Unavailable
+          </nav>
+          <PageHeader title="Payment Detail" back="/finance/payments" />
+          <LoadErrorState result={result} area="payment" backHref="/finance/payments" />
+        </>
+      );
+    }
     return (
       <>
         <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
@@ -61,10 +75,7 @@ export default async function PaymentDetailPage({ params }: { params: { id: stri
         subtitle={mode !== "—" ? `Payment via ${mode}` : undefined}
         back="/finance/payments"
         actions={
-          <>
-            <StatusPill status={status} />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
-          </>
+          <StatusPill status={status} />
         }
       />
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { DataTable, Tabs, EmptyState } from "../../../_components/ds";
+import { DataTable, Tabs, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import type { SummaryRow, LedgerRow, ItcRow } from "./types";
 
 const TABS = ["Summary", "GST Ledger", "ITC Reconciliation"] as const;
@@ -12,17 +13,31 @@ interface GstConsoleProps {
   summary: SummaryRow[];
   ledger: LedgerRow[];
   itc: ItcRow[];
+  /** Per-source load failure flags (GAP-FINANCE-GST-01): a failed fetch is not an empty period. */
+  errors?: { summary?: boolean; ledger?: boolean; itc?: boolean };
 }
 
-export function GstConsole({ period, summary, ledger, itc }: GstConsoleProps) {
+const TAB_ERROR_KEY = { Summary: "summary", "GST Ledger": "ledger", "ITC Reconciliation": "itc" } as const;
+
+export function GstConsole({ period, summary, ledger, itc, errors = {} }: GstConsoleProps) {
   const [active, setActive] = useState<Tab>("Summary");
+  // Tabs identify by their label string, so a warning cue on a failed tab is
+  // added to the label and mapped back to the tab id on change.
+  const labelOf = (t: Tab) => (errors[TAB_ERROR_KEY[t]] ? `${t} ⚠` : t);
+  const failedState = (area: string) => (
+    <RefreshErrorState error={toHumanError("load", { area })} backHref="/finance" />
+  );
 
   return (
     <div>
-      <Tabs tabs={[...TABS]} active={active} onChange={(t) => { setActive(t as Tab); }} />
+      <Tabs
+        tabs={TABS.map(labelOf)}
+        active={labelOf(active)}
+        onChange={(label) => { const t = TABS.find((x) => labelOf(x) === label); if (t) setActive(t); }}
+      />
 
       {active === "Summary" && (
-        summary.length === 0 ? (
+        errors.summary ? failedState("GST summary") : summary.length === 0 ? (
           <EmptyState
             icon="🧾"
             title="No GST summary for this period"
@@ -45,7 +60,7 @@ export function GstConsole({ period, summary, ledger, itc }: GstConsoleProps) {
       )}
 
       {active === "GST Ledger" && (
-        ledger.length === 0 ? (
+        errors.ledger ? failedState("GST ledger") : ledger.length === 0 ? (
           <EmptyState
             icon="📒"
             title="No GST ledger entries for this period"
@@ -76,7 +91,7 @@ export function GstConsole({ period, summary, ledger, itc }: GstConsoleProps) {
       )}
 
       {active === "ITC Reconciliation" && (
-        itc.length === 0 ? (
+        errors.itc ? failedState("ITC reconciliation") : itc.length === 0 ? (
           <EmptyState
             icon="🔄"
             title="No ITC reconciliation for this period"

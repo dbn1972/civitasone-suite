@@ -324,7 +324,7 @@ describe("PFMS Adapter — enabled (mocked fetch)", () => {
 
       const bankFileRes = await app.inject({
         method: "GET",
-        url: `/v1/finance/pfms/${row.id}/bank-file`,
+        url: `/v1/finance/pfms/${row.id}/bank-file?reason=regression+test+download`,
         headers: { authorization: `Bearer ${token}` },
       });
       expect(bankFileRes.statusCode).toBe(400);

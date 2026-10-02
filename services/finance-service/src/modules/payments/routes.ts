@@ -11,6 +11,7 @@ import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { DomainError, assertBillRejectable } from "./domain.js";
+import * as mastersRepo from "../masters/repo.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
 const APPROVER_ROLES = ["accounts_officer", "finance_admin", "super_admin"];
@@ -81,6 +82,10 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = createBillBody.parse(req.body);
+    // A deactivated vendor must not receive new bills. A vendor row that cannot be
+    // found is tolerated (bills.vendor_id has no FK yet; see migration 0065).
+    const vendor = await mastersRepo.getVendorById(ctx.tenantId, body.vendorId);
+    if (vendor && !vendor.isActive) throw new HttpError(409, "VENDOR_INACTIVE", "vendor is deactivated; reactivate it before lodging bills");
     return sendAccepted(reply, acceptedResponseSchema, await commands.createBill(ctx, body));
   });
 

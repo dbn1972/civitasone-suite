@@ -3,7 +3,9 @@ import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PfmsConsole } from "./PfmsConsole";
+import { canDownloadBankFile } from "./roles";
 import type { PfmsBatchRow, PfmsConfig, PfmsDepartment } from "./types";
 
 async function getBatches(): Promise<LoaderResult<PfmsBatchRow[]>> {
@@ -82,7 +84,7 @@ export default async function PfmsOpsConsolePage() {
         />
       </StatGrid>
 
-      <PfmsConsole batches={batches} config={config} departments={departments} />
+      <PfmsConsole batches={batches} config={config} departments={departments} canDownloadBankFile={canDownloadBankFile(getSessionRoles())} />
     </div>
   );
 }

@@ -2152,11 +2152,12 @@
     "newAdvanceLink": "+ New Advance",
     "statOpenAdvances": "Open Advances",
     "statOutstanding": "Outstanding",
-    "statSettledMtd": "Settled (MTD)",
     "statOverdue": "Overdue > 90d",
     "cardTitle": "Advance management",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "Finance page"
+    "routeErrorArea": "Finance page",
+    "statSettledAllTime": "Settled (all time)",
+    "areaAdvances": "advances"
   },
   "expenditureAdvancesNew": {
     "title": "New Advance",
@@ -2169,7 +2170,13 @@
     "labelPurpose": "Purpose",
     "saving": "Saving…",
     "submit": "Create advance",
-    "recorded": "Advance recorded."
+    "recorded": "Advance recorded.",
+    "errorAmount": "Enter a positive amount in rupees with at most 2 decimals.",
+    "confirmTitle": "Issue this advance?",
+    "confirmDescription": "This records an outward advance of {amount} to {payee}, due {dueDate}. It commits public money and is recovered against actual expenditure.",
+    "confirmNoPayee": "the payee",
+    "confirmNoDueDate": "no due date set",
+    "confirmLabel": "Issue advance"
   },
   "expenditureAdvancesTable": {
     "tabAll": "All",
@@ -2227,10 +2234,12 @@
     "statInProcess": "Bills In Process",
     "statTotal": "Total Bills",
     "statValueInPipeline": "Value In Pipeline",
-    "statPaidMtd": "Paid (MTD)",
     "cardTitle": "Bill processing",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "Finance page"
+    "routeErrorArea": "Finance page",
+    "statPaidAllTime": "Paid (all time)",
+    "areaBills": "bills",
+    "newBillLink": "+ New Bill"
   },
   "expenditureBillsTable": {
     "colBill": "Bill",
@@ -2252,10 +2261,11 @@
     "statTotal": "Total Guarantees",
     "statActive": "Active",
     "statReleased": "Released",
-    "statExpiringSoon": "Expiring Soon",
     "cardTitle": "Guarantees & Securities",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "Finance page"
+    "routeErrorArea": "Finance page",
+    "statOtherStatus": "Expired / invoked / other",
+    "areaGuarantees": "guarantees"
   },
   "expenditureGuaranteesTable": {
     "colEntity": "Entity",
@@ -2287,14 +2297,15 @@
   },
   "expenditureSchemeTracking": {
     "title": "Scheme Tracking",
-    "subtitle": "Scheme expenditure with milestones, UC status, and progress.",
+    "subtitle": "Scheme outlay and utilisation by funding source.",
     "statTotal": "Total Schemes",
     "statActive": "Active",
     "statCompleted": "Completed",
-    "statPendingUc": "Pending UC",
     "cardTitle": "Scheme Expenditure",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "Finance page"
+    "routeErrorArea": "Finance page",
+    "statOtherStatus": "On hold / other",
+    "areaSchemes": "schemes"
   },
   "expenditureSchemeTrackingTable": {
     "colCode": "Code",
@@ -2317,7 +2328,17 @@
     "labelPurpose": "Purpose",
     "saving": "Saving…",
     "submit": "Submit UC",
-    "submitted": "Utilization certificate submitted."
+    "submitted": "Utilization certificate submitted.",
+    "labelGrantRef": "Grant reference",
+    "labelPeriodFrom": "Period from",
+    "labelPeriodTo": "Period to",
+    "declaration": "I certify that the grant was utilised for the sanctioned purpose.",
+    "errorAmount": "Enter a positive amount in rupees with at most 2 decimals.",
+    "errorPeriodOrder": "The period start must be on or before the period end.",
+    "errorDeclaration": "Tick the declaration to submit.",
+    "confirmTitle": "Submit this utilization certificate?",
+    "confirmDescription": "This certifies that {amount} was utilised for the sanctioned purpose under UC {ucNo}. It is a statutory certificate and is recorded against your name.",
+    "confirmLabel": "Submit certificate"
   },
   "expenditureUtilizationCertificates": {
     "title": "Utilization Certificates",
@@ -2329,7 +2350,9 @@
     "statCoveredAmount": "Covered Amount",
     "cardTitle": "Utilization certificates",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "Finance page"
+    "routeErrorArea": "Finance page",
+    "statRejected": "Returned / Rejected",
+    "areaUcs": "utilization certificates"
   },
   "expenditureUtilizationCertificatesTable": {
     "tabAll": "All",
@@ -2342,7 +2365,8 @@
     "colAmount": "Amount",
     "colSubmitted": "Submitted",
     "colStatus": "Status",
-    "filterPlaceholder": "Search UCs…"
+    "filterPlaceholder": "Search UCs…",
+    "tabRejected": "Returned"
   },
   "expenses": {
     "title": "My Expense Claims",
@@ -4092,7 +4116,8 @@
     "disabledTitle": "Bank file is only available for pending or signed batches.",
     "confirmTitle": "Download bank file for batch {pfmsId}?",
     "confirmLabel": "Download",
-    "description": "This generates and downloads the NEFT beneficiary bank file (account numbers, IFSC, amounts) for batch <b>{pfmsId}</b>. Handle the downloaded file per your department's data-handling policy."
+    "description": "This generates and downloads the NEFT beneficiary bank file (account numbers, IFSC, amounts) for batch <b>{pfmsId}</b>. The download is recorded in the audit log with your name and the reason below. It contains personal financial data: use it only to upload to the bank / SFTP, then delete the local copy, per your department's data-handling policy.",
+    "reasonLabel": "Reason for download (recorded in the audit log)"
   },
   "pfmsBatchesPanel": {
     "emptyTitle": "No PFMS batches yet",
@@ -4198,13 +4223,13 @@
   "pfmsSubmitPaymentForm": {
     "referenceIdRequired": "Reference ID is required.",
     "beneficiaryCodeRequired": "Beneficiary code is required.",
-    "amountRequired": "Amount must be a numeric paise value (digits only).",
+    "amountRequired": "Enter the amount in rupees with at most 2 decimals, e.g. 15,000.00.",
     "purposeCodeRequired": "Purpose code is required.",
     "title": "Submit Payment to PFMS",
     "referenceIdLabel": "Reference ID",
     "beneficiaryCodeLabel": "Beneficiary Code",
-    "amountLabel": "Amount, in paise",
-    "amountPlaceholder": "e.g. 1500000 for ₹15,000.00",
+    "amountLabel": "Amount (₹)",
+    "amountPlaceholder": "e.g. 15,000 or 15,000.50",
     "purposeCodeLabel": "Purpose Code",
     "schemeCodeLabel": "Scheme Code",
     "ddoCodeLabel": "DDO Code",
@@ -4215,7 +4240,7 @@
     "networkErrorFallback": "Network error. Please try again.",
     "confirmTitle": "Submit this payment to PFMS?",
     "confirmLabel": "Submit payment",
-    "confirmDescription": "Submit payment <b>{referenceId}</b> for beneficiary <b>{beneficiaryCode}</b> to PFMS/e-Kuber. This initiates a real payment submission and cannot be recalled from this console."
+    "confirmDescription": "Submit payment <b>{referenceId}</b> of <b>{amount}</b> for beneficiary <b>{beneficiaryCode}</b> to PFMS/e-Kuber. This initiates a real payment submission and cannot be recalled from this console."
   },
   "procurement": {
     "title": "Procurement",
@@ -7414,5 +7439,137 @@
     "selfDisbursalError": "You computed, submitted or approved this settlement, so you cannot record its payment or reject it.",
     "forbiddenError": "Your role does not allow this step.",
     "networkError": "Network error. Please try again."
+  },
+  "financeBillForm": {
+    "pageTitle": "New Bill",
+    "pageSubtitle": "Lodge a vendor bill for pre-audit and 3-way match.",
+    "backLabel": "Back to bills",
+    "loadFailedArea": "bill form options",
+    "labelBillNo": "Bill / invoice number",
+    "labelVendor": "Vendor",
+    "selectVendor": "Select a vendor…",
+    "labelHead": "Budget / account head",
+    "selectHead": "Select a head…",
+    "labelDdo": "DDO",
+    "selectDdo": "Select a DDO…",
+    "labelAmount": "Gross amount (₹)",
+    "labelBillDate": "Bill date",
+    "labelPo": "PO reference (optional)",
+    "labelGrn": "GRN reference (optional)",
+    "review": "Review & submit bill",
+    "submitting": "Submitting…",
+    "success": "Bill submitted for pre-audit.",
+    "confirmTitle": "Submit this bill?",
+    "confirmDescription": "Lodges bill {billNo} from {vendor} for {amount} for pre-audit and 3-way match. A distinct officer must pass it before payment.",
+    "confirmLabel": "Submit bill",
+    "err": {
+      "billNoRequired": "Enter the bill / invoice number.",
+      "billNoTooLong": "Bill number is too long (max 64).",
+      "vendorRequired": "Choose a vendor.",
+      "headRequired": "Choose the budget / account head.",
+      "ddoRequired": "Choose a DDO (6-12 letters or digits).",
+      "dateInvalid": "Use the date picker (YYYY-MM-DD).",
+      "amountInvalid": "Enter a positive amount in rupees with at most 2 decimals."
+    }
+  },
+  "financePaymentForm": {
+    "pageTitle": "New Payment",
+    "pageSubtitle": "Release an outward payment against a passed bill.",
+    "backLabel": "Back to payments",
+    "loadFailedArea": "payment form options",
+    "labelBill": "Passed bill (beneficiary)",
+    "selectBill": "Select a passed bill…",
+    "noPassedBills": "No bills are passed and awaiting payment.",
+    "labelAmount": "Amount (full bill net)",
+    "labelDdo": "DDO",
+    "selectDdo": "Select a DDO…",
+    "labelMode": "Payment mode",
+    "selectMode": "Select a mode…",
+    "review": "Review & release payment",
+    "success": "Payment submitted to the gateway for processing.",
+    "confirmTitle": "Release this payment?",
+    "confirmDescription": "Releasing initiates an outward {mode} disbursement of {amount} to {vendor} against bill {billNo}. A different officer from the bill's creator must make this payment (maker-checker). This is irreversible once submitted to the gateway.",
+    "fallbackVendor": "the vendor",
+    "confirmLabel": "Release payment",
+    "err": {
+      "billRequired": "Choose a passed bill to pay.",
+      "ddoRequired": "Choose a DDO (6-12 letters or digits).",
+      "modeRequired": "Choose a payment mode.",
+      "amountMissing": "The bill has no payable amount."
+    }
+  },
+  "financeVendorForm": {
+    "pageTitle": "New Vendor",
+    "pageSubtitle": "Register a vendor in the vendor master.",
+    "backLabel": "Back to vendors",
+    "labelName": "Vendor name",
+    "labelCategory": "Category",
+    "labelPan": "PAN",
+    "labelGstin": "GSTIN (optional)",
+    "labelAddress": "Registered address",
+    "labelContactPerson": "Contact person (optional)",
+    "labelPhone": "Phone (optional)",
+    "labelEmail": "Email (optional)",
+    "labelBankName": "Bank name",
+    "labelBankAccount": "Bank account number",
+    "labelIfsc": "IFSC",
+    "review": "Review & create vendor",
+    "created": "Vendor created.",
+    "confirmTitle": "Create this vendor?",
+    "confirmDescription": "{name} (PAN {pan}) with bank account {account}, {ifsc}. The vendor becomes active immediately and can be paid. Check the bank details carefully: a wrong account diverts payments.",
+    "confirmLabel": "Create vendor",
+    "err": {
+      "nameInvalid": "Enter the vendor's name (at least 2 characters).",
+      "categoryRequired": "Enter a category.",
+      "panInvalid": "PAN must look like ABCDE1234F.",
+      "gstinInvalid": "GSTIN must be a valid 15-character GSTIN, or leave it blank.",
+      "addressRequired": "Enter the registered address.",
+      "phoneInvalid": "Phone must be 6 to 20 characters, or leave it blank.",
+      "emailInvalid": "Enter a valid email, or leave it blank.",
+      "bankNameRequired": "Enter the bank name.",
+      "bankAccountInvalid": "Enter the bank account number (5 to 30 characters).",
+      "ifscInvalid": "IFSC must look like HDFC0001234."
+    }
+  },
+  "financeVendorStatus": {
+    "deactivateLabel": "Deactivate vendor",
+    "reactivateLabel": "Reactivate vendor",
+    "deactivateTitle": "Deactivate {name}?",
+    "reactivateTitle": "Reactivate {name}?",
+    "deactivateDescription": "A deactivated vendor can no longer be chosen for new bills or payments. Existing records are kept.",
+    "reactivateDescription": "The vendor becomes available for new bills and payments again.",
+    "deactivateConfirm": "Deactivate",
+    "reactivateConfirm": "Reactivate",
+    "deactivated": "Vendor deactivated.",
+    "reactivated": "Vendor reactivated."
+  },
+  "financeRecurringTable": {
+    "cardTitle": "Recurring Entry Templates",
+    "colName": "Name",
+    "colVoucherType": "Voucher Type",
+    "colFrequency": "Frequency",
+    "colAmount": "Amount",
+    "colNextRun": "Next Run",
+    "colEndDate": "End Date",
+    "colStatus": "Status",
+    "colActions": "Actions",
+    "filterPlaceholder": "Filter by name…",
+    "emptyTitle": "No recurring entries yet",
+    "emptyMessage": "Create your first standing journal instruction using the form above.",
+    "pause": "Pause",
+    "resume": "Resume",
+    "end": "End now",
+    "confirm": "Confirm",
+    "pauseAria": "Pause {name}",
+    "resumeAria": "Resume {name}",
+    "endAria": "End {name} now",
+    "pauseTitle": "Pause this recurring entry?",
+    "resumeTitle": "Resume this recurring entry?",
+    "endTitle": "End this recurring entry now?",
+    "pauseDetail": "No further journals will be posted until it is resumed.",
+    "resumeDetail": "It will resume posting journals on its schedule.",
+    "endDetail": "It will stop posting journals from today and cannot be resumed.",
+    "confirmDescription": "{name} — {amount} {frequency}, next run {nextRun}. {detail}",
+    "submitted": "Change submitted — the list updates once it has been processed."
   }
 }

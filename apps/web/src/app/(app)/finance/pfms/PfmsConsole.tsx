@@ -12,9 +12,11 @@ interface PfmsConsoleProps {
   batches: PfmsBatchRow[];
   config: PfmsConfig | null;
   departments?: PfmsDepartment[];
+  /** Whether the session may download a batch bank file (GAP-FINANCE-PFMS-03). Defaults to true; the server is still the authority. */
+  canDownloadBankFile?: boolean;
 }
 
-export function PfmsConsole({ batches, config, departments = [] }: PfmsConsoleProps) {
+export function PfmsConsole({ batches, config, departments = [], canDownloadBankFile = true }: PfmsConsoleProps) {
   const t = useTranslations("pfmsConsole");
   // The shared Tabs design-system component uses each tab string as both its
   // display label and its identity (selection compares by ===, and it doubles
@@ -30,7 +32,7 @@ export function PfmsConsole({ batches, config, departments = [] }: PfmsConsolePr
     <Card title={t("title")}>
       <Tabs tabs={[...TABS]} active={active} onChange={(tab) => setActive(tab as Tab)} />
 
-      {active === TABS[0] && <BatchesPanel batches={batches} />}
+      {active === TABS[0] && <BatchesPanel batches={batches} canDownloadBankFile={canDownloadBankFile} />}
       {active === TABS[1] && <ConfigPanel config={config} />}
       {active === TABS[2] && <PaymentsPanel departments={departments} />}
     </Card>

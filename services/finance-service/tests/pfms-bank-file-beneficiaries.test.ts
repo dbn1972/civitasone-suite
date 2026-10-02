@@ -196,7 +196,7 @@ describe("GET /v1/finance/pfms/:id/bank-file", () => {
     const app = await buildApp();
     try {
       const res = await app.inject({
-        method: "GET", url: `/v1/finance/pfms/${PFMS_BATCH}/bank-file`, headers: financeAdmin(),
+        method: "GET", url: `/v1/finance/pfms/${PFMS_BATCH}/bank-file?reason=regression+test+download`, headers: financeAdmin(),
       });
 
       expect(res.statusCode).toBe(200);

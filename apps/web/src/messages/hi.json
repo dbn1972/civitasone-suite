@@ -2128,11 +2128,12 @@
     "newAdvanceLink": "+ नया अग्रिम",
     "statOpenAdvances": "खुले अग्रिम",
     "statOutstanding": "बकाया",
-    "statSettledMtd": "निपटाए गए (चालू माह)",
     "statOverdue": "90 दिन से अधिक अतिदेय",
     "cardTitle": "अग्रिम प्रबंधन",
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
-    "routeErrorArea": "वित्त पृष्ठ"
+    "routeErrorArea": "वित्त पृष्ठ",
+    "statSettledAllTime": "निपटाए गए (कुल)",
+    "areaAdvances": "अग्रिम"
   },
   "expenditureAdvancesNew": {
     "title": "नया अग्रिम",
@@ -2145,7 +2146,13 @@
     "labelPurpose": "प्रयोजन",
     "saving": "सहेजा जा रहा है…",
     "submit": "अग्रिम बनाएं",
-    "recorded": "अग्रिम दर्ज किया गया।"
+    "recorded": "अग्रिम दर्ज किया गया।",
+    "errorAmount": "रुपये में धनात्मक राशि दर्ज करें (अधिकतम 2 दशमलव)।",
+    "confirmTitle": "यह अग्रिम जारी करें?",
+    "confirmDescription": "यह {payee} को {amount} का अग्रिम दर्ज करता है, देय तिथि {dueDate}। यह सार्वजनिक धन की प्रतिबद्धता है और वास्तविक व्यय के विरुद्ध वसूल किया जाएगा।",
+    "confirmNoPayee": "प्राप्तकर्ता",
+    "confirmNoDueDate": "कोई देय तिथि निर्धारित नहीं",
+    "confirmLabel": "अग्रिम जारी करें"
   },
   "expenditureAdvancesTable": {
     "tabAll": "सभी",
@@ -2203,10 +2210,12 @@
     "statInProcess": "प्रक्रियाधीन बिल",
     "statTotal": "कुल बिल",
     "statValueInPipeline": "पाइपलाइन में मूल्य",
-    "statPaidMtd": "भुगतान किया गया (चालू माह)",
     "cardTitle": "बिल प्रसंस्करण",
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
-    "routeErrorArea": "वित्त पृष्ठ"
+    "routeErrorArea": "वित्त पृष्ठ",
+    "statPaidAllTime": "भुगतान किया गया (कुल)",
+    "areaBills": "बिल",
+    "newBillLink": "+ नया बिल"
   },
   "expenditureBillsTable": {
     "colBill": "बिल",
@@ -2228,10 +2237,11 @@
     "statTotal": "कुल गारंटी",
     "statActive": "सक्रिय",
     "statReleased": "जारी की गई",
-    "statExpiringSoon": "शीघ्र समाप्त होने वाली",
     "cardTitle": "गारंटी और प्रतिभूतियां",
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
-    "routeErrorArea": "वित्त पृष्ठ"
+    "routeErrorArea": "वित्त पृष्ठ",
+    "statOtherStatus": "समाप्त / प्रवर्तित / अन्य",
+    "areaGuarantees": "गारंटी"
   },
   "expenditureGuaranteesTable": {
     "colEntity": "इकाई",
@@ -2263,14 +2273,15 @@
   },
   "expenditureSchemeTracking": {
     "title": "योजना ट्रैकिंग",
-    "subtitle": "मील के पत्थर, UC स्थिति, और प्रगति के साथ योजना व्यय।",
+    "subtitle": "वित्तपोषण स्रोत के अनुसार योजना परिव्यय और उपयोग।",
     "statTotal": "कुल योजनाएं",
     "statActive": "सक्रिय",
     "statCompleted": "पूर्ण",
-    "statPendingUc": "UC लंबित",
     "cardTitle": "योजना व्यय",
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
-    "routeErrorArea": "वित्त पृष्ठ"
+    "routeErrorArea": "वित्त पृष्ठ",
+    "statOtherStatus": "रोके गए / अन्य",
+    "areaSchemes": "योजनाएं"
   },
   "expenditureSchemeTrackingTable": {
     "colCode": "कोड",
@@ -2293,7 +2304,17 @@
     "labelPurpose": "प्रयोजन",
     "saving": "सहेजा जा रहा है…",
     "submit": "UC सबमिट करें",
-    "submitted": "उपयोगिता प्रमाणपत्र सबमिट किया गया।"
+    "submitted": "उपयोगिता प्रमाणपत्र सबमिट किया गया।",
+    "labelGrantRef": "अनुदान संदर्भ",
+    "labelPeriodFrom": "अवधि प्रारंभ",
+    "labelPeriodTo": "अवधि समाप्ति",
+    "declaration": "मैं प्रमाणित करता/करती हूँ कि अनुदान का उपयोग स्वीकृत प्रयोजन के लिए किया गया।",
+    "errorAmount": "रुपये में धनात्मक राशि दर्ज करें (अधिकतम 2 दशमलव)।",
+    "errorPeriodOrder": "अवधि का प्रारंभ अवधि की समाप्ति से पहले या उसी दिन होना चाहिए।",
+    "errorDeclaration": "जमा करने के लिए घोषणा पर टिक करें।",
+    "confirmTitle": "यह उपयोगिता प्रमाणपत्र जमा करें?",
+    "confirmDescription": "यह प्रमाणित करता है कि UC {ucNo} के अंतर्गत {amount} स्वीकृत प्रयोजन के लिए उपयोग किए गए। यह एक सांविधिक प्रमाणपत्र है और आपके नाम से दर्ज होगा।",
+    "confirmLabel": "प्रमाणपत्र जमा करें"
   },
   "expenditureUtilizationCertificates": {
     "title": "उपयोगिता प्रमाणपत्र",
@@ -2305,7 +2326,9 @@
     "statCoveredAmount": "कवर की गई राशि",
     "cardTitle": "उपयोगिता प्रमाणपत्र",
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
-    "routeErrorArea": "वित्त पृष्ठ"
+    "routeErrorArea": "वित्त पृष्ठ",
+    "statRejected": "लौटाए गए / अस्वीकृत",
+    "areaUcs": "उपयोगिता प्रमाणपत्र"
   },
   "expenditureUtilizationCertificatesTable": {
     "tabAll": "सभी",
@@ -2318,7 +2341,8 @@
     "colAmount": "राशि",
     "colSubmitted": "प्रस्तुत",
     "colStatus": "स्थिति",
-    "filterPlaceholder": "UC खोजें…"
+    "filterPlaceholder": "UC खोजें…",
+    "tabRejected": "लौटाए गए"
   },
   "expenses": {
     "title": "मेरे व्यय दावे",
@@ -4933,7 +4957,8 @@
     "disabledTitle": "बैंक फ़ाइल केवल लंबित या हस्ताक्षरित बैचों के लिए उपलब्ध है।",
     "confirmTitle": "बैच {pfmsId} के लिए बैंक फ़ाइल डाउनलोड करें?",
     "confirmLabel": "डाउनलोड करें",
-    "description": "यह बैच <b>{pfmsId}</b> के लिए NEFT लाभार्थी बैंक फ़ाइल (खाता संख्या, IFSC, राशि) जनरेट और डाउनलोड करता है। डाउनलोड की गई फ़ाइल को अपने विभाग की डेटा-हैंडलिंग नीति के अनुसार संभालें।"
+    "description": "यह बैच <b>{pfmsId}</b> के लिए NEFT लाभार्थी बैंक फ़ाइल (खाता संख्या, IFSC, राशि) बनाकर डाउनलोड करता है। यह डाउनलोड आपके नाम और नीचे दिए कारण के साथ ऑडिट लॉग में दर्ज होगा। इसमें व्यक्तिगत वित्तीय डेटा है: इसका उपयोग केवल बैंक / SFTP पर अपलोड के लिए करें, फिर अपने विभाग की डेटा-हैंडलिंग नीति के अनुसार स्थानीय प्रति हटा दें।",
+    "reasonLabel": "डाउनलोड का कारण (ऑडिट लॉग में दर्ज होगा)"
   },
   "pfmsBatchesPanel": {
     "emptyTitle": "अभी तक कोई PFMS बैच नहीं",
@@ -5039,13 +5064,13 @@
   "pfmsSubmitPaymentForm": {
     "referenceIdRequired": "संदर्भ आईडी आवश्यक है।",
     "beneficiaryCodeRequired": "लाभार्थी कोड आवश्यक है।",
-    "amountRequired": "राशि एक संख्यात्मक पैसा मान होनी चाहिए (केवल अंक)।",
+    "amountRequired": "रुपये में राशि दर्ज करें (अधिकतम 2 दशमलव), जैसे 15,000.00।",
     "purposeCodeRequired": "प्रयोजन कोड आवश्यक है।",
     "title": "PFMS को भुगतान सबमिट करें",
     "referenceIdLabel": "संदर्भ आईडी",
     "beneficiaryCodeLabel": "लाभार्थी कोड",
-    "amountLabel": "राशि, पैसे में",
-    "amountPlaceholder": "उदा. ₹15,000.00 के लिए 1500000",
+    "amountLabel": "राशि (₹)",
+    "amountPlaceholder": "जैसे 15,000 या 15,000.50",
     "purposeCodeLabel": "प्रयोजन कोड",
     "schemeCodeLabel": "योजना कोड",
     "ddoCodeLabel": "डीडीओ कोड",
@@ -5056,7 +5081,7 @@
     "networkErrorFallback": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
     "confirmTitle": "यह भुगतान PFMS को सबमिट करें?",
     "confirmLabel": "भुगतान सबमिट करें",
-    "confirmDescription": "PFMS/e-Kuber को लाभार्थी <b>{beneficiaryCode}</b> के लिए भुगतान <b>{referenceId}</b> सबमिट करें। यह एक वास्तविक भुगतान सबमिशन शुरू करता है और इस कंसोल से वापस नहीं लिया जा सकता।"
+    "confirmDescription": "लाभार्थी <b>{beneficiaryCode}</b> के लिए <b>{amount}</b> का भुगतान <b>{referenceId}</b> PFMS/e-Kuber को जमा करें। यह वास्तविक भुगतान प्रस्तुति आरंभ करता है और इस कंसोल से वापस नहीं लिया जा सकता।"
   },
   "procurement": {
     "title": "खरीद",
@@ -6910,5 +6935,137 @@
     "selfDisbursalError": "यह निपटान आपने परिकलित, सबमिट या स्वीकृत किया है, इसलिए आप इसका भुगतान दर्ज या अस्वीकार नहीं कर सकते।",
     "forbiddenError": "आपकी भूमिका इस चरण की अनुमति नहीं देती।",
     "networkError": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।"
+  },
+  "financeBillForm": {
+    "pageTitle": "नया बिल",
+    "pageSubtitle": "पूर्व-लेखापरीक्षा और 3-वे मिलान के लिए विक्रेता बिल दर्ज करें।",
+    "backLabel": "बिलों पर वापस जाएं",
+    "loadFailedArea": "बिल फ़ॉर्म विकल्प",
+    "labelBillNo": "बिल / चालान संख्या",
+    "labelVendor": "विक्रेता",
+    "selectVendor": "विक्रेता चुनें…",
+    "labelHead": "बजट / लेखा शीर्ष",
+    "selectHead": "शीर्ष चुनें…",
+    "labelDdo": "डीडीओ",
+    "selectDdo": "डीडीओ चुनें…",
+    "labelAmount": "सकल राशि (₹)",
+    "labelBillDate": "बिल की तिथि",
+    "labelPo": "पीओ संदर्भ (वैकल्पिक)",
+    "labelGrn": "जीआरएन संदर्भ (वैकल्पिक)",
+    "review": "समीक्षा करें और बिल जमा करें",
+    "submitting": "जमा हो रहा है…",
+    "success": "बिल पूर्व-लेखापरीक्षा के लिए जमा किया गया।",
+    "confirmTitle": "यह बिल जमा करें?",
+    "confirmDescription": "{vendor} का बिल {billNo}, {amount} के लिए पूर्व-लेखापरीक्षा और 3-वे मिलान हेतु दर्ज करता है। भुगतान से पहले किसी अन्य अधिकारी को इसे पास करना होगा।",
+    "confirmLabel": "बिल जमा करें",
+    "err": {
+      "billNoRequired": "बिल / चालान संख्या दर्ज करें।",
+      "billNoTooLong": "बिल संख्या बहुत लंबी है (अधिकतम 64)।",
+      "vendorRequired": "विक्रेता चुनें।",
+      "headRequired": "बजट / लेखा शीर्ष चुनें।",
+      "ddoRequired": "डीडीओ चुनें (6-12 अक्षर या अंक)।",
+      "dateInvalid": "तिथि चयनकर्ता का उपयोग करें (YYYY-MM-DD)।",
+      "amountInvalid": "रुपये में धनात्मक राशि दर्ज करें (अधिकतम 2 दशमलव)।"
+    }
+  },
+  "financePaymentForm": {
+    "pageTitle": "नया भुगतान",
+    "pageSubtitle": "पास किए गए बिल के विरुद्ध बहिर्गामी भुगतान जारी करें।",
+    "backLabel": "भुगतानों पर वापस जाएं",
+    "loadFailedArea": "भुगतान फ़ॉर्म विकल्प",
+    "labelBill": "पास किया गया बिल (लाभार्थी)",
+    "selectBill": "पास किया गया बिल चुनें…",
+    "noPassedBills": "कोई बिल पास होकर भुगतान की प्रतीक्षा में नहीं है।",
+    "labelAmount": "राशि (बिल की पूर्ण शुद्ध राशि)",
+    "labelDdo": "डीडीओ",
+    "selectDdo": "डीडीओ चुनें…",
+    "labelMode": "भुगतान का माध्यम",
+    "selectMode": "माध्यम चुनें…",
+    "review": "समीक्षा करें और भुगतान जारी करें",
+    "success": "भुगतान प्रसंस्करण के लिए गेटवे को भेजा गया।",
+    "confirmTitle": "यह भुगतान जारी करें?",
+    "confirmDescription": "यह बिल {billNo} के विरुद्ध {vendor} को {amount} का बहिर्गामी {mode} संवितरण आरंभ करता है। यह भुगतान बिल के निर्माता से भिन्न अधिकारी द्वारा किया जाना चाहिए (मेकर-चेकर)। गेटवे को भेजने के बाद इसे पलटा नहीं जा सकता।",
+    "fallbackVendor": "विक्रेता",
+    "confirmLabel": "भुगतान जारी करें",
+    "err": {
+      "billRequired": "भुगतान के लिए पास किया गया बिल चुनें।",
+      "ddoRequired": "डीडीओ चुनें (6-12 अक्षर या अंक)।",
+      "modeRequired": "भुगतान का माध्यम चुनें।",
+      "amountMissing": "बिल में भुगतान योग्य राशि नहीं है।"
+    }
+  },
+  "financeVendorForm": {
+    "pageTitle": "नया विक्रेता",
+    "pageSubtitle": "विक्रेता मास्टर में विक्रेता पंजीकृत करें।",
+    "backLabel": "विक्रेताओं पर वापस जाएं",
+    "labelName": "विक्रेता का नाम",
+    "labelCategory": "श्रेणी",
+    "labelPan": "पैन",
+    "labelGstin": "जीएसटीआईएन (वैकल्पिक)",
+    "labelAddress": "पंजीकृत पता",
+    "labelContactPerson": "संपर्क व्यक्ति (वैकल्पिक)",
+    "labelPhone": "फ़ोन (वैकल्पिक)",
+    "labelEmail": "ईमेल (वैकल्पिक)",
+    "labelBankName": "बैंक का नाम",
+    "labelBankAccount": "बैंक खाता संख्या",
+    "labelIfsc": "आईएफएससी",
+    "review": "समीक्षा करें और विक्रेता बनाएं",
+    "created": "विक्रेता बनाया गया।",
+    "confirmTitle": "यह विक्रेता बनाएं?",
+    "confirmDescription": "{name} (पैन {pan}), बैंक खाता {account}, {ifsc}। विक्रेता तुरंत सक्रिय हो जाता है और उसे भुगतान किया जा सकता है। बैंक विवरण ध्यान से जांचें: गलत खाते से भुगतान भटक जाते हैं।",
+    "confirmLabel": "विक्रेता बनाएं",
+    "err": {
+      "nameInvalid": "विक्रेता का नाम दर्ज करें (कम से कम 2 अक्षर)।",
+      "categoryRequired": "श्रेणी दर्ज करें।",
+      "panInvalid": "पैन ABCDE1234F जैसा होना चाहिए।",
+      "gstinInvalid": "जीएसटीआईएन मान्य 15 अक्षरों का होना चाहिए, या खाली छोड़ें।",
+      "addressRequired": "पंजीकृत पता दर्ज करें।",
+      "phoneInvalid": "फ़ोन 6 से 20 अक्षरों का होना चाहिए, या खाली छोड़ें।",
+      "emailInvalid": "मान्य ईमेल दर्ज करें, या खाली छोड़ें।",
+      "bankNameRequired": "बैंक का नाम दर्ज करें।",
+      "bankAccountInvalid": "बैंक खाता संख्या दर्ज करें (5 से 30 अक्षर)।",
+      "ifscInvalid": "आईएफएससी HDFC0001234 जैसा होना चाहिए।"
+    }
+  },
+  "financeVendorStatus": {
+    "deactivateLabel": "विक्रेता निष्क्रिय करें",
+    "reactivateLabel": "विक्रेता पुनः सक्रिय करें",
+    "deactivateTitle": "{name} को निष्क्रिय करें?",
+    "reactivateTitle": "{name} को पुनः सक्रिय करें?",
+    "deactivateDescription": "निष्क्रिय किए गए विक्रेता को नए बिलों या भुगतानों के लिए नहीं चुना जा सकेगा। मौजूदा रिकॉर्ड सुरक्षित रहते हैं।",
+    "reactivateDescription": "विक्रेता नए बिलों और भुगतानों के लिए फिर उपलब्ध हो जाता है।",
+    "deactivateConfirm": "निष्क्रिय करें",
+    "reactivateConfirm": "पुनः सक्रिय करें",
+    "deactivated": "विक्रेता निष्क्रिय किया गया।",
+    "reactivated": "विक्रेता पुनः सक्रिय किया गया।"
+  },
+  "financeRecurringTable": {
+    "cardTitle": "आवर्ती प्रविष्टि टेम्पलेट",
+    "colName": "नाम",
+    "colVoucherType": "वाउचर प्रकार",
+    "colFrequency": "आवृत्ति",
+    "colAmount": "राशि",
+    "colNextRun": "अगला निष्पादन",
+    "colEndDate": "समाप्ति तिथि",
+    "colStatus": "स्थिति",
+    "colActions": "कार्रवाइयां",
+    "filterPlaceholder": "नाम से फ़िल्टर करें…",
+    "emptyTitle": "अभी कोई आवर्ती प्रविष्टि नहीं",
+    "emptyMessage": "ऊपर के फ़ॉर्म से अपना पहला स्थायी जर्नल निर्देश बनाएं।",
+    "pause": "रोकें",
+    "resume": "फिर शुरू करें",
+    "end": "अभी समाप्त करें",
+    "confirm": "पुष्टि करें",
+    "pauseAria": "{name} को रोकें",
+    "resumeAria": "{name} को फिर शुरू करें",
+    "endAria": "{name} को अभी समाप्त करें",
+    "pauseTitle": "यह आवर्ती प्रविष्टि रोकें?",
+    "resumeTitle": "यह आवर्ती प्रविष्टि फिर शुरू करें?",
+    "endTitle": "यह आवर्ती प्रविष्टि अभी समाप्त करें?",
+    "pauseDetail": "फिर शुरू किए जाने तक कोई और जर्नल पोस्ट नहीं होगा।",
+    "resumeDetail": "यह अपने कार्यक्रम के अनुसार जर्नल पोस्ट करना फिर शुरू करेगा।",
+    "endDetail": "यह आज से जर्नल पोस्ट करना बंद कर देगा और फिर शुरू नहीं किया जा सकेगा।",
+    "confirmDescription": "{name} — {amount} {frequency}, अगला निष्पादन {nextRun}। {detail}",
+    "submitted": "परिवर्तन जमा किया गया — प्रसंस्करण के बाद सूची अपडेट होगी।"
   }
 }

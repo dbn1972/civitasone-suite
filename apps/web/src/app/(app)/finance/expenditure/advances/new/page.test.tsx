@@ -42,6 +42,7 @@ describe("NewAdvancePage", () => {
     renderPage(<NewAdvancePage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
 
     await waitFor(() => expect(screen.getByText("Advance recorded.")).toBeInTheDocument());
     expect(fetchMock).toHaveBeenCalledWith(
@@ -63,10 +64,49 @@ describe("NewAdvancePage", () => {
     renderPage(<NewAdvancePage />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
 
-    const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    const alert = await screen.findByText(/couldn't save/i);
     expect(alert.textContent).not.toMatch(/insufficient_budget/i);
     expect(alert.textContent).not.toMatch(/\b422\b/);
+  });
+
+  // GAP-FINANCE-EXPENDITURE-ADVANCES-NEW-01
+  it("asks for confirmation (with the amount) before POSTing; cancel sends nothing", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("₹1,000.00");
+    expect(fetchMock).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sends an x-idempotency-key and a float-free paise string; double-confirm sends ONE request", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: "1.15" } });
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    const confirm = await screen.findByRole("button", { name: "Issue advance" });
+    fireEvent.click(confirm);
+    fireEvent.click(confirm);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect((init.headers as Record<string, string>)["x-idempotency-key"]).toMatch(/^[0-9a-f-]{36}$/);
+    // 1.15 * 100 === 114.99999999999999 in floats; must be exactly 115 paise.
+    expect(JSON.parse(init.body as string).amountMinor).toBe("115");
+  });
+
+  it("rejects a sub-paise amount with a field error and makes no request", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    renderPage(<NewAdvancePage />);
+    fillForm();
+    fireEvent.change(screen.getByLabelText("Amount (₹)"), { target: { value: "10.005" } });
+    fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
+    expect(await screen.findByText(/at most 2 decimals/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 });

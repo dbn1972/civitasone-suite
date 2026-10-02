@@ -11,7 +11,7 @@ import type { PfmsBatchRow } from "./types";
  * route registered on finance-service (see PR "## BACKEND FOLLOW-UPS"); batches
  * are created by the payments workflow, not from this console.
  */
-export function BatchesPanel({ batches }: { batches: PfmsBatchRow[] }) {
+export function BatchesPanel({ batches, canDownloadBankFile = true }: { batches: PfmsBatchRow[]; canDownloadBankFile?: boolean }) {
   const t = useTranslations("pfmsBatchesPanel");
 
   if (batches.length === 0) {
@@ -47,7 +47,9 @@ export function BatchesPanel({ batches }: { batches: PfmsBatchRow[] }) {
             if (row.channel !== "treasury_batch") return null;
             return (
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <BankFileAction batchId={row.id} pfmsId={row.pfmsId} submissionStatus={row.submissionStatus} />
+                {canDownloadBankFile && (
+                  <BankFileAction batchId={row.id} pfmsId={row.pfmsId} submissionStatus={row.submissionStatus} />
+                )}
                 {row.submissionStatus !== "signed" && (
                   <SignBatchAction batchId={row.id} pfmsId={row.pfmsId} />
                 )}

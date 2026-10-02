@@ -23,7 +23,7 @@ const financeSections: NavTile[] = [
 	{ title: "Advances", section: "Expenditure", description: "Employee and vendor advances with outstanding balance tracking.", href: "/finance/expenditure/advances" },
 	{ title: "Utilization Certificates", section: "Expenditure", description: "Grant utilization certificates submitted by grantees.", href: "/finance/expenditure/utilization-certificates" },
 	{ title: "Guarantees", section: "Expenditure", description: "Bank guarantees, performance securities, and EMDs.", href: "/finance/expenditure/guarantees" },
-	{ title: "Scheme Tracking", section: "Expenditure", description: "Scheme expenditure with milestones and UC status.", href: "/finance/expenditure/scheme-tracking" },
+	{ title: "Scheme Tracking", section: "Expenditure", description: "Scheme outlay and utilisation by funding source.", href: "/finance/expenditure/scheme-tracking" },
 
 	// Treasury & Banking
 	{ title: "PFMS Integration", section: "Treasury & Banking", description: "PFMS (Public Financial Management System) payment scroll tracking and beneficiary verification.", href: "/finance/treasury/pfms" },

@@ -15,15 +15,21 @@ import { useSeededResource } from "@/lib/sync/resource";
 // tranche 5 found in PfmsConsole.tsx). Tracked by position instead.
 const TAB_STATUS_MAP: string[][] = [
   [], // All
-  ["pending", "rejected"], // Pending
+  ["pending"], // Pending (a rejected UC is NOT "not yet submitted" -- own tab below)
   ["submitted", "verified"], // Submitted
+  ["rejected"], // Returned / Rejected
 ];
 
 type Row = UCSummary & { period: string };
 
+/** "from – to", or "—" when either end is missing (never "undefined – undefined"). */
+export function ucPeriod(from?: string | null, to?: string | null): string {
+  return from && to ? `${from} – ${to}` : "—";
+}
+
 export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "api" | "error" }) {
   const t = useTranslations("expenditureUtilizationCertificatesTable");
-  const TABS = [t("tabAll"), t("tabPending"), t("tabSubmitted")];
+  const TABS = [t("tabAll"), t("tabPending"), t("tabSubmitted"), t("tabRejected")];
   const [activeTabIndex, setActiveTabIndex] = useState(0);
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<UCSummary[]>(
     "finance.ucs",
@@ -37,7 +43,7 @@ export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "
       ? rows
       : rows.filter((u) => TAB_STATUS_MAP[activeTabIndex].includes(u.status));
 
-  const tableRows: Row[] = filtered.map((u) => ({ ...u, period: `${u.periodFrom} – ${u.periodTo}` }));
+  const tableRows: Row[] = filtered.map((u) => ({ ...u, period: ucPeriod(u.periodFrom, u.periodTo) }));
 
   return (
     <>

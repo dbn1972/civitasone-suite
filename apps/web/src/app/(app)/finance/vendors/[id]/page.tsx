@@ -1,7 +1,9 @@
-import { PageHeader, StatGrid, StatCard, StatusPill, Card, DataTable, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, StatusPill, Card, DataTable, EmptyState, LoadErrorState, Masked } from "@/app/_components/ds";
 import { getFinanceVendorById } from "@/app/_data/loaders";
 import { formatMoney } from "@/lib/formatters";
+import { VendorStatusAction } from "../VendorStatusAction";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWrite, VENDOR_WRITE_ROLES } from "@/lib/finance/writeRoles";
 
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -13,6 +15,11 @@ function field(data: Record<string, unknown>, ...keys: string[]): string {
 }
 
 /** Best-effort minor-unit amount from a loosely-typed record (number | numeric string | bigint). */
+function rawStr(data: Record<string, unknown>, ...keys: string[]): string | undefined {
+  const v = field(data, ...keys);
+  return v === "—" ? undefined : v;
+}
+
 function amountMinorOf(data: Record<string, unknown>, ...keys: string[]): number | undefined {
   for (const key of keys) {
     const v = data[key];
@@ -34,9 +41,21 @@ function rawArray(data: Record<string, unknown>, ...keys: string[]): Record<stri
 type BillRow = { billNo: string; date: string; amount: string; tds: string; status: string; [k: string]: unknown };
 
 export default async function VendorDetailPage({ params }: { params: { id: string } }) {
-  const { data: vendor, source } = await getFinanceVendorById(params.id);
+  const result = await getFinanceVendorById(params.id);
+  const { data: vendor } = result;
 
   if (!vendor) {
+    // A failed load (5xx / 403 / network / schema) is NOT "not found": only a
+    // real 404 (or a clean empty api response) says the vendor does not exist
+    // (GAP-FINANCE-VENDORS-DETAIL-02).
+    if (result.source === "error" && result.status !== 404) {
+      return (
+        <div className="page-main wrap" aria-labelledby="page-heading">
+          <PageHeader title="Vendor Detail" back="/finance/vendors" />
+          <LoadErrorState result={result} area="vendor" backHref="/finance/vendors" />
+        </div>
+      );
+    }
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Vendor Detail" back="/finance/vendors" />
@@ -78,7 +97,16 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
         title={name}
         subtitle={category !== "—" ? category : undefined}
         back="/finance/vendors"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
+        actions={
+          typeof (vendor as Record<string, unknown>).version === "number" && canWrite(getSessionRoles(), VENDOR_WRITE_ROLES) ? (
+            <VendorStatusAction
+              id={params.id}
+              version={(vendor as Record<string, unknown>).version as number}
+              isActive={status.toLowerCase() === "active"}
+              name={name}
+            />
+          ) : null
+        }
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e7edfd" label="Total Bills" value={rawBills.length} />
@@ -90,7 +118,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
       <Card title="Vendor Details" padding>
         <div className="fields">
           <div className="field"><span className="label">Name</span><span>{name}</span></div>
-          <div className="field"><span className="label">PAN</span><span className="mono">{field(vendor, "pan", "panNumber")}</span></div>
+          <div className="field"><span className="label">PAN</span><Masked kind="pan" value={rawStr(vendor, "pan", "panNumber")} fallback="—" ariaLabel="PAN (masked)" /></div>
           <div className="field"><span className="label">GSTIN</span><span className="mono">{field(vendor, "gstin", "gstNumber")}</span></div>
           <div className="field"><span className="label">Category</span><span>{category}</span></div>
           <div className="field"><span className="label">Address</span><span>{field(vendor, "address", "registeredAddress")}</span></div>
@@ -98,7 +126,7 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
           <div className="field"><span className="label">Email</span><span>{field(vendor, "email", "contactEmail")}</span></div>
           <div className="field"><span className="label">Phone</span><span>{field(vendor, "phone", "contactPhone", "mobile")}</span></div>
           <div className="field"><span className="label">Bank</span><span>{field(vendor, "bankName", "bank")} ({field(vendor, "ifsc", "ifscCode")})</span></div>
-          <div className="field"><span className="label">Account</span><span className="mono">{field(vendor, "bankAccount", "accountNumber", "accountNo")}</span></div>
+          <div className="field"><span className="label">Account</span><Masked kind="account" value={rawStr(vendor, "bankAccount", "accountNumber", "accountNo")} fallback="—" ariaLabel="Account number (masked)" /></div>
           <div className="field"><span className="label">Registered Since</span><span>{field(vendor, "registeredSince", "createdAt")}</span></div>
           <div className="field"><span className="label">Status</span><StatusPill status={status} /></div>
         </div>

@@ -31,9 +31,9 @@ describe("SubmitPaymentForm", () => {
     expect(refInput).toHaveFocus();
 
     // Amount gets its own, field-specific message — not the generic combined text.
-    expect(screen.getByText("Amount must be a numeric paise value (digits only).")).toBeInTheDocument();
+    expect(screen.getByText("Enter the amount in rupees with at most 2 decimals, e.g. 15,000.00.")).toBeInTheDocument();
     expect(
-      screen.queryByText(/Reference ID, beneficiary code, amount \(numeric paise\), and purpose code are required/),
+      screen.queryByText(/Reference ID, beneficiary code, amount \(rupees\), and purpose code are required/),
     ).not.toBeInTheDocument();
   });
 
@@ -50,7 +50,7 @@ describe("SubmitPaymentForm", () => {
     renderForm();
     fireEvent.change(screen.getByLabelText(/Reference ID/), { target: { value: "REF-1" } });
     fireEvent.change(screen.getByLabelText(/Beneficiary Code/), { target: { value: "BEN-1" } });
-    fireEvent.change(screen.getByLabelText(/Amount, in paise/), { target: { value: "150000" } });
+    fireEvent.change(screen.getByLabelText(/Amount \(₹\)/), { target: { value: "1,500" } });
     fireEvent.change(screen.getByLabelText(/Purpose Code/), { target: { value: "PUR01" } });
     fireEvent.click(screen.getByText("Submit Payment"));
 
@@ -68,7 +68,7 @@ describe("SubmitPaymentForm", () => {
     renderForm();
     fireEvent.change(screen.getByLabelText(/Reference ID/), { target: { value: "REF-2" } });
     fireEvent.change(screen.getByLabelText(/Beneficiary Code/), { target: { value: "BEN-2" } });
-    fireEvent.change(screen.getByLabelText(/Amount, in paise/), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText(/Amount \(₹\)/), { target: { value: "10" } });
     fireEvent.change(screen.getByLabelText(/Purpose Code/), { target: { value: "PUR02" } });
     fireEvent.click(screen.getByText("Submit Payment"));
 
@@ -79,5 +79,39 @@ describe("SubmitPaymentForm", () => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-PFMS-02
+  it("shows a live rupee preview and restates the amount in the confirm dialog; posts PAISE", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(
+        JSON.stringify({ data: { referenceId: "REF-9", pfmsTransactionId: "T", status: "accepted", timestamp: "2026-08-01T00:00:00Z" } }),
+        { status: 201 },
+      ),
+    );
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/Reference ID/), { target: { value: "REF-9" } });
+    fireEvent.change(screen.getByLabelText(/Beneficiary Code/), { target: { value: "BEN-9" } });
+    fireEvent.change(screen.getByLabelText(/Amount \(₹\)/), { target: { value: "15,000" } });
+    fireEvent.change(screen.getByLabelText(/Purpose Code/), { target: { value: "PUR09" } });
+    expect(screen.getByText("₹15,000.00")).toBeInTheDocument(); // live preview under the field
+    fireEvent.click(screen.getByText("Submit Payment"));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("₹15,000.00");
+    fireEvent.click(screen.getByText("Submit payment"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.amount).toBe("1500000");
+  });
+
+  it("rejects a sub-paise rupee amount instead of rounding it", () => {
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/Reference ID/), { target: { value: "R" } });
+    fireEvent.change(screen.getByLabelText(/Beneficiary Code/), { target: { value: "B" } });
+    fireEvent.change(screen.getByLabelText(/Amount \(₹\)/), { target: { value: "12.345" } });
+    fireEvent.change(screen.getByLabelText(/Purpose Code/), { target: { value: "P" } });
+    fireEvent.click(screen.getByText("Submit Payment"));
+    expect(screen.getByText(/at most 2 decimals/)).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });

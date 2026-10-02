@@ -15,6 +15,7 @@
  * over an unchanged page and the officer could not tell if anything happened
  * (and might re-submit an irreversible disbursement).
  */
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ActionButton, useToast } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
@@ -75,20 +76,6 @@ export function PaymentActions() {
         }}
         onSuccess={() => { toast.info("PFMS sync submitted — the register updates as instructions settle."); router.refresh(); }}
       />
-      <ActionButton
-        label="+ New Payment"
-        className="btn primary"
-        danger
-        confirmTitle="Release a new payment?"
-        confirmDescription="Releasing initiates an outward EFT/PFMS disbursement. The maker prepares it; a distinct checker must authorise. This is irreversible once submitted to the gateway."
-        confirmLabel="Release payment"
-        requireReason
-        reasonLabel="Authorising officer & reason (maker-checker)"
-        onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { action: "release", reason }, "payment");
-        }}
-        onSuccess={() => { toast.info("Payment submitted to the gateway for processing — the status updates once it responds."); router.refresh(); }}
-      />
     </>
   );
 }
@@ -116,41 +103,58 @@ export function SanctionApproveAction({ id }: { id: string }) {
 }
 
 /* ── Bills: pass (pre-audit) and pay (treasury) ─────────────────── */
-export function BillPassPayActions({ id, status }: { id: string; status: string }) {
+
+/**
+ * GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-02: whether "Pass bill" may be offered.
+ * A bill can only be passed while it is still awaiting pre-audit AND its
+ * 3-way match is complete (finance-service rejects a pass without both PO and
+ * GRN references). The backend stays the final authority; this just stops the
+ * UI inviting a paid / already-passed / mismatched bill to be passed again.
+ */
+export function billPassBlockedReason(status: string, threeWayMatch?: string): string | null {
+  const s = (status ?? "").toLowerCase();
+  if (!["submitted", "pending", "under_review"].includes(s)) {
+    return "This bill is no longer awaiting pre-audit, so it cannot be passed.";
+  }
+  if (threeWayMatch !== undefined && threeWayMatch !== "matched") {
+    return "The 3-way match (PO, GRN, invoice) is not complete, so this bill cannot be passed yet.";
+  }
+  return null;
+}
+
+export function BillPassPayActions({ id, status, threeWayMatch }: { id: string; status: string; threeWayMatch?: string }) {
   const router = useRouter();
   const { toast } = useToast();
   const s = (status ?? "").toLowerCase();
-  const canPay = s === "passed" || s === "approved";
+  const canPay = s === "passed"; // finance-service emits "passed" (a pass maps approved -> passed)
+  const passBlocked = billPassBlockedReason(status, threeWayMatch);
   return (
     <>
-      <ActionButton
-        label="Pass bill"
-        className="btn ghost"
-        confirmTitle="Pass this bill for payment?"
-        confirmDescription="Passing certifies the bill has cleared 3-way match and pre-audit. The passing officer must differ from the submitter. Downstream payment can then be released."
-        confirmLabel="Pass bill"
-        requireReason
-        reasonLabel="Pre-audit officer & reason"
-        onConfirm={async (reason) => {
-          await patchJson(`/api/proxy/v1/finance/bills/${id}/approve`, { decision: "pass", reason }, "bill");
-        }}
-        onSuccess={() => { toast.info("Bill passing submitted for processing."); router.refresh(); }}
-      />
-      <ActionButton
-        label="Release payment"
-        className="btn primary"
-        danger
-        disabled={!canPay}
-        confirmTitle="Release payment for this bill?"
-        confirmDescription="This authorises an irreversible outward disbursement against the passed bill. A distinct treasury officer must authorise (maker-checker)."
-        confirmLabel="Release payment"
-        requireReason
-        reasonLabel="Treasury officer & reason"
-        onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { billId: id, action: "release", reason }, "payment");
-        }}
-        onSuccess={() => { toast.info("Payment submitted to the gateway for processing."); router.refresh(); }}
-      />
+      <span title={passBlocked ?? undefined}>
+        <ActionButton
+          label="Pass bill"
+          className="btn ghost"
+          disabled={passBlocked !== null}
+          confirmTitle="Pass this bill for payment?"
+          confirmDescription="Passing certifies the bill has cleared 3-way match and pre-audit. The passing officer must differ from the submitter. Downstream payment can then be released."
+          confirmLabel="Pass bill"
+          requireReason
+          reasonLabel="Pre-audit officer & reason"
+          onConfirm={async (reason) => {
+            // approveBillBody carries the officer's note in `notes`.
+            await patchJson(`/api/proxy/v1/finance/bills/${id}/approve`, { notes: reason }, "bill");
+          }}
+          onSuccess={() => { toast.info("Bill passing submitted for processing."); router.refresh(); }}
+        />
+      </span>
+      {passBlocked ? <span style={{ position: "absolute", width: 1, height: 1, overflow: "hidden", clip: "rect(0 0 0 0)" }}>{passBlocked}</span> : null}
+      {canPay ? (
+        // Releasing a payment needs the DDO, mode and the bill's net amount --
+        // collected (and confirmed) on the payment form, not a one-line reason.
+        <Link href={`/finance/payments/new?billId=${encodeURIComponent(id)}`} className="btn primary">
+          Release payment
+        </Link>
+      ) : null}
     </>
   );
 }
@@ -173,26 +177,6 @@ export function SanctionCreateAction() {
         await postJson("/api/proxy/v1/finance/sanctions", { reason, status: "pending" }, "sanction");
       }}
       onSuccess={() => { toast.success("Draft sanction submitted for approval."); router.refresh(); }}
-    />
-  );
-}
-
-export function BillCreateAction() {
-  const router = useRouter();
-  const { toast } = useToast();
-  return (
-    <ActionButton
-      label="+ New Bill"
-      className="btn primary"
-      confirmTitle="Submit a new bill?"
-      confirmDescription="This lodges a bill for pre-audit and 3-way match. It must be passed by a distinct officer before payment can be released."
-      confirmLabel="Submit bill"
-      requireReason
-      reasonLabel="Submitting officer & reason"
-      onConfirm={async (reason) => {
-        await postJson("/api/proxy/v1/finance/bills", { reason, status: "pending" }, "bill");
-      }}
-      onSuccess={() => { toast.success("Bill submitted for pre-audit."); router.refresh(); }}
     />
   );
 }

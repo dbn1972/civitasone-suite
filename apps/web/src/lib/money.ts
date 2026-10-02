@@ -47,6 +47,30 @@ export function rupeesToMinorString(input: string, opts?: { allowZero?: boolean 
 }
 
 /**
+ * GAP-FINANCE-PFMS-02: parse a clerk-typed RUPEES amount that may carry
+ * thousands separators (Indian "1,20,000.50" or western "120,000.50") into a
+ * paise digit-string, with no float math. At most 2 decimals; anything
+ * ambiguous (sub-paise, negative, empty, non-numeric) is rejected as null.
+ *
+ *   parseRupeesToPaise("15,000")       -> "1500000"
+ *   parseRupeesToPaise("1,20,000.50")  -> "12000050"
+ *   parseRupeesToPaise("12.345")       -> null
+ *   parseRupeesToPaise("")             -> null
+ */
+export function parseRupeesToPaise(input: string): string | null {
+  const text = input.trim().replace(/^₹\s*/, "");
+  // Commas are accepted ONLY as valid thousands grouping -- Indian
+  // (12,34,567.89) or western (1,234,567.89). Anything else is rejected, never
+  // guessed: "12,50" is a European decimal comma and silently reading it as
+  // 1,250 would overstate the amount 100x.
+  const INDIAN = /^\d{1,2}(,\d{2})*,\d{3}(\.\d{1,2})?$/;
+  const WESTERN = /^\d{1,3}(,\d{3})+(\.\d{1,2})?$/;
+  const PLAIN = /^\d+(\.\d{1,2})?$/;
+  if (!(PLAIN.test(text) || INDIAN.test(text) || WESTERN.test(text))) return null;
+  return rupeesToMinorString(text.replace(/,/g, ""));
+}
+
+/**
  * Sum of rupee input strings in paise, or null if ANY entry is invalid (see
  * rupeesToMinorString). BigInt end to end -- no float accumulation
  * (GAP-PAYROLL-OFF-CYCLE-03: "0.1" + "0.2" must total exactly 30 paise).

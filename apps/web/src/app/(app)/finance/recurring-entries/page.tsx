@@ -1,8 +1,11 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "../../../_components/ds";
+import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWrite, RECURRING_WRITE_ROLES } from "@/lib/finance/writeRoles";
 import { RecurringEntryForm, type AccountOption } from "./RecurringEntryForm";
+import { RecurringEntriesTable, type RecurringEntryRow } from "./RecurringEntriesTable";
 
 type RawRow = {
   id: string;
@@ -14,17 +17,6 @@ type RawRow = {
   end_date: string | null;
   is_active: boolean;
 } & Record<string, unknown>;
-
-export type RecurringEntryRow = {
-  id: string;
-  name: string;
-  voucherType: string;
-  frequency: string;
-  amountMinor: string | number;
-  nextRunDateDisplay: string;
-  endDateDisplay: string;
-  statusLabel: string;
-};
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -52,6 +44,8 @@ function mapRecurringEntries(payload: unknown): RecurringEntryRow[] | null {
       nextRunDateDisplay: formatIndianDate(row.next_run_date ?? null),
       endDateDisplay: row.end_date ? formatIndianDate(row.end_date) : "—",
       statusLabel: row.is_active ? "active" : "inactive",
+      // inactive AND already past its end date: neither Resume nor End applies
+      ended: !row.is_active && !!row.end_date && String(row.end_date).slice(0, 10) <= todayIST(),
     });
   }
   return mapped;
@@ -99,16 +93,6 @@ export default async function RecurringEntriesPage() {
 
   const active = entries.filter((e) => e.statusLabel === "active").length;
 
-  const columns: { key: keyof RecurringEntryRow; label: string; cellType?: "status" | "amount" }[] = [
-    { key: "name", label: "Name" },
-    { key: "voucherType", label: "Voucher Type" },
-    { key: "frequency", label: "Frequency" },
-    { key: "amountMinor", label: "Amount", cellType: "amount" },
-    { key: "nextRunDateDisplay", label: "Next Run" },
-    { key: "endDateDisplay", label: "End Date" },
-    { key: "statusLabel", label: "Status", cellType: "status" },
-  ];
-
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -125,19 +109,7 @@ export default async function RecurringEntriesPage() {
 
       <RecurringEntryForm accounts={accounts} />
 
-      <Card title="Recurring Entry Templates">
-        <DataTable<RecurringEntryRow>
-          columns={columns}
-          rows={entries}
-          sortable
-          filterable
-          filterPlaceholder="Filter by name…"
-          pageSize={15}
-          emptyIcon="🔁"
-          emptyTitle="No recurring entries yet"
-          emptyMessage="Create your first standing journal instruction using the form above."
-        />
-      </Card>
+      <RecurringEntriesTable entries={entries} canWrite={canWrite(getSessionRoles(), RECURRING_WRITE_ROLES)} />
     </div>
   );
 }

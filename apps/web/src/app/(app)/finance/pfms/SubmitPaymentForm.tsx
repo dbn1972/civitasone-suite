@@ -4,6 +4,8 @@ import { useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { parseRupeesToPaise } from "@/lib/money";
+import { formatMoney } from "@/lib/formatters";
 import type { PfmsMode } from "./types";
 
 type SubmitResult = {
@@ -25,8 +27,11 @@ interface SubmitPaymentFormProps {
 /**
  * POST /v1/finance/pfms/payments — submits a payment to PFMS/e-Kuber via the
  * finance-service adapter (services/finance-service/src/modules/pfms/adapter-routes.ts).
- * `amount` is a numeric PAISE string per the backend's submitPaymentBody schema
- * (regex ^\d+$, "amount must be numeric paise string") — not rupees.
+ * The backend's submitPaymentBody takes `amount` as a numeric PAISE string
+ * (regex ^\d+$). The clerk types RUPEES here (with a live ₹ preview, restated in
+ * the confirm dialog) and it is converted to paise without float math before
+ * POST -- typing rupees into a paise field released a payment 100x too small
+ * (GAP-FINANCE-PFMS-02).
  * The adapter fails closed with 503 INTEGRATION_DISABLED when PFMS_ENABLED is
  * not set in this environment; that surfaces as a server error in the dialog.
  */
@@ -73,6 +78,8 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
     purposeCode: purposeInput,
   };
 
+  const paiseAmount = parseRupeesToPaise(amount);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
@@ -80,7 +87,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
     const nextErrors: Partial<Record<FieldKey, string>> = {};
     if (!referenceId.trim()) nextErrors.referenceId = FIELD_ERRORS.referenceId;
     if (!beneficiaryCode.trim()) nextErrors.beneficiaryCode = FIELD_ERRORS.beneficiaryCode;
-    if (!/^\d+$/.test(amount.trim())) nextErrors.amount = FIELD_ERRORS.amount;
+    if (paiseAmount === null) nextErrors.amount = FIELD_ERRORS.amount;
     if (!purposeCode.trim()) nextErrors.purposeCode = FIELD_ERRORS.purposeCode;
     setErrors(nextErrors);
     const firstInvalid = (Object.keys(nextErrors) as FieldKey[])[0];
@@ -101,7 +108,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
         body: JSON.stringify({
           referenceId: referenceId.trim(),
           beneficiaryCode: beneficiaryCode.trim(),
-          amount: amount.trim(),
+          amount: paiseAmount ?? "",
           purposeCode: purposeCode.trim(),
           schemeCode: schemeCode.trim() || undefined,
           ddoCode: ddoCode.trim() || undefined,
@@ -183,7 +190,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
                 ref={amountInput}
                 value={amount}
                 onChange={(e) => setAmount(e.target.value)}
-                inputMode="numeric"
+                inputMode="decimal"
                 maxLength={32}
                 aria-required="true"
                 aria-invalid={!!errors.amount || undefined}
@@ -191,6 +198,9 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
                 placeholder={t("amountPlaceholder")}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {paiseAmount !== null && (
+                <span aria-live="polite" style={{ fontSize: 12, color: "var(--ink2)" }}>{formatMoney(paiseAmount)}</span>
+              )}
               {errors.amount && (
                 <p id={`${ids.amount}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
                   {errors.amount}
@@ -277,6 +287,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
             {t.rich("confirmDescription", {
               referenceId,
               beneficiaryCode,
+              amount: paiseAmount ? formatMoney(paiseAmount) : "",
               b: (chunks) => <strong>{chunks}</strong>,
             })}
           </>
