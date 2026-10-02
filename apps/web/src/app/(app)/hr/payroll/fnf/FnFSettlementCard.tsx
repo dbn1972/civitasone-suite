@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { StatusPill, Button } from "../../../../_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { FnfSettlementActions } from "./FnfSettlementActions";
+import type { FnfViewer } from "./fnfWorkflow";
 
 /**
  * One F&F settlement as payroll-service's GET /v1/payroll/fnf/settlements
@@ -34,6 +36,14 @@ export type FnFCardRow = {
   tdsOnSeparationMinor?: string | number | null;
   gratuityExemptMinor?: string | number | null;
   leaveEncashExemptMinor?: string | number | null;
+  // GAP-PAYROLL-FNF-01 workflow fields (serializeSettlement).
+  version?: number | null;
+  computedBy?: string | null;
+  submittedBy?: string | null;
+  financeApprovedBy?: string | null;
+  rejectionReason?: string | null;
+  paymentReference?: string | null;
+  paymentDate?: string | null;
 };
 
 type Money = string | number | null | undefined;
@@ -71,7 +81,7 @@ export function settlementFoots(row: FnFCardRow): boolean {
   return net !== null && gross - tds === net;
 }
 
-function FnFCard({ row }: { row: FnFCardRow }) {
+function FnFCard({ row, viewer }: { row: FnFCardRow; viewer?: FnfViewer }) {
   const t = useTranslations("fnFSettlementCard");
   const tf = useTranslations("computeFnfForm");
   const [expanded, setExpanded] = useState(false);
@@ -152,11 +162,37 @@ function FnFCard({ row }: { row: FnFCardRow }) {
           )}
         </div>
       )}
+
+      {row.status === "rejected" && row.rejectionReason && (
+        <p role="note" style={{ margin: "0 18px 12px", fontSize: 12, color: "var(--ink2)" }}>
+          {t("rejectedNote", { reason: row.rejectionReason })}
+        </p>
+      )}
+      {row.status === "disbursed" && row.paymentReference && (
+        <p style={{ margin: "0 18px 12px", fontSize: 12, color: "var(--ink2)" }}>
+          {t("disbursedNote", { reference: row.paymentReference, date: formatIndianDate(row.paymentDate ?? "") })}
+        </p>
+      )}
+      {viewer && (
+        <FnfSettlementActions
+          row={{
+            id: row.id,
+            name,
+            netPayableMinor: row.netPayableMinor,
+            status: row.status,
+            version: row.version ?? null,
+            computedBy: row.computedBy ?? null,
+            submittedBy: row.submittedBy ?? null,
+            financeApprovedBy: row.financeApprovedBy ?? null,
+          }}
+          viewer={viewer}
+        />
+      )}
     </div>
   );
 }
 
-export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
+export function FnFSettlementCards({ rows, viewer }: { rows: FnFCardRow[]; viewer?: FnfViewer }) {
   const t = useTranslations("fnFSettlementCard");
 
   if (rows.length === 0) {
@@ -171,17 +207,13 @@ export function FnFSettlementCards({ rows }: { rows: FnFCardRow[] }) {
 
   return (
     <>
-      {/* GAP-PAYROLL-FNF-01/02: the per-card "Submit for Approval" / "Finance
-          Approve" / "Mark Disbursed" buttons POSTed to
-          /v1/payroll/fnf/settlements/:id/{submit,finance-approve,disburse},
-          none of which exist in payroll-service (fnf/routes.ts has only
-          compute + read routes), so every click failed -- and with no role
-          or maker-checker control. They are removed until a real approval /
-          payment workflow exists server-side; this note says so honestly. */}
-      <p role="note" style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 12px" }}>{t("workflowUnavailableNote")}</p>
+      {/* GAP-PAYROLL-FNF-01: settlements now go through submit -> finance
+          approval -> disbursement (fnfWorkflow.ts), each step by a
+          different person. */}
+      <p role="note" style={{ fontSize: 12, color: "var(--ink2)", margin: "0 0 12px" }}>{t("workflowNote")}</p>
       <div style={{ display: "grid", gap: 14 }}>
         {rows.map((row) => (
-          <FnFCard key={row.id} row={row} />
+          <FnFCard key={row.id} row={row} {...(viewer ? { viewer } : {})} />
         ))}
       </div>
     </>

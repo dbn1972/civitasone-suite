@@ -11,6 +11,9 @@ export const COMMANDS = {
   taxDeclarationSubmit:   "payroll.tax_declaration.submit",
   nachReturnProcess:      "payroll.nach_return.process",
   fnfCompute:             "payroll.fnf.compute",
+  // GAP-PAYROLL-FNF-01: submit / finance-approve / disburse / reject a
+  // settlement (fnf/workflow.ts). Audited only -- no new outbound event.
+  fnfTransition:          "payroll.fnf.transition",
   form16BulkGenerate:     "payroll.form16.bulk_generate",
   exemptionCeilingUpsert: "payroll.exemption_ceiling.upsert",
   perquisiteComponentUpsert: "payroll.perquisite_component.upsert",

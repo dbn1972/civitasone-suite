@@ -5,6 +5,8 @@
  * GET   /v1/payroll/fnf/settlements/:id   → read single settlement
  * GET   /v1/payroll/fnf/settlements       → list settlements (filter by employeeId)
  * GET   /v1/payroll/internal/fnf-tax-breakdown → internal: compute on-the-fly for hrms-service
+ * POST  /v1/payroll/fnf/settlements/:id/{submit,finance-approve,disburse,reject}
+ *       → GAP-PAYROLL-FNF-01 maker-checker workflow (./workflow.ts) → 202
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
@@ -16,10 +18,55 @@ import { COMMANDS } from "../../topics.js";
 import { fnfSettlements } from "./schema.js";
 import { exemptionCeilings } from "./schema.js";
 import { eq, and } from "drizzle-orm";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import { sendAccepted } from "@civitasone/schemas/validate";
 import { computeFnfSettlement, type FnfInput } from "./domain.js";
 import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
+import { deterministicUuid } from "../../shared/deterministic-id.js";
+import {
+  FNF_ACTIONS, FNF_SUBMIT_ROLES, FNF_FINANCE_APPROVE_ROLES, FNF_DISBURSE_ROLES, FNF_REJECT_ROLES,
+  decideTransition, type FnfAction,
+} from "./workflow.js";
 
 const FNF_ROLES = ["payroll_admin", "hr_admin", "super_admin", "finance_officer"];
+const AUDIT_TOPIC = "audit.event.record";
+// GAP-PAYROLL-FNF-01: payroll_officer may submit a settlement (workflow.ts),
+// so it must be able to see the list/detail it submits from. Compute stays
+// on FNF_ROLES.
+const FNF_READ_ROLES = [...FNF_ROLES, "payroll_officer"];
+
+/** Today's date in IST as YYYY-MM-DD (payment dates are Indian calendar dates). */
+function todayIst(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+}
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => {
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}, "must be a real calendar date");
+
+const transitionBase = z.object({ version: z.number().int().min(1) });
+const TRANSITION_BODIES = {
+  submit: transitionBase.extend({ note: z.string().trim().max(512).optional() }),
+  "finance-approve": transitionBase.extend({ note: z.string().trim().max(512).optional() }),
+  reject: transitionBase.extend({ reason: z.string().trim().min(10).max(512) }),
+  // Disburse records a payment made outside this system (no bank
+  // integration): the UTR / cheque / transaction reference and the date
+  // the money actually left, both entered by the user.
+  disburse: transitionBase.extend({
+    paymentReference: z.string().trim().regex(/^[A-Za-z0-9][A-Za-z0-9/-]{3,63}$/, "4-64 letters, digits, '/' or '-'"),
+    paymentDate: isoDate.refine((v) => v <= todayIst(), "payment date cannot be in the future"),
+    note: z.string().trim().max(512).optional(),
+  }),
+} as const;
+
+/** Roles checked BEFORE the row is read (the per-status rule for reject is applied by decideTransition). */
+const ACTION_GATE_ROLES: Record<FnfAction, string[]> = {
+  submit: FNF_SUBMIT_ROLES,
+  "finance-approve": FNF_FINANCE_APPROVE_ROLES,
+  disburse: FNF_DISBURSE_ROLES,
+  reject: FNF_REJECT_ROLES,
+};
 
 // GAP-PAYROLL-FNF-03: every money field used to be
 // `z.string().transform((v) => BigInt(v))` -- BigInt("1234.5") /
@@ -159,7 +206,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get("/v1/payroll/fnf/settlements/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FNF_ROLES);
+    requireRole(ctx, FNF_READ_ROLES);
 
     const { id } = idParamSchema.parse(req.params);
 
@@ -183,7 +230,7 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
    */
   app.get("/v1/payroll/fnf/settlements", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, FNF_ROLES);
+    requireRole(ctx, FNF_READ_ROLES);
 
     const q = listQuerySchema.parse(req.query);
 
@@ -207,6 +254,86 @@ export async function fnfRoutes(app: FastifyInstance): Promise<void> {
     const empMap = await fetchEmployeeSummaries(ctx.tenantId);
     return reply.send({ data: rows.map((r) => serializeSettlement(r, empMap)), meta: { limit: q.limit, offset: q.offset } });
   });
+
+  /**
+   * POST /v1/payroll/fnf/settlements/:id/{submit,finance-approve,disburse,reject}
+   *
+   * GAP-PAYROLL-FNF-01. Every rule (status, version, role, segregation of
+   * duties) is checked here so the caller gets a 403/409 instead of a 202
+   * the consumer silently drops, then re-asserted by the consumer under a
+   * row lock. The body's `version` is the one the caller loaded; the
+   * messageId is derived from (id, action, version, actor) so a double-click
+   * publishes the same command twice and the inbox dedups it. Denied
+   * segregation-of-duties attempts are audited (outcome "denied").
+   */
+  for (const action of FNF_ACTIONS) {
+    app.post(`/v1/payroll/fnf/settlements/:id/${action}`, async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, ACTION_GATE_ROLES[action]);
+      const { id } = idParamSchema.parse(req.params);
+      const body = TRANSITION_BODIES[action].parse(req.body ?? {}) as {
+        version: number; note?: string; reason?: string; paymentReference?: string; paymentDate?: string;
+      };
+
+      const rows = await scopedRead((tx) => tx
+        .select({
+          status: fnfSettlements.status,
+          version: fnfSettlements.version,
+          createdBy: fnfSettlements.createdBy,
+          computedBy: fnfSettlements.computedBy,
+          submittedBy: fnfSettlements.submittedBy,
+          financeApprovedBy: fnfSettlements.financeApprovedBy,
+        })
+        .from(fnfSettlements)
+        .where(and(eq(fnfSettlements.id, id), eq(fnfSettlements.tenantId, ctx.tenantId)))
+        .limit(1));
+      const row = rows[0];
+      if (!row) throw new HttpError(404, "NOT_FOUND", "settlement not found");
+
+      const decision = decideTransition(action, row, { id: ctx.actorId, roles: ctx.roles }, body.version);
+      if (!decision.ok) {
+        if (decision.code === "FNF_SELF_APPROVAL_FORBIDDEN" || decision.code === "FNF_SELF_DISBURSAL_FORBIDDEN") {
+          // A blocked segregation-of-duties attempt is itself audit-worthy.
+          // Queue-first, same shape as loans/commands.ts disburseLoan.
+          await queue.publish(AUDIT_TOPIC, {
+            messageId: randomUUID(),
+            type: AUDIT_TOPIC,
+            tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+            payload: {
+              service: "payroll", action: `fnf_${action.replace("-", "_")}`, resourceType: "fnf_settlement",
+              resourceId: id, outcome: "denied", denialCode: decision.code, status: row.status,
+            },
+          });
+        }
+        throw new HttpError(decision.status, decision.code, decision.message);
+      }
+
+      await queue.publish(COMMANDS.fnfTransition, {
+        // Same person double-clicking dedupes; a different person's attempt
+        // is a distinct command (the consumer's lock + predicate picks one).
+        messageId: deterministicUuid(`payroll-fnf-transition:${id}:${action}:v${body.version}:${ctx.actorId}`),
+        type: COMMANDS.fnfTransition,
+        tenantId: ctx.tenantId,
+        actorId: ctx.actorId,
+        correlationId: ctx.correlationId,
+        schemaVersion: "1.0",
+        payload: {
+          id,
+          tenantId: ctx.tenantId,
+          action,
+          expectedVersion: body.version,
+          ...(body.note ? { note: body.note } : {}),
+          ...(body.reason ? { reason: body.reason } : {}),
+          ...(body.paymentReference ? { paymentReference: body.paymentReference } : {}),
+          ...(body.paymentDate ? { paymentDate: body.paymentDate } : {}),
+        },
+      });
+      return sendAccepted(reply, acceptedResponseSchema, {
+        id, status: "accepted", correlationId: ctx.correlationId,
+        data: { id, requestedStatus: decision.to },
+      });
+    });
+  }
 
   /**
    * GET /v1/payroll/internal/fnf-tax-breakdown
@@ -330,5 +457,18 @@ function serializeSettlement(
     createdBy: row.createdBy,
     updatedBy: row.updatedBy,
     version: row.version,
+    // GAP-PAYROLL-FNF-01 workflow trail.
+    computedBy: row.computedBy ?? row.createdBy,
+    submittedBy: row.submittedBy,
+    submittedAt: row.submittedAt,
+    financeApprovedBy: row.financeApprovedBy,
+    financeApprovedAt: row.financeApprovedAt,
+    disbursedBy: row.disbursedBy,
+    disbursedAt: row.disbursedAt,
+    paymentReference: row.paymentReference,
+    paymentDate: row.paymentDate,
+    rejectedBy: row.rejectedBy,
+    rejectedAt: row.rejectedAt,
+    rejectionReason: row.rejectionReason,
   };
 }
