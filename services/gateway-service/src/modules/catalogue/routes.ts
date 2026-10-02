@@ -69,6 +69,10 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   // ── List ────────────────────────────────────────────────────────────────
   app.get("/api/v1/gateway/catalogue", async (req, reply) => {
     const ctx = resolveContext(req);
+    // GAP-ADMIN-GATEWAY-ROUTES-01: the catalogue is the platform's internal
+    // API surface (paths, upstreams, owners) -- admin-only on read too, not
+    // just on write. RLS still scopes rows to the caller's tenant.
+    requireRole(ctx, ADMIN_ROLES);
     const q = z
       .object({
         status: z.enum(["draft", "active", "deprecated", "retired"]).optional(),
@@ -84,6 +88,7 @@ export async function catalogueRoutes(app: FastifyInstance): Promise<void> {
   // ── Get one + changelog ───────────────────────────────────────────────────
   app.get("/api/v1/gateway/catalogue/:id", async (req, reply) => {
     const ctx = resolveContext(req);
+    requireRole(ctx, ADMIN_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const result = await withTenant(
       ctx.tenantId,

@@ -11,7 +11,7 @@ const TENANT_ADMIN_TILE_HREFS = new Set(["/admin/integrations"]);
 const adminTiles: NavTile[] = [
   { title: "SA Dashboard", href: "/admin/sa-dashboard", description: "Platform health, revenue and growth" },
   { title: "Tenants", href: "/admin/tenants", description: "Tenant directory and management" },
-  { title: "Tenant Provisioning", href: "/admin/tenant-provision", description: "New tenant onboarding wizard" },
+  { title: "Tenant Provisioning", href: "/admin/tenant-provision", description: "Provisioning steps reference" },
   { title: "Onboarding Queue", href: "/admin/onboarding", description: "Pending tenant onboarding requests" },
   { title: "Metering", href: "/admin/metering", description: "Per-tenant usage and billing" },
   { title: "Invoices", href: "/admin/invoices", description: "Billing invoices and payments" },

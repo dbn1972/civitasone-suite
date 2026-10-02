@@ -1,8 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSATenants } from "@/app/_data/loaders";
 import { TenantsTable } from "./TenantsTable";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function TenantsPage() {
+  // GAP-ADMIN-TENANTS-01: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Tenants" area="the tenant directory" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   const { data: tenants, source } = await getSATenants();
   const active = tenants.filter((t) => String(t.status).toLowerCase() === "active").length;
   const trial = tenants.filter((t) => String(t.status).toLowerCase() === "trial").length;

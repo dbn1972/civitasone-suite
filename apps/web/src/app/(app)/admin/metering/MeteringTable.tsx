@@ -20,7 +20,10 @@ export function MeteringTable({ meters, source = "api" }: { meters: Row[]; sourc
           { key: "storage", label: "Storage" },
           { key: "users", label: "Users", align: "right" },
           { key: "billingPeriod", label: "Period" },
-          { key: "amount", label: "Amount (₹)", align: "right" },
+          // GAP-ADMIN-METERING-02: no billing-service route serves
+          // /v1/billing/metering, so the unit of `amount` is unknowable; the
+          // header must not assert rupees (billing-service stores paise).
+          { key: "amount", label: "Amount", align: "right" },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows} sortable filterable filterPlaceholder="Search metering…" pageSize={15} exportable exportFilename="usage-metering" emptyIcon="📊" emptyTitle="No metering data" emptyMessage="No usage metering records found."

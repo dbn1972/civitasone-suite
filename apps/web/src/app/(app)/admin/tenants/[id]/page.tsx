@@ -1,9 +1,18 @@
-import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState, LoadErrorState } from "@/app/_components/ds";
 import { getAdminTenantDetail, getAdminTenantModules } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
+import { AdminAccessDenied, sessionHasAnyRole } from "../../_components/AdminAccessGate";
 import { TenantModulesTable } from "./TenantModulesTable";
 
 export default async function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  // GAP-ADMIN-TENANTS-DETAIL-02: a cross-tenant record -- platform operators
+  // only (admin-service GET /v1/admin/tenants/:id is requireSuperAdmin).
+  // Gate before the loaders run so a tenant user guessing an id never even
+  // triggers the fetch.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Tenant" area="tenant records" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   const { id } = await params;
   const [detailResult, modulesResult] = await Promise.all([
     getAdminTenantDetail(id),
@@ -13,6 +22,27 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
   const tenant = detailResult.data;
   const modules = modulesResult.data;
   const source = detailResult.source === "error" || modulesResult.source === "error" ? "error" : "api";
+
+  // GAP-ADMIN-TENANTS-DETAIL-01: fetchJson returns data=null for EVERY failure
+  // (401/403/404/5xx/network), so branching on `!tenant` alone used to report
+  // an outage or an access denial as "Tenant not found — it may have been
+  // removed". Only a real 404 is "not found"; 403 shows Access restricted and
+  // anything else the retryable load-error state (LoadErrorState does both).
+  if (detailResult.source === "error" && detailResult.status !== 404) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Tenant" back="/admin/tenants" />
+        <LoadErrorState
+          result={detailResult}
+          area="tenant"
+          module="this tenant"
+          backHref="/admin/tenants"
+          backLabel="Back to Tenants"
+          requiredRoles={[...PLATFORM_ADMIN_ROLES]}
+        />
+      </div>
+    );
+  }
 
   if (!tenant) {
     return (

@@ -2,13 +2,25 @@ import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSADashboard, getSAOperationsSnapshot } from "@/app/_data/loaders";
 import { SADashboardTable } from "./SADashboardTable";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function SaDashboardPage() {
+  // GAP-ADMIN-SA-DASHBOARD: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Super Admin Dashboard" area="the super admin dashboard" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   const [{ data: dashboard, source }, { data: operations, source: opsSource }] = await Promise.all([
     getSADashboard(),
     getSAOperationsSnapshot(),
   ]);
-  const tenants = Number(dashboard.activeTenants ?? 0);
+  // GAP-ADMIN-SA-DASHBOARD-01: a missing/failed activeTenants used to be
+  // coerced to a fabricated "0" via `?? 0`. Unknown is "—"; a real 0
+  // from the API (admin-service sa-dashboard.ts countActive()) still shows 0.
+  const tenants = dashboard.activeTenants == null || !Number.isFinite(Number(dashboard.activeTenants))
+    ? "—"
+    : Number(dashboard.activeTenants);
   // totalUsers is an honest `null` from the backend when no cross-tenant user
   // count exists to report (see services/admin-service/.../health/sa-dashboard.ts's
   // doc comment: identity-service's user store is tenant-scoped only, so
@@ -16,8 +28,8 @@ export default async function SaDashboardPage() {
   // fabricated 0, same convention as this file's own uptime/services handling
   // below and apps/web/.../tenant-admin/mfa/page.tsx's unavailable-count case.
   const users = dashboard.totalUsers == null ? "—" : Number(dashboard.totalUsers);
-  // No backend has ever populated `dashboard.uptime` (GET /api/v1/admin/sa-dashboard
-  // has no matching route at all today) and no real "% uptime over time" telemetry
+  // No backend populates `dashboard.uptime` (admin-service GET /v1/admin/sa-dashboard
+  // returns activeTenants/totalUsers/metrics only) and no real "% uptime over time" telemetry
   // exists anywhere in the platform yet — admin-service's own operations snapshot
   // lists "Uptime Kuma" under externalMonitorRecommendation as a tool still to be
   // ADDED. So there is nothing honest to compute here yet; show "—" instead of a

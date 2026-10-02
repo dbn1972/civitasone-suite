@@ -58,7 +58,7 @@ export async function flagUpdate(ctx: RequestContext, flagId: string, payload: F
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function flagKill(ctx: RequestContext, flagId: string): Promise<Accepted> {
+export async function flagKill(ctx: RequestContext, flagId: string, reason: string): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish("admin.feature_flag.kill", {
     messageId: id,
@@ -67,7 +67,7 @@ export async function flagKill(ctx: RequestContext, flagId: string): Promise<Acc
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { flagId, tenantId: ctx.tenantId },
+    payload: { flagId, tenantId: ctx.tenantId, reason },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

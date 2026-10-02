@@ -1,8 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSAGateways } from "@/app/_data/loaders";
 import { GatewaysTable } from "./GatewaysTable";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function GatewaysPage() {
+  // GAP-ADMIN-GATEWAYS-01: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Communication Gateways" area="communication gateways" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   const { data: gateways, source } = await getSAGateways();
   const active = gateways.filter((g) => String(g.status).toLowerCase() === "active").length;
   const degraded = gateways.filter((g) => String(g.status).toLowerCase() === "degraded").length;

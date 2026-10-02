@@ -678,7 +678,7 @@ describe("previously-missing-table modules — lifecycle (update/delete/kill/pau
     expect(rows[0]?.enabled).toBe(true);
     expect(rows[0]?.rolloutPercent).toBe(50);
 
-    const kill = await app.inject({ method: "POST", url: `/v1/admin/feature-flags/manage/${flagId}/kill`, headers: bearer(["super_admin"], T, ACTOR) });
+    const kill = await app.inject({ method: "POST", url: `/v1/admin/feature-flags/manage/${flagId}/kill`, headers: bearer(["super_admin"], T, ACTOR), payload: { reason: "lifecycle test kill" } });
     expect(kill.statusCode).toBe(202);
     rows = await waitFor(
       () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(featureFlags).where(eq(featureFlags.id, flagId)))),

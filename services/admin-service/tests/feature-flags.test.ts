@@ -207,7 +207,7 @@ describe("POST /v1/admin/feature-flags/manage/:id/kill", () => {
   it("returns 202 for super_admin (kill switch activated)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/admin/feature-flags/manage/${VALID_UUID}/kill`,
-      headers: authHeader(["super_admin"]),
+      headers: authHeader(["super_admin"]), payload: { reason: "Incident INC-42: checkout errors" },
     });
     expect(res.statusCode).toBe(202);
     expect(res.json().status).toBe("accepted");
@@ -216,9 +216,26 @@ describe("POST /v1/admin/feature-flags/manage/:id/kill", () => {
   it("returns 202 for platform_admin", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/admin/feature-flags/manage/${VALID_UUID}/kill`,
-      headers: authHeader(["platform_admin"]),
+      headers: authHeader(["platform_admin"]), payload: { reason: "Rolling back bad release" },
     });
     expect(res.statusCode).toBe(202);
+  });
+
+  // GAP-ADMIN-FEATURE-FLAGS-01: a kill without a stated reason is rejected.
+  it("returns 400 when the reason is missing", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/admin/feature-flags/manage/${VALID_UUID}/kill`,
+      headers: authHeader(["super_admin"]), payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it("returns 400 when the reason is blank or too short", async () => {
+    const res = await app.inject({
+      method: "POST", url: `/v1/admin/feature-flags/manage/${VALID_UUID}/kill`,
+      headers: authHeader(["super_admin"]), payload: { reason: "  x " },
+    });
+    expect(res.statusCode).toBe(400);
   });
 
   it("returns 400 with invalid uuid", async () => {

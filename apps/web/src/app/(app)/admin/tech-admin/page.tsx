@@ -1,8 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSATechAdmin } from "@/app/_data/loaders";
 import { TechAdminTable } from "./TechAdminTable";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function TechAdminPage() {
+  // GAP-ADMIN-TECH-ADMIN-01: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Tech Admin" area="platform service health" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   const { data: services, source } = await getSATechAdmin();
   const running = services.filter((s) => String(s.status).toLowerCase() === "running").length;
   const stopped = services.filter((s) => String(s.status).toLowerCase() === "stopped").length;

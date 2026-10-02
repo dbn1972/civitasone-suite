@@ -1,8 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSAEditions } from "@/app/_data/loaders";
 import { EditionsTable } from "./EditionsTable";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function EditionsPage() {
+  // GAP-ADMIN-EDITIONS-01: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Edition Catalog" area="the edition catalog" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   const { data: editions, source } = await getSAEditions();
   const active = editions.filter((e) => String(e.status).toLowerCase() === "active").length;
   const totalTenants = editions.reduce((s, e) => s + Number(e.tenants ?? 0), 0);

@@ -78,14 +78,18 @@ export function registerFeatureFlagConsumers(queue: Queue): void {
     }
   });
 
-  queue.subscribe<{ flagId: string; tenantId: string }>("admin.feature_flag.kill", async (msg) => {
+  queue.subscribe<{ flagId: string; tenantId: string; reason?: string }>("admin.feature_flag.kill", async (msg) => {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const p = msg.payload;
         await (tx as any).update(featureFlags).set({ killSwitch: true, updatedBy: msg.actorId, updatedAt: new Date() })
           .where(and(eq(featureFlags.id, p.flagId), eq(featureFlags.tenantId, p.tenantId)));
-        await emit(tx, msg, "admin.feature_flag.killed", p, "kill", p.flagId);
+        // GAP-ADMIN-FEATURE-FLAGS-01: the operator's stated reason is part of
+        // the audit record (actor comes from msg.actorId). Older in-flight
+        // messages published before the reason field existed carry none.
+        await emit(tx, msg, "admin.feature_flag.killed", p, "kill", p.flagId,
+          p.reason ? { reason: p.reason } : undefined);
       });
       await cache.invalidate(cacheKey(msg.payload.tenantId));
     } catch (err) {
@@ -116,6 +120,7 @@ async function emit(
   payload: Record<string, unknown>,
   action: string,
   resourceId: string,
+  auditExtra?: Record<string, unknown>,
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -125,6 +130,6 @@ async function emit(
   await enqueue(t, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "admin", action, resourceType: RESOURCE, resourceId, outcome: "success" },
+    payload: { service: "admin", action, resourceType: RESOURCE, resourceId, outcome: "success", ...(auditExtra ?? {}) },
   });
 }
