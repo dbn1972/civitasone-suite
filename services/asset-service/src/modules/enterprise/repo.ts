@@ -1,4 +1,4 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   projectAuc, assetLeases, assetImpairments, functionalLocations, spareParts,
@@ -61,6 +61,23 @@ export async function findAucById(id: string, tenantId: string) {
   return rows[0] ?? null;
 }
 
+/**
+ * Atomic capitalize guard: flips under_construction -> capitalized in one conditional
+ * UPDATE and reports whether THIS call won, so a double click / replay creates one asset.
+ */
+export async function claimAucForCapitalize(tx: Writer, id: string, tenantId: string, assetId: string, actor: string): Promise<boolean> {
+  const rows = await tx.update(projectAuc).set({ status: "capitalized", assetId, updatedBy: actor, updatedAt: new Date() })
+    .where(and(eq(projectAuc.id, id), eq(projectAuc.tenantId, tenantId), eq(projectAuc.status, "under_construction")))
+    .returning({ id: projectAuc.id });
+  return rows.length > 0;
+}
+
+export async function findLocationByIdTx(tx: Writer, tenantId: string, id: string) {
+  const rows = await tx.select().from(functionalLocations)
+    .where(and(eq(functionalLocations.id, id), eq(functionalLocations.tenantId, tenantId))).limit(1);
+  return rows[0] ?? null;
+}
+
 export async function updateAuc(tx: Writer, id: string, patch: Partial<typeof projectAuc.$inferInsert>) {
   await tx.update(projectAuc).set({ ...patch, updatedAt: new Date() }).where(eq(projectAuc.id, id));
 }
@@ -85,14 +102,35 @@ export async function listImpairments(tenantId: string, assetId: string, limit =
   return scopedRead((tx) => tx.select().from(assetImpairments).where(and(eq(assetImpairments.tenantId, tenantId), eq(assetImpairments.assetId, assetId))).limit(limit));
 }
 
-export async function listLocations(tenantId: string, limit = 500) {
+export async function listLocations(tenantId: string, limit = 100, offset = 0) {
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
-  return scopedRead((tx) => tx.select().from(functionalLocations).where(eq(functionalLocations.tenantId, tenantId)).limit(limit));
+  return scopedRead((tx) => tx.select().from(functionalLocations).where(eq(functionalLocations.tenantId, tenantId))
+    .orderBy(asc(functionalLocations.code), asc(functionalLocations.id)).limit(limit).offset(offset));
 }
 
 export async function insertLocation(tx: Writer, row: typeof functionalLocations.$inferInsert) {
   await tx.insert(functionalLocations).values(row);
+}
+
+export async function findLocationByCode(tenantId: string, code: string) {
+  const rows = await scopedRead((tx) => tx.select().from(functionalLocations)
+    .where(and(eq(functionalLocations.tenantId, tenantId), eq(functionalLocations.code, code))).limit(1));
+  return rows[0] ?? null;
+}
+
+export async function findLocationById(tenantId: string, id: string) {
+  const rows = await scopedRead((tx) => tx.select().from(functionalLocations)
+    .where(and(eq(functionalLocations.id, id), eq(functionalLocations.tenantId, tenantId))).limit(1));
+  return rows[0] ?? null;
+}
+
+/** GAP-ASSETS-LOCATIONS-02: name / org unit only -- the code is immutable (assets may reference it). */
+export async function updateLocation(
+  tx: Writer, tenantId: string, id: string, patch: { name?: string; orgUnit?: string | null },
+) {
+  await tx.update(functionalLocations).set(patch)
+    .where(and(eq(functionalLocations.id, id), eq(functionalLocations.tenantId, tenantId)));
 }
 
 export async function insertSparePart(tx: Writer, row: typeof spareParts.$inferInsert) {

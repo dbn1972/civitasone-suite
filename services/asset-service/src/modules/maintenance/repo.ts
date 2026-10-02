@@ -1,4 +1,5 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
+import { assetAssets } from "../register/schema.js";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   assetMaintenancePlans, assetWorkOrders,
@@ -38,21 +39,40 @@ export async function completeWorkOrder(tx: Writer, id: string, tenantId: string
     .where(and(eq(assetWorkOrders.id, id), eq(assetWorkOrders.tenantId, tenantId)));
 }
 
+// GAP-ASSETS-MAINTENANCE-02/-04: the queue (GET /maintenance) and the per-asset
+// history (GET /assets/:id/maintenance) read the SAME table and return the SAME
+// shape — the work-order row plus the asset's code/name (left join, tenant-matched)
+// so the UI shows a real asset code instead of a truncated UUID.
+const workOrderWithAsset = {
+  wo: assetWorkOrders,
+  assetCode: assetAssets.code,
+  assetName: assetAssets.name,
+};
+
+export function withAssetLabel(r: { wo: WorkOrderRow; assetCode: string | null; assetName: string | null }) {
+  return { ...r.wo, assetCode: r.assetCode, assetName: r.assetName };
+}
+
 export async function listMaintenanceByAsset(tenantId: string, assetId: string, limit = 500) {
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
-  return scopedRead((tx) => tx.select().from(assetWorkOrders)
+  const rows = await scopedRead((tx) => tx.select(workOrderWithAsset).from(assetWorkOrders)
+    .leftJoin(assetAssets, and(eq(assetAssets.id, assetWorkOrders.assetId), eq(assetAssets.tenantId, assetWorkOrders.tenantId)))
     .where(and(eq(assetWorkOrders.tenantId, tenantId), eq(assetWorkOrders.assetId, assetId)))
     .limit(limit));
+  return rows.map(withAssetLabel);
 }
 
 export async function listMaintenanceByTenant(tenantId: string, opts?: { limit?: number; offset?: number }) {
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
-  return scopedRead((tx) => tx.select().from(assetWorkOrders)
+  const rows = await scopedRead((tx) => tx.select(workOrderWithAsset).from(assetWorkOrders)
+    .leftJoin(assetAssets, and(eq(assetAssets.id, assetWorkOrders.assetId), eq(assetAssets.tenantId, assetWorkOrders.tenantId)))
     .where(eq(assetWorkOrders.tenantId, tenantId))
+    .orderBy(desc(assetWorkOrders.scheduledDate), desc(assetWorkOrders.id))
     .limit(opts?.limit ?? 50)
     .offset(opts?.offset ?? 0));
+  return rows.map(withAssetLabel);
 }
 
 export async function listMaintenancePlans(tenantId: string, opts?: { assetId?: string }) {

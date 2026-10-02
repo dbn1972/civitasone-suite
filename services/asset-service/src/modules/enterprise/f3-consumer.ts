@@ -14,6 +14,7 @@ import { makeBarcode } from "../register/consumer.js";
 const log = pino({ name: "asset-f3-enterprise" });
 const WORKFLOW_CREATE = "workflow.instance.create";
 const GL_TOPIC = "finance.gl.post";
+const AUDIT_TOPIC = "audit.event.record";
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
 const FIXED_ASSET_CODE = process.env.ASSET_FIXED_ASSET_CODE ?? "1200";
 const IMPAIRMENT_CODE = process.env.ASSET_IMPAIRMENT_CODE ?? "5200";
@@ -29,7 +30,7 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
     const op = String(p.op ?? "");
     const ops = new Set([
       "auc_create", "auc_capitalize", "lease_create", "impairment", "revaluation",
-      "location_create", "spare_part", "request_disposal", "inter_org_transfer", "bulk_import",
+      "location_create", "location_update", "spare_part", "request_disposal", "inter_org_transfer", "bulk_import",
     ]);
     if (!ops.has(op)) return;
     try {
@@ -50,6 +51,17 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
               createdBy: msg.actorId,
               updatedBy: msg.actorId,
             });
+            // GAP-ASSETS-PROJECTS-05: AUC creation is an audited mutation; the
+            // clerk's stated reason/authorisation rides in the audit details.
+            await enqueue(tx, {
+              topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "asset", module: "enterprise", action: "create", resourceType: "auc_project",
+                resourceId: p.id as string, outcome: "success",
+                details: { projectCode: p.projectCode, amountMinor: p.amountMinor, ...(p.reason ? { reason: p.reason } : {}) },
+              },
+            });
             break;
           }
           case "auc_capitalize": {
@@ -60,6 +72,8 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
             const name = p.name as string;
             const accumulatedMinor = BigInt(p.accumulatedMinor as string);
             const code = `AUC/${projectCode}`;
+            // Double-click / replay guard: only the call that wins the conditional status flip creates the asset.
+            if (!(await repo.claimAucForCapitalize(tx, aucId, tenantId, assetId, msg.actorId))) break;
             await registerRepo.insertAsset(tx, {
               id: assetId, tenantId, name, code,
               categoryId: DEFAULT_IT_CATEGORY, assetType: "infra", barcode: makeBarcode(code),
@@ -71,7 +85,6 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
               projectRef: projectCode, orgUnit: null, aucId,
               createdBy: msg.actorId, updatedBy: msg.actorId,
             });
-            await repo.updateAuc(tx, aucId, { status: "capitalized", assetId, updatedBy: msg.actorId });
             break;
           }
           case "lease_create": {
@@ -199,6 +212,34 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
               parentId: (p.parentId as string | null) ?? null,
               createdBy: msg.actorId,
             });
+            await enqueue(tx, {
+              topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "asset", module: "enterprise", action: "create", resourceType: "functional_location",
+                resourceId: p.id as string, outcome: "success",
+                details: { code: p.code, name: p.name, orgUnit: p.orgUnit ?? null, parentId: p.parentId ?? null },
+              },
+            });
+            break;
+          }
+          case "location_update": {
+            const patch: { name?: string; orgUnit?: string | null } = {};
+            if (typeof p.name === "string") patch.name = p.name;
+            if (p.orgUnit === null || typeof p.orgUnit === "string") patch.orgUnit = p.orgUnit;
+            if (Object.keys(patch).length > 0) {
+              const before = await repo.findLocationByIdTx(tx, p.tenantId as string, p.id as string);
+              await repo.updateLocation(tx, p.tenantId as string, p.id as string, patch);
+              await enqueue(tx, {
+                topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+                tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+                payload: {
+                  service: "asset", module: "enterprise", action: "update", resourceType: "functional_location",
+                  resourceId: p.id as string, outcome: "success",
+                  details: { ...patch, before: before ? { name: before.name, orgUnit: before.orgUnit } : null },
+                },
+              });
+            }
             break;
           }
           case "spare_part": {

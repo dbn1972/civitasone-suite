@@ -910,6 +910,14 @@ export function mapAssetMaintenanceHistory(payload: unknown): AssetDetail["maint
   });
 }
 
+const MAINTENANCE_TYPES: ReadonlyArray<MaintenanceSummary["maintenanceType"]> = ["preventive", "corrective", "amc", "breakdown"];
+
+/** GAP-ASSETS-MAINTENANCE-01/-03: the work order's real type; anything unknown stays "corrective" (the DB default). */
+function toMaintenanceType(value: unknown): MaintenanceSummary["maintenanceType"] {
+  const v = typeof value === "string" ? value.toLowerCase() : "";
+  return MAINTENANCE_TYPES.find((t) => t === v) ?? "corrective";
+}
+
 export function mapMaintenanceSummaries(payload: unknown): MaintenanceSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
@@ -929,9 +937,11 @@ export function mapMaintenanceSummaries(payload: unknown): MaintenanceSummary[] 
     mapped.push({
       id,
       assetId,
-      assetCode: assetId.slice(0, 8).toUpperCase(),
+      // asset-service joins the asset's code/name onto each work order
+      // (GAP-ASSETS-MAINTENANCE-02); the truncated id is only a last-resort label.
+      assetCode: toText(row.assetCode) ?? assetId.slice(0, 8).toUpperCase(),
       assetName: toText(row.assetName) ?? "Asset",
-      maintenanceType: "corrective",
+      maintenanceType: toMaintenanceType(row.maintenanceType),
       scheduledDate: toText(row.scheduledDate)?.slice(0, 10) ?? "—",
       completedDate: toText(row.completedDate)?.slice(0, 10) ?? undefined,
       estimatedCost: parseMinor(row.costMinor) ?? 0,

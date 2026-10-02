@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
@@ -82,7 +83,7 @@ export function AucTable({ rows }: { rows: AucRow[] }) {
           );
         }
         if (row.assetId) {
-          return <a href={`/assets/${row.assetId}`} aria-label={`View capitalized asset for project ${row.projectCode}`}>View asset</a>;
+          return <Link href={`/assets/${row.assetId}`} aria-label={`View capitalized asset for project ${row.projectCode}`}>View asset</Link>;
         }
         return <span style={{ color: "var(--ink2)", fontSize: 13 }}>—</span>;
       },

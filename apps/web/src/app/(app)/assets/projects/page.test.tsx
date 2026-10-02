@@ -69,6 +69,31 @@ describe("ProjectsAucPage", () => {
     expect(screen.queryByText("No AUC projects yet")).not.toBeInTheDocument();
   });
 
+  it("on error shows a retryable error state and disables the create form (GAP-ASSETS-PROJECTS-01)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error", status: 500 });
+
+    const ui = await ProjectsAucPage();
+    render(ui);
+
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Create AUC project" })).toBeDisabled();
+  });
+
+  it("on a 403 shows access-restricted instead of a retry loop", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error", status: 403, errorMessage: "asset roles only" });
+
+    const ui = await ProjectsAucPage();
+    render(ui);
+
+    expect(screen.getByText("Access restricted")).toBeInTheDocument();
+  });
+
+  it("a healthy page keeps the create form enabled", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    render(await ProjectsAucPage());
+    expect(screen.getByRole("button", { name: "Create AUC project" })).toBeEnabled();
+  });
+
   it("never fabricates stat counts on error — shows placeholders, not zeros or stale numbers", async () => {
     // Even if a fallback payload happens to carry rows, source:"error" must win —
     // the StatGrid must not render a count/money value as fact.
