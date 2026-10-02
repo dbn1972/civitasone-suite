@@ -6,8 +6,19 @@ import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
 import { formatIndianDate, formatRupees } from "@/lib/formatters";
 import { postWithErrorCode } from "../../_lib/postWithErrorCode";
+import { rupeesToMinorString } from "@/lib/money";
 
 type ChallanInvalidField = "bsr" | "amt" | "serial" | "date";
+
+/**
+ * First day of `period` (YYYY-MM) as YYYY-MM-DD, used only to compare against
+ * depositDate for the (non-blocking) GAP-PAYROLL-STATUTORY-CHALLANS-05
+ * advisory below -- not to validate or alter anything that gets submitted.
+ */
+function firstDayOfPeriod(period: string): string | null {
+  if (!/^\d{4}-\d{2}$/.test(period)) return null;
+  return `${period}-01`;
+}
 
 export function IngestChallanForm({ period }: { period: string }) {
   const t = useTranslations("ingestChallanForm");
@@ -47,6 +58,13 @@ export function IngestChallanForm({ period }: { period: string }) {
   const serialInvalid = invalidFields.has("serial");
   const dateInvalid = invalidFields.has("date");
 
+  // GAP-PAYROLL-STATUTORY-CHALLANS-05 [HUMAN REVIEW: statutory compliance]:
+  // advisory only, never blocks submission -- TDS deposit timing rules are a
+  // tax-domain question this pass does not resolve (see the fix's own
+  // hedge: "confirm with tax owner").
+  const periodStart = firstDayOfPeriod(challanPeriod);
+  const showDepositDateWarning = Boolean(periodStart && depositDate && depositDate < periodStart);
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
@@ -58,8 +76,20 @@ export function IngestChallanForm({ period }: { period: string }) {
       bsrRef.current?.focus();
       return;
     }
-    const amt = parseFloat(tdsAmount);
-    if (Number.isNaN(amt) || amt < 0) {
+    // GAP-PAYROLL-STATUTORY-CHALLANS-02 [HUMAN REVIEW: statutory compliance]:
+    // validated the same way every other money field in this codebase is
+    // (rupeesToMinorString -- rejects non-numeric, negative, zero, and more
+    // than 2 decimal places) instead of a bare parseFloat/NaN check. The
+    // wire format itself is UNCHANGED: services/payroll-service/src/modules/
+    // statutory-returns/challan-routes.ts's challanBodySchema expects
+    // `tdsAmount` as a plain rupee number and does its own paise rounding
+    // server-side (`Math.round(tdsAmount * 100)`) -- confirmed from that
+    // route's actual Zod schema, not assumed. Converting to minor units on
+    // the client and sending THAT instead would silently break a contract
+    // that already works; only the client-side validation strictness
+    // changes here.
+    const tdsAmountMinor = rupeesToMinorString(tdsAmount);
+    if (tdsAmountMinor == null) {
       setTone("bad");
       setMessage(t("tdsAmountInvalidError"));
       setInvalidFields(new Set(["amt"]));
@@ -102,8 +132,18 @@ export function IngestChallanForm({ period }: { period: string }) {
       setTone("good");
       setInvalidFields(new Set());
       setMessage(t("ingestedMessage", { period: challanPeriod }));
+      const ingestedForDifferentPeriod = challanPeriod !== period;
       setBsrCode(""); setChallanSerial(""); setDepositDate(""); setTdsAmount("");
-      router.refresh();
+      // GAP-PAYROLL-STATUTORY-CHALLANS-05: ingesting for a period other than
+      // the one being viewed used to call router.refresh(), which only
+      // re-fetches the CURRENT URL's period -- the just-ingested row never
+      // appeared without the user noticing and manually changing the period
+      // selector. Navigate to the ingested period/form type instead.
+      if (ingestedForDifferentPeriod) {
+        router.push(`/hr/payroll/statutory/challans?period=${encodeURIComponent(challanPeriod)}&formType=${formType}`);
+      } else {
+        router.refresh();
+      }
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {
@@ -172,9 +212,14 @@ export function IngestChallanForm({ period }: { period: string }) {
                 onChange={(e) => setDepositDate(e.target.value)}
                 aria-required="true"
                 aria-invalid={dateInvalid || undefined}
-                aria-describedby={dateInvalid ? errId : undefined}
+                aria-describedby={dateInvalid ? errId : (showDepositDateWarning ? `${dateId}-warning` : undefined)}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {showDepositDateWarning && (
+                <p id={`${dateId}-warning`} style={{ margin: 0, fontSize: 11, color: "var(--warn, #92400e)" }}>
+                  {t("depositDateWarning", { period: challanPeriod })}
+                </p>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={formTypeId} style={{ fontSize: 13, fontWeight: 600 }}>{t("formTypeLabel")}</label>

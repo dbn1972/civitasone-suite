@@ -5,8 +5,35 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
 import { postWithErrorCode } from "../../_lib/postWithErrorCode";
+import { PT_NO_UPPER_BOUND_MINOR } from "./constants";
 
-export function PtSlabForm() {
+type ExistingSlab = {
+  state_code: string;
+  slab_from_minor: number | string;
+  slab_to_minor: number | string;
+};
+
+/**
+ * GAP-PAYROLL-STATUTORY-PT-04 [HUMAN REVIEW: statutory compliance]: two
+ * client-side pre-checks so an inconsistent slab is caught before the confirm
+ * dialog. Both mirror payroll-service EXACTLY (modules/payroll/state-rules.ts,
+ * the authority since PR #1761 / GAP-PAYROLL-STATUTORY-PT-03):
+ *   - range: "To" may not be below "From" (the server's ptSlab refine), so
+ *     a single-amount slab where From equals To is allowed;
+ *   - overlap: ranges are INCLUSIVE at both ends (two slabs that share even
+ *     one boundary amount overlap), and an existing slab of the same state
+ *     with the same "From" is the row this POST upserts, so it is excluded
+ *     from the comparison (same as findPtSlabOverlap).
+ * The server still re-checks (422 PT_SLAB_OVERLAP); this only saves a round
+ * trip. Neither check invents or changes any statutory rate/threshold.
+ *
+ * Deliberately NOT done here (left open, see the PR description): replacing
+ * the free-text state code with a validated state/UT enum (no authoritative
+ * list exists yet in this codebase) and adding an effective-from date (would
+ * need a backend schema change). Upsert semantics are settled by #1761: each
+ * slab is upserted on (state, From) and the state's other slabs are kept.
+ */
+export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSlab[] }) {
   const t = useTranslations("ptSlabForm");
   const router = useRouter();
   const [stateCode, setStateCode] = useState("");
@@ -22,7 +49,7 @@ export function PtSlabForm() {
   // compared/prefix-matched directly to decide which field is invalid (same
   // bug class as CreateCorrectionForm.tsx/tranche 11) -- invalidField is a
   // stable, untranslated identity kept separately from the display string.
-  const [invalidField, setInvalidField] = useState<"stateCode" | "ptAmount" | null>(null);
+  const [invalidField, setInvalidField] = useState<"stateCode" | "ptAmount" | "slabTo" | null>(null);
 
   const stateId = useId();
   const fromId = useId();
@@ -31,8 +58,10 @@ export function PtSlabForm() {
   const errId = useId();
   const stateRef = useRef<HTMLInputElement>(null);
   const amtRef = useRef<HTMLInputElement>(null);
+  const toRef = useRef<HTMLInputElement>(null);
   const stateInvalid = invalidField === "stateCode";
   const amtInvalid = invalidField === "ptAmount";
+  const toInvalid = invalidField === "slabTo";
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -53,6 +82,35 @@ export function PtSlabForm() {
       amtRef.current?.focus();
       return;
     }
+
+    const fromMinor = Math.round((parseFloat(slabFrom) || 0) * 100);
+    const toMinor = slabTo.trim() ? Math.round(parseFloat(slabTo) * 100) : PT_NO_UPPER_BOUND_MINOR;
+
+    if (toMinor < fromMinor) {
+      setTone("bad");
+      setMessage(t("slabRangeInvalidError"));
+      setInvalidField("slabTo");
+      toRef.current?.focus();
+      return;
+    }
+
+    const trimmedState = stateCode.trim().toUpperCase();
+    const overlaps = existingSlabs.some((s) => {
+      if ((s.state_code ?? "").toUpperCase() !== trimmedState) return false;
+      const existingFrom = Number(s.slab_from_minor);
+      const existingTo = Number(s.slab_to_minor);
+      // Same "From" = the row this POST upserts (server upsert key), not an overlap.
+      if (existingFrom === fromMinor) return false;
+      return fromMinor <= existingTo && existingFrom <= toMinor;
+    });
+    if (overlaps) {
+      setTone("bad");
+      setMessage(t("slabOverlapError"));
+      setInvalidField("slabTo");
+      toRef.current?.focus();
+      return;
+    }
+
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -62,7 +120,7 @@ export function PtSlabForm() {
     setDialogError(undefined);
     try {
       const fromMinor = Math.round((parseFloat(slabFrom) || 0) * 100);
-      const toMinor = slabTo.trim() ? Math.round(parseFloat(slabTo) * 100) : 999999999999;
+      const toMinor = slabTo.trim() ? Math.round(parseFloat(slabTo) * 100) : PT_NO_UPPER_BOUND_MINOR;
       const taxMinor = Math.round((parseFloat(ptAmount) || 0) * 100);
       // GAP-PAYROLL-STATUTORY-PT-03: the server upserts this one slab on
       // (state, start) and keeps the state's other slabs; a range that
@@ -122,9 +180,12 @@ export function PtSlabForm() {
               <label htmlFor={toId} style={{ fontSize: 13, fontWeight: 600 }}>{t("slabToLabel")}</label>
               <input
                 id={toId}
+                ref={toRef}
                 type="number" min="0" step="0.01"
                 value={slabTo}
                 onChange={(e) => setSlabTo(e.target.value)}
+                aria-invalid={toInvalid || undefined}
+                aria-describedby={toInvalid ? errId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
             </div>

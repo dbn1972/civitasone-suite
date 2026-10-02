@@ -6,7 +6,7 @@ import { Button } from "./Button";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
-import { formatMoney, formatRupees, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatRupees, formatIndianDate, formatPercent } from "@/lib/formatters";
 
 /**
  * DataTable is a "use client" component rendered from ~80+ call sites across
@@ -78,8 +78,8 @@ interface Column<T> {
    * bad value reaches a mounted client tree without ever hitting that CI guard.
    */
   render?: (row: T) => ReactNode;
-  /** Server-safe: renders StatusPill/formatMoney/formatRupees/formatIndianDate/a date+time stamp from the row value at `key` */
-  cellType?: "status" | "amount" | "rupees" | "date" | "datetime";
+  /** Server-safe: renders StatusPill/formatMoney/formatRupees/formatIndianDate/a date+time stamp/a percent from the row value at `key` */
+  cellType?: "status" | "amount" | "rupees" | "date" | "datetime" | "percent";
   /**
    * Opt-in, server-safe: when cellType is "status", looks up the raw status
    * value in this map to pass StatusPill a translated label instead of its
@@ -198,6 +198,20 @@ function resolveRowKey<T extends Record<string, unknown>>(
 // offending COLUMN DEFINITION, not once per cell.
 const warnedRenderColumns = new Set<string>();
 
+/**
+ * "percent" cellType input: Postgres `numeric` columns reach the browser as
+ * decimal strings ("10.00") via Drizzle/postgres.js, so a finite numeric
+ * string is accepted as well as a number. Anything else renders as "—".
+ */
+function toPercentNumber(raw: unknown): number | null {
+  if (typeof raw === "number") return raw;
+  if (typeof raw === "string" && raw.trim() !== "") {
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  }
+  return null;
+}
+
 function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): ReactNode {
   if ("render" in col && col.render != null) {
     if (typeof col.render === "function") return col.render(row);
@@ -217,7 +231,7 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
           `DataTable: column "${col.key}" (label "${col.label}") has a "render" prop that isn't a ` +
           `function (got ${typeof col.render}). This usually means a Server Component tried to pass a ` +
           `render function to DataTable ("use client") -- functions can't cross that boundary. Use a ` +
-          `built-in cellType ("status" | "amount" | "rupees" | "date" | "datetime") instead, or move this ` +
+          `built-in cellType ("status" | "amount" | "rupees" | "date" | "datetime" | "percent") instead, or move this ` +
           `column's custom rendering into a Client Component. Falling back to this column's cellType/default ` +
           `rendering for now.`,
         );
@@ -243,6 +257,9 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
   }
   if (col.cellType === "datetime") {
     return formatDateTimeIST(row[col.key] as string | null | undefined);
+  }
+  if (col.cellType === "percent") {
+    return formatPercent(toPercentNumber(row[col.key]));
   }
   return String(row[col.key] ?? "");
 }
@@ -384,6 +401,7 @@ export function DataTable<T extends Record<string, unknown>>({
     if (col.cellType === "rupees") return String(formatRupees(row[col.key] as number | string | null) ?? "");
     if (col.cellType === "date") return formatIndianDate(row[col.key] as string | null | undefined);
     if (col.cellType === "datetime") return formatDateTimeIST(row[col.key] as string | null | undefined);
+    if (col.cellType === "percent") return String(formatPercent(toPercentNumber(row[col.key])) ?? "");
     if (col.cellType === "status") return String(row[col.key] ?? "");
     return String(row[col.key] ?? "");
   }

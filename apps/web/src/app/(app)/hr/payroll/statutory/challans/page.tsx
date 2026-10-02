@@ -50,21 +50,29 @@ function currentPeriod(): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-async function getChallans(period: string): Promise<LoaderResult<ChallanRow[]>> {
-  return fetchJson<ChallansResponse, ChallanRow[]>(`/api/v1/payroll/statutory/challans?period=${encodeURIComponent(period)}`, [], {
-    telemetryKey: "payroll.statutory.challans",
-    mapResponse: (p) => (Array.isArray(p?.challans) ? p.challans : null),
-  });
+async function getChallans(period: string, formType: string): Promise<LoaderResult<ChallanRow[]>> {
+  return fetchJson<ChallansResponse, ChallanRow[]>(
+    `/api/v1/payroll/statutory/challans?period=${encodeURIComponent(period)}&formType=${encodeURIComponent(formType)}`,
+    [],
+    {
+      telemetryKey: "payroll.statutory.challans",
+      mapResponse: (p) => (Array.isArray(p?.challans) ? p.challans : null),
+    },
+  );
 }
 
-async function getReconciliation(period: string): Promise<LoaderResult<ReconcileResponse | null>> {
-  return fetchJson<ReconcileResponse, ReconcileResponse | null>(`/api/v1/payroll/statutory/reconcile?period=${encodeURIComponent(period)}`, null, {
-    telemetryKey: "payroll.statutory.reconcile",
-    mapResponse: (p) => (p && Array.isArray(p.perPeriod) ? p : null),
-  });
+async function getReconciliation(period: string, formType: string): Promise<LoaderResult<ReconcileResponse | null>> {
+  return fetchJson<ReconcileResponse, ReconcileResponse | null>(
+    `/api/v1/payroll/statutory/reconcile?period=${encodeURIComponent(period)}&formType=${encodeURIComponent(formType)}`,
+    null,
+    {
+      telemetryKey: "payroll.statutory.reconcile",
+      mapResponse: (p) => (p && Array.isArray(p.perPeriod) ? p : null),
+    },
+  );
 }
 
-export default async function ChallansPage({ searchParams }: { searchParams?: { period?: string } }) {
+export default async function ChallansPage({ searchParams }: { searchParams?: { period?: string; formType?: string } }) {
   const t = await getTranslations("challans");
   // GAP-PAYROLL-STATUTORY-CHALLANS-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
   // URL, but this page's API (TDS challans) is READER_ROLES-only in
@@ -75,10 +83,14 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
     return <PermissionDenied module="TDS challans" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />;
   }
   const period = searchParams?.period && /^\d{4}-\d{2}$/.test(searchParams.period) ? searchParams.period : currentPeriod();
+  // GAP-PAYROLL-STATUTORY-CHALLANS-04: default to 24Q, matching the
+  // backend's own default for an absent/unrecognised formType (see
+  // challan-routes.ts: `formType === "26Q" ? "26Q" : "24Q"`).
+  const formType = searchParams?.formType === "26Q" ? "26Q" : "24Q";
 
   const [{ data: challans, source: challansSource }, { data: reconciliation, source: reconcileSource }] = await Promise.all([
-    getChallans(period),
-    getReconciliation(period),
+    getChallans(period, formType),
+    getReconciliation(period, formType),
   ]);
 
   const source = challansSource === "error" || reconcileSource === "error" ? "error" : "api";
@@ -100,6 +112,10 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
     ? t(RECONCILE_STATUS_KEY[rawReconcileStatus])
     : t("unknownStatus");
 
+  // GAP-PAYROLL-STATUTORY-CHALLANS-03: the tile icon reads the same
+  // top-level reconciliation.matched flag the filing-blocked banner uses.
+  const reconciliationMatched = reconciliation?.matched ?? null;
+
   const columns: { key: keyof ChallanRow & string; label: string; align?: "left" | "right"; cellType?: "amount" | "status" | "date" }[] = [
     { key: "cin", label: t("colCin") },
     { key: "bsrCode", label: t("colBsrCode") },
@@ -120,13 +136,42 @@ export default async function ChallansPage({ searchParams }: { searchParams?: { 
       />
       <DataSourceBadge source={source === "error" ? "error" : "api"} message={t("loadErrorMessage")} />
 
-      <PeriodSelector period={period} />
+      <PeriodSelector period={period} formType={formType} />
+
+      {/* GAP-PAYROLL-STATUTORY-CHALLANS-03: reconciliation.filingBlocked was
+          already returned by the backend but never rendered. The gate itself
+          exists server-side (buildForm24Q in statutory-returns/routes.ts).
+          The backend's own `note` is NOT shown: it is English-only and always
+          says "24Q" and "does not match", even for 26Q or a period that is
+          only pending finalisation. Translated copy keyed on the selected
+          form type and the period's status is used instead. */}
+      {!errored && reconciliation?.filingBlocked && (
+        <div
+          role="alert"
+          style={{
+            background: "var(--badbg, #fdecea)",
+            border: "1px solid var(--bad, #c0392b)",
+            borderRadius: 10,
+            padding: "12px 16px",
+            marginBottom: 16,
+            fontSize: 13,
+            color: "var(--bad, #c0392b)",
+          }}
+        >
+          <strong>{t("filingBlockedHeading", { formType })}</strong>
+          <p style={{ margin: "4px 0 0" }}>
+            {rawReconcileStatus === "pending_finalisation"
+              ? t("filingBlockedPendingBody", { formType, period })
+              : t("filingBlockedMismatchBody", { formType, period })}
+          </p>
+        </div>
+      )}
 
       <StatGrid>
         <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statChallansForPeriod")} value={errored ? "—" : challans.length} />
         <StatCard
-          icon={reconciliation?.matched ? "✅" : "⚠️"}
-          iconBg={reconciliation?.matched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
+          icon={reconciliationMatched ? "✅" : "⚠️"}
+          iconBg={reconciliationMatched ? "var(--goodbg, #e6f7f0)" : "var(--badbg, #fdecea)"}
           label={t("statReconciliationStatus")}
           value={errored ? "—" : reconcileStatusLabel}
         />

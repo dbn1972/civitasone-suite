@@ -79,4 +79,17 @@ describe("ProfessionalTaxPage", () => {
     renderPage(ui);
     expect(screen.getByText("Add / Update PT Slab")).toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-STATUTORY-PT-02/05: prints the open-ended sentinel as 'No upper bound' and drops the average tile", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [{ state_code: "KA", slab_from_minor: 1500001, slab_to_minor: 999999999999, pt_amount_minor: 20000 }],
+      source: "api",
+    });
+    const ui = await ProfessionalTaxPage();
+    renderPage(ui);
+    expect(screen.getByText("No upper bound")).toBeInTheDocument();
+    expect(screen.queryByText(/9,99,99,99,999/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Avg PT per Slab/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Highest slab amount (any state)")).toBeInTheDocument();
+  });
 });

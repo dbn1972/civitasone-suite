@@ -54,7 +54,14 @@ const SLICE_FILES = SLICE_SUBDIRS.flatMap((dir) => walk(dir));
 // note in IngestChallanForm.tsx/PerquisiteComponentForm.tsx) get swept into
 // the same match as the useState declaration immediately after them. None
 // are real remaining UI text.
-const HR_PAYROLL_STATUTORY_CHALLANS_PERQUISITE_HARDCODED_STRING_CEILING = 19;
+//
+// GAP-PAYROLL-STATUTORY-CHALLANS fix wave: re-scanned again (challans 11,
+// perquisite 9 [unchanged] = 20 total) after adding formType state to
+// PeriodSelector.tsx and new validation/warning state to
+// IngestChallanForm.tsx. Both new findings individually reviewed and
+// confirmed the same useState/useRef false-positive class above -- not real
+// UI text.
+const HR_PAYROLL_STATUTORY_CHALLANS_PERQUISITE_HARDCODED_STRING_CEILING = 20;
 
 describe("hr/payroll/statutory challans/ + perquisite/ i18n coverage (UX-017 tranche 13)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

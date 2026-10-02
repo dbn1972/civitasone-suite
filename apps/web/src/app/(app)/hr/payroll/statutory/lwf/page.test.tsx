@@ -79,4 +79,22 @@ describe("LwfPage", () => {
     renderPage(ui);
     expect(screen.getByText("Add / Update LWF Configuration")).toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-STATUTORY-LWF-03/06: labels the frequency enum and splits monthly vs other states", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        { state_code: "KA", employee_contrib_minor: 2000, employer_contrib_minor: 4000, frequency: "yearly" },
+        { state_code: "MH", employee_contrib_minor: 1200, employer_contrib_minor: 3600, frequency: "half_yearly" },
+        { state_code: "TN", employee_contrib_minor: 500, employer_contrib_minor: 1000, frequency: "monthly" },
+      ],
+      source: "api",
+    });
+    const ui = await LwfPage();
+    renderPage(ui);
+    expect(screen.getAllByText("Yearly").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Half-yearly").length).toBeGreaterThan(0);
+    expect(screen.queryByText("half_yearly")).not.toBeInTheDocument();
+    expect(screen.getByText("Monthly frequency states")).toBeInTheDocument();
+    expect(screen.getByText("Other frequency states")).toBeInTheDocument();
+  });
 });

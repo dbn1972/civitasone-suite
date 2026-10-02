@@ -1,11 +1,20 @@
 import * as repo from "./repo.js";
 import { fetchEmployeeSummaries, fetchNpsPranLast4 } from "../../shared/hrms-client.js";
 
-export async function listPfReport(tenantId: string, limit: number) {
-  const rows = await repo.listPfByTenant(tenantId, limit);
+export async function listPfReport(tenantId: string, limit: number, period?: string) {
+  // GAP-PAYROLL-STATUTORY-PF-04: same best-effort employeeName enrichment
+  // listGpfReport/listNpsReport already use (see UX-021 below) --
+  // fetchEmployeeSummaries fails open to an empty Map on an unreachable
+  // HRMS, so this never gates the report; null just means the frontend
+  // falls back to the employeeId it already shows.
+  const [rows, empMap] = await Promise.all([
+    repo.listPfByTenant(tenantId, limit, period),
+    fetchEmployeeSummaries(tenantId),
+  ]);
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
+    employeeName: empMap.get(r.employeeId)?.fullName ?? null,
     period: r.period,
     basicMinor: Number(r.basicMinor),
     empContribMinor: Number(r.empContribMinor),
@@ -13,11 +22,16 @@ export async function listPfReport(tenantId: string, limit: number) {
   }));
 }
 
-export async function listEsiReport(tenantId: string, limit: number) {
-  const rows = await repo.listEsiByTenant(tenantId, limit);
+export async function listEsiReport(tenantId: string, limit: number, period?: string) {
+  // GAP-PAYROLL-STATUTORY-ESI-02: same enrichment as listPfReport above.
+  const [rows, empMap] = await Promise.all([
+    repo.listEsiByTenant(tenantId, limit, period),
+    fetchEmployeeSummaries(tenantId),
+  ]);
   return rows.map((r) => ({
     id: r.id,
     employeeId: r.employeeId,
+    employeeName: empMap.get(r.employeeId)?.fullName ?? null,
     period: r.period,
     grossMinor: Number(r.grossMinor),
     empContribMinor: Number(r.empContribMinor),
@@ -73,7 +87,10 @@ export async function listGpfReport(tenantId: string, limit: number) {
     employeeCode: empMap.get(r.employeeId)?.employeeNo ?? null,
     period: r.period,
     basicMinor: Number(r.basicMinor),
-    contribPct: r.contribPct,
+    // payroll_gpf.contrib_pct is a Drizzle `numeric` column, which the
+    // driver returns as a string ("10.00"); send a number so clients can
+    // format it as a percent.
+    contribPct: Number(r.contribPct),
     empContribMinor: Number(r.empContribMinor),
   }));
 }
@@ -99,4 +116,28 @@ export async function listNpsReport(tenantId: string, limit: number) {
     empContribMinor: Number(r.empContribMinor),
     erContribMinor: Number(r.erContribMinor),
   }));
+}
+
+/**
+ * GAP-PAYROLL-STATUTORY-PF-03 / ESI-03: per-period ledger summary for the
+ * PF/ESI pages' stat tiles. Money stays bigint paise end to end and is sent
+ * as a decimal string (JSON has no bigint).
+ */
+function serialiseSummary(s: repo.LedgerPeriodSummary) {
+  return {
+    periods: s.periods,
+    period: s.period,
+    recordCount: s.recordCount,
+    empContribMinor: s.empContribMinor.toString(),
+    erContribMinor: s.erContribMinor.toString(),
+    totalContribMinor: (s.empContribMinor + s.erContribMinor).toString(),
+  };
+}
+
+export async function pfPeriodSummary(tenantId: string, period?: string) {
+  return serialiseSummary(await repo.summarisePfPeriod(tenantId, period));
+}
+
+export async function esiPeriodSummary(tenantId: string, period?: string) {
+  return serialiseSummary(await repo.summariseEsiPeriod(tenantId, period));
 }

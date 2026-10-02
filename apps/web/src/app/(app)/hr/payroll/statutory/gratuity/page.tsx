@@ -9,6 +9,7 @@ import { toHumanError } from "@/lib/messages";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { GRATUITY_CEILING_PAISE } from "./constants";
 
 type GratuityRow = {
   id: string;
@@ -89,6 +90,12 @@ export default async function GratuityPage() {
       <GratuityCalculator />
 
       <Card title={t("registerCardTitle")}>
+        {/* GAP-PAYROLL-STATUTORY-GRATUITY-04: the statutory ceiling was never
+            shown next to the register's own amounts, only inside the
+            calculator (and only when a result happened to be capped). */}
+        <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>
+          {t("ceilingNote", { amount: formatMoney(GRATUITY_CEILING_PAISE) })}
+        </p>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "gratuity records" })} backHref="/hr/payroll/statutory" />

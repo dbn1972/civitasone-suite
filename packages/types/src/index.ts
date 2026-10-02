@@ -121,6 +121,9 @@ export interface NavTile {
   href: string;
   description?: string;
   section?: string;
+  /** Optional explicit icon override, checked before LinkTiles' own
+   * title/href-based inference (see LinkTiles.tsx's tileIcon()). */
+  icon?: string;
 }
 
 export interface MetricCard {

@@ -24,7 +24,17 @@ function toPaiseOrUndefined(v: string): number | undefined {
   return Math.round((parseFloat(v) || 0) * 100);
 }
 
-export function LwfConfigForm() {
+type ExistingLwfConfig = { state_code: string };
+
+/**
+ * GAP-PAYROLL-STATUTORY-LWF-05 [HUMAN REVIEW: statutory compliance]: saving
+ * an already-configured state now surfaces an explicit overwrite warning in
+ * the confirm dialog, instead of a generic "Save / Update" title with no
+ * indication that a repeat state replaces its stored values. A blank
+ * contribution field still means "keep the stored value" (PR #1761 /
+ * GAP-PAYROLL-STATUTORY-LWF-02), so it is deliberately NOT required here.
+ */
+export function LwfConfigForm({ existingConfigs = [] }: { existingConfigs?: ExistingLwfConfig[] }) {
   const t = useTranslations("lwfConfigForm");
   const router = useRouter();
   const [stateCode, setStateCode] = useState("");
@@ -41,6 +51,7 @@ export function LwfConfigForm() {
   // CreateCorrectionForm.tsx/tranche 11) -- invalidField is a stable,
   // untranslated identity kept separately from the display string.
   const [invalidField, setInvalidField] = useState<"stateCode" | null>(null);
+  const [isOverwrite, setIsOverwrite] = useState(false);
 
   const stateId = useId();
   const empId = useId();
@@ -63,6 +74,7 @@ export function LwfConfigForm() {
       return;
     }
     setDialogError(undefined);
+    setIsOverwrite(existingConfigs.some((c) => (c.state_code ?? "").toUpperCase() === stateCode.trim().toUpperCase()));
     setConfirmOpen(true);
   }
 
@@ -182,13 +194,23 @@ export function LwfConfigForm() {
         confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={t.rich("confirmDescription", {
-          strong: (chunks) => <strong>{chunks}</strong>,
-          state: stateCode.trim().toUpperCase(),
-          emp: empContrib.trim() === "" ? t("unchangedValue") : formatRupees(parseFloat(empContrib) || 0),
-          er: erContrib.trim() === "" ? t("unchangedValue") : formatRupees(parseFloat(erContrib) || 0),
-          frequency: frequency ? t(FREQUENCY_LABEL_KEY[frequency]) : t("unchangedValue"),
-        })}
+        description={
+          <>
+            {t.rich("confirmDescription", {
+              strong: (chunks) => <strong>{chunks}</strong>,
+              state: stateCode.trim().toUpperCase(),
+              emp: empContrib.trim() === "" ? t("unchangedValue") : formatRupees(parseFloat(empContrib) || 0),
+              er: erContrib.trim() === "" ? t("unchangedValue") : formatRupees(parseFloat(erContrib) || 0),
+              frequency: frequency ? t(FREQUENCY_LABEL_KEY[frequency]) : t("unchangedValue"),
+            })}
+            {isOverwrite && (
+              <>
+                {" "}
+                <strong>{t("overwriteWarning", { state: stateCode.trim().toUpperCase() })}</strong>
+              </>
+            )}
+          </>
+        }
         onConfirm={() => void saveLwf()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />

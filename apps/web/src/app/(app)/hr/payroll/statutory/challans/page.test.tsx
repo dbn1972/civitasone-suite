@@ -121,4 +121,51 @@ describe("ChallansPage", () => {
     expect(screen.queryByText("no_challan")).not.toBeInTheDocument();
     expect(screen.queryByText("2026-06-07")).not.toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-STATUTORY-CHALLANS-03/04: shows the filing-blocked banner and forwards ?formType=26Q to both loaders", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/reconcile")) {
+        return Promise.resolve({
+          data: {
+            formType: "26Q", period: "2026-06",
+            perPeriod: [{ period: "2026-06", formType: "26Q", tdsDeductedMinor: "100000", tdsDepositedMinor: "50000", varianceMinor: "50000", matched: false, challanCount: 1, status: "shortfall" }],
+            totalDeductedMinor: "100000", totalDepositedMinor: "50000", varianceMinor: "50000", matched: false, filingBlocked: true, note: "Deposit the shortfall before filing.",
+          },
+          source: "api",
+        });
+      }
+      return Promise.resolve({ data: [], source: "api" });
+    });
+
+    const ui = await ChallansPage({ searchParams: { period: "2026-06", formType: "26Q" } });
+    renderPage(ui);
+    expect(screen.getByText("Filing of 26Q is blocked until challans match")).toBeInTheDocument();
+    expect(screen.getByText("TDS deducted for 2026-06 does not match the 26Q challans deposited. Resolve the difference before filing 26Q.")).toBeInTheDocument();
+    // The backend's English-only, always-"24Q" note is never echoed.
+    expect(screen.queryByText(/Deposit the shortfall before filing/)).not.toBeInTheDocument();
+    const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
+    expect(paths.length).toBe(2);
+    expect(paths.every((p) => p.includes("formType=26Q"))).toBe(true);
+  });
+
+  it("GAP-PAYROLL-STATUTORY-CHALLANS-03: a pending-finalisation period gets its own blocked message, not 'does not match'", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/reconcile")) {
+        return Promise.resolve({
+          data: {
+            formType: "24Q", period: "2026-06",
+            perPeriod: [{ period: "2026-06", formType: "24Q", tdsDeductedMinor: "0", tdsDepositedMinor: "0", varianceMinor: "0", matched: false, challanCount: 0, status: "pending_finalisation" }],
+            totalDeductedMinor: "0", totalDepositedMinor: "0", varianceMinor: "0", matched: false, filingBlocked: true, note: "TDS deducted does NOT match deposited challans; resolve before filing 24Q.",
+          },
+          source: "api",
+        });
+      }
+      return Promise.resolve({ data: [], source: "api" });
+    });
+    const ui = await ChallansPage({ searchParams: { period: "2026-06" } });
+    renderPage(ui);
+    expect(screen.getByText("Filing of 24Q is blocked until challans match")).toBeInTheDocument();
+    expect(screen.getByText(/TDS for 2026-06 is not finalised yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/does not match/i)).not.toBeInTheDocument();
+  });
 });

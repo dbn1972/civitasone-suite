@@ -599,6 +599,7 @@
     "electionSubmitted": "Election submitted. It may take a moment to appear below."
   },
   "challans": {
+    "filingBlockedHeading": "Filing of {formType} is blocked until challans match",
     "errorBackLabel": "Back to Statutory",
     "errorArea": "TDS Challans & Reconciliation",
     "loadingAriaLabel": "Loading…",
@@ -626,7 +627,9 @@
     "reconcileShortfall": "Shortfall",
     "reconcileExcess": "Excess deposited",
     "reconcileNoChallan": "No challan",
-    "reconcilePendingFinalisation": "Run not finalised"
+    "reconcilePendingFinalisation": "Run not finalised",
+    "filingBlockedMismatchBody": "TDS deducted for {period} does not match the {formType} challans deposited. Resolve the difference before filing {formType}.",
+    "filingBlockedPendingBody": "TDS for {period} is not finalised yet (the payroll run is still pending). {formType} cannot be filed until it is finalised and reconciled."
   },
   "checkinLog": {
     "title": "Check-In Log",
@@ -2112,6 +2115,9 @@
     "supportRef": "If you contact support, quote this code:"
   },
   "esi": {
+    "selectPeriodLabel": "Period",
+    "loadErrorArea": "ESI contributions",
+    "statTotalEsiContribution": "Total ESI contribution — {period}",
     "errorBackLabel": "Back to Statutory",
     "errorArea": "ESI",
     "loadingAriaLabel": "Loading…",
@@ -2130,7 +2136,8 @@
     "historyCardTitle": "ESI Contribution Ledger",
     "filterPlaceholder": "Filter by employee or period…",
     "emptyTitle": "No ESI records",
-    "emptyMessage": "No ESI contributions have been recorded yet."
+    "emptyMessage": "No ESI contributions have been recorded yet.",
+    "truncatedNotice": "Showing the first {shown} of {total} records for this period. The totals above cover all {total}."
   },
   "expenditure": {
     "routeErrorBackLabel": "Back to Finance",
@@ -2484,6 +2491,9 @@
     "formatHint": "Format YYYY-YY, e.g. 2025-26"
   },
   "gpf": {
+    "loadErrorArea": "GPF ledger",
+    "statUniqueEmployeesAllTime": "Unique Employees (to date)",
+    "statPeriodsCoveredAllTime": "Periods Covered (to date)",
     "title": "General Provident Fund (GPF)",
     "subtitle": "GPF subscription ledger for eligible employees under the old pension scheme.",
     "loadErrorMessage": "Couldn't load — showing nothing",
@@ -2491,7 +2501,7 @@
     "colEmployee": "Employee",
     "colPeriod": "Period",
     "colBasicPay": "Basic Pay",
-    "colRatePercent": "Rate (%)",
+    "colRatePercent": "Rate",
     "colGpfContribution": "GPF Contribution",
     "statGpfRecords": "GPF Records",
     "statTotalGpfSubscription": "Total GPF Subscription",
@@ -2531,6 +2541,7 @@
     "loadingHeading": "GPF Statements"
   },
   "gratuity": {
+    "ceilingNote": "Payment of Gratuity Act ceiling: {amount}. Government (CCS Pension Rules) DCRG follows separate rules and ceilings, so this cap does not apply to every row.",
     "errorBackLabel": "Back to Statutory",
     "errorArea": "Gratuity",
     "loadingAriaLabel": "Loading…",
@@ -2553,8 +2564,9 @@
     "loadErrorMessage": "Couldn't load the gratuity register — the calculator below still works"
   },
   "gratuityCalculator": {
+    "disclaimerEstimateOnly": "This is an estimate only. The register above is authoritative.",
     "heading": "Gratuity Calculator",
-    "description": "Payment of Gratuity Act, 1972 — applicable after 5 years of continuous service. Formula: (Basic + DA) × 15/26 × Completed Years. Maximum: ₹20,00,000.",
+    "description": "Payment of Gratuity Act, 1972 — applicable after 5 years of continuous service. Formula: (Basic + DA) × 15/26 × Completed Years. Maximum: {ceiling}.",
     "salaryLabel": "Last Drawn Monthly Salary (Basic + DA) — ₹",
     "salaryPlaceholder": "e.g. 55000",
     "yearsLabel": "Years of Service",
@@ -2977,6 +2989,7 @@
     "regimeNew": "New"
   },
   "ingestChallanForm": {
+    "depositDateWarning": "This deposit date falls before the start of {period}. TDS deposits are normally due the month after deduction — double check before confirming.",
     "formTitle": "Ingest TDS Challan",
     "periodLabel": "Period",
     "bsrCodeLabel": "BSR Code",
@@ -3459,6 +3472,11 @@
     "noMatchMessage": "Try a different search."
   },
   "lwf": {
+    "loadErrorArea": "LWF configuration",
+    "statMonthlyFrequencyCount": "Monthly frequency states",
+    "statOtherFrequencyCount": "Other frequency states",
+    "frequencyMonthly": "Monthly",
+    "frequencyHalfYearly": "Half-yearly",
     "errorBackLabel": "Back to Statutory",
     "errorArea": "Labour Welfare Fund",
     "loadingAriaLabel": "Loading…",
@@ -3470,15 +3488,15 @@
     "colEmployerContribution": "Employer Contribution",
     "colFrequency": "Frequency",
     "statStatesConfigured": "States Configured",
-    "statTotalEmpContribution": "Total Emp Contribution",
-    "statTotalEmployerContribution": "Total Employer Contribution",
-    "statUniqueFrequencies": "Unique Frequencies",
     "historyCardTitle": "LWF Configuration",
     "filterPlaceholder": "Filter by state…",
     "emptyTitle": "No LWF configuration",
-    "emptyMessage": "Add a state's LWF contribution rates using the form above."
+    "emptyMessage": "Add a state's LWF contribution rates using the form above.",
+    "frequencyQuarterly": "Quarterly",
+    "frequencyYearly": "Yearly"
   },
   "lwfConfigForm": {
+    "overwriteWarning": "{state} already has an LWF configuration. Amounts or frequency you enter replace the stored values; blank fields keep the current value.",
     "formTitle": "Add / Update LWF Configuration",
     "stateCodeLabel": "State Code",
     "stateCodePlaceholder": "e.g. KA",
@@ -3951,6 +3969,9 @@
     "subtitle": "Register a new pensioner in the PPO system."
   },
   "periodSelector": {
+    "formTypeLabel": "Form Type",
+    "formType24qOption": "24Q",
+    "formType26qOption": "26Q",
     "periodLabel": "Period",
     "requiredError": "Choose a period (YYYY-MM) to view.",
     "submitBtn": "View Period"
@@ -4016,6 +4037,9 @@
     "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}."
   },
   "pf": {
+    "selectPeriodLabel": "Period",
+    "loadErrorArea": "PF contributions",
+    "statTotalPfContribution": "Total PF contribution (EPF + EPS) — {period}",
     "errorBackLabel": "Back to Statutory",
     "errorArea": "PF & ECR",
     "loadingAriaLabel": "Loading…",
@@ -4025,8 +4049,8 @@
     "colEmployee": "Employee",
     "colPeriod": "Period",
     "colBasic": "Basic",
-    "colEmployeePf": "Employee PF (12%)",
-    "colEmployerPf": "Employer PF (12%)",
+    "colEmployeePf": "Employee PF",
+    "colEmployerPf": "Employer PF",
     "statPfRecords": "PF Records",
     "statTotalEmployeeContribution": "Total Employee Contribution",
     "statTotalEmployerContribution": "Total Employer Contribution",
@@ -4034,7 +4058,8 @@
     "historyCardTitle": "EPF Contribution Ledger",
     "filterPlaceholder": "Filter by employee or period…",
     "emptyTitle": "No PF records",
-    "emptyMessage": "No EPF contributions have been recorded yet."
+    "emptyMessage": "No EPF contributions have been recorded yet.",
+    "truncatedNotice": "Showing the first {shown} of {total} records for this period. The totals above cover all {total}."
   },
   "pfms": {
     "title": "PFMS Ops Console",
@@ -4298,6 +4323,9 @@
     "chainEffective": "Effective"
   },
   "pt": {
+    "loadErrorArea": "professional tax slabs",
+    "noUpperBound": "No upper bound",
+    "statHighestSlabAmount": "Highest slab amount (any state)",
     "errorBackLabel": "Back to Statutory",
     "errorArea": "Professional Tax",
     "loadingAriaLabel": "Loading…",
@@ -4318,6 +4346,8 @@
     "emptyMessage": "Add a state's professional tax slab using the form above."
   },
   "ptSlabForm": {
+    "slabRangeInvalidError": "Slab 'To' cannot be less than slab 'From'.",
+    "slabOverlapError": "This slab overlaps an existing slab for this state.",
     "formTitle": "Add / Update PT Slab",
     "stateCodeLabel": "State Code",
     "stateCodePlaceholder": "e.g. KA",
@@ -4902,6 +4932,9 @@
     "underReview": "Under review"
   },
   "statutory": {
+    "seeChallansForFilingStatus": "See Challans & Reconciliation for filing status",
+    "tileTdsReturnsTitle": "TDS Returns (24Q/26Q)",
+    "tileTdsReturnsDescription": "Quarterly e-TDS returns for salary and non-salary deductions",
     "loadingAriaLabel": "Loading…",
     "errorBackLabel": "Back to Payroll",
     "errorArea": "Statutory Consoles",
@@ -4936,7 +4969,7 @@
   },
   "statutoryComplianceCard": {
     "noCeiling": "No ceiling",
-    "seeChallansForFilingStatus": "See Challans & Reconciliation for filing status",
+    "ceilingStateSpecific": "State-specific",
     "employee": "Employee",
     "employer": "Employer",
     "wageCeiling": "Wage ceiling",

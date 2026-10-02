@@ -583,6 +583,7 @@
     "emptyMessage": "कर्मचारी लाभ नामांकन (HRA, LTC, चिकित्सा) यहाँ दिखाई देते हैं जब लाभ विंडो के दौरान चयन प्रस्तुत किए जाते हैं।"
   },
   "challans": {
+    "filingBlockedHeading": "चालान मेल न खाने तक {formType} की फाइलिंग अवरुद्ध है",
     "errorBackLabel": "वैधानिक अनुभाग पर वापस जाएं",
     "errorArea": "TDS चालान और सुलह",
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -610,7 +611,9 @@
     "reconcileShortfall": "कमी",
     "reconcileExcess": "अधिक जमा",
     "reconcileNoChallan": "कोई चालान नहीं",
-    "reconcilePendingFinalisation": "रन अंतिम नहीं"
+    "reconcilePendingFinalisation": "रन अंतिम नहीं",
+    "filingBlockedMismatchBody": "{period} के लिए काटा गया TDS जमा किए गए {formType} चालानों से मेल नहीं खाता। {formType} फाइल करने से पहले अंतर दूर करें।",
+    "filingBlockedPendingBody": "{period} का TDS अभी अंतिम नहीं हुआ है (पेरोल रन लंबित है)। अंतिम और मिलान होने तक {formType} फाइल नहीं किया जा सकता।"
   },
   "checkinLog": {
     "title": "चेक-इन लॉग",
@@ -2037,6 +2040,9 @@
     "supportRef": "यदि आप सहायता से संपर्क करें, तो यह कोड बताएँ:"
   },
   "esi": {
+    "selectPeriodLabel": "अवधि",
+    "loadErrorArea": "ईएसआई अंशदान",
+    "statTotalEsiContribution": "कुल ईएसआई अंशदान — {period}",
     "errorBackLabel": "वैधानिक अनुभाग पर वापस जाएं",
     "errorArea": "ESI",
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -2055,7 +2061,8 @@
     "historyCardTitle": "ESI अंशदान लेजर",
     "filterPlaceholder": "कर्मचारी या अवधि के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई ESI रिकॉर्ड नहीं",
-    "emptyMessage": "अभी तक कोई ESI अंशदान दर्ज नहीं किया गया है।"
+    "emptyMessage": "अभी तक कोई ESI अंशदान दर्ज नहीं किया गया है।",
+    "truncatedNotice": "इस अवधि के {total} में से पहले {shown} रिकॉर्ड दिखाए जा रहे हैं। ऊपर के योग सभी {total} रिकॉर्ड के हैं।"
   },
   "expenditure": {
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
@@ -2409,6 +2416,9 @@
     "formatHint": "प्रारूप YYYY-YY, उदा. 2025-26"
   },
   "gpf": {
+    "loadErrorArea": "जीपीएफ लेजर",
+    "statUniqueEmployeesAllTime": "अद्वितीय कर्मचारी (अब तक)",
+    "statPeriodsCoveredAllTime": "कवर की गई अवधि (अब तक)",
     "title": "सामान्य भविष्य निधि (GPF)",
     "subtitle": "पुरानी पेंशन योजना के अंतर्गत पात्र कर्मचारियों के लिए GPF अंशदान लेजर।",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
@@ -2416,7 +2426,7 @@
     "colEmployee": "कर्मचारी",
     "colPeriod": "अवधि",
     "colBasicPay": "मूल वेतन",
-    "colRatePercent": "दर (%)",
+    "colRatePercent": "दर",
     "colGpfContribution": "GPF अंशदान",
     "statGpfRecords": "GPF रिकॉर्ड",
     "statTotalGpfSubscription": "कुल GPF अभिदान",
@@ -2456,6 +2466,7 @@
     "loadingHeading": "GPF विवरण"
   },
   "gratuity": {
+    "ceilingNote": "भुगतान ग्रेच्युटी अधिनियम की सीमा: {amount}। सरकारी (सीसीएस पेंशन नियम) डीसीआरजी के नियम और सीमाएँ अलग हैं, इसलिए यह सीमा हर पंक्ति पर लागू नहीं होती।",
     "errorBackLabel": "वैधानिक अनुभाग पर वापस जाएं",
     "errorArea": "ग्रेच्युटी",
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -2478,8 +2489,9 @@
     "loadErrorMessage": "ग्रेच्युटी रजिस्टर लोड नहीं हो सका — नीचे दिया कैलकुलेटर फिर भी काम करता है"
   },
   "gratuityCalculator": {
+    "disclaimerEstimateOnly": "यह केवल एक अनुमान है। ऊपर दिया गया रजिस्टर प्रामाणिक है।",
     "heading": "ग्रेच्युटी कैलकुलेटर",
-    "description": "भुगतान ग्रेच्युटी अधिनियम, 1972 — निरंतर सेवा के 5 वर्ष पूरे होने के बाद लागू। सूत्र: (मूल + DA) × 15/26 × पूर्ण वर्ष। अधिकतम: ₹20,00,000।",
+    "description": "भुगतान ग्रेच्युटी अधिनियम, 1972 — निरंतर सेवा के 5 वर्ष पूरे होने के बाद लागू। सूत्र: (मूल + DA) × 15/26 × पूर्ण वर्ष। अधिकतम: {ceiling}।",
     "salaryLabel": "अंतिम आहरित मासिक वेतन (मूल + DA) — ₹",
     "salaryPlaceholder": "उदा. 55000",
     "yearsLabel": "सेवा के वर्ष",
@@ -2869,6 +2881,7 @@
     "regimeNew": "नई"
   },
   "ingestChallanForm": {
+    "depositDateWarning": "यह जमा तारीख {period} के आरंभ से पहले की है। टीडीएस जमा आमतौर पर कटौती के अगले महीने देय होता है — पुष्टि करने से पहले दोबारा जांच लें।",
     "formTitle": "TDS चालान अंतर्ग्रहीत करें",
     "periodLabel": "अवधि",
     "bsrCodeLabel": "BSR कोड",
@@ -3350,6 +3363,11 @@
     "noMatchMessage": "एक अलग खोज आज़माएँ।"
   },
   "lwf": {
+    "loadErrorArea": "एलडब्ल्यूएफ विन्यास",
+    "statMonthlyFrequencyCount": "मासिक आवृत्ति वाले राज्य",
+    "statOtherFrequencyCount": "अन्य आवृत्ति वाले राज्य",
+    "frequencyMonthly": "मासिक",
+    "frequencyHalfYearly": "अर्धवार्षिक",
     "errorBackLabel": "वैधानिक अनुभाग पर वापस जाएं",
     "errorArea": "श्रम कल्याण निधि",
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -3361,15 +3379,15 @@
     "colEmployerContribution": "नियोक्ता अंशदान",
     "colFrequency": "आवृत्ति",
     "statStatesConfigured": "विन्यासित राज्य",
-    "statTotalEmpContribution": "कुल कर्मचारी अंशदान",
-    "statTotalEmployerContribution": "कुल नियोक्ता अंशदान",
-    "statUniqueFrequencies": "अद्वितीय आवृत्तियाँ",
     "historyCardTitle": "LWF विन्यास",
     "filterPlaceholder": "राज्य के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई LWF विन्यास नहीं",
-    "emptyMessage": "ऊपर दिए गए फॉर्म का उपयोग करके किसी राज्य की LWF अंशदान दरें जोड़ें।"
+    "emptyMessage": "ऊपर दिए गए फॉर्म का उपयोग करके किसी राज्य की LWF अंशदान दरें जोड़ें।",
+    "frequencyQuarterly": "त्रैमासिक",
+    "frequencyYearly": "वार्षिक"
   },
   "lwfConfigForm": {
+    "overwriteWarning": "{state} के लिए एलडब्ल्यूएफ विन्यास पहले से मौजूद है। आपके द्वारा दर्ज राशि या आवृत्ति संग्रहीत मानों को बदल देगी; खाली फ़ील्ड वर्तमान मान बनाए रखेंगे।",
     "formTitle": "LWF विन्यास जोड़ें / अद्यतन करें",
     "stateCodeLabel": "राज्य कोड",
     "stateCodePlaceholder": "उदा. KA",
@@ -4715,6 +4733,9 @@
     "subtitle": "पीपीओ प्रणाली में एक नया पेंशनभोगी पंजीकृत करें।"
   },
   "periodSelector": {
+    "formTypeLabel": "फॉर्म प्रकार",
+    "formType24qOption": "24Q",
+    "formType26qOption": "26Q",
     "periodLabel": "अवधि",
     "requiredError": "देखने के लिए एक अवधि (YYYY-MM) चुनें।",
     "submitBtn": "अवधि देखें"
@@ -4780,6 +4801,9 @@
     "confirmDescriptionWithRecovered": "कर्मचारी <strong>{employeeId}</strong> (FY {fy}) के लिए अनुलाभ <strong>{nature}</strong> सहेजें: मूल्य ₹{value}, वसूल ₹{recovered}।"
   },
   "pf": {
+    "selectPeriodLabel": "अवधि",
+    "loadErrorArea": "पीएफ अंशदान",
+    "statTotalPfContribution": "कुल पीएफ अंशदान (ईपीएफ + ईपीएस) — {period}",
     "errorBackLabel": "वैधानिक अनुभाग पर वापस जाएं",
     "errorArea": "PF और ECR",
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -4789,8 +4813,8 @@
     "colEmployee": "कर्मचारी",
     "colPeriod": "अवधि",
     "colBasic": "मूल वेतन",
-    "colEmployeePf": "कर्मचारी PF (12%)",
-    "colEmployerPf": "नियोक्ता PF (12%)",
+    "colEmployeePf": "कर्मचारी PF",
+    "colEmployerPf": "नियोक्ता PF",
     "statPfRecords": "PF रिकॉर्ड",
     "statTotalEmployeeContribution": "कुल कर्मचारी अंशदान",
     "statTotalEmployerContribution": "कुल नियोक्ता अंशदान",
@@ -4798,7 +4822,8 @@
     "historyCardTitle": "EPF अंशदान लेजर",
     "filterPlaceholder": "कर्मचारी या अवधि के अनुसार फ़िल्टर करें…",
     "emptyTitle": "कोई PF रिकॉर्ड नहीं",
-    "emptyMessage": "अभी तक कोई EPF अंशदान दर्ज नहीं किया गया है।"
+    "emptyMessage": "अभी तक कोई EPF अंशदान दर्ज नहीं किया गया है।",
+    "truncatedNotice": "इस अवधि के {total} में से पहले {shown} रिकॉर्ड दिखाए जा रहे हैं। ऊपर के योग सभी {total} रिकॉर्ड के हैं।"
   },
   "pfms": {
     "title": "PFMS संचालन कंसोल",
@@ -5062,6 +5087,9 @@
     "chainEffective": "प्रभावी"
   },
   "pt": {
+    "loadErrorArea": "व्यावसायिक कर स्लैब",
+    "noUpperBound": "कोई ऊपरी सीमा नहीं",
+    "statHighestSlabAmount": "उच्चतम स्लैब राशि (किसी भी राज्य में)",
     "errorBackLabel": "वैधानिक अनुभाग पर वापस जाएं",
     "errorArea": "व्यावसायिक कर",
     "loadingAriaLabel": "लोड हो रहा है…",
@@ -5082,6 +5110,8 @@
     "emptyMessage": "ऊपर दिए गए फॉर्म का उपयोग करके किसी राज्य का व्यावसायिक कर स्लैब जोड़ें।"
   },
   "ptSlabForm": {
+    "slabRangeInvalidError": "स्लैब 'तक' की राशि स्लैब 'से' की राशि से कम नहीं हो सकती।",
+    "slabOverlapError": "यह स्लैब इस राज्य के किसी मौजूदा स्लैब से ओवरलैप करता है।",
     "formTitle": "PT स्लैब जोड़ें / अद्यतन करें",
     "stateCodeLabel": "राज्य कोड",
     "stateCodePlaceholder": "उदा. KA",
@@ -5782,6 +5812,9 @@
     "underReview": "समीक्षाधीन"
   },
   "statutory": {
+    "seeChallansForFilingStatus": "फाइलिंग स्थिति हेतु चालान और सुलह देखें",
+    "tileTdsReturnsTitle": "टीडीएस रिटर्न (24Q/26Q)",
+    "tileTdsReturnsDescription": "वेतन और गैर-वेतन कटौती के लिए त्रैमासिक ई-टीडीएस रिटर्न",
     "loadingAriaLabel": "लोड हो रहा है…",
     "errorBackLabel": "वेतन पर वापस जाएं",
     "errorArea": "वैधानिक कंसोल",
@@ -5816,7 +5849,7 @@
   },
   "statutoryComplianceCard": {
     "noCeiling": "कोई सीमा नहीं",
-    "seeChallansForFilingStatus": "फाइलिंग स्थिति हेतु चालान और सुलह देखें",
+    "ceilingStateSpecific": "राज्य-विशिष्ट",
     "employee": "कर्मचारी",
     "employer": "नियोक्ता",
     "wageCeiling": "वेतन सीमा",

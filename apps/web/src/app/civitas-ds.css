@@ -467,3 +467,16 @@ tr.clickable:hover{background:var(--primary-soft)!important}
   .ph h1{font-size:20px;letter-spacing:-.3px}
   .stat .val{font-size:22px}
 }
+
+/* GAP-PAYROLL-STATUTORY-05: client-side hover driven entirely by CSS so
+   StatutoryComplianceCard can use next/link (client-side nav) instead of a
+   plain <a> (full page reload) and still show a shadow on BOTH mouse hover
+   and keyboard focus — the previous onMouseEnter/onMouseLeave JS handlers
+   only ever fired for mouse hover, never for :focus-visible. */
+.statutory-card {
+  transition: box-shadow 0.15s;
+}
+.statutory-card:hover,
+.statutory-card:focus-visible {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
