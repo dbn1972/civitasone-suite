@@ -1,7 +1,8 @@
 "use client";
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { operatorAccountStatus } from "./operatorStatus";
 type Row = Record<string, unknown>;
 export function OperatorsTable({ operators, source = "api" }: { operators: Row[]; source?: "api" | "error" }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("sa.operators", operators, source, (d) => d.length === 0);
@@ -18,6 +19,14 @@ export function OperatorsTable({ operators, source = "api" }: { operators: Row[]
           { key: "name", label: "Name" },
           { key: "role", label: "Role" },
           { key: "lastLogin", label: "Last Login" },
+          {
+            key: "status",
+            label: "Account status",
+            render: (o) => {
+              const s = operatorAccountStatus(o);
+              return s === "unknown" ? <span aria-label="Account status unknown">—</span> : <StatusPill status={s} />;
+            },
+          },
           { key: "twoFaStatus", label: "2FA", cellType: "status" },
           { key: "permissions", label: "Permissions" },
         ]}

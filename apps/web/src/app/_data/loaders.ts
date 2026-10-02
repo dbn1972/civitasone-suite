@@ -5008,8 +5008,11 @@ export type AdminUserSummary = {
   mfaEnabled: boolean;
 };
 
+/** Page size requested from GET /v1/admin/users (the route caps `limit` at 200). A full page means the directory may hold more. */
+export const ADMIN_USERS_LIST_LIMIT = 200;
+
 export async function getAdminUsersList(): Promise<LoaderResult<AdminUserSummary[]>> {
-  return fetchJson<unknown, AdminUserSummary[]>("/api/v1/admin/users?limit=200", [], {
+  return fetchJson<unknown, AdminUserSummary[]>(`/api/v1/admin/users?limit=${ADMIN_USERS_LIST_LIMIT}`, [], {
     telemetryKey: "admin.users.list",
     mapResponse: (p) => {
       const rows = getArrayPayload(p);

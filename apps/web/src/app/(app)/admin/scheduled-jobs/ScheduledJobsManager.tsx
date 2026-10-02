@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { Button, ConfirmDialog, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminScheduledJob } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
@@ -74,6 +74,8 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
   }
 }
 
+type PendingAction = { kind: "run" | "delete" | "disable"; job: AdminScheduledJob };
+
 export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: AdminScheduledJob[]; source: "api" | "error" }) {
   const [jobs, setJobs] = useState<AdminScheduledJob[]>(initialJobs);
   const [showModal, setShowModal] = useState(false);
@@ -83,6 +85,10 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  // GAP-ADMIN-SCHEDULED-JOBS-01: run-now / delete / disable never fire on a single click.
+  const [pending, setPending] = useState<PendingAction | null>(null);
+  const [confirmBusy, setConfirmBusy] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | undefined>(undefined);
   const formError = useFormError("scheduled job");
 
   const enabledCount = jobs.filter((j) => j.enabled).length;
@@ -101,30 +107,57 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
   }
 
   async function handleToggle(job: AdminScheduledJob) {
+    // Enabling is harmless; disabling a live job asks first.
+    if (job.enabled) {
+      setConfirmError(undefined);
+      setPending({ kind: "disable", job });
+      return;
+    }
+    await runToggle(job);
+  }
+
+  async function runToggle(job: AdminScheduledJob): Promise<boolean> {
     setBusyId(job.id);
     setError(null);
     const result = await callApi(`/${job.id}`, "PUT", { enabled: !job.enabled });
     if (!result.ok) setError(result.message ?? null);
     else await refresh();
     setBusyId(null);
+    return result.ok;
   }
 
-  async function handleRunNow(id: string) {
-    setBusyId(id);
-    setError(null);
-    const result = await callApi(`/${id}/run-now`, "POST");
-    if (!result.ok) setError(result.message ?? null);
-    else await refresh();
-    setBusyId(null);
+  function askRunNow(job: AdminScheduledJob) {
+    setConfirmError(undefined);
+    setPending({ kind: "run", job });
   }
 
-  async function handleDelete(id: string) {
-    setBusyId(id);
-    setError(null);
-    const result = await callApi(`/${id}`, "DELETE");
-    if (!result.ok) setError(result.message ?? null);
-    else await refresh();
+  function askDelete(job: AdminScheduledJob) {
+    setConfirmError(undefined);
+    setPending({ kind: "delete", job });
+  }
+
+  async function runConfirmed() {
+    if (!pending) return;
+    const { kind, job } = pending;
+    setConfirmBusy(true);
+    setConfirmError(undefined);
+    setBusyId(job.id);
+    let result: { ok: boolean; message?: string };
+    if (kind === "disable") {
+      result = await callApi(`/${job.id}`, "PUT", { enabled: false });
+    } else if (kind === "run") {
+      result = await callApi(`/${job.id}/run-now`, "POST");
+    } else {
+      result = await callApi(`/${job.id}`, "DELETE");
+    }
     setBusyId(null);
+    setConfirmBusy(false);
+    if (!result.ok) {
+      setConfirmError(result.message ?? scheduledJobError());
+      return;
+    }
+    setPending(null);
+    await refresh();
   }
 
   async function openHistory(id: string) {
@@ -238,9 +271,9 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
                   </td>
                   <td>
                     <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-                      <Button variant="ghost" size="sm" onClick={() => void handleRunNow(job.id)} disabled={busyId === job.id} aria-label={`Run ${job.name} now`} style={{ fontSize: 12 }}>▶ Run Now</Button>
+                      <Button variant="ghost" size="sm" onClick={() => askRunNow(job)} disabled={busyId === job.id} aria-label={`Run ${job.name} now`} style={{ fontSize: 12 }}>▶ Run Now</Button>
                       <Button variant="ghost" size="sm" onClick={() => void openHistory(job.id)} style={{ fontSize: 12 }}>📋 History</Button>
-                      <Button variant="danger" size="sm" onClick={() => void handleDelete(job.id)} disabled={busyId === job.id} aria-label={`Delete ${job.name}`}>🗑️</Button>
+                      <Button variant="danger" size="sm" onClick={() => askDelete(job)} disabled={busyId === job.id} aria-label={`Delete ${job.name}`}>🗑️</Button>
                     </div>
                   </td>
                 </tr>
@@ -249,6 +282,30 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
           </table>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={pending !== null}
+        danger={pending?.kind !== "run" ? true : false}
+        title={
+          pending?.kind === "delete" ? `Delete job "${pending.job.name}"?`
+            : pending?.kind === "disable" ? `Disable job "${pending.job.name}"?`
+            : pending ? `Run "${pending.job.name}" now?` : ""
+        }
+        description={
+          pending ? (
+            pending.kind === "delete"
+              ? "This permanently removes the job and stops all future runs. It cannot be undone."
+              : pending.kind === "disable"
+                ? "The job will stop running on its schedule until it is enabled again."
+                : `This immediately sends ${pending.job.targetService} → ${pending.job.targetCommand} outside its schedule.`
+          ) : undefined
+        }
+        confirmLabel={pending?.kind === "delete" ? "Delete job" : pending?.kind === "disable" ? "Disable job" : "Run now"}
+        busy={confirmBusy}
+        errorMessage={confirmError}
+        onConfirm={() => void runConfirmed()}
+        onCancel={() => { if (!confirmBusy) { setPending(null); setConfirmError(undefined); } }}
+      />
 
       {showModal && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Create Scheduled Job">

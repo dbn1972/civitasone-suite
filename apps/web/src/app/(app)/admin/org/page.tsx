@@ -1,5 +1,7 @@
 import { getAdminOrgUnits } from "@/app/_data/loaders";
 import { OrgHierarchyManager } from "./OrgHierarchyManager";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
 
 // COMP-004: this page used to edit a purely local, hardcoded 12-node
 // "Ministry of Finance" tree and Save with PUT /v1/admin/org-hierarchy
@@ -13,6 +15,8 @@ import { OrgHierarchyManager } from "./OrgHierarchyManager";
 // GET /v1/admin/org-hierarchy's actual data, followed by a refetch — there
 // is no client-side tree state that can drift from the server.
 export default async function OrgHierarchyPage() {
+  // GAP-ADMIN-ORG-01: tenant-service org-hierarchy requires tenant_admin or higher.
+  requireAnyRole(ADMIN_TENANT_ROLES);
   const { data: units, source } = await getAdminOrgUnits();
   return <OrgHierarchyManager initialUnits={units} source={source} />;
 }

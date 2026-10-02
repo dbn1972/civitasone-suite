@@ -2,6 +2,11 @@ import type { NavTile } from "@civitasone/types";
 import { LinkTiles } from "../../_components/LinkTiles";
 import { PageHeader } from "../../_components/ds";
 import { getTranslations } from "next-intl/server";
+import { requireAnyRole, getSessionRoles } from "@/lib/auth/roleGuard";
+import { ADMIN_PLATFORM_ROLES, ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
+
+/** Tiles a tenant_admin may see: only consoles whose admin-service routes admit tenant_admin. */
+const TENANT_ADMIN_TILE_HREFS = new Set(["/admin/integrations"]);
 
 const adminTiles: NavTile[] = [
   { title: "SA Dashboard", href: "/admin/sa-dashboard", description: "Platform health, revenue and growth" },
@@ -22,11 +27,16 @@ const adminTiles: NavTile[] = [
 ];
 
 export default async function AdminPage() {
+  // GAP-ADMIN-HOME-01: the hub lists platform-operator consoles (tenants, operators, API keys, invoices);
+  // a tenant_admin is admitted but sees only the Integrations tile.
+  requireAnyRole(ADMIN_TENANT_ROLES);
+  const isPlatform = ADMIN_PLATFORM_ROLES.some((r) => getSessionRoles().includes(r));
+  const tiles = isPlatform ? adminTiles : adminTiles.filter((t) => TENANT_ADMIN_TILE_HREFS.has(t.href));
   const t = await getTranslations("admin");
   return (
     <div className="page-main" aria-labelledby="page-heading">
       <PageHeader title={t("title")} subtitle={t("subtitle")} />
-      <LinkTiles tiles={adminTiles} columns="four" />
+      <LinkTiles tiles={tiles} columns="four" />
     </div>
   );
 }

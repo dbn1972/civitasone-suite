@@ -5,7 +5,7 @@ import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
-import { assertCanConfer, hasUnconditionalAuthority, assertKeyAllowed, DomainError } from "./domain.js";
+import { assertCanConfer, hasUnconditionalAuthority, assertKeyAllowed, isPlatformAuthorityKey, DomainError } from "./domain.js";
 import type { CreateRoleBody, CreatePermissionBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -113,6 +113,13 @@ export async function revokePermission(ctx: RequestContext, roleId: string, perm
 export async function assignRole(ctx: RequestContext, roleId: string, userId: string, reason?: string): Promise<Accepted> {
   const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
+
+  // GAP-ADMIN-USERS-02: a platform-authority role (super_admin/platform_admin) may only be
+  // assigned by platform staff, even when the role row carries no permissions (assertCanConfer
+  // alone passes for an empty permission set).
+  if (isPlatformAuthorityKey(role.key) && !hasUnconditionalAuthority(ctx.roles)) {
+    throw new HttpError(403, "FORBIDDEN", `role '${role.key}' can only be assigned by platform staff`);
+  }
 
   // Anti-self-escalation: caller must be able to confer everything the role grants.
   const roleperms = await scopedRead((tx) => repo.permissionKeysForRole(tx, ctx.tenantId, roleId));

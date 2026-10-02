@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
+import { HttpError } from "../../shared/context.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { CreateUserBody, UpdateUserBody, StatusBody } from "./validators.js";
 import type { UserView } from "./domain.js";
@@ -30,7 +31,19 @@ export async function updateUser(ctx: RequestContext, id: string, body: UpdateUs
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isSameUuid(a: string, b: string): boolean {
+  return UUID_RE.test(a) && UUID_RE.test(b) && a.toLowerCase() === b.toLowerCase();
+}
+
 export async function changeUserStatus(ctx: RequestContext, id: string, body: StatusBody): Promise<Accepted> {
+  // GAP-ADMIN-USERS-01: an admin must not suspend, lock or deactivate their own
+  // account (also covers DELETE, which routes through this command). Another
+  // admin can still do it, so this never strands the account permanently.
+  // UUIDs are case-insensitive: the route's zod uuid() accepts an upper-cased id, so compare lower-cased.
+  if (body.status !== "active" && isSameUuid(id, ctx.actorId)) {
+    throw new HttpError(409, "SELF_STATUS_CHANGE", "you cannot suspend, lock or deactivate your own account");
+  }
   await queue.publish(COMMANDS.deactivateUser, {
     messageId: randomUUID(),
     type: COMMANDS.deactivateUser, tenantId: ctx.tenantId, actorId: ctx.actorId,

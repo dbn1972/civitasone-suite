@@ -1,5 +1,7 @@
-import { PageHeader, StatGrid, StatCard, DataTable } from "../../../_components/ds";
-import { fetchJson } from "@/app/_data/apiClient";
+import { PageHeader, StatGrid, StatCard, DataTable, LoadErrorState } from "../../../_components/ds";
+import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { DEVICE_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 type Row = {
   id: string;
@@ -19,19 +21,36 @@ type Row = {
   department: string;
 } & Record<string, unknown>;
 
-async function getData(): Promise<Row[]> {
-  const r = await fetchJson<unknown, Row[]>("/api/v1/hrms/devices/admin", [], {
+async function getData(): Promise<LoaderResult<Row[]>> {
+  return fetchJson<unknown, Row[]>("/api/v1/hrms/devices/admin", [], {
     telemetryKey: "admin.devices",
     mapResponse: (p) => {
       const arr = (p as { data?: Row[] })?.data;
       return Array.isArray(arr) ? arr : null;
     },
   });
-  return r.data;
 }
 
 export default async function DevicesPage() {
-  const items = await getData();
+  // GAP-ADMIN-DEVICES-01: hrms-service gates GET /v1/hrms/devices/admin to
+  // hr_admin/it_admin/super_admin (names, codes, departments, last IPs).
+  requireAnyRole(DEVICE_ADMIN_ROLES);
+  const res = await getData();
+
+  // GAP-ADMIN-DEVICES-02: a failed fetch used to render "Total Devices 0,
+  // Blocked 0" -- a security-posture screen that looks clean when it is blind.
+  if (res.source === "error") {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Device Trust & Compliance"
+          subtitle="Monitor all devices accessing organization data — block, flag, or trust"
+        />
+        <LoadErrorState result={res} area="devices" backHref="/admin" requiredRoles={DEVICE_ADMIN_ROLES} />
+      </div>
+    );
+  }
+  const items = res.data;
 
   const trusted = items.filter((i) => i.trustStatus === "trusted").length;
   const flagged = items.filter((i) => i.trustStatus === "flagged").length;

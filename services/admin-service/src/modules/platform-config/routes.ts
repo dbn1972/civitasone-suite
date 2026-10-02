@@ -8,6 +8,32 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
+
+const AUDIT_TOPIC = "audit.event.record";
+
+/**
+ * GAP-ADMIN-CONFIG-03: every platform-config mutation is audited with the actor
+ * and a before/after of the touched parameters (CLAUDE.md rule 8). Written to the
+ * transactional outbox BEFORE the in-memory change is applied, so a failed audit
+ * write rejects the request instead of leaving an unaudited change behind.
+ */
+async function auditConfigChange(
+  ctx: { tenantId: string; actorId: string; correlationId: string },
+  action: string,
+  before: unknown,
+  after: unknown,
+): Promise<void> {
+  await db.transaction(async (tx) => {
+    const t = tx as Parameters<typeof enqueue>[0];
+    await enqueue(t, {
+      topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+      payload: { service: "admin", action, resourceType: "platform_config", resourceId: "platform", outcome: "success", before, after },
+    });
+  });
+}
 
 const PLATFORM_ADMIN = ["platform_admin", "super_admin"];
 
@@ -162,6 +188,26 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, PLATFORM_ADMIN);
     const body = patchConfigSchema.parse(req.body);
 
+    // Audit first (see auditConfigChange): snapshot only the parameters this request touches.
+    const touched = Object.keys(body) as (keyof typeof controllable)[];
+    // `after` is the merged subtree for the same keys as `before` (not the raw partial body).
+    const before = Object.fromEntries(touched.map((k) => [k, structuredClone(controllable[k])]));
+    const after: Record<string, unknown> = {};
+    for (const k of touched) {
+      const patch = body[k] as unknown;
+      const prev = controllable[k] as unknown;
+      after[k] = patch !== null && typeof patch === "object" && prev !== null && typeof prev === "object"
+        ? { ...(prev as Record<string, unknown>), ...(patch as Record<string, unknown>) }
+        : patch;
+    }
+    // Same side effects as the apply step below: an invalid logLevel is ignored; enabling debug forces "debug".
+    if ("logLevel" in after && !(VALID_LOG_LEVELS as readonly string[]).includes(String(after.logLevel))) after.logLevel = controllable.logLevel;
+    if (typeof body.debugModeUntil === "string" && body.debugModeUntil) {
+      (before as Record<string, unknown>).logLevel ??= controllable.logLevel;
+      after.logLevel = "debug";
+    }
+    await auditConfigChange(ctx, "platform_config.update", before, after);
+
     if (body.cacheTtl) {
       for (const [k, v] of Object.entries(body.cacheTtl)) {
         controllable.cacheTtl[k] = v;
@@ -197,6 +243,12 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
     const raw = body.durationMinutes ?? 15;
     const mins = Math.min(60, Math.max(5, raw)); // clamp to [5, 60]
     const until = new Date(Date.now() + mins * 60000).toISOString();
+    await auditConfigChange(
+      ctx,
+      "platform_config.debug_mode",
+      { debugModeUntil: controllable.debugModeUntil, logLevel: controllable.logLevel },
+      { debugModeUntil: until, logLevel: "debug" },
+    );
     controllable.debugModeUntil = until;
     controllable.logLevel = "debug";
     return reply.send({ status: "debug_enabled", until, durationMinutes: mins });
