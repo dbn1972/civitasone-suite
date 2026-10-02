@@ -1,30 +1,43 @@
 import { getTranslations } from "next-intl/server";
-import { ModuleHub } from "../../_components/ModuleHub";
+import { ModuleHub, type ModuleHubGroup } from "../../_components/ModuleHub";
+
+/** Hub tiles: [route, message key under assets.links]. Grouping lives in GROUPS. */
+const ROUTES = {
+  dashboard: "/assets/dashboard",
+  register: "/assets/register",
+  bulkImport: "/assets/bulk-import",
+  scan: "/assets/scan",
+  verification: "/assets/verification",
+  list: "/assets/list",
+  fixedAssets: "/assets/fixed-assets",
+  infra: "/assets/infra",
+  locations: "/assets/locations",
+  leases: "/assets/leases",
+  projects: "/assets/projects",
+  maintenance: "/assets/maintenance",
+  fleet: "/assets/fleet",
+  insurance: "/assets/insurance",
+  depreciation: "/assets/depreciation",
+  condemnation: "/assets/condemnation",
+} as const;
+
+type LinkKey = keyof typeof ROUTES;
+
+/** GAP-ASSETS-HOME-01: five headed groups covering all 16 tiles exactly once. */
+const GROUPS: { key: string; links: LinkKey[] }[] = [
+  { key: "overview", links: ["dashboard"] },
+  { key: "register", links: ["register", "bulkImport", "scan", "verification"] },
+  { key: "registers", links: ["list", "fixedAssets", "infra", "locations", "leases", "projects"] },
+  { key: "operate", links: ["maintenance", "fleet", "insurance"] },
+  { key: "account", links: ["depreciation", "condemnation"] },
+];
 
 export default async function Page() {
   const t = await getTranslations("assets");
-  return (
-    <ModuleHub
-      title={t("title")}
-      description="Asset lifecycle, depreciation, maintenance and disposal."
-      links={[
-        { href: "/assets/dashboard", label: "Dashboard", note: "Overview and quick navigation" },
-        { href: "/assets/list", label: "Asset Register", note: "All assets with status and valuation" },
-        { href: "/assets/register", label: "Register Asset", note: "Manual capitalization" },
-        { href: "/assets/depreciation", label: "Depreciation Run", note: "Multi-book period-end posting" },
-        { href: "/assets/projects", label: "Projects & AUC", note: "Capitalize WIP to fixed assets" },
-        { href: "/assets/leases", label: "IFRS 16 Leases", note: "ROU assets and liabilities" },
-        { href: "/assets/locations", label: "Functional Locations", note: "PM hierarchy" },
-        { href: "/assets/bulk-import", label: "Bulk Import", note: "Mass asset load" },
-        { href: "/assets/scan", label: "Barcode Scan", note: "Mobile field verification" },
-        { href: "/assets/verification", label: "Physical Verification", note: "Stock-take and reconciliation" },
-        { href: "/assets/fixed-assets", label: "Fixed Assets", note: "Capitalized assets" },
-        { href: "/assets/infra", label: "Infrastructure", note: "Roads, buildings and networks" },
-        { href: "/assets/maintenance", label: "Maintenance", note: "AMC, preventive and corrective" },
-        { href: "/assets/fleet", label: "Fleet & Telematics", note: "Vehicles, GPS and IoT devices" },
-        { href: "/assets/insurance", label: "Insurance", note: "Policies and claims" },
-        { href: "/assets/condemnation", label: "Condemnation & Disposal", note: "Survey, auction and disposal workflow" },
-      ]}
-    />
-  );
+  // GAP-ASSETS-HOME-02: every label comes from the message catalogue.
+  const groups: ModuleHubGroup[] = GROUPS.map((g) => ({
+    heading: t(`groups.${g.key}`),
+    links: g.links.map((k) => ({ href: ROUTES[k], label: t(`links.${k}.label`), note: t(`links.${k}.note`) })),
+  }));
+  return <ModuleHub title={t("title")} description={t("description")} groups={groups} />;
 }

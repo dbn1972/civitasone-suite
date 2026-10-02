@@ -15,3 +15,23 @@ export function vehicleLabel(v: VehicleLike): string {
 export function vehicleOptions(vehicles: readonly VehicleLike[]): PickerOption[] {
   return vehicles.map((v) => ({ id: v.id, label: vehicleLabel(v) }));
 }
+
+/**
+ * GAP-ASSETS-FLEET-VEHICLES-04: fuel type is a lower-case enum on the wire
+ * ("cng"); capitalising the first letter rendered "Cng". One label map for the
+ * dropdown, the confirm dialog and the table.
+ */
+export const FUEL_TYPES = ["petrol", "diesel", "electric", "cng"] as const;
+export type FuelType = (typeof FUEL_TYPES)[number];
+
+export const FUEL_LABELS: Record<FuelType, string> = {
+  petrol: "Petrol",
+  diesel: "Diesel",
+  electric: "Electric",
+  cng: "CNG",
+};
+
+export function fuelLabel(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  return (FUEL_LABELS as Record<string, string>)[raw.toLowerCase()] ?? raw;
+}

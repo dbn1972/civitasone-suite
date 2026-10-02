@@ -58,12 +58,25 @@ describe("FleetDevicesPage", () => {
     expect(screen.getByText("No devices registered yet")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when the loader falls back on error", async () => {
+  // GAP-ASSETS-FLEET-DEVICES-04
+  it("shows a load error with Retry -- not the empty state -- when the loader falls back on error", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" });
 
     const ui = await FleetDevicesPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.queryByText("No devices registered yet")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /try again|retry/i }).length).toBeGreaterThan(0);
+  });
+
+  // GAP-ASSETS-FLEET-DEVICES-03 (already built by the HIGH pass; pinned here)
+  it("labels a device's vehicle by registration and never prints an unknown vehicle UUID", async () => {
+    fetchJsonMock.mockResolvedValueOnce({
+      data: [{ id: "d9", vehicleId: "99999999-9999-9999-9999-999999999999", deviceImei: "490154203237518", protocol: "gt06", status: "active" }],
+      source: "api",
+    });
+    render(await FleetDevicesPage());
+    expect(screen.getByRole("columnheader", { name: /^Vehicle$/ })).toBeInTheDocument();
+    expect(screen.queryByText("99999999-9999-9999-9999-999999999999")).not.toBeInTheDocument();
   });
 });

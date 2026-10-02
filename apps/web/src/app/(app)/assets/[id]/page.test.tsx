@@ -50,4 +50,21 @@ describe("AssetDetailPage sub-fetch failures", () => {
     render(await AssetDetailPage({ params: { id: "a1" } }));
     expect(screen.queryByTestId("eoffice")).not.toBeInTheDocument();
   });
+
+  // GAP-ASSETS-INFRA-05
+  it("hides the movable-only Tagged and AMC lifecycle steps for an infrastructure asset", async () => {
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, type: "infra" }, source: "api", parts: { depreciation: "api", maintenance: "api" } });
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.queryByText("Tagged")).not.toBeInTheDocument();
+    expect(screen.queryByText("AMC")).not.toBeInTheDocument();
+    expect(screen.getByText("Acquired (GRN)")).toBeInTheDocument();
+    expect(screen.getByText("In use")).toBeInTheDocument();
+  });
+
+  it("keeps Tagged and AMC for a movable asset", async () => {
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, type: "movable" }, source: "api", parts: { depreciation: "api", maintenance: "api" } });
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.getByText("Tagged")).toBeInTheDocument();
+    expect(screen.getByText("AMC")).toBeInTheDocument();
+  });
 });

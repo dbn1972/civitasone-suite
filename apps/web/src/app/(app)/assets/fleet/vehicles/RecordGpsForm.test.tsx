@@ -33,10 +33,15 @@ describe("RecordGpsForm", () => {
     fireEvent.change(screen.getByLabelText(/^Latitude/), { target: { value: "28.6" } });
     fireEvent.change(screen.getByLabelText(/^Longitude/), { target: { value: "77.2" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Position" }));
+    await waitFor(() => expect(screen.getByText("Record this position?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Record position" }));
 
     await waitFor(() => {
       expect(screen.getByText("Position recorded for DL01AB1234 — Tata Sumo.")).toBeInTheDocument();
     });
+    // GAP-ASSETS-FLEET-VEHICLES-06: IST date-time, never the raw ISO string.
+    expect(screen.getByText(/01 Aug 2026, 05:30 am IST/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-08-01T00:00:00/)).not.toBeInTheDocument();
     const [url] = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0]!;
     expect(String(url)).toContain(`v1/assets/fleet/vehicles/${VALID_UUID}/gps`);
   });
@@ -49,6 +54,8 @@ describe("RecordGpsForm", () => {
     fireEvent.change(screen.getByLabelText(/^Latitude/), { target: { value: "28.6" } });
     fireEvent.change(screen.getByLabelText(/^Longitude/), { target: { value: "77.2" } });
     fireEvent.click(screen.getByRole("button", { name: "Record Position" }));
+    await waitFor(() => expect(screen.getByText("Record this position?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Record position" }));
 
     await waitFor(() => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
@@ -69,5 +76,34 @@ describe("RecordGpsForm", () => {
     render(<RecordGpsForm options={[]} />);
     expect(screen.getByLabelText(/^Vehicle/)).toBeDisabled();
     expect(screen.getByText(/No vehicles are registered yet/)).toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-FLEET-VEHICLES-06
+  it("shows the entered coordinates in a confirm dialog and sends nothing on cancel", async () => {
+    const spy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<RecordGpsForm options={OPTS} initialVehicleId={VALID_UUID} />);
+    fireEvent.change(screen.getByLabelText(/^Latitude/), { target: { value: "28.6" } });
+    fireEvent.change(screen.getByLabelText(/^Longitude/), { target: { value: "77.2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Position" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("28.6, 77.2");
+    expect(dialog).toHaveTextContent("DL01AB1234 — Tata Sumo");
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(spy).not.toHaveBeenCalled();
+  });
+
+  it("falls back to the acceptance time when the service echoes no timestamp", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: { id: VALID_UUID, lat: 28.6, lng: 77.2 } }), { status: 202 }),
+    );
+    render(<RecordGpsForm options={OPTS} initialVehicleId={VALID_UUID} />);
+    fireEvent.change(screen.getByLabelText(/^Latitude/), { target: { value: "28.6" } });
+    fireEvent.change(screen.getByLabelText(/^Longitude/), { target: { value: "77.2" } });
+    fireEvent.click(screen.getByRole("button", { name: "Record Position" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: "Record position" }));
+    const line = (await screen.findByText(/Last recorded position/)).parentElement!;
+    expect(line).not.toHaveTextContent(/undefined|Invalid/);
+    expect(line).toHaveTextContent(/IST/);
   });
 });

@@ -1,16 +1,22 @@
-import { PageHeader, Card, DataTable } from "../../../../_components/ds";
-import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
+import { PageHeader, Card, RefreshErrorState } from "../../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { ScheduleMaintenanceForm } from "./ScheduleMaintenanceForm";
+import { MaintenanceTable, type MaintenanceTableRow } from "./MaintenanceTable";
 import { getVehicles } from "../_data/vehicles";
 import { vehicleLabel, vehicleOptions } from "../_data/labels";
+import { formatIndianDate } from "@/lib/formatters";
+import { displayStatus } from "../_data/maintenanceStatus";
+import { toHumanError } from "@/lib/messages";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWriteFleet } from "@/lib/auth/workRoles";
 
 /**
  * GET /v1/assets/fleet/maintenance (asset-service, port 3015, gateway prefix
  * /api/v1/assets). Field names are inferred from the schedule payload
- * (vehicleId, type, scheduledDate, odometerThresholdKm) — the route as read
- * from services/asset-service/src/modules/fleet/routes.ts currently always
- * returns `{ data: [] }` (no DB-backed list yet); see BACKEND FOLLOW-UPS.
+ * (vehicleId, type, scheduledDate, odometerThresholdKm, status) and match the
+ * DB-backed list in the asset-service fleet routes module (GAP-ASSETS-FLEET-MAINTENANCE-07:
+ * verified -- scheduledDate is a bare calendar date; only the date drives
+ * "overdue", the odometer threshold is stored but not evaluated).
  */
 type RawRow = {
   id: string;
@@ -26,8 +32,10 @@ export type MaintenanceRow = {
   vehicleId: string;
   typeLabel: string;
   scheduledDate: string;
+  scheduledLabel: string;
   odometerThresholdKm: string;
-  statusLabel: string;
+  /** Raw service status (scheduled | completed | cancelled). */
+  status: string;
 };
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -52,9 +60,11 @@ function mapMaintenance(payload: unknown): MaintenanceRow[] | null {
       vehicleId: row.vehicleId,
       typeLabel: String(row.type ?? "").replace(/_/g, " "),
       scheduledDate: String(row.scheduledDate ?? ""),
+      // GAP-ASSETS-FLEET-MAINTENANCE-04: dd Mon yyyy (IST-safe), "—" when absent.
+      scheduledLabel: formatIndianDate(row.scheduledDate ? String(row.scheduledDate) : null),
       odometerThresholdKm:
         typeof row.odometerThresholdKm === "number" ? `${row.odometerThresholdKm.toLocaleString("en-IN")} km` : "—",
-      statusLabel: String(row.status ?? "scheduled"),
+      status: String(row.status ?? "scheduled"),
     });
   }
   return mapped;
@@ -67,22 +77,23 @@ async function getMaintenance(): Promise<LoaderResult<MaintenanceRow[]>> {
   });
 }
 
-type MaintenanceTableRow = MaintenanceRow & { vehicle: string };
-
 export default async function FleetMaintenancePage() {
   const [{ data: jobs, source }, { data: vehicles, source: vehiclesSource }] = await Promise.all([getMaintenance(), getVehicles()]);
 
   // GAP-ASSETS-FLEET-MAINTENANCE-02: show the registration number, never the raw UUID.
   const byId = new Map(vehicles.map((v) => [v.id, vehicleLabel(v)]));
-  const rows: MaintenanceTableRow[] = jobs.map((j) => ({ ...j, vehicle: byId.get(j.vehicleId) ?? "Unknown vehicle" }));
-
-  const columns: { key: keyof MaintenanceTableRow; label: string; cellType?: "status" }[] = [
-    { key: "vehicle", label: "Vehicle" },
-    { key: "typeLabel", label: "Type" },
-    { key: "scheduledDate", label: "Scheduled Date" },
-    { key: "odometerThresholdKm", label: "Odometer Threshold" },
-    { key: "statusLabel", label: "Status", cellType: "status" },
-  ];
+  const rows: MaintenanceTableRow[] = jobs.map((j) => {
+    const statusLabel = displayStatus(j.status, j.scheduledDate);
+    return {
+      id: j.id,
+      vehicle: byId.get(j.vehicleId) ?? "Unknown vehicle",
+      typeLabel: j.typeLabel,
+      scheduledLabel: j.scheduledLabel,
+      odometerThresholdKm: j.odometerThresholdKm,
+      statusLabel,
+      open: statusLabel === "scheduled" || statusLabel === "overdue",
+    };
+  });
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -91,23 +102,17 @@ export default async function FleetMaintenancePage() {
         subtitle="Preventive maintenance scheduling for government vehicles."
         back="/assets/fleet"
         backLabel="Fleet & Telematics"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
       <ScheduleMaintenanceForm options={vehicleOptions(vehicles)} vehiclesError={vehiclesSource === "error"} />
 
       <Card title="Scheduled Maintenance">
-        <DataTable<MaintenanceTableRow>
-          columns={columns}
-          rows={rows}
-          sortable
-          filterable
-          filterPlaceholder="Filter by vehicle, type…"
-          pageSize={15}
-          emptyIcon="🛠️"
-          emptyTitle="No maintenance scheduled yet"
-          emptyMessage="Schedule your first maintenance job using the form above."
-        />
+        {/* GAP-ASSETS-FLEET-MAINTENANCE-03: a failed load is an error, never "No maintenance scheduled yet". */}
+        {source === "error" ? (
+          <RefreshErrorState error={toHumanError("load", { area: "maintenance schedule" })} />
+        ) : (
+          <MaintenanceTable rows={rows} canAct={canWriteFleet(getSessionRoles())} />
+        )}
       </Card>
     </div>
   );

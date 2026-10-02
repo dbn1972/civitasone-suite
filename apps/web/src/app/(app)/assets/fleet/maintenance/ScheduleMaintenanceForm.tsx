@@ -56,6 +56,7 @@ export function ScheduleMaintenanceForm({ options, vehiclesError = false }: Prop
   const vehicleIdErrId = useId();
   const scheduledDateErrId = useId();
   const odometerErrId = useId();
+  const odometerHelpId = useId();
 
   const vehicleIdRef = useRef<HTMLSelectElement>(null);
   const scheduledDateRef = useRef<HTMLInputElement>(null);
@@ -168,7 +169,7 @@ export function ScheduleMaintenanceForm({ options, vehiclesError = false }: Prop
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={odometerId} style={{ fontSize: 13, fontWeight: 600 }}>Odometer Threshold (km)</label>
+              <label htmlFor={odometerId} style={{ fontSize: 13, fontWeight: 600 }}>Odometer Threshold (km) (optional)</label>
               <input
                 id={odometerId}
                 ref={odometerRef}
@@ -176,9 +177,13 @@ export function ScheduleMaintenanceForm({ options, vehiclesError = false }: Prop
                 value={odometerThresholdKm}
                 onChange={(e) => setOdometerThresholdKm(e.target.value)}
                 aria-invalid={!!errors.odometerThresholdKm || undefined}
-                aria-describedby={errors.odometerThresholdKm ? odometerErrId : undefined}
+                aria-describedby={errors.odometerThresholdKm ? `${odometerErrId} ${odometerHelpId}` : odometerHelpId}
                 style={inputStyle}
               />
+              {/* GAP-ASSETS-FLEET-MAINTENANCE-06: states what the system actually does today. */}
+              <p id={odometerHelpId} style={{ fontSize: 12, margin: 0, color: "var(--ink2)" }}>
+                Optional reference reading. It is saved with the job, but the job is scheduled and flagged overdue by its date only; reaching this reading does not trigger it.
+              </p>
               {errors.odometerThresholdKm && <p id={odometerErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.odometerThresholdKm}</p>}
             </div>
           </div>

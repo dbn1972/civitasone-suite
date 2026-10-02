@@ -286,3 +286,14 @@ export function canWriteAssets(roles: readonly string[]): boolean {
  * Mirrors that constant exactly -- keep in sync.
  */
 export const SANCTION_CREATE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+
+/**
+ * GAP-ASSETS-FLEET-MAINTENANCE-05: roles asset-service admits on the fleet
+ * mutation routes (the ADMIN list in the asset-service fleet routes module).
+ * Client gate is UX only; the service stays authoritative (403).
+ */
+export const FLEET_WRITE_ROLES = ["super_admin", "asset_admin", "fleet_manager"] as const;
+
+export function canWriteFleet(roles: readonly string[]): boolean {
+  return roles.some((r) => (FLEET_WRITE_ROLES as readonly string[]).includes(r));
+}

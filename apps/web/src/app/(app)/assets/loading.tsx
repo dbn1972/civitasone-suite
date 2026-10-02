@@ -1,15 +1,18 @@
+/**
+ * GAP-ASSETS-HOME-03: header + tile-grid skeleton (matches the hub and works as
+ * a generic card skeleton for child routes without their own loading.tsx).
+ * No min-h-screen wrapper, so there is no layout jump when content lands.
+ */
 export default function AssetsLoading() {
+  const bar = { borderRadius: 8, background: "var(--line, #e2e8f0)" } as const;
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
-        </div>
-        <div className="h-72 rounded-xl bg-slate-200" />
+    <div className="animate-pulse page-main" role="status" aria-label="Loading assets" style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+      <div style={{ ...bar, height: 14, width: 160 }} />
+      <div style={{ ...bar, height: 32, width: 280 }} />
+      <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(260px,1fr))" }}>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} style={{ ...bar, height: 88, borderRadius: 12 }} />
+        ))}
       </div>
     </div>
   );

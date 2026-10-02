@@ -1,6 +1,6 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getInfraAssets } from "../../../_data/loaders";
 import { PageHeader, StatCard, StatGrid, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
+import Link from "next/link";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
@@ -24,20 +24,21 @@ export default async function InfraAssetsPage() {
 
   return (
     <>
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Infrastructure Assets"
         subtitle="Buildings, roads, utilities & public infrastructure register."
         actions={
           <>
-            <a href="/assets/locations" className="btn ghost">Map view</a>
+            {/* GAP-ASSETS-INFRA-02: /assets/locations is a code/name list, not a map. */}
+            <Link href="/assets/locations" className="btn ghost">Locations</Link>
             <a href="/assets/register" className="btn primary">+ Add Infra</a>
           </>
         }
       />
+      {/* GAP-ASSETS-INFRA-04: a failed load must not read as "0 assets, net block zero". */}
       <StatGrid>
-        <StatCard icon="🏗️" iconBg="#fdf0e3" label="Infra Assets" value={assets.length.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Net Block" value={formatMoney(netBlock)} />
+        <StatCard icon="🏗️" iconBg="#fdf0e3" label="Infra Assets" value={source === "error" ? "—" : assets.length.toLocaleString("en-IN")} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Net Block" value={source === "error" ? "—" : formatMoney(netBlock)} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">

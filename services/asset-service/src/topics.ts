@@ -30,6 +30,7 @@ export const COMMANDS = {
   fleetAssignDriver:             "asset.fleet.assign_driver",
   fleetMaintenanceSchedule:      "asset.fleet.maintenance_schedule",
   fleetMaintenanceComplete:      "asset.fleet.maintenance_complete",
+  fleetMaintenanceCancel:        "asset.fleet.maintenance_cancel",
   f3RouteWrite:              "asset.f3.route_write",
   verificationCreate:        "asset.verification.create",
   verificationItemAdd:       "asset.verification.item.add",

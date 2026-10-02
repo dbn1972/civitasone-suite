@@ -24,19 +24,48 @@ export async function findVehicleById(id: string, tenantId: string): Promise<Fle
   return rows[0] ?? null;
 }
 
+/**
+ * Finds a vehicle whose registration number matches `registrationNo` ignoring
+ * case, spaces and hyphens (GAP-ASSETS-FLEET-VEHICLES-05: duplicate check).
+ * Decommissioned vehicles are ignored so a plate can be re-registered.
+ */
+export async function findVehicleByRegistration(tenantId: string, registrationNo: string, excludeId?: string): Promise<FleetVehicleRow | null> {
+  const norm = registrationNo.replace(/[\s-]+/g, "").toUpperCase();
+  const rows = await scopedRead((tx) =>
+    tx.select().from(fleetVehicles)
+      .where(and(
+        eq(fleetVehicles.tenantId, tenantId),
+        sql`upper(regexp_replace(${fleetVehicles.registrationNo}, '[[:space:]-]+', '', 'g')) = ${norm}`,
+        sql`${fleetVehicles.status} <> 'decommissioned'`,
+        ...(excludeId ? [sql`${fleetVehicles.id} <> ${excludeId}`] : []),
+      ))
+      .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function updateVehiclePosition(
   tx: Writer,
   id: string,
   tenantId: string,
   fields: { lat: string; lng: string; fuelLevelPct?: number | null | undefined; lastGpsAt: Date },
-): Promise<void> {
-  await (tx as typeof db).update(fleetVehicles)
+  opts?: { onlyIfNotOlder?: boolean },
+): Promise<boolean> {
+  // onlyIfNotOlder: a back-dated reading must not move the live position
+  // backwards -- apply only when last_gps_at is null or <= the reading's time.
+  const rows = await (tx as typeof db).update(fleetVehicles)
     .set({
       currentLat: fields.lat, currentLng: fields.lng,
       lastGpsAt: fields.lastGpsAt,
       ...(fields.fuelLevelPct !== undefined ? { fuelLevelPct: fields.fuelLevelPct } : {}),
     })
-    .where(and(eq(fleetVehicles.id, id), eq(fleetVehicles.tenantId, tenantId)));
+    .where(and(
+      eq(fleetVehicles.id, id), eq(fleetVehicles.tenantId, tenantId),
+      ...(opts?.onlyIfNotOlder
+        ? [sql`(${fleetVehicles.lastGpsAt} IS NULL OR ${fleetVehicles.lastGpsAt} <= ${fields.lastGpsAt.toISOString()}::timestamptz)`]
+        : []),
+    ))
+    .returning({ id: fleetVehicles.id });
+  return rows.length > 0;
 }
 
 export async function listVehiclesByTenant(tenantId: string, opts?: { limit?: number; offset?: number }) {
@@ -177,6 +206,24 @@ export async function updateMaintenanceStatus(
   await (tx as typeof db).update(fleetMaintenance)
     .set(update)
     .where(and(eq(fleetMaintenance.id, id), eq(fleetMaintenance.tenantId, tenantId)));
+}
+
+/** Completes an OPEN (scheduled) job; returns whether a row changed. */
+export async function completeMaintenance(tx: Writer, id: string, tenantId: string, costMinor: bigint | null): Promise<boolean> {
+  const rows = await (tx as typeof db).update(fleetMaintenance)
+    .set({ status: "completed", ...(costMinor !== null ? { costMinor } : {}) })
+    .where(and(eq(fleetMaintenance.id, id), eq(fleetMaintenance.tenantId, tenantId), eq(fleetMaintenance.status, "scheduled")))
+    .returning({ id: fleetMaintenance.id });
+  return rows.length > 0;
+}
+
+/** Cancels an OPEN (scheduled) job; returns whether a row changed. */
+export async function cancelMaintenance(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).update(fleetMaintenance)
+    .set({ status: "cancelled" })
+    .where(and(eq(fleetMaintenance.id, id), eq(fleetMaintenance.tenantId, tenantId), eq(fleetMaintenance.status, "scheduled")))
+    .returning({ id: fleetMaintenance.id });
+  return rows.length > 0;
 }
 
 // ── fleet dashboard ──────────────────────────────────────────────────────
