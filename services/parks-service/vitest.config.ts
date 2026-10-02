@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 // Wave 3 cross-events wiring added tests/municipal-status-notification-integration.test.ts,
 // which flips process.env.DATABASE_URL between two real cross-service DB
@@ -18,6 +19,7 @@ import { defineConfig } from "vitest/config";
 // shared civitas_parks tables.
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

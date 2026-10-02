@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 // CI bootstrap sets civitas_admin from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
 // (civitas_test). Turbo 2 strict mode strips undeclared env — see turbo.json
@@ -12,6 +13,7 @@ const adminPw =
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // buildApp() + inject under parallel CI load regularly exceeds the 5s default.
     testTimeout: 30_000,
     env: {

@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // Several real-DB test files here (municipal-challan-integration,
     // recon-db, recon-idempotency-db, rls-isolation, distribution-lock-race,
     // masters-opening-balance-consumer, ...) write/relay through the SAME

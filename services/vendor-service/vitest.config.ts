@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 // This service had no local vitest config, so it silently inherited the
 // repo root's `include: ["tests/**/*.test.ts"]` fallback (vitest.config.mjs)
@@ -15,6 +16,7 @@ import { defineConfig } from "vitest/config";
 // integration suite convention) without needing a second config.
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

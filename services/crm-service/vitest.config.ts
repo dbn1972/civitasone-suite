@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
@@ -27,6 +29,11 @@ export default defineConfig({
             })()),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
+      // Test-only key (same literal the crm test files already set inline via
+      // `??=`). pii-crypto fails closed without it, so a test file that does not
+      // set it itself (lead-score-recalc-nested-tx-deadlock) threw
+      // "CRM_PII_KEY is required". Never a real key.
+      CRM_PII_KEY: "test_pii_key_for_crm_domain_tests_aaaa", // gitleaks:allow
     },
     coverage: {
       provider: "v8",

@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // REL-024: buildApp() registers 14+ modules (capa, enforcement, licence,
     // survey, telemetry, findings, universe, risk, planning, assignment,
     // checklist, sync, evidence, execution) and legitimately takes >10s when
@@ -16,7 +18,7 @@ export default defineConfig({
     // reproduced identically across two separate CI runs. Raised for the
     // whole file since any beforeAll here can be scheduled at the same
     // contention point.
-    hookTimeout: 30_000,
+    // hookTimeout (60s) now comes from sharedTestTimeouts (../../vitest.shared.ts).
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

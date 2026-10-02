@@ -1,10 +1,12 @@
 import { defineConfig } from "vitest/config";
 import path from "path";
 import react from "@vitejs/plugin-react";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   plugins: [react()],
   test: {
+    ...sharedTestTimeouts,
     environment: "jsdom",
     globals: true,
     include: ["src/**/*.test.ts", "src/**/*.test.tsx", "tests/a11y/**/*.test.ts", "tests/contract/**/*.test.ts", "scripts/**/*.test.mjs"],

@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // Without a config of its own this service picked up the repo-root config,
     // whose DATABASE_URL addresses civitas_finance — so cdp integration tests
     // either skipped or ran against the wrong database.

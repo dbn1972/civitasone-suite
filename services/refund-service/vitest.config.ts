@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // Without a config of its own this service picked up the repo-root
     // vitest.config.mjs, whose DATABASE_URL defaults to civitas_finance --
     // so every refund-service DB-integration test connected to the wrong

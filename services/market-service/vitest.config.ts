@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 // Re-review fix (PR #821 REQUEST CHANGES, HIGH finding #2 — zero test
 // coverage): market-service had no local vitest config, so it silently
@@ -17,6 +18,7 @@ import { defineConfig } from "vitest/config";
 // don't need a real Redis/Postgres connection.
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

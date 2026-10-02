@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 // CI bootstrap sets civitas_admin's password from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
 // (civitas_test). Local compose defaults to civitas_dev_pw. Silo provisioning
@@ -20,6 +21,7 @@ const provisioningRunnerDsn =
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
