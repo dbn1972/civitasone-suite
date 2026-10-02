@@ -2398,6 +2398,9 @@ export const FinanceInstrumentSummarySchema = z.object({
   instrumentNo: z.string(),
   bankAccountId: z.string().nullable(),
   bankName: z.string(),
+  // Last four digits of the drawn-on account (GAP-FINANCE-TREASURY-CHEQUES-05);
+  // never the full number. Present on the list route only.
+  accountNoLast4: z.string().nullable().optional(),
   payee: z.string(),
   amountMinor: z.string(),
   currency: z.string(),
@@ -2576,6 +2579,10 @@ export const FinanceChallanSummarySchema = z.object({
   id: z.string(),
   challanNo: z.string(),
   receiptHeadId: z.string(),
+  // LMMHA code + name of the receipt head (GAP-FINANCE-REVENUE-CHALLANS-02);
+  // optional so a payload from before the join still validates.
+  receiptHeadCode: z.string().nullable().optional(),
+  receiptHeadName: z.string().nullable().optional(),
   depositor: z.string(),
   amountMinor: z.string(),
   currency: z.string(),

@@ -1,5 +1,6 @@
 import { eq, and, sql, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { financeHeads } from "../budget/schema.js";
 import {
   financeBanks, financeChallans, financeDeposits, financeDepositEvents, financeDebt, financeGuarantees,
   type BankRow, type ChallanInsert, type ChallanRow, type DepositInsert, type DepositRow, type DepositEventInsert,
@@ -33,16 +34,31 @@ export async function listGuaranteesByTenant(tenantId: string, limit: number, of
     .offset(offset));
 }
 
-export async function listChallansByTenant(tenantId: string, limit: number, offset = 0): Promise<ChallanRow[]> {
-  return scopedRead((tx) => tx.select().from(financeChallans)
+/** A challan plus the receipt head (LMMHA code + name) it books to. */
+export type ChallanWithHead = { challan: ChallanRow; headCode: string | null; headName: string | null };
+
+// GAP-FINANCE-REVENUE-CHALLANS-02 / DETAIL-03: the register must show the head
+// a clerk recognises (code + name), not the opaque receipt_head_id uuid. Left
+// join, tenant-matched on both sides, so a challan whose head row is missing
+// still lists (head fields null) instead of vanishing.
+const challanWithHead = (tx: Parameters<Parameters<typeof scopedRead>[0]>[0]) => tx
+  .select({ challan: financeChallans, headCode: financeHeads.code, headName: financeHeads.name })
+  .from(financeChallans)
+  .leftJoin(financeHeads, and(
+    eq(financeHeads.id, financeChallans.receiptHeadId),
+    eq(financeHeads.tenantId, financeChallans.tenantId),
+  ));
+
+export async function listChallansByTenant(tenantId: string, limit: number, offset = 0): Promise<ChallanWithHead[]> {
+  return scopedRead((tx) => challanWithHead(tx)
     .where(eq(financeChallans.tenantId, tenantId))
     .orderBy(desc(financeChallans.createdAt))
     .limit(limit)
     .offset(offset));
 }
 
-export async function findChallanByIdAndTenant(id: string, tenantId: string): Promise<ChallanRow | null> {
-  const rows = await scopedRead((tx) => tx.select().from(financeChallans)
+export async function findChallanByIdAndTenant(id: string, tenantId: string): Promise<ChallanWithHead | null> {
+  const rows = await scopedRead((tx) => challanWithHead(tx)
     .where(and(eq(financeChallans.id, id), eq(financeChallans.tenantId, tenantId))).limit(1));
   return rows[0] ?? null;
 }

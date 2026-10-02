@@ -46,7 +46,8 @@ test.describe('Finance & Expense — HRMS (S17)', () => {
   // ── Travel ───────────────────────────────────────────────────────────────
 
   // REL-023: real gap, not a stale test — TravelClaimCard.tsx (finance/
-  // travel/TravelClaimCard.tsx), which computes CCS(TA) Rules 1988 Second
+  // travel/TravelClaimCard.tsx, deleted in GAP-FINANCE-TRAVEL-03; any revival must read
+  // fare entitlements from a backend policy endpoint, not a client table), which computed CCS(TA) Rules 1988 Second
   // Schedule fare-class entitlement (Level 1-5 -> Sleeper, ... Level 9-17
   // -> AC-I) from an employee's pay level, is orphaned dead code:
   // /finance/travel now redirects to /hr/travel, whose TravelRequestsPage

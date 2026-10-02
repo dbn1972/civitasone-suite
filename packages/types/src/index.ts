@@ -2382,6 +2382,8 @@ export type FinanceInstrumentSummary = {
   instrumentNo: string;
   bankAccountId: string | null;
   bankName: string;
+  /** Last four digits of the drawn-on account; never the full number. List route only. */
+  accountNoLast4?: string | null;
   payee: string;
   amountMinor: string;
   currency: string;
@@ -2554,6 +2556,9 @@ export type FinanceChallanSummary = {
   id: string;
   challanNo: string;
   receiptHeadId: string;
+  /** LMMHA code / name of the receipt head; null when the head row cannot be resolved. */
+  receiptHeadCode?: string | null;
+  receiptHeadName?: string | null;
   depositor: string;
   amountMinor: string;
   currency: string;

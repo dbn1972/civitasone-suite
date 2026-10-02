@@ -1,9 +1,11 @@
 import { and, eq, desc, inArray, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { lastFourDigits } from "./account-mask.js";
 
 export type Writer = Pick<typeof db, "select" | "insert" | "update">;
 import {
   financeInstruments,
+  financeBanks,
   type InstrumentRow,
   type InstrumentInsert,
 } from "../treasury/schema.js";
@@ -64,6 +66,25 @@ export async function findByNumber(tenantId: string, type: string, no: string): 
       .limit(1);
     return rows[0] ?? null;
   });
+}
+
+/**
+ * Last four digits of each referenced bank account, keyed by bank id
+ * (GAP-FINANCE-TREASURY-CHEQUES-05). Tenant-scoped; the full account number
+ * never leaves this function.
+ */
+export async function accountLast4ByBankId(tenantId: string, bankIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (bankIds.length === 0) return out;
+  const rows = await scopedRead((tx) => tx
+    .select({ id: financeBanks.id, accountNo: financeBanks.accountNo })
+    .from(financeBanks)
+    .where(and(eq(financeBanks.tenantId, tenantId), inArray(financeBanks.id, bankIds))));
+  for (const r of rows) {
+    const last4 = lastFourDigits(r.accountNo);
+    if (last4) out.set(r.id, last4);
+  }
+  return out;
 }
 
 export async function listInstruments(

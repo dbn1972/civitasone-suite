@@ -117,19 +117,20 @@ test.describe("Payroll Sub-modules (S12-S13)", () => {
     await expect(page.getByRole("button", { name: /Check run/i })).toBeVisible();
   });
 
-  // 6. TDS Returns /finance/statutory/tds-returns
-  //    PageHeader: "TDS Returns"; StatGrid: Total Returns, Filed, Pending.
+  // 6. TDS deductions /finance/statutory/tds-returns
+  //    PageHeader: "TDS Deductions" (GAP-FINANCE-STATUTORY-TDS-RETURNS-01: the page lists per-deduction
+  //    rows, not filed returns); StatGrid: Total Deductions, Deducted, Deposited, Filed, FY-Quarters.
 
-  test("TDS Returns page loads with correct heading", async ({ page }) => {
+  test("TDS Deductions page loads with correct heading", async ({ page }) => {
     await page.goto("/finance/statutory/tds-returns");
-    // level:1 disambiguates the page h1 from a card's own "TDS Returns" h3
-    // and (when the seed list is empty) an "No TDS returns" h4 EmptyState.
-    await expect(page.getByRole("heading", { name: "TDS Returns", level: 1 })).toBeVisible();
+    // level:1 disambiguates the page h1 from a card's own "TDS Deductions" h3
+    // and (when the seed list is empty) an "No TDS deductions" h4 EmptyState.
+    await expect(page.getByRole("heading", { name: "TDS Deductions", level: 1 })).toBeVisible();
   });
 
-  test("TDS Returns stat cards render Total Returns and Filed", async ({ page }) => {
+  test("TDS Deductions stat cards render Total Deductions and Filed", async ({ page }) => {
     await page.goto("/finance/statutory/tds-returns");
-    await expect(page.getByText("Total Returns")).toBeVisible();
-    await expect(page.getByText("Filed")).toBeVisible();
+    await expect(page.getByText("Total Deductions")).toBeVisible();
+    await expect(page.getByText("Filed", { exact: true })).toBeVisible();
   });
 });

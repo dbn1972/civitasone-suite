@@ -149,6 +149,11 @@ const STATUS_MAP: Record<string, PillVariant> = {
   // TRACES is NOT "filed"; a quarter that failed to load is unknown, not
   // "pending". PAN status on deductee rows (GAP-PAYROLL-RETURNS-05).
   reconciled: "good",
+  // Challan register (GAP-FINANCE-REVENUE-CHALLANS-04): "verified" is a success
+  // state and must not fall through to the neutral info tone; "deposited" is the
+  // explicit neutral middle step (pending -> deposited -> reconciled).
+  verified: "good",
+  deposited: "info",
   unreconciled: "warn",
   "not loaded": "mut",
   "pan ok": "good",

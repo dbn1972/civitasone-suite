@@ -11,6 +11,7 @@ import { createChallanBody, createDepositBody, depositDispositionBody, idParam }
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
+import { challanView } from "./challan-view.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
@@ -75,12 +76,7 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     const rows = await repo.listChallansByTenant(ctx.tenantId, q.limit, q.offset);
-    sendValidated(reply, FinanceChallanSummaryListSchema, rows.map((r) => ({
-      id: r.id, challanNo: r.challanNo, receiptHeadId: r.receiptHeadId,
-      depositor: r.depositor, amountMinor: r.amountMinor.toString(), currency: r.currency,
-      grnNo: r.grnNo, status: r.status,
-      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
-    })));
+    sendValidated(reply, FinanceChallanSummaryListSchema, rows.map(challanView));
   });
 
   app.get("/v1/finance/challans/:id", async (req, reply) => {
@@ -89,12 +85,7 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const r = await repo.findChallanByIdAndTenant(id, ctx.tenantId);
     if (!r) throw new HttpError(404, "NOT_FOUND", "challan not found");
-    sendValidated(reply, FinanceChallanSummarySchema, {
-      id: r.id, challanNo: r.challanNo, receiptHeadId: r.receiptHeadId,
-      depositor: r.depositor, amountMinor: r.amountMinor.toString(), currency: r.currency,
-      grnNo: r.grnNo, status: r.status,
-      createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
-    });
+    sendValidated(reply, FinanceChallanSummarySchema, challanView(r));
   });
 
   // Deposits was also POST-only (pd/emd/sd/fdr issuance); the register page

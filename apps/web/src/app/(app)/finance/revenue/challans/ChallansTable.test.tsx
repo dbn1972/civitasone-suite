@@ -26,4 +26,16 @@ describe("ChallansTable (GAP-FINANCE-REVENUE-CHALLANS-01)", () => {
     expect(container.textContent).not.toContain("2026-09-26T09:40:00.000Z");
     expect(container.textContent).toMatch(/26 Sep 2026/);
   });
+
+  // GAP-FINANCE-REVENUE-CHALLANS-02: head code + name, searchable by name
+  it("shows the receipt head as CODE - Name instead of the raw id", () => {
+    seed([{
+      id: "c1", challanNo: "CHN/1", receiptHeadId: "uuid-should-not-show", receiptHeadCode: "0040", receiptHeadName: "Tax Revenue",
+      depositor: "A", amountMinor: "100", currency: "INR", grnNo: null, status: "pending",
+      createdAt: "2026-09-26T09:40:00.000Z", updatedAt: "2026-09-26T09:40:00.000Z", version: 1,
+    }], "live");
+    const { container } = render(<ChallansTable challans={[]} source="api" />);
+    expect(container.textContent).toContain("0040 - Tax Revenue");
+    expect(container.textContent).not.toContain("uuid-should-not-show");
+  });
 });

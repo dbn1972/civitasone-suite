@@ -3,17 +3,21 @@
 import { DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { drawnOnLabel } from "@/lib/finance/chequeRegister";
 import type { FinanceInstrumentSummary } from "@civitasone/types";
 
-type Cheque = FinanceInstrumentSummary;
+// drawnOn = bank name + masked last four digits; a real column key so search, sort and CSV use it.
+type Cheque = FinanceInstrumentSummary & { drawnOn: string };
 
-export function ChequesTable({ cheques, source = "api" }: { cheques: Cheque[]; source?: "api" | "error" }) {
-  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Cheque[]>(
+export function ChequesTable({ cheques, source = "api" }: { cheques: FinanceInstrumentSummary[]; source?: "api" | "error" }) {
+  const { data: fetched, provenance, offline, cachedAt } = useSeededResource<FinanceInstrumentSummary[]>(
     "finance.cheques",
     cheques,
     source,
     (d) => d.length === 0,
   );
+
+  const rows: Cheque[] = fetched.map((c) => ({ ...c, drawnOn: drawnOnLabel(c.bankName, c.accountNoLast4) }));
 
   return (
     <>
@@ -28,9 +32,9 @@ export function ChequesTable({ cheques, source = "api" }: { cheques: Cheque[]; s
           { key: "instrumentNo", label: "Cheque/DD No" },
           { key: "payee", label: "Payee" },
           { key: "amountMinor", label: "Amount", align: "right", cellType: "amount" },
-          { key: "bankName", label: "Drawn On" },
-          { key: "issueDate", label: "Issued" },
-          { key: "clearedAt", label: "Cleared" },
+          { key: "drawnOn", label: "Drawn On" },
+          { key: "issueDate", label: "Issued", cellType: "date" },
+          { key: "clearedAt", label: "Cleared", cellType: "date" },
           { key: "status", label: "Status", cellType: "status" },
         ]}
         rows={rows}

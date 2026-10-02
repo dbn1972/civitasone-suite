@@ -52,6 +52,24 @@ describe("ChallanDetailPage", () => {
     expect(screen.queryByText(/Stamp Duty — Residential/)).not.toBeInTheDocument();
   });
 
+  // GAP-FINANCE-REVENUE-CHALLANS-DETAIL-03 / DETAIL-05
+  it("shows the receipt head as CODE - Name and never the raw id; status once as a pill", async () => {
+    getFinanceChallanByIdMock.mockResolvedValue({
+      data: { ...CHALLAN, receiptHeadCode: "0040", receiptHeadName: "Tax Revenue" }, source: "api",
+    });
+    const { container } = render(await ChallanDetailPage({ params: { id: "c1" } }));
+    expect(screen.getAllByText("0040 - Tax Revenue").length).toBeGreaterThan(0);
+    expect(container.textContent).not.toContain("0030-stamps");
+    expect(container.querySelectorAll(".pill").length).toBe(1);
+    expect(container.querySelector(".pill")?.className).toBe("pill good");
+  });
+
+  it("shows a dash, not the uuid, when the head could not be resolved", async () => {
+    getFinanceChallanByIdMock.mockResolvedValue({ data: CHALLAN, source: "api" });
+    const { container } = render(await ChallanDetailPage({ params: { id: "c1" } }));
+    expect(container.textContent).not.toContain("0030-stamps");
+  });
+
   it("shows an honest empty state instead of fake data when no record is found", async () => {
     getFinanceChallanByIdMock.mockResolvedValue({ data: null, source: "api" });
 
