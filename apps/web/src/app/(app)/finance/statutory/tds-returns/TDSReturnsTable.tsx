@@ -1,5 +1,5 @@
 "use client";
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { VendorTdsEntry } from "@civitasone/types";
@@ -17,23 +17,26 @@ export function TDSReturnsTable({ returns, source = "api" }: { returns: Row[]; s
       <DataTable<Row>
         columns={[
           { key: "vendor_name", label: "Vendor" },
+          { key: "pan", label: "PAN" },
           { key: "section", label: "Section" },
           { key: "quarter", label: "Quarter" },
           { key: "fy", label: "FY" },
           { key: "tds_amount_minor", label: "Total TDS", align: "right", cellType: "amount" },
-          { key: "deduction_date", label: "Deduction Date" },
-          { key: "status", label: "Status", cellType: "status" },
+          { key: "deduction_date", label: "Deduction Date", cellType: "date" },
+          // "filed" is the final, successful state of a deduction; the global pill map keeps
+          // it amber for RTI/appeals, so the good tone is set here (TDS-RETURNS-06).
+          { key: "status", label: "Status", render: (row: Row) => <StatusPill status={String(row.status)} variant={String(row.status) === "filed" ? "good" : undefined} /> },
         ]}
         rows={rows}
         sortable
         filterable
-        filterPlaceholder="Search TDS returns…"
+        filterPlaceholder="Search TDS deductions…"
         pageSize={15}
         exportable
-        exportFilename="tds-returns"
+        exportFilename="tds-deductions"
         emptyIcon="📑"
-        emptyTitle="No TDS returns"
-        emptyMessage="No TDS return records found."
+        emptyTitle="No TDS deductions"
+        emptyMessage="No vendor TDS deductions found."
       />
     </>
   );

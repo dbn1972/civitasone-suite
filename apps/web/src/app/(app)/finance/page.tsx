@@ -53,7 +53,7 @@ const financeSections: NavTile[] = [
 	{ title: "Vendors", section: "Vendor & Masters", description: "Registered vendor master with PAN and GSTIN.", href: "/finance/vendors" },
 
 	// Statutory
-	{ title: "TDS Returns", section: "Statutory", description: "Quarterly vendor TDS deduction register with CSV export.", href: "/finance/statutory/tds-returns" },
+	{ title: "TDS Deductions", section: "Statutory", description: "Vendor TDS deduction register by section and quarter, with CSV export.", href: "/finance/statutory/tds-returns" },
 	{ title: "GST & ITC", section: "Statutory", description: "GST summary, ledger, and input-tax-credit reconciliation.", href: "/finance/gst" },
 	{ title: "Reconciliation", section: "Statutory", description: "Bank/subledger reconciliation runs and break resolution.", href: "/finance/reconciliation" },
 	{ title: "PFMS Operations", section: "Statutory", description: "PFMS (the government's central payment platform) batches, salary bills, payment advice, bank file and e-sign.", href: "/finance/pfms" },

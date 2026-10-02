@@ -114,7 +114,9 @@ export async function listInstruments(
   filters: { status?: string; type?: string; limit: number },
 ): Promise<InstrumentView[]> {
   const rows = await repo.listInstruments(ctx.tenantId, filters);
-  return rows.map(serialize);
+  const bankIds = [...new Set(rows.map((r) => r.bankAccountId).filter((id): id is string => !!id))];
+  const last4 = await repo.accountLast4ByBankId(ctx.tenantId, bankIds);
+  return rows.map((r) => ({ ...serialize(r), accountNoLast4: r.bankAccountId ? last4.get(r.bankAccountId) ?? null : null }));
 }
 
 function illegal(from: string, to: string): HttpError {

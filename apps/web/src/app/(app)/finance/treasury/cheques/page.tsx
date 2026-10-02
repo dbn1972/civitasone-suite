@@ -1,12 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceCheques } from "@/app/_data/loaders";
+import { chequeStatusCounts } from "@/lib/finance/chequeRegister";
 import { ChequesTable } from "./ChequesTable";
 
 export default async function ChequesPage() {
   const { data: cheques, source } = await getFinanceCheques();
-  const cleared = cheques.filter((c) => String(c.status).toLowerCase() === "cleared").length;
-  const presented = cheques.filter((c) => String(c.status).toLowerCase() === "presented").length;
-  const bounced = cheques.filter((c) => String(c.status).toLowerCase() === "bounced").length;
+  // GAP-FINANCE-TREASURY-CHEQUES-04: every lifecycle status is counted, so the cards
+  // add up to Total; a failed load shows a dash, not a misleading 0.
+  const c = chequeStatusCounts(cheques);
+  const loaded = source !== "error";
+  const n = (v: number) => (loaded ? v : "—");
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -16,10 +19,12 @@ export default async function ChequesPage() {
         back="/finance"
       />
       <StatGrid>
-        <StatCard icon="📝" iconBg="#e7edfd" label="Total Instruments" value={cheques.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Cleared" value={cleared} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Presented" value={presented} />
-        <StatCard icon="❌" iconBg="#fce7ee" label="Bounced" value={bounced} />
+        <StatCard icon="📝" iconBg="#e7edfd" label="Total Instruments" value={n(c.total)} />
+        <StatCard icon="📤" iconBg="#eff6ff" label="Issued (outstanding)" value={n(c.issued)} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Presented" value={n(c.presented)} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Cleared" value={n(c.cleared)} />
+        <StatCard icon="❌" iconBg="#fce7ee" label="Bounced" value={n(c.bounced)} />
+        <StatCard icon="🚫" iconBg="#f2f4f7" label="Cancelled / other" value={n(c.cancelled + c.other)} />
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside ChequesTable, driven
           by the same useSeededResource call that produces its rows — not a

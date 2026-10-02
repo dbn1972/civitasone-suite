@@ -73,6 +73,10 @@ const nextConfig = {
       // GAP-FINANCE-BENEFITS-01/02).
       { source: '/finance/advances', destination: '/hr/advances', permanent: true },
       { source: '/finance/benefits', destination: '/hr/benefits', permanent: true },
+      // GAP-FINANCE-TRAVEL-01: finance/travel/page.tsx also redirect()s, but only
+      // after finance/layout.tsx's role gate, so an employee/manager with an old
+      // bookmark saw PermissionDenied. This config redirect runs before layouts.
+      { source: '/finance/travel', destination: '/hr/travel', permanent: true },
       { source: '/stock', destination: '/inventory', permanent: true },
       { source: '/stock/list', destination: '/inventory/list', permanent: true },
       { source: '/stock/ledger', destination: '/inventory/reconcile', permanent: true },

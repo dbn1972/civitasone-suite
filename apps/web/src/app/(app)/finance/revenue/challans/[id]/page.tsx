@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getFinanceChallanById } from "@/app/_data/loaders";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { formatReceiptHead } from "@/lib/finance/challanRegister";
 
 /**
  * Challan detail, wired to GET /v1/finance/challans/:id (finance-service
@@ -37,6 +38,8 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
     );
   }
 
+  const receiptHead = formatReceiptHead(challan.receiptHeadCode, challan.receiptHeadName);
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -48,7 +51,9 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
         <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={formatMoney(challan.amountMinor)} />
         <StatCard icon="🧾" iconBg="#e7edfd" label="GRN No" value={challan.grnNo ?? "—"} />
         <StatCard icon="📅" iconBg="#fffaeb" label="Created" value={formatIndianDate(challan.createdAt)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value={challan.status} />
+        {/* GAP-FINANCE-REVENUE-CHALLANS-DETAIL-05: status is shown once, as the pill in the field
+            grid below; this card carries the receipt head instead of repeating it raw. */}
+        <StatCard icon="🏛️" iconBg="#ecfdf3" label="Receipt Head" value={receiptHead} />
       </StatGrid>
 
       <Card title="Challan Details" padding>
@@ -58,7 +63,7 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
           <div className="field"><span className="label">Amount</span><span>{formatMoney(challan.amountMinor)}</span></div>
           <div className="field"><span className="label">Currency</span><span>{challan.currency}</span></div>
           <div className="field"><span className="label">GRN No</span><span className="mono">{challan.grnNo ?? "—"}</span></div>
-          <div className="field"><span className="label">Receipt Head</span><span className="mono">{challan.receiptHeadId}</span></div>
+          <div className="field"><span className="label">Receipt Head</span><span className="mono">{receiptHead}</span></div>
           <div className="field"><span className="label">Created</span><span>{formatIndianDate(challan.createdAt)}</span></div>
           <div className="field"><span className="label">Last Updated</span><span>{formatIndianDate(challan.updatedAt)}</span></div>
           <div className="field"><span className="label">Status</span><StatusPill status={challan.status} /></div>

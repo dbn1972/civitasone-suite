@@ -2,7 +2,11 @@ import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceCashBook } from "@/app/_data/loaders";
 import { CashBankTable } from "./CashBankTable";
 import { cashBookCacheKey, parseCashBookQuery, periodLabel } from "./cashBookQuery";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { cashBookTotals, countToday, openingClosing } from "@/lib/finance/cashBook";
+
+// finance-service cash-book route default page size (cashbook/routes.ts `limit` default).
+const CASH_BOOK_PAGE = 100;
 
 export default async function CashBankPage({
   searchParams,
@@ -16,8 +20,11 @@ export default async function CashBankPage({
   // gl.finance_cash_book returns raw snake_case columns (no serialize() step
   // on the backend): receipt_minor / payment_minor / entry_date, not the
   // camelCase names this page previously (and incorrectly) read.
-  const receipts = entries.filter((e) => Number(e.receipt_minor ?? 0) > 0).length;
-  const payments = entries.filter((e) => Number(e.payment_minor ?? 0) > 0).length;
+  // GAP-FINANCE-TREASURY-CASH-BANK-04: money totals summed in BigInt paise (counts kept as hints).
+  const totals = cashBookTotals(entries);
+  // GAP-FINANCE-TREASURY-CASH-BANK-02: the route returns at most CASH_BOOK_PAGE rows. Opening/closing
+  // are only shown for ONE account type and a window the limit did not truncate.
+  const balances = query.type ? openingClosing(entries, entries.length < CASH_BOOK_PAGE) : null;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -48,17 +55,23 @@ export default async function CashBankPage({
       </form>
       <StatGrid>
         <StatCard icon="📖" iconBg="#e7edfd" label="Total Entries" value={entries.length} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="Receipts" value={receipts} />
-        <StatCard icon="📤" iconBg="#fce7ee" label="Payments" value={payments} />
+        <StatCard icon="📥" iconBg="#ecfdf3" label={`Receipts (${totals.receiptCount} entries)`} value={formatMoney(totals.receiptTotal)} />
+        <StatCard icon="📤" iconBg="#fce7ee" label={`Payments (${totals.paymentCount} entries)`} value={formatMoney(totals.paymentTotal)} />
         {/* IST, not UTC: an entry genuinely dated "today" in India would be
             excluded from 00:00-05:30 IST every day if compared against
             new Date().toISOString(), which is always UTC. */}
-        <StatCard icon="📊" iconBg="#fffaeb" label="Today" value={entries.filter((e) => String(e.entry_date) === new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" })).length} />
+        <StatCard icon="📊" iconBg="#fffaeb" label="Today" value={countToday(entries)} />
+        {balances ? <StatCard icon="🔓" iconBg="#eff6ff" label="Opening balance" value={formatMoney(balances.opening)} /> : null}
+        {balances ? <StatCard icon="🔒" iconBg="#eff6ff" label="Closing balance" value={formatMoney(balances.closing)} /> : null}
       </StatGrid>
       {/* UX-012: the data-source badge now lives inside CashBankTable, driven
           by the same useSeededResource call that produces its rows — not a
           second, independent read of `source` here that could disagree
           with the table's own cache state (UX-002's pattern). */}
+      <p className="muted" style={{ fontSize: 13, margin: "0 0 8px" }}>
+        Balance is a running ledger balance and reads correctly in date order only (newest first).
+        {balances ? "" : " Choose Cash or Bank above to see opening and closing balances."}
+      </p>
       <Card title="Cash & Bank Entries">
         <CashBankTable
           entries={entries}
