@@ -2906,7 +2906,9 @@
     "hubQuickAccess": "Quick Access",
     "hubResultsFor": "{count, plural, one {# result} other {# results}} for “{query}”",
     "hubNoMatch": "No modules match “{query}”. Try a different term, or open one of these:",
-    "hubItemsCount": "{count, plural, one {# item} other {# items}}"
+    "hubItemsCount": "{count, plural, one {# item} other {# items}}",
+    "officeLocations": "Office Locations (Geofences)",
+    "officeLocationsDesc": "Geofenced offices used for geo check-in"
   },
   "hrAuditLog": {
     "title": "HR Audit Log",
@@ -7572,5 +7574,116 @@
     "endDetail": "It will stop posting journals from today and cannot be resumed.",
     "confirmDescription": "{name} — {amount} {frequency}, next run {nextRun}. {detail}",
     "submitted": "Change submitted — the list updates once it has been processed."
+  },
+  "disciplinaryActions": {
+    "heading": "Case actions",
+    "notOwner": "Only the case creator or the assigned inquiry officer can progress this case.",
+    "noneAvailable": "No further actions are available at this stage.",
+    "submitted": "Submitted. The case status will update shortly.",
+    "fixFields": "Fill in all required fields with valid values.",
+    "errNotOwner": "You are neither the creator nor the assigned inquiry officer of this case, so you cannot progress it.",
+    "errWrongState": "This case has already moved on from this stage. Refresh the page to see its current status.",
+    "errPenaltyMismatch": "A major penalty cannot be imposed in a minor proceeding.",
+    "errNetwork": "Couldn't reach the server. Check your connection and try again.",
+    "select": "Select…",
+    "notesLabel": "Notes (optional)",
+    "reasonLabel": "Reason",
+    "field_chargeMemoRef": "Charge memo reference",
+    "field_chargeMemoDate": "Charge memo date",
+    "field_inquiryOfficerName": "Inquiry officer name",
+    "field_inquiryAppointedDate": "Date of appointment",
+    "field_finding": "Finding",
+    "field_findingDate": "Finding date",
+    "field_penaltyType": "Penalty",
+    "field_penaltyDate": "Penalty date",
+    "field_penaltyDetail": "Penalty details (optional)",
+    "field_appealFiledDate": "Appeal filed on",
+    "field_appealAuthority": "Appellate authority",
+    "field_appealOutcome": "Appeal outcome",
+    "field_appealDecidedDate": "Decided on",
+    "finding_guilty": "Guilty",
+    "finding_not_guilty": "Not guilty",
+    "finding_partly_guilty": "Partly guilty",
+    "outcome_upheld": "Upheld",
+    "outcome_modified": "Modified",
+    "outcome_set_aside": "Set aside",
+    "actions": {
+      "charge_memo": {
+        "label": "Issue charge memo",
+        "description": "Record the articles of charge served on the employee.",
+        "confirm": "Issue charge memo"
+      },
+      "inquiry": {
+        "label": "Appoint inquiry officer",
+        "description": "Appoint the officer who will conduct the inquiry.",
+        "confirm": "Appoint inquiry officer"
+      },
+      "finding": {
+        "label": "Record finding",
+        "description": "Record the inquiry finding. This moves the case to the penalty stage.",
+        "confirm": "Record finding"
+      },
+      "penalty": {
+        "label": "Impose penalty",
+        "description": "Impose the penalty directly. To route a proposed penalty for approval, use the eOffice note below instead.",
+        "confirm": "Impose penalty"
+      },
+      "appeal": {
+        "label": "Record appeal",
+        "description": "Record a statutory appeal filed against the penalty.",
+        "confirm": "Record appeal"
+      },
+      "appeal_decision": {
+        "label": "Record appeal decision",
+        "description": "Record the appellate authority's decision.",
+        "confirm": "Record decision"
+      },
+      "close": {
+        "label": "Close case",
+        "description": "Conclude the proceedings. This cannot be undone.",
+        "confirm": "Close case"
+      },
+      "drop": {
+        "label": "Drop case",
+        "description": "Drop the proceedings without a penalty. This cannot be undone; a reason is required.",
+        "confirm": "Drop case"
+      }
+    }
+  },
+  "officeLocations": {
+    "title": "Office locations (attendance geofences)",
+    "subtitle": "Geofenced offices used to validate geo check-in. Staff pick from these when checking in.",
+    "listTitle": "Geofenced offices",
+    "dataSourceErrorMessage": "Couldn't load office locations.",
+    "colName": "Name",
+    "colAddress": "Address",
+    "colCoordinates": "Latitude, longitude",
+    "colRadius": "Radius",
+    "colStatus": "Status",
+    "radiusValue": "{meters} m",
+    "emptyTitle": "No office locations yet",
+    "emptyMessage": "Add the first geofenced office below so staff can check in with their location.",
+    "formTitle": "Add office location",
+    "nameLabel": "Name",
+    "namePlaceholder": "e.g. Head Office",
+    "nameError": "Enter a name up to 256 characters.",
+    "addressLabel": "Address (optional)",
+    "addressError": "Address can be at most 1024 characters.",
+    "latitudeLabel": "Latitude",
+    "latitudeError": "Enter a latitude as a decimal number, e.g. 28.6139.",
+    "latitudeRange": "Latitude must be between -90 and 90.",
+    "longitudeLabel": "Longitude",
+    "longitudeError": "Enter a longitude as a decimal number, e.g. 77.2090.",
+    "longitudeRange": "Longitude must be between -180 and 180.",
+    "radiusLabel": "Radius (metres)",
+    "radiusHint": "Staff within this distance of the point count as inside the office. {min}-{max} m.",
+    "radiusError": "Radius must be a whole number between {min} and {max} metres.",
+    "fixFields": "Please fix the highlighted fields.",
+    "submit": "Add office location",
+    "confirmTitle": "Confirm geofence",
+    "confirmBody": "{name} will be set at {latitude}, {longitude} with a {radius} m radius. Wrong coordinates make every check-in at this office fail or pass incorrectly, so check the point on the map first.",
+    "confirmMapLink": "Open this point on a map",
+    "confirmAction": "Confirm and add",
+    "submitted": "{name} was submitted. It will appear in the list shortly."
   }
 }

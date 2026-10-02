@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } fr
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 
@@ -58,11 +59,28 @@ async function getInterns(): Promise<LoaderResult<Row[]>> {
 
 const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
+/**
+ * GAP-HR-INTERNS-04 (DPDP): interns are frequently students and sometimes
+ * minors. hr/layout.tsx admits plain "employee" into this tree and the
+ * employees list route (the only source here) is deliberately open to every
+ * employee as a directory, so without a page-level check any employee saw a
+ * register whose whole point is to single out interns. HR staff see the
+ * register; a manager sees it too (the backend already narrows a manager's
+ * list to their direct reports). Policy default -- the one thing HR must
+ * confirm is whether managers should keep access (see the PR's VERIFY list);
+ * widening it later is a one-word change to this list. Mirrored in
+ * hrTileAccess.ts so the hub stops offering the tile to roles denied here.
+ */
+const INTERNS_VIEW_ROLES = [...EMPLOYEE_ADMIN_ROLES, "manager"];
+
 export default async function InternsPage() {
   const t = await getTranslations("interns");
+  const roles = getSessionRoles();
+  if (!roles.some((r: string) => INTERNS_VIEW_ROLES.includes(r))) {
+    return <PermissionDenied module="the interns register" requiredRoles={INTERNS_VIEW_ROLES} backHref="/hr" backLabel="Back to HR" />;
+  }
   const { data: items, source } = await getInterns();
   const errored = source === "error";
-  const roles = getSessionRoles();
   const canAdd = roles.some((r: string) => EMPLOYEE_ADMIN_ROLES.includes(r));
 
   // GAP-HR-INTERNS-02: stat cards used to render 0 on a failed load (a

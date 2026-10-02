@@ -2,9 +2,24 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 let mockRoles: string[] = ["hr_admin"];
+let mockUserId: string | null = "u1";
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => mockRoles,
+  getSessionUserId: () => mockUserId,
 }));
+
+// CaseActions (GAP-HR-DISCIPLINARY-DETAIL-06) is a client component: give it
+// the English catalogue and a router, as the real provider tree would.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn(), push: vi.fn() }) }));
+vi.mock("next-intl", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next-intl")>();
+  const en = (await import("@/messages/en.json")).default as unknown as Record<string, Record<string, unknown>>;
+  return {
+    ...actual,
+    useTranslations: (ns: string) => (key: string) =>
+      key.split(".").reduce<unknown>((o, k) => (o as Record<string, unknown> | undefined)?.[k], en[ns]) as string ?? key,
+  };
+});
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -73,6 +88,7 @@ describe("DisciplinaryCaseDetailPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
     mockRoles = ["hr_admin"];
+    mockUserId = "u1";
   });
 
   it("shows an honest permission-denied state for a role the backend would reject", async () => {
@@ -152,5 +168,30 @@ describe("DisciplinaryCaseDetailPage", () => {
     const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
     render(ui);
     expect(screen.getByText("Confidential — Disciplinary Case")).toBeInTheDocument();
+  });
+
+  // GAP-HR-DISCIPLINARY-DETAIL-06
+  it("offers the next state-machine action to the case creator (inquiry_appointed -> record finding)", async () => {
+    mockLoaders();
+    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    render(ui);
+    expect(screen.getByRole("button", { name: "Record finding" })).toBeInTheDocument();
+  });
+
+  it("offers the actions to the assigned inquiry officer too", async () => {
+    mockUserId = "io-1";
+    mockLoaders({ caseResult: { data: { ...BASE_CASE, createdBy: "someone-else" }, source: "api" } });
+    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    render(ui);
+    expect(screen.getByRole("button", { name: "Record finding" })).toBeInTheDocument();
+  });
+
+  it("shows no action buttons to a user who is neither creator nor inquiry officer", async () => {
+    mockUserId = "u-other";
+    mockLoaders();
+    const ui = await DisciplinaryCaseDetailPage({ params: { id: "case-1" } });
+    render(ui);
+    expect(screen.queryByRole("button", { name: "Record finding" })).not.toBeInTheDocument();
+    expect(screen.getByText(/only the case creator or the assigned inquiry officer/i)).toBeInTheDocument();
   });
 });
