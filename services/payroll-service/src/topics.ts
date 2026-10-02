@@ -10,6 +10,9 @@ export const COMMANDS = {
   taxDeclarationUpdate:   "payroll.tax_declaration.update",
   taxDeclarationSubmit:   "payroll.tax_declaration.submit",
   nachReturnProcess:      "payroll.nach_return.process",
+  // GAP-PAYROLL-DISBURSEMENT-TRANSFERS: transfer-ledger writes (consumer-side, CQRS)
+  disbursementTransferRetry:   "payroll.disbursement_transfer.retry",
+  disbursementTransferReconcile: "payroll.disbursement_transfer.reconcile",
   fnfCompute:             "payroll.fnf.compute",
   form16BulkGenerate:     "payroll.form16.bulk_generate",
   exemptionCeilingUpsert: "payroll.exemption_ceiling.upsert",

@@ -109,6 +109,11 @@ const STATUS_MAP: Record<string, PillVariant> = {
   disbursed: "good",
   computed: "warn",
   processing: "warn",
+  // payroll.disbursement_transfers (GAP-PAYROLL-DISBURSEMENT-TRANSFERS):
+  // "sent" = in a generated bank file, outcome not yet known; "returned" =
+  // the bank bounced the credit (NACH return), money did not land.
+  sent: "warn",
+  returned: "bad",
   finalized: "good",
   applied: "warn",
   "late filed": "warn",

@@ -12,7 +12,9 @@ import { NachMandateForm } from "./NachMandateForm";
 import { NachReturnForm } from "./NachReturnForm";
 import { SponsorBankConfigForm } from "./SponsorBankConfigForm";
 import { DscConfigForm } from "./DscConfigForm";
-import { DisbursementTransferTable, toClientTransferRow, type RawTransferRow } from "./DisbursementTransferTable";
+import { DisbursementTransferTable } from "./DisbursementTransferTable";
+// Plain (non-"use client") module: these are CALLED here on the server.
+import { toClientTransferRow, isCreditedTransfer, isFailedTransfer, type RawTransferRow } from "./transferRows";
 
 /**
  * GAP-PAYROLL-DISBURSEMENT-04: roles that may change the sponsor bank
@@ -71,7 +73,9 @@ async function getDscConfig(): Promise<LoaderResult<RawDscConfig | null>> {
 }
 
 async function getTransfers(): Promise<LoaderResult<RawTransferRow[]>> {
-  return fetchJson<unknown, RawTransferRow[]>("/api/v1/payroll/disbursement/transfers", [], {
+  // Current attempt per payment (the API hides rows superseded by a retry);
+  // 500 is the API's page-size cap.
+  return fetchJson<unknown, RawTransferRow[]>("/api/v1/payroll/disbursement/transfers?limit=500", [], {
     telemetryKey: "payroll.disbursement.transfers",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: RawTransferRow[] })?.data;
@@ -147,8 +151,8 @@ export default async function DisbursementPage() {
 
   // UX-017: callback params are `tx`, not `t`, to avoid shadowing the
   // translation function.
-  const credited = transfersErrored ? null : transfers.filter((tx) => tx.status === "credited").length;
-  const failed = transfersErrored ? null : transfers.filter((tx) => tx.status === "failed").length;
+  const credited = transfersErrored ? null : transfers.filter((tx) => isCreditedTransfer(tx.status)).length;
+  const failed = transfersErrored ? null : transfers.filter((tx) => isFailedTransfer(tx.status)).length;
 
   const dscDaysLeft = dsc.kind === "configured" ? daysUntilIST(dsc.notAfter) : null;
   const dscStatValue =

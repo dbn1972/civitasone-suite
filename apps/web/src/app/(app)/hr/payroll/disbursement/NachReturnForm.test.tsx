@@ -50,6 +50,29 @@ describe("NachReturnForm", () => {
     });
   });
 
+  it("[TRANSFERS D4] sends the issued NACH file name when given, and omits it when blank", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ data: { credited: 1, returned: 0, unmatched: 0 } }), { status: 202 }));
+
+    renderForm();
+    fireEvent.change(screen.getByLabelText(/Return File Content/), { target: { value: "0001CREDIT" } });
+    fireEvent.change(screen.getByLabelText(/Bank file name/), { target: { value: " NACH_SBIN_2_20261001.txt " } });
+    fireEvent.click(screen.getByText("Process Return File"));
+    await waitFor(() => expect(screen.getByText("Process this NACH return file?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Process file"));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body)))
+      .toEqual({ content: "0001CREDIT", fileReference: "NACH_SBIN_2_20261001.txt" });
+
+    await waitFor(() => expect(screen.getByText(/Processed: 1 credited/)).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Return File Content/), { target: { value: "0002CREDIT" } });
+    fireEvent.click(screen.getByText("Process Return File"));
+    await waitFor(() => expect(screen.getByText("Process this NACH return file?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Process file"));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(String((fetchSpy.mock.calls[1]![1] as RequestInit).body))).toEqual({ content: "0002CREDIT" });
+  });
+
   it("surfaces a server error on the confirm dialog (error path)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 400 }));
 

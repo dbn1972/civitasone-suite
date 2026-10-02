@@ -96,13 +96,13 @@ describe("BankFileWizard", () => {
     expect(screen.getByText("bank_transfer_RUN1_2026-09.csv")).toBeInTheDocument();
   });
 
-  it("[DISB-02] a paid run is labelled a re-issue, with a duplicate-payment warning in the confirm", () => {
+  it("[DISB-02/TRANSFERS D2] a paid run is labelled a re-issue whose file carries only retries / never-sent employees", () => {
     renderWizard([PAID_RUN]);
-    expect(screen.getByText(/already marked paid/)).toBeInTheDocument();
+    expect(screen.getByText(/carries only queued retries and employees never sent before/)).toBeInTheDocument();
     goToDownloadStep();
     fireEvent.click(screen.getByRole("button", { name: /download bank file/i }));
     expect(screen.getByText("Re-issue a bank file for a paid run?")).toBeInTheDocument();
-    expect(screen.getByText(/paying salaries twice/)).toBeInTheDocument();
+    expect(screen.getByText(/cannot pay anyone twice/)).toBeInTheDocument();
   });
 
   // ── GAP-PAYROLL-DISBURSEMENT-03 ──────────────────────────────────────────
