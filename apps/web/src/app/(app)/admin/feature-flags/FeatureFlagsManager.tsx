@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Button, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { Button, ConfirmDialog, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminFeatureFlagRow } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
@@ -46,6 +46,10 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // GAP-ADMIN-FEATURE-FLAGS-01: Kill only opens a confirmation; nothing is
+  // sent until the operator confirms with a reason.
+  const [killTarget, setKillTarget] = useState<AdminFeatureFlagRow | null>(null);
+  const [killError, setKillError] = useState<string | undefined>(undefined);
   const formError = useFormError("feature flag");
 
   const activeCount = flags.filter((f) => f.enabled && f.rolloutPercent === 100 && !f.killSwitch).length;
@@ -63,12 +67,19 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
     }
   }
 
-  async function handleKillSwitch(id: string) {
+  async function handleKillSwitch(id: string, reason: string) {
     setBusyId(id);
     setError(null);
-    const result = await callApi(`/${id}/kill`, "POST");
-    if (!result.ok) setError(result.message ?? null);
-    else await refresh();
+    setKillError(undefined);
+    // admin-service feature-flags/routes.ts killBody: reason 3..500 chars,
+    // recorded in the audit event alongside the actor.
+    const result = await callApi(`/${id}/kill`, "POST", { reason });
+    if (!result.ok) {
+      setKillError(result.message);
+    } else {
+      setKillTarget(null);
+      await refresh();
+    }
     setBusyId(null);
   }
 
@@ -174,10 +185,9 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
                     <Button
                       variant="danger"
                       size="sm"
-                      onClick={() => void handleKillSwitch(flag.id)}
+                      onClick={() => { setKillError(undefined); setKillTarget(flag); }}
                       disabled={flag.killSwitch || busyId === flag.id}
                       aria-label={`Kill switch for ${flag.name}`}
-                      style={{ backgroundColor: flag.killSwitch ? "#ccc" : "#dc2626", color: "#fff", border: "none", padding: "4px 12px", borderRadius: 4, cursor: flag.killSwitch ? "not-allowed" : "pointer", boxShadow: "none" }}
                     >
                       {flag.killSwitch ? "Killed" : "🛑 Kill"}
                     </Button>
@@ -188,6 +198,28 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
           </table>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={killTarget !== null}
+        danger
+        requireReason
+        minReasonLength={3}
+        maxReasonLength={500}
+        reasonLabel="Reason for killing this flag (recorded in the audit log)"
+        title={killTarget ? `Kill switch: ${killTarget.name}` : "Kill switch"}
+        description={
+          killTarget
+            ? `Turns "${killTarget.key}" off immediately for everyone it targets, regardless of rollout or segments. This cannot be undone from this screen.`
+            : undefined
+        }
+        confirmLabel="Kill flag"
+        busy={killTarget !== null && busyId === killTarget.id}
+        errorMessage={killError}
+        onConfirm={(reason) => {
+          if (killTarget && reason) void handleKillSwitch(killTarget.id, reason);
+        }}
+        onCancel={() => { setKillTarget(null); setKillError(undefined); }}
+      />
 
       {showModal && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Create Feature Flag">

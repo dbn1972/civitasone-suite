@@ -98,14 +98,23 @@ describe("CAP-052 catalogue routes (CQRS)", () => {
     );
   });
 
-  it("lists catalogue for authenticated reader", async () => {
+  it("lists catalogue for a platform admin", async () => {
     const res = await app.inject({
       method: "GET",
       url: "/api/v1/gateway/catalogue",
-      headers: auth(readerToken(TENANT_A)),
+      headers: auth(adminToken(TENANT_A)),
     });
     expect(res.statusCode).toBe(200);
     expect(Array.isArray(res.json().data)).toBe(true);
+  });
+
+  // GAP-ADMIN-GATEWAY-ROUTES-01: reads are admin-only too -- a plain tenant
+  // role must not enumerate the internal API surface.
+  it("forbids a non-admin reader from listing or reading catalogue entries", async () => {
+    const list = await app.inject({ method: "GET", url: "/api/v1/gateway/catalogue", headers: auth(readerToken(TENANT_A)) });
+    expect(list.statusCode).toBe(403);
+    const one = await app.inject({ method: "GET", url: `/api/v1/gateway/catalogue/${crypto.randomUUID()}`, headers: auth(readerToken(TENANT_A)) });
+    expect(one.statusCode).toBe(403);
   });
 
   it("enforces RBAC on register (reader forbidden)", async () => {
@@ -149,13 +158,13 @@ describe("CAP-052 catalogue routes (CQRS)", () => {
     const got = await app.inject({
       method: "GET",
       url: `/api/v1/gateway/catalogue/${id}`,
-      headers: auth(readerToken(TENANT_A)),
+      headers: auth(adminToken(TENANT_A)),
     });
     expect([200, 404]).toContain(got.statusCode);
   });
 
   it("isolates tenants — Tenant B never sees Tenant A's catalogue (RLS)", async () => {
-    const res = await app.inject({ method: "GET", url: "/api/v1/gateway/catalogue", headers: auth(readerToken(TENANT_B)) });
+    const res = await app.inject({ method: "GET", url: "/api/v1/gateway/catalogue", headers: auth(adminToken(TENANT_B)) });
     expect(res.statusCode).toBe(200);
     expect(res.json().meta.total).toBe(0);
   });

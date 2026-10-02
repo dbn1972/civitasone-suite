@@ -38,6 +38,13 @@ const updateBody = z.object({
 
 const idParam = z.object({ id: z.string().uuid() });
 
+// GAP-ADMIN-FEATURE-FLAGS-01: the kill switch is a one-way, high-impact
+// action (there is no un-kill route), so the operator must state why.
+// The reason travels on the command and lands in the audit record.
+export const killBody = z.object({
+  reason: z.string().trim().min(3).max(500),
+});
+
 const evalQuery = z.object({
   subjectId: z.string().min(1).max(200),
   segments: z.string().max(2000).optional(),
@@ -110,7 +117,8 @@ export async function featureFlagRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(idParam, req.params);
-    const result = await commands.flagKill(ctx, id);
+    const { reason } = safeParse(killBody, req.body ?? {});
+    const result = await commands.flagKill(ctx, id, reason);
     return reply.code(202).send(result);
   });
 

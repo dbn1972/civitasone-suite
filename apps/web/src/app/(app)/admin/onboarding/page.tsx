@@ -1,8 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSAOnboarding } from "@/app/_data/loaders";
 import { OnboardingTable } from "./OnboardingTable";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function OnboardingPage() {
+  // GAP-ADMIN-ONBOARDING-01: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Tenant Onboarding Queue" area="the tenant onboarding queue" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   const { data: queue, source } = await getSAOnboarding();
   const newReqs = queue.filter((q) => String(q.stage).toLowerCase() === "new request").length;
   const inProgress = queue.filter((q) => !["new request", "go-live pending", "completed"].includes(String(q.stage).toLowerCase())).length;

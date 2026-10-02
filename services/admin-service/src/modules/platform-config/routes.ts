@@ -10,6 +10,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
+import { auditEvent } from "../../shared/audit.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -68,6 +69,10 @@ const gatewayConfigSchema = z.object({
   rateLimitTenantMax: z.number().int().min(10).max(10000).optional(),
   authRateLimitMax: z.number().int().min(3).max(1000).optional(),
   bodyLimitBytes: z.number().int().min(1024).max(52428800).optional(),
+  // GAP-ADMIN-GATEWAY-CONFIG-02: platform-wide edge-auth / limit changes
+  // must carry an operator reason; it goes to the audit record, never to the
+  // gateway itself (stripped before forwarding below).
+  reason: z.string().trim().min(3).max(500),
 }).strict();
 
 type PlatformConfig = {
@@ -280,7 +285,27 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
   app.patch("/v1/admin/platform-config/gateway", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PLATFORM_ADMIN);
-    const body = gatewayConfigSchema.parse(req.body);
+    const { reason, ...body } = gatewayConfigSchema.parse(req.body);
+    if (Object.keys(body).length === 0) {
+      throw new HttpError(400, "EMPTY_BODY", "at least one gateway setting must be provided");
+    }
+    // Best-effort "before" snapshot for the audit diff: a failed read must not
+    // block an operator from fixing a misconfigured gateway, so it degrades
+    // to `null` (recorded as unknown) instead of failing the PATCH.
+    let before: Record<string, unknown> | null = null;
+    try {
+      const cur = await fetch(`${GATEWAY_URL}/internal/config`, {
+        headers: { "x-internal-secret": INTERNAL_SECRET },
+        signal: AbortSignal.timeout(5000),
+      });
+      if (cur.ok) {
+        const curBody = (await cur.json()) as { data?: unknown };
+        if (curBody.data && typeof curBody.data === "object") before = curBody.data as Record<string, unknown>;
+      }
+    } catch {
+      before = null;
+    }
+    let result: { status: string; data: unknown };
     try {
       const res = await fetch(`${GATEWAY_URL}/internal/config`, {
         method: "PATCH",
@@ -295,12 +320,30 @@ export async function platformConfigRoutes(app: FastifyInstance): Promise<void> 
         const errBody = await res.json().catch(() => ({})) as { message?: string };
         throw new HttpError(res.status === 400 ? 400 : 502, "GATEWAY_CONFIG_ERROR", errBody.message ?? `Gateway returned ${res.status}`);
       }
-      const result = await res.json() as { status: string; data: unknown };
-      return reply.send(result);
+      result = await res.json() as { status: string; data: unknown };
     } catch (err) {
       if (err instanceof HttpError) throw err;
       throw new HttpError(502, "GATEWAY_UNREACHABLE", "Cannot reach gateway service");
     }
+    // GAP-ADMIN-GATEWAY-CONFIG-02: every applied change is audited with the
+    // actor (ctx.actorId), the reason, and per-field before/after. The
+    // gateway holds this config in memory (no admin-service row to write),
+    // so the audit record is the only durable trail of who changed what.
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    for (const [k, v] of Object.entries(body)) {
+      changes[k] = { from: before ? before[k] ?? null : null, to: v };
+    }
+    await db.transaction(async (tx) => {
+      await auditEvent(
+        tx,
+        { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId },
+        "gateway_config.update",
+        "gateway_config",
+        "gateway",
+        { reason, changes, beforeKnown: before !== null },
+      );
+    });
+    return reply.send(result);
   });
 
   app.setErrorHandler((err, req, reply) => {

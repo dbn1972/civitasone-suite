@@ -1,4 +1,6 @@
 import { PageHeader } from "@/app/_components/ds";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 // COMP-004: this page used to render 3 hardcoded MOCK_JOBS as "Recent Jobs"
 // with no fetch attempt at all, alongside a "New Scan Job" form that posted
@@ -11,6 +13,11 @@ import { PageHeader } from "@/app/_components/ds";
 // button is disabled rather than left to silently 404 against an endpoint
 // that doesn't exist.
 export default function AdminBulkScanPage() {
+  // GAP-ADMIN-BULK-SCAN-01: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Bulk Scan" area="bulk scan" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader

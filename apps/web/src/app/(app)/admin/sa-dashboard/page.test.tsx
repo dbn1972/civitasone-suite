@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
+// The page is now role-gated (platform operators only); render as one.
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => ["super_admin"] }));
+
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
@@ -89,5 +92,19 @@ describe("SaDashboardPage", () => {
     render(await SaDashboardPage());
     expect(screen.getByText("Services").parentElement).toHaveTextContent("—");
     expect(screen.queryByText("0/18")).not.toBeInTheDocument();
+  });
+
+  // GAP-ADMIN-SA-DASHBOARD-01
+  it("shows '—' (not a fabricated 0) when activeTenants is missing, and a real 0 when the API says 0", async () => {
+    mockLoaders({ dashboard: { data: {}, source: "api" } });
+    render(await SaDashboardPage());
+    expect(screen.getByText("Active Tenants").parentElement).toHaveTextContent("—");
+    expect(screen.getByText("Active Tenants").parentElement).not.toHaveTextContent("0");
+  });
+
+  it("renders a genuine zero tenant count as 0", async () => {
+    mockLoaders({ dashboard: { data: { activeTenants: 0 }, source: "api" } });
+    render(await SaDashboardPage());
+    expect(screen.getByText("Active Tenants").parentElement).toHaveTextContent("0");
   });
 });

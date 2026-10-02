@@ -1,8 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSAEntitlements } from "@/app/_data/loaders";
 import { EntitlementsTable } from "./EntitlementsTable";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function EntitlementsPage() {
+  // GAP-ADMIN-ENTITLEMENTS-01: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Entitlements" area="platform entitlements" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   const { data: entitlements, source } = await getSAEntitlements();
   const active = entitlements.filter((e) => String(e.status).toLowerCase() === "active").length;
 

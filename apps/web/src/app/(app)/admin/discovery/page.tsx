@@ -1,4 +1,6 @@
 import { PageHeader } from "@/app/_components/ds";
+import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
+import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 
 // COMP-004: this page used to render 6 hardcoded MOCK_SERVICES — and, worse,
 // silently fell back to that fake list whenever the (also fake) GET
@@ -12,6 +14,11 @@ import { PageHeader } from "@/app/_components/ds";
 // is disabled rather than left to silently 404 against an endpoint that
 // doesn't exist.
 export default function AdminDiscoveryPage() {
+  // GAP-ADMIN-DISCOVERY-01: platform-operator screen -- gate before any loader runs so an
+  // unauthorized caller sees "Access restricted", not operator chrome.
+  if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
+    return <AdminAccessDenied title="Service Discovery" area="service discovery" roles={PLATFORM_ADMIN_ROLES} />;
+  }
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader

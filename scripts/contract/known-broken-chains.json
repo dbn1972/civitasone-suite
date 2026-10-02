@@ -8,7 +8,6 @@
     { "module": "admin", "screen": "/admin/metering" },
     { "module": "admin", "screen": "/admin/onboarding" },
     { "module": "admin", "screen": "/admin/operators" },
-    { "module": "admin", "screen": "/admin/sa-dashboard" },
     { "module": "admin", "screen": "/admin/tenants" }
   ]
 }
