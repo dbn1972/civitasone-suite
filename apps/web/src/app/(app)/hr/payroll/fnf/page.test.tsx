@@ -11,14 +11,18 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 const getSessionRolesMock = vi.fn(() => ["payroll_admin"]);
+const getSessionUserIdMock = vi.fn<() => string | null>(() => ME);
 vi.mock("@/lib/auth/roleGuard", async (io) => ({
   ...(await io<typeof import("@/lib/auth/roleGuard")>()),
   getSessionRoles: () => getSessionRolesMock(),
+  getSessionUserId: () => getSessionUserIdMock(),
 }));
 
 import FnfPage from "./page";
 
 const EMP = "9b8c7d6e-0000-4000-8000-000000000001";
+const ME = "11111111-0000-4000-8000-0000000000aa";
+const OTHER = "22222222-0000-4000-8000-0000000000bb";
 
 async function renderPage() {
   const ui = await FnfPage();
@@ -29,6 +33,7 @@ describe("FnfPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
     getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+    getSessionUserIdMock.mockReturnValue(ME);
   });
 
   it("GAP-PAYROLL-FNF-05: a card shows the employee name, HR code, translated separation type and an Indian-format date -- never the UUID", async () => {
@@ -52,18 +57,92 @@ describe("FnfPage", () => {
     expect(container.textContent).not.toContain(EMP);
   });
 
-  it("GAP-PAYROLL-FNF-01/02: no Submit / Finance Approve / Mark Disbursed buttons (no such endpoints exist); the gap is stated honestly", async () => {
+  // GAP-PAYROLL-FNF-01: the workflow buttons are back, gated by role AND
+  // status AND segregation of duties.
+  const row = (id: string, name: string, status: string, extra: Record<string, unknown> = {}) => ({
+    id, employeeId: EMP, employeeName: name, separationType: "retirement", separationDate: "2026-07-01",
+    netPayableMinor: "100000", status, version: 2, computedBy: OTHER, submittedBy: null, financeApprovedBy: null, ...extra,
+  });
+  const btn = (label: RegExp, name: string) => screen.queryByRole("button", { name: new RegExp(`(${label.source}).*${name}`, "i") });
+
+  it("GAP-PAYROLL-FNF-01: payroll_admin sees the next step for each status, never on their own work", async () => {
     fetchJsonMock.mockResolvedValue({
       data: [
-        { id: "s1", employeeId: EMP, separationType: "retirement", separationDate: "2026-07-01", netPayableMinor: "1", status: "draft" },
-        { id: "s2", employeeId: EMP, separationType: "retirement", separationDate: "2026-07-02", netPayableMinor: "1", status: "manager_approved" },
-        { id: "s3", employeeId: EMP, separationType: "retirement", separationDate: "2026-07-03", netPayableMinor: "1", status: "finance_approved" },
+        row("s1", "Asha", "computed"),
+        row("s2", "Bala", "submitted", { submittedBy: OTHER }),
+        row("s3", "Chitra", "submitted", { submittedBy: ME }),
+        row("s4", "Dev", "submitted", { submittedBy: OTHER, computedBy: ME }),
+        row("s5", "Esha", "finance_approved", { submittedBy: OTHER, financeApprovedBy: OTHER }),
+        row("s6", "Farid", "finance_approved", { submittedBy: OTHER, financeApprovedBy: ME }),
+        row("s7", "Gita", "disbursed", { paymentReference: "UTR-0001", paymentDate: "2026-09-30" }),
+        row("s8", "Hari", "computed", { version: undefined }),
+        row("s9", "Indu", "rejected", { rejectionReason: "leave balance is wrong" }),
+        row("s10", "Jaya", "finance_approved", { submittedBy: ME, financeApprovedBy: OTHER }),
+        row("s11", "Kiran", "finance_approved", { submittedBy: OTHER, financeApprovedBy: OTHER, computedBy: ME }),
       ],
       source: "api",
     });
     await renderPage();
-    expect(screen.queryByRole("button", { name: /submit for approval|finance approve|mark disbursed/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/Approval and payment recording for F&F settlements are not available/)).toBeInTheDocument();
+    expect(btn(/submit/, "Asha")).toBeInTheDocument();
+    expect(btn(/finance-approve/, "Bala")).toBeInTheDocument();
+    expect(btn(/reject/, "Bala")).toBeInTheDocument();
+    expect(btn(/finance-approve|reject/, "Chitra")).not.toBeInTheDocument();
+    expect(btn(/finance-approve|reject/, "Dev")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/someone else must approve or reject it/)).toHaveLength(2);
+    expect(btn(/record the payment/, "Esha")).toBeInTheDocument();
+    expect(btn(/reject/, "Esha")).toBeInTheDocument();
+    expect(btn(/record the payment|reject/, "Farid")).not.toBeInTheDocument();
+    expect(btn(/record the payment|reject/, "Jaya")).not.toBeInTheDocument();
+    expect(btn(/record the payment|reject/, "Kiran")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/someone else must record its payment/)).toHaveLength(3);
+    expect(btn(/submit|approve|payment|reject/, "Gita")).not.toBeInTheDocument();
+    expect(screen.getByText(/reference UTR-0001, dated 30 Sep 2026/)).toBeInTheDocument();
+    expect(btn(/submit/, "Hari")).not.toBeInTheDocument();
+    expect(btn(/submit|approve|payment|reject/, "Indu")).not.toBeInTheDocument();
+    expect(screen.getByText(/Rejected: leave balance is wrong/)).toBeInTheDocument();
+    expect(screen.queryByText(/not available in this system/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FNF-01: finance_officer can approve/reject a submitted settlement but cannot submit or disburse", async () => {
+    getSessionRolesMock.mockReturnValue(["finance_officer"]);
+    fetchJsonMock.mockResolvedValue({
+      data: [
+        row("s1", "Asha", "computed"),
+        row("s2", "Bala", "submitted", { submittedBy: OTHER }),
+        row("s3", "Chitra", "finance_approved", { submittedBy: OTHER, financeApprovedBy: OTHER }),
+      ],
+      source: "api",
+    });
+    await renderPage();
+    expect(btn(/submit/, "Asha")).not.toBeInTheDocument();
+    expect(btn(/finance-approve/, "Bala")).toBeInTheDocument();
+    expect(btn(/record the payment|reject/, "Chitra")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FNF-01: payroll_officer can open the page and submit, but gets no compute form and no approval buttons", async () => {
+    getSessionRolesMock.mockReturnValue(["payroll_officer"]);
+    fetchJsonMock.mockResolvedValue({
+      data: [row("s1", "Asha", "computed"), row("s2", "Bala", "submitted", { submittedBy: OTHER })],
+      source: "api",
+    });
+    await renderPage();
+    expect(screen.queryByText("Compute F&F Settlement")).not.toBeInTheDocument();
+    expect(btn(/submit/, "Asha")).toBeInTheDocument();
+    expect(btn(/finance-approve|reject/, "Bala")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FNF-01: hr_admin sees no workflow buttons (compute only)", async () => {
+    getSessionRolesMock.mockReturnValue(["hr_admin"]);
+    fetchJsonMock.mockResolvedValue({ data: [row("s1", "Asha", "computed"), row("s2", "Bala", "submitted", { submittedBy: OTHER })], source: "api" });
+    await renderPage();
+    expect(screen.queryByRole("button", { name: /submit the settlement|finance-approve|record the payment|reject the settlement/i })).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FNF-01: no session user id -> no workflow buttons", async () => {
+    getSessionUserIdMock.mockReturnValue(null);
+    fetchJsonMock.mockResolvedValue({ data: [row("s1", "Asha", "computed")], source: "api" });
+    await renderPage();
+    expect(btn(/submit/, "Asha")).not.toBeInTheDocument();
   });
 
   it("renders an empty state when there are no settlements", async () => {

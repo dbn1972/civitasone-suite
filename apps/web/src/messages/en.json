@@ -6955,7 +6955,9 @@
     "unknownEmployee": "Unknown employee",
     "exemptionsNote": "Tax-exempt portions — gratuity: {gratuity}, leave encashment: {leave}.",
     "footingWarning": "The rows above do not add up to the net payable. Check this settlement before paying it.",
-    "workflowUnavailableNote": "Approval and payment recording for F&F settlements are not available in this system yet. Settlements are computed here; record the payment through your existing process."
+    "workflowNote": "Each settlement goes through submit → finance approval → disbursement, and each step must be taken by a different person.",
+    "rejectedNote": "Rejected: {reason}. Recompute it with corrected inputs using the form above to reopen it.",
+    "disbursedNote": "Paid — reference {reference}, dated {date}."
   },
   "payrollPayGroups": {
     "title": "Pay Groups",
@@ -7256,5 +7258,41 @@
     "back": "← Back",
     "raising": "Raising…",
     "submit": "Submit transfer to eOffice"
+  },
+  "fnfSettlementActions": {
+    "submitBtn": "Submit for approval",
+    "approveBtn": "Finance approve",
+    "disburseBtn": "Mark disbursed",
+    "rejectBtn": "Reject",
+    "cancelBtn": "Cancel",
+    "submitAriaLabel": "Submit the settlement for {name} for finance approval",
+    "approveAriaLabel": "Finance-approve the settlement for {name}",
+    "disburseAriaLabel": "Record the payment of the settlement for {name}",
+    "rejectAriaLabel": "Reject the settlement for {name}",
+    "submitTitle": "Submit for finance approval?",
+    "submitDescription": "The settlement for {name} (net payable {amount}) will go to finance for approval. You will not be able to approve it yourself.",
+    "approveTitle": "Approve this settlement?",
+    "approveDescription": "You are approving the settlement for {name} for payment of {amount}. Someone other than you must then record the payment.",
+    "rejectTitle": "Reject this settlement?",
+    "rejectDescription": "The settlement for {name} ({amount}) will go back to the payroll desk to be recomputed. Say what needs to change.",
+    "disburseTitle": "Record the payment",
+    "disburseDescription": "Record that {amount} has been paid to {name}. This does not send money — enter the reference of the payment you already made. This cannot be undone.",
+    "noteLabel": "Note (optional)",
+    "rejectReasonLabel": "Reason for rejection",
+    "paymentReferenceLabel": "Payment reference (UTR / cheque / transaction no.)",
+    "paymentReferenceInvalid": "Use 4 to 64 letters, digits, / or -, starting with a letter or digit.",
+    "paymentDateLabel": "Payment date",
+    "paymentDateFuture": "The payment date cannot be in the future.",
+    "submitQueued": "Submitted the settlement for {name}. Its status will update in a few seconds.",
+    "approveQueued": "Approved the settlement for {name}. Its status will update in a few seconds.",
+    "disburseQueued": "Recorded the payment for {name}. Its status will update in a few seconds.",
+    "rejectQueued": "Rejected the settlement for {name}. Its status will update in a few seconds.",
+    "selfExcludedApprove": "You computed or submitted this settlement, so someone else must approve or reject it.",
+    "selfExcludedDisburse": "You computed, submitted or approved this settlement, so someone else must record its payment or reject it.",
+    "staleError": "This settlement has changed since the page loaded. Refresh the page and try again.",
+    "selfApprovalError": "You computed or submitted this settlement, so you cannot approve or reject it.",
+    "selfDisbursalError": "You computed, submitted or approved this settlement, so you cannot record its payment or reject it.",
+    "forbiddenError": "Your role does not allow this step.",
+    "networkError": "Network error. Please try again."
   }
 }

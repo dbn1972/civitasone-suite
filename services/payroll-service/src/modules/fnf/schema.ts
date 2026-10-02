@@ -37,6 +37,19 @@ export const fnfSettlements = payrollSchema.table("fnf_settlements", {
   createdBy:                  uuid("created_by").notNull(),
   updatedBy:                  uuid("updated_by").notNull(),
   version:                    integer("version").notNull().default(1),
+  // GAP-PAYROLL-FNF-01 workflow (migration 0052). See ./workflow.ts.
+  computedBy:                 uuid("computed_by"),
+  submittedBy:                uuid("submitted_by"),
+  submittedAt:                timestamp("submitted_at", { withTimezone: true }),
+  financeApprovedBy:          uuid("finance_approved_by"),
+  financeApprovedAt:          timestamp("finance_approved_at", { withTimezone: true }),
+  disbursedBy:                uuid("disbursed_by"),
+  disbursedAt:                timestamp("disbursed_at", { withTimezone: true }),
+  paymentReference:           varchar("payment_reference", { length: 64 }),
+  paymentDate:                date("payment_date"),
+  rejectedBy:                 uuid("rejected_by"),
+  rejectedAt:                 timestamp("rejected_at", { withTimezone: true }),
+  rejectionReason:            varchar("rejection_reason", { length: 512 }),
 });
 
 export const ltcExemptions = payrollSchema.table("ltc_exemptions", {
