@@ -1,12 +1,12 @@
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "@/app/_components/ds";
 import { ClosePeriodForm } from "./ClosePeriodForm";
 import { PeriodsTable } from "./PeriodsTable";
 import { getPeriods } from "./periodsLoader";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 
 export default async function PeriodCloseCockpitPage() {
-  const { data: periods, source } = await getPeriods();
+  const result = await getPeriods();
+  const { data: periods, source } = result;
   // GAP-FINANCE-PERIOD-CLOSE-01: mirror finance-service's period-close role
   // tiers so no one is offered an action that 403s -- soft-close:
   // finance_officer/finance_admin/super_admin; hard-close and reopen:
@@ -21,13 +21,28 @@ export default async function PeriodCloseCockpitPage() {
   const softClosedCount = periods.filter((p) => p.status === "soft_close").length;
   const hardClosedCount = periods.filter((p) => p.status === "hard_close").length;
 
+  // GAP-FINANCE-PERIOD-CLOSE-04: a failed read must not render "Open 0 / Hard-Closed 0" (which
+  // reads as "nothing is locked") next to a live close form. One error state with Retry replaces the
+  // stats, the form and the table.
+  if (source === "error") {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader
+          title="Period-Close Cockpit"
+          subtitle="Track accounting-period status and drive the soft-close, hard-close, and reopen workflow."
+          back="/finance"
+        />
+        <LoadErrorState result={result} area="accounting periods" backHref="/finance" />
+      </div>
+    );
+  }
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Period-Close Cockpit"
         subtitle="Track accounting-period status and drive the soft-close, hard-close, and reopen workflow."
         back="/finance"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
       <StatGrid>
@@ -42,14 +57,10 @@ export default async function PeriodCloseCockpitPage() {
         implicitly open. Use the form to soft-close a period for the first time.
       </p>
 
-      {canClose ? <ClosePeriodForm /> : null}
+      {canClose ? <ClosePeriodForm periods={periods.map((p) => ({ period: p.period, status: p.status }))} /> : null}
 
       <Card title="Accounting Periods">
-        {source === "error" && periods.length === 0 ? (
-          <DataSourceBadge source="error" />
-        ) : (
-          <PeriodsTable periods={periods} canClose={canClose} canHardClose={canHardClose} canReopen={canReopen} />
-        )}
+        <PeriodsTable periods={periods} canClose={canClose} canHardClose={canHardClose} canReopen={canReopen} />
       </Card>
     </div>
   );

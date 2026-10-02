@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ToastProvider } from "@/app/_components/ds";
-import { PaymentActions } from "./FinanceActions";
+import { PaymentActions, SanctionApproveAction } from "./FinanceActions";
 
 /**
  * L3 (money truthfulness): finance maker-checker commands return 202 Accepted
@@ -29,24 +29,24 @@ describe("FinanceActions confirms an accepted (202) submission", () => {
 
     render(
       <ToastProvider>
-        <PaymentActions />
+        <SanctionApproveAction id="s1" />
       </ToastProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "PFMS Sync" }));
-    await waitFor(() => expect(screen.getByText("Sync the payment register with PFMS?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Approve sanction" }));
+    await waitFor(() => expect(screen.getByText("Approve this sanction?")).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText("Reason / approving authority"), {
+    fireEvent.change(screen.getByLabelText("Approving authority & reason"), {
       target: { value: "DDO / office contingency" },
     });
-    fireEvent.click(screen.getByText("Run sync"));
+    fireEvent.click(screen.getByText("Approve"));
 
     await waitFor(() =>
-      expect(screen.getByText("PFMS sync submitted — the register updates as instructions settle.")).toBeInTheDocument(),
+      expect(screen.getByText("Approval submitted — the sanction status updates once processing completes.")).toBeInTheDocument(),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/proxy/v1/finance/payments/eft",
-      expect.objectContaining({ method: "POST" }),
+      "/api/proxy/v1/finance/sanctions/s1/approve",
+      expect.objectContaining({ method: "PATCH" }),
     );
     expect(refreshMock).toHaveBeenCalled();
   });
@@ -73,22 +73,36 @@ describe("FinanceActions surfaces a clerk-safe error on a failed submission", ()
 
     render(
       <ToastProvider>
-        <PaymentActions />
+        <SanctionApproveAction id="s1" />
       </ToastProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "PFMS Sync" }));
-    await waitFor(() => expect(screen.getByText("Sync the payment register with PFMS?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Approve sanction" }));
+    await waitFor(() => expect(screen.getByText("Approve this sanction?")).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText("Reason / approving authority"), {
+    fireEvent.change(screen.getByLabelText("Approving authority & reason"), {
       target: { value: "DDO / office contingency" },
     });
-    fireEvent.click(screen.getByText("Run sync"));
+    fireEvent.click(screen.getByText("Approve"));
 
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
     expect(alert.textContent).not.toMatch(/502/);
     expect(alert.textContent).not.toMatch(/Bad Gateway/i);
     expect(alert.textContent).not.toMatch(/request failed/i);
+  });
+});
+
+// GAP-FINANCE-PAYMENTS-07 (review H2): the PFMS sync endpoint does not exist, so the control is an
+// honest disabled button -- no confirm dialog, no POST, no "may move funds" copy.
+describe("PFMS Sync is unavailable until a real sync route exists", () => {
+  it("renders a disabled 'Not available yet' button that makes no request", () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    render(<PaymentActions />);
+    const btn = screen.getByRole("button", { name: /Not available yet/ });
+    expect(btn).toBeDisabled();
+    fireEvent.click(btn);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(screen.queryByText(/move funds/i)).not.toBeInTheDocument();
   });
 });

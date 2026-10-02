@@ -61,6 +61,11 @@ beforeAll(async () => {
     { id: HEAD_EXP, tenantId: TENANT, code: "3054-H1", name: "Roads and Bridges", level: 1, classification: "expense", createdBy: ACTOR, updatedBy: ACTOR },
     { id: HEAD_LIAB, tenantId: TENANT, code: "8443-H1", name: "Civil Deposits", level: 1, classification: "liability", createdBy: ACTOR, updatedBy: ACTOR },
     // seed-all.mjs shape: level-0 major head classified "revenue"
+    // GAP-FINANCE-OPENING-BALANCES-03: the opening-balances route requires codes in the chart of accounts
+    ...["H1-1100", "H1-3100", "H1-M1", "H1-M2"].map((code, i) => ({
+      id: `aaaaaaaa-2222-4000-8000-0000000a1f1${i}`, tenantId: TENANT, code, name: `Head ${code}`, level: 1,
+      classification: "expense", createdBy: ACTOR, updatedBy: ACTOR,
+    })),
     { id: HEAD_REV0, tenantId: TENANT, code: "2202", name: "General Education", level: 0, classification: "revenue", createdBy: ACTOR, updatedBy: ACTOR },
   ]));
   await scoped(TENANT, (tx) => tx.insert(financeBudgetAllocation).values({

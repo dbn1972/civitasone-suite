@@ -624,6 +624,8 @@ export interface PaymentSummary {
   referenceId: string;
   beneficiary: string;
   amountDisplay: string;
+  /** Exact paise as a base-10 string (GAP-FINANCE-PAYMENTS-05); optional for legacy payloads. */
+  amountMinor?: string;
   status: 'Queued' | 'Released' | 'Pending Approval' | 'Failed';
 }
 
@@ -2368,6 +2370,9 @@ export type FinancePaymentDetail = {
   id: string;
   billId: string;
   amountMinor: string;
+  /** Same reference the register shows; null/absent until an EFT reference is issued. */
+  eftRef?: string | null;
+  utr?: string | null;
   mode: "NEFT" | "RTGS" | "IMPS" | "DBT" | "PFMS" | "cheque";
   status: string;
   currency: string;

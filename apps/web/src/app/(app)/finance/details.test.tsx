@@ -9,7 +9,13 @@ const loaders = vi.hoisted(() => ({
 }));
 vi.mock("@/app/_data/loaders", () => loaders);
 vi.mock("next-intl/server", () => ({ getTranslations: async () => (key: string) => key }));
-vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+  // GAP-FINANCE-PAYMENTS-DETAIL-05: the payment detail hands a real 404 to the route-level not-found page.
+  notFound: () => {
+    throw new Error("NEXT_NOT_FOUND");
+  },
+}));
 vi.mock("@/app/_components/RaiseEOfficeNote", () => ({ RaiseEOfficeNote: () => <div>raise-eoffice</div> }));
 vi.mock("./expenditure/bills/[id]/BillLineItemsTable", () => ({ BillLineItemsTable: () => <div>lines</div> }));
 
@@ -41,6 +47,10 @@ describe("detail pages: a failed load is not 'not found' (FAILMASK)", () => {
     });
     it(`${name}: 404 shows the not-found copy`, async () => {
       loaders[loader].mockResolvedValue(err404);
+      if (name === "payment") {
+        await expect(page()).rejects.toThrow("NEXT_NOT_FOUND");
+        return;
+      }
       render(await page());
       expect(screen.getByText(notFound)).toBeInTheDocument();
     });

@@ -5,22 +5,47 @@ const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
   fetchJson: (...args: unknown[]) => fetchJsonMock(...args),
 }));
+const coaMock = vi.fn();
+vi.mock("@/app/_data/loaders", () => ({
+  getChartOfAccounts: () => coaMock(),
+}));
+const rolesMock = vi.fn();
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => rolesMock(),
+}));
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
 import OpeningBalancesPage from "./page";
 
+const FY_ACTIVE = { code: "2026-27", label: "FY 2026-27", status: "active" };
+const FY_CLOSED = { code: "2024-25", label: "FY 2024-25", status: "closed" };
+const COA = {
+  data: [
+    { code: "1000", name: "Cash in hand", type: "asset", status: "active", currency: "INR", balanceDisplay: "0" },
+    { code: "2000", name: "Payables", type: "liability", status: "active", currency: "INR", balanceDisplay: "0" },
+  ],
+  source: "api",
+};
+const ONE_BALANCE = {
+  data: [
+    { id: "ob1", accountCode: "1000", debitMinor: "500000", creditMinor: "0", narration: "Opening cash", enteredAt: "2026-04-01" },
+  ],
+  source: "api",
+};
+
 describe("OpeningBalancesPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    coaMock.mockReset();
+    rolesMock.mockReset();
+    rolesMock.mockReturnValue(["finance_admin"]);
+    coaMock.mockResolvedValue(COA);
   });
 
   it("prompts to choose a fiscal year when none is selected", async () => {
-    fetchJsonMock.mockResolvedValueOnce({
-      data: [{ code: "2026-27", label: "FY 2026-27", status: "active" }],
-      source: "api",
-    });
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" });
 
     const ui = await OpeningBalancesPage({ searchParams: {} });
     render(ui);
@@ -29,32 +54,16 @@ describe("OpeningBalancesPage", () => {
   });
 
   it("renders opening balances for the selected fiscal year", async () => {
-    fetchJsonMock
-      .mockResolvedValueOnce({ data: [{ code: "2026-27", label: "FY 2026-27", status: "active" }], source: "api" })
-      .mockResolvedValueOnce({
-        data: [
-          {
-            id: "ob1",
-            accountCode: "1000",
-            debitMinor: "500000",
-            creditMinor: "0",
-            narration: "Opening cash",
-            enteredAt: "2026-04-01",
-          },
-        ],
-        source: "api",
-      });
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
 
     const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
     render(ui);
 
-    expect(screen.getByText("1000")).toBeInTheDocument();
+    expect(screen.getByText(/1000/)).toBeInTheDocument();
   });
 
   it("renders an empty state when there are no opening balances for the fiscal year", async () => {
-    fetchJsonMock
-      .mockResolvedValueOnce({ data: [{ code: "2026-27", label: "FY 2026-27", status: "active" }], source: "api" })
-      .mockResolvedValueOnce({ data: [], source: "api" });
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce({ data: [], source: "api" });
 
     const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
     render(ui);
@@ -64,9 +73,7 @@ describe("OpeningBalancesPage", () => {
 
   // GAP-FINANCE-OPENING-BALANCES-02
   it("a failed fiscal-years read shows a retry state instead of an empty select", async () => {
-    fetchJsonMock
-      .mockResolvedValueOnce({ data: [], source: "error" })
-      .mockResolvedValueOnce({ data: [], source: "api" });
+    fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" }).mockResolvedValueOnce({ data: [], source: "api" });
 
     const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
     render(ui);
@@ -76,9 +83,7 @@ describe("OpeningBalancesPage", () => {
   });
 
   it("a failed balances read shows retry, — cards, no empty-state copy and NO entry form", async () => {
-    fetchJsonMock
-      .mockResolvedValueOnce({ data: [{ code: "2026-27", label: "FY 2026-27", status: "active" }], source: "api" })
-      .mockResolvedValueOnce({ data: [], source: "error" });
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce({ data: [], source: "error" });
 
     const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
     render(ui);
@@ -87,5 +92,81 @@ describe("OpeningBalancesPage", () => {
     expect(screen.queryByText("No opening balances entered")).not.toBeInTheDocument();
     expect(screen.queryByText(/Save Opening Balances/)).not.toBeInTheDocument();
     expect(screen.getAllByText("—").length).toBe(3);
+  });
+
+  // GAP-FINANCE-OPENING-BALANCES-03
+  it("names the account beside its code in the saved-balances table", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
+
+    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    render(ui);
+
+    expect(screen.getByText("1000 — Cash in hand")).toBeInTheDocument();
+  });
+
+  it("offers the chart of accounts as suggestions in the entry form", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce({ data: [], source: "api" });
+
+    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    const { container } = render(ui);
+
+    expect(container.querySelectorAll("datalist option").length).toBe(2);
+  });
+
+  it("warns and falls back to free text when the chart of accounts fails to load", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
+    coaMock.mockResolvedValue({ data: [], source: "error" });
+
+    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    render(ui);
+
+    expect(screen.getByText(/chart of accounts could not be loaded/i)).toBeInTheDocument();
+    expect(screen.getByText("1000")).toBeInTheDocument();
+    expect(screen.getByText(/Save Opening Balances/)).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-OPENING-BALANCES-04
+  it("shows the table but NOT the entry form to a read-only finance role", async () => {
+    rolesMock.mockReturnValue(["audit_officer"]);
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
+
+    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    render(ui);
+
+    expect(screen.getByText("1000 — Cash in hand")).toBeInTheDocument();
+    expect(screen.queryByText(/Save Opening Balances/)).not.toBeInTheDocument();
+    expect(screen.getByText(/restricted to Finance Admins/)).toBeInTheDocument();
+  });
+
+  it("shows the entry form to finance_admin", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
+
+    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    render(ui);
+
+    expect(screen.getByText(/Save Opening Balances/)).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-OPENING-BALANCES-06
+  it("labels a closed fiscal year, warns and hides the entry form", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE, FY_CLOSED], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
+
+    const ui = await OpeningBalancesPage({ searchParams: { fy: "2024-25" } });
+    render(ui);
+
+    expect(screen.getByRole("option", { name: "FY 2024-25 (2024-25) — closed" })).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent(/closed/);
+    expect(screen.queryByText(/Save Opening Balances/)).not.toBeInTheDocument();
+  });
+
+  it("leaves an active fiscal year unchanged (form shown, no warning)", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: [FY_ACTIVE, FY_CLOSED], source: "api" }).mockResolvedValueOnce(ONE_BALANCE);
+
+    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    render(ui);
+
+    expect(screen.getByRole("option", { name: "FY 2026-27 (2026-27) — active" })).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText(/Save Opening Balances/)).toBeInTheDocument();
   });
 });

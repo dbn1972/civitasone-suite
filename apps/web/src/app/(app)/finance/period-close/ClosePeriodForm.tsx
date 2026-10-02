@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { toHumanError } from "@/lib/messages";
+import { todayIST } from "@/lib/formatters";
+import { periodBounds, suggestPeriod, validatePeriod } from "./periodHelpers";
 
 /**
  * Plain-language fallback for a soft-close network exception (no Response to
@@ -18,13 +20,20 @@ function softCloseExceptionMessage(): string {
   return `${human.what} ${human.next}`;
 }
 
-// YYYY-MM with a valid month (01-12).
-const PERIOD_PATTERN = /^\d{4}-(0[1-9]|1[0-2])$/;
-
-export function ClosePeriodForm() {
+export function ClosePeriodForm({
+  periods = [],
+  today,
+}: {
+  /** Tracked periods, used to pre-select the earliest still-open one (GAP-FINANCE-PERIOD-CLOSE-03). */
+  periods?: ReadonlyArray<{ period: string; status: string }>;
+  /** "YYYY-MM-DD" (IST) override for tests; defaults to today in Asia/Kolkata. */
+  today?: string;
+}) {
   const router = useRouter();
+  const todayIso = today ?? todayIST();
+  const bounds = periodBounds(todayIso);
 
-  const [period, setPeriod] = useState("");
+  const [period, setPeriod] = useState(() => suggestPeriod(periods, todayIso));
   const [error, setError] = useState<string | undefined>();
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -36,8 +45,10 @@ export function ClosePeriodForm() {
   const periodRef = useRef<HTMLInputElement>(null);
 
   function validate(): boolean {
-    if (!PERIOD_PATTERN.test(period.trim())) {
-      setError("Period must be a valid month in YYYY-MM format, e.g. 2026-04.");
+    // Real month, and not a typo such as 2062-04 (bounded around the current month).
+    const problem = validatePeriod(period, todayIso);
+    if (problem) {
+      setError(problem);
       periodRef.current?.focus();
       return false;
     }
@@ -78,7 +89,7 @@ export function ClosePeriodForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form onSubmit={handleSubmit} noValidate style={{ marginBottom: 16 }}>
       <Card title="Soft-Close a Period" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 6, maxWidth: 240 }}>
@@ -88,10 +99,12 @@ export function ClosePeriodForm() {
             <input
               id={periodId}
               ref={periodRef}
+              type="month"
               value={period}
+              min={bounds.min}
+              max={bounds.max}
               onChange={(e) => setPeriod(e.target.value)}
-              placeholder="2026-04"
-              maxLength={7}
+              placeholder="YYYY-MM"
               aria-required="true"
               aria-invalid={!!error || undefined}
               aria-describedby={error ? periodErrId : undefined}

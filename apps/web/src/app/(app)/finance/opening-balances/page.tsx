@@ -2,7 +2,11 @@ import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, Re
 import { toHumanError } from "@/lib/messages";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { getChartOfAccounts } from "@/app/_data/loaders";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { OPENING_BALANCE_WRITE_ROLES } from "@/lib/auth/workRoles";
 import { OpeningBalanceForm } from "./OpeningBalanceForm";
+import { accountLabel, fiscalYearOptionLabel, fyAllowsOpeningBalances, type CoaAccount } from "./openingBalanceAccounts";
 
 type FiscalYearOption = { code: string; label: string; status: string };
 
@@ -95,6 +99,25 @@ export default async function OpeningBalancesPage({
     : ({ data: [] as OpeningBalanceRow[], source: "api" as const });
   const { data: balances, source: balancesSource } = balancesResult;
 
+  // GAP-FINANCE-OPENING-BALANCES-03: the chart of accounts names the codes in the
+  // table and validates / suggests them in the entry form. It is best-effort: a
+  // failed read falls back to raw codes + a free-text form with a visible warning.
+  const coaResult =
+    selectedFy && balancesSource !== "error"
+      ? await getChartOfAccounts()
+      : null;
+  const coaOk = !!coaResult && coaResult.source !== "error";
+  const accounts: CoaAccount[] = coaOk
+    ? coaResult.data.map((a) => ({ code: a.code, name: a.name, status: a.status }))
+    : [];
+
+  // GAP-FINANCE-OPENING-BALANCES-04: the API admits only finance_admin/super_admin to POST
+  // (masters/fy-routes.ts WRITER_ROLES); everyone else sees the table read-only.
+  const canEdit = getSessionRoles().some((r) => (OPENING_BALANCE_WRITE_ROLES as readonly string[]).includes(r));
+  // GAP-FINANCE-OPENING-BALANCES-06: no entry form for a closed fiscal year.
+  const selectedFyStatus = fiscalYears.find((fy) => fy.code === selectedFy)?.status;
+  const fyOpen = fyAllowsOpeningBalances(selectedFyStatus);
+
   // Paise may exceed 2^53 in aggregate: sum as BigInt, never Number().
   const toMinor = (v: string | number) => {
     try { return BigInt(v); } catch { return 0n; }
@@ -142,7 +165,7 @@ export default async function OpeningBalancesPage({
               <option value="">Select a fiscal year…</option>
               {fiscalYears.map((fy) => (
                 <option key={fy.code} value={fy.code}>
-                  {fy.label} ({fy.code}){fy.status === "active" ? " — active" : ""}
+                  {fiscalYearOptionLabel(fy)}
                 </option>
               ))}
             </select>
@@ -181,15 +204,30 @@ export default async function OpeningBalancesPage({
             <StatCard icon="⬆️" iconBg="#fff2e6" label="Total Credit" value={formatMoney(totalCredit)} />
           </StatGrid>
 
-          <OpeningBalanceForm fyCode={selectedFy} />
+          {!fyOpen ? (
+            <p role="alert" className="pill warn" style={{ width: "fit-content", margin: "0 0 16px" }}>
+              Fiscal year {selectedFy} is {selectedFyStatus}. Opening balances cannot be set on a closed year, so the
+              entry form is hidden; the saved balances below are read-only.
+            </p>
+          ) : canEdit ? (
+            <OpeningBalanceForm
+              fyCode={selectedFy}
+              accounts={accounts}
+              accountsUnavailable={!coaOk}
+            />
+          ) : (
+            <p style={{ color: "var(--ink2)", fontSize: 13, margin: "0 0 16px" }}>
+              Opening balances can be viewed here. Entering them is restricted to Finance Admins.
+            </p>
+          )}
 
           <Card title={`Opening Balances — ${selectedFy}`}>
             <DataTable<OpeningBalanceRow>
               columns={columns}
-              rows={balances}
+              rows={balances.map((b) => ({ ...b, accountCode: accountLabel(b.accountCode, accounts) }))}
               sortable
               filterable
-              filterPlaceholder="Filter by account code…"
+              filterPlaceholder="Filter by account code or name…"
               pageSize={15}
               emptyIcon="🧾"
               emptyTitle="No opening balances entered"

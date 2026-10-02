@@ -59,6 +59,24 @@ export const FINANCE_ROLES = [
 ] as const;
 
 /**
+ * GAP-FINANCE-OPENING-BALANCES-04: roles finance-service lets POST
+ * /v1/finance/opening-balances (masters/fy-routes.ts WRITER_ROLES). Other
+ * FINANCE_ROLES members (finance_officer, audit_officer, ...) can read the
+ * balances but get a 403 only AFTER confirming, so the entry form is hidden
+ * for them. Mirrors that constant exactly -- keep in sync.
+ */
+export const OPENING_BALANCE_WRITE_ROLES = ["finance_admin", "super_admin"] as const;
+
+/**
+ * GAP-FINANCE-PAYMENTS-04: roles finance-service lets create a payment
+ * (POST /v1/finance/payments/eft) and trigger the PFMS sync action
+ * (payments/routes.ts FINANCE_ROLES). audit_officer / budget_officer /
+ * procurement_officer / accounts_officer can open the page but would 403 after
+ * typing a reason, so the buttons are hidden for them. Mirrors that constant.
+ */
+export const PAYMENT_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+
+/**
  * UX gate for every page under /hr, /hr/payroll and /hr/recruitment (all
  * three share hr/layout.tsx's single `requireAnyRole(HR_ROLES)` call, since
  * payroll and recruitment are sub-trees of the same URL prefix and layout).

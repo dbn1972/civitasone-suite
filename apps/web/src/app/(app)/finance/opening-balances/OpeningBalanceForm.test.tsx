@@ -91,4 +91,79 @@ describe("OpeningBalanceForm", () => {
     expect(screen.getByText(/at most 2 decimals/)).toBeInTheDocument();
     expect(screen.queryByText("Save these opening balances?")).not.toBeInTheDocument();
   });
+
+  // GAP-FINANCE-OPENING-BALANCES-05
+  it("reads lakh-grouped '48,62,400' as ₹48,62,400.00, not ₹48.00", () => {
+    render(<OpeningBalanceForm fyCode="2026-27" />);
+    fireEvent.change(screen.getByLabelText("Account code, row 1"), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText("Debit amount, row 1"), { target: { value: "48,62,400" } });
+    fireEvent.change(screen.getByLabelText("Account code, row 2"), { target: { value: "2000" } });
+    fireEvent.change(screen.getByLabelText("Credit amount, row 2"), { target: { value: "10" } });
+    fireEvent.click(screen.getByText(/Save Opening Balances/));
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("₹48,62,400.00");
+    expect(alert).not.toHaveTextContent("Total debits (₹48.00)");
+  });
+
+  it("rejects 12abc with an example amount instead of reading it as 12", () => {
+    render(<OpeningBalanceForm fyCode="2026-27" />);
+    fireEvent.change(screen.getByLabelText("Account code, row 1"), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText("Debit amount, row 1"), { target: { value: "12abc" } });
+    fireEvent.click(screen.getByText(/Save Opening Balances/));
+    expect(screen.getByRole("alert")).toHaveTextContent(/48,62,400\.00/);
+  });
+
+  // GAP-FINANCE-OPENING-BALANCES-03
+  describe("chart-of-accounts validation", () => {
+    const accounts = [
+      { code: "1000", name: "Cash in hand", status: "active" as const },
+      { code: "2000", name: "Payables", status: "active" as const },
+    ];
+
+    it("blocks the confirm dialog with an inline error for an unknown code", () => {
+      render(<OpeningBalanceForm fyCode="2026-27" accounts={accounts} />);
+      fireEvent.change(screen.getByLabelText("Account code, row 1"), { target: { value: "9X99" } });
+      fireEvent.change(screen.getByLabelText("Debit amount, row 1"), { target: { value: "100" } });
+      fireEvent.click(screen.getByText(/Save Opening Balances/));
+      expect(screen.getByRole("alert")).toHaveTextContent(/9X99.*not in the chart of accounts/);
+      expect(screen.getByLabelText("Account code, row 1")).toHaveAttribute("aria-invalid", "true");
+      expect(screen.queryByText("Save these opening balances?")).not.toBeInTheDocument();
+    });
+
+    it("submits only the code (not 'code - name') for a known account", async () => {
+      const fetchMock = vi
+        .spyOn(globalThis, "fetch")
+        .mockResolvedValue(new Response(JSON.stringify({ status: "accepted", count: 2 }), { status: 202 }));
+      render(<OpeningBalanceForm fyCode="2026-27" accounts={accounts} />);
+      fireEvent.change(screen.getByLabelText("Account code, row 1"), { target: { value: "1000" } });
+      fireEvent.change(screen.getByLabelText("Debit amount, row 1"), { target: { value: "5000" } });
+      fireEvent.change(screen.getByLabelText("Account code, row 2"), { target: { value: "2000" } });
+      fireEvent.change(screen.getByLabelText("Credit amount, row 2"), { target: { value: "5000" } });
+      fireEvent.click(screen.getByText(/Save Opening Balances/));
+      await waitFor(() => expect(screen.getByText("Save these opening balances?")).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText("Reason / approving authority"), { target: { value: "Per audited TB 31-03" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save opening balances" }));
+      await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+      const body = JSON.parse(String((fetchMock.mock.calls[0][1] as RequestInit).body));
+      expect(body.entries.map((e: { accountCode: string }) => e.accountCode)).toEqual(["1000", "2000"]);
+    });
+
+    it("lists the accounts as datalist suggestions with their names", () => {
+      const { container } = render(<OpeningBalanceForm fyCode="2026-27" accounts={accounts} />);
+      const options = Array.from(container.querySelectorAll("datalist option"));
+      expect(options.map((o) => o.getAttribute("value"))).toEqual(["1000", "2000"]);
+      expect(options[0]?.textContent).toBe("Cash in hand");
+    });
+
+    it("does not validate codes when the chart is unavailable (warns instead)", () => {
+      render(<OpeningBalanceForm fyCode="2026-27" accountsUnavailable />);
+      expect(screen.getByText(/chart of accounts could not be loaded/i)).toBeInTheDocument();
+      fireEvent.change(screen.getByLabelText("Account code, row 1"), { target: { value: "ANY" } });
+      fireEvent.change(screen.getByLabelText("Debit amount, row 1"), { target: { value: "100" } });
+      fireEvent.change(screen.getByLabelText("Account code, row 2"), { target: { value: "ANY2" } });
+      fireEvent.change(screen.getByLabelText("Credit amount, row 2"), { target: { value: "100" } });
+      fireEvent.click(screen.getByText(/Save Opening Balances/));
+      expect(screen.getByText("Save these opening balances?")).toBeInTheDocument();
+    });
+  });
 });

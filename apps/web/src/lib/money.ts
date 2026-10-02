@@ -57,7 +57,7 @@ export function rupeesToMinorString(input: string, opts?: { allowZero?: boolean 
  *   parseRupeesToPaise("12.345")       -> null
  *   parseRupeesToPaise("")             -> null
  */
-export function parseRupeesToPaise(input: string): string | null {
+export function parseRupeesToPaise(input: string, opts?: { allowZero?: boolean }): string | null {
   const text = input.trim().replace(/^₹\s*/, "");
   // Commas are accepted ONLY as valid thousands grouping -- Indian
   // (12,34,567.89) or western (1,234,567.89). Anything else is rejected, never
@@ -67,7 +67,7 @@ export function parseRupeesToPaise(input: string): string | null {
   const WESTERN = /^\d{1,3}(,\d{3})+(\.\d{1,2})?$/;
   const PLAIN = /^\d+(\.\d{1,2})?$/;
   if (!(PLAIN.test(text) || INDIAN.test(text) || WESTERN.test(text))) return null;
-  return rupeesToMinorString(text.replace(/,/g, ""));
+  return rupeesToMinorString(text.replace(/,/g, ""), opts);
 }
 
 /**

@@ -32,17 +32,17 @@ describe("ClosePeriodForm", () => {
   });
 
   it("rejects an invalid month without opening the confirm dialog", () => {
-    render(<ClosePeriodForm />);
+    render(<ClosePeriodForm today="2026-07-04" />);
     fireEvent.change(screen.getByLabelText(/Period/), { target: { value: "2026-13" } });
     fireEvent.click(screen.getByRole("button", { name: "Soft-Close Period" }));
-    expect(screen.getByText(/valid month in YYYY-MM/)).toBeInTheDocument();
+    expect(screen.getByText(/valid month/)).toBeInTheDocument();
     expect(screen.queryByText("Soft-close this period?")).not.toBeInTheDocument();
     expect(browserFetchMock).not.toHaveBeenCalled();
   });
 
   it("soft-closes a valid period (happy path)", async () => {
     browserFetchMock.mockResolvedValue(makeRes(true, 200, { status: "soft_close" }));
-    render(<ClosePeriodForm />);
+    render(<ClosePeriodForm today="2026-07-04" />);
     fireEvent.change(screen.getByLabelText(/Period/), { target: { value: "2026-04" } });
     fireEvent.click(screen.getByRole("button", { name: "Soft-Close Period" }));
     await waitFor(() => expect(screen.getByText("Soft-close this period?")).toBeInTheDocument());
@@ -69,7 +69,7 @@ describe("ClosePeriodForm", () => {
     browserFetchMock.mockResolvedValue(
       makeRes(false, 409, { code: "ALREADY_CLOSED", message: "period is already hard-closed" }),
     );
-    render(<ClosePeriodForm />);
+    render(<ClosePeriodForm today="2026-07-04" />);
     fireEvent.change(screen.getByLabelText(/Period/), { target: { value: "2026-03" } });
     fireEvent.click(screen.getByRole("button", { name: "Soft-Close Period" }));
     await waitFor(() => expect(screen.getByText("Soft-close this period?")).toBeInTheDocument());
@@ -81,5 +81,36 @@ describe("ClosePeriodForm", () => {
     expect(alert.textContent).not.toMatch(/ALREADY_CLOSED/);
     expect(alert.textContent).not.toMatch(/period is already hard-closed/);
     expect(refreshMock).not.toHaveBeenCalled();
+  });
+
+  // GAP-FINANCE-PERIOD-CLOSE-03
+  it("uses a month picker, bounded around the current month", () => {
+    render(<ClosePeriodForm today="2026-07-04" />);
+    const input = screen.getByLabelText(/Period/);
+    expect(input).toHaveAttribute("type", "month");
+    expect(input).toHaveAttribute("min", "2024-07");
+    expect(input).toHaveAttribute("max", "2027-07");
+  });
+
+  it("rejects an implausible month such as 2062-04 (passes the YYYY-MM pattern)", () => {
+    render(<ClosePeriodForm today="2026-07-04" />);
+    fireEvent.change(screen.getByLabelText(/Period/), { target: { value: "2062-04" } });
+    fireEvent.click(screen.getByRole("button", { name: "Soft-Close Period" }));
+    expect(screen.getByText(/more than 12 months ahead/)).toBeInTheDocument();
+    expect(screen.queryByText("Soft-close this period?")).not.toBeInTheDocument();
+  });
+
+  it("defaults to the earliest still-open tracked period", () => {
+    render(
+      <ClosePeriodForm
+        today="2026-07-04"
+        periods={[
+          { period: "2026-06", status: "open" },
+          { period: "2026-05", status: "open" },
+          { period: "2026-04", status: "hard_close" },
+        ]}
+      />,
+    );
+    expect(screen.getByLabelText(/Period/)).toHaveValue("2026-05");
   });
 });
