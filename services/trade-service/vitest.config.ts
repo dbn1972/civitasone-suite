@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // Wave 3 cross-service wiring added a second real-DB integration test
     // file (tests/cross-service-integration.test.ts) alongside
     // tests/trade-lifecycle.test.ts. Both hit the SAME live civitas_trade

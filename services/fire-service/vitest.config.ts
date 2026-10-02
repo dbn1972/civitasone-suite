@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 // Same root-cause fix as market-service (see that PR): no local vitest config
 // meant this service silently inherited the repo root's
@@ -12,6 +13,7 @@ import { defineConfig } from "vitest/config";
 // second config.
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

@@ -1,8 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
-    testTimeout: 15000,
+    ...sharedTestTimeouts,
     setupFiles: ["./tests/setup-tax-config.ts"],
     env: {
       JWT_ALGORITHM: "HS256",

@@ -174,7 +174,26 @@ jobs:
         # each fix costs a full ~18min cycle just to reveal the next one. With
         # it, one run enumerates every failing package and the job still exits
         # non-zero, so the gate is unchanged — only the diagnostics improve.
-        run: pnpm turbo test --continue
+        #
+        # --concurrency=4 / --maxWorkers=2: turbo's default runs 10 package
+        # suites at once and each vitest spawns a worker per core, all on a
+        # 4-vCPU runner against one Postgres. Collect times hit 10-40x local
+        # and ~87 files failed on 5s timeouts, varying run to run (CI test
+        # triage 2026-10-02, group A). Every package's test script is
+        # `vitest run`, so the args after `--` reach vitest in each one.
+        run: pnpm turbo test --continue --concurrency=4 -- --maxWorkers=2
+      # Gateway SEC-021 spawns a real hrms-service subprocess (tsx src/index.ts)
+      # with a 30s readiness window it missed under the turbo run's load above.
+      # gateway-service/vitest.config.ts excludes it unless GATEWAY_SPAWN_TESTS=1,
+      # so it runs here, alone, after the turbo run. It lives in this job (not
+      # integration-tests, which needs: [test] and never starts while this job
+      # is red) and uses !cancelled() so it still runs when the step above fails.
+      - name: Gateway SEC-021 real-subprocess test
+        if: ${{ !cancelled() }}
+        working-directory: services/gateway-service
+        env:
+          GATEWAY_SPAWN_TESTS: '1'
+        run: pnpm exec vitest run tests/sec-021-actor-id-audit-log.integration.test.ts
 
   # ─────────────────────────────────────────────
   # Job 2b: Integration tests (blocking gate)

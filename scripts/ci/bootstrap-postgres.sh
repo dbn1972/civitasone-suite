@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Byte-order sorting so `find ... | sort` applies migrations in the same order
+# on every machine. Under a non-C locale, audit-service's
+# 0020b_additional_status_type_constraints.sql sorts before
+# 0020_vigilance_investigation_schema.sql and aborts on a missing relation.
+export LC_ALL=C
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 PGHOST="${PGHOST:-localhost}"

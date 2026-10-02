@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       // The relay tests use fake db/queue handles and mock @civitasone/observability,
       // so no real queue driver is loaded. QUEUE_DRIVER is set to the safe in-memory

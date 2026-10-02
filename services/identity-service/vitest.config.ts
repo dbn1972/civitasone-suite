@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // REL-024: buildApp() registers 11+ route modules (users, rbac, sessions,
     // mfa, devices, sync, api-keys, break-glass, saml, scim, webauthn) and
     // legitimately takes >10s to complete when the CI test job runs all
@@ -12,7 +14,7 @@ export default defineConfig({
     // two observed victims ("Hook timed out in 10000ms" in beforeAll's
     // buildApp() call); raised for the whole file since any beforeAll here
     // can be scheduled at the same contention point.
-    hookTimeout: 30_000,
+    // hookTimeout (60s) now comes from sharedTestTimeouts (../../vitest.shared.ts).
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",

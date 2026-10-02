@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // Property-based tests (fast-check) live in tests/properties/*.prop.ts
     // per the design doc's test organization; unit/integration tests use
     // the standard *.test.ts suffix. Both patterns are discovered here.

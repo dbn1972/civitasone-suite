@@ -1,6 +1,16 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
+    // sec-021 spawns a real hrms-service (tsx src/index.ts) and waits up to 30s
+    // for it to come up, which it misses under the turbo run's load. ci.yml's
+    // Tests job runs it in its own step after `turbo test`, alone, with
+    // GATEWAY_SPAWN_TESTS=1. Set the same locally to run it.
+    exclude:
+      process.env.GATEWAY_SPAWN_TESTS === "1"
+        ? configDefaults.exclude
+        : [...configDefaults.exclude, "tests/sec-021-actor-id-audit-log.integration.test.ts"],
     env: {
       NODE_ENV: "test",
       JWT_ALGORITHM: "HS256",

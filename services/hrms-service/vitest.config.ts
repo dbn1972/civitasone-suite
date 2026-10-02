@@ -1,6 +1,7 @@
 import { configDefaults, defineConfig } from "vitest/config";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 function readPiiKey(): string {
   try {
@@ -18,6 +19,7 @@ function readPiiKey(): string {
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     // These three are manual live-stack UAT scripts, not unit/integration
     // tests: they fetch() real HTTP servers on 127.0.0.1:3012/3013
     // (hrms-service / payroll-service) instead of exercising the app

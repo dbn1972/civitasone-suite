@@ -1,6 +1,7 @@
 {
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
+  "globalDependencies": ["vitest.shared.ts"],
   "tasks": {
     "build": {
       "dependsOn": [
@@ -44,7 +45,10 @@
         "JWT_ALGORITHM",
         "QUEUE_DRIVER",
         "CACHE_DRIVER",
-        "NODE_ENV"
+        "NODE_ENV",
+        "COURT_E2E",
+        "COURT_CAPTCHA_DEV_TOKEN",
+        "COURT_PII_KEY"
       ]
     },
     "lint": {},

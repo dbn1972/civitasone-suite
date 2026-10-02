@@ -1,7 +1,9 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       // Default to in-memory so unit tests do not require LocalStack. The
       // LocalStack suite (sqs.localstack.test.ts) is gated on AWS_ENDPOINT_URL

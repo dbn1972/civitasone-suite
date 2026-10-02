@@ -1,6 +1,8 @@
 import { defineConfig } from "vitest/config";
+import { sharedTestTimeouts } from "../../vitest.shared";
 export default defineConfig({
   test: {
+    ...sharedTestTimeouts,
     env: {
       JWT_ALGORITHM: "HS256",
       JWT_SECRET: "test_secret_for_civitasone_32chr",
