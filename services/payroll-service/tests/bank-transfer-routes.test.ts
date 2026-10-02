@@ -60,6 +60,33 @@ vi.mock("../src/modules/bank-transfer/zip-util.js", () => ({
   createZipBuffer: vi.fn(() => Buffer.from("PK-FAKE-ZIP")),
 }));
 
+// GAP-PAYROLL-DISBURSEMENT-TRANSFERS: which lines a file carries and the
+// ledger/issuance/audit writes are SQL under an advisory lock
+// (bank-transfer/issuance.ts), covered end to end against real Postgres in
+// disbursement-transfers-real-db.test.ts. Here the issuance plans a FIRST
+// file (every payable slip) and calls the route's real renderer, so file
+// content, 422s and headers are still exercised.
+vi.mock("../src/modules/bank-transfer/issuance.js", async (importOriginal) => ({
+  // keep the real PAYABLE_SLIP_STATUSES allow-list
+  ...(await importOriginal<typeof import("../src/modules/bank-transfer/issuance.js")>()),
+  issueBankFile: vi.fn(async (input: {
+    payableSlips: Array<{ id: string; employeeId: string; employeeNo: string; netPayMinor: bigint }>;
+    master: Map<string, { fullName: string; bankAccountNo: string | null; bankIfsc: string | null }>;
+    render: (lines: unknown[], at: { seq: number; batchBase: number }) => unknown;
+  }) => {
+    const lines = input.payableSlips.map((s) => {
+      const b = input.master.get(s.employeeId);
+      return {
+        kind: "first", slipId: s.id, employeeId: s.employeeId, employeeNo: s.employeeNo,
+        name: b?.fullName ?? s.employeeNo, amountMinor: s.netPayMinor,
+        ifsc: (b?.bankIfsc ?? "").trim().toUpperCase(), accountNo: (b?.bankAccountNo ?? "").trim(),
+      };
+    });
+    const file = input.render(lines, { seq: 1, batchBase: 1 });
+    return { file, issuanceId: "iss-1", mode: "first", lineCount: lines.length, totalMinor: 0n };
+  }),
+}));
+
 vi.mock("../src/modules/tax/config.js", () => ({
   loadTaxConfig: vi.fn(),
 }));
@@ -414,17 +441,25 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
       sponsorIfsc: "SBIN0000001", sponsorAccount: "9999999999",
       utilityCode: "UTIL01", userNumber: "USR001",
       settlementOffsetDays: 1, nachEnabled: true, apbsEnabled: true,
-      maxRecordsPerFile: 100000, maxAmountPerFileMinor: 1000000000n,
+      // one record per part file -> two slips split into the two mocked parts
+      maxRecordsPerFile: 1, maxAmountPerFileMinor: 1000000000n,
       createdAt: new Date(), updatedAt: new Date(), createdBy: ACTOR, updatedBy: ACTOR,
     } as never);
 
     vi.mocked(fetchPayrollInput).mockResolvedValue({
       month: "2025-06",
-      employees: [{ id: "emp-001", employeeNo: "EMP001", fullName: "Jane",
-        basicMinor: "5000", payStructureId: null,
-        bankAccountNo: "9876543210", bankIfsc: "HDFC0001234",
-        pan: null, uan: null, cityClass: "X" as const,
-        taxRegime: "new" as const, departmentId: "d1", pensionScheme: "NPS" as const }],
+      employees: [
+        { id: "emp-001", employeeNo: "EMP001", fullName: "Jane",
+          basicMinor: "5000", payStructureId: null,
+          bankAccountNo: "9876543210", bankIfsc: "HDFC0001234",
+          pan: null, uan: null, cityClass: "X" as const,
+          taxRegime: "new" as const, departmentId: "d1", pensionScheme: "NPS" as const },
+        { id: "emp-002", employeeNo: "EMP002", fullName: "Ravi",
+          basicMinor: "5000", payStructureId: null,
+          bankAccountNo: "1112223334", bankIfsc: "HDFC0001234",
+          pan: null, uan: null, cityClass: "X" as const,
+          taxRegime: "new" as const, departmentId: "d1", pensionScheme: "NPS" as const },
+      ],
       lopDays: {},
     });
 
@@ -439,7 +474,7 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
 
     mockScopedRead
       .mockResolvedValueOnce([makeRun()])
-      .mockResolvedValueOnce([makeSlip()]);
+      .mockResolvedValueOnce([makeSlip(), makeSlip({ id: "slip-002", employeeId: "emp-002", employeeNo: "EMP002" })]);
 
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
@@ -489,9 +524,11 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
       .mockResolvedValueOnce([makeSlip()]);
   }
 
-  async function auditCalls() {
-    const { queue } = await import("../src/shared/infra.js");
-    return vi.mocked(queue.publish).mock.calls.filter(([topic]) => topic === "audit.event.record");
+  async function issueCalls() {
+    const { issueBankFile } = await import("../src/modules/bank-transfer/issuance.js");
+    return vi.mocked(issueBankFile).mock.calls.map(([input]) => input as unknown as Record<string, unknown> & {
+      ctx: { actorId: string; tenantId: string }; run: { id: string }; payableSlips: unknown[];
+    });
   }
 
   it("[DISB-02] the old GET no longer generates a file (410 USE_POST) and reads nothing", async () => {
@@ -526,7 +563,7 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
     expect(mockScopedRead).not.toHaveBeenCalled();
   });
 
-  it("[DISB-02] CSV generation writes an audit row with actor, reason and totals (the CSV path used to write none)", async () => {
+  it("[DISB-02] CSV generation goes through the audited issuance with actor, reason and the payable slips", async () => {
     await mockCsvHappyPath();
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
@@ -538,37 +575,72 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(200);
-    const calls = await auditCalls();
+    const calls = await issueCalls();
     expect(calls).toHaveLength(1);
-    const msg = calls[0][1] as { actorId: string; tenantId: string; payload: { action: string; resourceId: string; detail: Record<string, unknown> } };
-    expect(msg.actorId).toBe(ACTOR);
-    expect(msg.tenantId).toBe(TENANT);
-    expect(msg.payload.action).toBe("bank_file_generated");
-    expect(msg.payload.resourceId).toBe(RUN_ID);
-    expect(msg.payload.detail).toMatchObject({
-      format: "csv", recordCount: 1, totalAmountMinor: "8000", reason: REASON, reissue: false, signed: false,
-    });
+    expect(calls[0]!.ctx.actorId).toBe(ACTOR);
+    expect(calls[0]!.ctx.tenantId).toBe(TENANT);
+    expect(calls[0]!.run.id).toBe(RUN_ID);
+    expect(calls[0]).toMatchObject({ format: "csv", reason: REASON, fullReissue: false, fullReissueReason: null, excludedSlips: {} });
+    expect(calls[0]!.payableSlips).toHaveLength(1);
+    expect(res.headers["x-bank-file-mode"]).toBe("first");
+    expect(res.headers["x-bank-file-issuance-id"]).toBe("iss-1");
   });
 
-  it("[DISB-02] a file for a disbursed (paid) run is audited as a re-issue", async () => {
-    await mockCsvHappyPath({ status: "disbursed" });
+  it("[TRANSFERS D3/R5] only payable-status slips reach the issuance (held + exception excluded); none payable is 422", async () => {
+    await mockCsvHappyPath();
+    mockScopedRead.mockReset();
+    mockScopedRead
+      .mockResolvedValueOnce([makeRun()])
+      .mockResolvedValueOnce([
+        makeSlip(),
+        makeSlip({ id: "slip-x", employeeId: "emp-x", employeeNo: "EMPX", netPayMinor: -500n, status: "exception" }),
+        makeSlip({ id: "slip-h", employeeId: "emp-001", employeeNo: "EMPH", netPayMinor: 9000n, status: "held" }),
+      ]);
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
-    const res = await app.inject({
-      method: "POST",
-      url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
-      payload: { format: "csv", reason: "Re-issue after SBI rejected batch 3" },
+    const ok = await app.inject({
+      method: "POST", url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: REASON }, headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.body).not.toContain("EMPX");
+    expect(ok.body).not.toContain("EMPH");
+    const calls = await issueCalls();
+    expect(calls[0]!.payableSlips).toHaveLength(1);
+    expect(calls[0]!.excludedSlips).toEqual({ exception: 1, held: 1 });
+
+    mockScopedRead
+      .mockResolvedValueOnce([makeRun()])
+      .mockResolvedValueOnce([makeSlip({ status: "held" })]);
+    const none = await app.inject({
+      method: "POST", url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: REASON }, headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    await app.close();
+    expect(none.statusCode).toBe(422);
+    expect(none.json().code).toBe("NO_PAYABLE_SLIPS");
+  });
+
+  it("[TRANSFERS D2] fullReissue is admin-only (403 for payroll_officer) and needs its own reason (400), before touching the run", async () => {
+    const { buildApp } = await import("../src/app.js");
+    const app = await buildApp();
+    const officer = await app.inject({
+      method: "POST", url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: REASON, fullReissue: true, fullReissueReason: "Bank lost the whole batch file" },
+      headers: { authorization: `Bearer ${adminToken(["payroll_officer"])}` },
+    });
+    const noReason = await app.inject({
+      method: "POST", url: `/v1/payroll/runs/${RUN_ID}/bank-file`,
+      payload: { format: "csv", reason: REASON, fullReissue: true },
       headers: { authorization: `Bearer ${adminToken()}` },
     });
     await app.close();
-    expect(res.statusCode).toBe(200);
-    const calls = await auditCalls();
-    const msg = calls[0][1] as { payload: { action: string; detail: Record<string, unknown> } };
-    expect(msg.payload.action).toBe("bank_file_reissued");
-    expect(msg.payload.detail.reissue).toBe(true);
+    expect(officer.statusCode).toBe(403);
+    expect(noReason.statusCode).toBe(400);
+    expect(mockScopedRead).not.toHaveBeenCalled();
   });
 
-  it("[DISB-02] no audit row is written when generation is refused (unapproved run)", async () => {
+  it("[DISB-02] nothing is issued or audited when generation is refused (unapproved run)", async () => {
     mockScopedRead.mockResolvedValueOnce([makeRun({ status: "draft" })]);
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
@@ -580,7 +652,7 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(409);
-    expect(await auditCalls()).toHaveLength(0);
+    expect(await issueCalls()).toHaveLength(0);
   });
 
   it("[DISB-03] every generated file states x-bank-file-signed: false (the route does not sign)", async () => {
@@ -620,6 +692,6 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
     await app.close();
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe("NACH_NOT_ENABLED");
-    expect(await auditCalls()).toHaveLength(0);
+    expect(await issueCalls()).toHaveLength(0);
   });
 });

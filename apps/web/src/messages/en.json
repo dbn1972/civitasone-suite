@@ -543,7 +543,7 @@
     "formatNachDisabled": "NACH is switched off in the sponsor bank configuration.",
     "formatApbsUnavailable": "Not available yet: APBS needs an Aadhaar number and bank IIN for every beneficiary, which are not captured.",
     "runPaidSuffix": "already paid — re-issue",
-    "reissueNote": "This run is already marked paid. Generating a file now is a re-issue and will be recorded as one. Make sure the bank has not already processed the earlier file.",
+    "reissueNote": "This run already has a bank file. A new file carries only queued retries and employees never sent before — nobody already sent or paid. If there is nothing left to pay, the file is refused.",
     "previewLayoutLabel": "File layout:",
     "previewNotAvailable": "A record-level preview is not available; the file is built from the run's payslips when you download it.",
     "dscOnFile": "DSC on file",
@@ -560,7 +560,7 @@
     "confirmLabel": "Generate & download",
     "confirmReasonLabel": "Reason (recorded in the audit log)",
     "confirmDescription": "{period} · {format} · {count} records · net {amount}.",
-    "confirmReissueWarning": "This run is already paid; a second file risks paying salaries twice if the bank already processed the first one.",
+    "confirmReissueWarning": "Only queued retries and never-sent employees will be in this file. Employees already sent or paid are left out, so this file cannot pay anyone twice.",
     "confirmUnsignedNote": "The file will be generated unsigned."
   },
   "benefits": {
@@ -1522,7 +1522,7 @@
     "creditedPct": "{pct}% credited",
     "emptyTitle": "No transfers yet",
     "emptyMessage": "Bank transfers appear here after disbursement is initiated for a payroll run.",
-    "retryMessage": "Retry initiated for {name}.",
+    "retryMessage": "Retry queued for {name}. It is paid by the next bank file you generate for this run; refresh to see its status.",
     "retryNetworkError": "Network error. Please try again.",
     "totalAmountLabel": "Total Amount",
     "creditedLabel": "Credited",
@@ -1538,7 +1538,7 @@
     "retryBtn": "Retry",
     "retryConfirmTitle": "Retry this bank transfer?",
     "retryConfirmLabel": "Retry transfer",
-    "retryConfirmDescription": "Retry bank transfer for <strong>{name}</strong>, amount <strong>{amount}</strong>. Only retry once the bank has confirmed the earlier transfer failed — retrying a delayed transfer can pay twice.",
+    "retryConfirmDescription": "Retry bank transfer for <strong>{name}</strong>, amount <strong>{amount}</strong>. Only retry once the bank has confirmed the earlier transfer failed — retrying a delayed transfer can pay twice. The retry is paid by the next bank file for this run, which carries only queued retries and employees never sent before.",
     "retryConfirmFailureReason": "Previous failure: {reason}",
     "retryReasonLabel": "Reason for retry (recorded in the audit log)",
     "accountEndingAria": "Account ending {last4}"
@@ -3660,7 +3660,9 @@
     "processedMessage": "Processed: {credited} credited, {returned} returned, {unmatched} unmatched.",
     "confirmTitle": "Process this NACH return file?",
     "confirmLabel": "Process file",
-    "confirmDescription": "This queues the return file for reconciliation against the selected run. It cannot be un-submitted once queued."
+    "confirmDescription": "This queues the return file for reconciliation against the selected run. It cannot be un-submitted once queued.",
+    "fileReferenceLabel": "Bank file name (optional)",
+    "fileReferenceHint": "Needed only when this run has more than one NACH file, e.g. NACH_SBIN_2_20261001.txt."
   },
   "nav": {
     "dashboard": "Dashboard",

@@ -6,61 +6,7 @@ import { useTranslations } from "next-intl";
 import { Button, StatusPill, ConfirmDialog, Masked } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatRupees } from "@/lib/formatters";
-
-/**
- * Raw row as returned by GET /v1/payroll/disbursement/transfers. Only ever
- * read on the SERVER (page.tsx) -- it is never passed to this client
- * component as-is, because a client component's props are serialised into
- * the RSC payload: a full account number handed to the browser is exposed
- * even if the table renders it masked (GAP-PAYROLL-DISBURSEMENT-01).
- */
-export type RawTransferRow = {
-  id: string;
-  employeeId?: string;
-  employeeName: string;
-  accountNumber?: string | null;
-  /** Preferred: a server-side masked/last-4 field, when the API provides one. */
-  accountNumberMasked?: string | null;
-  ifsc: string;
-  amountRupees: number;
-  status: "pending" | "processing" | "credited" | "failed" | string;
-  nachBatchId: string | null;
-  failureReason: string | null;
-};
-
-/** The client-safe row: account reduced to its last 4 digits, no employee UUID. */
-export type TransferRow = {
-  id: string;
-  employeeName: string;
-  accountLast4: string | null;
-  ifsc: string;
-  amountRupees: number;
-  status: "pending" | "processing" | "credited" | "failed" | string;
-  nachBatchId: string | null;
-  failureReason: string | null;
-};
-
-/** Server-side reduction of a raw transfer row to the client-safe shape. */
-export function toClientTransferRow(raw: RawTransferRow): TransferRow {
-  // A server-masked value (e.g. "••••1234" or "XXXXXXXX1234") already shows
-  // only its tail: take its last 4 digits directly. A raw account number
-  // needs more than 4 characters, otherwise there is nothing safe to show.
-  const maskedDigits = (raw.accountNumberMasked ?? "").replace(/[^0-9]/g, "");
-  const rawSource = (raw.accountNumber ?? "").replace(/[^0-9A-Za-z]/g, "");
-  const accountLast4 = maskedDigits.length >= 4
-    ? maskedDigits.slice(-4)
-    : rawSource.length > 4 ? rawSource.slice(-4) : null;
-  return {
-    id: raw.id,
-    employeeName: raw.employeeName,
-    accountLast4,
-    ifsc: raw.ifsc,
-    amountRupees: raw.amountRupees,
-    status: raw.status,
-    nachBatchId: raw.nachBatchId,
-    failureReason: raw.failureReason,
-  };
-}
+import { isCreditedTransfer, isFailedTransfer, isInFlightTransfer, type TransferRow } from "./transferRows";
 
 type RetryResponse = { data: { id: string; status: string } };
 
@@ -124,9 +70,9 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
   // UX-017: renamed these callback params from `t` (for "transfer") to `tx`
   // -- this component now also holds `t`, the translation function, in the
   // same scope, the exact tranche-7-discovered shadowing bug class.
-  const done = transfers.filter((tx) => tx.status === "credited").length;
-  const failed = transfers.filter((tx) => tx.status === "failed").length;
-  const processing = transfers.filter((tx) => tx.status === "processing").length;
+  const done = transfers.filter((tx) => isCreditedTransfer(tx.status)).length;
+  const failed = transfers.filter((tx) => isFailedTransfer(tx.status)).length;
+  const processing = transfers.filter((tx) => isInFlightTransfer(tx.status)).length;
   const total = transfers.reduce((sum, tx) => sum + tx.amountRupees, 0);
   const pct = transfers.length > 0 ? Math.round((done / transfers.length) * 100) : 0;
 
@@ -245,12 +191,12 @@ export function DisbursementTransferTable({ transfers }: { transfers: TransferRo
                 </td>
                 <td style={{ padding: "10px 12px" }}>
                   <StatusPill status={tx.status} />
-                  {tx.status === "failed" && tx.failureReason ? (
+                  {isFailedTransfer(tx.status) && tx.failureReason ? (
                     <div style={{ fontSize: 11, color: "var(--bad, #c0392b)", marginTop: 2 }}>{tx.failureReason}</div>
                   ) : null}
                 </td>
                 <td style={{ padding: "10px 12px" }}>
-                  {tx.status === "failed" ? (
+                  {isFailedTransfer(tx.status) ? (
                     <Button
                       type="button"
                       variant="primary"

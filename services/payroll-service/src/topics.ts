@@ -10,6 +10,9 @@ export const COMMANDS = {
   taxDeclarationUpdate:   "payroll.tax_declaration.update",
   taxDeclarationSubmit:   "payroll.tax_declaration.submit",
   nachReturnProcess:      "payroll.nach_return.process",
+  // GAP-PAYROLL-DISBURSEMENT-TRANSFERS: transfer-ledger writes (consumer-side, CQRS)
+  disbursementTransferRetry:   "payroll.disbursement_transfer.retry",
+  disbursementTransferReconcile: "payroll.disbursement_transfer.reconcile",
   fnfCompute:             "payroll.fnf.compute",
   // GAP-PAYROLL-FNF-01: submit / finance-approve / disburse / reject a
   // settlement (fnf/workflow.ts). Audited only -- no new outbound event.

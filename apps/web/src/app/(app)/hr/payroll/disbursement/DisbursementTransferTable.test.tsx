@@ -8,8 +8,11 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: refreshMock }),
 }));
 
-import { DisbursementTransferTable, toClientTransferRow, type RawTransferRow } from "./DisbursementTransferTable";
+import { DisbursementTransferTable } from "./DisbursementTransferTable";
+import { toClientTransferRow, type RawTransferRow } from "./transferRows";
 
+// A legacy/defensive raw row carrying a full account number: the reducer must
+// still mask it even though the real API never sends one.
 const RAW: RawTransferRow = {
   id: "tx-1",
   employeeId: "9b2f6c1e-0000-4000-8000-000000000001",
@@ -20,6 +23,32 @@ const RAW: RawTransferRow = {
   status: "failed",
   nachBatchId: null,
   failureReason: "Account closed",
+};
+
+// Exactly what GET /v1/payroll/disbursement/transfers returns
+// (payroll-service disbursement-transfers/routes.ts serializeTransfer).
+const API_ROW = {
+  id: "11111111-2222-4333-8444-555555555555",
+  runId: "aaaaaaaa-2222-4333-8444-555555555555",
+  employeeId: "9b2f6c1e-0000-4000-8000-000000000002",
+  employeeNo: "EMP-002",
+  employeeName: "Vikram Singh",
+  accountNumberMasked: "XXXX5544",
+  ifsc: "HDFC0000123",
+  amountPaise: "6100000",
+  amountRupees: 61000,
+  status: "returned",
+  fileFormat: "nach",
+  fileReference: "NACH_SBIN_1_20260930.txt",
+  nachBatchId: "NACH_SBIN_1_20260930.txt",
+  failureReason: "Account closed",
+  reasonCode: "01",
+  attemptNo: 1,
+  parentTransferId: null,
+  sentAt: "2026-09-30T10:00:00.000Z",
+  settledAt: "2026-10-01T10:00:00.000Z",
+  createdAt: "2026-09-30T10:00:00.000Z",
+  updatedAt: "2026-10-01T10:00:00.000Z",
 };
 
 function renderTable(rows: RawTransferRow[] = [RAW]) {
@@ -67,7 +96,7 @@ describe("DisbursementTransferTable", () => {
 
   // ── GAP-PAYROLL-DISBURSEMENT-07 ──────────────────────────────────────────
   it("[DISB-07] retry confirm stays disabled until a >=10 char reason, then POSTs reason + idempotency key", async () => {
-    fetchMock.mockResolvedValue(new Response(JSON.stringify({ data: { id: "tx-1", status: "processing" } }), { status: 200 }));
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ data: { id: "tx-2", status: "pending", parentTransferId: "tx-1", correlationId: "c-1" } }), { status: 202 }));
     renderTable();
     fireEvent.click(screen.getByRole("button", { name: "Retry transfer for Asha Rao" }));
 
@@ -87,6 +116,45 @@ describe("DisbursementTransferTable", () => {
     const headers = init.headers as Record<string, string>;
     expect(headers["x-idempotency-key"]).toMatch(/.{8,}/);
     await waitFor(() => expect(refreshMock).toHaveBeenCalled());
+  });
+
+  // ── GAP-PAYROLL-DISBURSEMENT-TRANSFERS: the real API's row + statuses ────
+  it("[TRANSFERS] reduces a real API row: last 4 from the server mask, exact rupees from amountPaise, NACH batch id", () => {
+    const row = toClientTransferRow(API_ROW);
+    expect(row).toEqual({
+      id: API_ROW.id, employeeName: "Vikram Singh", accountLast4: "5544", ifsc: "HDFC0000123",
+      amountRupees: 61000, status: "returned", nachBatchId: "NACH_SBIN_1_20260930.txt", failureReason: "Account closed",
+    });
+    expect(JSON.stringify(row)).not.toContain(API_ROW.employeeId);
+  });
+
+  it("[TRANSFERS] a RETURNED row is retryable and shows its return reason; sent/success/pending rows are not", () => {
+    renderTable([
+      API_ROW,
+      { ...API_ROW, id: "s1", employeeName: "Sent Person", status: "sent", failureReason: null },
+      { ...API_ROW, id: "s2", employeeName: "Paid Person", status: "success", failureReason: null },
+      { ...API_ROW, id: "s3", employeeName: "Queued Person", status: "pending", failureReason: null },
+    ]);
+    expect(screen.getByRole("button", { name: "Retry transfer for Vikram Singh" })).toBeInTheDocument();
+    expect(screen.getByText("Account closed")).toBeInTheDocument();
+    for (const name of ["Sent Person", "Paid Person", "Queued Person"]) {
+      expect(screen.queryByRole("button", { name: `Retry transfer for ${name}` })).not.toBeInTheDocument();
+    }
+  });
+
+  it("[TRANSFERS] stats count success as credited, failed+returned as failed, pending+sent as processing", () => {
+    renderTable([
+      { ...API_ROW, id: "a", status: "success" },
+      { ...API_ROW, id: "b", status: "returned" },
+      { ...API_ROW, id: "c", status: "failed" },
+      { ...API_ROW, id: "d", status: "sent" },
+      { ...API_ROW, id: "e", status: "pending" },
+    ]);
+    // The stat tiles label with <p>; the status pills also say e.g. "Failed".
+    const stat = (label: string) => screen.getAllByText(label).find((el) => el.tagName === "P")!.parentElement;
+    expect(stat("Credited")).toHaveTextContent("1");
+    expect(stat("Failed")).toHaveTextContent("2");
+    expect(stat("Processing")).toHaveTextContent("2");
   });
 
   it("[DISB-07] the retry confirm warns about double payment and shows the amount, not a UUID", () => {

@@ -271,7 +271,7 @@ describe("DisbursementPage", () => {
     mockResponses({
       transfers: [{
         id: "tx-1", employeeId: "9b2f6c1e-0000-4000-8000-000000000001", employeeName: "Asha Rao",
-        accountNumber: "123456789012", ifsc: "SBIN0001234", amountRupees: 1000, status: "credited",
+        accountNumber: "123456789012", ifsc: "SBIN0001234", amountRupees: 1000, status: "success",
         nachBatchId: null, failureReason: null,
       }],
     });
@@ -279,6 +279,24 @@ describe("DisbursementPage", () => {
     expect(screen.getByText("••••9012")).toBeInTheDocument();
     expect(document.body.innerHTML).not.toContain("123456789012");
     expect(document.body.innerHTML).not.toContain("9b2f6c1e-0000-4000-8000-000000000001");
+  });
+
+  it("[TRANSFERS] page stats read the real ledger statuses: success = credited, failed + returned = failed", async () => {
+    const row = {
+      id: "t", employeeId: "e", employeeName: "A", accountNumberMasked: "XXXX1234", ifsc: "SBIN0001234",
+      amountPaise: "100000", amountRupees: 1000, nachBatchId: null, failureReason: null,
+    };
+    mockResponses({
+      transfers: [
+        { ...row, id: "t1", status: "success" },
+        { ...row, id: "t2", status: "returned", failureReason: "Account closed" },
+        { ...row, id: "t3", status: "failed", failureReason: "Rejected" },
+        { ...row, id: "t4", status: "sent" },
+      ],
+    });
+    await renderPage();
+    expect(screen.getByText("Transfers Credited").parentElement).toHaveTextContent("1");
+    expect(screen.getByText("Transfers Failed").parentElement).toHaveTextContent("2");
   });
 
   // ───────────────────────────────────────────────────────────────────────

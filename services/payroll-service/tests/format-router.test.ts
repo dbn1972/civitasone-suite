@@ -4,7 +4,7 @@
  *
  * Uses HS256 test JWTs (JWT_ALGORITHM=HS256 set in vitest.config.ts).
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db } from "../src/shared/db.js";
@@ -145,6 +145,17 @@ async function removeSponsorConfig() {
   const { cache } = await import("../src/shared/infra.js");
   await cache.invalidate(cache.makeKey(TENANT, "sponsor_bank_config", TENANT));
 }
+
+// GAP-PAYROLL-DISBURSEMENT-TRANSFERS: every test here wants a FIRST bank file
+// for RUN_ID. Since the transfer ledger, a second file for the same run only
+// carries never-sent employees / queued retries (anything else is 409
+// REISSUE_WOULD_DUPLICATE_PAYMENT), so clear the run's ledger between tests.
+beforeEach(async () => {
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.execute(sql`DELETE FROM payroll.disbursement_transfers WHERE tenant_id = ${TENANT}::uuid AND run_id = ${RUN_ID}::uuid`);
+    await tx.execute(sql`DELETE FROM payroll.disbursement_file_issuances WHERE tenant_id = ${TENANT}::uuid AND run_id = ${RUN_ID}::uuid`);
+  }));
+});
 
 // ═══════════════════════════════════════════════════════════════════
 // CSV backward compatibility

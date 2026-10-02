@@ -12,6 +12,9 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
   const t = useTranslations("nachReturnForm");
   const [runId, setRunId] = useState(runs[0]?.id ?? "");
   const [content, setContent] = useState("");
+  // Which issued NACH file this return answers; the API asks for it only when
+  // the run has more than one NACH file (422 FILE_REFERENCE_REQUIRED).
+  const [fileReference, setFileReference] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
@@ -21,6 +24,8 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
 
   const runSelectId = useId();
   const contentId = useId();
+  const fileRefId = useId();
+  const fileRefHintId = useId();
   const errId = useId();
   const runSelectRef = useRef<HTMLSelectElement>(null);
   const contentRef = useRef<HTMLTextAreaElement>(null);
@@ -51,11 +56,12 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
     try {
       const res = await browserJson<{ data: ReturnSummary }>(`v1/payroll/runs/${runId}/nach-return`, {
         method: "POST",
-        body: JSON.stringify({ content }),
+        body: JSON.stringify(fileReference.trim() ? { content, fileReference: fileReference.trim() } : { content }),
       });
       setConfirmOpen(false);
       setResult(res.data);
       setContent("");
+      setFileReference("");
     } catch (err) {
       setError(err instanceof Error ? err.message : t("networkError"));
     } finally {
@@ -107,6 +113,21 @@ export function NachReturnForm({ runs }: { runs: RunOption[] }) {
             placeholder={t("returnFileContentPlaceholder")}
             style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", fontFamily: "monospace", fontSize: 12 }}
           />
+        </div>
+        <div style={{ display: "grid", gap: 6, maxWidth: 420 }}>
+          <label htmlFor={fileRefId} style={{ fontSize: 13, fontWeight: 600 }}>
+            {t("fileReferenceLabel")}
+          </label>
+          <input
+            id={fileRefId}
+            type="text"
+            value={fileReference}
+            onChange={(e) => setFileReference(e.target.value)}
+            aria-describedby={fileRefHintId}
+            maxLength={200}
+            style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, fontFamily: "monospace", fontSize: 12 }}
+          />
+          <p id={fileRefHintId} style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>{t("fileReferenceHint")}</p>
         </div>
       </div>
       <div style={{ marginTop: 14 }}>
