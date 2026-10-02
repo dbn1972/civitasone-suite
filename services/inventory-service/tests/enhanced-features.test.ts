@@ -194,14 +194,14 @@ describe("Goods Returns + QC Gate (SVC-053)", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("PATCH /v1/inventory/goods-returns/:id/inspect → 202 (QC gate)", async () => {
+  it("PATCH /v1/inventory/goods-returns/:id/inspect → 404 for an unknown return (QC gate pre-check)", async () => {
     const fakeId = "88888888-aaaa-4000-8000-000000000001";
     const res = await app.inject({
       method: "PATCH", url: `/v1/inventory/goods-returns/${fakeId}/inspect`,
       headers: authHeader(["qc_inspector"]),
       payload: { qcStatus: "passed", disposition: "restock" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("PATCH /v1/inventory/goods-returns/:id/inspect → 403 wrong role", async () => {

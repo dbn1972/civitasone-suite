@@ -6,6 +6,9 @@ import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, isNoData, statValue } from "./RegisterFrame";
 import type { InventoryGoodsReturnRow } from "./_data";
+import { INVENTORY_LIST_LIMIT, capNote } from "./_limits";
+import { itemLabel, nameOrDash } from "./_labels";
+import { dispositionLabel } from "./goods-returns/[id]/qcMatrix";
 
 type Col = {
   key: keyof InventoryGoodsReturnRow & string;
@@ -16,12 +19,16 @@ type Col = {
 
 const columns: Col[] = [
   { key: "createdAt", label: "Date", render: (r) => formatIndianDate(r.createdAt) },
-  { key: "itemId", label: "Item", render: (r) => <code>{r.itemId.slice(0, 8)}</code> },
-  { key: "storeId", label: "Store", render: (r) => <code>{r.storeId.slice(0, 8)}</code> },
+  // GAP-INVENTORY-GOODS-RETURNS-02: item and store are named so a QC inspector can
+  // tell what is being inspected without opening the row; an unresolvable item
+  // falls back to its short id.
+  { key: "itemId", label: "Item", render: (r) => <span title={r.itemId}>{itemLabel(r)}</span> },
+  { key: "storeId", label: "Store", render: (r) => <span title={r.storeId}>{nameOrDash(r.storeName)}</span> },
   { key: "qty", label: "Qty", align: "right" },
   { key: "reason", label: "Reason" },
   { key: "qcStatus", label: "QC Status", render: (r) => <StatusPill status={r.qcStatus} /> },
-  { key: "disposition", label: "Disposition", render: (r) => <StatusPill status={r.disposition} /> },
+  // GAP-INVENTORY-GOODS-RETURNS-DETAIL-02: the same wording as the detail page and the form.
+  { key: "disposition", label: "Disposition", render: (r) => <StatusPill status={r.disposition} label={dispositionLabel(r.disposition)} /> },
   { key: "originalIssueId", label: "Issue", render: (r) => <code>{r.originalIssueId.slice(0, 8)}</code> },
 ];
 
@@ -61,7 +68,7 @@ export function GoodsReturnsTable({
           <StatCard icon="⏳" iconBg="#f1f5f9" label="Oldest Pending QC (days)" value={oldestPendingDays} />
       </StatGrid>
       <Card title="Goods Returns">
-        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="goods returns">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="goods returns" capNote={capNote(rows.length, INVENTORY_LIST_LIMIT, "goods returns")}>
           <DataTable<InventoryGoodsReturnRow>
             columns={columns}
             rows={rows}

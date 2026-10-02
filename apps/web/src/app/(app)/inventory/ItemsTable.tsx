@@ -2,11 +2,11 @@
 
 import type { ReactNode } from "react";
 import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_components/ds";
-import { PredictionBadge } from "@/app/_components/ds/PredictionBadge";
 import { formatMoney } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryItemRow } from "./_data";
+import { INVENTORY_LIST_LIMIT, capNote } from "./_limits";
 
 type Col = {
   key: keyof InventoryItemRow & string;
@@ -22,24 +22,9 @@ const columns: Col[] = [
   { key: "uom", label: "Unit", render: (r) => r.uom ?? "—" },
   { key: "itemType", label: "Type" },
   { key: "reorderLevel", label: "Reorder Level", align: "right" },
+  { key: "reorderQty", label: "Reorder Qty", align: "right" },
   { key: "unitCostMinor", label: "Std. Cost", align: "right", render: (r) => formatMoney(r.unitCostMinor) },
   { key: "status", label: "Status", render: (r) => <StatusPill status={r.status} /> },
-  {
-    key: "demandForecast" as keyof InventoryItemRow & string,
-    label: "Demand Forecast",
-    render: (r) => {
-      const pred = (r as Record<string, unknown>).demandForecast as { confidence: number; totalDemand: number; isFallback?: boolean; factors?: Array<{ feature: string; contribution: number; direction: "positive" | "negative" }> } | undefined;
-      if (!pred) return null;
-      return (
-        <PredictionBadge
-          confidence={pred.confidence}
-          label={`${pred.totalDemand} units`}
-          factors={pred.factors}
-          isFallback={pred.isFallback}
-        />
-      );
-    },
-  },
 ];
 
 export function ItemsTable({ items, source = "api" }: { items: InventoryItemRow[]; source?: "api" | "error" }) {
@@ -63,7 +48,7 @@ export function ItemsTable({ items, source = "api" }: { items: InventoryItemRow[
           <StatCard icon="🔔" iconBg="#fef3c7" label="Reorder Tracked" value={statValue(provenance, tracked)} />
       </StatGrid>
       <Card title="Items">
-        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="item master">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="item master" capNote={capNote(rows.length, INVENTORY_LIST_LIMIT, "items")}>
           <DataTable<InventoryItemRow>
             columns={columns}
             rows={rows}

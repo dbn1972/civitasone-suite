@@ -1,19 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { formatMoney } from "@/lib/formatters";
 import { DataTable, Segmented, EmptyState, Card } from "@/app/_components/ds";
 
-interface StockItem {
+type StockItem = {
   id: string;
   itemCode: string;
   name: string;
   category: string;
   unit: string;
-  currentStock: number;
+  currentStock: number | null;
   minStockLevel: number;
-  totalValue: number;
-  isLowStock: boolean;
-}
+  totalValue: number | null;
+  isLowStock: boolean | null;
+};
 
 interface Props {
   items: StockItem[];
@@ -24,10 +25,12 @@ const COLUMNS = [
   { key: "name" as const, label: "Item Name" },
   { key: "category" as const, label: "Category" },
   { key: "unit" as const, label: "UOM" },
-  { key: "currentStock" as const, label: "On-hand Qty", align: "right" as const },
+  { key: "currentStock" as const, label: "On-hand Qty", align: "right" as const, render: (r: { currentStock: number | null }) => (r.currentStock === null ? "—" : r.currentStock) },
   { key: "minStockLevel" as const, label: "Reorder Level", align: "right" as const },
-  { key: "totalValue" as const, label: "Value", align: "right" as const, cellType: "amount" as const },
-  { key: "isLowStock" as const, label: "Status", cellType: "status" as const },
+  { key: "totalValue" as const, label: "Value", align: "right" as const, render: (r: { totalValue: number | null }) => formatMoney(r.totalValue) },
+  // GAP-INVENTORY-LIST-04: a real text column (not a boolean smuggled through a cast),
+  // so the status pill is never colour-only.
+  { key: "stockStatus" as const, label: "Status", cellType: "status" as const },
 ];
 
 const SEG_OPTIONS = ["All items", "Low stock"];
@@ -35,12 +38,11 @@ const SEG_OPTIONS = ["All items", "Low stock"];
 export function InventoryStockListClient({ items }: Props) {
   const [active, setActive] = useState("All items");
 
-  const filtered = active === "Low stock" ? items.filter((i) => i.isLowStock) : items;
+  const filtered = active === "Low stock" ? items.filter((i) => i.isLowStock === true) : items;
 
-  // Map isLowStock to a textual status so cellType:"status" renders a non-colour-only pill.
-  const rows = filtered.map((i) => ({
+  const rows: Array<StockItem & { stockStatus: "Low Stock" | "OK" | "Unknown" }> = filtered.map((i) => ({
     ...i,
-    isLowStock: (i.isLowStock ? "Low Stock" : "OK") as unknown as boolean,
+    stockStatus: i.isLowStock === null ? "Unknown" : i.isLowStock ? "Low Stock" : "OK",
   }));
 
   return (
@@ -61,7 +63,7 @@ export function InventoryStockListClient({ items }: Props) {
       ) : (
         <DataTable
           columns={COLUMNS}
-          rows={rows as unknown as Record<string, unknown>[]}
+          rows={rows}
           rowLinkPrefix="/inventory/"
           rowLinkKey="id"
           identifyingColumnKey="name"

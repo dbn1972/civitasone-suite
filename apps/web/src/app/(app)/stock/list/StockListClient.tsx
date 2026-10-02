@@ -9,9 +9,9 @@ interface StockItem {
   itemCode: string;
   name: string;
   unit: string;
-  currentStock: number;
-  totalValue: number;
-  isLowStock: boolean;
+  currentStock: number | null;
+  totalValue: number | null;
+  isLowStock: boolean | null;
   category: string;
 }
 
@@ -33,12 +33,12 @@ const SEG_OPTIONS = ["All", "Low stock"];
 export function StockListClient({ items }: Props) {
   const [active, setActive] = useState("All");
 
-  const filtered = active === "Low stock" ? items.filter((i) => i.isLowStock) : items;
+  const filtered = active === "Low stock" ? items.filter((i) => i.isLowStock === true) : items;
 
   // Normalise rows so cellType:"status" renders the label, cellType:"amount" gets paise value
   const rows = filtered.map((i) => ({
     ...i,
-    isLowStock: (i.isLowStock ? "Low Stock" : "OK") as unknown as boolean,
+    isLowStock: (i.isLowStock === null ? "Unknown" : i.isLowStock ? "Low Stock" : "OK") as unknown as boolean,
   }));
 
   return (

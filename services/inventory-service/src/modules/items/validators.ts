@@ -121,12 +121,33 @@ export const createGoodsReturnBody = z.object({
 });
 export type CreateGoodsReturnBody = z.infer<typeof createGoodsReturnBody>;
 
-export const qcInspectionBody = z.object({
+const qcInspectionShape = z.object({
   qcStatus:    z.enum(["passed", "failed", "conditional"]),
   qcNotes:     z.string().max(512).optional(),
   disposition: z.enum(["restock", "quarantine", "scrap"]),
 });
-export type QcInspectionBody = z.infer<typeof qcInspectionBody>;
+
+/**
+ * GAP-INVENTORY-GOODS-RETURNS-DETAIL-01: the verdict and the disposition are
+ * not independent. Reject only the two combinations that put rejected stock
+ * back on the shelf or destroy stock that passed QC:
+ *   - failed + restock  (failed-QC stock returned to sellable inventory)
+ *   - passed + scrap    (good stock written off)
+ * "conditional" (accept with concession) is left unconstrained: any of the
+ * three outcomes can be a legitimate concession decision. The web form is
+ * stricter (apps/web goods-returns/[id]/qcMatrix.ts) -- keep them in sync.
+ */
+export function qcMatrixViolation(v: { qcStatus: string; disposition: string }): string | null {
+  if (v.qcStatus === "failed" && v.disposition === "restock") return "failed stock cannot be restocked";
+  if (v.qcStatus === "passed" && v.disposition === "scrap") return "stock that passed QC cannot be scrapped";
+  return null;
+}
+
+export const qcInspectionBody = qcInspectionShape.superRefine((v, ctx) => {
+  const message = qcMatrixViolation(v);
+  if (message) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["disposition"], message });
+});
+export type QcInspectionBody = z.infer<typeof qcInspectionShape>;
 
 /**
  * Payload schema validated by the consumer before it mutates Postgres.
@@ -175,7 +196,7 @@ export const createGoodsReturnPayload = createGoodsReturnBody.extend({
   tenantId: z.string().uuid(),
 });
 /** Same fresh-messageId reasoning as releaseReservationPayload above. */
-export const qcInspectionPayload = qcInspectionBody.extend({
+export const qcInspectionPayload = qcInspectionShape.extend({
   id:           z.string().uuid(),
   tenantId:     z.string().uuid(),
   inspectedBy:  z.string().uuid(),

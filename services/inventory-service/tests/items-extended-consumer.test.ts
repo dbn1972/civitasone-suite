@@ -313,18 +313,18 @@ describe("goods-return consumer — create + QC inspect round-trip", () => {
     });
     await drain();
 
-    const mq = queue as unknown as MemoryQueue;
-    const before = mq.dlq.length;
-    await app.inject({
+    // The route now rejects synchronously with a real 409 instead of a 202 the consumer drops.
+    const again = await app.inject({
       method: "PATCH", url: `/v1/inventory/goods-returns/${id}/inspect`, headers: hdr(TENANT_A, ACTOR_A),
       payload: { qcStatus: "passed", disposition: "restock" },
     });
+    expect(again.statusCode).toBe(409);
+    expect(again.json().code).toBe("NOT_PENDING");
     await drain();
 
     const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) => tx.select().from(goodsReturns).where(eq(goodsReturns.id, id))));
     expect(rows[0]!.qcStatus).toBe("failed");
     expect(rows[0]!.disposition).toBe("scrap");
-    expect(mq.dlq.slice(before).some((d) => d.error.includes("QC_NOT_PENDING"))).toBe(true);
   });
 });
 
@@ -384,6 +384,31 @@ describe("items-extended consumer — idempotency", () => {
     expect(rows[0]!.status).toBe("released");
     expect(rows[0]!.version).toBe(2); // NOT bumped again
     expect(mq.dlq.slice(before).some((d) => d.error.includes("RESERVATION_RELEASE_FAILED"))).toBe(true);
+  });
+});
+
+describe("goods-return consumer — QC matrix defence in depth", () => {
+  it("a directly published failed+restock inspection is dead-lettered and the return stays pending", async () => {
+    const create = await app.inject({
+      method: "POST", url: "/v1/inventory/goods-returns", headers: hdr(TENANT_A, ACTOR_A),
+      payload: { originalIssueId: ITEM_A2, itemId: ITEM_A1, storeId: STORE_A, qty: 1, reason: "matrix check" },
+    });
+    const id = create.json().id as string;
+    await drain();
+    const msgId = "aaaaaaaa-0000-4000-8000-00000000d778";
+    IDEMPOTENCY_MESSAGE_IDS.push(msgId);
+    const mq = queue as unknown as MemoryQueue;
+    const before = mq.dlq.length;
+    await queue.publish(COMMANDS.goodsReturnInspect, {
+      messageId: msgId, type: COMMANDS.goodsReturnInspect, tenantId: TENANT_A, actorId: ACTOR_A,
+      correlationId: "corr-qc-matrix", schemaVersion: "1.0",
+      payload: { id, tenantId: TENANT_A, inspectedBy: ACTOR_A, qcStatus: "failed", disposition: "restock" },
+    });
+    await drain();
+    const rows = await runWithTenant(TENANT_A, () => db.transaction(async (tx) => tx.select().from(goodsReturns).where(eq(goodsReturns.id, id))));
+    expect(rows[0]!.qcStatus).toBe("pending");
+    expect(rows[0]!.disposition).toBe("pending");
+    expect(mq.dlq.slice(before).some((d) => d.error.includes("QC_MATRIX_VIOLATION"))).toBe(true);
   });
 });
 

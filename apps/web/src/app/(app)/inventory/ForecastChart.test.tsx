@@ -27,4 +27,16 @@ describe("ForecastChart — alt data table (Req 3.1)", () => {
     render(<ForecastChart itemName="Printer Cartridge" data={DATA} />);
     expect(screen.getByText("30-day demand forecast — Printer Cartridge")).toBeInTheDocument();
   });
+
+  it("shows total demand and confidence when supplied (GAP-INVENTORY-HOME-04)", () => {
+    render(<ForecastChart itemName="Printer Cartridge" data={DATA} totalDemand={1234} confidence={0.82} />);
+    expect(screen.getByText(/Total 30-day demand/)).toHaveTextContent("1,234 units");
+    expect(screen.getByRole("meter", { name: "Confidence: 82%" })).toBeInTheDocument();
+  });
+
+  it("omits the extras when the service reported none", () => {
+    render(<ForecastChart itemName="Printer Cartridge" data={DATA} />);
+    expect(screen.queryByText(/Total 30-day demand/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("meter")).not.toBeInTheDocument();
+  });
 });

@@ -12,18 +12,28 @@ vi.mock("@/app/_data/loaders", () => loaders);
 
 const inv = vi.hoisted(() => ({
   getInventoryCycleCounts: vi.fn(),
+  getInventoryGoodsReturns: vi.fn(),
+  getInventoryLedger: vi.fn(),
   getInventoryLowStock: vi.fn(),
   getInventoryItemForecast: vi.fn(),
 }));
 vi.mock("./_data", () => inv);
 
+const lookups = vi.hoisted(() => ({
+  getItemNames: vi.fn(),
+  getStoreNames: vi.fn(),
+  getWarehouseNames: vi.fn(),
+}));
+vi.mock("./_lookups", () => lookups);
+
 const auth = vi.hoisted(() => ({
   getSessionRoles: vi.fn(() => ["inventory_manager"]),
   getSessionUserId: vi.fn(() => "approver-1"),
 }));
-vi.mock("@/lib/auth/roleGuard", () => ({
+// Keep the real role constants (no hand-copied literals); only the session readers are stubbed.
+vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
   ...auth,
-  INVENTORY_CYCLE_COUNT_APPROVE_ROLES: ["inventory_manager", "inventory_admin", "super_admin"],
 }));
 
 // Client leaves that need providers/ fetch are not under test here.
@@ -35,14 +45,25 @@ vi.mock("../stock/_components/PrintExportButton", () => ({ PrintExportButton: ()
 vi.mock("./list/InventoryStockListClient", () => ({
   InventoryStockListClient: () => <div>STOCK REGISTER</div>,
 }));
-vi.mock("./ForecastChart", () => ({ ForecastChart: () => <div>FORECAST CHART</div> }));
+const forecastProps = vi.hoisted(() => ({ last: null as null | { itemName: string; totalDemand?: number; confidence?: number } }));
+vi.mock("./MovementsTable", () => ({
+  MovementsTable: (p: { kind: string }) => <div>MOVEMENTS {p.kind}</div>,
+}));
+vi.mock("./ForecastChart", () => ({
+  ForecastChart: (p: { itemName: string; totalDemand?: number; confidence?: number }) => {
+    forecastProps.last = p;
+    return <div>FORECAST CHART</div>;
+  },
+}));
 
 const { default: StockItemDetailPage } = await import("./[id]/page");
 const { default: CycleCountDetailPage } = await import("./cycle-counts/[id]/page");
 const { default: GoodsReturnDetailPage } = await import("./goods-returns/[id]/page");
 const { default: InventoryListPage } = await import("./list/page");
 const { default: InventoryReconcilePage } = await import("./reconcile/page");
+const { default: InventoryReceiptsPage } = await import("./receipts/page");
 const { default: InventoryHub } = await import("./page");
+const { INVENTORY_WRITE_ROLES } = await import("@/lib/auth/roleGuard");
 
 const params = { params: { id: "abc" } };
 const retryBtn = () => screen.queryByRole("button", { name: /try again|retry/i });
@@ -52,6 +73,11 @@ beforeEach(() => {
   auth.getSessionRoles.mockReturnValue(["inventory_manager"]);
   auth.getSessionUserId.mockReturnValue("approver-1");
   inv.getInventoryCycleCounts.mockResolvedValue({ data: [], source: "api" });
+  inv.getInventoryGoodsReturns.mockResolvedValue({ data: [], source: "api" });
+  lookups.getItemNames.mockResolvedValue(new Map());
+  lookups.getStoreNames.mockResolvedValue(new Map());
+  lookups.getWarehouseNames.mockResolvedValue(new Map());
+  forecastProps.last = null;
 });
 
 describe("GAP-INVENTORY-DETAIL-01: stock item detail separates outage from 404", () => {
@@ -219,5 +245,186 @@ describe("GAP-INVENTORY-HOME-01", () => {
     expect(retryBtn()).not.toBeInTheDocument();
     expect(container.querySelector(".stat")?.textContent).toContain("1");
     expect(screen.getByText(/forecast unavailable/i)).toBeInTheDocument();
+  });
+});
+
+const low = (itemId: string, name: string, onHandQty: number, reorderLevel: number) => ({
+  itemId, name, sku: null, storeId: "s", onHandQty, reorderLevel, suggestedReorderQty: 1,
+});
+
+describe("GAP-INVENTORY-HOME-02 / -03 / -04", () => {
+  it("charts the item furthest below its reorder level regardless of API order, and passes total + confidence", async () => {
+    inv.getInventoryLowStock.mockResolvedValue({
+      source: "api",
+      data: [low("a", "Mild", 9, 10), low("b", "Severe", 2, 10), low("z", "NoLevel", 0, 0)],
+    });
+    inv.getInventoryItemForecast.mockResolvedValue({
+      source: "api",
+      data: { available: true, itemId: "b", dailyForecast: [1, 2], totalDemand: 42, confidence: 0.8 },
+    });
+    render(await InventoryHub());
+    expect(inv.getInventoryItemForecast).toHaveBeenCalledWith("b");
+    expect(forecastProps.last).toMatchObject({ itemName: "Severe", totalDemand: 42, confidence: 0.8 });
+  });
+
+  it("a full page of 200 pending returns reads 200+", async () => {
+    inv.getInventoryLowStock.mockResolvedValue({ source: "api", data: [] });
+    inv.getInventoryGoodsReturns.mockResolvedValue({
+      source: "api",
+      data: Array.from({ length: 200 }, () => ({ qcStatus: "pending" })),
+    });
+    render(await InventoryHub());
+    expect(screen.getByText("200+ pending QC")).toBeInTheDocument();
+  });
+
+  it("tiles carry counts: low stock, pending QC and counts awaiting approval", async () => {
+    inv.getInventoryLowStock.mockResolvedValue({ source: "api", data: [low("a", "A", 1, 5), low("b", "B", 1, 5)] });
+    inv.getInventoryItemForecast.mockResolvedValue({ source: "api", data: { available: false, itemId: "a", dailyForecast: [], totalDemand: 0, confidence: 0 } });
+    inv.getInventoryGoodsReturns.mockResolvedValue({
+      source: "api",
+      data: [{ qcStatus: "pending" }, { qcStatus: "passed" }, { qcStatus: "pending" }, { qcStatus: "pending" }],
+    });
+    inv.getInventoryCycleCounts.mockResolvedValue({ source: "api", data: [{ id: "1" }] });
+    render(await InventoryHub());
+    expect(screen.getByText("2 low")).toBeInTheDocument();
+    expect(screen.getByText("3 pending QC")).toBeInTheDocument();
+    expect(screen.getByText("1 counts to approve")).toBeInTheDocument();
+  });
+
+  it("a failed count fetch shows '—' on that tile only", async () => {
+    inv.getInventoryLowStock.mockResolvedValue({ source: "api", data: [low("a", "A", 1, 5)] });
+    inv.getInventoryItemForecast.mockResolvedValue({ source: "api", data: { available: false, itemId: "a", dailyForecast: [], totalDemand: 0, confidence: 0 } });
+    inv.getInventoryGoodsReturns.mockResolvedValue({ source: "error", data: [] });
+    render(await InventoryHub());
+    expect(screen.getByText("1 low")).toBeInTheDocument();
+    expect(screen.queryByText(/pending QC/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+});
+
+describe("GAP-INVENTORY-LIST-03: pending cycle counts", () => {
+  const stock = { source: "api", data: [{ id: "1", itemCode: "A", name: "A", category: "c", unit: "u", currentStock: 1, minStockLevel: 1, totalValue: 100, isLowStock: false }] };
+
+  it("a failed cycle-count fetch shows its own retry notice instead of hiding approvals", async () => {
+    loaders.getStockItems.mockResolvedValue(stock);
+    inv.getInventoryCycleCounts.mockResolvedValue({ data: [], source: "error" });
+    render(await InventoryListPage());
+    expect(screen.getByText(/pending cycle-count approvals/i)).toBeInTheDocument();
+    expect(retryBtn()).toBeInTheDocument();
+  });
+
+  it("rows show item and warehouse names, never the raw ids", async () => {
+    loaders.getStockItems.mockResolvedValue(stock);
+    inv.getInventoryCycleCounts.mockResolvedValue({
+      source: "api",
+      data: [{
+        id: "cc-1", itemId: "11111111-2222-3333-4444-555555555555", warehouseId: "99999999-8888-7777-6666-555555555555",
+        itemName: "Toner", itemSku: "T-1", warehouseName: "Main Store", systemQty: 1, physicalQty: 2, variance: 1,
+        absVariance: 1, status: "pending_approval", reasonCode: "recount", countedAt: "2026-08-01", createdAt: "2026-08-01",
+      }],
+    });
+    render(await InventoryListPage());
+    expect(screen.getByText("T-1 · Toner")).toBeInTheDocument();
+    expect(screen.getByText("Main Store")).toBeInTheDocument();
+    expect(screen.queryByText(/11111111-2222/)).not.toBeInTheDocument();
+  });
+});
+
+describe("GAP-INVENTORY-CYCLE-COUNTS-DETAIL-03 / -05", () => {
+  const base = {
+    id: "abc", itemId: "i-1", warehouseId: "w-1", systemQty: 10, physicalQty: 12, variance: 2, absVariance: 2,
+    autoAdjustThreshold: 10, reasonCode: "recount", status: "approved", countedAt: "2026-08-01", createdAt: "2026-08-01",
+    version: 3, approvedBy: "u-1234567890", adjustmentId: "adj-0001",
+  };
+
+  it("shows item and warehouse names (no UUID text) and the adjustment reference when approved", async () => {
+    loaders.getCycleCountById.mockResolvedValue({ source: "api", data: base });
+    lookups.getItemNames.mockResolvedValue(new Map([["i-1", { name: "Toner", sku: "T-1" }]]));
+    lookups.getWarehouseNames.mockResolvedValue(new Map([["w-1", "Main Store"]]));
+    render(await CycleCountDetailPage(params));
+    expect(screen.getAllByText("T-1 · Toner").length).toBeGreaterThan(0);
+    expect(screen.getByText("Main Store")).toBeInTheDocument();
+    expect(screen.queryByText("i-1")).not.toBeInTheDocument();
+    expect(screen.getByText("adj-0001")).toBeInTheDocument();
+  });
+
+  it("an unresolvable warehouse reads '—' and a rejected count shows no adjustment reference", async () => {
+    loaders.getCycleCountById.mockResolvedValue({ source: "api", data: { ...base, status: "rejected", rejectedBy: "u-2" } });
+    render(await CycleCountDetailPage(params));
+    expect(screen.queryByText(/stock adjustment reference/i)).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBeGreaterThan(0);
+  });
+});
+
+describe("GAP-INVENTORY-GOODS-RETURNS-DETAIL-05: names and disposition wording", () => {
+  it("shows item and store names and the truthful disposition label", async () => {
+    loaders.getGoodsReturnById.mockResolvedValue({
+      source: "api",
+      data: {
+        id: "gr-1", originalIssueId: "iss-1", itemId: "i-1", storeId: "s-1", qty: 3, reason: "damaged",
+        qcStatus: "failed", qcInspectedBy: "u-1234567890", qcInspectedAt: "2026-08-02", qcNotes: "water",
+        disposition: "quarantine", createdAt: "2026-08-01",
+      },
+    });
+    lookups.getItemNames.mockResolvedValue(new Map([["i-1", { name: "Toner", sku: "T-1" }]]));
+    lookups.getStoreNames.mockResolvedValue(new Map([["s-1", "Central Store"]]));
+    render(await GoodsReturnDetailPage(params));
+    expect(screen.getByText("T-1 · Toner")).toBeInTheDocument();
+    expect(screen.getByText("Central Store")).toBeInTheDocument();
+    expect(screen.getByText("Quarantine")).toBeInTheDocument();
+    expect(screen.queryByText(/penalty/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/GRN reference/i)).not.toBeInTheDocument();
+  });
+});
+
+describe("INVENTORY_WRITE_ROLES stays in step with the service", () => {
+  it("includes the roles the service WRITE_ROLES allow for bins and items", () => {
+    for (const r of ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"]) {
+      expect(INVENTORY_WRITE_ROLES).toContain(r);
+    }
+  });
+});
+
+describe("receipts register asks the service for receipts only (GAP-INVENTORY-RECEIPTS-02 alignment)", () => {
+  it("calls getInventoryLedger with movementType receipt", async () => {
+    inv.getInventoryLedger.mockResolvedValue({ data: [], source: "api" });
+    render(await InventoryReceiptsPage());
+    expect(inv.getInventoryLedger).toHaveBeenCalledWith({ movementType: "receipt" });
+    expect(screen.getByText("MOVEMENTS receipt")).toBeInTheDocument();
+  });
+});
+
+describe("unknown stock levels are not Low Stock and not Rs 0 (stock-service reports none)", () => {
+  const item = (id: string, over: Record<string, unknown> = {}) => ({
+    id, itemCode: id, name: id, category: "c", unit: "u", currentStock: 5, minStockLevel: 1,
+    unitCost: 100, totalValue: 500, isLowStock: false, ...over,
+  });
+
+  it("excludes unreported items from the low-stock count and the value total, and says so", async () => {
+    loaders.getStockItems.mockResolvedValue({
+      source: "api",
+      data: [
+        item("A", { isLowStock: true, currentStock: 0, totalValue: 12500 }),
+        item("B"),
+        item("U", { currentStock: null, unitCost: null, totalValue: null, isLowStock: null }),
+      ],
+    });
+    const { container } = render(await InventoryListPage());
+    const stats = Array.from(container.querySelectorAll(".stat")).map((e) => e.textContent ?? "");
+    expect(stats.join(" ")).toContain("2 of 3 items valued");
+    expect(stats.join(" ")).toContain("₹130.00"); // 12500 + 500 paise, U excluded
+    const low = stats.find((s) => s.includes("Low Stock"));
+    expect(low).toMatch(/1/);
+  });
+
+  it("when no item reports a value the value stat is a dash, not Rs 0", async () => {
+    loaders.getStockItems.mockResolvedValue({
+      source: "api",
+      data: [item("U", { currentStock: null, unitCost: null, totalValue: null, isLowStock: null })],
+    });
+    const { container } = render(await InventoryListPage());
+    const value = Array.from(container.querySelectorAll(".stat")).find((e) => (e.textContent ?? "").includes("Stock Value"));
+    expect(value?.textContent).toContain("—");
+    expect(value?.textContent).not.toContain("₹0");
   });
 });

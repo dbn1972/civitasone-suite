@@ -31,16 +31,35 @@ function row(overrides: Partial<InventoryLedgerRow> = {}): InventoryLedgerRow {
   };
 }
 
-describe("MovementsTable — movement type chip ARIA (Req 3.2)", () => {
-  it("renders the movement type chip with role=status and a descriptive aria-label", () => {
-    render(<MovementsTable entries={[row({ movementType: "receipt" })]} kind="receipt" />);
-    const chip = screen.getByRole("status", { name: "Movement type: receipt" });
-    expect(chip).toBeInTheDocument();
+describe("MovementsTable (GAP-INVENTORY-ISSUES-02 / -03)", () => {
+  it("names the item and store, shows the reason, and has no repeated Type column", () => {
+    render(
+      <MovementsTable
+        entries={[row({ movementType: "issue", qtyIn: 0, qtyOut: 5, itemName: "Toner", itemSku: "T-1", storeName: "Main Store", reasonCode: "consumption" })]}
+        kind="issue"
+      />,
+    );
+    expect(screen.getByText("T-1 · Toner")).toBeInTheDocument();
+    expect(screen.getByText("Main Store")).toBeInTheDocument();
+    expect(screen.getByText("consumption")).toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /^type$/i })).not.toBeInTheDocument();
+    expect(screen.queryByText("11111111")).not.toBeInTheDocument();
   });
 
-  it("labels an issue-kind row's chip with its own movement type", () => {
+  it("an unresolvable item falls back to its short id", () => {
+    render(<MovementsTable entries={[row()]} kind="receipt" />);
+    expect(screen.getByText("11111111")).toBeInTheDocument();
+  });
+
+  it("a full ledger page is flagged and the totals read as lower bounds", () => {
+    const many = Array.from({ length: 500 }, (_, n) => row({ id: "l" + n, movementType: "issue", qtyIn: 0, qtyOut: 1 }));
+    render(<MovementsTable entries={many} kind="issue" />);
+    expect(screen.getByRole("note")).toHaveTextContent(/first 500 ledger movements/i);
+    expect(screen.getAllByText("500+")).toHaveLength(2);
+  });
+
+  it("a short page shows no cap note", () => {
     render(<MovementsTable entries={[row({ movementType: "issue", qtyIn: 0, qtyOut: 5 })]} kind="issue" />);
-    const chip = screen.getByRole("status", { name: "Movement type: issue" });
-    expect(chip).toBeInTheDocument();
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 });

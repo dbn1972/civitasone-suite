@@ -2,6 +2,8 @@ import { PageHeader } from "@/app/_components/ds";
 import { getInventoryBins } from "../_data";
 import { BinsTable } from "../BinsTable";
 import { ArrowLeft } from "lucide-react";
+import Link from "next/link";
+import { INVENTORY_WRITE_ROLES, getSessionRoles } from "@/lib/auth/roleGuard";
 
 export const dynamic = "force-dynamic";
 
@@ -10,13 +12,18 @@ export const dynamic = "force-dynamic";
 // derives zero-filled stats from a failed fetch.
 export default async function InventoryBinsPage() {
   const { data, source } = await getInventoryBins();
+  const canCreate = getSessionRoles().some((r) => INVENTORY_WRITE_ROLES.includes(r));
 
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
-      <PageHeader title="Bins & Racks" subtitle="Physical bin and rack locations within government stores." />
+      <PageHeader
+        title="Bins & Racks"
+        subtitle="Physical bin and rack locations within government stores."
+        actions={canCreate ? <Link href="/inventory/bins/new" className="btn primary">+ New bin</Link> : undefined}
+      />
       <BinsTable bins={data} source={source} />
     </>
   );

@@ -1,11 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { DataTable, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryLedgerRow } from "./_data";
+import { INVENTORY_LEDGER_LIMIT, capNote } from "./_limits";
+import { itemLabel, nameOrDash } from "./_labels";
 
 type Col = {
   key: keyof InventoryLedgerRow & string;
@@ -35,6 +37,10 @@ export function MovementsTable({
   );
 
   const rows = all.filter((r) => r.movementType === kind);
+  // GAP-INVENTORY-ISSUES-02: the ledger is fetched newest-first in a fixed page.
+  // When the page is full the totals may under-count, so say so -- and show the
+  // totals as "N+" rather than as exact figures.
+  const capped = all.length >= INVENTORY_LEDGER_LIMIT;
   const totalQty = rows.reduce((s, e) => s + (kind === "receipt" ? e.qtyIn : e.qtyOut), 0);
 
   const qtyCol: Col =
@@ -44,20 +50,16 @@ export function MovementsTable({
 
   const columns: Col[] = [
     { key: "postingDate", label: "Date", render: (r) => formatIndianDate(r.postingDate) },
-    { key: "itemId", label: "Item", render: (r) => <code>{r.itemId.slice(0, 8)}</code> },
+    // GAP-INVENTORY-ISSUES-03: item by SKU/name (short id only as a fallback),
+    // plus store and reason. The Type column is gone: this table is filtered to
+    // one movement type, so it repeated the same word on every row.
+    { key: "itemId", label: "Item", render: (r) => <span title={r.itemId}>{itemLabel(r)}</span> },
+    { key: "storeId", label: "Store", render: (r) => <span title={r.storeId}>{nameOrDash(r.storeName)}</span> },
     qtyCol,
     { key: "balanceQty", label: "Balance", align: "right" },
     { key: "rateMinor", label: "Rate", align: "right", render: (r) => formatMoney(r.rateMinor) },
     { key: "valueMinor", label: "Value", align: "right", render: (r) => formatMoney(r.valueMinor) },
-    {
-      key: "movementType",
-      label: "Type",
-      render: (r) => (
-        <span role="status" aria-label={`Movement type: ${r.movementType}`}>
-          <StatusPill status={r.movementType === "receipt" ? "completed" : "open"} label={r.movementType} />
-        </span>
-      ),
-    },
+    { key: "reasonCode", label: "Reason", render: (r) => r.reasonCode ?? "—" },
   ];
 
   const lineLabel = kind === "receipt" ? "Receipt Lines" : "Issue Lines";
@@ -70,12 +72,12 @@ export function MovementsTable({
           icon={kind === "receipt" ? "📥" : "📤"}
           iconBg={kind === "receipt" ? "#dcfce7" : "#fee2e2"}
           label={lineLabel}
-          value={statValue(provenance, rows.length)}
+          value={statValue(provenance, capped ? `${rows.length}+` : rows.length)}
         />
-        <StatCard icon="🔢" iconBg="#f1f5f9" label={qtyLabel} value={statValue(provenance, totalQty)} />
+        <StatCard icon="🔢" iconBg="#f1f5f9" label={qtyLabel} value={statValue(provenance, capped ? `${totalQty}+` : totalQty)} />
       </StatGrid>
       <Card title={kind === "receipt" ? "Receipts" : "Issues"}>
-        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="stock ledger">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="stock ledger" capNote={capNote(all.length, INVENTORY_LEDGER_LIMIT, "ledger movements")}>
           <DataTable<InventoryLedgerRow>
             columns={columns}
             rows={rows}

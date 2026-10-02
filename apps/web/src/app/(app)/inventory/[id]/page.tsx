@@ -52,7 +52,10 @@ export default async function StockItemDetailPage({
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title="Item not found" back="/inventory/list" />
-        <p className="sub">The requested stock item could not be found.</p>
+        <p className="sub">
+          This stock item could not be found. It may have been removed, or you may not have access to it.{" "}
+          <Link href="/inventory/list">Browse all stock items</Link>
+        </p>
       </div>
     );
   }
@@ -72,8 +75,8 @@ export default async function StockItemDetailPage({
           <>
             {item.itemCode} · {item.name}{" "}
             <StatusPill
-              status={item.isLowStock ? "low stock" : "active"}
-              label={item.isLowStock ? "Low Stock" : "OK"}
+              status={item.isLowStock === null ? "info" : item.isLowStock ? "low stock" : "active"}
+              label={item.isLowStock === null ? "Level unknown" : item.isLowStock ? "Low Stock" : "OK"}
             />
           </>
         }
@@ -111,7 +114,7 @@ export default async function StockItemDetailPage({
               <div className="fld">
                 <div className="l">On-hand qty</div>
                 <div className="v">
-                  {item.currentStock.toLocaleString("en-IN")}
+                  {item.currentStock === null ? "—" : item.currentStock.toLocaleString("en-IN")}
                 </div>
               </div>
               <div className="fld">

@@ -2,7 +2,7 @@
  * items repo — Drizzle queries against the `inventory` schema ONLY.
  * Every read is tenant-scoped; updates are optimistic-locked on `version`.
  */
-import { eq, and, sql, type SQL } from "drizzle-orm";
+import { eq, and, sql, asc, desc, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { DomainError } from "../../shared/domain.js";
 import {
@@ -203,8 +203,11 @@ export async function insertBin(tx: Writer, row: BinInsert): Promise<void> {
 }
 
 export async function listBins(tenantId: string, limit: number, offset: number): Promise<BinRow[]> {
+  // Stable order (GAP-INVENTORY-BINS-04): without ORDER BY, offset paging over a
+  // heap can repeat or skip rows between requests.
   return scopedRead((tx) => tx.select().from(bins)
     .where(eq(bins.tenantId, tenantId))
+    .orderBy(asc(bins.code), asc(bins.id))
     .limit(limit).offset(offset));
 }
 
@@ -264,8 +267,10 @@ export async function updateGoodsReturnQc(
 }
 
 export async function listGoodsReturns(tenantId: string, limit: number, offset: number): Promise<GoodsReturnRow[]> {
+  // Newest first, id tiebreak (GAP-INVENTORY-GOODS-RETURNS-04): stable paging.
   return scopedRead((tx) => tx.select().from(goodsReturns)
     .where(eq(goodsReturns.tenantId, tenantId))
+    .orderBy(desc(goodsReturns.createdAt), desc(goodsReturns.id))
     .limit(limit).offset(offset));
 }
 

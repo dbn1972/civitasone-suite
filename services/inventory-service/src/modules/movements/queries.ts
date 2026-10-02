@@ -7,6 +7,7 @@ import { RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
 import { suggestedReorderQty } from "./domain.js";
 import type { MovementRow } from "./schema.js";
+import type { LedgerOpts } from "./repo.js";
 
 /**
  * Fetch a movement header by id — the caller's only way to learn the
@@ -53,9 +54,9 @@ export async function listBalances(
 }
 
 export async function listLedger(
-  tenantId: string, opts: { itemId?: string; storeId?: string; from?: string; to?: string; limit: number; offset: number },
+  tenantId: string, opts: LedgerOpts,
 ): Promise<{ data: Array<Record<string, unknown>> }> {
-  const hash = `list:${opts.itemId ?? ""}:${opts.storeId ?? ""}:${opts.from ?? ""}:${opts.to ?? ""}:${opts.limit}:${opts.offset}`;
+  const hash = `list:${opts.itemId ?? ""}:${opts.storeId ?? ""}:${opts.movementType ?? ""}:${opts.from ?? ""}:${opts.to ?? ""}:${opts.limit}:${opts.offset}`;
   return cache.listOrLoad(tenantId, RESOURCE.ledger, hash, async () => {
     const rows = await repo.listLedger(tenantId, opts);
     return {

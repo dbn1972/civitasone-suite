@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { NavTile } from "@civitasone/types";
 import { StatIcon } from "./ds/StatIcon";
+import { StatusPill } from "./ds/StatusPill";
 
 interface LinkTilesProps {
   tiles: NavTile[];
@@ -99,6 +100,11 @@ export function LinkTiles({ tiles, columns = "three" }: LinkTilesProps) {
                     <StatIcon icon={tileIcon(tile)} size={18} />
                   </div>
                   <h3 className="v">{tile.title}</h3>
+                  {tile.badge ? (
+                    <div style={{ margin: "2px 0 6px" }}>
+                      <StatusPill status={tile.badge.tone === "warn" ? "pending" : "info"} label={tile.badge.text} />
+                    </div>
+                  ) : null}
                   {tile.description ? <div className="l">{tile.description}</div> : null}
                 </Link>
               );

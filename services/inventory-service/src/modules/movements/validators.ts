@@ -108,6 +108,10 @@ export const balanceQueryParams = z.object({
 export const ledgerQueryParams = z.object({
   itemId:  z.string().uuid().optional(),
   storeId: z.string().uuid().optional(),
+  // GAP-INVENTORY-ISSUES-02/-04: filter server-side so a view of one movement
+  // type (e.g. the Issues register) is not a client-side slice of the newest N
+  // mixed rows. Mirrors the CHECK constraint on stock_ledger.movement_type.
+  movementType: z.enum(["receipt", "issue", "transfer", "adjustment"]).optional(),
   from:    z.string().regex(datePattern).optional(),
   to:      z.string().regex(datePattern).optional(),
   limit:   z.coerce.number().int().positive().max(500).default(100),
