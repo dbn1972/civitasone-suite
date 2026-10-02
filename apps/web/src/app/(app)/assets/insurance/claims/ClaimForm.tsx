@@ -4,7 +4,7 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import type { PolicyOption } from "./page";
 
@@ -12,16 +12,34 @@ type AcceptedResponse = { id?: string; status?: string; correlationId?: string }
 
 const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
-/** Custom date validator — NOT native min/max. Requires ISO yyyy-MM-dd and a real calendar date, not in the future. */
-function validateClaimDate(value: string): string | null {
+/**
+ * Custom date validator -- NOT native min/max. ISO yyyy-MM-dd, a real calendar
+ * date, not after today in IST (GAP-ASSETS-INSURANCE-CLAIMS-02: the UTC date
+ * rejected the current IST date before 05:30), and inside the policy's
+ * [start, end] cover when the policy dates are known. Advisory only: the
+ * server stays the rule owner.
+ */
+export function validateClaimDate(
+  value: string,
+  policy?: { startDate: string; endDate: string },
+  today: string = todayIST(),
+): string | null {
   if (!value) return "Enter the claim date.";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return "Enter a valid date (yyyy-mm-dd).";
   const d = new Date(`${value}T00:00:00Z`);
   if (Number.isNaN(d.getTime())) return "Enter a valid calendar date.";
-  const today = new Date(new Date().toISOString().slice(0, 10) + "T00:00:00Z");
-  if (d.getTime() > today.getTime()) return "Claim date cannot be in the future.";
+  if (value > today) return "Claim date cannot be in the future.";
+  if (policy?.startDate && value < policy.startDate) {
+    return `Claim date is before the policy's cover starts (${formatIndianDate(policy.startDate)}).`;
+  }
+  if (policy?.endDate && value > policy.endDate) {
+    return `Claim date is after the policy's cover ended (${formatIndianDate(policy.endDate)}).`;
+  }
   return null;
 }
+
+/** GAP-ASSETS-INSURANCE-CLAIMS-06: free-text claim narrative limit (asset-service has no cap; keeps one row readable). */
+export const CLAIM_NOTES_MAX = 1000;
 
 export function ClaimForm({
   policies,
@@ -35,7 +53,9 @@ export function ClaimForm({
 }) {
   const router = useRouter();
 
-  const eligiblePolicies = policies.filter((p) => p.status === "active");
+  // Only policies still in force: active AND not already past their end date (IST).
+  const today = todayIST();
+  const eligiblePolicies = policies.filter((p) => p.status === "active" && !(p.endDate && p.endDate < today));
   const initialPolicyId = preselectedPolicyId && eligiblePolicies.some((p) => p.id === preselectedPolicyId) ? preselectedPolicyId : "";
 
   const [policyId, setPolicyId] = useState(initialPolicyId);
@@ -71,12 +91,15 @@ export function ClaimForm({
     const errors: Record<string, string> = {};
     if (!policyId) errors.policyId = "Select the policy this claim is against.";
 
-    const dateErr = validateClaimDate(claimDate);
+    const dateErr = validateClaimDate(claimDate, selectedPolicy);
     if (dateErr) errors.claimDate = dateErr;
 
     const claimAmountMinorStr = rupeesToMinorString(claimAmount);
     if (!claimAmountMinorStr) {
       errors.claimAmount = "Enter a valid claim amount (e.g. 8000 or 8000.50).";
+    } else if (!Number.isSafeInteger(Number(claimAmountMinorStr))) {
+      // GAP-ASSETS-INSURANCE-07: the API takes a JSON number -- exact or rejected, never rounded.
+      errors.claimAmount = "That claim amount is too large to submit.";
     } else if (selectedPolicy) {
       // Client-side guard mirroring the server's CLAIM_EXCEEDS_COVERAGE rule —
       // the server is still authoritative and re-checks this on submit.
@@ -116,7 +139,7 @@ export function ClaimForm({
           policyId: selectedPolicy.id,
           assetId: selectedPolicy.assetId,
           claimDate,
-          claimAmountMinor: Number(claimAmountMinorStr),
+          claimAmountMinor: Number(claimAmountMinorStr), // safe-integer checked in handleSubmit
           currency: "INR",
           notes: notes.trim() || undefined,
         }),
@@ -161,6 +184,7 @@ export function ClaimForm({
               {eligiblePolicies.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.policyNo} · {p.insurer} — sum insured {formatMoney(p.coverageMinor)}
+                  {p.startDate && p.endDate ? ` · cover ${formatIndianDate(p.startDate)} to ${formatIndianDate(p.endDate)}` : ""}
                 </option>
               ))}
             </select>
@@ -219,7 +243,18 @@ export function ClaimForm({
             <label htmlFor={notesId} style={{ fontSize: 13, fontWeight: 600 }}>
               Notes
             </label>
-            <input id={notesId} value={notes} onChange={(e) => setNotes(e.target.value)} style={inputStyle} />
+            <textarea
+              id={notesId}
+              value={notes}
+              maxLength={CLAIM_NOTES_MAX}
+              rows={4}
+              onChange={(e) => setNotes(e.target.value)}
+              aria-describedby={`${notesId}-count`}
+              style={{ ...inputStyle, minHeight: 96, resize: "vertical" }}
+            />
+            <span id={`${notesId}-count`} style={{ fontSize: 12, color: "var(--ink2)" }}>
+              {notes.length} / {CLAIM_NOTES_MAX}
+            </span>
           </div>
         </div>
 

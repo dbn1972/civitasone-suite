@@ -5,9 +5,6 @@ import { ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { policyBody, claimBody, idParam, policyQueryParams, claimQueryParams } from "./validators.js";
 import * as commands from "./commands.js";
-import { db, scopedRead } from "../../shared/db.js";
-import { assetPolicies, assetClaims } from "./schema.js";
-import { eq, and } from "drizzle-orm";
 import { z as z2 } from "zod";
 import * as queries from "./queries.js";
 
@@ -79,26 +76,16 @@ export async function insuranceRoutes(app: FastifyInstance): Promise<void> {
       expiryDate: z2.string().optional(),
       premiumMinor: z2.number().int().nonnegative().optional(),
     }).parse(req.body);
-    const existing = await queries.getPolicy(ctx.tenantId, id);
-    if (!existing) throw new HttpError(404, "NOT_FOUND", "policy not found");
-    const patch: Record<string, unknown> = { updatedAt: new Date(), updatedBy: ctx.actorId };
-    if (body.status !== undefined) patch.status = body.status;
-    if (body.expiryDate !== undefined) patch.endDate = body.expiryDate;
-    if (body.premiumMinor !== undefined) patch.premiumMinor = BigInt(body.premiumMinor);
-    await db.update(assetPolicies).set(patch).where(and(eq(assetPolicies.id, id), eq(assetPolicies.tenantId, ctx.tenantId)));
+    await commands.updatePolicy(ctx, id, body);
     return reply.send({ id });
   });
 
-  // ── Claim lifecycle ──────────────────────────────────────────────────────
+  // ── Claim lifecycle (writes live in commands/repo, inside the tenant tx) ─
   app.patch("/v1/assets/insurance/claims/:id/approve", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ["asset_admin", "super_admin"]);
     const { id } = idParam.parse(req.params);
-    const existing = await queries.getClaim(ctx.tenantId, id);
-    if (!existing) throw new HttpError(404, "NOT_FOUND", "claim not found");
-    await db.update(assetClaims)
-      .set({ status: "approved", updatedAt: new Date(), updatedBy: ctx.actorId })
-      .where(and(eq(assetClaims.id, id), eq(assetClaims.tenantId, ctx.tenantId)));
+    await commands.approveClaim(ctx, id);
     return reply.send({ id });
   });
 
@@ -110,16 +97,7 @@ export async function insuranceRoutes(app: FastifyInstance): Promise<void> {
       settlementAmountMinor: z2.number().int().nonnegative(),
       currency: z2.string().length(3).default("INR"),
     }).parse(req.body);
-    const existing = await queries.getClaim(ctx.tenantId, id);
-    if (!existing) throw new HttpError(404, "NOT_FOUND", "claim not found");
-    await db.update(assetClaims)
-      .set({
-        status: "settled",
-        settledAmountMinor: BigInt(body.settlementAmountMinor),
-        updatedAt: new Date(),
-        updatedBy: ctx.actorId,
-      })
-      .where(and(eq(assetClaims.id, id), eq(assetClaims.tenantId, ctx.tenantId)));
+    await commands.settleClaim(ctx, id, body.settlementAmountMinor);
     return reply.send({ id });
   });
 
@@ -127,12 +105,8 @@ export async function insuranceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ["asset_admin", "super_admin"]);
     const { id } = idParam.parse(req.params);
-    const body = z2.object({ reason: z2.string() }).parse(req.body);
-    const existing = await queries.getClaim(ctx.tenantId, id);
-    if (!existing) throw new HttpError(404, "NOT_FOUND", "claim not found");
-    await db.update(assetClaims)
-      .set({ status: "rejected", notes: body.reason, updatedAt: new Date(), updatedBy: ctx.actorId })
-      .where(and(eq(assetClaims.id, id), eq(assetClaims.tenantId, ctx.tenantId)));
+    const body = z2.object({ reason: z2.string().trim().min(1).max(1000) }).parse(req.body);
+    await commands.rejectClaim(ctx, id, body.reason);
     return reply.send({ id });
   });
 

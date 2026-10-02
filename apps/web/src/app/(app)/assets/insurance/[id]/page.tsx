@@ -1,22 +1,8 @@
-import { PageHeader, Card, DataTable, StatusPill, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, Card, DataTable, StatusPill, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import Link from "next/link";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
-
-export type PolicyDetail = {
-  id: string;
-  assetId: string;
-  policyNo: string;
-  insurer: string;
-  coverageMinor: string;
-  premiumMinor: string;
-  currency: string;
-  startDate: string;
-  endDate: string;
-  renewalReminderDays: number;
-  status: string;
-} & Record<string, unknown>;
+import { mapPolicyDetail, type PolicyDetail } from "./policyDetail";
 
 export type ClaimRow = {
   id: string;
@@ -38,27 +24,6 @@ function arrayFromPayload(payload: unknown): unknown[] | null {
     return (payload as { data: unknown[] }).data;
   }
   return null;
-}
-
-function mapPolicyDetail(payload: unknown): PolicyDetail | null {
-  if (!isRecord(payload)) return null;
-  const id = payload.id;
-  const assetId = payload.assetId;
-  const policyNo = payload.policyNo;
-  if (typeof id !== "string" || typeof assetId !== "string" || typeof policyNo !== "string") return null;
-  return {
-    id,
-    assetId,
-    policyNo,
-    insurer: typeof payload.insurer === "string" ? payload.insurer : "—",
-    coverageMinor: String(payload.coverageMinor ?? 0),
-    premiumMinor: String(payload.premiumMinor ?? 0),
-    currency: typeof payload.currency === "string" ? payload.currency : "INR",
-    startDate: typeof payload.startDate === "string" ? payload.startDate : "",
-    endDate: typeof payload.endDate === "string" ? payload.endDate : "",
-    renewalReminderDays: typeof payload.renewalReminderDays === "number" ? payload.renewalReminderDays : 30,
-    status: typeof payload.status === "string" ? payload.status : "unknown",
-  };
 }
 
 function mapClaims(payload: unknown): ClaimRow[] | null {
@@ -116,25 +81,27 @@ async function getAssetLabel(assetId: string): Promise<LoaderResult<string | nul
 }
 
 export default async function PolicyDetailPage({ params }: { params: { id: string } }) {
-  const { data: policy, source: policySource } = await getPolicy(params.id);
-  const { data: claims, source: claimsSource } = await getClaimsForPolicy(params.id);
-
-  const overallSource = policySource === "error" || claimsSource === "error" ? "error" : "api";
+  const policyRes = await getPolicy(params.id);
+  const claimsRes = await getClaimsForPolicy(params.id);
+  const { data: policy } = policyRes;
+  const { data: claims } = claimsRes;
 
   if (!policy) {
+    // GAP-ASSETS-INSURANCE-DETAIL-03: only a real 404 (or an OK response with no
+    // policy) is "not found"; every other failure -- including a 403 -- gets the
+    // load-error state with the right retry / permission treatment.
+    const notFound = policyRes.source !== "error" || policyRes.status === 404;
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title="Policy not found" back="/assets/insurance" backLabel="Asset Insurance" />
-        {policySource === "error" ? (
-          <Card title="Policy">
-            <DataSourceBadge source="error" />
-          </Card>
-        ) : (
+        <PageHeader title={notFound ? "Policy not found" : "Policy"} back="/assets/insurance" backLabel="Asset Insurance" />
+        {notFound ? (
           <EmptyState
             icon="🔍"
             title="Policy not found"
-            message="The requested policy could not be found. It may have lapsed or the link is incorrect."
+            message="This policy does not exist or the link is incorrect."
           />
+        ) : (
+          <LoadErrorState result={policyRes} area="insurance policy" backHref="/assets/insurance" backLabel="Asset Insurance" />
         )}
       </div>
     );
@@ -150,12 +117,7 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
         subtitle="Insurance policy details and claims filed against it."
         back="/assets/insurance"
         backLabel="Asset Insurance"
-        actions={
-          <>
-            {overallSource === "error" ? <DataSourceBadge source="error" /> : null}
-            <StatusPill status={policy.status} />
-          </>
-        }
+        actions={<StatusPill status={policy.status} />}
       />
 
       <Card title="Policy Details" padding>
@@ -166,24 +128,33 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
             <div className="l">Asset</div>
             <div className="v"><Link className="lnk" href={`/assets/${encodeURIComponent(policy.assetId)}`}>{assetLabel ?? "View asset"}</Link></div>
           </div>
-          <div className="fld"><div className="l">Sum Insured</div><div className="v">{formatMoney(policy.coverageMinor)}</div></div>
-          <div className="fld"><div className="l">Premium</div><div className="v">{formatMoney(policy.premiumMinor)}</div></div>
+          <div className="fld"><div className="l">Sum Insured</div><div className="v">{policy.coverageMinor === null ? "—" : formatMoney(policy.coverageMinor)}</div></div>
+          <div className="fld"><div className="l">Premium</div><div className="v">{policy.premiumMinor === null ? "—" : formatMoney(policy.premiumMinor)}</div></div>
           <div className="fld"><div className="l">Start Date</div><div className="v">{formatIndianDate(policy.startDate)}</div></div>
           <div className="fld"><div className="l">End Date</div><div className="v">{formatIndianDate(policy.endDate)}</div></div>
-          <div className="fld"><div className="l">Renewal Reminder</div><div className="v">{policy.renewalReminderDays} days before expiry</div></div>
+          <div className="fld">
+            <div className="l">Renewal Reminder</div>
+            <div className="v">
+              {policy.renewalReminderDays === null ? (
+                <span style={{ color: "var(--ink2)" }}>Not set</span>
+              ) : (
+                `${policy.renewalReminderDays} days before expiry`
+              )}
+            </div>
+          </div>
         </div>
       </Card>
 
       <Card
         title="Claims on this policy"
         link={
-          <a href={`/assets/insurance/claims?policyId=${encodeURIComponent(policy.id)}`} className="btn primary">
+          <Link href={`/assets/insurance/claims?policyId=${encodeURIComponent(policy.id)}`} className="btn primary">
             File a Claim
-          </a>
+          </Link>
         }
       >
-        {claimsSource === "error" && claims.length === 0 ? (
-          <DataSourceBadge source="error" />
+        {claimsRes.source === "error" ? (
+          <LoadErrorState result={claimsRes} area="claims on this policy" backHref="/assets/insurance" backLabel="Asset Insurance" />
         ) : (
           <DataTable<(typeof claimRows)[number]>
             columns={[
@@ -193,6 +164,9 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
               { key: "status", label: "Status", cellType: "status" },
             ]}
             rows={claimRows}
+            rowLinkKey="id"
+            rowLinkPrefix="/assets/insurance/claims/"
+            identifyingColumnKey="claimDateDisplay"
             sortable
             pageSize={15}
             emptyIcon="📋"

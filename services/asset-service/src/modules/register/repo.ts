@@ -35,7 +35,12 @@ export async function findAssetsByTenant(tenantId: string, opts?: { category?: s
   if (opts?.category) conditions.push(eq(assetAssets.categoryId, opts.category));
   if (opts?.status)   conditions.push(eq(assetAssets.status, opts.status));
   if (opts?.type)     conditions.push(eq(assetAssets.assetType, opts.type));
-  if (opts?.search)   conditions.push(sql`to_tsvector('simple', ${assetAssets.name} || ' ' || ${assetAssets.code}) @@ plainto_tsquery('simple', ${opts.search})`);
+  if (opts?.search) {
+    // GAP-ASSETS-INSURANCE-03: whole-word text match OR a case-insensitive substring of
+    // name/code, so a picker typing "serv" finds "Server Rack" (tsvector matches whole words only).
+    const like = `%${opts.search.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+    conditions.push(sql`(to_tsvector('simple', ${assetAssets.name} || ' ' || ${assetAssets.code}) @@ plainto_tsquery('simple', ${opts.search}) OR ${assetAssets.name} ILIKE ${like} OR ${assetAssets.code} ILIKE ${like})`);
+  }
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.
   return scopedRead((tx) => tx.select().from(assetAssets)

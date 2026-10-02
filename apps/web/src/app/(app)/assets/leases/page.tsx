@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import Link from "next/link";
+import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, SkeletonRow, useConfirmAction } from "../../../_components/ds";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
@@ -105,13 +106,15 @@ export default function LeasesPage() {
   const inputStyle = { padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
   const fieldCol = { display: "flex", flexDirection: "column" as const, gap: 4 };
 
+  // GAP-ASSETS-LEASES-02: liability and status are captured and returned, so they are shown.
   const tableRows = rows.map((r) => ({
     id: r.id,
     leaseNo: r.leaseNo,
     lessorName: r.lessorName,
     rou: formatMoney(r.rouCostMinor),
+    liability: formatMoney(r.liabilityMinor),
+    status: r.status,
     term: `${formatIndianDate(r.leaseStart)} → ${formatIndianDate(r.leaseEnd)}`,
-    asset: r.assetId ? "View" : "—",
     assetId: r.assetId ?? "",
   }));
 
@@ -127,7 +130,7 @@ export default function LeasesPage() {
         <div role="status" aria-live="polite" className="banner" style={{ background: "var(--panel)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}
       <div className="card" style={{ marginBottom: 16 }}>
-        <form onSubmit={submit} className="pad">
+        <form onSubmit={submit} noValidate className="pad">
           <div className="fields">
             <div style={fieldCol}>
               <label className="l" htmlFor="lease-no">Lease no.</label>
@@ -139,7 +142,7 @@ export default function LeasesPage() {
             </div>
             <div style={fieldCol}>
               <label className="l" htmlFor="lease-rou">ROU cost (₹)</label>
-              <input id="lease-rou" required inputMode="decimal" value={form.rouCost} onChange={(e) => setForm({ ...form, rouCost: e.target.value })} style={inputStyle} />
+              <input id="lease-rou" required inputMode="decimal" aria-describedby="lease-money-hint" value={form.rouCost} onChange={(e) => setForm({ ...form, rouCost: e.target.value })} style={inputStyle} />
             </div>
             <div style={fieldCol}>
               <label className="l" htmlFor="lease-liab">Liability (₹)</label>
@@ -151,9 +154,12 @@ export default function LeasesPage() {
             </div>
             <div style={fieldCol}>
               <label className="l" htmlFor="lease-end">Lease end</label>
-              <input id="lease-end" required type="date" value={form.leaseEnd} onChange={(e) => setForm({ ...form, leaseEnd: e.target.value })} style={inputStyle} />
+              <input id="lease-end" required type="date" min={form.leaseStart || undefined} value={form.leaseEnd} onChange={(e) => setForm({ ...form, leaseEnd: e.target.value })} style={inputStyle} />
             </div>
           </div>
+          <p id="lease-money-hint" style={{ fontSize: 12, color: "var(--ink2)", margin: "8px 0 0" }}>
+            Enter amounts as digits only, with up to 2 decimals (for example 18500000 or 185000.50) — no commas.
+          </p>
           {formError ? <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "8px 0 0" }}>{formError}</p> : null}
           <Button type="submit" disabled={register.busy} style={{ marginTop: 12 }}>{register.busy ? "Registering…" : "Register lease"}</Button>
         </form>
@@ -163,18 +169,43 @@ export default function LeasesPage() {
         {loadError ? (
           <ErrorState error={toHumanError("load", { area: "leases" })} onRetry={() => void load()} />
         ) : tableRows.length === 0 ? (
-          <EmptyState icon="📄" title={loaded ? "No leases yet" : "Loading leases…"} message={loaded ? "Register an IFRS 16 lease to track ROU assets and liabilities." : undefined} />
+          loaded ? (
+            <EmptyState icon="📄" title="No leases yet" message="Register an IFRS 16 lease to track ROU assets and liabilities." />
+          ) : (
+            <div aria-busy="true" aria-label="Loading leases">
+              {[0, 1, 2, 3, 4].map((i) => (
+                <SkeletonRow key={i} />
+              ))}
+            </div>
+          )
         ) : (
           <DataTable
             columns={[
               { key: "leaseNo", label: "Lease" },
               { key: "lessorName", label: "Lessor" },
               { key: "rou", label: "ROU", align: "right" },
+              { key: "liability", label: "Liability", align: "right" },
+              { key: "status", label: "Status", cellType: "status" },
               { key: "term", label: "Term" },
-              { key: "asset", label: "Asset", render: (r) => (r.assetId ? <a href={`/assets/${r.assetId}`}>View</a> : "—") },
+              {
+                key: "assetId",
+                label: "Asset",
+                // GAP-ASSETS-LEASES-06: client-side navigation, distinguishable accessible name.
+                render: (r) =>
+                  r.assetId ? (
+                    <Link href={`/assets/${encodeURIComponent(r.assetId)}`} aria-label={`View asset for lease ${r.leaseNo}`}>
+                      View
+                    </Link>
+                  ) : (
+                    "—"
+                  ),
+              },
             ]}
             rows={tableRows}
             sortable
+            filterable
+            filterPlaceholder="Filter by lease or lessor…"
+            pageSize={15}
           />
         )}
       </div>

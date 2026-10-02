@@ -2,11 +2,11 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, EntityPicker, Field, useConfirmAction, type EntityOption } from "@/app/_components/ds";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { browserJson } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
-import type { AssetOption } from "./page";
+import { resolveAssets, searchAssets } from "@/lib/entityAdapters/asset";
 
 type AcceptedResponse = { id?: string; status?: string; correlationId?: string };
 
@@ -24,7 +24,21 @@ function validateDate(value: string): string | null {
   return null;
 }
 
-export function PolicyForm({ assets }: { assets: AssetOption[] }) {
+/**
+ * GAP-ASSETS-INSURANCE-07: the policies API takes minor units as JSON numbers
+ * (z.number().int()), so a paise string is only sendable exactly while it is a
+ * safe integer. Anything larger is rejected in the form instead of being
+ * silently rounded by Number().
+ */
+export function safeMinorNumber(minor: string): number | null {
+  const n = Number(minor);
+  return Number.isSafeInteger(n) ? n : null;
+}
+
+const RENEWAL_MIN_DAYS = 1;
+const RENEWAL_MAX_DAYS = 365;
+
+export function PolicyForm({ disabledReason }: { disabledReason?: string }) {
   const router = useRouter();
 
   const [assetId, setAssetId] = useState("");
@@ -34,6 +48,7 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
   const [premium, setPremium] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [renewalDays, setRenewalDays] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -48,28 +63,37 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
   const premiumId = useId();
   const startDateId = useId();
   const endDateId = useId();
+  const renewalId = useId();
   const summaryId = useId();
 
-  const assetRef = useRef<HTMLSelectElement>(null);
   const policyNoRef = useRef<HTMLInputElement>(null);
   const insurerRef = useRef<HTMLInputElement>(null);
   const coverageRef = useRef<HTMLInputElement>(null);
   const premiumRef = useRef<HTMLInputElement>(null);
   const startDateRef = useRef<HTMLInputElement>(null);
   const endDateRef = useRef<HTMLInputElement>(null);
+  const renewalRef = useRef<HTMLInputElement>(null);
+  // Labels of every option the picker has shown, so the confirm dialog can name the chosen asset.
+  const seenAssets = useRef(new Map<string, EntityOption>());
 
-  const fieldOrder: [string, React.RefObject<HTMLElement>][] = [
-    ["assetId", assetRef],
+  async function searchAndRemember(query: string, signal: AbortSignal) {
+    const found = await searchAssets(query, signal);
+    for (const o of found) seenAssets.current.set(o.id, o);
+    return found;
+  }
+
+  const fieldOrder: [string, { current: HTMLElement | null }][] = [
+    ["assetId", { get current() { return document.getElementById(assetSelectId); } }],
     ["policyNo", policyNoRef],
     ["insurer", insurerRef],
     ["coverage", coverageRef],
     ["premium", premiumRef],
     ["startDate", startDateRef],
     ["endDate", endDateRef],
+    ["renewal", renewalRef],
   ];
 
-  const selectedAsset = assets.find((a) => a.id === assetId);
-  const assetLabel = selectedAsset ? [selectedAsset.code, selectedAsset.name].filter(Boolean).join(" · ") || "the selected asset" : "the selected asset";
+  const assetLabel = seenAssets.current.get(assetId)?.label ?? "the selected asset";
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -93,6 +117,18 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
     if (!startErr && !endErr && endDate <= startDate) {
       errors.endDate = "End date must be after the start date.";
     }
+
+    // GAP-ASSETS-INSURANCE-06: optional; sent only when entered.
+    if (renewalDays.trim() !== "") {
+      const n = Number(renewalDays);
+      if (!/^\d+$/.test(renewalDays.trim()) || n < RENEWAL_MIN_DAYS || n > RENEWAL_MAX_DAYS) {
+        errors.renewal = `Enter a whole number of days between ${RENEWAL_MIN_DAYS} and ${RENEWAL_MAX_DAYS}.`;
+      }
+    }
+
+    // GAP-ASSETS-INSURANCE-07: exact-or-reject, never a silently rounded amount.
+    if (coverageMinor && safeMinorNumber(coverageMinor) === null) errors.coverage = "That sum insured is too large to submit.";
+    if (premiumMinor && safeMinorNumber(premiumMinor) === null) errors.premium = "That premium is too large to submit.";
 
     setFieldErrors(errors);
 
@@ -129,11 +165,12 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
           assetId,
           policyNo: policyNo.trim(),
           insurer: insurer.trim(),
-          coverageMinor: Number(coverageMinor),
-          premiumMinor: Number(premiumMinor),
+          coverageMinor: safeMinorNumber(coverageMinor),
+          premiumMinor: safeMinorNumber(premiumMinor),
           currency: "INR",
           startDate,
           endDate,
+          ...(renewalDays.trim() !== "" ? { renewalReminderDays: Number(renewalDays) } : {}),
         }),
       });
       setTone("good");
@@ -146,41 +183,25 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
       setPremium("");
       setStartDate("");
       setEndDate("");
+      setRenewalDays("");
       setFieldErrors({});
       router.refresh();
   }
 
   return (
-    <form onSubmit={submit} style={{ marginBottom: 16 }} aria-label="Create an insurance policy">
+    <form onSubmit={submit} noValidate style={{ marginBottom: 16 }} aria-label="Create an insurance policy">
       <Card title="Create Policy" padding>
         <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))" }}>
-          <div style={{ display: "grid", gap: 6 }}>
-            <label htmlFor={assetSelectId} style={{ fontSize: 13, fontWeight: 600 }}>
-              Asset <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-            </label>
-            <select
-              id={assetSelectId}
-              ref={assetRef}
-              value={assetId}
-              onChange={(e) => setAssetId(e.target.value)}
-              aria-required="true"
-              aria-invalid={!!fieldErrors.assetId || undefined}
-              aria-describedby={fieldErrors.assetId ? `${assetSelectId}-error` : undefined}
-              style={inputStyle}
-            >
-              <option value="">Select an asset…</option>
-              {assets.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {[a.code, a.name].filter(Boolean).join(" · ") || a.id}
-                </option>
-              ))}
-            </select>
-            {fieldErrors.assetId && (
-              <p id={`${assetSelectId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
-                {fieldErrors.assetId}
-              </p>
-            )}
-          </div>
+          <Field id={assetSelectId} label="Asset" required error={fieldErrors.assetId} disabled={!!disabledReason}>
+            <EntityPicker
+              value={assetId || null}
+              onChange={(v) => setAssetId(typeof v === "string" ? v : "")}
+              search={searchAndRemember}
+              resolve={resolveAssets}
+              placeholder="Search by asset code or name…"
+              noResultsText="No matching asset"
+            />
+          </Field>
 
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor={policyNoId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -311,10 +332,38 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
               </p>
             )}
           </div>
+
+          <div style={{ display: "grid", gap: 6 }}>
+            <label htmlFor={renewalId} style={{ fontSize: 13, fontWeight: 600 }}>
+              Renewal reminder (days before expiry)
+            </label>
+            <input
+              id={renewalId}
+              ref={renewalRef}
+              inputMode="numeric"
+              placeholder="30"
+              value={renewalDays}
+              onChange={(e) => setRenewalDays(e.target.value)}
+              aria-invalid={!!fieldErrors.renewal || undefined}
+              aria-describedby={fieldErrors.renewal ? `${renewalId}-error` : undefined}
+              style={inputStyle}
+            />
+            {fieldErrors.renewal && (
+              <p id={`${renewalId}-error`} role="alert" style={{ margin: 0, fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+                {fieldErrors.renewal}
+              </p>
+            )}
+          </div>
         </div>
 
+        {disabledReason ? (
+          <p role="alert" style={{ margin: "12px 0 0", fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+            {disabledReason}
+          </p>
+        ) : null}
+
         <div style={{ marginTop: 14 }}>
-          <Button type="submit" style={{ minHeight: 44 }} disabled={busy} aria-label="Create insurance policy">
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy || !!disabledReason} aria-label="Create insurance policy">
             {busy ? "Saving…" : "Create Policy"}
           </Button>
         </div>

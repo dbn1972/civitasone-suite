@@ -1,8 +1,10 @@
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import Link from "next/link";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "@/app/_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { PoliciesTable, type PolicyTableRow } from "./PoliciesTable";
 import { PolicyForm } from "./PolicyForm";
+import { derivePolicyStats } from "./policyStats";
 
 export type AssetOption = {
   id: string;
@@ -45,7 +47,8 @@ function mapAssets(payload: unknown): AssetOption[] | null {
     if (typeof id !== "string") continue;
     mapped.push({
       id,
-      code: typeof raw.code === "string" ? raw.code : "",
+      // GAP-ASSETS-INSURANCE-03: the other asset loaders read assetCode ?? code.
+      code: typeof raw.assetCode === "string" && raw.assetCode ? raw.assetCode : typeof raw.code === "string" ? raw.code : "",
       name: typeof raw.name === "string" ? raw.name : "",
     });
   }
@@ -92,27 +95,31 @@ async function getPolicies(): Promise<LoaderResult<PolicyRow[]>> {
   });
 }
 
+/** Shown in the Asset column when the policy's asset is not in the labels fetched for this page. */
+const ASSET_FALLBACK_LABEL = "Asset (not in loaded list)";
+
 export default async function InsurancePoliciesPage() {
-  const { data: assets, source: assetsSource } = await getAssets();
-  const { data: policies, source: policiesSource } = await getPolicies();
+  const assetsRes = await getAssets();
+  const policiesRes = await getPolicies();
+  const { data: assets } = assetsRes;
+  const { data: policies } = policiesRes;
 
-  const overallSource = assetsSource === "error" || policiesSource === "error" ? "error" : "api";
+  // GAP-ASSETS-INSURANCE-05: ONE failure indicator -- the body's error state.
+  // No header badge, no per-card badges, no zero stat tiles.
+  const policiesFailed = policiesRes.source === "error";
+  const assetsFailed = assetsRes.source === "error";
 
-  const today = new Date().toISOString().slice(0, 10);
-  const activePolicies = policies.filter((p) => p.status === "active").length;
-  const expiringSoon = policies.filter((p) => {
-    if (p.status !== "active" || !p.endDate) return false;
-    const days = (new Date(p.endDate).getTime() - new Date(today).getTime()) / 86_400_000;
-    return days >= 0 && days <= 30;
-  }).length;
-  const expired = policies.filter((p) => p.endDate && p.endDate < today && p.status === "active").length;
+  // GAP-ASSETS-INSURANCE-04: IST "today"; each policy in exactly one bucket.
+  const stats = derivePolicyStats(policies, todayIST());
 
   const assetLookup = new Map(assets.map((a) => [a.id, a]));
-  const rows = policies.map((p) => {
+  const rows: PolicyTableRow[] = policies.map((p) => {
     const asset = assetLookup.get(p.assetId);
+    const known = asset ? [asset.code, asset.name].filter(Boolean).join(" · ") : "";
     return {
       ...p,
-      assetLabel: asset ? [asset.code, asset.name].filter(Boolean).join(" · ") || asset.id : p.assetId,
+      // GAP-ASSETS-INSURANCE-03: never a raw UUID in the Asset column.
+      assetLabel: known || ASSET_FALLBACK_LABEL,
       startDateDisplay: formatIndianDate(p.startDate),
       endDateDisplay: formatIndianDate(p.endDate),
     };
@@ -125,58 +132,35 @@ export default async function InsurancePoliciesPage() {
         subtitle="Insurance policies covering registered assets, and claims filed against them."
         back="/assets"
         actions={
-          <>
-            {overallSource === "error" ? <DataSourceBadge source="error" /> : null}
-            <a href="/assets/insurance/claims" className="btn ghost">
-              View Claims
-            </a>
-          </>
+          <Link href="/assets/insurance/claims" className="btn ghost">
+            View Claims
+          </Link>
         }
       />
 
-      {policiesSource === "error" && policies.length === 0 ? (
-        <Card title="Policies">
-          <DataSourceBadge source="error" />
-        </Card>
+      {policiesFailed ? (
+        <LoadErrorState result={policiesRes} area="insurance policies" backHref="/assets" />
       ) : (
         <StatGrid>
-          <StatCard icon="🛡️" iconBg="#e6f0ff" label="Total Policies" value={policies.length} />
-          <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={activePolicies} />
-          <StatCard icon="⏳" iconBg="#fff2e6" label="Expiring in 30 Days" value={expiringSoon} />
-          <StatCard icon="⚠️" iconBg="#fef3f2" label="Lapsed" value={expired} />
+          <StatCard icon="🛡️" iconBg="#e6f0ff" label="Total Policies" value={stats.total} />
+          <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={stats.active} />
+          <StatCard icon="⏳" iconBg="#fff2e6" label="Expiring in 30 Days" value={stats.expiring} />
+          <StatCard icon="⚠️" iconBg="#fef3f2" label="Lapsed" value={stats.lapsed} />
+          <StatCard icon="❔" iconBg="#f2f4f7" label="Other" value={stats.other} />
         </StatGrid>
       )}
 
-      <PolicyForm assets={assets} />
+      <PolicyForm
+        disabledReason={
+          assetsFailed ? "Couldn't load assets, so a policy can't be created right now. Refresh the page to try again." : undefined
+        }
+      />
 
-      <Card title="Policies">
-        {policiesSource === "error" && policies.length === 0 ? (
-          <DataSourceBadge source="error" />
-        ) : (
-          <DataTable<(typeof rows)[number]>
-            columns={[
-              { key: "policyNo", label: "Policy No." },
-              { key: "assetLabel", label: "Asset" },
-              { key: "insurer", label: "Insurer" },
-              { key: "coverageMinor", label: "Sum Insured", align: "right", cellType: "amount" },
-              { key: "premiumMinor", label: "Premium", align: "right", cellType: "amount" },
-              { key: "startDateDisplay", label: "Start" },
-              { key: "endDateDisplay", label: "End" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={rows}
-            rowLinkKey="id"
-            rowLinkPrefix="/assets/insurance/"
-            sortable
-            filterable
-            filterPlaceholder="Filter by policy number or insurer…"
-            pageSize={15}
-            emptyIcon="🛡️"
-            emptyTitle="No insurance policies"
-            emptyMessage="Create the first policy above to start tracking asset insurance."
-          />
-        )}
-      </Card>
+      {policiesFailed ? null : (
+        <Card title="Policies">
+          <PoliciesTable rows={rows} />
+        </Card>
+      )}
     </div>
   );
 }
