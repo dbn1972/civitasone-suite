@@ -4,18 +4,29 @@
  * disagree on provenance). Pure + BigInt paise (no float addition).
  */
 export interface GlStatEntry {
+  /** "<journalId>:<line>" (or a bare journal id) -- see journalIdOf. */
+  id: string;
   accountCode: string;
   debit: string;
   credit: string;
 }
 
 export interface GlStats {
+  /** Distinct vouchers (journals) -- NOT rows: a 3-line voucher counts once. */
   vouchers: number;
+  /** Ledger lines (what the table's rows are). */
+  entryLines: number;
   accountsActive: number;
   totalDebit: bigint;
   totalCredit: bigint;
   /** null when there are no entries: an empty ledger is "no entries", never "balanced". */
   balance: "balanced" | "unbalanced" | null;
+}
+
+/** Rows are journal lines with id "journalId:line"; the voucher is the journal. */
+export function journalIdOf(id: string): string {
+  const i = id.indexOf(":");
+  return i === -1 ? id : id.slice(0, i);
 }
 
 export function computeGlStats(entries: readonly GlStatEntry[]): GlStats {
@@ -26,7 +37,8 @@ export function computeGlStats(entries: readonly GlStatEntry[]): GlStats {
     totalCredit += BigInt(e.credit || "0");
   }
   return {
-    vouchers: entries.length,
+    vouchers: new Set(entries.map((e) => journalIdOf(e.id))).size,
+    entryLines: entries.length,
     accountsActive: new Set(entries.map((e) => e.accountCode)).size,
     totalDebit,
     totalCredit,

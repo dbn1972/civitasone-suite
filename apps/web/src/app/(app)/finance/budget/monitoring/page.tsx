@@ -1,16 +1,10 @@
 import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
+import { formatMoneyCompact } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getFinanceBudgetMonitoring, getFinanceBudgetMonitoringLines } from "@/app/_data/loaders";
 import { currentFinancialYear } from "@/lib/fiscalYear";
 import { FyFilter } from "../../_components/FyFilter";
 import { MonitoringTable } from "./MonitoringTable";
-
-function rupees(val: unknown): string {
-  const n = Number(BigInt(String(val ?? "0"))) / 100;
-  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
-  if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`;
-  return `₹${n.toFixed(0)}`;
-}
 
 export default async function BudgetMonitoringPage({
   searchParams,
@@ -70,13 +64,13 @@ export default async function BudgetMonitoringPage({
           icon="💰"
           iconBg="var(--panel)"
           label="Total Allocated"
-          value={summaryErr ? "—" : rupees((totals as Record<string, unknown>).allocatedMinor)}
+          value={summaryErr ? "—" : formatMoneyCompact(String((totals as Record<string, unknown>).allocatedMinor ?? "0"))}
         />
         <StatCard
           icon="📤"
           iconBg="var(--panel)"
           label="Total Expended"
-          value={summaryErr ? "—" : rupees((totals as Record<string, unknown>).actualMinor)}
+          value={summaryErr ? "—" : formatMoneyCompact(String((totals as Record<string, unknown>).actualMinor ?? "0"))}
         />
         <StatCard
           icon="🟢"

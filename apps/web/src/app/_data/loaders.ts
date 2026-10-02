@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { HR_AUDIT_SERVICES } from "@/app/(app)/hr/audit-log/auditResource";
 import type {
   AccountSummary,
@@ -2039,7 +2040,7 @@ export async function getFinanceUCs(): Promise<LoaderResult<UCSummary[]>> {
 }
 
 export async function getFinanceGLEntries(): Promise<LoaderResult<GLEntrySummary[]>> {
-  return fetchJson<unknown, GLEntrySummary[]>("/api/v1/finance/journals", [], {
+  return fetchJson<unknown, GLEntrySummary[]>(`/api/v1/finance/journals?limit=${GL_JOURNAL_LIMIT}`, [], {
     revalidateSeconds: 60,
     telemetryKey: "finance.gl",
     responseSchema: GLEntrySummaryListSchema,

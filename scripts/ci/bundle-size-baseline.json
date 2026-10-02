@@ -1483,11 +1483,6 @@
       "sizeBytes": 158,
       "firstLoadJsBytes": 152000
     },
-    "/finance/advances": {
-      "marker": "ƒ",
-      "sizeBytes": 1490,
-      "firstLoadJsBytes": 89400
-    },
     "/finance/audit-paras": {
       "marker": "ƒ",
       "sizeBytes": 1200,
@@ -1497,11 +1492,6 @@
       "marker": "ƒ",
       "sizeBytes": 1050,
       "firstLoadJsBytes": 147000
-    },
-    "/finance/benefits": {
-      "marker": "ƒ",
-      "sizeBytes": 1490,
-      "firstLoadJsBytes": 89400
     },
     "/finance/budget/allocation": {
       "marker": "ƒ",

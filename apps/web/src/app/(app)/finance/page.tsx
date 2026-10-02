@@ -14,7 +14,7 @@ const financeSections: NavTile[] = [
 	{ title: "Demand for Grants", section: "Budget", description: "Parliamentary demand for grants with voted/charged breakup.", href: "/finance/budget/demand-grants" },
 	{ title: "Revised Estimates", section: "Budget", description: "BE vs RE with variance analysis by head.", href: "/finance/budget/revised-estimates" },
 	{ title: "Outcome Budget", section: "Budget", description: "Scheme output indicators and achievement tracking.", href: "/finance/budget/outcome-budget" },
-	{ title: "Budget Allocation", section: "Budget", description: "Department-wise allocation, release, and utilization.", href: "/finance/budget/allocation" },
+	{ title: "Budget Allocation", section: "Budget", description: "Allocation, commitment and expenditure by budget head and financial year.", href: "/finance/budget/allocation" },
 	{ title: "Budget Monitoring", section: "Budget", description: "Real-time head-wise allocation, commitment, expenditure and forecast.", href: "/finance/budget/monitoring" },
 	{ title: "Fund Releases", section: "Budget", description: "Allocation distributions issued to subordinate offices and departments.", href: "/finance/budget/fund-releases" },
 

@@ -65,6 +65,14 @@ const nextConfig = {
     // catch-all listed first would shadow the more specific redirects below.
     return [
       { source: '/hr/orgchart', destination: '/hr/org-chart', permanent: true },
+      // Legacy finance bookmarks -> HR modules. Done here (not as page-level
+      // redirect() calls) because finance/layout.tsx role-gates every
+      // /finance/* child BEFORE the page runs, so a non-finance employee would
+      // see PermissionDenied instead of being redirected. Config redirects run
+      // first and keep the query string (GAP-FINANCE-ADVANCES-01,
+      // GAP-FINANCE-BENEFITS-01/02).
+      { source: '/finance/advances', destination: '/hr/advances', permanent: true },
+      { source: '/finance/benefits', destination: '/hr/benefits', permanent: true },
       { source: '/stock', destination: '/inventory', permanent: true },
       { source: '/stock/list', destination: '/inventory/list', permanent: true },
       { source: '/stock/ledger', destination: '/inventory/reconcile', permanent: true },

@@ -22,13 +22,13 @@ export default async function AllocationPage() {
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Budget Allocation"
-        subtitle="Department-wise allocation, release, and utilization."
+        subtitle="Allocation, commitment and expenditure by budget head and financial year."
         back="/finance"
       />
       <StatGrid>
         <StatCard icon="📊" iconBg="#e7edfd" label="Allocations" value={errored ? "—" : allocations.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Committed" value={errored ? "—" : committed} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending" value={errored ? "—" : allocations.length - committed} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Not yet committed" value={errored ? "—" : allocations.length - committed} />
         <StatCard icon="🏛️" iconBg="#eff6ff" label="Budget Heads" value={errored ? "—" : new Set(allocations.map((a) => a.headId)).size} />
       </StatGrid>
       {/* UX-012: the data-source badge lives inside AllocationTable, driven by

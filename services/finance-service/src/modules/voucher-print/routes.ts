@@ -2,12 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "../gl/repo.js";
+import { escHtml, buildVoucherLines } from "./render.js";
 
 const READER_ROLES = ["finance_officer", "finance_admin", "super_admin", "audit_officer"];
-
-function escHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 function renderTemplate(template: string, vars: Record<string, string>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? "");
@@ -40,10 +37,6 @@ th{background:#f5f5f5}
 <div class="footer">System-generated voucher — print for records</div>
 </body></html>`;
 
-function fmt(minor: number): string {
-  return (minor / 100).toLocaleString("en-IN", { minimumFractionDigits: 2 });
-}
-
 export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/journals/:id/pdf", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -54,15 +47,7 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "journal not found");
     }
     const lines = journal.lines ?? [];
-    let totalDebit = 0;
-    let totalCredit = 0;
-    const lineRows = lines.map((l) => {
-      const dr = Number(l.debitMinor);
-      const cr = Number(l.creditMinor);
-      totalDebit += dr;
-      totalCredit += cr;
-      return `<tr><td>${escHtml(l.accountCode)}</td><td class="amount">${fmt(dr)}</td><td class="amount">${fmt(cr)}</td><td></td></tr>`;
-    }).join("");
+    const { lineRows, totalDebit, totalCredit } = buildVoucherLines(lines);
     const html = renderTemplate(VOUCHER_TEMPLATE, {
       orgName: "CivitasOne Government ERP",
       voucherNo: escHtml(journal.voucherNo),
@@ -70,8 +55,8 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
       type: escHtml(journal.type ?? "journal"),
       status: escHtml(journal.status ?? "posted"),
       lineRows,
-      totalDebit: fmt(totalDebit),
-      totalCredit: fmt(totalCredit),
+      totalDebit,
+      totalCredit,
     });
     return reply.header("content-type", "text/html; charset=utf-8").send(html);
   });
@@ -85,15 +70,7 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(404, "NOT_FOUND", "journal not found");
     }
     const lines = journal.lines ?? [];
-    let totalDebit = 0;
-    let totalCredit = 0;
-    const lineRows = lines.map((l) => {
-      const dr = Number(l.debitMinor);
-      const cr = Number(l.creditMinor);
-      totalDebit += dr;
-      totalCredit += cr;
-      return `<tr><td>${escHtml(l.accountCode)}</td><td class="amount">${fmt(dr)}</td><td class="amount">${fmt(cr)}</td><td></td></tr>`;
-    }).join("");
+    const { lineRows, totalDebit, totalCredit } = buildVoucherLines(lines);
     const html = renderTemplate(VOUCHER_TEMPLATE, {
       orgName: "CivitasOne Government ERP",
       voucherNo: escHtml(journal.voucherNo),
@@ -101,8 +78,8 @@ export async function voucherPrintRoutes(app: FastifyInstance): Promise<void> {
       type: escHtml(journal.type ?? "journal"),
       status: escHtml(journal.status ?? "posted"),
       lineRows,
-      totalDebit: fmt(totalDebit),
-      totalCredit: fmt(totalCredit),
+      totalDebit,
+      totalCredit,
     });
     return reply
       .header("content-type", "text/html; charset=utf-8")

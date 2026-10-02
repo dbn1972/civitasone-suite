@@ -1,17 +1,11 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
+import { formatMoney } from "@/lib/formatters";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { budgetHeadLabel } from "../_lib/headLabel";
 
 type Row = Record<string, unknown>;
-
-function rupees(val: unknown): string {
-  const n = Number(BigInt(String(val ?? "0"))) / 100;
-  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
-  if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`;
-  return `₹${n.toFixed(0)}`;
-}
 
 function exceptionBadge(kind: unknown): string {
   switch (kind) {
@@ -61,10 +55,10 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
       headCode: typeof r.headCode === "string" ? r.headCode : null,
       headName: typeof r.headName === "string" ? r.headName : null,
     }),
-    _allocated: rupees(r.allocatedMinor),
-    _committed: rupees(r.committedMinor),
-    _actual:    rupees(r.actualMinor),
-    _available: rupees(r.availableMinor),
+    _allocated: formatMoney(String(r.allocatedMinor ?? "0")),
+    _committed: formatMoney(String(r.committedMinor ?? "0")),
+    _actual:    formatMoney(String(r.actualMinor ?? "0")),
+    _available: formatMoney(String(r.availableMinor ?? "0")),
     _exception: exceptionBadge(r.exception),
   }));
 

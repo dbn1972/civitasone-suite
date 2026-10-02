@@ -38,27 +38,10 @@ test.describe('Finance & Expense — HRMS (S17)', () => {
     await expect(page.getByRole('button', { name: /New Request/i })).toBeVisible();
   });
 
-  // REL-023: real gap, not a stale test — the modal "AdvanceSlideOver"
-  // (finance/advances/AdvanceSlideOver.tsx) this test exercises, including
-  // its GFR 2017 Rule 290 "Sanctioning Authority" mandatory-field notice, is
-  // orphaned dead code: /finance/advances now redirects to /hr/advances,
-  // whose RequestAdvanceForm.tsx is a plain inline expand-in-place form
-  // (Employee / Amount / Recovery Months / Request Date / Purpose only)
-  // with no dialog role and — this is the important part — no
-  // "Sanctioning Authority" field and no GFR Rule 290 notice at all. GFR
-  // 2017 Rule 290 requires an advance to be sanctioned by an authorised
-  // officer; this looks like a compliance regression introduced when the
-  // advances flow moved from Finance to HR, not a UI restyle. Flagging for
-  // product/compliance review rather than silently dropping the
-  // requirement or reintroducing the old dialog myself.
-  test.fixme('AdvanceSlideOver: dialog opens with "Sanctioning Authority" as required field (GFR Rule 290)', async ({ page }) => {
-    await page.goto('/hr/advances');
-    await page.getByRole('button', { name: /New Request/i }).click();
-    const dialog = page.getByRole('dialog');
-    await expect(dialog).toBeVisible();
-    await expect(dialog.getByText(/GFR 2017 Rule 290/i)).toBeVisible();
-    await expect(dialog.getByText(/Sanctioning Authority/i)).toBeVisible();
-  });
+  // The old AdvanceSlideOver dialog (GFR 2017 Rule 290 "Sanctioning Authority"
+  // field) was deleted in GAP-FINANCE-ADVANCES-02; its coverage gap (no
+  // sanctioning-authority field in /hr/advances' RequestAdvanceForm) remains a
+  // product/compliance question and has no test to keep until that is decided.
 
   // ── Travel ───────────────────────────────────────────────────────────────
 

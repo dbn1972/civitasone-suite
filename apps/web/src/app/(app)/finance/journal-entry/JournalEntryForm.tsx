@@ -40,6 +40,21 @@ function emptyLine(defaultCode = ""): JournalLine {
 function paiseOf(val: string): bigint {
   return parseMinorOrZero(val) ?? 0n;
 }
+/**
+ * GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05: conservative, configurable shape for
+ * the voucher reference (finance-service accepts 1-64 chars; the gapless
+ * number is allocated server-side on approval). Deliberately permissive until
+ * Finance fixes a numbering series: letters, digits, space and . / _ -.
+ */
+export const VOUCHER_NO_MAX = 64;
+export const VOUCHER_NO_PATTERN = /^[A-Za-z0-9][A-Za-z0-9 ./_-]*$/;
+export function voucherNoError(raw: string): string | null {
+  const v = raw.trim();
+  if (!v) return "Voucher number is required.";
+  if (v.length > VOUCHER_NO_MAX) return `Voucher number must be at most ${VOUCHER_NO_MAX} characters.`;
+  if (!VOUCHER_NO_PATTERN.test(v)) return "Use letters, numbers and - _ / . only, starting with a letter or number.";
+  return null;
+}
 const AMOUNT_ERROR = "Enter an amount with at most 2 decimals.";
 const AMOUNT_COMMA_ERROR = "Enter digits and an optional decimal point only - remove the commas (e.g. 100000.50).";
 function amountErrorFor(val: string): string {
@@ -131,7 +146,8 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
   /* ── validation (per-field) ─────────────────────────────────── */
   function validate(): FieldErrors {
     const e: FieldErrors = {};
-    if (!voucherNo.trim()) e.voucherNo = "Voucher number is required.";
+    const voucherErr = voucherNoError(voucherNo);
+    if (voucherErr) e.voucherNo = voucherErr;
     if (!narration.trim()) e.narration = "Narration is required.";
     if (!postingDate) e.postingDate = "Posting date is required.";
     const lineErrs: Record<number, string> = {};
@@ -297,6 +313,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
             id="jv-voucher"
             className="input"
             placeholder="e.g. JV-2026-001"
+            maxLength={VOUCHER_NO_MAX}
             value={voucherNo}
             onChange={(e) => setVoucherNo(e.target.value)}
             aria-invalid={errors.voucherNo ? true : undefined}

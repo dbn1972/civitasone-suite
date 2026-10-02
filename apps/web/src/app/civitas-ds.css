@@ -305,7 +305,13 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .lt-section{margin-bottom:28px}
 .lt-section-hd{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2,#667085);margin:0 0 12px;padding:0 0 6px;border-bottom:1px solid var(--line,#e5e7eb)}
 
+/* Finance print header (PrintHeader.tsx): screen-hidden, print-visible. */
+.fin-print-header{display:none}
+.fin-print-header h1{font-size:18pt;margin:0}
+.fin-print-header p{font-size:10pt;color:#555;margin:4px 0 12px}
+
 @media print{
+  .fin-print-header{display:block}
   @page{margin:14mm}
   body{background:#fff!important}
   .sb,.tb,.mnav,.mactions,.ph-act,.iconbtn,.tb-search,.seg,.back,.subnav{display:none!important}

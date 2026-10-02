@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { DataTable, Segmented, EmptyState, RefreshErrorState, StatGrid, StatCard } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { balanceSheetTotals, incomeExpenditureTotals, rupeesNumberToPaise } from "./statementTotals";
+import { balanceSheetTotals, incomeExpenditureTotals, parseRupeesExact } from "./statementTotals";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { FinancialStatementSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
@@ -29,6 +29,14 @@ interface StatementsTableProps {
   source?: "api" | "error";
 }
 
+/** "—" for anything that is not a clean money value (never a fabricated 0). */
+function cellMoney(v: unknown): string {
+  const p = parseRupeesExact(v);
+  return p === null ? "—" : formatMoney(p);
+}
+
+const MONEY_FIELDS = ["openingBalance", "receipts", "payments", "closingBalance"] as const;
+
 type StatRow = FinancialStatementSummary & Record<string, unknown>;
 
 export function StatementsTable({ statements, source = "api" }: StatementsTableProps) {
@@ -48,6 +56,13 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
   const ie = incomeExpenditureTotals(rows);
   const bs = balanceSheetTotals(rows);
 
+  // Any unreadable figure anywhere: flag it, show "—" in the cell, and withhold
+  // totals and the balance verdict that would silently exclude it.
+  const badCells = rows.reduce(
+    (n, r) => n + MONEY_FIELDS.filter((f) => parseRupeesExact((r as unknown as Record<string, unknown>)[f]) === null).length,
+    0,
+  );
+
   // GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-01: a failed load with nothing
   // cached is an error, not a table of zeros.
   if (provenance === "error-no-data") {
@@ -62,37 +77,46 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
           (UX-002's pattern; the page used to render a second, independent
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+      {badCells > 0 ? (
+        <p role="alert" style={{ margin: "0 0 12px", color: "#b91c1c", fontSize: "0.85rem" }}>
+          Data error: {badCells} figure{badCells === 1 ? "" : "s"} could not be read and {badCells === 1 ? "is" : "are"} shown as
+          &quot;—&quot;. Totals and the balance check are withheld until the source data is corrected.
+        </p>
+      ) : null}
       {activeType === "I&E" && rows.length > 0 ? (
         <StatGrid>
-          <StatCard icon="📥" iconBg="#ecfdf3" label="Total Income" value={formatMoney(ie.totalIncome)} />
-          <StatCard icon="📤" iconBg="#fef3f2" label="Total Expenditure" value={formatMoney(ie.totalExpenditure)} />
+          <StatCard icon="📥" iconBg="#ecfdf3" label="Total Income" value={ie.invalidRows ? "—" : formatMoney(ie.totalIncome)} />
+          <StatCard icon="📤" iconBg="#fef3f2" label="Total Expenditure" value={ie.invalidRows ? "—" : formatMoney(ie.totalExpenditure)} />
           <StatCard
             icon="💰"
             iconBg="#eff6ff"
             label={ie.surplus < 0n ? "Deficit" : "Surplus"}
-            value={formatMoney(ie.surplus < 0n ? -ie.surplus : ie.surplus)}
-            delta={ie.surplus < 0n ? "Deficit" : "Surplus"}
-            up={ie.surplus >= 0n}
+            value={ie.invalidRows ? "—" : formatMoney(ie.surplus < 0n ? -ie.surplus : ie.surplus)}
+            {...(ie.invalidRows ? {} : { delta: ie.surplus < 0n ? "Deficit" : "Surplus", up: ie.surplus >= 0n })}
           />
         </StatGrid>
       ) : null}
       {activeType === "Balance Sheet" && rows.length > 0 ? (
         <StatGrid>
-          <StatCard icon="🏛️" iconBg="#e7edfd" label="Total Assets" value={formatMoney(bs.totalAssets)} />
-          <StatCard icon="📑" iconBg="#fef3f2" label="Total Liabilities" value={formatMoney(bs.totalLiabilities)} />
+          <StatCard icon="🏛️" iconBg="#e7edfd" label="Total Assets" value={bs.invalidRows ? "—" : formatMoney(bs.totalAssets)} />
+          <StatCard icon="📑" iconBg="#fef3f2" label="Total Liabilities" value={bs.invalidRows ? "—" : formatMoney(bs.totalLiabilities)} />
           <StatCard
             icon="💰"
             iconBg="#eff6ff"
             label={bs.surplus < 0n ? "Current-period deficit" : "Current-period surplus"}
-            value={formatMoney(bs.surplus < 0n ? -bs.surplus : bs.surplus)}
+            value={bs.invalidRows ? "—" : formatMoney(bs.surplus < 0n ? -bs.surplus : bs.surplus)}
           />
           <StatCard
             icon="⚖️"
             iconBg="#ecfdf3"
             label="Balance check"
-            value={bs.balanced ? "Balanced" : "Unbalanced"}
-            delta={bs.balanced ? "Assets = Liabilities + surplus" : `Difference ${formatMoney(bs.difference < 0n ? -bs.difference : bs.difference)}`}
-            up={bs.balanced}
+            value={bs.invalidRows ? "Cannot verify" : bs.balanced ? "Balanced" : "Unbalanced"}
+            {...(bs.invalidRows
+              ? { delta: "Unreadable figures in the data" , up: false }
+              : {
+                  delta: bs.balanced ? "Assets = Liabilities + surplus" : `Difference ${formatMoney(bs.difference < 0n ? -bs.difference : bs.difference)}`,
+                  up: bs.balanced,
+                })}
           />
         </StatGrid>
       ) : null}
@@ -120,8 +144,8 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
                 label: "Opening",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Opening ${formatMoney(rupeesNumberToPaise(st.openingBalance as number))}`}>
-                    {formatMoney(rupeesNumberToPaise(st.openingBalance as number))}
+                  <span aria-label={`Opening ${cellMoney(st.openingBalance)}`}>
+                    {cellMoney(st.openingBalance)}
                   </span>
                 ),
               },
@@ -130,8 +154,8 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
                 label: "Receipts",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Receipts ${formatMoney(rupeesNumberToPaise(st.receipts as number))}`}>
-                    {formatMoney(rupeesNumberToPaise(st.receipts as number))}
+                  <span aria-label={`Receipts ${cellMoney(st.receipts)}`}>
+                    {cellMoney(st.receipts)}
                   </span>
                 ),
               },
@@ -140,8 +164,8 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
                 label: "Payments",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Payments ${formatMoney(rupeesNumberToPaise(st.payments as number))}`}>
-                    {formatMoney(rupeesNumberToPaise(st.payments as number))}
+                  <span aria-label={`Payments ${cellMoney(st.payments)}`}>
+                    {cellMoney(st.payments)}
                   </span>
                 ),
               },
@@ -150,8 +174,8 @@ export function StatementsTable({ statements, source = "api" }: StatementsTableP
                 label: "Closing",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Closing ${formatMoney(rupeesNumberToPaise(st.closingBalance as number))}`}>
-                    {formatMoney(rupeesNumberToPaise(st.closingBalance as number))}
+                  <span aria-label={`Closing ${cellMoney(st.closingBalance)}`}>
+                    {cellMoney(st.closingBalance)}
                   </span>
                 ),
               },
