@@ -8,6 +8,7 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerPayrollConsumers } from "./modules/payroll/consumer.js";
+import { registerPayProfileConsumers } from "./modules/pay-profiles/consumer.js";
 import { registerLoansConsumers }   from "./modules/loans/consumer.js";
 import { registerTaxConsumers }     from "./modules/tax/consumer.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
@@ -61,6 +62,7 @@ assertPiiKeyAtBoot();
 await loadTaxConfig();
 
 registerPayrollConsumers(queue);
+registerPayProfileConsumers(queue);
 registerLoansConsumers(queue);
 registerTaxConsumers(queue);
 registerIntegrationConsumers(queue);

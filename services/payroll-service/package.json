@@ -13,7 +13,9 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -rf dist",
     "coverage": "vitest run --coverage",
-    "backfill:payroll-register": "tsx src/scripts/backfill-payroll-register.ts"
+    "backfill:payroll-register": "tsx src/scripts/backfill-payroll-register.ts",
+    "report:hra-floor-impact": "tsx src/scripts/hra-floor-impact.ts",
+    "payroll:set-hra-floor": "tsx src/scripts/set-hra-floor.ts"
   },
   "dependencies": {
     "@civitasone/auth": "workspace:*",

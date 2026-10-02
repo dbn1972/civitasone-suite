@@ -43,7 +43,7 @@
  * Money is bigint paise throughout; every line is rounded to whole rupees
  * with the same roundRupee() computeSlip uses.
  */
-import { roundRupee, hraSlabPct, rawComponentAmountMinor } from "./domain.js";
+import { roundRupee, govtHraMinor, rawComponentAmountMinor } from "./domain.js";
 import type { CityClass, EarningsOverride, PayComponent, RawComponent } from "./domain.js";
 
 export interface SubsistenceConfig {
@@ -242,6 +242,18 @@ export function computeSubsistenceEarnings(input: {
   cityClass: CityClass;
   rawComponents: RawComponent[];
   plan: SubsistencePlan;
+  /**
+   * PAY-PROFILES: HRA minimum floor for the city class (continuing HRA is
+   * government-scale HRA, so the floor applies). Omitted / 0n == no floor.
+   */
+  hraFloorMinor?: bigint;
+  /**
+   * PAY-PROFILES: an Option A deputationist's full-month deputation (duty)
+   * allowance. Paid only for the regular (non-suspended) days -- it is a duty
+   * allowance, not a compensatory one under FR 53(1)(ii)(b). VERIFY against
+   * FR 53 / Swamy's. Omitted / 0n == none.
+   */
+  deputationAllowanceMinor?: bigint;
 }): SubsistenceEarnings {
   const { basicMinor, daRateBps, cityClass, rawComponents, plan } = input;
   const dim = BigInt(plan.daysInMonth);
@@ -251,7 +263,8 @@ export function computeSubsistenceEarnings(input: {
   const regularDaMinor = roundRupee((basicMinor * reg * daRateBps) / (dim * 10_000n));
   // HRA on the pay drawn before suspension, for the whole month -- identical
   // to computeSlip's own HRA line for a non-suspended month.
-  const hraMinor = roundRupee((basicMinor * hraSlabPct(cityClass, daRateBps)) / 100n);
+  // PAY-PROFILES: never below the HRA floor (floor 0n == the slab, unchanged).
+  const hraMinor = govtHraMinor(basicMinor, cityClass, daRateBps, input.hraFloorMinor ?? 0n);
 
   // Sum of basic x days x rate over every suspended segment, divided once at
   // the end so mixed-rate months round only once.
@@ -268,6 +281,11 @@ export function computeSubsistenceEarnings(input: {
   }
   if (subsistenceDaMinor > 0n) {
     components.push({ code: "SA_DA", name: "Dearness Allowance on Subsistence Allowance", type: "earning", amountMinor: subsistenceDaMinor });
+  }
+  const depAllowFull = input.deputationAllowanceMinor ?? 0n;
+  const depAllowMinor = roundRupee((depAllowFull * reg) / dim);
+  if (depAllowMinor > 0n) {
+    components.push({ code: "DEP_ALLOW", name: "Deputation (Duty) Allowance", type: "earning", amountMinor: depAllowMinor });
   }
   for (const c of rawComponents) {
     if (["BASIC", "DA", "HRA"].includes(c.code)) continue;
@@ -343,4 +361,36 @@ export function toSuspensionWindow(s: FeedSuspension): SuspensionWindow {
     suspensionId: s.suspensionId, fromDate: s.fromDate, toDate: s.toDate,
     revisedPct: s.revisedSubsistencePct, revisedEffectiveFrom: s.revisedEffectiveFrom, reviewOrderRef: s.reviewOrderRef,
   };
+}
+
+/** Pay profiles FR 53 is never applied to: their whole month is withheld and flagged. */
+const NON_GOVERNMENT_PROFILES: ReadonlySet<string> = new Set(["consolidated_contract", "ctc_contract"]);
+
+/**
+ * PAY-PROFILES x FR 53: the suspension treatment keyed on the PAY PROFILE.
+ *
+ *  - An employee with no ASSIGNED profile (source "default", or an HRMS feed
+ *    that predates profiles) keeps exactly resolveSuspensionTreatment's
+ *    engagement-type rule.
+ *  - With an assigned profile, the profile decides: govt_scale and both
+ *    deputation profiles get the FR 53 subsistence allowance (even when the
+ *    engagement type's pay mode is not "monthly", e.g. a legacy
+ *    "deputation" type); consolidated_contract and ctc_contract are withheld
+ *    and flagged NON_GOVERNMENT_ENGAGEMENT_WITHHELD.
+ *  - A suspension flagged without its dates stays withheld
+ *    (SUSPENSION_DETAILS_MISSING) whatever the profile.
+ */
+export function resolveProfiledSuspension(
+  emp: Parameters<typeof resolveSuspensionTreatment>[0] & { payProfile?: { profile: string; source: string } },
+  month: string,
+  cfg: SubsistenceConfig,
+): SuspensionTreatment {
+  const base = resolveSuspensionTreatment(emp, month, cfg);
+  if (emp.payProfile?.source !== "assigned" || base.kind === "none") return base;
+  if (base.kind === "withhold" && base.flags.includes("SUSPENSION_DETAILS_MISSING")) return base;
+  const plan = base.plan!;
+  if (NON_GOVERNMENT_PROFILES.has(emp.payProfile.profile)) {
+    return { kind: "withhold", plan, flags: ["NON_GOVERNMENT_ENGAGEMENT_WITHHELD"] };
+  }
+  return { kind: "subsistence", plan };
 }

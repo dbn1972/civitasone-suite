@@ -13,6 +13,56 @@ import { ltcExemptions } from "../fnf/schema.js";
 import { randomUUID } from "node:crypto";
 import { enqueue } from "../../shared/outbox.js";
 
+/**
+ * PAY-PROFILES: the separation event's own profile summary (hrms emits the
+ * profile in force on the separation date), used when the employee has no
+ * slip computed under a profile yet -- e.g. a deputed-IN employee leaving in
+ * their first month. Same shape separationPayProfile() reads off a slip.
+ */
+export function eventPayProfileRow(ev: { profile?: string; deputationDirection?: string | null; consolidatedMonthlyMinor?: string | null } | undefined):
+  { pay_profile: string; profile_snapshot: Record<string, unknown> } | null {
+  if (!ev?.profile) return null;
+  return {
+    pay_profile: ev.profile,
+    profile_snapshot: {
+      ...(ev.deputationDirection ? { direction: ev.deputationDirection } : {}),
+      ...(ev.consolidatedMonthlyMinor ? { consolidatedMonthlyMinor: ev.consolidatedMonthlyMinor } : {}),
+    },
+  };
+}
+
+/**
+ * PAY-PROFILES: how a separation is settled given the pay profile on the
+ * employee's latest slip (null for slips that predate PAY-PROFILES, which
+ * keeps the legacy settlement exactly). Pure; exported for tests.
+ */
+export function separationPayProfile(row: { pay_profile: string; profile_snapshot: Record<string, unknown> | null } | null): {
+  finalSalaryOnly: boolean;
+  noCentralDa: boolean;
+  eligibleForGratuity: boolean;
+  /** Consolidated pay: leave encashment only when the engagement policy grants it. */
+  leaveEncashmentEligible: boolean;
+  consolidatedMonthlyMinor: bigint | null;
+  daRateBpsOverride: bigint | null;
+} {
+  const snap = row?.profile_snapshot ?? {};
+  const profile = row?.pay_profile ?? null;
+  const deputation = profile === "deputation_parent_scale" || profile === "deputation_post_scale";
+  const consolidated = profile === "consolidated_contract";
+  const consolidatedAmount = typeof snap.consolidatedMonthlyMinor === "string" && /^\d+$/.test(snap.consolidatedMonthlyMinor)
+    ? BigInt(snap.consolidatedMonthlyMinor) : null;
+  const parentDa = deputation && snap.daSource === "parent" && typeof snap.daRateBps === "string" && /^\d+$/.test(snap.daRateBps)
+    ? BigInt(snap.daRateBps) : null;
+  return {
+    finalSalaryOnly: deputation && snap.direction === "in",
+    noCentralDa: consolidated,
+    eligibleForGratuity: snap.eligibleForGratuity !== false,
+    leaveEncashmentEligible: consolidated ? snap.leaveEncashmentEligible === true : snap.leaveEncashmentEligible !== false,
+    consolidatedMonthlyMinor: consolidated ? consolidatedAmount : null,
+    daRateBpsOverride: parentDa,
+  };
+}
+
 const AUDIT = "audit.event.record";
 
 export function registerIntegrationConsumers(queue: Queue): void {
@@ -90,10 +140,24 @@ export function registerIntegrationConsumers(queue: Queue): void {
     const p = msg.payload as {
       employeeId: string; effectiveDate: string; basicMinor?: string; dateOfJoining?: string;
       separationType?: string; encashmentDays?: number; taxRegime?: "old" | "new"; employeeCategory?: string;
+      /** PAY-PROFILES: profile in force on the separation date (hrms). */
+      payProfile?: { profile?: string; deputationDirection?: string | null; consolidatedMonthlyMinor?: string | null };
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      const basicMinor = BigInt(p.basicMinor ?? "0");
+      // PAY-PROFILES: the employee's most recent slip records which pay
+      // computation applied (migration 0055). Slips computed before
+      // PAY-PROFILES carry no profile, so everything below is unchanged for
+      // them and for govt-scale staff.
+      const lastProfileRows = (await tx.execute(sql`
+        SELECT pay_profile, profile_snapshot
+        FROM payroll.payroll_slips
+        WHERE tenant_id = ${msg.tenantId}::uuid AND employee_id = ${p.employeeId}::uuid AND pay_profile IS NOT NULL
+        ORDER BY created_at DESC
+        LIMIT 1
+      `)) as unknown as Array<{ pay_profile: string; profile_snapshot: Record<string, unknown> | null }>;
+      const separationProfile = separationPayProfile(lastProfileRows[0] ?? eventPayProfileRow(p.payProfile));
+      const basicMinor = separationProfile.consolidatedMonthlyMinor ?? BigInt(p.basicMinor ?? "0");
       const join = new Date(p.dateOfJoining ?? p.effectiveDate);
       const sep = new Date(p.effectiveDate);
       const years = Math.max(0, (sep.getTime() - join.getTime()) / (365.25 * 86400000));
@@ -108,16 +172,21 @@ export function registerIntegrationConsumers(queue: Queue): void {
       // (logged + dead-lettered, same as any other failed event handler)
       // hold the message for redelivery once the rate is configured, instead
       // of computing and persisting a wrong (understated) gratuity amount.
-      const daRows = (await tx.execute(sql`
-        SELECT rate_bps FROM payroll.dearness_allowance_rates
-        WHERE tenant_id = ${msg.tenantId}::uuid AND effective_from <= ${p.effectiveDate}::date
-        ORDER BY effective_from DESC LIMIT 1
-      `)) as unknown as Array<{ rate_bps: number | string }>;
-      if (daRows.length === 0) {
-        throw new NonRetryableError(`DA_RATE_NOT_CONFIGURED: no Dearness Allowance rate configured for tenant ${msg.tenantId} covering separation date ${p.effectiveDate}; add a payroll.dearness_allowance_rates row (rate_bps=0 if DA genuinely does not apply) before this employee's gratuity can be computed`);
+      // PAY-PROFILES: consolidated pay has no central DA, so its wages are the
+      // consolidated amount alone and no DA rate is needed.
+      let lastDaMinor = 0n;
+      if (!separationProfile.noCentralDa) {
+        const daRows = (await tx.execute(sql`
+          SELECT rate_bps FROM payroll.dearness_allowance_rates
+          WHERE tenant_id = ${msg.tenantId}::uuid AND effective_from <= ${p.effectiveDate}::date
+          ORDER BY effective_from DESC LIMIT 1
+        `)) as unknown as Array<{ rate_bps: number | string }>;
+        if (daRows.length === 0) {
+          throw new NonRetryableError(`DA_RATE_NOT_CONFIGURED: no Dearness Allowance rate configured for tenant ${msg.tenantId} covering separation date ${p.effectiveDate}; add a payroll.dearness_allowance_rates row (rate_bps=0 if DA genuinely does not apply) before this employee's gratuity can be computed`);
+        }
+        const daRateBps = separationProfile.daRateBpsOverride ?? BigInt(daRows[0]!.rate_bps);
+        lastDaMinor = (basicMinor * daRateBps) / 10000n;
       }
-      const daRateBps = BigInt(daRows[0]!.rate_bps);
-      const lastDaMinor = (basicMinor * daRateBps) / 10000n;
       // BUG FIX (death/disablement gratuity denial): separationType was
       // already destructured above (it's used for the fnfCompute payload
       // below) but was never passed into computeGratuity, so its 5-year
@@ -127,7 +196,12 @@ export function registerIntegrationConsumers(queue: Queue): void {
       // Code on Social Security, 2020 §53(1) proviso, which waive that floor
       // for exactly those two causes. See
       // MIN_SERVICE_WAIVED_SEPARATION_TYPES in payroll/domain.ts.
-      const gratuityMinor = computeGratuity(years, basicMinor, lastDaMinor, p.separationType);
+      // PAY-PROFILES: a deputed-IN employee's gratuity is the PARENT
+      // organisation's liability -- this tenant settles the final salary
+      // only; likewise when the engagement is not gratuity-eligible.
+      const gratuityMinor = separationProfile.finalSalaryOnly || !separationProfile.eligibleForGratuity
+        ? 0n
+        : computeGratuity(years, basicMinor, lastDaMinor, p.separationType);
       // BUG FIX: this used to `return` here whenever gratuityMinor was 0
       // (< 5 years' qualifying service), which skipped the fnfCompute
       // publish below entirely -- a short-tenure separation got NO F&F
@@ -204,7 +278,11 @@ export function registerIntegrationConsumers(queue: Queue): void {
       // gratuity/leave-encashment gross figures or their exemptions.
       const completedYears = completedYearsPgAct(years);
       const leaveBalanceDays = p.encashmentDays ?? 0;
-      const leaveEncashmentGrossMinor = computeLeaveEncashmentGrossMinor(basicMinor, lastDaMinor, leaveBalanceDays);
+      // PAY-PROFILES: no leave encashment from this tenant for a deputed-IN
+      // employee (the parent organisation encashes on final separation).
+      const leaveEncashmentGrossMinor = separationProfile.finalSalaryOnly || !separationProfile.leaveEncashmentEligible
+        ? 0n
+        : computeLeaveEncashmentGrossMinor(basicMinor, lastDaMinor, leaveBalanceDays);
       const lastDrawnWagesMinor = basicMinor + lastDaMinor;
       const fyStartYear = sep.getMonth() >= 3 ? sep.getFullYear() : sep.getFullYear() - 1;
 
@@ -230,6 +308,11 @@ export function registerIntegrationConsumers(queue: Queue): void {
           salaryYtdMinor: "0",
           tdsYtdMinor: "0",
           fyStartYear,
+          // PAY-PROFILES: terminal-benefit gates (fnf/domain.ts zeroes the
+          // gross when false). Only sent when a profile says so, so the
+          // payload is unchanged for every pre-PAY-PROFILES separation.
+          ...(separationProfile.finalSalaryOnly || !separationProfile.eligibleForGratuity ? { eligibleForGratuity: false } : {}),
+          ...(separationProfile.finalSalaryOnly || !separationProfile.leaveEncashmentEligible ? { leaveEncashmentEligible: false } : {}),
         },
       });
     });

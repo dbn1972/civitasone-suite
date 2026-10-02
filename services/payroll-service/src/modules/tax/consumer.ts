@@ -5,7 +5,12 @@ import { COMMANDS, EVENTS } from "../../topics.js";
 import { exemptionCeilings } from "../fnf/schema.js";
 import { perquisiteComponents, taxDeclarations } from "./schema.js";
 import { hraExemptionMinor } from "./engine.js";
-import { hraSlabPct, roundRupee } from "../payroll/domain.js";
+import { govtHraMinor, roundRupee } from "../payroll/domain.js";
+import { loadAllowanceRuleRows, resolveAllowanceRules } from "../pay-profiles/allowance-rules.js";
+import { planEmployeePay } from "../pay-profiles/plan.js";
+import { pino } from "pino";
+
+const log = pino({ name: "payroll-tax-consumer" });
 import { resolveDaRateBps } from "../payroll/consumer.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 
@@ -228,10 +233,37 @@ async function computeHraClaimedMinor(
     );
   }
 
-  const basicMinor = BigInt(emp.basicMinor);
-  const daMinor = roundRupee((basicMinor * daRateBps) / 10000n);
+  // PAY-PROFILES: derive basic / DA rate / HRA exactly as the payroll run
+  // does for this employee's pay profile (parent or post basic for a
+  // deputationist, parent-State DA when recorded, the HRA minimum floor in
+  // force for the month). Consolidated pay carries no HRA, so no exemption.
+  const rules = resolveAllowanceRules(await loadAllowanceRuleRows(tx, tenantId), tenantId, month);
+  // Never throws on a profile problem (a declaration must always process):
+  //  - ctc_contract: its HRA comes from the CTC structure (PR3) -> 0n here;
+  //  - consolidated pay has no HRA -> 0n;
+  //  - a deputation profile that no longer applies (lapsed / repatriated /
+  //    incomplete terms): fall back to the government-scale computation on
+  //    the HRMS basic and central DA, and log an advisory.
+  if (emp.payProfile?.profile === "ctc_contract") return 0n;
+  const planned = planEmployeePay(emp, month, daRateBps, rules);
+  let basicMinor: bigint;
+  let empDaRateBps: bigint;
+  let floorMinor: bigint;
+  if (planned.ok) {
+    if (planned.plan.profile === "consolidated_contract") return 0n;
+    basicMinor = planned.plan.profileBasicMinor;
+    empDaRateBps = planned.plan.daRateBps;
+    floorMinor = planned.plan.hraFloorMinor;
+  } else {
+    log.warn({ tenantId, employeeId, code: planned.code, month }, "HRA exemption: pay profile not applicable for the FY snapshot month; computed on the government-scale basis (advisory)");
+    basicMinor = BigInt(emp.basicMinor);
+    empDaRateBps = daRateBps;
+    floorMinor = rules.hraFloorMinor[emp.cityClass];
+  }
+
+  const daMinor = roundRupee((basicMinor * empDaRateBps) / 10000n);
   const salaryAnnualMinor = (basicMinor + daMinor) * 12n;
-  const hraReceivedAnnualMinor = roundRupee((basicMinor * hraSlabPct(emp.cityClass, daRateBps)) / 100n) * 12n;
+  const hraReceivedAnnualMinor = govtHraMinor(basicMinor, emp.cityClass, empDaRateBps, floorMinor) * 12n;
 
   return hraExemptionMinor(salaryAnnualMinor, hraReceivedAnnualMinor, rentPaidMinor, emp.cityClass === "X");
 }

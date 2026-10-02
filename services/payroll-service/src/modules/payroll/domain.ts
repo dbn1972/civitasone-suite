@@ -102,6 +102,19 @@ export interface SlipInput {
    * which case computeSlip runs exactly the code path it always has.
    */
   earningsOverride?: EarningsOverride;
+  /**
+   * PAY-PROFILES: which pay computation applies. OMITTED == govt_scale, and
+   * with `hraFloorMinor` also omitted computeSlip executes exactly the
+   * pre-PAY-PROFILES statements (byte-identical output; proven by the
+   * legacy-oracle property test). See SlipPayProfile.
+   */
+  payProfile?: SlipPayProfile;
+  /**
+   * PAY-PROFILES: 7th CPC HRA minimum floor (paise) for this employee's city
+   * class, from the effective allowance rules. Omitted / 0n == no floor.
+   * Applies to government-scale HRA only (govt_scale + deputation profiles).
+   */
+  hraFloorMinor?: bigint;
 }
 
 /** FR 53 suspension pay lines + the bases computeSlip derives from them. */
@@ -115,6 +128,68 @@ export interface EarningsOverride {
   pensionBaseMinor: bigint;
   /** Sec 10(13A) "salary" (Basic + DA, incl. subsistence allowance + its DA) for the old-regime HRA exemption. */
   hraSalaryMinor: bigint;
+}
+
+/**
+ * PAY-PROFILES: per-employee pay computation (the earnings stage); the
+ * deduction tail is shared by every profile.
+ *
+ *  govt_scale              BASIC + central DA + max(7th CPC HRA slab, floor)
+ *  deputation_parent_scale Option A: as govt_scale on the PARENT basic, plus
+ *                          the deputation (duty) allowance (DEP_ALLOW) --
+ *                          excluded from the DA, HRA and pension bases
+ *  deputation_post_scale   Option B: as govt_scale on the POST basic, no allowance
+ *  consolidated_contract   one consolidated amount (passed already pro-rated
+ *                          for paid days as basicMinor), no DA/HRA; EPF (when
+ *                          the engagement has PF) regardless of the HRMS
+ *                          pension_scheme default
+ *
+ * ctc_contract is computed by the CTC module (PAY-PROFILES PR3) and is
+ * rejected here.
+ */
+export type SlipPayProfile =
+  | { kind: "govt_scale" }
+  | { kind: "deputation_parent_scale"; allowance: DeputationAllowanceInput }
+  | { kind: "deputation_post_scale" }
+  | { kind: "consolidated_contract" };
+
+export type DeputationStationType = "same" | "other";
+
+/** One station type's deputation-allowance rule: % of basic (bps) capped at a rupee amount. */
+export interface DeputationAllowanceRule { rateBps: bigint; capMinor: bigint }
+
+export interface DeputationAllowanceInput {
+  /** auto: tenant rule when configured, else fixedMinor; fixed: per-employee override. */
+  mode: "auto" | "fixed";
+  /** Amount recorded on the deputation order (paise/month). */
+  fixedMinor: bigint;
+  stationType: DeputationStationType | null;
+  /** The tenant's effective rule for the employee's station type, or null when not configured. */
+  rule: DeputationAllowanceRule | null;
+}
+
+/**
+ * Deputation (duty) allowance for Option A. Computed (min(% of basic, cap))
+ * once the tenant has configured a rule for the station type; until then --
+ * or when the deputation order fixes an amount (mode "fixed") -- the amount
+ * recorded on the order. Pure.
+ */
+export function deputationAllowanceMinor(basicMinor: bigint, a: DeputationAllowanceInput): { amountMinor: bigint; basis: "computed" | "fixed" } {
+  if (a.mode === "auto" && a.rule && a.stationType) {
+    const pctAmount = roundRupee((basicMinor * a.rule.rateBps) / 10000n);
+    return { amountMinor: pctAmount < a.rule.capMinor ? pctAmount : a.rule.capMinor, basis: "computed" };
+  }
+  return { amountMinor: roundRupee(a.fixedMinor), basis: "fixed" };
+}
+
+/**
+ * Government-scale HRA: the 7th CPC slab % of basic, but never below the
+ * city-class minimum floor. A zero basic never attracts the floor. With
+ * floor 0n this is exactly `pct(basic, hraSlabPct(...))`. Pure.
+ */
+export function govtHraMinor(basicMinor: bigint, cityClass: CityClass, daRateBps: bigint, floorMinor = 0n): bigint {
+  const slab = pct(basicMinor, hraSlabPct(cityClass, daRateBps));
+  return basicMinor > 0n && slab < floorMinor ? floorMinor : slab;
 }
 
 /** Deduction codes treated as "recovery" — subject to the protected-net floor. */
@@ -281,7 +356,6 @@ export function computeSlip(input: SlipInput): SlipResult {
     ptMinor = 0n,
     components = [],
     rawComponents = [],
-    pensionScheme = "EPF",
     statutoryPf = true,
     statutoryEsi = true,
     taxRegime = "new",
@@ -294,7 +368,17 @@ export function computeSlip(input: SlipInput): SlipResult {
     statutoryConfig = DEFAULT_STATUTORY_CONFIG,
     taxTenantId = PLATFORM_DEFAULT_TENANT_ID,
     earningsOverride,
+    hraFloorMinor = 0n,
   } = input;
+  const profile = input.payProfile ?? { kind: "govt_scale" as const };
+  if ((profile.kind as string) === "ctc_contract") {
+    throw new DomainError("CTC_PROFILE_NOT_SUPPORTED", "ctc_contract slips are computed by the CTC module (PAY-PROFILES PR3)");
+  }
+  const consolidated = profile.kind === "consolidated_contract";
+  // A consolidated-pay contract employee is on EPF (when the engagement has
+  // PF at all) -- never on the NPS/GPF the HRMS pension_scheme column
+  // defaults to for government staff.
+  const pensionScheme: PensionScheme = consolidated ? "EPF" : input.pensionScheme ?? "EPF";
 
   const earnings: PayComponent[] = [];
   const deductions: PayComponent[] = [];
@@ -303,8 +387,10 @@ export function computeSlip(input: SlipInput): SlipResult {
   let hraMinor: bigint;
   if (earningsOverride) {
     // FR 53 suspension: subsistence.ts already built the pay lines (regular
-    // days prorated + Subsistence Allowance + DA on it + continuing HRA/CCA).
-    // Copied so the floor-trimming below never mutates the caller's objects.
+    // days prorated + Subsistence Allowance + DA on it + continuing HRA/CCA,
+    // and -- PAY-PROFILES -- the profile's basic/DA, the HRA floor and a
+    // pro-rated deputation allowance). Copied so the floor-trimming below
+    // never mutates the caller's objects.
     for (const c of earningsOverride.components) {
       (c.type === "earning" ? earnings : deductions).push({ ...c });
     }
@@ -312,15 +398,23 @@ export function computeSlip(input: SlipInput): SlipResult {
     hraMinor = earningsOverride.hraMinor;
   } else {
     // Basic is the first earning.
-    earnings.push({ code: "BASIC", name: "Basic Pay", type: "earning", amountMinor: basicMinor });
+    earnings.push({ code: "BASIC", name: consolidated ? "Consolidated Emoluments" : "Basic Pay", type: "earning", amountMinor: basicMinor });
 
-    // Dearness Allowance = DA% of basic.
-    daMinor = roundRupee((basicMinor * daRateBps) / 10000n);
+    // Dearness Allowance = DA% of basic (no central DA on consolidated pay).
+    daMinor = consolidated ? 0n : roundRupee((basicMinor * daRateBps) / 10000n);
     if (daMinor > 0n) earnings.push({ code: "DA", name: "Dearness Allowance", type: "earning", amountMinor: daMinor });
 
-    // HRA = city-class slab % of basic (escalates with DA threshold).
-    hraMinor = pct(basicMinor, hraSlabPct(cityClass, daRateBps));
+    // HRA = city-class slab % of basic (escalates with DA threshold), never
+    // below the city-class floor (PAY-PROFILES; floor 0n == legacy). None on
+    // consolidated pay.
+    hraMinor = consolidated ? 0n : govtHraMinor(basicMinor, cityClass, daRateBps, hraFloorMinor);
     if (hraMinor > 0n) earnings.push({ code: "HRA", name: "House Rent Allowance", type: "earning", amountMinor: hraMinor });
+
+    // Option A deputation (duty) allowance -- not part of the DA/HRA/pension bases.
+    if (profile.kind === "deputation_parent_scale") {
+      const dep = deputationAllowanceMinor(basicMinor, profile.allowance);
+      if (dep.amountMinor > 0n) earnings.push({ code: "DEP_ALLOW", name: "Deputation (Duty) Allowance", type: "earning", amountMinor: dep.amountMinor });
+    }
 
     // Evaluate remaining structure components (skip BASIC/DA/HRA — handled above).
     for (const c of rawComponents) {
