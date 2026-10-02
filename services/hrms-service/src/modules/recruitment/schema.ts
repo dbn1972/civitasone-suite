@@ -64,6 +64,9 @@ export const hrmsApplications = recruitmentSchema.table("hrms_applications", {
   eligibilityResult: jsonb("eligibility_result"),
   withdrawReason: text("withdraw_reason"),
   dedupKey:      varchar("dedup_key", { length: 320 }),
+  // DPDP: consent to the candidate-facing privacy notice (public apply path only).
+  consentGivenAt: timestamp("consent_given_at", { withTimezone: true }),
+  consentVersion: varchar("consent_version", { length: 32 }),
   screeningDecision:  varchar("screening_decision", { length: 16 }).notNull().default("pending"),
   screeningReasonCode: varchar("screening_reason_code", { length: 24 }),
   screeningRemarks:   text("screening_remarks"),

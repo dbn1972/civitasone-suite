@@ -7,15 +7,17 @@ import { describe, it, expect, vi } from "vitest";
 import Fastify from "fastify";
 
 const APP_ID = "aaaaaaaa-0001-4000-8000-00000000a001";
-const state = vi.hoisted(() => ({ stage: "rejected" }));
+const state = vi.hoisted(() => ({ stage: "rejected", list: false, call: 0 }));
 
 vi.mock("../src/shared/db.js", async (io) => {
-  let call = 0;
   return {
     ...(await io<Record<string, unknown>>()),
     scopedRead: async () => {
-      call += 1;
-      if (call % 2 === 1) {
+      state.call += 1;
+      const call = state.call;
+      // The LIST route reads count -> applications -> job titles; the detail route reads application -> job.
+      if (state.list && call % 3 === 1) return [{ n: 1 }];
+      if (state.list ? call % 3 === 2 : call % 2 === 1) {
         return [{
           id: "aaaaaaaa-0001-4000-8000-00000000a001", applicationNo: "REC/2026/0042", jobOpeningId: "bbbbbbbb-0001-4000-8000-00000000b001",
           stage: state.stage, status: "active", appliedAt: new Date("2026-03-01T10:00:00Z"),
@@ -53,6 +55,8 @@ describe("candidate portal detail payload", () => {
 describe("candidate portal list payload", () => {
   it("does not leak screeningRemarks or screeningDecision", async () => {
     state.stage = "rejected";
+    state.list = true;
+    state.call = 0;
     const app = Fastify();
     await app.register(candidatePublicPortalRoutes);
     const res = await app.inject({ method: "GET", url: "/v1/careers/portal/applications", headers: { authorization: "Bearer x.y" } });

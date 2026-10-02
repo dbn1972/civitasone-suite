@@ -100,7 +100,7 @@ async function applyHrAssisted(jobOpeningId: string, email: string): Promise<{ s
 async function applyPublic(jobOpeningId: string, email: string): Promise<{ statusCode: number; body: any }> {
   const r = await app.inject({
     method: "POST", url: "/v1/careers/apply", headers: CT,
-    payload: { tenantId: TENANT, jobOpeningId, applicantName: "Hardening Public Candidate", email },
+    payload: { tenantId: TENANT, jobOpeningId, applicantName: "Hardening Public Candidate", email, consent: true, consentVersion: "2026-10-v1" },
   });
   await drain();
   return { statusCode: r.statusCode, body: r.json() };

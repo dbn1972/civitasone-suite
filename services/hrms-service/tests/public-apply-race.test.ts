@@ -78,6 +78,7 @@ describe("POST /v1/careers/apply — response-integrity under concurrency (real 
     const payload = {
       tenantId: TENANT, jobOpeningId: vacancyId,
       applicantName: "Race Candidate", email,
+      consent: true, consentVersion: "2026-10-v1",
       // Deliberately no `mobile`: services/hrms-service's mobile-field PII
       // encryption overflowing its varchar(20) column is a separate,
       // already-tracked bug — omitted here so this test proves THIS fix
@@ -125,7 +126,7 @@ describe("POST /v1/careers/apply — response-integrity under concurrency (real 
     await seedVacancy(vacancyId, { allowMultiple: true });
     const app = await buildApp();
     const email = `race-candidate-multi-${randomUUID()}@example.test`;
-    const payload = { tenantId: TENANT, jobOpeningId: vacancyId, applicantName: "Multi Candidate", email };
+    const payload = { tenantId: TENANT, jobOpeningId: vacancyId, applicantName: "Multi Candidate", email, consent: true, consentVersion: "2026-10-v1" };
 
     const responses = await Promise.all(
       Array.from({ length: 5 }, () => app.inject({ method: "POST", url: "/v1/careers/apply", payload })),
@@ -135,6 +136,38 @@ describe("POST /v1/careers/apply — response-integrity under concurrency (real 
     const ids = responses.map((r) => (r.json() as { id: string }).id);
     expect(new Set(ids).size).toBe(5); // 5 genuinely independent applications, never merged/deduped
 
+    await app.close();
+  });
+  // GAP-RECRUITMENT-CAREERS-DETAIL-02 (DPDP): consent is mandatory and is persisted with the notice version.
+  it("rejects an application without consent (400) and writes no row", async () => {
+    const vacancyId = randomUUID();
+    await seedVacancy(vacancyId);
+    const app = await buildApp();
+    const email = `no-consent-${randomUUID()}@example.test`;
+    const res = await app.inject({
+      method: "POST", url: "/v1/careers/apply",
+      payload: { tenantId: TENANT, jobOpeningId: vacancyId, applicantName: "No Consent", email },
+    });
+    expect(res.statusCode).toBe(400);
+    expect(await findByDedupKey(vacancyId, email.toLowerCase())).toHaveLength(0);
+    await app.close();
+  });
+
+  it("stores consent_given_at and consent_version on the new application", async () => {
+    const vacancyId = randomUUID();
+    await seedVacancy(vacancyId);
+    const app = await buildApp();
+    const email = `consent-${randomUUID()}@example.test`;
+    const before = Date.now();
+    const res = await app.inject({
+      method: "POST", url: "/v1/careers/apply",
+      payload: { tenantId: TENANT, jobOpeningId: vacancyId, applicantName: "Consenting Candidate", email, consent: true, consentVersion: "2026-10-v1" },
+    });
+    expect(res.statusCode).toBe(202);
+    const rows = await findByDedupKey(vacancyId, email.toLowerCase());
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.consentVersion).toBe("2026-10-v1");
+    expect(rows[0]!.consentGivenAt!.getTime()).toBeGreaterThanOrEqual(before - 1000);
     await app.close();
   });
 });
