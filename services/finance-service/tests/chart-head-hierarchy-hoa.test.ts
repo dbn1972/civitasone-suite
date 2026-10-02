@@ -2,7 +2,7 @@
  * GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01 / NEW-02 -- pure validation, no DB.
  */
 import { describe, it, expect } from "vitest";
-import { assertValidHeadParent, DomainError } from "../src/modules/budget/domain.js";
+import { assertValidHeadParent, DomainError, headSearchPattern } from "../src/modules/budget/domain.js";
 import { updateHeadHoABody } from "../src/modules/budget/validators.js";
 
 const HOA = "210100101010101010";
@@ -40,5 +40,15 @@ describe("updateHeadHoABody (NEW-01)", () => {
   });
   it("still rejects a malformed HoA code", () => {
     expect(updateHeadHoABody.safeParse({ hoaCode: "123", reason: "Aligning with PFMS" }).success).toBe(false);
+  });
+});
+
+describe("headSearchPattern (GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-04)", () => {
+  it("wraps the trimmed term for a substring match", () => {
+    expect(headSearchPattern("  2110 ")).toBe("%2110%");
+  });
+  it("treats LIKE wildcards and backslashes typed by the user as literals", () => {
+    expect(headSearchPattern("a%b_c")).toBe("%a\\%b\\_c%");
+    expect(headSearchPattern("x\\y")).toBe("%x\\\\y%");
   });
 });

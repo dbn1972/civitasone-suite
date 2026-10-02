@@ -33,7 +33,7 @@ export function ForecastChart({ itemName, data, totalDemand, confidence }: Forec
 
   return (
     <div>
-      <Chart type="line" data={chartData} title={`30-day demand forecast — ${itemName}`} height={180} />
+      <Chart type="line" data={chartData} title={`30-day demand forecast — ${itemName}`} height={180} hideDataTable />
       {/* GAP-INVENTORY-HOME-04: the service's total and confidence were mapped but never shown. */}
       {totalDemand !== undefined ? (
         <p style={{ margin: "8px 0 4px", fontSize: 13 }}>

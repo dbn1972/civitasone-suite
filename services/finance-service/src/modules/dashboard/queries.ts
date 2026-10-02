@@ -25,6 +25,21 @@ export function computeBudgetUtilisationPct(expenditureMinor: number, sanctioned
 }
 
 /**
+ * GAP-FINANCE-DASHBOARD-04: the budget-estimate total as a bigint-safe decimal
+ * string (paise). The aggregate arrives as a numeric string from the driver.
+ * Missing or unparseable input is `undefined` (field omitted, "unknown"), never
+ * "0": the UI reads "0" as "no budget estimate on record".
+ */
+export function sanctionedMinorString(totalBE: unknown): string | undefined {
+  if (totalBE === null || totalBE === undefined || totalBE === "") return undefined;
+  try {
+    return BigInt(totalBE as string | number | bigint).toString();
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * GAP-FINANCE-DASHBOARD-02: Indian fiscal-year bounds ("2026-27" ->
  * 2026-04-01..2027-03-31). Returns null for anything that is not a real,
  * consecutive FY label so a typo can never silently widen or shift the window.
@@ -78,6 +93,12 @@ export async function getDashboard(tenantId: string, fy?: string) {
           // which formatMoney() then re-divided again, rendering every
           // amount 100x too small (the same bug fixed in gl/queries.ts).
           totalExpenditure: Number(expRow?.total ?? 0),
+          // GAP-FINANCE-DASHBOARD-04: the budget-estimate total (paise, decimal
+          // string). NOTE: BE ONLY (`sum(be_minor)`): no RE / re-appropriation and
+          // not the sanctions table, so the UI calls it a "budget estimate". Lets it
+          // derive "remaining"/"over estimate" by exact subtraction instead of
+          // back-computing from the rounded percentage.
+          sanctionedMinor: sanctionedMinorString(budgetRow?.totalBE),
         };
       });
     },

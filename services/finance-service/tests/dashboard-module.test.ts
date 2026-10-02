@@ -11,7 +11,7 @@
  *   4. No secrets in dashboard response shape
  */
 import { describe, it, expect } from "vitest";
-import { computeBudgetUtilisationPct, fyDateBounds } from "../src/modules/dashboard/queries.js";
+import { computeBudgetUtilisationPct, fyDateBounds, sanctionedMinorString } from "../src/modules/dashboard/queries.js";
 
 const DASHBOARD_ROLES = ["finance_officer", "finance_admin", "super_admin", "budget_officer"];
 const FORBIDDEN_ROLES = ["citizen", "employee", "hr_officer", "procurement_officer"];
@@ -110,5 +110,15 @@ describe("fyDateBounds", () => {
     expect(fyDateBounds("2026")).toBeNull();
     expect(fyDateBounds("2026-2027")).toBeNull();
     expect(fyDateBounds("")).toBeNull();
+  });
+});
+
+describe("sanctionedMinorString (GAP-FINANCE-DASHBOARD-04)", () => {
+  it("keeps full bigint precision and treats a missing budget as 0", () => {
+    expect(sanctionedMinorString("18014398509481986")).toBe("18014398509481986");
+    expect(sanctionedMinorString(250000)).toBe("250000");
+    expect(sanctionedMinorString("0")).toBe("0");
+    expect(sanctionedMinorString(undefined)).toBeUndefined();
+    expect(sanctionedMinorString("garbage")).toBeUndefined();
   });
 });

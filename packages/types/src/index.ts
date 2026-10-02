@@ -655,6 +655,8 @@ export type FinanceDashboard = {
   pendingSanctions: number;
   paymentsThisMonth: number;
   totalExpenditure: number;
+  /** Total budget estimate (BE only), minor units (paise) as a decimal string; absent from an older API. */
+  sanctionedMinor?: string;
 };
 
 export type BudgetSummary = {

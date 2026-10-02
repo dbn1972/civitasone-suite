@@ -6,6 +6,7 @@ import { Card, DataTable, Segmented, StatusPill, EmptyState, StatGrid, StatCard,
 import { toHumanError } from "@/lib/messages";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { countAccountsByType, formatBalanceDisplay } from "./accountStats";
 
 interface AccountsTableProps {
   accounts: AccountSummary[];
@@ -36,8 +37,7 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
     return <RefreshErrorState error={toHumanError("load", { area: "chart of accounts" })} backHref="/finance" />;
   }
 
-  const majorHeads = rows.filter((a) => a.type === "asset" || a.type === "liability").length;
-  const activeCount = rows.filter((a) => a.status === "active").length;
+  const counts = countAccountsByType(rows);
 
   const q = search.trim().toLowerCase();
 
@@ -51,7 +51,7 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
     return matchesSearch && matchesType && matchesStatus;
   }) as AccountRow[];
 
-  const SEG_OPTIONS = ["All", "Asset", "Liability", "Income", "Expense"] as const;
+  const SEG_OPTIONS = ["All", "Asset", "Liability", "Equity", "Income", "Expense"] as const;
   const segValue = typeFilter === "all" ? "All" : typeFilter.charAt(0).toUpperCase() + typeFilter.slice(1);
 
   function handleSegChange(v: string) {
@@ -61,10 +61,11 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
   return (
     <>
     <StatGrid>
-      <StatCard icon="🧱" iconBg="#e7edfd" label="Heads of Account" value={rows.length} />
-      <StatCard icon="🏛️" iconBg="#eff6ff" label="Asset / Liability" value={majorHeads} />
-      <StatCard icon="🔢" iconBg="#ecfdf3" label="Income / Expense" value={rows.length - majorHeads} />
-      <StatCard icon="✅" iconBg="#fffaeb" label="Active" value={activeCount} delta="CGA" up={true} />
+      <StatCard icon="🧱" iconBg="#e7edfd" label="Heads of Account" value={counts.total} />
+      <StatCard icon="🏛️" iconBg="#eff6ff" label="Asset / Liability" value={counts.assetLiability} />
+      <StatCard icon="⚖️" iconBg="#faf5ff" label="Equity" value={counts.equity} />
+      <StatCard icon="🔢" iconBg="#ecfdf3" label="Income / Expense" value={counts.incomeExpense} />
+      <StatCard icon="✅" iconBg="#fffaeb" label="Active" value={counts.active} delta="CGA" up={true} />
     </StatGrid>
     <Card
       title="Chart of Accounts · List of Major & Minor Heads (LMMHA)"
@@ -158,10 +159,16 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
             { key: "name", label: "Name" },
             { key: "type", label: "Type", render: (a) => <span style={{ textTransform: "capitalize" }}>{a.type as string}</span> },
             { key: "currency", label: "Currency" },
-            { key: "balanceDisplay", label: "Balance", align: "right", render: (a) => <>₹{a.balanceDisplay}</> },
+            { key: "balanceDisplay", label: "Balance", align: "right", render: (a) => <>{formatBalanceDisplay(a.balanceDisplay as string)}</> },
             { key: "status", label: "Status", render: (a) => <StatusPill status={a.status as string} /> },
           ]}
           rows={filtered}
+          caption="Chart of accounts heads"
+          identifyingColumnKey="name"
+          pageSize={20}
+          sortable
+          exportable
+          exportFilename="chart-of-accounts"
         />
       )}
     </Card>

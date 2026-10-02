@@ -42,7 +42,8 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
-    const accounts = await queries.listAccounts(ctx.tenantId, q.limit);
+    const { q: search } = z.object({ q: z.string().trim().max(100).optional() }).parse(req.query);
+    const accounts = await queries.listAccounts(ctx.tenantId, q.limit, search);
     return reply.send({ data: accounts, pagination: { hasMore: accounts.length === q.limit, pageSize: q.limit } });
   });
 

@@ -155,4 +155,28 @@ describe("Chart", () => {
     const svg = container.querySelector("svg");
     expect(svg).toHaveAttribute("height", "300");
   });
+
+  // GAP-FINANCE-DASHBOARD-07
+  describe("accessibility", () => {
+    it.each(["bar", "line", "pie", "donut"] as const)("%s chart svg has role=img and an accessible name", (type) => {
+      const { container } = render(<Chart type={type} title="Spend" data={data} />);
+      const svg = container.querySelector("svg")!;
+      expect(svg).toHaveAttribute("role", "img");
+      expect(svg).toHaveAttribute("aria-label", "Spend");
+    });
+
+    it("exposes every series value in a visually-hidden table", () => {
+      const { container } = render(<Chart type="donut" title="Spend" data={data} valueFormatter={(v) => `₹${v}.00`} />);
+      const table = container.querySelector("table.sr-only")!;
+      expect(table).toHaveAttribute("aria-label", "Spend");
+      const cells = Array.from(table.querySelectorAll("tbody td")).map((c) => c.textContent);
+      expect(cells).toHaveLength(data.length);
+      expect(cells[0]).toBe(`${data[0]!.label}: ₹${data[0]!.value}.00`);
+    });
+  });
+
+  it("hideDataTable omits the built-in hidden table (consumer supplies its own)", () => {
+    const { container } = render(<Chart type="line" title="Spend" data={data} hideDataTable />);
+    expect(container.querySelector("table")).toBeNull();
+  });
 });

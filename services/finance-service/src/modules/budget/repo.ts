@@ -1,6 +1,6 @@
-import { eq, and, sql, inArray, desc } from "drizzle-orm";
+import { eq, and, or, sql, inArray, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
-import { DomainError } from "./domain.js";
+import { DomainError, headSearchPattern } from "./domain.js";
 import {
   financeBudgets, financeSanctions, financeHeads, financeReappropriations, financeDemands, financeSchemes,
   type BudgetRow, type BudgetInsert, type SanctionRow, type SanctionInsert, type HeadRow,
@@ -114,10 +114,21 @@ export async function findReappropriationById(id: string): Promise<Reappropriati
   return rows[0] ?? null;
 }
 
-export async function listHeads(tenantId: string, limit: number): Promise<HeadRow[]> {
-  return scopedRead((tx) => tx.select().from(financeHeads)
-    .where(eq(financeHeads.tenantId, tenantId))
-    .limit(limit));
+/**
+ * GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-04: optional `search` narrows heads by a
+ * case-insensitive substring of code or name (LIKE wildcards in the user's
+ * text are escaped by headSearchPattern), so a head beyond the first page of
+ * a large chart can still be found.
+ */
+export async function listHeads(tenantId: string, limit: number, search?: string): Promise<HeadRow[]> {
+  const pattern = search ? headSearchPattern(search) : null;
+  const where = pattern
+    ? and(
+        eq(financeHeads.tenantId, tenantId),
+        or(sql`${financeHeads.code} ILIKE ${pattern} ESCAPE '\\'`, sql`${financeHeads.name} ILIKE ${pattern} ESCAPE '\\'`),
+      )
+    : eq(financeHeads.tenantId, tenantId);
+  return scopedRead((tx) => tx.select().from(financeHeads).where(where).limit(limit));
 }
 
 export async function listSanctionsByTenant(tenantId: string, limit: number, offset = 0): Promise<SanctionRow[]> {

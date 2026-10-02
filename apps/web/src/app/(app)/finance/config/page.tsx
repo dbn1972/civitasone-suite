@@ -1,33 +1,20 @@
 import Link from "next/link";
 import { PageHeader, Card, StatGrid, StatCard, DataTable, EmptyState, LoadErrorState } from "../../../_components/ds";
 import { maskLast4 } from "../../../_components/ds/Masked";
-import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { getFinanceBankAccounts, getFinanceFiscalYears, type FinanceBankAccount, type FinanceFiscalYear } from "@/app/_data/loaders";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { BankAccountForm } from "./BankAccountForm";
 
-type FY = { id: string; code: string; label: string; startDate: string; endDate: string; status: string } & Record<string, unknown>;
-/**
- * GET /v1/finance/bank-accounts never returns the full number: it sends
- * `accountNoLast4` and a masked `ifscPrefix` (masters/bank-routes.ts). The
- * table used to read a non-existent `accountNo` key (GAP-FINANCE-CONFIG-02);
- * it now renders the server-masked value only.
- */
-type Bank = { id: string; bankName: string; branchName: string | null; accountNoLast4: string; ifscPrefix: string; accountType: string; purpose: string | null; status: string } & Record<string, unknown>;
-type BankRow = Bank & { accountMasked: string };
+// The table renders the server-masked account value only (GAP-FINANCE-CONFIG-02).
+type FY = FinanceFiscalYear & Record<string, unknown>;
+type BankRow = FinanceBankAccount & Record<string, unknown> & { accountMasked: string };
 
 /** Bank-account create/list is finance_admin/super_admin only server-side (bank-routes.ts). */
 const BANK_ADMIN_ROLES = ["finance_admin", "super_admin"];
 
-async function getFYs(): Promise<LoaderResult<FY[]>> {
-  return fetchJson<unknown, FY[]>("/api/v1/finance/fiscal-years", [], { telemetryKey: "config.fy", mapResponse: (p) => (p as { data: FY[] })?.data ?? null });
-}
-async function getBanks(): Promise<LoaderResult<Bank[]>> {
-  return fetchJson<unknown, Bank[]>("/api/v1/finance/bank-accounts", [], { telemetryKey: "config.banks", mapResponse: (p) => (p as { data: Bank[] })?.data ?? null });
-}
-
 export default async function FinanceConfigPage() {
-  const [fyResult, bankResult] = await Promise.all([getFYs(), getBanks()]);
-  const fys = fyResult.data;
+  const [fyResult, bankResult] = await Promise.all([getFinanceFiscalYears(), getFinanceBankAccounts()]);
+  const fys = fyResult.data as FY[];
   const fyErr = fyResult.source === "error";
   const bankErr = bankResult.source === "error";
   const canManageBanks = getSessionRoles().some((r) => BANK_ADMIN_ROLES.includes(r));
@@ -60,8 +47,8 @@ export default async function FinanceConfigPage() {
             columns={[
               { key: "code", label: "Code" },
               { key: "label", label: "Label" },
-              { key: "startDate", label: "Start" },
-              { key: "endDate", label: "End" },
+              { key: "startDate", label: "Start", cellType: "date" },
+              { key: "endDate", label: "End", cellType: "date" },
               { key: "status", label: "Status", cellType: "status" },
             ]}
             rows={fys}
@@ -96,17 +83,27 @@ export default async function FinanceConfigPage() {
       </Card>
       {canManageBanks && !bankErr ? <BankAccountForm /> : null}
 
-      {activeFY && (
-        <Card title={`Opening Balances — ${activeFY.code}`}>
-          <div className="pad" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-            <p style={{ color: "var(--mut)", fontSize: 13.5, margin: 0, flexBasis: "100%" }}>
-              Enter the starting balances for each account head when migrating to CivitasOne.
-            </p>
+      {/* Setup order: financial year, bank accounts, opening balances. The card is
+          always shown (GAP-FINANCE-CONFIG-06); without an active year the link is
+          disabled with a hint instead of the card vanishing. */}
+      <Card title={activeFY ? `Opening Balances — ${activeFY.code}` : "Opening Balances"}>
+        <div className="pad" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <p style={{ color: "var(--mut)", fontSize: 13.5, margin: 0, flexBasis: "100%" }}>
+            Enter the starting balances for each account head when migrating to CivitasOne.
+          </p>
+          {activeFY ? (
             <Link href={`/finance/opening-balances?fy=${encodeURIComponent(activeFY.code)}`} className="btn primary">Enter opening balances</Link>
-            <Link href="/finance/chart-of-accounts" className="btn ghost">View account heads</Link>
-          </div>
-        </Card>
-      )}
+          ) : (
+            <>
+              <button type="button" className="btn primary" disabled aria-describedby="opening-balances-hint">Enter opening balances</button>
+              <p id="opening-balances-hint" style={{ color: "var(--mut)", fontSize: 13, margin: 0, flexBasis: "100%" }}>
+                {fyErr ? "Financial years could not be loaded, so opening balances are unavailable right now." : "Activate a financial year first; opening balances are entered against the active year."}
+              </p>
+            </>
+          )}
+          <Link href="/finance/chart-of-accounts" className="btn ghost">View account heads</Link>
+        </div>
+      </Card>
     </div>
   );
 }

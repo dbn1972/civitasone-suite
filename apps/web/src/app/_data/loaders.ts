@@ -1965,6 +1965,9 @@ function mapFinanceDashboard(payload: unknown): FinanceDashboard | null {
     pendingSanctions: typeof payload.pendingSanctions === "number" ? payload.pendingSanctions : 0,
     paymentsThisMonth: typeof payload.paymentsThisMonth === "number" ? payload.paymentsThisMonth : 0,
     totalExpenditure: typeof payload.totalExpenditure === "number" ? payload.totalExpenditure : 0,
+    ...(typeof payload.sanctionedMinor === "string" && /^\d+$/.test(payload.sanctionedMinor)
+      ? { sanctionedMinor: payload.sanctionedMinor }
+      : {}),
   };
 }
 
@@ -2379,6 +2382,100 @@ export async function getFinanceDebt(): Promise<LoaderResult<FinanceDebtSummary[
     telemetryKey: "finance.debt",
     responseSchema: FinanceDebtSummaryListSchema,
     mapResponse: (p) => getArrayPayload(p) as FinanceDebtSummary[] | null,
+  });
+}
+
+/**
+ * GAP-FINANCE-CONFIG-05: one fiscal-year loader for /finance/fiscal-years and
+ * /finance/config, so the two screens cannot diverge on payload shape (array
+ * or `{data}`) or on defaulting of missing fields.
+ */
+export type FinanceFiscalYear = {
+  id?: string;
+  code: string;
+  label: string;
+  startDate: string;
+  endDate: string;
+  status: string;
+};
+
+function isRecordValue(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+
+function rowsOfPayload(payload: unknown): unknown[] | null {
+  if (Array.isArray(payload)) return payload;
+  if (isRecordValue(payload) && Array.isArray(payload.data)) return payload.data;
+  return null;
+}
+
+export function mapFiscalYears(payload: unknown): FinanceFiscalYear[] | null {
+  const rows = rowsOfPayload(payload);
+  if (!rows) return null;
+  const mapped: FinanceFiscalYear[] = [];
+  for (const raw of rows) {
+    if (!isRecordValue(raw)) continue;
+    if (typeof raw.code !== "string" || typeof raw.label !== "string") continue;
+    mapped.push({
+      ...(typeof raw.id === "string" ? { id: raw.id } : {}),
+      code: raw.code,
+      label: raw.label,
+      startDate: typeof raw.startDate === "string" ? raw.startDate : "",
+      endDate: typeof raw.endDate === "string" ? raw.endDate : "",
+      status: typeof raw.status === "string" ? raw.status : "unknown",
+    });
+  }
+  return mapped;
+}
+
+export async function getFinanceFiscalYears(): Promise<LoaderResult<FinanceFiscalYear[]>> {
+  return fetchJson<unknown, FinanceFiscalYear[]>("/api/v1/finance/fiscal-years", [], {
+    telemetryKey: "finance.fiscal_years",
+    mapResponse: mapFiscalYears,
+  });
+}
+
+/**
+ * GET /v1/finance/bank-accounts never returns the full number: it sends
+ * `accountNoLast4` and a masked `ifscPrefix` (masters/bank-routes.ts).
+ */
+export type FinanceBankAccount = {
+  id: string;
+  bankName: string;
+  branchName: string | null;
+  accountNoLast4: string;
+  ifscPrefix: string;
+  accountType: string;
+  purpose: string | null;
+  status: string;
+};
+
+export function mapBankAccounts(payload: unknown): FinanceBankAccount[] | null {
+  const rows = rowsOfPayload(payload);
+  if (!rows) return null;
+  const str = (v: unknown, d = "") => (typeof v === "string" ? v : d);
+  const mapped: FinanceBankAccount[] = [];
+  for (const raw of rows) {
+    if (!isRecordValue(raw)) continue;
+    if (typeof raw.id !== "string" || typeof raw.bankName !== "string") continue;
+    mapped.push({
+      id: raw.id,
+      bankName: raw.bankName,
+      branchName: typeof raw.branchName === "string" ? raw.branchName : null,
+      accountNoLast4: str(raw.accountNoLast4),
+      ifscPrefix: str(raw.ifscPrefix),
+      accountType: str(raw.accountType),
+      purpose: typeof raw.purpose === "string" ? raw.purpose : null,
+      status: str(raw.status, "unknown"),
+    });
+  }
+  return mapped;
+}
+
+export async function getFinanceBankAccounts(): Promise<LoaderResult<FinanceBankAccount[]>> {
+  return fetchJson<unknown, FinanceBankAccount[]>("/api/v1/finance/bank-accounts", [], {
+    telemetryKey: "finance.bank_accounts",
+    mapResponse: mapBankAccounts,
   });
 }
 
