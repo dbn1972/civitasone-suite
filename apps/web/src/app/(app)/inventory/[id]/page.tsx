@@ -1,10 +1,11 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import Link from "next/link";
 import { getStockItemById } from "../../../_data/loaders";
 import {
   StatusPill,
   EmptyState,
   DataTable,
   PageHeader,
+  LoadErrorState,
 } from "../../../_components/ds";
 import { PrintExportButton } from "../../stock/_components/PrintExportButton";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
@@ -32,7 +33,20 @@ export default async function StockItemDetailPage({
 }: {
   params: { id: string };
 }) {
-  const { data: item, source } = await getStockItemById(params.id);
+  const result = await getStockItemById(params.id);
+  const { data: item } = result;
+
+  // GAP-INVENTORY-DETAIL-01: fetchJson returns {data:null, source:"error"} for
+  // ANY failure, so a 5xx/timeout/403 used to render "Item not found". Only a
+  // real 404 is "not found"; every other failure is a retryable/permission state.
+  if (result.source === "error" && result.status !== 404) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Stock item" back="/inventory/list" />
+        <LoadErrorState result={result} area="stock item" backHref="/inventory/list" />
+      </div>
+    );
+  }
 
   if (!item) {
     return (
@@ -47,7 +61,7 @@ export default async function StockItemDetailPage({
     id: entry.id,
     date: formatIndianDate(entry.date),
     type: entry.type,
-    quantityDisplay: `${entry.type === "issue" ? "-" : "+"}${entry.quantity.toLocaleString("en-IN")}`,
+    quantityDisplay: `${entry.direction === "out" ? "-" : "+"}${entry.quantity.toLocaleString("en-IN")}`,
     balance: entry.balance.toLocaleString("en-IN"),
   }));
 
@@ -66,17 +80,16 @@ export default async function StockItemDetailPage({
         back="/inventory/list"
         actions={
           <>
-            {source === "error" && <DataSourceBadge source={source} />}
             <PrintExportButton
               label="Print Label"
               documentTitle={`${item.itemCode} · ${item.name}`}
             />
-            <a
-              href={`/stock/ledger/new?itemId=${params.id}`}
-              className="btn primary"
-            >
+            {/* GAP-INVENTORY-DETAIL-02: /stock/:path* is permanently redirected to
+                /inventory/:path*, so the entry form now lives at
+                /inventory/ledger/new (it used to be an unreachable stock/ledger/new). */}
+            <Link href={`/inventory/ledger/new?itemId=${encodeURIComponent(params.id)}`} className="btn primary">
               + Stock Entry
-            </a>
+            </Link>
           </>
         }
       />
@@ -131,7 +144,7 @@ export default async function StockItemDetailPage({
             <div className="card-h">
               <h3>Stock ledger</h3>
             </div>
-            {item.stockLedger.length === 0 ? ( // ux-001-ok: `item` is only reachable past the earlier `if (!item) return` guard above (source==="error" implies a null item per the loader contract) -- this is a genuinely ledger-free item, never a masked fetch failure
+            {item.stockLedger.length === 0 ? ( // ux-001-ok: a failed fetch returns above (LoadErrorState) and a 404 returns "Item not found", so `item` here is real -- this is a genuinely ledger-free item, never a masked fetch failure
               <EmptyState
                 icon="📋"
                 title="No ledger entries"

@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
+import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryBinRow } from "./_data";
 
 type Col = {
@@ -29,33 +30,35 @@ const columns: Col[] = [
 ];
 
 export function BinsTable({ bins, source = "api" }: { bins: InventoryBinRow[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<InventoryBinRow[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<InventoryBinRow[]>(
     "inventory.bins",
     bins,
     source,
     (d) => d.length === 0,
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${formatIndianDate(new Date(cachedAt).toISOString())}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
+  const active = rows.filter((b) => b.isActive).length;
+  const withCapacity = rows.filter((b) => b.capacity != null && b.capacity > 0).length;
 
   return (
-    <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
-      <DataTable<InventoryBinRow>
-        columns={columns}
-        rows={rows}
-        sortable
-        filterable
-        filterPlaceholder="Filter bins…"
-        pageSize={15}
-      />
-    </>
+    <div aria-label="Inventory bins and racks">
+      <StatGrid>
+          <StatCard icon="🗄️" iconBg="#f1f5f9" label="Total Bins" value={statValue(provenance, rows.length)} />
+          <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={statValue(provenance, active)} />
+          <StatCard icon="📐" iconBg="#fef3c7" label="Capacity Tracked" value={statValue(provenance, withCapacity)} />
+      </StatGrid>
+      <Card title="Bins">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="bins and racks">
+          <DataTable<InventoryBinRow>
+            columns={columns}
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder="Filter bins…"
+            pageSize={15}
+          />
+        </RegisterFrame>
+      </Card>
+    </div>
   );
 }

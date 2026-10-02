@@ -1,5 +1,5 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, DataTable } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { formatMoney } from "@/lib/formatters";
 import { getStockItems } from "../../../_data/loaders";
 import { getInventoryCycleCounts, type InventoryCycleCountRow } from "../_data";
@@ -32,6 +32,10 @@ export default async function InventoryListPage() {
     getInventoryCycleCounts("pending_approval"),
   ]);
 
+  // GAP-INVENTORY-LIST-01: a failed fetch yields items=[] -- never present that as
+  // an unstocked store (zero SKUs, Rs 0 value, "Add stock items"). Stats read
+  // "—" and the register is replaced by a retry state.
+  const failed = source === "error";
   const lowStockCount = items.filter((i) => i.isLowStock).length;
   const totalValue = items.reduce((sum, i) => sum + i.totalValue, 0);
 
@@ -44,12 +48,11 @@ export default async function InventoryListPage() {
         title="Stock Items"
         subtitle="All SKUs shared with the inventory module and their current stock levels."
       />
-      {source === "error" && <DataSourceBadge source="error" />}
       <div aria-label="Inventory stock items">
         <StatGrid>
-          <StatCard icon="📦" iconBg="#f1f5f9" label="Total SKUs" value={items.length} />
-          <StatCard icon="⚠️" iconBg="#fee2e2" label="Low Stock" value={lowStockCount} />
-          <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={formatMoney(totalValue)} />
+          <StatCard icon="📦" iconBg="#f1f5f9" label="Total SKUs" value={failed ? null : items.length} />
+          <StatCard icon="⚠️" iconBg="#fee2e2" label="Low Stock" value={failed ? null : lowStockCount} />
+          <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={failed ? null : formatMoney(totalValue)} />
         </StatGrid>
 
         {pendingCycleCounts.length > 0 ? (
@@ -64,7 +67,11 @@ export default async function InventoryListPage() {
           </Card>
         ) : null}
 
-        <InventoryStockListClient items={items} />
+        {failed ? (
+          <RefreshErrorState error={toHumanError("load", { area: "stock items" })} backHref="/inventory" />
+        ) : (
+          <InventoryStockListClient items={items} />
+        )}
       </div>
     </>
   );

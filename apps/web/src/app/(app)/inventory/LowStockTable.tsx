@@ -1,9 +1,9 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DataTable, StatusPill } from "@/app/_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
+import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryLowStockRow } from "./_data";
 
 type Col = {
@@ -23,33 +23,33 @@ const columns: Col[] = [
 ];
 
 export function LowStockTable({ rows: initial, source = "api" }: { rows: InventoryLowStockRow[]; source?: "api" | "error" }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<InventoryLowStockRow[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<InventoryLowStockRow[]>(
     "inventory.low-stock",
     initial,
     source,
     (d) => d.length === 0,
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${formatIndianDate(new Date(cachedAt).toISOString())}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
+  const totalSuggested = rows.reduce((s, r) => s + r.suggestedReorderQty, 0);
 
   return (
-    <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
-      <DataTable<InventoryLowStockRow>
-        columns={columns}
-        rows={rows}
-        sortable
-        filterable
-        filterPlaceholder="Filter low-stock items…"
-        pageSize={15}
-      />
-    </>
+    <div aria-label="Inventory low stock and reorder">
+      <StatGrid>
+          <StatCard icon="⚠️" iconBg="#fee2e2" label="Items Low" value={statValue(provenance, rows.length)} />
+          <StatCard icon="🛒" iconBg="#fef3c7" label="Total Suggested Reorder" value={statValue(provenance, totalSuggested)} />
+      </StatGrid>
+      <Card title="Low Stock Items">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="low-stock alerts">
+          <DataTable<InventoryLowStockRow>
+            columns={columns}
+            rows={rows}
+            sortable
+            filterable
+            filterPlaceholder="Filter low-stock items…"
+            pageSize={15}
+          />
+        </RegisterFrame>
+      </Card>
+    </div>
   );
 }

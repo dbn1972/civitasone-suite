@@ -1,15 +1,15 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader } from "@/app/_components/ds";
 import { getInventoryBins } from "../_data";
 import { BinsTable } from "../BinsTable";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+// GAP-INVENTORY-BINS-01: stats, provenance badge and the failure state live in
+// BinsTable so they all read ONE useSeededResource call -- this page no longer
+// derives zero-filled stats from a failed fetch.
 export default async function InventoryBinsPage() {
-  const { data: bins, source } = await getInventoryBins();
-  const active = bins.filter((b) => b.isActive).length;
-  const withCapacity = bins.filter((b) => b.capacity != null && b.capacity > 0).length;
+  const { data, source } = await getInventoryBins();
 
   return (
     <>
@@ -17,17 +17,7 @@ export default async function InventoryBinsPage() {
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
       <PageHeader title="Bins & Racks" subtitle="Physical bin and rack locations within government stores." />
-      {source === "error" && <DataSourceBadge source="error" />}
-      <div aria-label="Inventory bins and racks">
-        <StatGrid>
-          <StatCard icon="🗄️" iconBg="#f1f5f9" label="Total Bins" value={bins.length} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={active} />
-          <StatCard icon="📐" iconBg="#fef3c7" label="Capacity Tracked" value={withCapacity} />
-        </StatGrid>
-        <Card title="Bins">
-          <BinsTable bins={bins} source={source} />
-        </Card>
-      </div>
+      <BinsTable bins={data} source={source} />
     </>
   );
 }

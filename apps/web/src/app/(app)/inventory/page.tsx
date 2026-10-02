@@ -1,5 +1,6 @@
 import { ModuleHub } from "../../_components/ModuleHub";
-import { Card } from "@/app/_components/ds";
+import { Card, StatGrid, StatCard, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { getInventoryLowStock, getInventoryItemForecast } from "./_data";
 import { ForecastChart, type ForecastPoint } from "./ForecastChart";
 
@@ -13,10 +14,15 @@ function buildForecastSeries(dailyForecast: number[]): ForecastPoint[] {
 }
 
 export default async function Page() {
-  const { data: lowStock } = await getInventoryLowStock();
+  // GAP-INVENTORY-HOME-01: keep the whole loader result. An outage used to
+  // collapse to lowStock=[] and the hub looked like a healthy store with no
+  // alerts -- the Low Stock alert is the one number this hub exists to show.
+  const lowRes = await getInventoryLowStock();
+  const lowFailed = lowRes.source === "error";
+  const lowStock = lowRes.data;
   const topItem = lowStock[0];
-  const forecast = topItem ? await getInventoryItemForecast(topItem.itemId) : null;
-
+  const forecastRes = !lowFailed && topItem ? await getInventoryItemForecast(topItem.itemId) : null;
+  const forecastFailed = forecastRes?.source === "error";
   return (
     <ModuleHub
       title="Inventory"
@@ -34,10 +40,23 @@ export default async function Page() {
         { href: "/inventory/reconcile", label: "Reconciliation", note: "Verify ledger vs. physical stock movements" },
       ]}
     >
-      {topItem && forecast?.data.available ? (
-        <Card title="Demand forecast — item nearest reorder" padding>
-          <ForecastChart itemName={topItem.name} data={buildForecastSeries(forecast.data.dailyForecast)} />
+      {lowFailed ? (
+        <Card padding>
+          <RefreshErrorState error={toHumanError("load", { area: "low-stock alerts" })} />
         </Card>
+      ) : null}
+      <StatGrid>
+        <StatCard icon="⚠️" iconBg="#fee2e2" label="Items Low" value={lowFailed ? null : lowStock.length} />
+      </StatGrid>
+      {!lowFailed && topItem && forecastRes?.data.available ? (
+        <Card title="Demand forecast — item nearest reorder" padding>
+          <ForecastChart itemName={topItem.name} data={buildForecastSeries(forecastRes.data.dailyForecast)} />
+        </Card>
+      ) : null}
+      {forecastFailed ? (
+        <p role="status" style={{ fontSize: 13, color: "#92400e", margin: "0 0 12px" }}>
+          Forecast unavailable right now.
+        </p>
       ) : null}
     </ModuleHub>
   );

@@ -94,3 +94,10 @@ export const PAYROLL_READER_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin", "financ
  * GAP-PAYROLL-COMPARISON-03).
  */
 export const PAYROLL_REPORT_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin"];
+
+/**
+ * Roles permitted to approve/reject a cycle count. Mirrors inventory-service's
+ * APPROVE_ROLES in modules/cycle-count/routes.ts (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-02);
+ * the server remains the authority (it also enforces maker != checker).
+ */
+export const INVENTORY_CYCLE_COUNT_APPROVE_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];

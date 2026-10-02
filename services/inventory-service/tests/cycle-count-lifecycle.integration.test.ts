@@ -156,7 +156,7 @@ describe("cycle-count full lifecycle — auto-posted variance (within threshold)
 describe("cycle-count full lifecycle — variance above threshold requires approval", () => {
   it("does not touch stock until approved, then reconciles correctly (also regression-covers bug #4's messageId fix)", async () => {
     // System has 250; physical count finds 400 -> +150 surplus, exceeds the 13-unit threshold.
-    const { h, itemId, storeId } = await seedTenantWithStock(250, 15000);
+    const { tid, h, itemId, storeId } = await seedTenantWithStock(250, 15000);
 
     const ccRes = await app.inject({
       method: "POST", url: "/v1/inventory/cycle-counts", headers: h,
@@ -178,8 +178,10 @@ describe("cycle-count full lifecycle — variance above threshold requires appro
     expect(beforeApprove?.onHandQty).toBe(250);
     expect((await getLedger(h, itemId, storeId)).length).toBe(1); // just the receipt
 
+    // Maker != checker (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-02): the approver must be
+    // a DIFFERENT user (fresh `sub`, same tenant) than the one who recorded the count.
     const approveRes = await app.inject({
-      method: "POST", url: `/v1/inventory/cycle-counts/${ccId}/approve`, headers: h,
+      method: "POST", url: `/v1/inventory/cycle-counts/${ccId}/approve`, headers: authHeaders(tid),
       payload: { version: rec.version },
     });
     expect(approveRes.statusCode).toBe(202);
@@ -236,7 +238,7 @@ describe("cycle-count full lifecycle — no-variance count", () => {
 
 describe("cycle-count full lifecycle — rejection", () => {
   it("rejecting a pending-approval count leaves stock untouched (also regression-covers bug #4 for the reject command)", async () => {
-    const { h, itemId, storeId } = await seedTenantWithStock(250, 15000);
+    const { tid, h, itemId, storeId } = await seedTenantWithStock(250, 15000);
 
     const ccRes = await app.inject({
       method: "POST", url: "/v1/inventory/cycle-counts", headers: h,
@@ -249,7 +251,7 @@ describe("cycle-count full lifecycle — rejection", () => {
     expect(rec.status).toBe("pending_approval");
 
     const rejectRes = await app.inject({
-      method: "POST", url: `/v1/inventory/cycle-counts/${ccId}/reject`, headers: h,
+      method: "POST", url: `/v1/inventory/cycle-counts/${ccId}/reject`, headers: authHeaders(tid),
       payload: { version: rec.version, reason: "recount looks wrong, redo the physical count" },
     });
     expect(rejectRes.statusCode).toBe(202);
@@ -262,5 +264,89 @@ describe("cycle-count full lifecycle — rejection", () => {
 
     const after = await getBalance(h, itemId, storeId);
     expect(after?.onHandQty).toBe(250); // untouched — a rejected count never reconciles
+  });
+});
+
+describe("cycle-count approval — maker != checker, status and version guards (GAP-INVENTORY-CYCLE-COUNTS-DETAIL-02)", () => {
+  async function pendingCount() {
+    const seeded = await seedTenantWithStock(250, 15000);
+    const res = await app.inject({
+      method: "POST", url: "/v1/inventory/cycle-counts", headers: seeded.h,
+      payload: { itemId: seeded.itemId, warehouseId: seeded.storeId, physicalQty: 400, reasonCode: "recount" },
+    });
+    expect(res.statusCode).toBe(202);
+    const { id } = res.json();
+    await appQueue.drain();
+    const rec = (await app.inject({ method: "GET", url: `/v1/inventory/cycle-counts/${id}`, headers: seeded.h })).json().data;
+    expect(rec.status).toBe("pending_approval");
+    return { ...seeded, id, version: rec.version as number, createdBy: rec.createdBy as string };
+  }
+
+  it("the user who recorded the count cannot approve it: 403 MAKER_CHECKER, no stock written", async () => {
+    const c = await pendingCount();
+    const res = await app.inject({
+      method: "POST", url: `/v1/inventory/cycle-counts/${c.id}/approve`, headers: c.h, payload: { version: c.version },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error?.code ?? res.json().code).toBe("MAKER_CHECKER");
+    await appQueue.drain();
+    const rec = (await app.inject({ method: "GET", url: `/v1/inventory/cycle-counts/${c.id}`, headers: c.h })).json().data;
+    expect(rec.status).toBe("pending_approval");
+    expect((await getBalance(c.h, c.itemId, c.storeId))?.onHandQty).toBe(250);
+  });
+
+  it("the consumer itself refuses a maker self-approval published past the route", async () => {
+    const c = await pendingCount();
+    const { approveCycleCount } = await import("../src/modules/cycle-count/commands.js");
+    await approveCycleCount(
+      { tenantId: c.tid, actorId: c.createdBy, correlationId: randomUUID() } as unknown as Parameters<typeof approveCycleCount>[0],
+      c.id,
+      c.version,
+    );
+    await appQueue.drain();
+    const rec = (await app.inject({ method: "GET", url: `/v1/inventory/cycle-counts/${c.id}`, headers: c.h })).json().data;
+    expect(rec.status).toBe("pending_approval");
+    expect(rec.adjustmentId).toBeNull();
+    expect((await getBalance(c.h, c.itemId, c.storeId))?.onHandQty).toBe(250);
+  });
+
+  it("the user who recorded the count cannot reject it either: 403 MAKER_CHECKER", async () => {
+    const c = await pendingCount();
+    const res = await app.inject({
+      method: "POST", url: `/v1/inventory/cycle-counts/${c.id}/reject`, headers: c.h, payload: { version: c.version, reason: "nope" },
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().error?.code ?? res.json().code).toBe("MAKER_CHECKER");
+    const ok = await app.inject({
+      method: "POST", url: `/v1/inventory/cycle-counts/${c.id}/reject`, headers: authHeaders(c.tid), payload: { version: c.version, reason: "recount needed" },
+    });
+    expect(ok.statusCode).toBe(202);
+  });
+
+  it("a different approver with a stale version gets 409 VERSION_CONFLICT", async () => {
+    const c = await pendingCount();
+    const res = await app.inject({
+      method: "POST", url: `/v1/inventory/cycle-counts/${c.id}/approve`, headers: authHeaders(c.tid), payload: { version: c.version + 5 },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().error?.code ?? res.json().code).toBe("VERSION_CONFLICT");
+  });
+
+  it("approving twice: the second call is 409 NOT_PENDING_APPROVAL and only one adjustment is posted", async () => {
+    const c = await pendingCount();
+    const approver = authHeaders(c.tid);
+    const first = await app.inject({ method: "POST", url: `/v1/inventory/cycle-counts/${c.id}/approve`, headers: approver, payload: { version: c.version } });
+    expect(first.statusCode).toBe(202);
+    await appQueue.drain();
+    const second = await app.inject({ method: "POST", url: `/v1/inventory/cycle-counts/${c.id}/approve`, headers: authHeaders(c.tid), payload: { version: c.version } });
+    expect(second.statusCode).toBe(409);
+    expect(second.json().error?.code ?? second.json().code).toBe("NOT_PENDING_APPROVAL");
+    expect((await getLedger(c.h, c.itemId, c.storeId)).filter((l) => l.movementType === "adjustment")).toHaveLength(1);
+  });
+
+  it("an unknown cycle count id is 404", async () => {
+    const { h } = await seedTenantWithStock(10, 100);
+    const res = await app.inject({ method: "POST", url: `/v1/inventory/cycle-counts/${randomUUID()}/approve`, headers: h, payload: { version: 1 } });
+    expect(res.statusCode).toBe(404);
   });
 });

@@ -7,6 +7,7 @@
  * so the module stays self-contained.
  */
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { SUBSTITUTES_ITEM_CAP } from "./substitutesCoverage";
 
 export type InventoryItemRow = {
   id: string;
@@ -226,21 +227,30 @@ export function getInventoryItemForecast(itemId: string): Promise<LoaderResult<I
   });
 }
 
+export type InventorySubstitutesResult = LoaderResult<InventorySubstituteRow[]> & {
+  /** True when the item master has more items than SUBSTITUTES_ITEM_CAP. */
+  truncated: boolean;
+  /** Number of per-item requests that failed (rows for those items are missing). */
+  failedCount: number;
+  /** Items in the item master, whether or not they were all fetched. */
+  itemCount: number;
+};
+
 /**
  * Substitutes are listed per item (GET /items/:id/substitutes). Aggregate across
  * the current item master so the hub screen has a tenant-wide view.
  */
-export async function getInventorySubstitutes(): Promise<LoaderResult<InventorySubstituteRow[]>> {
+export async function getInventorySubstitutes(): Promise<InventorySubstitutesResult> {
   const { data: items, source: itemsSource } = await getInventoryItems();
   if (itemsSource === "error") {
-    return { data: [], source: "error" };
+    return { data: [], source: "error", truncated: false, failedCount: 0, itemCount: 0 };
   }
   if (items.length === 0) {
-    return { data: [], source: "api" };
+    return { data: [], source: "api", truncated: false, failedCount: 0, itemCount: 0 };
   }
 
   const results = await Promise.all(
-    items.slice(0, 50).map((item) =>
+    items.slice(0, SUBSTITUTES_ITEM_CAP).map((item) =>
       fetchJson<Envelope<InventorySubstituteRow>, InventorySubstituteRow[]>(
         `/api/v1/inventory/items/${item.id}/substitutes`,
         [],
@@ -254,6 +264,15 @@ export async function getInventorySubstitutes(): Promise<LoaderResult<InventoryS
   );
 
   const rows = results.flatMap((r) => r.data);
-  const anyApi = results.some((r) => r.source === "api");
-  return { data: rows, source: anyApi ? "api" : "error" };
+  const failedCount = results.filter((r) => r.source === "error").length;
+  // GAP-INVENTORY-SUBSTITUTES-02: "error" only when EVERY request failed; a
+  // partial failure or the item cap is reported via failedCount/truncated so
+  // the page can warn instead of showing an incomplete list as complete.
+  return {
+    data: rows,
+    source: failedCount === results.length ? "error" : "api",
+    truncated: items.length > SUBSTITUTES_ITEM_CAP,
+    failedCount,
+    itemCount: items.length,
+  };
 }

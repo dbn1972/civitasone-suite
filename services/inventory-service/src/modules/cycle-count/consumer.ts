@@ -8,7 +8,7 @@
  */
 import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
-import { eq, and } from "drizzle-orm";
+import { eq, and, ne } from "drizzle-orm";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -199,11 +199,23 @@ export function registerCycleCountConsumers(q: Queue): void {
             eq(cycleCounts.tenantId, msg.tenantId),
             eq(cycleCounts.version, p.version),
             eq(cycleCounts.status, "pending_approval"),
+            // Maker != checker, enforced where the write happens (the route
+            // pre-check can be raced or bypassed by a direct queue publish).
+            ne(cycleCounts.createdBy, msg.actorId),
           ),
         )
         .returning();
 
-      if (!updated) return;
+      if (!updated) {
+        // Not applied. If it was refused as a self-approval (e.g. the route's
+        // cached pre-check was stale), leave an audit trail instead of a silent no-op.
+        const [existing] = await tx.select({ createdBy: cycleCounts.createdBy }).from(cycleCounts)
+          .where(and(eq(cycleCounts.id, p.id), eq(cycleCounts.tenantId, msg.tenantId)));
+        if (existing && existing.createdBy === msg.actorId) {
+          await audit(tx as EnqueueTx, msg, "approve_refused_maker_checker", p.id);
+        }
+        return;
+      }
 
       // Post the reconciling stock entry now that a human has approved this
       // variance (see postReconciliation()'s doc comment: diffs against the

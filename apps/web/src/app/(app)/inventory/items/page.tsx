@@ -1,17 +1,15 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader } from "@/app/_components/ds";
 import { getInventoryItems } from "../_data";
 import { ItemsTable } from "../ItemsTable";
 import { ArrowLeft } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
+// GAP-INVENTORY-ITEMS-01: stats, provenance badge and the failure state live in
+// ItemsTable so they all read ONE useSeededResource call -- this page no longer
+// derives zero-filled stats from a failed fetch.
 export default async function InventoryItemsPage() {
-  const { data: items, source } = await getInventoryItems();
-
-  const active = items.filter((i) => i.status === "active").length;
-  const consumables = items.filter((i) => i.itemType === "consumable").length;
-  const tracked = items.filter((i) => i.reorderLevel > 0).length;
+  const { data, source } = await getInventoryItems();
 
   return (
     <>
@@ -19,18 +17,7 @@ export default async function InventoryItemsPage() {
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
       <PageHeader title="Item Master" subtitle="Catalogued stock items with categories, units and reorder policy." />
-      {source === "error" && <DataSourceBadge source="error" />}
-      <div aria-label="Inventory item master">
-        <StatGrid>
-          <StatCard icon="📦" iconBg="#f1f5f9" label="Total Items" value={items.length} />
-          <StatCard icon="✅" iconBg="#dcfce7" label="Active" value={active} />
-          <StatCard icon="🧴" iconBg="#faf5ff" label="Consumables" value={consumables} />
-          <StatCard icon="🔔" iconBg="#fef3c7" label="Reorder Tracked" value={tracked} />
-        </StatGrid>
-        <Card title="Items">
-          <ItemsTable items={items} source={source} />
-        </Card>
-      </div>
+      <ItemsTable items={data} source={source} />
     </>
   );
 }

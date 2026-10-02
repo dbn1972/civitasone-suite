@@ -1,9 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { DataTable, StatusPill, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
+import { RegisterFrame, isNoData, statValue } from "./RegisterFrame";
 import type { InventoryGoodsReturnRow } from "./_data";
 
 type Col = {
@@ -31,34 +32,47 @@ export function GoodsReturnsTable({
   returns: InventoryGoodsReturnRow[];
   source?: "api" | "error";
 }) {
-  const { data: rows, fromCache, offline, cachedAt } = useSeededResource<InventoryGoodsReturnRow[]>(
+  const { data: rows, provenance, offline, cachedAt } = useSeededResource<InventoryGoodsReturnRow[]>(
     "inventory.goods-returns",
     returns,
     source,
     (d) => d.length === 0,
   );
 
-  const cacheNote =
-    offline || fromCache
-      ? `Showing saved data${cachedAt ? ` from ${formatIndianDate(new Date(cachedAt).toISOString())}` : ""}${offline ? " — you're offline" : ""}.`
-      : null;
+  const pendingRows = rows.filter((r) => r.qcStatus === "pending");
+  const pendingQc = pendingRows.length;
+  // GAP-INVENTORY-GOODS-RETURNS-03: a unitless cross-item quantity total is
+  // meaningless; show the age of the oldest return still awaiting QC instead.
+  const oldestMs = pendingRows.reduce((min, r) => {
+    const t = Date.parse(r.createdAt);
+    return Number.isNaN(t) ? min : Math.min(min, t);
+  }, Number.POSITIVE_INFINITY);
+  const oldestPendingDays = isNoData(provenance)
+    ? null
+    : Number.isFinite(oldestMs)
+      ? Math.max(0, Math.floor((Date.now() - oldestMs) / 86_400_000))
+      : 0;
 
   return (
-    <>
-      {cacheNote ? (
-        <p role="status" aria-live="polite" style={{ fontSize: 12, color: "#92400e", margin: "0 0 8px" }}>
-          {cacheNote}
-        </p>
-      ) : null}
-      <DataTable<InventoryGoodsReturnRow>
-        columns={columns}
-        rows={rows}
-        rowHref={(row) => `/inventory/goods-returns/${row.id}`}
-        sortable
-        filterable
-        filterPlaceholder="Filter goods returns…"
-        pageSize={15}
-      />
-    </>
+    <div aria-label="Inventory goods returns">
+      <StatGrid>
+          <StatCard icon="↩️" iconBg="#fee2e2" label="Returns" value={statValue(provenance, rows.length)} />
+          <StatCard icon="🔎" iconBg="#fef3c7" label="Pending QC" value={statValue(provenance, pendingQc)} />
+          <StatCard icon="⏳" iconBg="#f1f5f9" label="Oldest Pending QC (days)" value={oldestPendingDays} />
+      </StatGrid>
+      <Card title="Goods Returns">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="goods returns">
+          <DataTable<InventoryGoodsReturnRow>
+            columns={columns}
+            rows={rows}
+            rowHref={(row) => `/inventory/goods-returns/${row.id}`}
+            sortable
+            filterable
+            filterPlaceholder="Filter goods returns…"
+            pageSize={15}
+          />
+        </RegisterFrame>
+      </Card>
+    </div>
   );
 }

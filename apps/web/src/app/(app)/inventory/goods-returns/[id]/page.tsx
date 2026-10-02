@@ -1,10 +1,22 @@
-import { PageHeader, Card, StatusPill, EmptyState } from "@/app/_components/ds";
+import { PageHeader, Card, StatusPill, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getGoodsReturnById } from "@/app/_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { QcInspectionForm } from "./QcInspectionForm";
 
 export default async function GoodsReturnDetailPage({ params }: { params: { id: string } }) {
-  const { data: goodsReturn } = await getGoodsReturnById(params.id);
+  const result = await getGoodsReturnById(params.id);
+  const { data: goodsReturn } = result;
+
+  // GAP-INVENTORY-GOODS-RETURNS-DETAIL-03: only a real 404 is "not found";
+  // 5xx/timeout get a retry state and 403 a permission-denied state.
+  if (result.source === "error" && result.status !== 404) {
+    return (
+      <>
+        <PageHeader title="Goods Return" back="/inventory/goods-returns" />
+        <LoadErrorState result={result} area="goods return" backHref="/inventory/goods-returns" />
+      </>
+    );
+  }
 
   if (!goodsReturn) {
     return (

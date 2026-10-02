@@ -24,10 +24,14 @@ export default async function InventoryReconcilePage() {
   const issues = entries.filter((e) => e.type === "issue");
   const adjustments = entries.filter((e) => e.type === "adjustment");
 
-  const totalIn = receipts.reduce((s, e) => s + e.quantity, 0);
-  const totalOut = issues.reduce((s, e) => s + e.quantity, 0);
-  const totalAdjusted = adjustments.reduce((s, e) => s + e.quantity, 0);
-  const netQty = totalIn - totalOut + totalAdjusted;
+  // GAP-INVENTORY-RECONCILE-02: totals and Net use the SIGNED quantity, so a
+  // stock-reducing adjustment/transfer lowers Net instead of inflating it.
+  // Net sums EVERY row so it always reconciles to the table; rows with an
+  // unrecognised voucher type are surfaced as their own "Unclassified" stat.
+  const unclassified = entries.filter((e) => e.type === "other");
+  const totalIn = receipts.reduce((s, e) => s + e.signedQuantity, 0);
+  const totalOut = issues.reduce((s, e) => s - e.signedQuantity, 0);
+  const netQty = entries.reduce((s, e) => s + e.signedQuantity, 0);
 
   const rows = entries as LedgerEntry[];
 
@@ -64,6 +68,9 @@ export default async function InventoryReconcilePage() {
             <StatCard icon="📥" iconBg="#ecfdf5" label="Total In (Qty)" value={totalIn.toLocaleString("en-IN")} />
             <StatCard icon="📤" iconBg="#fef2f2" label="Total Out (Qty)" value={totalOut.toLocaleString("en-IN")} />
             <StatCard icon="🔧" iconBg="#fffbeb" label="Adjustments" value={adjustments.length.toLocaleString("en-IN")} />
+            {unclassified.length > 0 ? (
+              <StatCard icon="❔" iconBg="#f1f5f9" label="Unclassified rows" value={unclassified.length.toLocaleString("en-IN")} />
+            ) : null}
             <StatCard
               icon="⚖️"
               iconBg="#eff6ff"
