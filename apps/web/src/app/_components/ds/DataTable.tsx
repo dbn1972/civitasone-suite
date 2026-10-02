@@ -7,6 +7,7 @@ import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
 import { formatMoney, formatRupees, formatIndianDate, formatPercent } from "@/lib/formatters";
+import { minorToDecimalString } from "@/lib/money";
 
 /**
  * DataTable is a "use client" component rendered from ~80+ call sites across
@@ -91,6 +92,14 @@ interface Column<T> {
   statusLabels?: Record<string, string>;
   /** Opt-in: set false to exclude a column from sorting when the table is sortable. */
   sortable?: boolean;
+  /**
+   * Opt-in, client components only (like `render`): the exact string written to
+   * the CSV for this column, taking precedence over every cellType rule. Use it
+   * when the on-screen text is a display form (an office NAME, a localised
+   * date) but the export should carry the machine value (an id, an ISO date).
+   * GAP-FINANCE-BUDGET-FUND-RELEASES-04.
+   */
+  csv?: (row: T) => string;
 }
 
 interface DataTableProps<T extends Record<string, unknown>> {
@@ -139,6 +148,13 @@ interface DataTableProps<T extends Record<string, unknown>> {
   exportable?: boolean;
   /** Filename for CSV export (without extension). */
   exportFilename?: string;
+  /**
+   * Opt-in: write cellType "amount" columns to the CSV as a plain decimal rupee
+   * number ("1250000.00") instead of the on-screen "₹12,50,000.00" text, so the
+   * file is machine-usable. Off by default so the ~80 existing exports keep their
+   * current format (GAP-FINANCE-BUDGET-FUND-RELEASES-04).
+   */
+  csvPlainAmounts?: boolean;
   /**
    * GAP-HR-LOANS-02: called with the exported row count and the active text
    * filter right before the CSV download starts, so a caller can record the
@@ -306,6 +322,7 @@ export function DataTable<T extends Record<string, unknown>>({
   filterable = false,
   filterPlaceholder = "Filter…",
   filterKeys,
+  csvPlainAmounts = false,
   pageSize,
   emptyIcon = "📋",
   emptyTitle = "No records found",
@@ -397,6 +414,10 @@ export function DataTable<T extends Record<string, unknown>>({
   };
 
   function csvCellValue<T2 extends Record<string, unknown>>(col: Column<T2>, row: T2): string {
+    if (col.csv) return col.csv(row);
+    if (col.cellType === "amount" && csvPlainAmounts) {
+      return minorToDecimalString(row[col.key] as string | number | bigint | null | undefined) ?? "";
+    }
     if (col.cellType === "amount") return String(formatMoney(row[col.key] as number | null) ?? "");
     if (col.cellType === "rupees") return String(formatRupees(row[col.key] as number | string | null) ?? "");
     if (col.cellType === "date") return formatIndianDate(row[col.key] as string | null | undefined);

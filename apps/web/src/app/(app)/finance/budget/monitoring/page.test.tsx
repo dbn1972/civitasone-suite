@@ -82,3 +82,53 @@ describe("BudgetMonitoringPage error states (GAP-FINANCE-BUDGET-MONITORING-01)",
     expect(screen.queryByText(/We couldn't load/)).not.toBeInTheDocument();
   });
 });
+
+// GAP-FINANCE-BUDGET-MONITORING-03/-04/-05
+describe("BudgetMonitoringPage -- exact money, on-track, committed, FY validation", () => {
+  const summary = (totals: Record<string, unknown>) => ({ data: { fy: "2026-27", fractionElapsedBps: "5000", totals }, source: "api" as const });
+  async function show(totals: Record<string, unknown>) {
+    getSummary.mockReset().mockResolvedValue(summary(totals));
+    getLines.mockReset().mockResolvedValue({ data: [], source: "api" });
+    render(await BudgetMonitoringPage({ searchParams: { fy: "2026-27" } }));
+  }
+  const card = (label: string) => screen.getByText(label).parentElement!.textContent ?? "";
+
+  it("cards show the exact paise (123456 -> ₹1,234.56), not the old rounded shorthand", async () => {
+    await show({ count: 1, allocatedMinor: "123456", committedMinor: "5000", actualMinor: "250000", exceptions: {} });
+    expect(card("Total Allocated")).toContain("₹1,234.56");
+    expect(card("Total Expended")).toContain("₹2,500.00");
+  });
+
+  it("adds a Total Committed card with the formatted committedMinor", async () => {
+    await show({ count: 1, allocatedMinor: "1", committedMinor: "5000", actualMinor: "1", exceptions: {} });
+    expect(card("Total Committed")).toContain("₹50.00");
+  });
+
+  it("totals without a count -> On Track is —, not 0", async () => {
+    await show({ allocatedMinor: "1", exceptions: {} });
+    expect(card("On Track")).toContain("—");
+    expect(card("On Track")).not.toMatch(/\b0\b/);
+  });
+
+  it("count 10 with exceptions 2/1/1 -> On Track 6; overlapping exceptions never go negative", async () => {
+    await show({ count: 10, exceptions: { over_committed: 2, under_utilised: 1, projected_overspend: 1 } });
+    expect(card("On Track")).toContain("6");
+  });
+  it("clamps On Track at 0 when exceptions exceed the head count", async () => {
+    await show({ count: 2, exceptions: { over_committed: 2, under_utilised: 1, projected_overspend: 1 } });
+    expect(card("On Track")).toMatch(/0/);
+    expect(card("On Track")).not.toContain("-");
+  });
+
+  it("?fy=abc falls back to a valid current FY and the loaders are called with it", async () => {
+    getSummary.mockReset().mockResolvedValue(EMPTY_SUMMARY);
+    getLines.mockReset().mockResolvedValue(EMPTY_LINES);
+    await BudgetMonitoringPage({ searchParams: { fy: "abc" } });
+    expect(getSummary).toHaveBeenCalledWith(expect.stringMatching(/^\d{4}-\d{2}$/));
+    expect(getSummary).not.toHaveBeenCalledWith("abc");
+    getSummary.mockClear();
+    await BudgetMonitoringPage({ searchParams: { fy: "2026-99" } });
+    expect(getSummary).not.toHaveBeenCalledWith("2026-99");
+  });
+});
+

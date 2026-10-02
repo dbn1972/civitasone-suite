@@ -6,15 +6,19 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { SanctionSummary } from "@civitasone/types";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
+import { SANCTION_STATUS_LABEL } from "../_lib/sanctionStats";
 
-type Tab = "All" | "Pending" | "Sanctioned";
+// One word per state: the tab, the stat card and the status pill all read
+// SANCTION_STATUS_LABEL ("Approved", not "Sanctioned" on one and "Approved" on
+// another -- GAP-FINANCE-BUDGET-SANCTIONS-05).
+type Tab = "All" | typeof SANCTION_STATUS_LABEL.pending | typeof SANCTION_STATUS_LABEL.approved;
 
-const TABS: Tab[] = ["All", "Pending", "Sanctioned"];
+const TABS: Tab[] = ["All", SANCTION_STATUS_LABEL.pending, SANCTION_STATUS_LABEL.approved];
 
 const TAB_STATUS_MAP: Record<Tab, string[]> = {
   All: [],
-  Pending: ["pending"],
-  Sanctioned: ["approved"],
+  [SANCTION_STATUS_LABEL.pending]: ["pending"],
+  [SANCTION_STATUS_LABEL.approved]: ["approved"],
 };
 
 export function SanctionsTable({ sanctions, source = "api" }: { sanctions: SanctionSummary[]; source?: "api" | "error" }) {

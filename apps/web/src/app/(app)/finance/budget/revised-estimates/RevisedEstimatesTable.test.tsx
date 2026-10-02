@@ -13,10 +13,12 @@ const sampleEstimates: RevisedEstimateRow[] = [
     id: "be-1",
     headCode: "2202",
     description: "General Education",
-    budgetEstimate: 100000,
-    revisedEstimate: 120000,
-    variancePct: 20,
+    financialYear: "2026-27",
+    budgetEstimateMinor: "10000000",
+    revisedEstimateMinor: "12000000",
+    varianceBps: 2000,
     status: "increased",
+    material: true,
   },
 ];
 
@@ -87,10 +89,12 @@ describe("RevisedEstimatesTable — UX-002 (single source of truth for data prov
         id: "be-2",
         headCode: "2211",
         description: "Family Welfare",
-        budgetEstimate: null,
-        revisedEstimate: 50000,
-        variancePct: null,
+        financialYear: "2026-27",
+        budgetEstimateMinor: null,
+        revisedEstimateMinor: "5000000",
+        varianceBps: null,
         status: "unknown",
+        material: false,
       },
     ];
     mockedHook.mockReturnValue({
@@ -107,3 +111,57 @@ describe("RevisedEstimatesTable — UX-002 (single source of truth for data prov
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(2); // BE cell + Variance % cell
   });
 });
+
+// GAP-FINANCE-BUDGET-REVISED-ESTIMATES-02/-03/-04/-01
+describe("RevisedEstimatesTable -- exact money, direction pills, materiality, FY", () => {
+  function showRows(rows: RevisedEstimateRow[], fy?: string) {
+    mockedHook.mockReturnValue({ data: rows as never, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    return render(<RevisedEstimatesTable estimates={rows} source="api" fy={fy} />);
+  }
+  const base: RevisedEstimateRow = {
+    id: "r", headCode: "2202", description: "Edu", financialYear: "2026-27",
+    budgetEstimateMinor: "100", revisedEstimateMinor: "100", varianceBps: 0, status: "no_change", material: false,
+  };
+
+  it("renders BE/RE exactly above 2^53 paise (no float rounding)", () => {
+    showRows([{ ...base, budgetEstimateMinor: "900719925474099301", revisedEstimateMinor: "900719925474099302", status: "increased" }]);
+    expect(screen.getByText("₹9,00,71,99,25,47,40,993.01")).toBeInTheDocument();
+    expect(screen.getByText("₹9,00,71,99,25,47,40,993.02")).toBeInTheDocument();
+  });
+
+  it("each direction renders a distinct pill class, label and text cue", () => {
+    const { container } = showRows([
+      { ...base, id: "a", status: "increased" },
+      { ...base, id: "b", status: "decreased" },
+      { ...base, id: "c", status: "no_change" },
+      { ...base, id: "d", status: "unknown" },
+    ]);
+    const pill = (text: string) => screen.getByText(text).className;
+    expect(pill("▲ Increased")).toContain("warn");
+    expect(pill("▼ Decreased")).toContain("info");
+    expect(pill("= No change")).toContain("mut");
+    expect(pill("Unknown")).toContain("mut");
+    expect(container.querySelectorAll(".pill").length).toBe(4);
+  });
+
+  it("flags a 12% revision as material (bold + text marker) and not a 5% one", () => {
+    showRows([
+      { ...base, id: "m", varianceBps: 1200, material: true, status: "increased" },
+      { ...base, id: "n", varianceBps: 500, material: false, status: "increased" },
+    ]);
+    expect(screen.getByText(/12\.0%/).textContent).toContain("Material");
+    expect(screen.getByText("5.0%").textContent).not.toContain("Material");
+  });
+
+  it("empty message names the selected FY", () => {
+    showRows([], "2026-27");
+    expect(screen.getByText("No revised estimates for FY 2026-27.")).toBeInTheDocument();
+  });
+
+  it("shows an FY column", () => {
+    showRows([base]);
+    expect(screen.getByText("FY")).toBeInTheDocument();
+    expect(screen.getByText("2026-27")).toBeInTheDocument();
+  });
+});
+

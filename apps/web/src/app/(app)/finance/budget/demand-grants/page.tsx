@@ -13,18 +13,22 @@ export default async function DemandGrantsPage() {
   // budget.finance_demands calls this column "class" (voted|charged), not "type".
   const voted = grants.filter((g) => String(g.class).toLowerCase() === "voted").length;
   const charged = grants.filter((g) => String(g.class).toLowerCase() === "charged").length;
+  // GAP-FINANCE-BUDGET-DEMAND-GRANTS-03: any other class value must not vanish
+  // between Total and Voted+Charged.
+  const other = grants.length - voted - charged;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="Demand for Grants"
-        subtitle="Parliamentary demand for grants with voted/charged breakup."
+        subtitle="Demands for grants with voted/charged breakup."
         back="/finance"
       />
       <StatGrid>
         <StatCard icon="🏛️" iconBg="#e7edfd" label="Total Demands" value={errored ? "—" : grants.length} />
         <StatCard icon="🗳️" iconBg="#ecfdf3" label="Voted" value={errored ? "—" : voted} />
         <StatCard icon="⚖️" iconBg="#fffaeb" label="Charged" value={errored ? "—" : charged} />
+        {!errored && other > 0 ? <StatCard icon="❔" iconBg="var(--panel)" label="Other" value={other} /> : null}
         <StatCard icon="📊" iconBg="#eff6ff" label="Services" value={errored ? "—" : new Set(grants.map((g) => g.service)).size} />
       </StatGrid>
       {/* UX-012: the data-source badge lives inside DemandGrantsTable. */}

@@ -11,7 +11,7 @@ const financeSections: NavTile[] = [
 	// Budget
 	{ title: "Budget Formulation", section: "Budget", description: "Sanctioned, released, and utilisation by major head.", href: "/finance/budget/formulation" },
 	{ title: "Sanctions", section: "Budget", description: "Government expenditure sanctions and approval status.", href: "/finance/budget/sanctions" },
-	{ title: "Demand for Grants", section: "Budget", description: "Parliamentary demand for grants with voted/charged breakup.", href: "/finance/budget/demand-grants" },
+	{ title: "Demand for Grants", section: "Budget", description: "Demands for grants with voted/charged breakup.", href: "/finance/budget/demand-grants" },
 	{ title: "Revised Estimates", section: "Budget", description: "BE vs RE with variance analysis by head.", href: "/finance/budget/revised-estimates" },
 	{ title: "Outcome Budget", section: "Budget", description: "Scheme output indicators and achievement tracking.", href: "/finance/budget/outcome-budget" },
 	{ title: "Budget Allocation", section: "Budget", description: "Allocation, commitment and expenditure by budget head and financial year.", href: "/finance/budget/allocation" },

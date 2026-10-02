@@ -63,3 +63,37 @@ describe("MonitoringTable — head label", () => {
     expect(screen.getByText("Unknown head")).toBeInTheDocument();
   });
 });
+
+// GAP-FINANCE-BUDGET-MONITORING-03/-05
+describe("MonitoringTable -- exact money, status/bar agreement", () => {
+  it("renders exact paise in the table (allocatedMinor 123456 -> ₹1,234.56)", () => {
+    render(<MonitoringTable lines={[{ headId: "h", fy: "2026-27", allocatedMinor: "123456", committedMinor: "0", actualMinor: "99", availableMinor: "123357", utilisationBps: 0 }]} />);
+    expect(screen.getByText("₹1,234.56")).toBeInTheDocument();
+    expect(screen.getByText("₹0.99")).toBeInTheDocument();
+  });
+
+  it("an over_committed row never pairs a green bar with an On Track pill", () => {
+    const { container } = render(<MonitoringTable lines={[{ headId: "h", fy: "2026-27", utilisationBps: 3000, exception: "over_committed" }]} />);
+    expect(screen.queryByText("On Track")).not.toBeInTheDocument();
+    expect(screen.getByText("Over-committed").className).toContain("bad");
+    const fill = container.querySelector('div[style*="width: 30%"]') as HTMLElement;
+    expect(fill.style.background).toBe("var(--bad)");
+  });
+
+  it("a plain low-utilisation head is a green bar with a good On Track pill", () => {
+    const { container } = render(<MonitoringTable lines={[{ headId: "h", fy: "2026-27", utilisationBps: 3000, exception: "on_track" }]} />);
+    expect(screen.getByText("On Track").className).toContain("good");
+    expect((container.querySelector('div[style*="width: 30%"]') as HTMLElement).style.background).toBe("var(--good)");
+  });
+
+  it("projected_overspend is at least amber", () => {
+    const { container } = render(<MonitoringTable lines={[{ headId: "h", fy: "2026-27", utilisationBps: 1000, exception: "projected_overspend" }]} />);
+    expect((container.querySelector('div[style*="width: 10%"]') as HTMLElement).style.background).toBe("var(--warn)");
+  });
+
+  it("the utilisation column states its basis (committed + expended)", () => {
+    render(<MonitoringTable lines={[{ headId: "h", fy: "2026-27", utilisationBps: 0 }]} />);
+    expect(screen.getByText(/Utilisation \(committed \+ expended\)/)).toBeInTheDocument();
+  });
+});
+

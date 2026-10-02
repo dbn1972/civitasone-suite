@@ -1,19 +1,11 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
-import { formatMoney } from "@/lib/formatters";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { minorToDecimalString } from "@/lib/money";
 
 type Row = Record<string, unknown>;
-
-function statusBadge(status: unknown): string {
-  switch (String(status)) {
-    case "issued":       return "Issued";
-    case "acknowledged": return "Acknowledged";
-    case "pending":      return "Pending";
-    default:             return String(status ?? "-");
-  }
-}
 
 export const UNKNOWN_OFFICE = "Unknown office";
 
@@ -23,23 +15,37 @@ export function officeLabel(officeId: unknown, names?: ReadonlyMap<string, strin
   return (id && names?.get(id)) || UNKNOWN_OFFICE;
 }
 
+const isInr = (currency: unknown) => currency == null || currency === "" || currency === "INR";
+
+/**
+ * GAP-FINANCE-BUDGET-FUND-RELEASES-03: the exact paise amount via formatMoney
+ * (the old local rupees() divided a paise bigint as a float, dropped paise
+ * below 1 lakh and could throw on a non-integer string). A non-INR release is
+ * shown under its ISO code rather than a rupee sign. Bad input renders "—".
+ */
+export function releaseAmountLabel(amountMinor: unknown, currency: unknown): string {
+  const money = formatMoney(amountMinor as string | number | bigint | null | undefined);
+  if (isInr(currency) || money === "—") return money;
+  return `${String(currency)} ${money.replace("₹", "")}`;
+}
+
 export function FundReleasesTable({ releases, source = "api" }: { releases: Row[]; source?: "api" | "error" }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>(
     "finance.fund-releases", releases, source, (d) => d.length === 0
   );
 
+  // GAP-FINANCE-BUDGET-FUND-RELEASES-05: the CCY column only earns its width
+  // when a non-rupee release is present.
+  const allInr = rows.every((r) => isInr(r.currency));
+
   const enriched = rows.map((r) => ({
     ...r,
-    _amount:   formatMoney(String(r.amountMinor ?? "0")),
-    _status:   statusBadge(r.status),
     // GAP-FINANCE-BUDGET-FUND-RELEASES-01: an 8-char uuid tail is not an
     // office name. No office directory backs from/to_office_id yet, so the
     // row says so plainly (full id kept as a tooltip for support) rather
     // than printing a fragment or guessing a name.
-    _from:     officeLabel(r.fromOfficeId),
-    _to:       officeLabel(r.toOfficeId),
-    _issued:   r.issuedBy ? String(r.issuedBy).slice(-8) : "-",
-    _effFrom:  String(r.effectiveFrom ?? "-").slice(0, 10),
+    _from: officeLabel(r.fromOfficeId),
+    _to: officeLabel(r.toOfficeId),
   }));
 
   return (
@@ -53,12 +59,16 @@ export function FundReleasesTable({ releases, source = "api" }: { releases: Row[
       <DataTable<Row>
         columns={[
           { key: "fy",        label: "FY" },
-          { key: "_from",     label: "From Office", render: (r) => <span title={String(r.fromOfficeId ?? "")}>{String(r._from)}</span> },
-          { key: "_to",       label: "To Office",   render: (r) => <span title={String(r.toOfficeId ?? "")}>{String(r._to)}</span> },
-          { key: "_amount",   label: "Amount",       align: "right" },
-          { key: "currency",  label: "CCY" },
-          { key: "_status",   label: "Status" },
-          { key: "_effFrom",  label: "Effective" },
+          // csv: the full office id (the display text is "Unknown office" until a directory backs the names).
+          { key: "_from",     label: "From Office", render: (r) => <span title={String(r.fromOfficeId ?? "")}>{String(r._from)}</span>, csv: (r) => String(r.fromOfficeId ?? "") },
+          { key: "_to",       label: "To Office",   render: (r) => <span title={String(r.toOfficeId ?? "")}>{String(r._to)}</span>, csv: (r) => String(r.toOfficeId ?? "") },
+          // Sorts on the raw paise string; CSV carries the plain decimal.
+          { key: "amountMinor", label: "Amount", align: "right", render: (r) => releaseAmountLabel(r.amountMinor, r.currency), csv: (r) => minorToDecimalString(r.amountMinor as string | number | null) ?? "" },
+          ...(allInr ? [] : [{ key: "currency", label: "CCY" }]),
+          // Raw status code on the pill + CSV; the pill humanizes it for display.
+          { key: "status",    label: "Status", cellType: "status" as const },
+          // IST calendar date on screen (a timestamptz sliced to 10 chars is the UTC date, a day early in IST); ISO in the CSV.
+          { key: "effectiveFrom", label: "Effective", render: (r) => formatIndianDate(r.effectiveFrom as string | null | undefined), csv: (r) => String(r.effectiveFrom ?? "") },
         ]}
         rows={enriched}
         sortable
@@ -66,6 +76,7 @@ export function FundReleasesTable({ releases, source = "api" }: { releases: Row[
         filterPlaceholder="Search releases…"
         pageSize={20}
         exportable
+        csvPlainAmounts
         exportFilename="fund-releases"
         emptyIcon="💸"
         emptyTitle="No fund releases"

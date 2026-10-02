@@ -172,3 +172,30 @@ export function assertBudgetableHead(head: { classification: string | null; code
     );
   }
 }
+
+
+/** The sanction statuses the web contract knows (SanctionSummarySchema). */
+export type SanctionWebStatus = "approved" | "pending" | "rejected";
+
+const SANCTION_STATUS_TO_WEB: Record<string, SanctionWebStatus> = {
+  approved: "approved",
+  exhausted: "approved", // fully utilised, but it WAS approved
+  rejected: "rejected",
+  cancelled: "rejected", // what the sanctionReject consumer stores
+  draft: "pending",
+  pending: "pending",
+  pending_approval: "pending", // what sanctionCreate / submit-approval store
+};
+
+/** True when the stored status is one this mapper explicitly understands. */
+export function isKnownSanctionStatus(status: string): boolean {
+  return Object.prototype.hasOwnProperty.call(SANCTION_STATUS_TO_WEB, status);
+}
+
+/**
+ * Stored sanction status -> the approved|pending|rejected the web renders.
+ * An unknown value maps to "pending" (never silently "approved"); callers log it.
+ */
+export function mapSanctionStatus(status: string): SanctionWebStatus {
+  return isKnownSanctionStatus(status) ? (SANCTION_STATUS_TO_WEB[status] ?? "pending") : "pending";
+}

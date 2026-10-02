@@ -332,3 +332,18 @@ describe("StatusPill payments + period-close statuses", () => {
     expect(container.querySelector(".pill")?.textContent).toBe("Hard Close");
   });
 });
+
+// GAP-FINANCE-BUDGET-OUTCOME-BUDGET-04 / DEMAND-GRANTS-05 / FORMULATION-05:
+// every value the finance-service budget module can emit has an explicit tone.
+describe("budget module status vocabularies", () => {
+  it.each([
+    // outcome indicator lifecycle (outcome-domain OutcomeStatus)
+    ["draft", "mut"], ["active", "good"], ["evaluated", "info"], ["closed", "mut"],
+    // demand-for-grants status (finance_demands.status defaults to draft)
+    // budget estimate rows (Formulation tabs)
+    ["pending", "warn"], ["submitted", "warn"], ["approved", "good"], ["rejected", "bad"],
+  ])("%s renders the %s tone", (status, tone) => {
+    expect(pillTone(status)).toBe(tone);
+  });
+});
+

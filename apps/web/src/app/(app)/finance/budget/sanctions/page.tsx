@@ -2,6 +2,9 @@ import Link from "next/link";
 import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../../_components/ds";
 import { getFinanceSanctions } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { SANCTION_CREATE_ROLES } from "@/lib/auth/workRoles";
+import { SANCTION_STATUS_LABEL, summariseSanctions } from "../_lib/sanctionStats";
 import { SanctionsTable } from "./SanctionsTable";
 
 export default async function SanctionsPage() {
@@ -13,11 +16,15 @@ export default async function SanctionsPage() {
   // (PermissionDenied for 403, Retry otherwise) in place of the table.
   const errored = source === "error";
 
-  const approved = sanctions.filter((s) => s.status === "approved").length;
-  const pending = sanctions.filter((s) => s.status === "pending").length;
-  // amount is a minor-unit (paise) decimal string — sum as BigInt so
-  // formatMoney() gets the right scale and large totals can't drift.
-  const totalAmount = sanctions.reduce((sum, s) => sum + BigInt(s.amount || "0"), 0n);
+  // GAP-FINANCE-BUDGET-SANCTIONS-03: "Sanctioned" is APPROVED money only (pending and
+  // rejected sanctions used to inflate it); "Active" excludes rejected ones. No
+  // fiscal-year filter exists on this list, so the cards are not labelled "(FY)".
+  const { active, approved, pending, approvedMinor } = summariseSanctions(sanctions);
+  // GAP-FINANCE-BUDGET-SANCTIONS-04: only the roles finance-service lets create a
+  // sanction see the button (an audit/budget reader would hit a 403 after filling
+  // the form). Deny by default: no/unknown roles never see the button (the backend
+  // is the real boundary either way).
+  const canCreate = getSessionRoles().some((r) => (SANCTION_CREATE_ROLES as readonly string[]).includes(r));
 
   return (
     <>
@@ -26,15 +33,15 @@ export default async function SanctionsPage() {
         subtitle="Administrative &amp; financial sanctions with budget check."
         actions={
           // GAP-FINANCE-BUDGET-SANCTIONS-01: a real form, not a one-line confirm.
-          <Link href="/finance/budget/sanctions/new" className="btn primary">+ New Sanction</Link>
+          canCreate ? <Link href="/finance/budget/sanctions/new" className="btn primary">+ New Sanction</Link> : undefined
         }
       />
 
       <StatGrid>
-        <StatCard icon="🖊️" iconBg="#e7edfd" label="Active Sanctions" value={errored ? "—" : sanctions.length} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Sanctioned (FY)" value={errored ? "—" : formatMoney(totalAmount)} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval" value={errored ? "—" : pending} />
-        <StatCard icon="📊" iconBg="#ecfdf3" label="Approved" value={errored ? "—" : approved} delta={errored ? undefined : "approved"} up={true} />
+        <StatCard icon="🖊️" iconBg="#e7edfd" label="Active Sanctions" value={errored ? "—" : active} />
+        <StatCard icon="💰" iconBg="#eff6ff" label="Sanctioned Value (approved)" value={errored ? "—" : formatMoney(approvedMinor)} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label={SANCTION_STATUS_LABEL.pending} value={errored ? "—" : pending} />
+        <StatCard icon="📊" iconBg="#ecfdf3" label={SANCTION_STATUS_LABEL.approved} value={errored ? "—" : approved} />
       </StatGrid>
 
       <Card title="Administrative & financial sanctions">

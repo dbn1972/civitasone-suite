@@ -1,29 +1,46 @@
 "use client";
+import React from "react";
 import { DataTable } from "@/app/_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { StatusPill, type PillVariant } from "@/app/_components/ds/StatusPill";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { budgetHeadLabel } from "../_lib/headLabel";
 
 type Row = Record<string, unknown>;
 
-function exceptionBadge(kind: unknown): string {
-  switch (kind) {
-    case "over_committed":      return "Over-committed";
-    case "projected_overspend": return "Proj. Overspend";
-    case "under_utilised":      return "Under-utilised";
-    default:                    return "On Track";
-  }
+/** The server's exception classification -> the label and pill tone shown for it. */
+const EXCEPTION: Record<string, { label: string; variant: PillVariant }> = {
+  over_committed: { label: "Over-committed", variant: "bad" },
+  projected_overspend: { label: "Proj. Overspend", variant: "warn" },
+  under_utilised: { label: "Under-utilised", variant: "info" },
+};
+const ON_TRACK = { label: "On Track", variant: "good" as PillVariant };
+
+export function exceptionInfo(kind: unknown): { label: string; variant: PillVariant } {
+  return EXCEPTION[String(kind)] ?? ON_TRACK;
 }
 
-function progressBar(utilisationBps: unknown): React.ReactNode {
+/**
+ * Bar colour from utilisation, never less severe than the row's own exception:
+ * a head the server flags over-committed / projected-overspend must not carry a
+ * green bar next to a red/amber status (GAP-FINANCE-BUDGET-MONITORING-05).
+ * (Utilisation is (committed + expended) / allocation -- the same basis the
+ * exception is derived from.)
+ */
+export function barColor(actualPct: number, exception: unknown): string {
+  const byPct = actualPct > 90 ? 2 : actualPct > 60 ? 1 : 0;
+  const byException = exception === "over_committed" ? 2 : exception === "projected_overspend" ? 1 : 0;
+  return ["var(--good)", "var(--warn)", "var(--bad)"][Math.max(byPct, byException)];
+}
+
+function progressBar(utilisationBps: unknown, exception: unknown): React.ReactNode {
   const bps = Number(utilisationBps ?? 0);
   // TRUE utilisation — a head can exceed 100% (overspend). Never cap the number
   // we SHOW the officer; only the bar's fill width is clamped to the track.
   const actualPct = bps / 100;
   const barWidth = Math.min(100, Math.max(0, actualPct));
   const overBudget = actualPct > 100;
-  const color = actualPct > 90 ? "var(--bad)" : actualPct > 60 ? "var(--warn)" : "var(--good)";
+  const color = barColor(actualPct, exception);
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
       <div style={{
@@ -41,8 +58,6 @@ function progressBar(utilisationBps: unknown): React.ReactNode {
   );
 }
 
-import React from "react";
-
 export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; source?: "api" | "error" }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>(
     "finance.budget-monitoring-lines", lines, source, (d) => d.length === 0
@@ -55,11 +70,6 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
       headCode: typeof r.headCode === "string" ? r.headCode : null,
       headName: typeof r.headName === "string" ? r.headName : null,
     }),
-    _allocated: formatMoney(String(r.allocatedMinor ?? "0")),
-    _committed: formatMoney(String(r.committedMinor ?? "0")),
-    _actual:    formatMoney(String(r.actualMinor ?? "0")),
-    _available: formatMoney(String(r.availableMinor ?? "0")),
-    _exception: exceptionBadge(r.exception),
   }));
 
   return (
@@ -74,15 +84,16 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
         columns={[
           { key: "_head", label: "Budget Head", render: (r) => <span title={String(r.headId ?? "")}>{String(r._head)}</span> },
           { key: "fy",     label: "FY" },
-          { key: "_allocated", label: "Allocated",  align: "right" },
-          { key: "_committed", label: "Committed",  align: "right" },
-          { key: "_actual",    label: "Expended",   align: "right" },
-          { key: "_available", label: "Available",  align: "right" },
+          // GAP-FINANCE-BUDGET-MONITORING-03: exact paise via formatMoney, plain decimals in the CSV.
+          { key: "allocatedMinor", label: "Allocated", align: "right", cellType: "amount" },
+          { key: "committedMinor", label: "Committed", align: "right", cellType: "amount" },
+          { key: "actualMinor",    label: "Expended",  align: "right", cellType: "amount" },
+          { key: "availableMinor", label: "Available", align: "right", cellType: "amount" },
           // Render the bar via the column API — DataTable String()-ifies a bare
           // ReactNode cell value (would show "[object Object]"); key stays a real
           // numeric field so the column still sorts by true utilisation.
-          { key: "utilisationBps", label: "Utilisation", render: (r) => progressBar(r.utilisationBps) },
-          { key: "_exception", label: "Status" },
+          { key: "utilisationBps", label: "Utilisation (committed + expended)", render: (r) => progressBar(r.utilisationBps, r.exception) },
+          { key: "exception", label: "Status", render: (r) => { const e = exceptionInfo(r.exception); return <StatusPill status={String(r.exception ?? "on_track")} label={e.label} variant={e.variant} />; }, csv: (r) => exceptionInfo(r.exception).label },
         ]}
         rows={enriched}
         sortable
@@ -90,6 +101,7 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
         filterPlaceholder="Search heads…"
         pageSize={20}
         exportable
+        csvPlainAmounts
         exportFilename="budget-monitoring"
         emptyIcon="📊"
         emptyTitle="No allocation data"

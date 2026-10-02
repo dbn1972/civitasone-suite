@@ -31,7 +31,8 @@ describe("BudgetFormulationPage", () => {
     });
     render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
     expect(screen.getByText("Proposed Outlay (BE, FY 2026-27)")).toBeInTheDocument();
-    expect(screen.getByText("₹12,34,567.89")).toBeInTheDocument();
+    // the card (and the row's BE cell) show this FY's BE total
+    expect(screen.getAllByText("₹12,34,567.89").length).toBeGreaterThan(0);
     expect(screen.getByText("Budget estimates (BE) — FY 2026-27")).toBeInTheDocument();
     expect(screen.queryByText("MH-b")).not.toBeInTheDocument();
   });
@@ -58,3 +59,70 @@ describe("BudgetFormulationPage", () => {
     expect(screen.queryByText(/We couldn't load/)).not.toBeInTheDocument();
   });
 });
+
+// GAP-FINANCE-BUDGET-FORMULATION-01/-04/-05
+describe("BudgetFormulationPage -- column meaning, counts, vocabulary", () => {
+  beforeEach(() => getBudgets.mockReset());
+  const full = (o: Record<string, unknown>) => ({
+    id: "x", majorHead: "2202", subHead: "Edu", sanctionedAmount: "500000", releasedAmount: "200000",
+    expenditure: "0", balance: "0", beMinor: "1000000", reMinor: "1000000", status: "approved", financialYear: "2026-27", ...o,
+  });
+
+  it("each money column shows the field it is named for (BE=beMinor, Sanctioned, Released)", async () => {
+    getBudgets.mockResolvedValue({ data: [full({})], source: "api" });
+    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    const row = screen.getByText("2202").closest("tr")!;
+    const cells = Array.from(row.querySelectorAll("td")).map((c) => c.textContent);
+    const header = Array.from(row.closest("table")!.querySelectorAll("th")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
+    const at = (label: string) => cells[header.findIndex((h) => h?.startsWith(label))];
+    expect(at("Budget Estimate (BE)")).toBe("₹10,000.00");
+    expect(at("Sanctioned")).toBe("₹5,000.00");
+    expect(at("Released")).toBe("₹2,000.00");
+  });
+
+  it("Last Year (BE) is the previous FY's BE for the same head, or — when absent", async () => {
+    getBudgets.mockResolvedValue({
+      data: [
+        full({ id: "cur", majorHead: "2202", beMinor: "1000000" }),
+        full({ id: "prev", majorHead: "2202", financialYear: "2025-26", beMinor: "700000", sanctionedAmount: "1", releasedAmount: "1" }),
+        full({ id: "new", majorHead: "3333", subHead: "Roads", beMinor: "1" }),
+      ],
+      source: "api",
+    });
+    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    const header = Array.from(screen.getAllByRole("columnheader")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
+    const idx = header.findIndex((h) => h === "Last Year (BE)");
+    const lastYear = (head: string) => screen.getByText(head).closest("tr")!.querySelectorAll("td")[idx].textContent;
+    expect(lastYear("2202")).toBe("₹7,000.00");
+    expect(lastYear("3333")).toBe("—");
+  });
+
+  it("a head repeated in the current FY gets last year's BE once, not on every row", async () => {
+    getBudgets.mockResolvedValue({
+      data: [
+        full({ id: "c1", beMinor: "100" }),
+        full({ id: "c2", beMinor: "200" }),
+        full({ id: "p", financialYear: "2025-26", beMinor: "700000" }),
+      ],
+      source: "api",
+    });
+    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    const header = Array.from(screen.getAllByRole("columnheader")).map((c) => c.textContent?.replace(/[▲▼↕]/g, "").trim());
+    const idx = header.findIndex((h) => h === "Last Year (BE)");
+    const cells = screen.getAllByRole("row").slice(1).map((r) => r.querySelectorAll("td")[idx]?.textContent);
+    expect(cells.filter((c) => c === "₹7,000.00").length).toBe(1);
+  });
+
+  it("Major Heads delta says approved N (matching the filter), and the card/tab share the word 'Pending'", async () => {
+    getBudgets.mockResolvedValue({
+      data: [full({ id: "a" }), full({ id: "b", majorHead: "2203" }), full({ id: "c", majorHead: "2204", status: "submitted" })],
+      source: "api",
+    });
+    render(await BudgetFormulationPage({ searchParams: { fy: "2026-27" } }));
+    expect(screen.getByText("approved 2")).toBeInTheDocument();
+    expect(screen.queryByText("Pending Review")).not.toBeInTheDocument();
+    // card label "Pending" + tab "Pending"
+    expect(screen.getAllByText("Pending").length).toBe(2);
+  });
+});
+
