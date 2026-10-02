@@ -307,6 +307,49 @@ grep -r "Number(" services/payroll-service/src/ | grep "_minor"
 
 ---
 
+## Data repair: flex election employee ids
+
+**Why:** before the flex-elections id-space fix, `payroll.flex_benefit_elections.employee_id`
+was written with the elector's login user id (`msg.actorId`) instead of their hrms employee
+id. Elections are now stored by hrms employee id, so that any future application or lookup
+by employee id matches them. (Payroll runs do not apply flex elections today; the only reader
+is `GET /v1/payroll/flex-benefits/my-elections`.) Rows written earlier are recognisable by
+`employee_id = created_by`.
+
+**Order of operations:**
+
+1. Deploy the fix first.
+2. Wait until every `payroll.flex_election.upsert` command queued before the deploy has
+   drained (queue depth and DLQ for that topic at zero). Those legacy `1.0` commands carry no
+   employee id and are still stored under the login id, with a `legacy 1.0 flexElectionUpsert`
+   warning logged for each.
+3. Run the backfill below for each tenant. Re-runs are safe and pick up any stragglers, so
+   run it again if a legacy warning appears after the first run.
+
+Until the backfill has run for a tenant, its employees will **not** see elections they made
+before the deploy in my-elections (those rows are still keyed by login id).
+
+**Repair** (one tenant per run, dry run by default, needs HRMS reachable):
+
+```bash
+cd services/payroll-service
+# 1. Dry run -- prints a JSON report, writes nothing
+DATABASE_URL=... HRMS_URL=... INTERNAL_SERVICE_SECRET=... \
+  npx tsx src/scripts/backfill-flex-election-employee-ids.ts --tenant <tenant-uuid>
+# 2. Apply (records one audit event per repaired row, attributed to --actor)
+DATABASE_URL=... HRMS_URL=... INTERNAL_SERVICE_SECRET=... \
+  npx tsx src/scripts/backfill-flex-election-employee-ids.ts --tenant <tenant-uuid> --apply --actor <operator-user-uuid>
+```
+
+- Runs inside the tenant's RLS transaction and filters `tenant_id`; it never reads or
+  writes another tenant. HRMS is called with that tenant's `x-tenant-id`.
+- All identities are resolved before any write. If HRMS is unreachable it exits 1 and
+  writes nothing.
+- Idempotent: re-running skips rows already repaired (`employee_id != created_by`).
+- Exit 2 means some rows need a human decision: `conflict` (an election already exists
+  for that employee/plan/FY, so neither row is touched) or `unlinked` (HRMS has no employee
+  for that user). Resolve those manually from the report.
+
 ## Rollback
 
 ```bash

@@ -992,6 +992,8 @@ describe("POST /v1/payroll/flex-benefits/elections (gap)", () => {
 
 describe("GET /v1/payroll/flex-benefits/my-elections (gap)", () => {
   it("200 — authorized (employee)", async () => {
+    // Elections are keyed by the caller's hrms employee id (resolved via hrms).
+    resolveActorEmployeeId.mockResolvedValueOnce("00000000-0009-4000-8000-0000000000e1");
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/payroll/flex-benefits/my-elections", headers: auth(["employee"]) });
     await app.close();
@@ -1000,6 +1002,8 @@ describe("GET /v1/payroll/flex-benefits/my-elections (gap)", () => {
   });
 
   it("200 — admin can also view", async () => {
+    // Elections are keyed by the caller's hrms employee id (resolved via hrms).
+    resolveActorEmployeeId.mockResolvedValueOnce("00000000-0009-4000-8000-0000000000e1");
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/payroll/flex-benefits/my-elections", headers: auth(["payroll_admin"]) });
     await app.close();

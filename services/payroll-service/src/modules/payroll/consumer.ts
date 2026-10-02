@@ -1,5 +1,6 @@
 import type { Queue } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
+import { pino } from "pino";
 import { randomUUID } from "node:crypto";
 import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import { db, scopedRead } from "../../shared/db.js";
@@ -513,6 +514,7 @@ async function collectAdHocEarnings(
 }
 
 const AUDIT = "audit.event.record";
+const log = pino({ name: "payroll-consumer" });
 const EFT_INITIATE = "finance.payment.eft.initiate";
 // Sentinel structure id for runs that have no salary structure (pensioner runs).
 const NIL_STRUCTURE_ID = "00000000-0000-0000-0000-000000000000";
@@ -1103,16 +1105,31 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.flexElectionUpsert, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; planId: string; fy: string;
+      id: string; tenantId: string; employeeId?: string; planId: string; fy: string;
       elections: Array<{ component: string; electedMinor: number }>;
       totalElectedMinor: number;
     };
+    // employee_id is the hrms employee id the route resolved (schemaVersion
+    // 1.1+). Only a legacy 1.0 command (enqueued by a pre-fix build) may lack
+    // it: it falls back to the old behaviour (actorId) so the message is not
+    // lost, and flex-election-backfill.ts repairs the row afterwards. Any
+    // other message without employeeId is malformed -- rejected, not guessed.
+    let employeeId = p.employeeId;
+    if (!employeeId) {
+      if (msg.schemaVersion !== "1.0") {
+        throw new NonRetryableError(`FLEX_ELECTION_EMPLOYEE_MISSING: flexElectionUpsert ${msg.messageId} (schemaVersion ${msg.schemaVersion}) carries no employeeId`);
+      }
+      // No PII: ids of the message/election/tenant only, never the actor.
+      log.warn({ messageId: msg.messageId, tenantId: msg.tenantId, electionId: p.id },
+        "legacy 1.0 flexElectionUpsert without employeeId: stored under actorId; run flex-election-backfill");
+      employeeId = msg.actorId;
+    }
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await tx.execute(sql`
         INSERT INTO payroll.flex_benefit_elections
           (id, tenant_id, employee_id, plan_id, fy, elections, total_elected_minor, created_by)
-        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${msg.actorId}::uuid, ${p.planId}::uuid,
+        VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${employeeId}::uuid, ${p.planId}::uuid,
           ${p.fy}, ${JSON.stringify(p.elections)}::jsonb,
           ${p.totalElectedMinor.toString()}::bigint, ${msg.actorId}::uuid)
         ON CONFLICT (tenant_id, employee_id, plan_id, fy)
