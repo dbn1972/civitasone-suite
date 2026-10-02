@@ -12,7 +12,7 @@ const AUDIT_TOPIC = "audit.event.record";
 
 export function registerPeriodCloseConsumers(queue: Queue): void {
   queue.subscribe("finance.period.close", async (msg) => {
-    const p = msg.payload as { tenantId: string; period: string; closeType: "soft_close" | "hard_close" };
+    const p = msg.payload as { tenantId: string; period: string; closeType: "soft_close" | "hard_close"; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // CONCURRENCY FIX: acquire the period's advisory lock (repo.ts's
@@ -46,9 +46,11 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
       await enqueue(tx, {
         topic: "finance.period.closed", eventType: "finance.period.closed",
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { period: p.period, status: p.closeType },
+        payload: { period: p.period, status: p.closeType, fromStatus: existing?.status ?? "open", reason: p.reason ?? null },
       });
-      await audit(tx, msg, p.closeType, "period", p.period);
+      await audit(tx, msg, p.closeType, "period", p.period, {
+        fromStatus: existing?.status ?? "open", reason: p.reason ?? null,
+      });
     });
     await cache.invalidateResource(msg.tenantId, "periods");
     log.info({ id: msg.messageId, period: p.period }, "Processed period.close");
@@ -90,17 +92,22 @@ export function registerPeriodCloseConsumers(queue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { period: p.period, fromStatus, reason: p.reason },
       });
-      await audit(tx, msg, "reopen", "period", p.period);
+      await audit(tx, msg, "reopen", "period", p.period, { fromStatus, reason: p.reason ?? null });
     });
     await cache.invalidateResource(msg.tenantId, "periods");
     log.info({ id: msg.messageId, period: p.period }, "Processed period.reopen");
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(
+  tx: any, msg: any, action: string, resourceType: string, resourceId: string,
+  details: Record<string, unknown> = {},
+): Promise<void> {
+  // `details` (incl. the officer's stated reason) is bound into
+  // audit-service's tamper-evident hash chain with the rest of the payload.
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "finance", action, resourceType, resourceId, outcome: "success" },
+    payload: { ...details, service: "finance", action, resourceType, resourceId, outcome: "success" },
   });
 }

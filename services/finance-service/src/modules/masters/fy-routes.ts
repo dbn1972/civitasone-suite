@@ -7,11 +7,12 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq, and } from "drizzle-orm";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { assertOpeningBalancesBalanced, DomainError } from "./domain.js";
+import { zMoneyMinor } from "@civitasone/schemas/money";
+import { assertOpeningBalancesBalanced, assertFiscalYearRangeValid, DomainError } from "./domain.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
 // UX-medium finding: this used to be a single FINANCE_ROLES = ["finance_admin",
@@ -57,21 +58,45 @@ const openingBalances = glSchema.table("finance_opening_balances", {
   version: integer("version").notNull().default(1),
 });
 
+// GAP-FINANCE-FISCAL-YEARS-01/-02, GAP-FINANCE-OPENING-BALANCES-01: every
+// write on this file changes which year postings land in or seeds the
+// ledger, so each one now carries a mandatory stated reason that is recorded
+// in the tamper-evident audit event (masters/consumer.ts).
+const reasonField = z.string().trim().min(10, "Reason must be at least 10 characters").max(500);
+
+/** YYYY-MM-DD that is a real calendar date (2030-02-31 is rejected, not cast-failed in the worker). */
+const isoCalendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use YYYY-MM-DD").refine((d) => {
+  const t = new Date(`${d}T00:00:00Z`);
+  return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d;
+}, "Not a valid calendar date");
+
 const createFYBody = z.object({
   code: z.string().regex(/^\d{4}-\d{2}$/, "Must be YYYY-YY, e.g. 2026-27"),
   label: z.string().min(2).max(64),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  startDate: isoCalendarDate,
+  endDate: isoCalendarDate,
+  reason: reasonField,
 });
+
+const activateFYBody = z.object({ reason: reasonField });
+
+// Opening balances are paise and may exceed 2^53 in aggregate: decode with
+// the canonical bigint-safe money codec (string | safe-integer number), never
+// a bare z.number() that silently rounds above 2^53 at JSON.parse time.
+// Upper bound = Postgres BIGINT max: anything larger would pass here and
+// then fail the insert in the worker after a 202.
+const PG_BIGINT_MAX = 9223372036854775807n;
+const moneyMinorNonNeg = zMoneyMinor.pipe(z.bigint().nonnegative().max(PG_BIGINT_MAX, "Amount is too large"));
 
 const openingBalanceBody = z.object({
   fyCode: z.string().regex(/^\d{4}-\d{2}$/),
   entries: z.array(z.object({
     accountCode: z.string().min(1).max(20),
-    debitMinor: z.number().int().nonnegative().default(0),
-    creditMinor: z.number().int().nonnegative().default(0),
+    debitMinor: moneyMinorNonNeg.default(0n),
+    creditMinor: moneyMinorNonNeg.default(0n),
     narration: z.string().max(500).optional(),
   })).min(1).max(500),
+  reason: reasonField,
 });
 
 export async function fyRoutes(app: FastifyInstance): Promise<void> {
@@ -86,6 +111,19 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITER_ROLES);
     const body = createFYBody.parse(req.body);
+    // Synchronous duplicate/overlap pre-check (the consumer re-checks inside
+    // its transaction for the racing case).
+    const existing = await scopedRead((tx) => tx.select({
+      code: fiscalYears.code, startDate: fiscalYears.startDate, endDate: fiscalYears.endDate,
+    }).from(fiscalYears).where(eq(fiscalYears.tenantId, ctx.tenantId)));
+    try {
+      assertFiscalYearRangeValid(body, existing);
+    } catch (err) {
+      if (err instanceof DomainError) {
+        throw new HttpError(err.code === "FY_INVALID_RANGE" ? 400 : 409, err.code, err.message);
+      }
+      throw err;
+    }
     const id = randomUUID();
     await queue.publish(COMMANDS.fiscalYearCreate, {
       messageId: id,
@@ -102,7 +140,16 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
   app.patch("/v1/finance/fiscal-years/:code/activate", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, WRITER_ROLES);
-    const code = (req.params as { code: string }).code;
+    const { code } = z.object({ code: z.string().regex(/^\d{4}-\d{2}$/) }).parse(req.params);
+    const body = activateFYBody.parse(req.body ?? {});
+    // Previously a typo'd/unknown code was accepted (202) and the consumer
+    // then closed the current active year while activating nothing, leaving
+    // the tenant with NO posting year. Reject it up front instead.
+    const rows = await scopedRead((tx) => tx.select({ code: fiscalYears.code, status: fiscalYears.status })
+      .from(fiscalYears).where(eq(fiscalYears.tenantId, ctx.tenantId)));
+    const target = rows.find((r) => r.code === code);
+    if (!target) throw new HttpError(404, "NOT_FOUND", `fiscal year ${code} not found`);
+    if (target.status === "active") throw new HttpError(409, "ALREADY_ACTIVE", `fiscal year ${code} is already active`);
     const id = randomUUID();
     await queue.publish(COMMANDS.fiscalYearActivate, {
       messageId: id,
@@ -111,7 +158,7 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
       actorId: ctx.actorId,
       correlationId: ctx.correlationId,
       schemaVersion: "1.0",
-      payload: { id, tenantId: ctx.tenantId, code },
+      payload: { id, tenantId: ctx.tenantId, code, reason: body.reason },
     });
     return reply.code(202).send({ id, status: "accepted", code });
   });
@@ -174,11 +221,12 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     }
 
     const id = randomUUID();
+    // Paise travel as base-10 strings on the queue (JSON has no bigint).
     const entries = body.entries.map((e) => ({
       id: randomUUID(),
       accountCode: e.accountCode,
-      debitMinor: e.debitMinor,
-      creditMinor: e.creditMinor,
+      debitMinor: e.debitMinor.toString(),
+      creditMinor: e.creditMinor.toString(),
       narration: e.narration ?? null,
     }));
     await queue.publish(COMMANDS.openingBalancesEnter, {
@@ -188,8 +236,13 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
       actorId: ctx.actorId,
       correlationId: ctx.correlationId,
       schemaVersion: "1.0",
-      payload: { id, tenantId: ctx.tenantId, fyCode: body.fyCode, entries },
+      payload: { id, tenantId: ctx.tenantId, fyCode: body.fyCode, entries, reason: body.reason },
     });
     return reply.code(202).send({ id, status: "accepted", count: entries.length });
   });
+
+  // Previously missing: without the shared finance error handler a ZodError
+  // (any malformed body on these routes) surfaced as an untriaged 500 instead
+  // of a 400 with fieldErrors, unlike every sibling finance module.
+  app.setErrorHandler(financeErrorHandler);
 }

@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import * as allocRepo from "./allocation-repo.js";
+import { findHeadLabels } from "./repo.js";
 import type { BudgetAllocationRow } from "./allocation-schema.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
@@ -74,7 +75,8 @@ export async function budgetAllocationRoutes(app: FastifyInstance): Promise<void
       limit: z.coerce.number().int().min(1).max(500).default(100),
     }).parse(req.query);
     const rows = await allocRepo.listAllocations(ctx.tenantId, q.fy, q.limit);
-    return reply.send({ data: rows.map(serialize) });
+    const labels = await findHeadLabels(ctx.tenantId, rows.map((r) => r.headId));
+    return reply.send({ data: rows.map((r) => serialize(r, labels)) });
   });
 
 
@@ -86,7 +88,8 @@ export async function budgetAllocationRoutes(app: FastifyInstance): Promise<void
     const rows = await allocRepo.listAllocations(ctx.tenantId, undefined, 500);
     const row = rows.find((r) => r.id === id);
     if (!row) throw new HttpError(404, "NOT_FOUND", "allocation not found");
-    return reply.send({ data: serialize(row) });
+    const labels = await findHeadLabels(ctx.tenantId, [row.headId]);
+    return reply.send({ data: serialize(row, labels) });
   });
 
   app.post("/v1/finance/budget-allocations/re-appropriate", async (req, reply) => {
@@ -114,9 +117,14 @@ export async function budgetAllocationRoutes(app: FastifyInstance): Promise<void
   app.setErrorHandler(financeErrorHandler);
 }
 
-function serialize(r: BudgetAllocationRow) {
+function serialize(r: BudgetAllocationRow, labels: Map<string, { code: string; name: string }>) {
+  const head = labels.get(r.headId);
   return {
-    id: r.id, headId: r.headId, fy: r.fy,
+    id: r.id, headId: r.headId,
+    // GAP-FINANCE-BUDGET-ALLOCATION-01: human head label, null when the head
+    // id no longer resolves in this tenant (never a guessed name).
+    headCode: head?.code ?? null, headName: head?.name ?? null,
+    fy: r.fy,
     allocatedMinor: r.allocatedMinor.toString(),
     committedMinor: r.committedMinor.toString(),
     actualMinor: r.actualMinor.toString(),

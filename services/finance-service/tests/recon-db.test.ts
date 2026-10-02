@@ -365,6 +365,7 @@ describe("I8 – Subledger = control account reconciliation (HTTP route)", () =>
     const closeRes = await app1.inject({
       method: "POST",
       url: "/v1/finance/periods/2025-06/hard-close",
+      payload: { reason: "Year-end lock after audit sign-off" },
       // BUG FIX (accounting-critical, role-tiering): hard-close now requires
       // the same elevated tier as reopen (finance_admin/super_admin) — see
       // period-close/routes.ts's PERIOD_ADMIN_ROLES doc comment for why a

@@ -50,3 +50,16 @@ describe("MonitoringTable — over-budget utilisation is shown truthfully", () =
     expect(screen.queryByText(/over budget/i)).not.toBeInTheDocument();
   });
 });
+
+/** GAP-FINANCE-BUDGET-MONITORING-02: heads are identified by code · name, never by uuid. */
+describe("MonitoringTable — head label", () => {
+  it("renders the server-joined head label and no uuid text", () => {
+    render(<MonitoringTable lines={[{ headId: "9b2f7c1e-0000-4000-8000-000000000001", headCode: "2202", headName: "General Education", fy: "2026-27", utilisationBps: 0 }]} />);
+    expect(screen.getByText("2202 · General Education")).toBeInTheDocument();
+    expect(screen.queryByText(/9b2f7c1e-0000/)).not.toBeInTheDocument();
+  });
+  it("renders 'Unknown head' when the head did not resolve", () => {
+    render(<MonitoringTable lines={[{ headId: "9b2f7c1e-0000-4000-8000-000000000002", fy: "2026-27", utilisationBps: 0 }]} />);
+    expect(screen.getByText("Unknown head")).toBeInTheDocument();
+  });
+});

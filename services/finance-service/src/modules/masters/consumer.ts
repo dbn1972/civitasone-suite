@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { encryptedText } from "../../shared/pii-crypto.js";
 import { HttpError } from "../../shared/context.js";
-import { assertOpeningBalancesBalanced, DomainError } from "./domain.js";
+import { assertOpeningBalancesBalanced, assertFiscalYearRangeValid, sameBankAccount, DomainError } from "./domain.js";
 import { financePao, financeDdo } from "./schema.js";
 
 const log = pino({ name: "finance.masters.consumer" });
@@ -174,6 +174,12 @@ export function registerMastersConsumers(queue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      await lockTenant(tx, "bank", p.tenantId);
+      const banks = await tx.select({ accountNo: bankAccounts.accountNo, ifsc: bankAccounts.ifsc })
+        .from(bankAccounts).where(eq(bankAccounts.tenantId, p.tenantId));
+      if (banks.some((b: { accountNo: unknown; ifsc: unknown }) => sameBankAccount({ accountNo: String(b.accountNo), ifsc: String(b.ifsc) }, p))) {
+        throw new DomainError("BANK_ACCOUNT_EXISTS", "this bank account (IFSC + account number) is already registered");
+      }
       await tx.insert(bankAccounts).values({
         id: p.id, tenantId: p.tenantId, bankName: p.bankName,
         branchName: p.branchName, accountNo: p.accountNo, ifsc: p.ifsc,
@@ -187,9 +193,22 @@ export function registerMastersConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.fiscalYearCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; code: string; label: string; startDate: string; endDate: string;
+      reason?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-FINANCE-FISCAL-YEARS-01 (review D2): serialise every fiscal-year
+      // write for the tenant so the overlap re-check below and the
+      // single-active invariant hold under concurrency (READ COMMITTED alone
+      // let two overlapping creates, or two activates, both commit).
+      await lockTenant(tx, "fy", p.tenantId);
+      // Racing-create guard: re-check duplicate/overlap inside the tx (the
+      // route's pre-check can't see a concurrent, not-yet-committed insert).
+      const existingYears = await tx.select({
+        code: fiscalYears.code, startDate: fiscalYears.startDate, endDate: fiscalYears.endDate, status: fiscalYears.status,
+      }).from(fiscalYears).where(eq(fiscalYears.tenantId, p.tenantId));
+      assertFiscalYearRangeValid(p, existingYears);
+      const previouslyActive = existingYears.filter((y) => y.status === "active").map((y) => y.code);
       const inserted = await tx.insert(fiscalYears).values({
         id: p.id, tenantId: p.tenantId, code: p.code, label: p.label,
         startDate: p.startDate, endDate: p.endDate, status: "active", createdBy: msg.actorId,
@@ -200,30 +219,45 @@ export function registerMastersConsumers(queue: Queue): void {
       await tx.update(fiscalYears)
         .set({ status: "closed" })
         .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.status, "active"), ne(fiscalYears.id, p.id)));
-      await audit(tx, msg, "create_fiscal_year", "fiscal_year", p.id);
+      await audit(tx, msg, "create_fiscal_year", "fiscal_year", p.id, {
+        code: p.code, reason: p.reason ?? null, closedFiscalYears: previouslyActive,
+      });
     });
     await cache.invalidateResource(msg.tenantId, "masters");
   });
 
   queue.subscribe(COMMANDS.fiscalYearActivate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; code: string };
+    const p = msg.payload as { id: string; tenantId: string; code: string; reason?: string };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      await lockTenant(tx, "fy", p.tenantId);
+      const years = await tx.select({ code: fiscalYears.code, status: fiscalYears.status })
+        .from(fiscalYears).where(eq(fiscalYears.tenantId, p.tenantId));
+      // Never close the current year unless the target really exists --
+      // otherwise the tenant is left with no active posting year at all.
+      if (!years.some((y) => y.code === p.code)) {
+        throw new DomainError("NOT_FOUND", `fiscal year ${p.code} not found`);
+      }
+      const previouslyActive = years.filter((y) => y.status === "active" && y.code !== p.code).map((y) => y.code);
       await tx.update(fiscalYears)
         .set({ status: "closed" })
         .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.status, "active")));
       await tx.update(fiscalYears)
         .set({ status: "active" })
         .where(and(eq(fiscalYears.tenantId, p.tenantId), eq(fiscalYears.code, p.code)));
-      await audit(tx, msg, "activate_fiscal_year", "fiscal_year", p.code);
+      await audit(tx, msg, "activate_fiscal_year", "fiscal_year", p.code, {
+        reason: p.reason ?? null, closedFiscalYears: previouslyActive,
+      });
     });
     await cache.invalidateResource(msg.tenantId, "masters");
   });
 
   queue.subscribe(COMMANDS.openingBalancesEnter, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; fyCode: string;
-      entries: Array<{ id: string; accountCode: string; debitMinor: number; creditMinor: number; narration: string | null }>;
+      id: string; tenantId: string; fyCode: string; reason?: string;
+      // string (paise) since GAP-FINANCE-OPENING-BALANCES-01; number accepted
+      // for any message enqueued by the previous route version.
+      entries: Array<{ id: string; accountCode: string; debitMinor: string | number; creditMinor: string | number; narration: string | null }>;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
@@ -278,16 +312,28 @@ export function registerMastersConsumers(queue: Queue): void {
           );
         }
       }
-      await audit(tx, msg, "enter_opening_balances", "opening_balance", p.id);
+      await audit(tx, msg, "enter_opening_balances", "opening_balance", p.id, {
+        fyCode: p.fyCode, entryCount: p.entries.length, reason: p.reason ?? null,
+      });
     });
     await cache.invalidateResource(msg.tenantId, "masters");
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+/** Per-tenant transaction-scoped advisory lock (same pattern as period-close/repo.ts lockPeriodTx). */
+async function lockTenant(tx: any, scope: string, tenantId: string): Promise<void> {
+  await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`${scope}:${tenantId}`}))`);
+}
+
+async function audit(
+  tx: any, msg: any, action: string, resourceType: string, resourceId: string,
+  details: Record<string, unknown> = {},
+): Promise<void> {
+  // `details` (e.g. the officer's stated reason) rides in the audit payload,
+  // which audit-service binds into the tamper-evident hash chain.
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "finance", action, resourceType, resourceId, outcome: "success" },
+    payload: { ...details, service: "finance", action, resourceType, resourceId, outcome: "success" },
   });
 }

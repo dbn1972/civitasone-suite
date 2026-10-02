@@ -46,9 +46,13 @@ describe("ClosePeriodForm", () => {
     fireEvent.change(screen.getByLabelText(/Period/), { target: { value: "2026-04" } });
     fireEvent.click(screen.getByRole("button", { name: "Soft-Close Period" }));
     await waitFor(() => expect(screen.getByText("Soft-close this period?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason for soft-closing"), { target: { value: "Books reviewed for the month" } });
     fireEvent.click(screen.getByText("Soft-close period"));
     await waitFor(() => expect(screen.getByText("Period 2026-04 soft-closed.")).toBeInTheDocument());
-    expect(browserFetchMock).toHaveBeenCalledWith("v1/finance/periods/2026-04/close", { method: "POST" });
+    expect(browserFetchMock).toHaveBeenCalledWith("v1/finance/periods/2026-04/close", {
+      method: "POST",
+      body: JSON.stringify({ reason: "Books reviewed for the month" }),
+    });
     expect(refreshMock).toHaveBeenCalled();
   });
 
@@ -69,6 +73,7 @@ describe("ClosePeriodForm", () => {
     fireEvent.change(screen.getByLabelText(/Period/), { target: { value: "2026-03" } });
     fireEvent.click(screen.getByRole("button", { name: "Soft-Close Period" }));
     await waitFor(() => expect(screen.getByText("Soft-close this period?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason for soft-closing"), { target: { value: "Books reviewed for the month" } });
     fireEvent.click(screen.getByText("Soft-close period"));
 
     const alert = await screen.findByRole("alert");

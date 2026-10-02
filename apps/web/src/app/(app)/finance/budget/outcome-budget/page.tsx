@@ -1,9 +1,14 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
 import { getFinanceOutcomeBudget } from "@/app/_data/loaders";
+import { toResourceState } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { OutcomeBudgetTable } from "./OutcomeBudgetTable";
 
 export default async function OutcomeBudgetPage() {
-  const { data: outcomes, source } = await getFinanceOutcomeBudget();
+  const result = await getFinanceOutcomeBudget();
+  const { data: outcomes } = result;
+  // GAP-FINANCE-BUDGET-OUTCOME-BUDGET-01: errored -> "—" cards + Retry state.
+  const errored = toResourceState(result).status === "error";
   // achievementBps is basis points (10000 = 100%), not a 0-100 percent.
   const achievementPct = (o: (typeof outcomes)[number]) => Number(o.achievementBps ?? 0) / 100;
   const achieved = outcomes.filter((o) => achievementPct(o) >= 100).length;
@@ -17,17 +22,20 @@ export default async function OutcomeBudgetPage() {
         back="/finance"
       />
       <StatGrid>
-        <StatCard icon="🎯" iconBg="#e7edfd" label="Total Indicators" value={outcomes.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Achieved" value={achieved} />
-        <StatCard icon="📈" iconBg="#fffaeb" label="In Progress" value={inProgress} />
-        <StatCard icon="⏳" iconBg="#eff6ff" label="Not Started" value={outcomes.length - achieved - inProgress} />
+        <StatCard icon="🎯" iconBg="#e7edfd" label="Total Indicators" value={errored ? "—" : outcomes.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Achieved" value={errored ? "—" : achieved} />
+        <StatCard icon="📈" iconBg="#fffaeb" label="In Progress" value={errored ? "—" : inProgress} />
+        <StatCard icon="⏳" iconBg="#eff6ff" label="Not Started" value={errored ? "—" : outcomes.length - achieved - inProgress} />
       </StatGrid>
-      {/* UX-012: the data-source badge now lives inside OutcomeBudgetTable,
-          driven by the same useSeededResource call that produces its rows —
-          not a second, independent read of `source` here that could
-          disagree with the table's own cache state (UX-002's pattern). */}
+      {/* UX-012: the data-source badge lives inside OutcomeBudgetTable. */}
       <Card title="Outcome Indicators">
-        <OutcomeBudgetTable outcomes={outcomes} source={source === "error" ? "error" : "api"} />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "outcome budget" })} backHref="/finance" />
+          </div>
+        ) : (
+          <OutcomeBudgetTable outcomes={outcomes} source="api" />
+        )}
       </Card>
     </div>
   );

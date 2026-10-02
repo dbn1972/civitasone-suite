@@ -1,3 +1,4 @@
+import { classifyBudgetHead, type HeadNature } from "@civitasone/schemas/budget-heads";
 /** Pure budget domain logic — no DB, no HTTP, no queue. Unit-tested in isolation. */
 
 export class DomainError extends Error {
@@ -132,3 +133,34 @@ export function assertSanctionApproverDistinct(createdBy: string, approverId: st
 }
 
 export { assertValidPfmsHoA, assertValidDdoCode } from "../../shared/pfms.js";
+
+export type HeadType = HeadNature;
+
+/**
+ * The accounting nature of a budget head, exactly as GET /v1/finance/accounts
+ * reports it (`type`). Delegates to the shared @civitasone/schemas rule
+ * (explicit nature wins; otherwise the LMMHA major-head range of the code),
+ * so the accounts list, the web head pickers and the budget-estimate guard
+ * below all agree.
+ */
+export function effectiveHeadType(classification: string | null, code: string): HeadType {
+  return classifyBudgetHead({ classification, code }).type;
+}
+
+/**
+ * GAP-FINANCE-BUDGET-FORMULATION-NEW-02: a Budget Estimate is an
+ * appropriation for EXPENDITURE. Budget-native classifications
+ * (revenue/capital/plan/nonplan) and unclassified heads are budgetable within
+ * the LMMHA expenditure ranges (2xxx-7xxx); receipt heads (0xxx-1xxx), the
+ * public account (8xxx) and explicit asset/liability/equity/income heads are
+ * not.
+ */
+export function assertBudgetableHead(head: { classification: string | null; code: string }): void {
+  const { type, budgetable } = classifyBudgetHead(head);
+  if (!budgetable) {
+    throw new DomainError(
+      "HEAD_NOT_BUDGETABLE",
+      `a budget estimate can only be proposed against an expenditure head (head ${head.code} is classified as ${type})`,
+    );
+  }
+}

@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { ZodError } from "zod";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
-import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, DomainError } from "./domain.js";
+import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, assertBudgetableHead, DomainError } from "./domain.js";
 import * as repo from "./repo.js";
 import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
@@ -16,8 +17,24 @@ function toDomain(err: unknown, status = 400): never {
   throw err;
 }
 
+/** A field-scoped 400 in the same envelope zod failures produce (fieldErrors[].field). */
+function fieldError(field: string, message: string): never {
+  throw new ZodError([{ code: "custom", path: [field], message }]);
+}
+
 export async function createBudget(ctx: RequestContext, body: CreateBudgetBody): Promise<Accepted> {
   assertValidFY(body.fy);
+  // GAP-FINANCE-BUDGET-FORMULATION-NEW-02: the head must exist in THIS tenant
+  // and be an expenditure head -- the form's picker filter is convenience
+  // only; this is the real control (a direct API call can't bypass it).
+  const head = await repo.findHeadByIdAndTenant(body.headId, ctx.tenantId);
+  if (!head) fieldError("headId", "Budget head not found");
+  try {
+    assertBudgetableHead(head);
+  } catch (err) {
+    if (err instanceof DomainError) fieldError("headId", err.message);
+    throw err;
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.budgetCreate, {
     messageId: id, type: COMMANDS.budgetCreate,

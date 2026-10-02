@@ -53,12 +53,14 @@ export function ClosePeriodForm() {
     setConfirmOpen(true);
   }
 
-  async function softClose() {
+  async function softClose(reason?: string) {
     setBusy(true);
     setDialogError(undefined);
     try {
+      // GAP-FINANCE-PERIOD-CLOSE-01: the stated reason is mandatory and recorded in the audit trail.
       const res = await browserFetch(`v1/finance/periods/${encodeURIComponent(period.trim())}/close`, {
         method: "POST",
+        body: JSON.stringify({ reason }),
       });
       if (!res.ok) {
         setDialogError(await errorMessageFromResponse(res, "save", "period action"));
@@ -120,6 +122,10 @@ export function ClosePeriodForm() {
         open={confirmOpen}
         title="Soft-close this period?"
         confirmLabel="Soft-close period"
+        requireReason
+        reasonLabel="Reason for soft-closing"
+        minReasonLength={10}
+        maxReasonLength={500}
         busy={busy}
         errorMessage={dialogError}
         description={
@@ -128,7 +134,7 @@ export function ClosePeriodForm() {
             postings outright and can be undone by reopening the period afterwards.
           </>
         }
-        onConfirm={() => void softClose()}
+        onConfirm={(reason) => void softClose(reason)}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
     </form>

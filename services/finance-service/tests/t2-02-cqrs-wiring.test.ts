@@ -53,7 +53,7 @@ describe("T2-02 finance CQRS + scanner-db", () => {
     expect(publish.mock.calls[0][0]).toBe("finance.bank_statement.import");
 
     const period = await import("../src/modules/period-close/commands.js");
-    await period.closePeriod(ctx, "2026-07", "soft_close");
+    await period.closePeriod(ctx, "2026-07", "soft_close", "Month-end close after review");
     expect(publish.mock.calls.at(-1)![0]).toBe("finance.period.close");
 
     const recon = await import("../src/modules/recon/commands.js");

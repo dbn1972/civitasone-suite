@@ -7,7 +7,8 @@ export class DomainError extends Error {
   }
 }
 
-type BalanceEntry = { debitMinor: number | bigint; creditMinor: number | bigint };
+// string = base-10 paise (bigint-safe queue transport, GAP-FINANCE-OPENING-BALANCES-01).
+type BalanceEntry = { debitMinor: number | bigint | string; creditMinor: number | bigint | string };
 
 /**
  * Opening-balance entries must balance: sum(debit) == sum(credit), exactly
@@ -37,4 +38,42 @@ export function assertOpeningBalancesBalanced(entries: BalanceEntry[]): void {
       `opening balance entries are unbalanced: debit ${totalDebit} !== credit ${totalCredit}`,
     );
   }
+}
+
+export type FiscalYearRange = { code: string; startDate: string; endDate: string };
+
+/**
+ * GAP-FINANCE-FISCAL-YEARS-01: creating a fiscal year switches the tenant's
+ * posting year, so a duplicate code or a date range that overlaps an existing
+ * year must be rejected before it is accepted -- two years claiming the same
+ * day make "which year does this posting land in" ambiguous. Dates are ISO
+ * YYYY-MM-DD strings, so lexical comparison is chronological. Ranges are
+ * inclusive on both ends (a year ends on 31-Mar, the next starts 01-Apr).
+ */
+export function assertFiscalYearRangeValid(
+  next: FiscalYearRange,
+  existing: readonly FiscalYearRange[],
+): void {
+  if (next.endDate <= next.startDate) {
+    throw new DomainError("FY_INVALID_RANGE", "fiscal year end date must be after its start date");
+  }
+  for (const fy of existing) {
+    if (fy.code === next.code) {
+      throw new DomainError("ALREADY_EXISTS", `fiscal year ${next.code} already exists`);
+    }
+    if (next.startDate <= fy.endDate && fy.startDate <= next.endDate) {
+      throw new DomainError(
+        "FY_OVERLAP",
+        `fiscal year ${next.code} (${next.startDate} to ${next.endDate}) overlaps existing fiscal year ${fy.code} (${fy.startDate} to ${fy.endDate})`,
+      );
+    }
+  }
+}
+
+/** RBI IFSC + account number identify a bank account; compare normalised. */
+export function sameBankAccount(
+  a: { accountNo: string; ifsc: string },
+  b: { accountNo: string; ifsc: string },
+): boolean {
+  return a.accountNo.trim() === b.accountNo.trim() && a.ifsc.trim().toUpperCase() === b.ifsc.trim().toUpperCase();
 }

@@ -6,7 +6,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
-import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
+import { resolveContext, requireRole, financeErrorHandler, HttpError } from "../../shared/context.js";
+import { sameBankAccount } from "./domain.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
@@ -34,8 +35,10 @@ const bankAccounts = paymentsSchema.table("finance_bank_accounts", {
 const createBankBody = z.object({
   bankName: z.string().min(2, "Bank name is required").max(200),
   branchName: z.string().max(200).optional(),
-  accountNo: z.string().min(5, "Account number is required").max(30),
-  ifsc: z.string().length(11, "IFSC must be 11 characters"),
+  accountNo: z.string().trim().regex(/^\d{5,30}$/, "Account number must be 5-30 digits"),
+  // GAP-FINANCE-CONFIG-01: RBI IFSC shape -- 4-letter bank code, a literal
+  // 0, then a 6-char alphanumeric branch code. Normalised to upper case.
+  ifsc: z.string().trim().toUpperCase().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "IFSC must look like SBIN0001234"),
   accountType: z.enum(["savings", "current", "overdraft"]).default("current"),
   purpose: z.string().max(64).optional(),
 });
@@ -63,6 +66,14 @@ export async function bankRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = createBankBody.parse(req.body);
+    // Duplicate pre-check (same IFSC + account number in this tenant). The
+    // columns are encrypted at rest, so compare the decrypted values; the
+    // worker re-checks under a per-tenant advisory lock for the racing case.
+    const existing = await scopedRead((tx) => tx.select({ accountNo: bankAccounts.accountNo, ifsc: bankAccounts.ifsc })
+      .from(bankAccounts).where(eq(bankAccounts.tenantId, ctx.tenantId)));
+    if (existing.some((r) => sameBankAccount({ accountNo: String(r.accountNo), ifsc: String(r.ifsc) }, body))) {
+      throw new HttpError(409, "BANK_ACCOUNT_EXISTS", "this bank account (IFSC + account number) is already registered");
+    }
     const id = randomUUID();
     await queue.publish(COMMANDS.bankAccountCreate, {
       messageId: id,

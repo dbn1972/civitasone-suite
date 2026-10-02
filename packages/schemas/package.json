@@ -9,6 +9,7 @@
     ".": "./dist/index.js",
     "./common": "./dist/common.js",
     "./money": "./dist/money.js",
+    "./budget-heads": "./dist/budget-heads.js",
     "./web": "./dist/web.js",
     "./identity": "./dist/identity.js",
     "./http": "./dist/http.js",

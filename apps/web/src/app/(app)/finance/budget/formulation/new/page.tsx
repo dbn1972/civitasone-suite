@@ -7,17 +7,25 @@
  * proxy. beMinor is a base-10 integer STRING (paise) -- the backend's
  * createBudgetBody schema is bigint-safe (matches createBillBody.grossMinor's
  * convention) and rejects a raw JSON number outright, since a number can
- * silently lose precision above 2^53 before Zod ever sees it. Same
- * rupees->paise->string conversion as revenue/assessments/
- * AssessmentCreateForm.tsx's rupeesToPaiseString().
- * Heads are loaded from GET /v1/finance/accounts.
+ * silently lose precision above 2^53 before Zod ever sees it. The
+ * rupees->paise conversion is string-based (lib/money's rupeesToMinorString,
+ * GAP-FINANCE-BUDGET-FORMULATION-NEW-01) -- never Number(x) * 100.
+ * Heads are loaded from GET /v1/finance/accounts and filtered to expenditure
+ * heads (GAP-FINANCE-BUDGET-FORMULATION-NEW-02); finance-service rejects a
+ * non-expense head on POST regardless (the real control).
  */
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, PageHeader } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
+import { formatMoney } from "@/lib/formatters";
 
-type AccountRow = { id: string; code?: string; name?: string };
+import { budgetableHeads, type AccountRow } from "../../_lib/heads";
+
+const AMOUNT_ERROR = "Enter an amount in rupees greater than 0, with at most 2 decimals (e.g. 1234567.89).";
+
+
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
@@ -37,19 +45,21 @@ export default function NewBudgetEstimatePage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const [amountError, setAmountError] = useState("");
   const formError = useFormError("budget estimate");
+  const previewMinor = rupeesToMinorString(amount);
 
   useEffect(() => {
     let active = true;
     (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/finance/accounts?limit=200", { headers: { accept: "application/json" } });
+        const res = await fetch("/api/proxy/v1/finance/accounts?limit=500", { headers: { accept: "application/json" } });
         if (!res.ok) {
           if (active) setLoadError((await formError.fromResponse(res, "load")).message);
           return;
         }
         const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
-        if (active) setAccounts(Array.isArray(json) ? json : json.data ?? []);
+        if (active) setAccounts(budgetableHeads(Array.isArray(json) ? json : json.data ?? []));
       } catch {
         if (active) setLoadError(formError.fromException("load").message);
       }
@@ -64,15 +74,19 @@ export default function NewBudgetEstimatePage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    // Exact, string-based rupees -> paise (no float): "1234567.89" -> "123456789";
+    // "1.005", "-5", "0", "abc", "1e21" are rejected before any request.
+    const beMinor = rupeesToMinorString(amount);
+    if (beMinor === null) {
+      setAmountError(AMOUNT_ERROR);
+      return;
+    }
+    setAmountError("");
     setBusy(true);
     setMessage("");
     setIsError(false);
     formError.clear();
     try {
-      // BUG FIX: beMinor must be sent as a base-10 integer STRING -- the
-      // backend's createBudgetBody schema no longer accepts a raw number
-      // (see the file-header comment above).
-      const beMinor = Math.round(Number(amount || "0") * 100).toString();
       const res = await fetch("/api/proxy/v1/finance/budgets", {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -133,7 +147,25 @@ export default function NewBudgetEstimatePage() {
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="be-amt">Budget estimate (₹)</label>
-              <input id="be-amt" required type="number" min="0" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} style={inputStyle} />
+              <input
+                id="be-amt"
+                required
+                type="text"
+                inputMode="decimal"
+                pattern="\d+(\.\d{1,2})?"
+                autoComplete="off"
+                value={amount}
+                onChange={(e) => { setAmount(e.target.value); setAmountError(""); }}
+                aria-invalid={amountError ? true : undefined}
+                aria-describedby="be-amt-hint"
+                style={inputStyle}
+              />
+              <span id="be-amt-hint" style={{ fontSize: 12, color: "var(--mut)" }}>
+                {previewMinor !== null ? `Will be recorded as ${formatMoney(BigInt(previewMinor))}` : "Rupees, up to 2 decimals"}
+              </span>
+              {amountError && (
+                <span role="alert" style={{ fontSize: 12, color: "#b91c1c" }}>{amountError}</span>
+              )}
               {formError.fieldError("beMinor") && (
                 <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("beMinor")}</span>
               )}
