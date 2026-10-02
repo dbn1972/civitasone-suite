@@ -12,13 +12,19 @@ const USER   = "aaaaaaaa-1111-4000-8000-000000000001";
 const EMP_A  = "eeeeeeee-aaaa-4000-8000-000000000001";
 const EMP_B  = "eeeeeeee-bbbb-4000-8000-000000000002";
 
-const { listByTenantMock } = vi.hoisted(() => ({
-  listByTenantMock: vi.fn(),
+const { listPageAfterIdMock } = vi.hoisted(() => ({
+  listPageAfterIdMock: vi.fn(),
 }));
 
 vi.mock("../src/modules/employee/repo.js", async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  listByTenant: (...a: unknown[]) => listByTenantMock(...a),
+  // GAP-HR-ORG-CHART-05 (#1759): the org tree now pages through the tenant via
+  // listPageAfterId (keyset), not listByTenant.
+  listPageAfterId: (...a: unknown[]) => listPageAfterIdMock(...a),
+  // GAP-HR-ORG-CHART-01: node chips resolve real designation/department names
+  // through the owning repo; empty maps -> the "—" placeholder.
+  findDepartmentsByIds: async () => [],
+  findDesignationsByIds: async () => [],
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -66,7 +72,7 @@ function makeEmp(id: string, managerId?: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  listByTenantMock.mockResolvedValue([]);
+  listPageAfterIdMock.mockResolvedValue([]);
 });
 
 afterAll(async () => {
@@ -91,7 +97,7 @@ describe("GET /v1/hrms/org-chart", () => {
   });
 
   it("200 — root nodes have no manager, child nodes are nested", async () => {
-    listByTenantMock.mockResolvedValue([
+    listPageAfterIdMock.mockResolvedValue([
       makeEmp(EMP_A),           // root
       makeEmp(EMP_B, EMP_A),    // child of EMP_A
     ]);
@@ -111,7 +117,7 @@ describe("GET /v1/hrms/org-chart", () => {
   });
 
   it("200 — separated employees are excluded from tree", async () => {
-    listByTenantMock.mockResolvedValue([
+    listPageAfterIdMock.mockResolvedValue([
       makeEmp(EMP_A),
       { ...makeEmp(EMP_B), status: "separated" },
     ]);
@@ -135,12 +141,24 @@ describe("GET /v1/hrms/org-chart", () => {
     await app.close();
   });
 
-  it("403 — employee role is rejected", async () => {
+  // #1499 deliberately opened the org chart to all staff ("employee" included).
+  it("200 — employee role is allowed (org chart opened to all staff, #1499)", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
       url: "/v1/hrms/org-chart",
       headers: auth(USER, ["employee"]),
+    });
+    expect(r.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it("403 — a role outside the reader list is still rejected", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/org-chart",
+      headers: auth(USER, ["vendor"]),
     });
     expect(r.statusCode).toBe(403);
     await app.close();

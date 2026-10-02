@@ -159,9 +159,14 @@ describe("Assessee Repo", () => {
   });
 
   it("listAssessees executes DB query via cache loader and paginates", async () => {
-    mockDbWhere.mockResolvedValue([{ id: "a-1" }, { id: "a-2" }, { id: "a-3" }]);
+    // #1394 (COMP-008): the listing now applies a deterministic ORDER BY
+    // (ownerName, id) after .where() so in-memory pagination boundaries are stable.
+    mockDbWhere.mockReturnValueOnce({ orderBy: mockDbOrderBy });
+    mockDbOrderBy.mockResolvedValueOnce([{ id: "a-1" }, { id: "a-2" }, { id: "a-3" }]);
     const { listAssessees } = await import("../src/modules/assessee/repo.js");
     const result = await listAssessees("11111111-1111-4111-8111-111111111111", { limit: 2, offset: 0 });
+    expect(mockDbOrderBy).toHaveBeenCalledTimes(1);
+    expect(mockDbOrderBy.mock.calls[0]).toHaveLength(2); // ownerName, id tiebreak
     expect(result.data).toHaveLength(2);
     expect(result.meta.total).toBe(3);
   });

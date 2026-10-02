@@ -14,6 +14,7 @@ import { buildApp } from "../src/app.js";
 import { db } from "../src/shared/db.js";
 import { hrmsDepartments, hrmsDesignations, hrmsEmployees } from "../src/modules/employee/schema.js";
 import { hrmsAttendance } from "../src/modules/attendance/schema.js";
+import { hrmsTrainings } from "../src/modules/training/schema.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -30,6 +31,10 @@ const ARJUN  = { id: randomUUID(), roles: ["employee"] };                    // 
 // references to point at — see beforeAll below.
 const DEPT_ID = randomUUID();
 const DESIG_ID = randomUUID();
+// Seeded directly: 5.1's POST only publishes a command (no consumer runs in this
+// harness) so no training row exists for 5.2's nomination to point at, and
+// createNomination 404s on an unknown training.
+const TRAINING_ID = randomUUID();
 
 function tok(p: { id: string; roles: string[] }) {
   return signToken({ sub: p.id, tid: TENANT, roles: p.roles, sid: `s-${p.id.slice(0,6)}` }, SECRET, 7200);
@@ -77,6 +82,16 @@ beforeAll(async () => {
       id: ARJUN.id, tenantId: TENANT, employeeNo: "DIC-ENG-101", fullName: "Arjun Nair",
       departmentId: DEPT_ID, designationId: DESIG_ID, dateOfJoining: "2024-11-01",
       status: "probation", employeeType: "permanent", createdBy: PRIYA.id, updatedBy: PRIYA.id,
+      // #1545 (training IDOR fix): POST /v1/hrms/nominations resolves a
+      // non-HR caller's own employee row via userRef = JWT sub and fails
+      // closed (403 NO_EMPLOYEE_LINK) without it. 5.2's self-nomination needs
+      // ARJUN's account linked, exactly as a real onboarded employee's is.
+      userRef: ARJUN.id,
+    });
+    await tx.insert(hrmsTrainings).values({
+      id: TRAINING_ID, tenantId: TENANT, title: "Cloud Architecture Certification",
+      fromDate: "2025-01-15", toDate: "2025-01-20", maxParticipants: 30,
+      createdBy: PRIYA.id, updatedBy: PRIYA.id,
     });
     await tx.insert(hrmsAttendance).values({
       id: randomUUID(), tenantId: TENANT, employeeId: ARJUN.id, attendanceDate: "2024-11-04",
@@ -88,6 +103,7 @@ afterAll(async () => {
   await runWithTenant(TENANT, () => db.transaction(async (tx) => {
     // hrms_attendance.employee_id FKs to hrms_employees.id -- must go first.
     await tx.delete(hrmsAttendance).where(eq(hrmsAttendance.tenantId, TENANT));
+    await tx.delete(hrmsTrainings).where(eq(hrmsTrainings.tenantId, TENANT));
     await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
     await tx.delete(hrmsDesignations).where(eq(hrmsDesignations.tenantId, TENANT));
     await tx.delete(hrmsDepartments).where(eq(hrmsDepartments.tenantId, TENANT));
@@ -197,10 +213,16 @@ describe("Phase 2: Employee Registration & Onboarding", () => {
     console.log(`  ✓ Manager can read employee list`);
   });
 
-  it("2.5 Employee CANNOT list all employees", async () => {
+  // #1499 deliberately opened the employee directory list (no PII/salary) to all staff.
+  it("2.5 Employee CAN list the employee directory (opened to all staff, #1499)", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/hrms/employees?limit=50", headers: h(MEERA) });
+    expect(r.statusCode).toBe(200);
+    console.log(`  ✓ Employee can read the directory list`);
+  });
+
+  it("2.5b A non-staff role (citizen) is still blocked from the directory list", async () => {
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/employees?limit=50", headers: h({ id: MEERA.id, roles: ["citizen"] }) });
     expect(r.statusCode).toBe(403);
-    console.log(`  ✓ Employee blocked from full list`);
   });
 
   it("2.6 HR creates leave types (CL, EL)", async () => {
@@ -355,7 +377,7 @@ describe("Phase 5: Training", () => {
 
   it("5.2 Employee self-nominates", async () => {
     const r = await app.inject({ method: "POST", url: "/v1/hrms/nominations", headers: h(ARJUN), payload: {
-      trainingId: state.trainingId || randomUUID(), employeeId: ARJUN.id,
+      trainingId: TRAINING_ID, employeeId: ARJUN.id,
     }});
     expect([202, 400]).toContain(r.statusCode);
     expect(r.statusCode).not.toBe(403);

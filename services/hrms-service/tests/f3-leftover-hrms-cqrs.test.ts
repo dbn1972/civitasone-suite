@@ -175,22 +175,127 @@ const KNOWN_INTENTIONAL_SYNC_WRITES = new Set<string>([
   "recruitment/screening-override-routes.ts:310",
 ]);
 
+/**
+ * Blank WHOLE-LINE comments (`// ...`, `/* ... *\/` blocks and JSDoc bodies),
+ * preserving line numbers, so prose that merely MENTIONS `db.transaction(`
+ * (e.g. "must go through db.transaction() ...") is never mistaken for a call
+ * site. Deliberately line-based, not character-based: a string literal that
+ * contains `/*` or `//` can then never blank real code after it.
+ */
+function stripComments(src: string): string[] {
+  let inBlock = false;
+  return src.split("\n").map((line) => {
+    const t = line.trim();
+    if (inBlock) {
+      if (t.includes("*/")) inBlock = false;
+      return "";
+    }
+    if (t.startsWith("//")) return "";
+    if (t.startsWith("/*")) {
+      if (!t.includes("*/")) inBlock = true;
+      return "";
+    }
+    return line;
+  });
+}
+
+/**
+ * Index just past the `)` that balances the `(` at `open`, or -1. String- and
+ * template-literal aware so a paren inside a string cannot unbalance it.
+ */
+function balancedEnd(text: string, open: number): number {
+  let depth = 0;
+  let quote: string | null = null;
+  for (let i = open; i < text.length; i++) {
+    const ch = text[i]!;
+    if (quote) {
+      if (ch === "\\") i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === "`") quote = ch;
+    else if (ch === "(") depth++;
+    else if (ch === ")" && --depth === 0) return i + 1;
+  }
+  return -1;
+}
+
+/** The full `db.transaction( ... )` call that opens on `lines[start]`, or null. */
+function transactionCall(lines: string[], start: number): string | null {
+  const text = lines.slice(start, start + 120).join("\n");
+  const at = text.indexOf("db.transaction(");
+  if (at === -1) return null;
+  const end = balancedEnd(text, at + "db.transaction".length);
+  return end === -1 ? null : text.slice(at, end);
+}
+
+/** `text` with every balanced `name( ... )` call (and a leading `await`) removed. */
+function removeCalls(text: string, name: string): string {
+  const re = new RegExp(`(?:\\bawait\\s+)?\\b${name}\\s*\\(`);
+  let out = text;
+  for (;;) {
+    const m = re.exec(out);
+    if (!m) return out;
+    const end = balancedEnd(out, m.index + m[0].length - 1);
+    if (end === -1) return out;
+    out = out.slice(0, m.index) + out.slice(end);
+  }
+}
+
+/**
+ * ALLOW-LIST (fails closed). A `db.transaction(cb)` is exempt only when it is a
+ * pure read-audit wrapper: after deleting every balanced auditLog(...) /
+ * emitAudit(...) call from the callback body, NOTHING executable may remain --
+ * so the tx parameter (whatever it is named) is never used elsewhere, no other
+ * call takes it, and no side-channel write (sqlClient.unsafe, a helper, a
+ * destructured repo method, a tagged template, ...) can sit beside the audit
+ * call. Such a wrapper exists only because wrapWithTenantGuc intercepts
+ * db.transaction() to set app.tenant_id; it defers/races no business write.
+ * Anything unrecognised is NOT exempt.
+ */
+function isAuditOnlyTransaction(call: string): boolean {
+  const arrow = call.indexOf("=>");
+  if (arrow === -1) return false;
+  const sig = /^db\.transaction\(\s*(?:async\s*)?(?:\(\s*(\w+)\s*(?::[^)]*)?\)|(\w+))\s*=>/.exec(call);
+  if (!sig) return false; // function-expression callbacks etc. are not recognised
+  const param = sig[1] ?? sig[2]!;
+  const body = call.slice(sig[0].length);
+  if (!/\b(?:auditLog|emitAudit)\s*\(/.test(body)) return false;
+  const rest = removeCalls(removeCalls(body, "auditLog"), "emitAudit");
+  if (new RegExp(`\\b${param}\\b`).test(rest)) return false;
+  // Only punctuation / await / return may be left (closing parens, braces, `;`).
+  return rest.replace(/\b(?:await|return)\b/g, "").replace(/[\s{}();,]/g, "") === "";
+}
+
+/** 1-based line numbers of sync Drizzle / repo writes in one route file's source. */
+function findSyncWrites(src: string): number[] {
+  const lines = stripComments(src);
+  const hits: number[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]!;
+    if (/await\s+repo\.(?:insert|update|delete|create|save|upsert|attest|transition)\w*\s*\(/.test(line)) {
+      hits.push(i + 1);
+      continue;
+    }
+    if (/\b(?:db|tx)\.(?:insert|update|delete)\s*\(/.test(line)) {
+      hits.push(i + 1);
+      continue;
+    }
+    if (/\bdb\.transaction\s*\(/.test(line) && !isAuditOnlyTransaction(transactionCall(lines, i) ?? "")) {
+      hits.push(i + 1);
+    }
+  }
+  return hits;
+}
+
 describe("F3 leftover hrms CQRS route boundary", () => {
   it("all module routes have zero sync Drizzle / repo writes (excluding disclosed exceptions above)", () => {
     const offenders: string[] = [];
     for (const file of routeFiles()) {
-      const src = readFileSync(file, "utf8");
-      // Allow scopedRead((tx) => tx.execute(SELECT...)) analytics reads — only flag writes.
-      const lines = src.split("\n");
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (/await\s+repo\.(?:insert|update|delete|create|save|upsert|attest|transition)\w*\s*\(/.test(line)) {
-          offenders.push(`${file.replace(MODULES + "/", "")}:${i + 1}`);
-          continue;
-        }
-        if (/\b(?:db|tx)\.(?:insert|update|delete)\s*\(/.test(line) || /\bdb\.transaction\s*\(/.test(line)) {
-          offenders.push(`${file.replace(MODULES + "/", "")}:${i + 1}`);
-        }
+      // Allow scopedRead((tx) => tx.execute(SELECT...)) analytics reads and
+      // read-audit-only transactions -- only flag writes.
+      for (const lineNo of findSyncWrites(readFileSync(file, "utf8"))) {
+        offenders.push(`${file.replace(MODULES + "/", "")}:${lineNo}`);
       }
     }
     const unexpected = offenders.filter((o) => !KNOWN_INTENTIONAL_SYNC_WRITES.has(o));
@@ -201,6 +306,62 @@ describe("F3 leftover hrms CQRS route boundary", () => {
     // land on the same file:line.
     const stale = [...KNOWN_INTENTIONAL_SYNC_WRITES].filter((entry) => !offenders.includes(entry));
     expect(stale).toEqual([]);
+  });
+
+  describe("scanner precision (findSyncWrites)", () => {
+    it("ignores whole-line comments that merely mention db.transaction( / db.insert(", () => {
+      const src = [
+        "// must go through db.transaction() (not a bare db.insert()) so RLS applies",
+        "/**",
+        " * db.transaction(async (tx) => tx.insert(x))",
+        " */",
+        "/* db.update( */",
+      ].join("\n");
+      expect(findSyncWrites(src)).toEqual([]);
+    });
+
+    it("a string containing /* or // does not blank the code after it", () => {
+      const src = ['const g = "/*";', "await db.insert(table).values(v);", 'const u = "http://x";'].join("\n");
+      expect(findSyncWrites(src)).toEqual([2]);
+    });
+
+    it("exempts a pure read-audit transaction (any tx param name, arrow forms)", () => {
+      const src = [
+        "await db.transaction((tx) => auditLog(tx, {",
+        "  action: 'read_detail', note: 'a (b) c',",
+        "}));",
+        "await db.transaction(async (t) => {",
+        "  await emitAudit(t, ctx, 'hrms.x.list_viewed', 'x', id, { count: rows.length });",
+        "});",
+        "await db.transaction(async trx => { await auditLog(trx, {}); });",
+      ].join("\n");
+      expect(findSyncWrites(src)).toEqual([]);
+    });
+
+    const flagged = (body: string[]) =>
+      expect(findSyncWrites(["await db.transaction(async (tx) => {", ...body, "});"].join("\n"))).toContain(1);
+
+    it("still flags a real write beside auditLog, however it is spelled", () => {
+      flagged(["  await tx.insert(table).values(v);", "  await auditLog(tx, {});"]);
+      flagged(["  await tx.execute(sql`DELETE FROM x`);", "  await auditLog(tx, {});"]); // execute
+      flagged(["  await tx`UPDATE x SET y = 1`;", "  await auditLog(tx, {});"]); // tagged template on tx
+      flagged(["  await sqlClient.unsafe('UPDATE x SET y = 1');", "  await auditLog(tx, {});"]); // side channel, tx unused
+      flagged(["  await createThing(tx, row);", "  await auditLog(tx, {});"]); // helper not named *repo
+      flagged(["  await repository.update(tx, id, patch);", "  await auditLog(tx, {});"]);
+      flagged(["  const { insertThing } = repo;", "  await insertThing(tx, row);", "  await auditLog(tx, {});"]); // destructured
+      flagged(["  await auditLog(tx, {});", "  await helper(async () => otherWrite(tx));"]); // nested helper
+    });
+
+    it("flags a renamed tx param used for a write beside the audit call", () => {
+      expect(findSyncWrites("await db.transaction(async (t) => { await t.execute(q); await auditLog(t, {}); });")).toEqual([1]);
+      expect(findSyncWrites("await db.transaction(async (trx) => { await trx.insert(x).values(v); await emitAudit(trx, c, 'a', 'b', i, {}); });")).toContain(1);
+    });
+
+    it("still flags repo transactions, bare db.insert, and unrecognised callbacks", () => {
+      expect(findSyncWrites("await db.transaction((tx) => repo.insertThing(tx, row));")).toEqual([1]);
+      expect(findSyncWrites("await db.insert(table).values(v);")).toEqual([1]);
+      expect(findSyncWrites("await db.transaction(async function (tx) { await auditLog(tx, {}); });")).toEqual([1]);
+    });
   });
 
   it("leave cancel publishes via sendAccepted", () => {

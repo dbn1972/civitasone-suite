@@ -3,7 +3,6 @@
  * Covers: happy path, 400, 401, 403, 404, 409 for all gap-features endpoints.
  */
 import { describe, it, expect, beforeEach, afterAll, vi } from "vitest";
-import { createMockSqlClient } from "./fixtures/mock-sql-client.js";
 import { signToken } from "@civitasone/auth";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
@@ -46,12 +45,31 @@ vi.mock("../src/shared/db.js", () => {
     insert: (t: unknown) => ({ values: (v: unknown) => H.insert(v) }),
     execute: (q: unknown) => H.execute(q),
   };
+  // #1560: these routes' raw SQL now runs through sqlClient.begin() +
+  // tx.unsafe() (tenant-GUC wrapped) instead of sqlPool.query(). Route the
+  // route's own query to H.poolQuery and unwrap its pg-style { rows } result
+  // to the row array postgres.js returns. set_config bookkeeping and the
+  // fire-and-forget audit INSERT (app.ts onResponse -> writeAuditLog) are
+  // short-circuited so they never consume a queued mockResolvedValueOnce.
+  const isBookkeeping = (text: unknown) =>
+    typeof text === "string" && (text.includes("set_config") || text.includes("audit.hr_action_log"));
+  const sqlClientFn = (...args: unknown[]) => {
+    const [strings] = args as [TemplateStringsArray];
+    if (strings?.[0]?.includes("set_config")) return Promise.resolve([]);
+    return Promise.resolve(H.poolQuery(...args)).then((r: { rows?: unknown[] } | undefined) => r?.rows ?? []);
+  };
+  sqlClientFn.end = async () => {};
+  sqlClientFn.unsafe = (...a: unknown[]) =>
+    isBookkeeping(a[0])
+      ? Promise.resolve([])
+      : Promise.resolve(H.poolQuery(...a)).then((r: { rows?: unknown[] } | undefined) => r?.rows ?? []);
+  sqlClientFn.begin = async (fn: (tx: typeof sqlClientFn) => Promise<unknown>) => fn(sqlClientFn);
   return {
     db: {
       transaction: async (cb: (tx: typeof mockTx) => Promise<unknown>) => cb(mockTx),
     },
     scopedRead: async (fn: (tx: typeof mockTx) => Promise<unknown>) => fn(mockTx),
-    sqlClient: createMockSqlClient(),
+    sqlClient: sqlClientFn,
     sqlPool: { query: (...a: unknown[]) => H.poolQuery(...a) },
   };
 });

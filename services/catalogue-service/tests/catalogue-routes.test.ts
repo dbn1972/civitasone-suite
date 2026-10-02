@@ -86,6 +86,9 @@ vi.mock("../src/modules/products/repo.js", () => ({
   findById: (...a: unknown[]) => H.productFindByIdMock(...a),
   listProducts: (...a: unknown[]) => H.productListMock(...a),
   listByTenant: (...a: unknown[]) => H.productListByTenantMock(...a),
+  // PERF-006 (#1384): the tree route compares the result length to this cap
+  // to report meta.truncated.
+  TREE_ROW_CAP: 5000,
   insertProduct: (...a: unknown[]) => H.productInsertMock(...a),
   updateProduct: (...a: unknown[]) => H.productUpdateMock(...a),
   softDelete: (...a: unknown[]) => H.productSoftDeleteMock(...a),
@@ -347,6 +350,7 @@ describe("Products CRUD", () => {
     await app.close();
     expect(res.statusCode).toBe(200);
     expect(res.json().data).toBeDefined();
+    expect(res.json().meta).toEqual({ truncated: false });
   });
 });
 

@@ -103,12 +103,25 @@ describe("GET /v1/hrms/org-chart — shape", () => {
     expect(Array.isArray(res.json())).toBe(true);
   });
 
-  it("returns 403 for wrong role (employee)", async () => {
+  // #1499 deliberately opened the org chart to all staff, so "employee" is a
+  // valid reader; a non-staff role (citizen) is still rejected.
+  it("returns 200 for employee role (org chart open to all staff, #1499)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET",
       url: "/v1/hrms/org-chart",
       headers: { authorization: `Bearer ${makeToken(["employee"])}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("returns 403 for wrong role (citizen)", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/org-chart",
+      headers: { authorization: `Bearer ${makeToken(["citizen"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(403);

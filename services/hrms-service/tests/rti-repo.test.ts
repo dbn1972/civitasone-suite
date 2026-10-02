@@ -15,6 +15,8 @@ const H = vi.hoisted(() => ({
   selectResult: vi.fn(),
   insertResult: vi.fn(),
   updateResult: vi.fn(),
+  limitSpy: vi.fn(),
+  offsetSpy: vi.fn(),
 }));
 
 vi.mock("../src/shared/db.js", () => {
@@ -23,7 +25,19 @@ vi.mock("../src/shared/db.js", () => {
       from: () => ({
         where: () => ({
           limit: () => H.selectResult(),
-          orderBy: () => ({ limit: () => H.selectResult() }),
+          // #1690 (GAP-HR-RTI-05): listRti paginates -- ...orderBy().limit().offset().
+          // `limit()` result stays directly awaitable for the other
+          // orderBy().limit() callers, and also exposes `.offset()`.
+          orderBy: () => ({
+            limit: (n: number) => {
+              H.limitSpy(n);
+              return {
+                offset: (o: number) => { H.offsetSpy(o); return H.selectResult(); },
+                then: (res: (v: unknown) => unknown, rej: (e: unknown) => unknown) =>
+                  Promise.resolve(H.selectResult()).then(res, rej),
+              };
+            },
+          }),
         }),
       }),
     }),
@@ -142,6 +156,15 @@ describe("listRti", () => {
     H.selectResult.mockResolvedValue([makeRow()]);
     const result = await listRti(TENANT, 10);
     expect(result).toHaveLength(1);
+    expect(H.limitSpy).toHaveBeenCalledWith(10);
+    expect(H.offsetSpy).toHaveBeenCalledWith(0);
+  });
+
+  it("forwards offset for pagination (#1690)", async () => {
+    H.selectResult.mockResolvedValue([makeRow()]);
+    await listRti(TENANT, 25, 50);
+    expect(H.limitSpy).toHaveBeenCalledWith(25);
+    expect(H.offsetSpy).toHaveBeenCalledWith(50);
   });
 });
 

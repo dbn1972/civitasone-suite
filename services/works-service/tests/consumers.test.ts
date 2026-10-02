@@ -41,7 +41,8 @@ vi.mock("../src/shared/db.js", () => ({
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
-  cache: { getOrLoad: vi.fn((_k: string, fn: Function) => fn()), invalidate: vi.fn() },
+  // #1381 (PERF-007): consumers invalidate by resource via cache.invalidateResource.
+  cache: { getOrLoad: vi.fn((_k: string, fn: Function) => fn()), invalidate: vi.fn(), invalidateResource: vi.fn() },
   queue: { publish: vi.fn(), subscribe: vi.fn(), start: vi.fn(), stop: vi.fn() },
 }));
 
@@ -92,6 +93,8 @@ describe("Proposal consumer — idempotency", () => {
     const { markProcessed } = await import("../src/shared/outbox.js");
     expect(markProcessed).toHaveBeenCalledWith(mockTx, "msg-001");
     expect(mockInsert).toHaveBeenCalled();
+    const { cache } = await import("../src/shared/infra.js");
+    expect(cache.invalidateResource).toHaveBeenCalledWith(baseMsg.tenantId, "master:work_proposals");
   });
 
   it("skips duplicate message (markProcessed returns false)", async () => {
