@@ -15,6 +15,11 @@ export const createJobOpeningBody = z.object({
   location:      z.string().max(200).optional(),
   qualification: z.string().max(500).optional(),
   payRange:      z.string().max(120).optional(),
+  // GAP-RECRUITMENT-NEW-02: structured pay. Min/max are bigint PAISE carried as decimal strings
+  // (never JS numbers); payRange stays the display text.
+  payLevel:      z.string().trim().min(1).max(16).optional(),
+  payMinMinor:   z.string().regex(/^\d{1,15}$/).optional(),
+  payMaxMinor:   z.string().regex(/^\d{1,15}$/).optional(),
   isPublished:   z.boolean().default(false),
   postedAt:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   closesAt:      z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
@@ -28,7 +33,10 @@ export const createJobOpeningBody = z.object({
   selectionProcess:  z.string().max(3000).optional(),
   requiredDocuments: z.array(z.string().max(200)).max(30).optional(),
   eligibility:       z.record(z.unknown()).optional(),
-});
+}).refine(
+  (b) => b.payMinMinor === undefined || b.payMaxMinor === undefined || BigInt(b.payMinMinor) <= BigInt(b.payMaxMinor),
+  { message: "payMinMinor must not exceed payMaxMinor", path: ["payMinMinor"] },
+);
 export type CreateJobOpeningBody = z.infer<typeof createJobOpeningBody>;
 
 export const createApplicationBody = z.object({

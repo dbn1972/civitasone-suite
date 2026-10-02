@@ -11,7 +11,8 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { listJobOpeningsByTenantMock, countApplicationsByJobMock, findPublishedOpeningMock } = vi.hoisted(() => ({
+const { listJobOpeningsByTenantMock, countApplicationsByJobMock, findPublishedOpeningMock, statusByJobsMock } = vi.hoisted(() => ({
+  statusByJobsMock: vi.fn(async () => new Map<string, string>()),
   listJobOpeningsByTenantMock: vi.fn(),
   findPublishedOpeningMock: vi.fn(),
   countApplicationsByJobMock: vi.fn(async () => new Map()),
@@ -21,6 +22,10 @@ vi.mock("../src/modules/recruitment/repo.js", () => ({
   listJobOpeningsByTenant: (...a: unknown[]) => listJobOpeningsByTenantMock(...a),
   countApplicationsByJob: (...a: unknown[]) => countApplicationsByJobMock(...a),
   findPublishedOpening: (...a: unknown[]) => findPublishedOpeningMock(...a),
+}));
+
+vi.mock("../src/modules/recruitment/reservation-repo.js", () => ({
+  statusByJobs: (...a: unknown[]) => (statusByJobsMock as unknown as (...x: unknown[]) => unknown)(...a),
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
@@ -57,6 +62,24 @@ function row(overrides: Partial<Record<string, unknown>>) {
 beforeEach(() => {
   vi.clearAllMocks();
   countApplicationsByJobMock.mockResolvedValue(new Map());
+  statusByJobsMock.mockResolvedValue(new Map());
+});
+
+// GAP-RECRUITMENT-HOME-05
+describe("listJobOpenings -- rosterStatus / feesMinor", () => {
+  it("batches the roster lookup once for every row and defaults to 'none'; fees are a paise string", async () => {
+    listJobOpeningsByTenantMock.mockResolvedValue([
+      row({ id: "j1", feesMinor: 10000n }),
+      row({ id: "j2", feesMinor: null }),
+      row({ id: "j3" }),
+    ]);
+    statusByJobsMock.mockResolvedValue(new Map([["j1", "approved"], ["j2", "draft"]]));
+    const rows = await listJobOpenings(TENANT, 100);
+    expect(statusByJobsMock).toHaveBeenCalledTimes(1);
+    expect(statusByJobsMock).toHaveBeenCalledWith(TENANT, ["j1", "j2", "j3"]);
+    expect(rows.map((r) => r.rosterStatus)).toEqual(["approved", "draft", "none"]);
+    expect(rows.map((r) => r.feesMinor)).toEqual(["10000", null, null]);
+  });
 });
 
 describe("listJobOpenings — status mapping (HR-A deep-verify)", () => {

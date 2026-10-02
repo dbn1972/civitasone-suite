@@ -218,6 +218,13 @@ const STATUS_MAP: Record<string, PillVariant> = {
   released: "mut",
   exhausted: "warn", // outlay fully drawn down: not an error, but needs attention
   invoked: "bad",
+
+  // Recruitment: talent-pool stage "not_selected" (an applicant who was not chosen -- a closed,
+  // neutral outcome, not an error) and the vacancy publish state shown in the recruitment hub
+  // (GAP-RECRUITMENT-TALENT-POOL-04 / GAP-RECRUITMENT-HOME-04).
+  "not selected": "mut",
+  published: "good",
+  unpublished: "mut",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

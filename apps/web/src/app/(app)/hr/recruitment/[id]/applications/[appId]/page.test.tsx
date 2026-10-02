@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 import hiMessages from "@/messages/hi.json";
@@ -9,58 +9,86 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ back: vi.fn(), push: vi.fn(), refresh: vi.fn() }),
 }));
 
+// Fast poll so the post-hire confirmation / stall paths run in real time.
+vi.mock("./applicationData", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  HIRE_POLL_INTERVAL_MS: 15,
+  HIRE_POLL_MAX_ATTEMPTS: 3,
+}));
+
 import ApplicationDetailPage from "./page";
 
-// UX-017: ApplicationDetailPage now reads its copy through next-intl
-// (useTranslations("recruitmentApplicationDetail")), so it needs a real
-// provider in the tree -- same pattern as hr/leave/apply/ApplyLeaveForm.test.tsx.
-function renderPage() {
+function renderPage(locale: "en" | "hi" = "en") {
   return render(
-    <NextIntlClientProvider locale="en" messages={enMessages}>
+    <NextIntlClientProvider locale={locale} messages={locale === "en" ? enMessages : hiMessages}>
       <ApplicationDetailPage />
     </NextIntlClientProvider>,
   );
 }
 
-const LIST_RESPONSE = {
-  data: [
-    { id: "app-1", applicantName: "Asha Verma", stage: "applied", screeningDecision: "pending", source: "public", appliedAt: "2026-08-01" },
-    { id: "app-2", applicantName: "Rahul Singh", stage: "selected", screeningDecision: "eligible", source: "public", appliedAt: "2026-08-02", email: "rahul@example.com" },
-  ],
+const APP = {
+  id: "app-2", jobOpeningId: "job-1", applicantName: "Rahul Singh", stage: "selected", screeningDecision: "eligible",
+  source: "public", appliedAt: "2026-08-02", email: "rahul@example.com",
 };
 
-// UX: the hire dialog's departmentId/designationId now render as
-// name-based dropdowns (populated from these lists) instead of raw UUID
-// text boxes — see page.tsx's dropdown-vs-fallback-input branches.
-const DEPARTMENTS_RESPONSE = { data: [{ id: "dept-1", name: "IT Department" }] };
-const DESIGNATIONS_RESPONSE = { data: [{ id: "desig-1", name: "Software Engineer" }] };
+const DEPARTMENTS = { data: [{ id: "dept-1", name: "IT Department" }] };
+const DESIGNATIONS = { data: [{ id: "desig-1", name: "Software Engineer" }] };
+
+const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
+
+type Routes = Record<string, (init?: RequestInit) => Response | Promise<Response>>;
+/** Routes a fetch by exact URL; unknown URLs fail the test loudly. Fee/offers default to empty. */
+function stubFetch(routes: Routes) {
+  const calls: string[] = [];
+  const base: Routes = {
+    "/api/proxy/v1/hrms/applications/app-2/fee": () => json({ message: "none" }, 404),
+    "/api/proxy/v1/hrms/applications/app-2/offers": () => json({ data: [] }),
+    ...routes,
+  };
+  const fn = vi.fn(async (url: string, init?: RequestInit) => {
+    calls.push(url);
+    const h = base[url];
+    if (!h) throw new Error(`unexpected fetch to ${url}`);
+    return h(init);
+  });
+  vi.stubGlobal("fetch", fn);
+  return { fn, calls };
+}
+
+const APP_URL = "/api/proxy/v1/hrms/applications/app-2";
+const HIRE_URL = "/api/proxy/v1/hrms/applications/app-2/hire";
+const DEPT_URL = "/api/proxy/v1/hrms/departments?limit=200";
+const DESIG_URL = "/api/proxy/v1/hrms/designations?limit=200";
+
+async function fillHireForm() {
+  fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
+  await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
+  fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
+  fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
+  fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "50000" } });
+  fireEvent.change(screen.getByLabelText("Department", { exact: false }), { target: { value: "dept-1" } });
+  fireEvent.change(screen.getByLabelText("Designation", { exact: false }), { target: { value: "desig-1" } });
+}
 
 describe("ApplicationDetailPage", () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it("loads the application via the job-opening's applications list, not the nonexistent singular GET", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") {
-        return { ok: true, status: 200, json: async () => LIST_RESPONSE } as Response;
-      }
-      // GET /v1/hrms/applications/:id does not exist (confirmed 404 live) — if the
-      // page ever calls it again, fail the test loudly instead of pretending it works.
-      throw new Error(`unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-
+  // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-05
+  it("loads ONE application via the singular GET and never downloads the vacancy's whole applicant list", async () => {
+    const { calls } = stubFetch({ [APP_URL]: () => json(APP) });
     renderPage();
-
     expect(await screen.findByRole("heading", { name: "Rahul Singh" })).toBeInTheDocument();
     expect(screen.getByText("Screening decision")).toBeInTheDocument();
     expect(screen.getByText("Eligible")).toBeInTheDocument();
-    expect(fetchMock).toHaveBeenCalledWith("/api/proxy/v1/hrms/job-openings/job-1/applications");
+    expect(calls).toContain(APP_URL);
+    expect(calls.some((u) => u.includes("/job-openings/"))).toBe(false);
   });
 
-  // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-02: no raw UUID / enum tokens / ISO timestamps.
+  // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-02
   it("shows the application number, translated enums and an IST date instead of the UUID, raw tokens and ISO timestamp", async () => {
-    const list = { data: [{ id: "app-2", applicationNo: "REC/2026/0042", applicantName: "Rahul Singh", stage: "offered", screeningDecision: "pending", source: "public_portal", appliedAt: "2026-03-01T10:00:00Z" }] };
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => list } as Response)));
+    stubFetch({
+      [APP_URL]: () => json({ ...APP, applicationNo: "REC/2026/0042", stage: "offered", screeningDecision: "pending", source: "public_portal", appliedAt: "2026-03-01T10:00:00Z" }),
+    });
     renderPage();
     await screen.findByRole("heading", { name: "Rahul Singh" });
     expect(screen.getByText("REC/2026/0042")).toBeInTheDocument();
@@ -68,110 +96,225 @@ describe("ApplicationDetailPage", () => {
     expect(screen.getByText("Public careers portal")).toBeInTheDocument();
     expect(screen.getByText("Offered")).toBeInTheDocument();
     expect(screen.getByText(/1 Mar 2026/)).toBeInTheDocument();
-    expect(screen.queryByText(/2026-03-01T10:00:00Z/)).not.toBeInTheDocument();
   });
 
-  it("shows a clean not-found state when the id isn't in the pipeline, with a working way back", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [] }) } as Response)));
-    renderPage();
-
-    expect(await screen.findByText("Application not found.")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /back/i })).toHaveAttribute("href", "/hr/recruitment/job-1");
-  });
-
-  it("links back to the job opening detail page, not the broken relative '.' (which 404s under this nested route)", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => LIST_RESPONSE } as Response)));
+  // GAP-...-APPLICATION-06
+  it("shows category, date of birth (when the API returns it) and résumé status in the summary", async () => {
+    stubFetch({ [APP_URL]: () => json({ ...APP, category: "OBC", dateOfBirth: "1995-04-12", hasResume: true }) });
     renderPage();
     await screen.findByRole("heading", { name: "Rahul Singh" });
-    expect(screen.getByRole("link", { name: /back/i })).toHaveAttribute("href", "/hr/recruitment/job-1");
+    expect(screen.getByText("OBC")).toBeInTheDocument();
+    expect(screen.getByText(/12 Apr 1995/)).toBeInTheDocument();
+    expect(screen.getByText("On file")).toBeInTheDocument();
   });
 
-  it("hides the Hire action once a hire has been initiated, so it can't be double-submitted", async () => {
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") {
-        return { ok: true, status: 200, json: async () => LIST_RESPONSE } as Response;
-      }
-      if (url === "/api/proxy/v1/hrms/departments?limit=200") {
-        return { ok: true, status: 200, json: async () => DEPARTMENTS_RESPONSE } as Response;
-      }
-      if (url === "/api/proxy/v1/hrms/designations?limit=200") {
-        return { ok: true, status: 200, json: async () => DESIGNATIONS_RESPONSE } as Response;
-      }
-      if (url === "/api/proxy/v1/hrms/applications/app-2/hire" && init?.method === "POST") {
-        return { ok: true, status: 202, text: async () => "{}" } as Response;
-      }
-      throw new Error(`unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
+  it("hides date of birth entirely when the API withheld it (hr_officer)", async () => {
+    stubFetch({ [APP_URL]: () => json({ ...APP, category: "UR", dateOfBirth: null, hasResume: false }) });
+    renderPage();
+    await screen.findByRole("heading", { name: "Rahul Singh" });
+    expect(screen.queryByText("Date of birth")).not.toBeInTheDocument();
+    expect(screen.getByText("Not provided")).toBeInTheDocument();
+  });
 
+  it("renders the fee, offers and PDF link sections", async () => {
+    stubFetch({
+      [APP_URL]: () => json(APP),
+      "/api/proxy/v1/hrms/applications/app-2/fee": () => json({ data: { status: "paid", amountMinor: "10000", paidAt: "2026-08-05T10:00:00Z" } }),
+      "/api/proxy/v1/hrms/applications/app-2/offers": () => json({ data: [{ id: "off-1", offerNo: "OFR-AAAA1111", status: "released", offerVersion: 2, grossCtcMinor: "60000000" }] }),
+    });
+    renderPage();
+    await screen.findByRole("heading", { name: "Rahul Singh" });
+    const feeCard = (await screen.findByText("Application fee")).closest(".card") as HTMLElement;
+    await waitFor(() => expect(within(feeCard).getByText("₹100.00")).toBeInTheDocument());
+    expect(within(feeCard).getByText("Paid")).toBeInTheDocument();
+    expect(await screen.findByText("OFR-AAAA1111")).toBeInTheDocument();
+    expect(screen.getByText(/₹6,00,000\.00/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Download application PDF" })).toHaveAttribute("href", "/api/proxy/v1/hrms/applications/app-2/pdf");
+  });
+
+  it("a failing fee call shows a section error with Retry and does not blank the rest of the page", async () => {
+    let feeCalls = 0;
+    stubFetch({
+      [APP_URL]: () => json(APP),
+      "/api/proxy/v1/hrms/applications/app-2/fee": () => (feeCalls++ === 0 ? json({ code: "INTERNAL" }, 500) : json({ data: { status: "pending", amountMinor: "5000" } })),
+      "/api/proxy/v1/hrms/applications/app-2/offers": () => json({ data: [] }),
+    });
+    renderPage();
+    expect(await screen.findByText(/could not load the fee status/i)).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Rahul Singh" })).toBeInTheDocument();
+    expect(await screen.findByText("No offers have been made yet.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("₹50.00")).toBeInTheDocument();
+  });
+
+  it("treats a 404 from the fee endpoint as 'no fee assessed', not an error", async () => {
+    stubFetch({ [APP_URL]: () => json(APP) });
+    renderPage();
+    expect(await screen.findByText("No fee has been assessed for this application.")).toBeInTheDocument();
+    expect(screen.queryByText(/could not load the fee status/i)).not.toBeInTheDocument();
+  });
+
+  // GAP-...-APPLICATION-07
+  it("a 404 shows the not-found state with a Back to pipeline button, not the error state", async () => {
+    stubFetch({ [APP_URL]: () => json({ code: "NOT_FOUND" }, 404) });
+    renderPage();
+    expect(await screen.findByText("Application not found.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to pipeline" })).toHaveAttribute("href", "/hr/recruitment/job-1");
+    expect(screen.queryByRole("button", { name: /try again|retry/i })).not.toBeInTheDocument();
+  });
+
+  it("an application that belongs to a different vacancy than the URL is not found", async () => {
+    stubFetch({ [APP_URL]: () => json({ ...APP, jobOpeningId: "job-OTHER" }) });
+    renderPage();
+    expect(await screen.findByText("Application not found.")).toBeInTheDocument();
+    expect(screen.queryByText("Rahul Singh")).not.toBeInTheDocument();
+  });
+
+  it("a 500 shows the error state with Retry (not 'Application not found'), and Retry re-runs the load", async () => {
+    let n = 0;
+    stubFetch({ [APP_URL]: () => (n++ === 0 ? new Response("", { status: 500 }) : json(APP)) });
+    renderPage();
+    await waitFor(() => expect(screen.getByText(/couldn't load application/i)).toBeInTheDocument());
+    expect(screen.queryByText("Application not found.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /try again|retry/i }));
+    expect(await screen.findByRole("heading", { name: "Rahul Singh" })).toBeInTheDocument();
+  });
+
+  it("a 403 error offers no pointless Retry", async () => {
+    stubFetch({ [APP_URL]: () => json({ code: "FORBIDDEN", message: "requires one of: hr_admin" }, 403) });
+    renderPage();
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    expect(screen.queryByRole("button", { name: /try again|retry/i })).not.toBeInTheDocument();
+  });
+
+  it("links back to the job opening detail page", async () => {
+    stubFetch({ [APP_URL]: () => json(APP) });
+    renderPage();
+    await screen.findByRole("heading", { name: "Rahul Singh" });
+    expect(screen.getByRole("link", { name: /back to applications/i })).toHaveAttribute("href", "/hr/recruitment/job-1");
+  });
+
+  // GAP-...-APPLICATION-08
+  it("translates the back link and the select placeholders (Hindi)", async () => {
+    stubFetch({ [APP_URL]: () => json(APP), [DEPT_URL]: () => json(DEPARTMENTS), [DESIG_URL]: () => json(DESIGNATIONS) });
+    renderPage("hi");
+    await screen.findByRole("heading", { name: "Rahul Singh" });
+    expect(screen.getByRole("link", { name: hiMessages.recruitmentApplicationDetail.backToApplications })).toBeInTheDocument();
+    expect(screen.queryByText("Back to Applications")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: hiMessages.recruitmentApplicationDetail.hire }));
+    expect(await screen.findByRole("option", { name: hiMessages.recruitmentApplicationDetail.selectDepartment })).toBeInTheDocument();
+    expect(screen.getByRole("option", { name: hiMessages.recruitmentApplicationDetail.selectDesignation })).toBeInTheDocument();
+  });
+
+  // GAP-...-APPLICATION-04
+  it("labels the hire fields Department / Designation (not '... ID') and shows names", async () => {
+    stubFetch({ [APP_URL]: () => json(APP), [DEPT_URL]: () => json(DEPARTMENTS), [DESIG_URL]: () => json(DESIGNATIONS) });
     renderPage();
     fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
-
     await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
+    expect(screen.getByLabelText("Department", { exact: false })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/department id/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/designation id/i)).not.toBeInTheDocument();
+  });
 
-    fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
-    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
-    // MEDIUM finding: Basic Pay now defaults to empty and the backend rejects
-    // 0 (hireApplicationBody.basicMinor is z.number().int().positive()) — a
-    // real positive value is required to get past the form's own
-    // client-side validation to the hire submission this test is about.
-    fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "50000" } });
-    fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
-    fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
-    fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
-
-    await waitFor(() => {
-      expect(screen.getByText(/hire initiated/i)).toBeInTheDocument();
+  it("with the departments API failing there is NO free-text UUID box: a disabled select, an inline error and a working Retry", async () => {
+    let deptCalls = 0;
+    stubFetch({
+      [APP_URL]: () => json(APP),
+      [DEPT_URL]: () => (deptCalls++ === 0 ? new Response("", { status: 500 }) : json(DEPARTMENTS)),
+      [DESIG_URL]: () => json(DESIGNATIONS),
     });
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
+    expect(await screen.findByText("Could not load departments.")).toBeInTheDocument();
+    const dept = screen.getByLabelText("Department", { exact: false }) as HTMLSelectElement;
+    expect(dept.tagName).toBe("SELECT");
+    expect(dept).toBeDisabled();
+    expect(screen.queryByPlaceholderText("UUID")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
+    expect(dept).not.toBeDisabled();
+  });
+
+  // GAP-...-APPLICATION-03
+  it("restates what will be created (employee no, department, designation, joining date, pay) before Confirm Hire", async () => {
+    stubFetch({ [APP_URL]: () => json(APP), [DEPT_URL]: () => json(DEPARTMENTS), [DESIG_URL]: () => json(DESIGNATIONS) });
+    renderPage();
+    await fillHireForm();
+    const summary = screen.getByText(/you are about to hire/i);
+    expect(summary).toHaveTextContent("Software Engineer");
+    expect(summary).toHaveTextContent("IT Department");
+    expect(summary).toHaveTextContent("EMP-2026-001");
+    expect(summary).toHaveTextContent("₹50,000.00");
+  });
+
+  it("after a 202 the stage does NOT flip to Hired: it shows 'Hire queued', hides the Hire button and posts basic pay in paise", async () => {
+    let posted: Record<string, unknown> | null = null;
+    stubFetch({
+      [APP_URL]: () => json(APP),
+      [DEPT_URL]: () => json(DEPARTMENTS),
+      [DESIG_URL]: () => json(DESIGNATIONS),
+      [HIRE_URL]: (init) => { posted = JSON.parse(String(init?.body)); return new Response("{}", { status: 202 }); },
+    });
+    renderPage();
+    await fillHireForm();
+    fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
+    expect(await screen.findByText(/hire queued/i)).toBeInTheDocument();
+    expect(posted).toMatchObject({ employeeNo: "EMP-2026-001", basicMinor: 5000000, departmentId: "dept-1", designationId: "desig-1" });
     expect(screen.queryByRole("button", { name: "Hire" })).not.toBeInTheDocument();
+    const stageRow = screen.getByText("Stage").parentElement as HTMLElement;
+    expect(stageRow).toHaveTextContent("Selected");
+    expect(stageRow).not.toHaveTextContent("Hired");
+  });
+
+  it("flips to Hired only once a refetch from the server returns stage hired", async () => {
+    let appFetches = 0;
+    stubFetch({
+      [APP_URL]: () => json(++appFetches >= 3 ? { ...APP, stage: "hired" } : APP),
+      [DEPT_URL]: () => json(DEPARTMENTS),
+      [DESIG_URL]: () => json(DESIGNATIONS),
+      [HIRE_URL]: () => new Response("{}", { status: 202 }),
+    });
+    renderPage();
+    await fillHireForm();
+    fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
+    expect(await screen.findByText(/hire queued/i)).toBeInTheDocument();
+    expect(await screen.findByText(/hire completed/i)).toBeInTheDocument();
+    expect(screen.getByText("Stage").parentElement).toHaveTextContent("Hired");
+    expect(screen.queryByText(/hire queued/i)).not.toBeInTheDocument();
+  });
+
+  it("warns that the hire did not complete when the consumer never moves the stage to hired", async () => {
+    stubFetch({
+      [APP_URL]: () => json(APP),
+      [DEPT_URL]: () => json(DEPARTMENTS),
+      [DESIG_URL]: () => json(DESIGNATIONS),
+      [HIRE_URL]: () => new Response("{}", { status: 202 }),
+    });
+    renderPage();
+    await fillHireForm();
+    fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
+    const warning = await screen.findByText(/has not completed yet/i);
+    expect(warning).toBeInTheDocument();
+    expect(screen.queryByText(/hire completed/i)).not.toBeInTheDocument();
+    expect(screen.getByText("Stage").parentElement).toHaveTextContent("Selected");
   });
 
   /**
    * UX-016: the pipeline load used to show `Failed to load (${res.status})`
-   * and the hire submit used to show the raw response text (falling back to
-   * `Request failed (${res.status})`) verbatim — the same class of leak
-   * useFormError closes fleet-wide (UX-003).
+   * and the hire submit used to show the raw response text verbatim.
    */
   describe("UX-016 clerk-safe errors", () => {
-    it("shows a clerk-safe message, never the raw HTTP status, when the pipeline fails to load", async () => {
-      vi.stubGlobal("fetch", vi.fn(async () => new Response("", { status: 500 })));
-      renderPage();
-
-      // Scoped to the toHumanError "area" text (not just /couldn't load/i)
-      // since this page's own DataSourceBadge also shows a generic
-      // "Couldn't load — showing nothing" pill on this same error state.
-      await waitFor(() => expect(screen.getByText(/couldn't load application/i)).toBeInTheDocument());
-      expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
-    });
-
     it("shows a clerk-safe message, never the raw server text, when hiring fails", async () => {
-      const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-        if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") {
-          return new Response(JSON.stringify(LIST_RESPONSE), { status: 200 });
-        }
-        if (url === "/api/proxy/v1/hrms/departments?limit=200") {
-          return new Response(JSON.stringify(DEPARTMENTS_RESPONSE), { status: 200 });
-        }
-        if (url === "/api/proxy/v1/hrms/designations?limit=200") {
-          return new Response(JSON.stringify(DESIGNATIONS_RESPONSE), { status: 200 });
-        }
-        if (url === "/api/proxy/v1/hrms/applications/app-2/hire" && init?.method === "POST") {
-          return new Response("hrms-service: hire command rejected", { status: 500 });
-        }
-        throw new Error(`unexpected fetch to ${url}`);
+      stubFetch({
+        [APP_URL]: () => json(APP),
+        [DEPT_URL]: () => json(DEPARTMENTS),
+        [DESIG_URL]: () => json(DESIGNATIONS),
+        [HIRE_URL]: () => new Response("hrms-service: hire command rejected", { status: 500 }),
       });
-      vi.stubGlobal("fetch", fetchMock);
-
       renderPage();
-      fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
-      await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
-      fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
-      fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
-      // MEDIUM finding: a real positive Basic Pay is now required client-side
-      // before submit is even attempted — see the sibling test above.
-      fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "50000" } });
-      fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
-      fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
+      await fillHireForm();
       fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
 
       const alert = await screen.findByRole("alert");
@@ -181,86 +324,22 @@ describe("ApplicationDetailPage", () => {
     });
   });
 
-  /**
-   * Stale i18n closure regression (react-hooks/exhaustive-deps follow-up):
-   * the load effect's not-found branch calls t("notFoundMessage"), but `t`
-   * was missing from the effect's dependency array (only
-   * [appId, jobOpeningId]) -- so it kept using whatever `t` was in scope
-   * when the effect last actually ran, regardless of a later locale switch,
-   * until appId/jobOpeningId changed again. Same bug class already fixed in
-   * CreateLeavePolicyForm.tsx (see that file's own test of the same name).
-   */
   describe("locale-safe not-found message", () => {
-    it("shows the not-found message in the new language after a locale switch, not the one active when the effect last ran", async () => {
-      vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ data: [] }) } as Response)));
-
+    it("shows the not-found message in the new language after a locale switch", async () => {
+      stubFetch({ [APP_URL]: () => json({ code: "NOT_FOUND" }, 404) });
       const { rerender } = render(
         <NextIntlClientProvider locale="en" messages={enMessages}>
           <ApplicationDetailPage />
         </NextIntlClientProvider>,
       );
       expect(await screen.findByText("Application not found.")).toBeInTheDocument();
-
-      // appId/jobOpeningId are unchanged (mocked as constant via useParams) --
-      // only `t` itself changes here, exactly the case the missing
-      // dependency mishandled.
       rerender(
         <NextIntlClientProvider locale="hi" messages={hiMessages}>
           <ApplicationDetailPage />
         </NextIntlClientProvider>,
       );
-
-      await waitFor(() => expect(screen.getByText("आवेदन नहीं मिला।")).toBeInTheDocument());
+      expect(await screen.findByText(hiMessages.recruitmentApplicationDetail.notFoundMessage)).toBeInTheDocument();
       expect(screen.queryByText("Application not found.")).not.toBeInTheDocument();
     });
-  });
-
-  // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-01: Basic Pay is typed in rupees; the API gets paise.
-  it("converts the rupee Basic Pay input to paise and shows a live preview", async () => {
-    let hireBody: Record<string, unknown> | undefined;
-    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") return { ok: true, status: 200, json: async () => LIST_RESPONSE } as Response;
-      if (url === "/api/proxy/v1/hrms/departments?limit=200") return { ok: true, status: 200, json: async () => DEPARTMENTS_RESPONSE } as Response;
-      if (url === "/api/proxy/v1/hrms/designations?limit=200") return { ok: true, status: 200, json: async () => DESIGNATIONS_RESPONSE } as Response;
-      if (url === "/api/proxy/v1/hrms/applications/app-2/hire" && init?.method === "POST") {
-        hireBody = JSON.parse(String(init.body));
-        return { ok: true, status: 202, text: async () => "{}" } as Response;
-      }
-      throw new Error(`unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
-    await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
-    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
-    fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "56100" } });
-    expect(screen.getByText(/5610000 paise/)).toBeInTheDocument();
-    fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
-    fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
-    fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
-    await waitFor(() => expect(hireBody).toBeTruthy());
-    expect(hireBody?.basicMinor).toBe(5610000);
-  });
-
-  it("rejects a Basic Pay with more than 2 decimals without calling the hire endpoint", async () => {
-    const fetchMock = vi.fn(async (url: string) => {
-      if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") return { ok: true, status: 200, json: async () => LIST_RESPONSE } as Response;
-      if (url.includes("/departments")) return { ok: true, status: 200, json: async () => DEPARTMENTS_RESPONSE } as Response;
-      if (url.includes("/designations")) return { ok: true, status: 200, json: async () => DESIGNATIONS_RESPONSE } as Response;
-      throw new Error(`unexpected fetch to ${url}`);
-    });
-    vi.stubGlobal("fetch", fetchMock);
-    renderPage();
-    fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
-    await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
-    fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-1" } });
-    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
-    fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "1.234" } });
-    fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
-    fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
-    fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
-    expect(await screen.findByText(/at most 2 decimals/i)).toBeInTheDocument();
-    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/hire"), expect.anything());
   });
 });

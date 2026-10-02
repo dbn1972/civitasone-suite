@@ -19,7 +19,8 @@ export function registerRecruitmentConsumers(queue: Queue): void {
     const p = msg.payload as {
       id: string; tenantId: string; refNo: string; title: string; departmentId: string; designationId?: string;
       vacancies: number; description?: string; vacancyType?: string; location?: string; qualification?: string;
-      payRange?: string; isPublished?: boolean; postedAt?: string; closesAt?: string;
+      payRange?: string; payLevel?: string; payMinMinor?: string; payMaxMinor?: string;
+      isPublished?: boolean; postedAt?: string; closesAt?: string;
       // MEDIUM finding: these three were silently dropped here even when a
       // caller (jd-template-routes.ts's POST .../use, or this route once
       // validators.ts gained templateId) sent them -- neither this payload
@@ -36,6 +37,9 @@ export function registerRecruitmentConsumers(queue: Queue): void {
         location: p.location ?? null,
         qualification: p.qualification ?? null,
         payRange: p.payRange ?? null,
+        payLevel: p.payLevel ?? null,
+        payMinMinor: p.payMinMinor !== undefined ? BigInt(p.payMinMinor) : null,
+        payMaxMinor: p.payMaxMinor !== undefined ? BigInt(p.payMaxMinor) : null,
         isPublished: p.isPublished ?? false,
         postedAt: p.postedAt ?? null, closesAt: p.closesAt ?? null, status: "open",
         templateId: p.templateId ?? null,

@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { withTenantScope } from "@civitasone/db";
 import { hrmsDepartments } from "../employee/schema.js";
 import { inArray } from "drizzle-orm";
+import * as reservationRepo from "./reservation-repo.js";
 import { isApplicationOpen, applicationClosedReason } from "./job-publication.js";
 
 /**
@@ -19,8 +20,10 @@ import { isApplicationOpen, applicationClosedReason } from "./job-publication.js
 export async function listJobOpenings(tenantId: string, limit: number, departmentId?: string) {
   return cache.listOrLoad(tenantId, "job_opening", `list:${limit}:${departmentId ?? "all"}`, async () => {
     const rows = await repo.listJobOpeningsByTenant(tenantId, limit, departmentId);
-    const [appCounts, deptRows] = await Promise.all([
+    const [appCounts, rosterStatuses, deptRows] = await Promise.all([
       repo.countApplicationsByJob(tenantId, rows.map((r) => r.id)),
+      // GAP-RECRUITMENT-HOME-05: ONE batched query for every row's roster status (no N+1).
+      reservationRepo.statusByJobs(tenantId, rows.map((r) => r.id)),
       rows.length > 0
         ? (withTenantScope(db, tenantId, (tx) => (tx as typeof db).select({ id: hrmsDepartments.id, name: hrmsDepartments.name }).from(hrmsDepartments).where(inArray(hrmsDepartments.id, [...new Set(rows.map((r) => r.departmentId))]))) as Promise<{ id: string; name: string }[]>)
         : Promise.resolve([]),
@@ -50,6 +53,10 @@ export async function listJobOpenings(tenantId: string, limit: number, departmen
       // `undefined` -- i.e. always "Not published" -- no matter the real DB
       // value, and a publish action's effect was never observable in the UI.
       isPublished: r.isPublished === true,
+      // GAP-RECRUITMENT-HOME-05: roster state ("none" when no roster exists) and the application
+      // fee as a bigint-paise STRING (never a JS number).
+      rosterStatus: rosterStatuses.get(r.id) ?? "none",
+      feesMinor: r.feesMinor === null || r.feesMinor === undefined ? null : String(r.feesMinor),
     }));
   });
 }

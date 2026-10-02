@@ -32,7 +32,7 @@ const ROW = {
 
 describe("recruitment routes (h8 batch)", () => {
   it("GET /v1/hrms/talent-pool never returns mobile", async () => {
-    H.search.mockResolvedValue([ROW]);
+    H.search.mockResolvedValue({ rows: [ROW], total: 1 });
     const app = Fastify();
     await app.register(recruitmentRoutes);
     const res = await app.inject({ method: "GET", url: "/v1/hrms/talent-pool?limit=10" });

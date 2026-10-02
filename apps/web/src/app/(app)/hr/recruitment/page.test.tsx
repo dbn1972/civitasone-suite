@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -148,5 +148,102 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     expect(screen.getByText("Junior Engineer")).toBeInTheDocument();
     expect(screen.queryByText("+ New Vacancy")).not.toBeInTheDocument();
     expect(screen.queryByText("Post First Job")).not.toBeInTheDocument();
+  });
+
+  // GAP-RECRUITMENT-HOME-01
+  it("formats the Posted column with the shared Indian date format, not the raw ISO string", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: STATS, source: "api" })
+      .mockResolvedValueOnce({ data: [{ ...OPENING, postedDate: "2026-09-04" }], source: "api" });
+    render(await RecruitmentPage());
+    expect(screen.queryByText("2026-09-04")).not.toBeInTheDocument();
+    expect(screen.getByText(/4 Sep(t)? 2026|04 Sep(t)? 2026|4 Sep 2026/)).toBeInTheDocument();
+  });
+
+  // GAP-RECRUITMENT-HOME-02
+  it("a 403 on the HR-only dashboard derives the cards from the openings list: no zero cards, no 'couldn't be loaded' chip", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: EMPTY_STATS, source: "error", status: 403 })
+      .mockResolvedValueOnce({
+        data: [OPENING, { ...OPENING, id: "job-2", status: "closed", applicationsReceived: 7, isPublished: true, vacancyType: "internship" }],
+        source: "api",
+      });
+    render(await RecruitmentPage());
+    expect(screen.queryByText("Some figures on this page couldn't be loaded.")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    const totalCard = screen.getByText("Total Vacancies").closest(".stat") as HTMLElement;
+    expect(totalCard.textContent).toContain("2");
+    const appsCard = screen.getByText("Applications Received").closest(".stat") as HTMLElement;
+    expect(appsCard.textContent).toContain("12");
+    expect(screen.getByRole("note")).toHaveTextContent(/2 vacancies you can see/);
+  });
+
+  it("any other dashboard failure keeps the chip and shows '—' instead of 0 on every card", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: EMPTY_STATS, source: "error", status: 500 })
+      .mockResolvedValueOnce({ data: [OPENING], source: "api" });
+    render(await RecruitmentPage());
+    expect(screen.getByText("Some figures on this page couldn't be loaded.")).toBeInTheDocument();
+    const totalCard = screen.getByText("Total Vacancies").closest(".stat") as HTMLElement;
+    expect(totalCard.textContent).toContain("—");
+    expect(screen.queryByRole("note")).not.toBeInTheDocument();
+  });
+
+  // GAP-RECRUITMENT-HOME-03
+  it("shows the internships & apprenticeships card from the dashboard", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: { ...STATS, internshipsApprenticeships: 3 }, source: "api" })
+      .mockResolvedValueOnce({ data: [OPENING], source: "api" });
+    render(await RecruitmentPage());
+    const card = screen.getByText("Internships & Apprenticeships").closest(".stat") as HTMLElement;
+    expect(card.textContent).toContain("3");
+  });
+
+  // GAP-RECRUITMENT-HOME-04
+  it("shows Published / Unpublished per row", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: STATS, source: "api" })
+      .mockResolvedValueOnce({
+        data: [OPENING, { ...OPENING, id: "job-2", jobTitle: "Clerk", isPublished: true }],
+        source: "api",
+      });
+    render(await RecruitmentPage());
+    const clerk = screen.getByText("Clerk").closest("tr") as HTMLElement;
+    expect(within(clerk).getByText("Published")).toBeInTheDocument();
+    const je = screen.getByText("Junior Engineer").closest("tr") as HTMLElement;
+    expect(within(je).getByText("Unpublished")).toBeInTheDocument();
+  });
+
+  // GAP-RECRUITMENT-HOME-05
+  it("shows the reservation roster state and application fee per row", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: STATS, source: "api" })
+      .mockResolvedValueOnce({
+        data: [
+          { ...OPENING, rosterStatus: "approved", feesMinor: "10000" },
+          { ...OPENING, id: "job-2", jobTitle: "Clerk", rosterStatus: "none", feesMinor: null },
+        ],
+        source: "api",
+      });
+    render(await RecruitmentPage());
+    const je = screen.getByText("Junior Engineer").closest("tr") as HTMLElement;
+    expect(within(je).getByText("Approved")).toBeInTheDocument();
+    expect(within(je).getByText("₹100.00")).toBeInTheDocument();
+    const clerk = screen.getByText("Clerk").closest("tr") as HTMLElement;
+    expect(within(clerk).getByText("Not set")).toBeInTheDocument();
+  });
+
+  // GAP-RECRUITMENT-HOME-06
+  it("renders the careers / talent-pool links with icons, not emoji in the label text", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: STATS, source: "api" })
+      .mockResolvedValueOnce({ data: [OPENING], source: "api" });
+    render(await RecruitmentPage());
+    const careers = screen.getByRole("link", { name: "View public careers page" });
+    expect(careers.querySelector("svg")).not.toBeNull();
+    const pool = screen.getByRole("link", { name: "Browse talent pool" });
+    expect(pool.querySelector("svg")).not.toBeNull();
+    expect(careers.textContent).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
+    expect(pool.textContent).not.toMatch(/[\u{1F300}-\u{1FAFF}]/u);
   });
 });

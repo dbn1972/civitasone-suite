@@ -6,6 +6,10 @@ import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { maskEmail } from "@/lib/maskPii";
+import {
+  TALENT_POOL_PAGE_SIZE, TALENT_POOL_SOURCES, buildTalentPoolPath, candidateHref, hasActiveFilters,
+  isEmptyPool, pageQuery, pageWindow, parsePage, parseSource, type TalentPoolParams,
+} from "./talentPoolView";
 
 // Mirrors HR_ROLES in services/hrms-service/src/modules/recruitment/routes.ts
 // (GET /v1/hrms/talent-pool) -- kept local rather than shared, matching how
@@ -22,18 +26,24 @@ type Candidate = {
   skills: string[] | null;
   source: string;
   stage: string;
+  jobOpeningId?: string | null;
   appliedAt: string;
 } & Record<string, unknown>;
 
-async function getCandidates(skill?: string, minExp?: string): Promise<LoaderResult<Candidate[]>> {
-  let path = "/api/v1/hrms/talent-pool?limit=200";
-  if (skill) path += `&skill=${encodeURIComponent(skill)}`;
-  if (minExp) path += `&minExp=${encodeURIComponent(minExp)}`;
-  const res = await fetchJson<unknown, Candidate[]>(path, [], {
+type Pool = { candidates: Candidate[]; total: number };
+
+// GAP-RECRUITMENT-TALENT-POOL-01 (product default, see PR VERIFY): this is the "available pool" -- the
+// API deliberately returns only candidates OFF the active pipeline (rejected / withdrawn / not selected).
+// The page does not request in-pipeline candidates, so there is no "Active Stages" figure to show.
+async function getCandidates(params: TalentPoolParams): Promise<LoaderResult<Pool>> {
+  const res = await fetchJson<unknown, Pool>(buildTalentPoolPath(params), { candidates: [], total: 0 }, {
     telemetryKey: "recruitment.talent_pool",
     mapResponse: (p) => {
-      const d = (p as Record<string, unknown>)?.data;
-      return Array.isArray(d) ? d as Candidate[] : null;
+      const body = p as Record<string, unknown> | null;
+      const d = body?.data;
+      if (!Array.isArray(d)) return null;
+      const total = typeof body?.total === "number" ? body.total : d.length;
+      return { candidates: d as Candidate[], total };
     },
   });
   return res;
@@ -42,10 +52,12 @@ async function getCandidates(skill?: string, minExp?: string): Promise<LoaderRes
 export default async function TalentPoolPage({
   searchParams,
 }: {
-  searchParams: { skill?: string; minExp?: string };
+  searchParams: TalentPoolParams;
 }) {
   const t = await getTranslations("recruitmentTalentPool");
-  const { data: candidates, source, status } = await getCandidates(searchParams.skill, searchParams.minExp);
+  const page = parsePage(searchParams.page);
+  const { data: pool, source, status } = await getCandidates(searchParams);
+  const { candidates, total } = pool;
 
   // A 403 here is a real, permanent role restriction (talent-pool search
   // spans every candidate across every vacancy tenant-wide, deliberately
@@ -72,15 +84,17 @@ export default async function TalentPoolPage({
 
   const withSkills  = candidates.filter((c) => c.skills && c.skills.length > 0).length;
   const experienced = candidates.filter((c) => (c.experienceYears ?? 0) >= 5).length;
-  const activeStage = candidates.filter((c) => !["rejected","not_selected","withdrawn"].includes(c.stage)).length;
 
   // Explicit allowlist: only fields the table renders, so a new API field can never leak into the client bundle.
   const rows = candidates.map((c) => ({
     id: c.id,
     applicantName: c.applicantName,
     qualification: c.qualification,
-    source: c.source,
+    // GAP-RECRUITMENT-TALENT-POOL-04: source is a channel, not a status -- plain text, not a pill.
+    sourceDisplay: c.source === "public_portal" ? t("sourcePublicPortal") : c.source === "internal" ? t("sourceInternal") : c.source,
     stage: c.stage,
+    // GAP-RECRUITMENT-TALENT-POOL-03: row -> application detail ("" when the vacancy id is missing = no link).
+    href: candidateHref(c),
     // GAP-RECRUITMENT-TALENT-POOL-02 (DPDP): this server component is the only place the
     // full address exists -- mask it here so it never reaches the client bundle or a CSV.
     email: maskEmail(c.email),
@@ -94,6 +108,8 @@ export default async function TalentPoolPage({
     appliedDate: new Date(c.appliedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
   }));
 
+  const pager = pageWindow(total, page, rows.length);
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -105,10 +121,9 @@ export default async function TalentPoolPage({
       />
       <DataSourceBadge source={source} />
       <StatGrid>
-        <StatCard icon="\ud83d\udc65" iconBg="var(--infobg)" label={t("statTotalCandidates")}   value={candidates.length} />
-        <StatCard icon="\ud83d\udca1" iconBg="var(--primary-soft)" label={t("statWithSkills")}        value={withSkills} />
-        <StatCard icon="\ud83e\udde0" iconBg="var(--warnbg)" label={t("statExperienced")} value={experienced} />
-        <StatCard icon="\u2705"       iconBg="var(--line2)" label={t("statActiveStages")}     value={activeStage} />
+        <StatCard icon="\ud83d\udc65" iconBg="var(--infobg)" label={t("statTotalCandidates")}   value={source === "error" ? null : total} />
+        <StatCard icon="\ud83d\udca1" iconBg="var(--primary-soft)" label={t("statWithSkills")}        value={source === "error" ? null : withSkills} />
+        <StatCard icon="\ud83e\udde0" iconBg="var(--warnbg)" label={t("statExperienced")} value={source === "error" ? null : experienced} />
       </StatGrid>
 
       {/* Filters */}
@@ -122,19 +137,28 @@ export default async function TalentPoolPage({
             <label htmlFor="tp-exp" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>{t("minExpLabel")}</label>
             <input id="tp-exp" name="minExp" type="number" min="0" defaultValue={searchParams.minExp ?? ""} placeholder={t("minExpPlaceholder")} className="input" style={{ width: 100 }} />
           </div>
-          <Button type="submit" variant="primary" style={{ minHeight: 44 }}>{t("search")}</Button>
-          <Link href="/hr/recruitment/talent-pool" className="btn ghost" style={{ minHeight: 44 }}>{t("clear")}</Link>
+          <div>
+            <label htmlFor="tp-source" style={{ display: "block", fontSize: 12, fontWeight: 600, color: "var(--ink2)", marginBottom: 4 }}>{t("sourceLabel")}</label>
+            <select id="tp-source" name="source" defaultValue={parseSource(searchParams.source) ?? ""} className="input" style={{ minWidth: 160 }}>
+              <option value="">{t("sourceAll")}</option>
+              {TALENT_POOL_SOURCES.map((v) => (
+                <option key={v} value={v}>{v === "public_portal" ? t("sourcePublicPortal") : t("sourceInternal")}</option>
+              ))}
+            </select>
+          </div>
+          <Button type="submit" variant="primary" className="btn-tall">{t("search")}</Button>
+          <Link href="/hr/recruitment/talent-pool" className="btn ghost btn-tall">{t("clear")}</Link>
         </form>
       </Card>
 
-      <Card title={t("candidatesTitle", { count: rows.length })}>
+      <Card title={t("candidatesTitle", { count: total })}>
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "talent pool" })} backHref="/hr/recruitment" />
-        ) : rows.length === 0 ? (
+        ) : isEmptyPool(rows) && page === 1 ? (
           <EmptyState
             icon="👥"
             title={t("noCandidatesFound")}
-            message={searchParams.skill || searchParams.minExp
+            message={hasActiveFilters(searchParams)
               ? t("noneMatchFilter")
               : t("candidatesAppearHere")
             }
@@ -148,11 +172,14 @@ export default async function TalentPoolPage({
               { key: "qualification", label: t("colQualification") },
               { key: "expDisplay", label: t("colExperience"), align: "right" },
               { key: "skillsDisplay", label: t("colSkills") },
-              { key: "source", label: t("colSource"), cellType: "status" },
+              { key: "sourceDisplay", label: t("colSource") },
               { key: "stage", label: t("colStage"), cellType: "status" },
               { key: "appliedDate", label: t("colApplied") },
             ]}
             rows={rows}
+            rowLinkKey="href"
+            rowLinkPrefix=""
+            identifyingColumnKey="applicantName"
             sortable
             filterable
         filterPlaceholder={t("filterPlaceholder")}
@@ -161,6 +188,17 @@ export default async function TalentPoolPage({
           emptyMessage={t("emptyMessageNoCandidates")}
             pageSize={20}
           />
+        )}
+        {source !== "error" && (total > TALENT_POOL_PAGE_SIZE || page > 1) && (
+          <nav aria-label={t("pagerLabel")} style={{ display: "flex", gap: 12, alignItems: "center", padding: "12px 16px", flexWrap: "wrap" }}>
+            {pager.hasPrev ? (
+              <Link href={`/hr/recruitment/talent-pool?${pageQuery(searchParams, page - 1)}`} className="btn ghost btn-tall" rel="prev">{t("prevPage")}</Link>
+            ) : null}
+            <span role="status" style={{ fontSize: 13, color: "var(--mut)" }}>{t("showingRange", { from: pager.from, to: pager.to, total })}</span>
+            {pager.hasNext ? (
+              <Link href={`/hr/recruitment/talent-pool?${pageQuery(searchParams, page + 1)}`} className="btn ghost btn-tall" rel="next">{t("nextPage")}</Link>
+            ) : null}
+          </nav>
         )}
       </Card>
     </div>

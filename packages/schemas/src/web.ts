@@ -930,6 +930,10 @@ export const JobOpeningSummarySchema = z.object({
   // value, and there was no way for the frontend to know a publish action
   // had taken effect. queries.ts's listJobOpenings now includes it.
   isPublished: z.boolean().default(false),
+  // GAP-RECRUITMENT-HOME-05: optional so older cached list payloads still validate.
+  rosterStatus: z.string().optional(),
+  // bigint paise as a decimal string, or null when no fee is configured.
+  feesMinor: z.string().nullable().optional(),
 });
 export const JobOpeningSummaryListSchema = z.array(JobOpeningSummarySchema);
 

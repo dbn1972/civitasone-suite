@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { hrmsReservationRosters, type ReservationRosterRow, type ReservationRosterInsert } from "./reservation-schema.js";
@@ -19,6 +19,18 @@ export async function findByJobTx(tx: Writer, tenantId: string, jobOpeningId: st
   const rows = await (tx as typeof db).select().from(hrmsReservationRosters)
     .where(and(eq(hrmsReservationRosters.tenantId, tenantId), eq(hrmsReservationRosters.jobOpeningId, jobOpeningId))).limit(1);
   return rows[0] ?? null;
+}
+
+/** Roster status for many vacancies in ONE query (job-opening list). Absent job id => no roster. */
+export async function statusByJobs(tenantId: string, jobOpeningIds: string[]): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  if (jobOpeningIds.length === 0) return out;
+  const rows = await scopedRead((tx) => tx
+    .select({ jobOpeningId: hrmsReservationRosters.jobOpeningId, status: hrmsReservationRosters.status })
+    .from(hrmsReservationRosters)
+    .where(and(eq(hrmsReservationRosters.tenantId, tenantId), inArray(hrmsReservationRosters.jobOpeningId, jobOpeningIds))));
+  for (const r of rows) out.set(r.jobOpeningId, r.status);
+  return out;
 }
 
 export async function insertRoster(tx: Writer, row: ReservationRosterInsert): Promise<void> {

@@ -14,9 +14,12 @@ import * as repo from "./repo.js";
 import * as screeningRepo from "./screening-repo.js";
 import { resolveDeptScope } from "./dept-scope.js";
 import { tenantStorage } from "@civitasone/db";
+import { writeAuditLog } from "../../shared/audit.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager"];
+// Date of birth is PII not needed to process an application -- narrower than HR_ROLES.
+const DOB_ROLES = ["hr_admin", "super_admin"];
 
 export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/job-openings", async (req, reply) => {
@@ -67,9 +70,11 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const talentPoolQuerySchema = z.object({
       skill: z.string().optional(),
-      minExp: z.string().regex(/^\d+$/).optional().transform(Number),
+      minExp: z.string().regex(/^\d{1,3}$/).optional().transform(Number),
       source: z.string().optional(),
       limit: z.string().regex(/^\d+$/).optional().transform(Number),
+      // GAP-RECRUITMENT-TALENT-POOL-05: real pagination.
+      offset: z.string().regex(/^\d+$/).optional().transform(Number),
       // MEDIUM finding: stage filtering. `stage` picks one exact stage;
       // `includeActive=true` opts into the full unfiltered (pre-fix) view.
       // With neither, repo.searchApplications defaults to
@@ -80,14 +85,19 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
       includeActive: z.enum(["true", "false"]).optional().transform((v) => v === "true"),
     });
     const q = talentPoolQuerySchema.parse(req.query);
-    const rows = await repo.searchApplications(ctx.tenantId, {
+    const pageLimit = Math.min(200, Number(q.limit) || 100);
+    const pageOffset = Math.min(100_000, Number(q.offset) || 0);
+    const { rows, total } = await repo.searchApplications(ctx.tenantId, {
       skill: q.skill || undefined,
       minExp: q.minExp ? Number(q.minExp) : undefined,
       source: q.source || undefined,
       stage: q.stage || undefined,
       includeActive: q.includeActive,
-    } as { skill?: string; minExp?: number; source?: string; stage?: string; includeActive?: boolean }, Math.min(200, Number(q.limit) || 100));
+    } as { skill?: string; minExp?: number; source?: string; stage?: string; includeActive?: boolean }, pageLimit, pageOffset);
     return reply.send({
+      total,
+      limit: pageLimit,
+      offset: pageOffset,
       data: rows.map((r) => ({
         id: r.id,
         applicantName: r.applicantName,
@@ -102,6 +112,52 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
         jobOpeningId: r.jobOpeningId,
         appliedAt: r.appliedAt,
       })),
+    });
+  });
+
+  // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-05/06: single application for the HR
+  // detail page, so it no longer downloads every applicant's PII on the vacancy to show one.
+  // Same role gate and tenant scoping as the list route (findApplicationById filters by
+  // tenant, so a foreign-tenant id is a 404, never a 403 that would confirm it exists).
+  // dateOfBirth is PII and not needed to process an application: it is returned to
+  // hr_admin/super_admin only (null for hr_officer). mobile is never returned here.
+  app.get("/v1/hrms/applications/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const r = await repo.findApplicationById(id, ctx.tenantId);
+    if (!r) throw new HttpError(404, "NOT_FOUND", "Application not found");
+    const canSeeDob = ctx.roles.some((role: string) => DOB_ROLES.includes(role));
+    // DPDP data-access audit (same pattern as apar/routes.ts): who read which applicant record and
+    // whether DOB was included. writeAuditLog is fire-and-forget and never throws.
+    void writeAuditLog({
+      tenantId: ctx.tenantId,
+      actorId: ctx.actorId,
+      actorType: null,
+      actorRoles: ctx.roles,
+      method: req.method,
+      path: `/v1/hrms/applications/${r.id}?dob=${canSeeDob ? "included" : "withheld"}`,
+      statusCode: 200,
+      requestId: (req.headers["x-correlation-id"] as string) ?? req.id,
+      ipAddr: req.ip,
+    });
+    return reply.send({
+      id: r.id,
+      jobOpeningId: r.jobOpeningId,
+      applicationNo: r.applicationNo ?? null,
+      applicantName: r.applicantName,
+      email: r.email,
+      qualification: r.qualification,
+      experienceYears: r.experienceYears,
+      skills: r.skills,
+      source: r.source,
+      stage: r.stage,
+      status: r.status,
+      screeningDecision: r.screeningDecision,
+      appliedAt: r.appliedAt,
+      category: r.category ?? null,
+      dateOfBirth: canSeeDob ? (r.dateOfBirth ?? null) : null,
+      hasResume: Boolean(r.resumeRef || r.resumeFileKey),
     });
   });
 

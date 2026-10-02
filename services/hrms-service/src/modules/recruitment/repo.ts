@@ -1,4 +1,4 @@
-import { eq, and, inArray, notInArray, sql, desc, ne, gt } from "drizzle-orm";
+import { eq, and, inArray, notInArray, sql, desc, ne, gt, gte } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import { hrmsJobOpenings, hrmsApplications, hrmsOffers, hrmsInterviews, type ApplicationRow, type JobOpeningRow, type InterviewRow } from "./schema.js";
 
@@ -411,11 +411,25 @@ export async function updateJobOpening(tx: Writer, id: string, patch: Partial<ty
  */
 export const AVAILABLE_STAGES: string[] = ["rejected", "withdrawn", "not_selected"];
 
+/** Escape LIKE/ILIKE wildcards so a skill search is a literal substring match. */
+export function escapeLikePattern(raw: string): string {
+  return raw.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/**
+ * GAP-RECRUITMENT-TALENT-POOL-05: skill and minExp are now applied in SQL
+ * (they used to run in JS after a limit*2 over-fetch, so a match outside the
+ * newest 2*limit rows was silently missed). Pagination is real
+ * (limit/offset + a total over the same predicate). No GIN index: the
+ * skill match is a case-insensitive SUBSTRING over unnest(skills), which a
+ * GIN array index cannot serve; the tenant_id predicate bounds the scan.
+ */
 export async function searchApplications(
   tenantId: string,
   filters: { skill?: string; minExp?: number; source?: string; stage?: string; includeActive?: boolean },
   limit = 100,
-): Promise<ApplicationRow[]> {
+  offset = 0,
+): Promise<{ rows: ApplicationRow[]; total: number }> {
   const conds = [eq(hrmsApplications.tenantId, tenantId)];
   if (filters.source) conds.push(eq(hrmsApplications.source, filters.source));
   // Explicit stage always wins. Otherwise, default to hiding active-pipeline
@@ -426,21 +440,24 @@ export async function searchApplications(
   } else if (!filters.includeActive) {
     conds.push(inArray(hrmsApplications.stage, AVAILABLE_STAGES));
   }
-  // Skill filter uses array containment (requires GIN index).
-  // For simplicity, we filter in JS after fetch (acceptable for <10k rows per tenant).
-  let rows = await scopedRead((tx) => tx.select().from(hrmsApplications)
-    .where(and(...conds))
-    .orderBy(desc(hrmsApplications.appliedAt))
-    .limit(limit * 2)); // over-fetch to compensate for JS filters
-
-  if (filters.skill) {
-    const s = filters.skill.toLowerCase();
-    rows = rows.filter((r) => (r.skills as string[] | null)?.some((sk) => sk.toLowerCase().includes(s)));
+  const skill = filters.skill?.trim();
+  if (skill) {
+    const pattern = `%${escapeLikePattern(skill)}%`;
+    conds.push(sql`EXISTS (SELECT 1 FROM unnest(${hrmsApplications.skills}) AS sk WHERE sk ILIKE ${pattern} ESCAPE '\\')`);
   }
   if (filters.minExp !== undefined) {
-    rows = rows.filter((r) => (r.experienceYears ?? 0) >= filters.minExp!);
+    conds.push(gte(hrmsApplications.experienceYears, filters.minExp));
   }
-  return rows.slice(0, limit);
+  const where = and(...conds);
+  return scopedRead(async (tx) => {
+    const rows = await tx.select().from(hrmsApplications)
+      .where(where)
+      .orderBy(desc(hrmsApplications.appliedAt), desc(hrmsApplications.id))
+      .limit(limit)
+      .offset(offset);
+    const counted = await tx.select({ n: sql<number>`count(*)::int` }).from(hrmsApplications).where(where);
+    return { rows, total: counted[0]?.n ?? 0 };
+  });
 }
 
 export async function countApplicationsBySource(tenantId: string): Promise<{ internal: number; public: number }> {
