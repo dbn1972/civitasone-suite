@@ -51,7 +51,22 @@ const createDesignationBody = z.object({
   code: z.string().min(1, "Designation code is required").max(20),
   name: z.string().min(2, "Designation name is required").max(200),
   level: z.number().int().min(1, "Pay level must be between 1 and 18.").max(18, "Pay level must be between 1 and 18.").optional(),
-  payGrade: z.string().max(30).optional(),
+  // GAP-HR-DESIGNATIONS-04: nullable (not just optional) so a PATCH can send
+  // `payGrade: null` to explicitly clear it, distinct from omitting the key
+  // entirely (leave unchanged) — f3-consumer.ts's PATCH case
+  // (employee_masters_routes__4) already branches on `!== undefined`, so it
+  // already treats an explicit null as "set it to NULL"; only this schema
+  // was rejecting that null with a 400 before this fix, which is why the
+  // designations table's inline edit sent an empty string instead (stored as
+  // "" in the DB, not NULL, so "cleared" and "never set" became visibly
+  // different values).
+  payGrade: z.string().max(30).optional().nullable(),
+});
+
+// Update schema: level 0 means "unclassified / cleared" (the web sends 0 for a
+// blank pay level), so the floor is 0 here while create stays min(1).
+const updateDesignationBody = createDesignationBody.partial().extend({
+  level: z.number().int().min(0, "Pay level must be between 0 and 18.").max(18, "Pay level must be between 1 and 18.").optional(),
 });
 
 /**
@@ -120,6 +135,22 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const body = createDeptBody.parse(req.body);
+    // GAP-HR-DEPARTMENTS-NEW-02: this used to publish and answer 202 with no
+    // uniqueness check at all (unlike designations' POST, just below), so two
+    // departments could silently share a code (case-insensitive). Synchronous
+    // and tenant-scoped, so the caller sees the rejection immediately instead
+    // of a false "added successfully" — same pattern as designations' own
+    // dupe check (GAP-HR-DESIGNATIONS-NEW-02).
+    const dupe = await scopedRead((tx) => tx.select({ id: hrmsDepartments.id }).from(hrmsDepartments)
+      .where(and(eq(hrmsDepartments.tenantId, ctx.tenantId), sql`lower(${hrmsDepartments.code}) = lower(${body.code})`))
+      .limit(1));
+    if (dupe[0]) {
+      return reply.code(409).send({
+        code: "DUPLICATE_CODE",
+        message: `Department code "${body.code}" already exists.`,
+        fieldErrors: [{ field: "code", message: "This code is already in use." }],
+      });
+    }
     // Hierarchy enforcement: level is always derived server-side from the
     // chosen parent (GAP-HR-DEPARTMENTS-03) rather than trusted from the
     // client — trusting a client-supplied level is what let e.g. level 40
@@ -129,7 +160,16 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       const parent = await scopedRead((tx) => tx.select().from(hrmsDepartments)
         .where(and(eq(hrmsDepartments.id, body.parentId as string), eq(hrmsDepartments.tenantId, ctx.tenantId))).limit(1));
       if (!parent[0]) {
-        return reply.code(400).send({ code: "PARENT_NOT_FOUND", message: "Selected parent department does not exist." });
+        // GAP-HR-DEPARTMENTS-NEW-01: fieldErrors added so a stale/removed
+        // parent (e.g. the select's cached list is out of date) surfaces
+        // under the Parent select itself, not only as a generic top-of-form
+        // message — same fieldErrors envelope every other field rejection
+        // in this file already uses.
+        return reply.code(400).send({
+          code: "PARENT_NOT_FOUND",
+          message: "Selected parent department does not exist.",
+          fieldErrors: [{ field: "parentId", message: "Selected parent department does not exist." }],
+        });
       }
       effectiveLevel = (parent[0].level ?? 0) + 1;
     } else if (body.level === undefined) {
@@ -173,7 +213,12 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
       const parent = await scopedRead((tx) => tx.select().from(hrmsDepartments)
         .where(and(eq(hrmsDepartments.id, body.parentId as string), eq(hrmsDepartments.tenantId, ctx.tenantId))).limit(1));
       if (!parent[0]) {
-        return reply.code(400).send({ code: "PARENT_NOT_FOUND", message: "Selected parent department does not exist." });
+        // GAP-HR-DEPARTMENTS-NEW-01: same fieldErrors addition as POST, above.
+        return reply.code(400).send({
+          code: "PARENT_NOT_FOUND",
+          message: "Selected parent department does not exist.",
+          fieldErrors: [{ field: "parentId", message: "Selected parent department does not exist." }],
+        });
       }
       publishBody.level = (parent[0].level ?? 0) + 1;
     }
@@ -257,7 +302,7 @@ export async function mastersRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = req.params as { id: string };
-    createDesignationBody.partial().parse(req.body);
+    updateDesignationBody.parse(req.body);
 
     // Synchronous pre-check (existence) — same reasoning as departments PATCH
     // above (also not tenant-scoped in the original code being converted).

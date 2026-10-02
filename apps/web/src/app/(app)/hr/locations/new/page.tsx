@@ -1,6 +1,8 @@
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { NewLocationPageClient } from "./NewLocationPageClient";
+import { fetchJson } from "@/app/_data/apiClient";
+import type { MinimalLocation } from "./AddLocationForm";
 
 /**
  * Mirrors services/location-service/src/modules/locations/routes.ts's
@@ -17,7 +19,22 @@ import { NewLocationPageClient } from "./NewLocationPageClient";
  */
 const LOCATION_ADMIN_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
 
-export default function NewLocationPage() {
+/**
+ * GAP-HR-LOCATIONS-NEW-01: the parent-location select needs the existing
+ * location list. Best-effort only -- a fetch failure here should not block
+ * the whole "Add Location" form; it just means the parent select falls back
+ * to "None (top level)" only, same as departments/new/page.tsx's
+ * getDepartments().
+ */
+async function getLocations(): Promise<MinimalLocation[]> {
+  const result = await fetchJson<unknown, MinimalLocation[]>("/api/v1/locations?limit=500", [], {
+    telemetryKey: "config.locations.new",
+    mapResponse: (p) => (p as { data: MinimalLocation[] })?.data ?? null,
+  });
+  return result.source === "error" ? [] : result.data;
+}
+
+export default async function NewLocationPage() {
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => LOCATION_ADMIN_ROLES.includes(r));
 
@@ -25,5 +42,6 @@ export default function NewLocationPage() {
     return <PermissionDenied module="adding a location" requiredRoles={LOCATION_ADMIN_ROLES} />;
   }
 
-  return <NewLocationPageClient />;
+  const locations = await getLocations();
+  return <NewLocationPageClient locations={locations} />;
 }

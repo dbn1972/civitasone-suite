@@ -51,6 +51,11 @@ const CODE_TO_KIND: Record<string, MessageKind> = {
   // GAP-HR-DESIGNATIONS-02: DELETE /v1/hrms/designations/:id 409s with this
   // code when an employee still holds the designation.
   DESIGNATION_IN_USE: "conflict",
+  // GAP-HR-DEPARTMENTS-NEW-02 / GAP-HR-DESIGNATIONS-NEW-02: POST .../departments
+  // and .../designations both 409 with this code on a case-insensitive
+  // duplicate code; the field-level message (under Code) comes from
+  // `fieldErrors` regardless, this only shapes the top-of-form summary line.
+  DUPLICATE_CODE: "conflict",
 };
 
 /**
