@@ -5,6 +5,9 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
+import { NonRetryableError } from "@civitasone/queue";
+import { payTermsColumns, mergedTermsError, moneyChanges, patchDiff, type PayTermsPatch } from "./pay-terms.js";
+import { liveProfileReferencesDeputation } from "../pay-profile/repo.js";
 
 const log = pino({ name: "deputation-consumer" });
 const AUDIT = "audit.event.record";
@@ -148,6 +151,40 @@ export function registerDeputationConsumers(queue: Queue): void {
     await cache.invalidate(cache.makeKey(msg.tenantId, "deputation", p.deputationId));
     await cache.invalidate(cache.makeKey(msg.tenantId, "employee", p.employeeId));
     log.info({ messageId: msg.messageId }, "deputation revert processed");
+  });
+
+  // PAY-PROFILES: deputation-order pay terms. Versioned against the row the
+  // route validated, so an edit made in between is not silently overwritten.
+  queue.subscribe(COMMANDS.deputationPayTermsUpdate, async (msg) => {
+    const p = msg.payload as { deputationId: string; expectedVersion: number; terms: PayTermsPatch };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const dep = await repo.findByIdTx(tx, msg.tenantId, p.deputationId);
+      if (!dep) throw new NonRetryableError(`deputation ${p.deputationId} not found`);
+      if (dep.status !== "active") throw new NonRetryableError(`deputation ${p.deputationId} is ${dep.status}`);
+      const cols = payTermsColumns(p.terms);
+      const termsError = mergedTermsError(dep, cols);
+      if (termsError) throw new NonRetryableError(termsError);
+      // Re-assert the profile lock at write time (a profile may have been
+      // requested/approved since the route accepted this edit).
+      const money = moneyChanges(dep, cols);
+      if (money.fields.length > 0 && await liveProfileReferencesDeputation(tx, msg.tenantId, p.deputationId)) {
+        throw new NonRetryableError(`PAY_TERMS_LOCKED_BY_PROFILE: ${money.fields.join(", ")} are fixed by an active or pending pay profile`);
+      }
+      const diff = patchDiff(dep, cols);
+      await repo.closeDeputation(tx, msg.tenantId, p.deputationId, { ...cols, updatedBy: msg.actorId }, p.expectedVersion);
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: "update_pay_terms", resourceType: "deputation", resourceId: p.deputationId,
+          outcome: "success",
+          metadata: { fields: Object.keys(p.terms), moneyFields: money.fields, before: diff.before, after: diff.after },
+        },
+      });
+    });
+    await cache.invalidate(cache.makeKey(msg.tenantId, "deputation", p.deputationId));
+    log.info({ messageId: msg.messageId }, "deputation pay terms updated");
   });
 
   log.info("deputation consumers registered");

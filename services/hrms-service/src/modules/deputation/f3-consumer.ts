@@ -7,6 +7,7 @@ import { COMMANDS } from "../../topics.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import * as repo from "./repo.js";
+import { payTermsColumns, payTermsSchema } from "./pay-terms.js";
 const log = pino({ name: "hrms-f3-deputation" });
 
 /**
@@ -47,19 +48,25 @@ async function closeDeputationCommand(
     updatedBy: actorId,
   }, dep.version);
 
-  // Restore the parent posting/reporting snapshot.
-  await tx.update(hrmsEmployees).set({
-    departmentId: dep.parentDepartmentId,
-    managerId: dep.parentManagerId,
-    updatedBy: actorId,
-  }).where(and(eq(hrmsEmployees.id, dep.employeeId), eq(hrmsEmployees.tenantId, tenantId)));
+  // Restore the parent posting/reporting snapshot. A deputed-IN employee
+  // (PAY-PROFILES) never had their posting switched and has no internal parent
+  // department, so there is nothing to restore.
+  if (dep.direction !== "in" && dep.parentDepartmentId) {
+    await tx.update(hrmsEmployees).set({
+      departmentId: dep.parentDepartmentId,
+      managerId: dep.parentManagerId,
+      updatedBy: actorId,
+    }).where(and(eq(hrmsEmployees.id, dep.employeeId), eq(hrmsEmployees.tenantId, tenantId)));
+  }
 
   await tx.insert(hrmsServiceBookEntries).values({
     tenantId, employeeId: dep.employeeId,
     entryType: newStatus === "repatriated" ? "repatriation" : "deputation_cancelled",
     effectiveDate,
     description: newStatus === "repatriated"
-      ? `Repatriated from ${dep.borrowingDepartment} back to parent cadre ${dep.parentCadre}`
+      ? (dep.direction === "in"
+        ? `Repatriated to parent organisation ${dep.parentOrganisation ?? dep.parentCadre}`
+        : `Repatriated from ${dep.borrowingDepartment} back to parent cadre ${dep.parentCadre}`)
       : `Deputation to ${dep.borrowingDepartment} cancelled`,
     recordedBy: actorId,
   });
@@ -115,11 +122,17 @@ export function registerF3_deputation_Consumers(queue: Queue): void {
             // existing active deputation before publishing.
             if (!emp) return;
 
+            // PAY-PROFILES: the route validated these with the same schema;
+            // re-parse so only known, typed fields reach the insert.
+            const terms = payTermsColumns(payTermsSchema.parse(body));
+            const deputedIn = terms.direction === "in";
             await repo.insertDeputation(tx, {
                     id: depId, tenantId: p.tenantId, employeeId,
                     parentCadre: body.parentCadre,
-                    parentDepartmentId: emp.departmentId,
-                    ...(emp.managerId ? { parentManagerId: emp.managerId } : {}),
+                    ...terms,
+                    // Deputed-IN: the parent is an external organisation.
+                    parentDepartmentId: deputedIn ? null : emp.departmentId,
+                    ...(!deputedIn && emp.managerId ? { parentManagerId: emp.managerId } : {}),
                     borrowingDepartment: body.borrowingDepartment,
                     ...(body.borrowingDepartmentId ? { borrowingDepartmentId: body.borrowingDepartmentId } : {}),
                     ...(body.borrowingManagerId ? { borrowingManagerId: body.borrowingManagerId } : {}),
@@ -131,15 +144,19 @@ export function registerF3_deputation_Consumers(queue: Queue): void {
                     createdBy: msg.actorId, updatedBy: msg.actorId,
                   });
 
-                  // Switch the employee's effective posting/reporting for the deputation.
-                  const empSet: Record<string, unknown> = { updatedBy: msg.actorId };
-                  if (body.borrowingDepartmentId) empSet.departmentId = body.borrowingDepartmentId;
-                  if (body.borrowingManagerId) empSet.managerId = body.borrowingManagerId;
-                  await tx.update(hrmsEmployees).set(empSet)
-                    .where(and(eq(hrmsEmployees.id, employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+                  // Switch the employee's effective posting/reporting for the
+                  // deputation (deputed-OUT only; a deputed-IN employee is
+                  // already posted here).
+                  if (!deputedIn) {
+                    const empSet: Record<string, unknown> = { updatedBy: msg.actorId };
+                    if (body.borrowingDepartmentId) empSet.departmentId = body.borrowingDepartmentId;
+                    if (body.borrowingManagerId) empSet.managerId = body.borrowingManagerId;
+                    await tx.update(hrmsEmployees).set(empSet)
+                      .where(and(eq(hrmsEmployees.id, employeeId), eq(hrmsEmployees.tenantId, p.tenantId)));
+                  }
 
                   await tx.insert(hrmsServiceBookEntries).values({
-                    tenantId: p.tenantId, employeeId, entryType: "deputation_out",
+                    tenantId: p.tenantId, employeeId, entryType: deputedIn ? "deputation_in" : "deputation_out",
                     effectiveDate: body.tenureFrom,
                     description: `Deputed to ${body.borrowingDepartment} (parent cadre ${body.parentCadre}) from ${body.tenureFrom} to ${body.tenureTo}`
                       + (body.deputationAllowanceMinor > 0 ? `, deputation allowance Rs ${(body.deputationAllowanceMinor / 100).toLocaleString("en-IN")}/month` : ""),

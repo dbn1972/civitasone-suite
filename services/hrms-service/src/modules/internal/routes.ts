@@ -6,7 +6,9 @@ import * as leaveRepo from "../leave/repo.js";
 import * as attendanceRepo from "../attendance/repo.js";
 import { getHolidaysInRange, countWorkingDaysExcludingHolidays } from "../leave/rules-engine.js";
 import { activePaySuspendedEmployeeIds, type ActivePaySuspension } from "../disciplinary/repo.js";
-import { loadTypeResolver, attendanceLopApplies } from "../employee/engagement-policy.js";
+import { loadTypeResolver, loadTypeCategoryResolver, attendanceLopApplies } from "../employee/engagement-policy.js";
+import { loadPayProfileFeedInputs } from "../pay-profile/repo.js";
+import { buildEmployeePayFeed } from "../pay-profile/feed.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
@@ -52,6 +54,12 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     // DIC engagement policy per employee (payroll excludes non-salary types +
     // gates statutory). Resolver = tenant type master over canonical catalogue.
     const resolveType = await loadTypeResolver(ctx.tenantId);
+    // PAY-PROFILES: approved pay profile + deputation pay terms + engagement
+    // category per employee (two batched reads for the whole tenant). All new
+    // fields are additive; a payroll-service that predates them ignores them,
+    // and an employee with no approved profile is reported as govt_scale.
+    const resolveEngagement = await loadTypeCategoryResolver(ctx.tenantId);
+    const payInputs = await loadPayProfileFeedInputs(ctx.tenantId, q.month);
     const approvedLeaves = await leaveRepo.findApprovedLeaveInMonth(ctx.tenantId, q.month);
     // MEDIUM fix: approved overtime hours by employee, so payroll-service can
     // see them at all -- see attendanceRepo.findApprovedOvertimeInMonth's
@@ -141,6 +149,10 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
       month: q.month,
       employees: active.map((e) => {
         const pol = resolveType(e.employeeType);
+        const pay = buildEmployeePayFeed(
+          { id: e.id, employeeType: e.employeeType, dateOfJoining: e.dateOfJoining },
+          payInputs, resolveEngagement(e.employeeType), q.month,
+        );
         return {
           id: e.id,
           employeeNo: e.employeeNo,
@@ -188,6 +200,12 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           statutoryPf: pol.statutoryPf,
           statutoryEsi: pol.statutoryEsi,
           statutoryNps: pol.statutoryNps,
+          // PAY-PROFILES (additive): which pay computation applies, the
+          // deputation pay terms it needs, engagement category/eligibility,
+          // and non-blocking advisories.
+          payProfile: pay.payProfile,
+          engagement: pay.engagement,
+          advisories: pay.advisories,
         };
       }),
       lopDays: Object.fromEntries(lopByEmployee.entries()),

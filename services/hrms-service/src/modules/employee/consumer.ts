@@ -11,6 +11,7 @@ import * as lifecycleRepo from "../lifecycle/repo.js";
 import * as serviceBookRepo from "../service-book/repo.js";
 import { computePension, elEncashment, qualifyingService } from "../pension/engine.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { payProfileAtDateTx } from "../pay-profile/repo.js";
 
 const AUDIT = "audit.event.record";
 
@@ -339,6 +340,11 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await repo.updateEmployee(tx, p.employeeId, { status: "separated", updatedBy: msg.actorId });
+      // PAY-PROFILES: the approved pay profile in force on the separation
+      // date, so payroll settles F&F on the right basis even when the
+      // employee was never paid a slip under it (e.g. a deputed-IN employee
+      // separating in their first month). Omitted when there is none.
+      const sepProfile = await payProfileAtDateTx(tx, p.tenantId, p.employeeId, p.effectiveDate);
       await enqueue(tx, {
         topic: EVENTS.employeeSeparated, eventType: EVENTS.employeeSeparated,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
@@ -353,6 +359,7 @@ export function registerEmployeeConsumers(rawQueue: Queue): void {
           // the F&F settlement's TDS true-up under the employee's own
           // elected regime instead of guessing "new" for everyone.
           taxRegime: emp?.taxRegime ?? "new",
+          ...(sepProfile ? { payProfile: sepProfile } : {}),
         },
       });
       await audit(tx, msg, "separate", "employee", p.employeeId);

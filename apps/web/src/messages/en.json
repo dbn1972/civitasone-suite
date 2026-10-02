@@ -4781,6 +4781,7 @@
     "eventLeave": "Leave",
     "eventDeputation": "Deputation",
     "eventDeputationOut": "Deputation (Out)",
+    "eventDeputationIn": "Deputation (In)",
     "eventRepatriation": "Repatriation",
     "eventDeputationCancelled": "Deputation Cancelled",
     "eventSeparation": "Separation",

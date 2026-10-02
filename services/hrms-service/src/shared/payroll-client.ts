@@ -61,12 +61,47 @@ export interface FnfTaxBreakdownResult {
   vrsExemption: { exemptMinor: string; taxableMinor: string } | null;
 }
 
+/** Separate breaker: a locked-period check must not trip (or be tripped by) the F&F one. */
+const lockBreaker = new CircuitBreaker({
+  name: "payroll-locked-through",
+  failureThreshold: 5,
+  recoveryMs: 30_000,
+});
+
 export class PayrollUnavailableError extends Error {
   readonly code = "PAYROLL_UNAVAILABLE";
   constructor(message: string) {
     super(message);
     this.name = "PayrollUnavailableError";
   }
+}
+
+/**
+ * PAY-PROFILES: the latest YYYY-MM with an approved/disbursed (i.e. locked)
+ * salary run for the tenant, or null when none. Pay-profile changes may not
+ * start on or before it. Throws PayrollUnavailableError on any failure so
+ * callers fail CLOSED (never assume "nothing is locked").
+ */
+export async function fetchPayrollLockedThrough(tenantId: string): Promise<string | null> {
+  const url = `${PAYROLL_URL}/v1/payroll/internal/locked-through`;
+  let res: Response;
+  try {
+    res = await lockBreaker.call(() =>
+      fetch(url, {
+        headers: { "x-internal": "1", "x-service-secret": SERVICE_SECRET, "x-tenant-id": tenantId },
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      }),
+    );
+  } catch (err) {
+    if (err instanceof CircuitBreakerOpenError) throw new PayrollUnavailableError("payroll-service circuit breaker open");
+    throw new PayrollUnavailableError(`payroll-service unreachable: ${(err as Error).message}`);
+  }
+  if (!res.ok) throw new PayrollUnavailableError(`payroll-service returned ${res.status}`);
+  const body = (await res.json()) as { lockedThrough?: unknown };
+  const v = body.lockedThrough;
+  if (v === null) return null;
+  if (typeof v === "string" && /^\d{4}-\d{2}$/.test(v)) return v;
+  throw new PayrollUnavailableError("payroll-service returned a malformed locked-through value");
 }
 
 /**

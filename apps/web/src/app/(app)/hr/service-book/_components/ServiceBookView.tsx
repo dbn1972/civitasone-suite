@@ -43,6 +43,7 @@ function eventConfig(t: Translator): Record<string, { icon: string; color: strin
     // badge config at all -- every one of them rendered as the generic
     // "Other" badge while the filter dropdown showed the raw code instead.
     deputation_out:       { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputationOut") },
+    deputation_in:        { icon: "🏛️", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventDeputationIn") },
     repatriation:         { icon: "🏠", color: "var(--info, #0891b2)", bg: "var(--infobg, #ecfeff)", label: t("eventRepatriation") },
     deputation_cancelled: { icon: "🚫", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventDeputationCancelled") },
     separation:           { icon: "📤", color: "var(--mut, #64748b)", bg: "var(--bg, #f8fafc)", label: t("eventSeparation") },

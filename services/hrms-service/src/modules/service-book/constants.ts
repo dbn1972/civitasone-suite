@@ -18,6 +18,7 @@ export const SERVICE_BOOK_EVENT_TYPES = [
   "increment",
   "leave",
   "deputation_out",
+  "deputation_in",
   "repatriation",
   "deputation_cancelled",
   "confirmation",
