@@ -5,10 +5,11 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { VendorsTable } from "./VendorsTable";
 import { maskPan } from "@/app/_components/ds/Masked";
 import { canWrite, VENDOR_WRITE_ROLES } from "@/lib/finance/writeRoles";
+import { vendorStats } from "./vendorStats";
 
 export default async function VendorsPage() {
   const { data: vendors, source } = await getFinanceVendors();
-  const active = vendors.filter((v) => v.status.toLowerCase() === "active").length;
+  const stats = vendorStats(vendors);
   // finance-service creates vendors already active and has no pending/approval
   // state (status is derived from isActive only), so a "Pending Approval"
   // count would be a permanent, fabricated 0. The card shows "—" and says so
@@ -29,10 +30,10 @@ export default async function VendorsPage() {
         actions={canCreate ? <Link href="/finance/vendors/new" className="btn primary">New vendor</Link> : null}
       />
       <StatGrid>
-        <StatCard icon="🏢" iconBg="#e7edfd" label="Total Vendors" value={vendors.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
+        <StatCard icon="🏢" iconBg="#e7edfd" label="Total Vendors" value={stats.total} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={stats.active} />
         <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval (not tracked yet)" value={null} />
-        <StatCard icon="📊" iconBg="#eff6ff" label="Categories" value={new Set(vendors.map((v) => v.category)).size} />
+        <StatCard icon="📊" iconBg="#eff6ff" label="Categories" value={stats.categories} />
       </StatGrid>
       <Card title="Vendors">
         {/* PAN is masked HERE, on the server, so the full PAN never reaches the client table

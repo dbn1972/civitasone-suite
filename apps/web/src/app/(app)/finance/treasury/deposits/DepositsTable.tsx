@@ -1,9 +1,10 @@
 "use client";
 
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { FinanceDepositSummary } from "@civitasone/types";
+import { depositStatusVariant, depositTypeLabel } from "./depositStats";
 
 type Deposit = FinanceDepositSummary;
 
@@ -25,22 +26,24 @@ export function DepositsTable({ deposits, source = "api" }: { deposits: Deposit[
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<Deposit>
         columns={[
-          { key: "pdNo", label: "PD No" },
+          { key: "pdNo", label: "Deposit No" },
           { key: "type", label: "Type" },
           { key: "administrator", label: "Administrator" },
           { key: "balanceMinor", label: "Balance", align: "right", cellType: "amount" },
-          { key: "status", label: "Status", cellType: "status" },
+          { key: "createdAt", label: "Opened", cellType: "date" },
+          { key: "status", label: "Status", render: (row) => <StatusPill status={String(row.status)} variant={depositStatusVariant(row.status)} /> },
         ]}
-        rows={rows}
+        // Deposit type shown (and exported) as its name, not the raw pd/emd/sd/fdr code.
+        rows={rows.map((r) => ({ ...r, type: depositTypeLabel(r.type) }))}
         sortable
         filterable
         filterPlaceholder="Search deposits…"
         pageSize={15}
         exportable
-        exportFilename="fixed-deposits"
+        exportFilename="deposits-register"
         emptyIcon="🏧"
         emptyTitle="No deposits"
-        emptyMessage="No fixed or term deposits found."
+        emptyMessage="No deposits found."
       />
     </>
   );
