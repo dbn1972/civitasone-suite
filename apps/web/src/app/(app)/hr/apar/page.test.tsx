@@ -71,6 +71,59 @@ describe("AparListPage", () => {
     expect(screen.getByText("25")).toBeInTheDocument(); // Finalised
   });
 
+  // GAP-HR-APPRAISALS-02: a single "how far along is this cycle" read,
+  // distinct from the five stat tiles above.
+  it("shows cycle progress as finalised-of-total with a percentage (GAP-HR-APPRAISALS-02)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        records: [],
+        total: 10,
+        hasMore: false,
+        counts: { selfPending: 2, inReview: 3, awaitingClosure: 1, finalised: 4 },
+      },
+    });
+
+    await renderPage({});
+
+    expect(screen.getByText("4 of 10 finalised (40%)")).toBeInTheDocument();
+  });
+
+  it("hides cycle progress on a genuine fetch failure, instead of a misleading 0% (GAP-HR-APPRAISALS-02)", async () => {
+    fetchJsonMock.mockResolvedValue({ source: "error", data: null });
+
+    await renderPage({});
+
+    expect(screen.queryByText(/finalised \(/)).not.toBeInTheDocument();
+  });
+
+  it("hides cycle progress when the register is empty (no percentage of zero)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: { records: [], total: 0, hasMore: false, counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 0 } },
+    });
+
+    await renderPage({});
+
+    expect(screen.queryByText(/finalised \(/)).not.toBeInTheDocument();
+  });
+
+  it("hides cycle progress on a filtered view, where total and counts are different sets (GAP-HR-APPRAISALS-02)", async () => {
+    fetchJsonMock.mockResolvedValue({
+      source: "api",
+      data: {
+        records: [],
+        total: 3,
+        hasMore: false,
+        counts: { selfPending: 0, inReview: 0, awaitingClosure: 0, finalised: 25 },
+      },
+    });
+
+    await renderPage({ status: "finalised" });
+
+    expect(screen.queryByText(/finalised \(/)).not.toBeInTheDocument();
+  });
+
   it("shows an honest 'showing N of total' notice when the backend reports hasMore, instead of a silent cap (GAP-HR-APAR-06)", async () => {
     fetchJsonMock.mockResolvedValue({
       source: "api",

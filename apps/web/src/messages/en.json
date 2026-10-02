@@ -136,7 +136,9 @@
     "filterPeriodPlaceholder": "e.g. 2025-26",
     "filterApplyBtn": "Apply",
     "filterClearBtn": "Clear",
-    "showingOfTotal": "Showing {shown} of {total} — narrow with a filter to see more"
+    "showingOfTotal": "Showing {shown} of {total} — narrow with a filter to see more",
+    "cycleProgressTitle": "Cycle Progress",
+    "cycleProgressSummary": "{finalised} of {total} finalised ({pct}%)"
   },
   "aparDetail": {
     "detailPageTitle": "APAR Detail",
@@ -6328,33 +6330,6 @@
     "chartDeductionsLabel": "Deductions ({count})",
     "chartEmployerLabel": "Employer ({count})",
     "chartOtherLabel": "Other ({count})"
-  },
-  "appraisals": {
-    "title": "Appraisals",
-    "subtitle": "Employee performance review cycle — APAR (Annual Performance Appraisal Report).",
-    "dataSourceErrorMessage": "Couldn't load — showing nothing",
-    "newAppraisal": "+ New Appraisal",
-    "emptyTitle": "No active appraisal cycle",
-    "emptyMessage": "Start an appraisal cycle to record employee performance ratings and manager reviews for the current period.",
-    "startNewCycle": "Start New Cycle",
-    "statTotal": "Total",
-    "statPending": "Pending",
-    "statInReview": "In Review",
-    "statCompleted": "Completed",
-    "colEmployee": "Employee",
-    "colDepartment": "Department",
-    "colPeriod": "Period",
-    "colRating": "Rating",
-    "colReviewer": "Reviewer",
-    "colStatus": "Status",
-    "recordsTitle": "Appraisal Records",
-    "filterPlaceholder": "Filter by employee, period or reviewer…",
-    "tableEmptyTitle": "No appraisals yet",
-    "tableEmptyMessage": "Use '+ New Appraisal' to start a performance review cycle."
-  },
-  "appraisalNew": {
-    "title": "New Appraisal",
-    "subtitle": "Create a performance review record."
   },
   "training": {
     "title": "Training Programs",
