@@ -4,14 +4,14 @@
  * the query string with no ownership check — any authenticated
  * `employee`-role caller could pass a co-worker's UUID and read their 80C/
  * 80D declaration usage and remaining tax-saving headroom (cross-employee
- * financial disclosure). Both routes now call enforceEmployeeOwnership(...),
+ * financial disclosure). Both routes now call scopeEmployeeId(...) (shared/employee-scope.ts),
  * the same guard tax/routes.ts already uses for its own employeeId-scoped
  * endpoints. regime-comparison currently only returns stub/placeholder
  * figures, so it wasn't independently exploitable yet — fixed for
  * consistency (see gap-routes.ts) and covered here so it doesn't become a
  * silent gap the moment real computation is wired in.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, vi, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
@@ -20,8 +20,20 @@ import { sqlClient } from "../src/shared/db.js";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
 const ADMIN_ACTOR = randomUUID();
+const EMP_ACTOR = randomUUID();
 const EMP_OWN = randomUUID();
 const EMP_OTHER = randomUUID();
+
+// hrms-client is mocked: the employee's JWT subject resolves to a DIFFERENT
+// hrms employee id (EMP_OWN). Ownership must be decided on that resolved id,
+// never by comparing the raw actorId (P0 id-space fix).
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
+  return {
+    ...actual,
+    resolveActorEmployeeId: vi.fn(async (_tenant: string, actorId: string) => (actorId === EMP_ACTOR ? EMP_OWN : null)),
+  };
+});
 
 function token(sub: string, roles: string[]) {
   return signToken({ sub, tid: TENANT, roles, sid: "sec-p2-02" }, SECRET);
@@ -36,7 +48,7 @@ for (const path of ["/v1/payroll/tax/optimization", "/v1/payroll/tax/regime-comp
       const res = await app.inject({
         method: "GET",
         url: `${path}?employeeId=${EMP_OTHER}`,
-        headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+        headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
       });
       await app.close();
       expect(res.statusCode).toBe(403);
@@ -47,7 +59,7 @@ for (const path of ["/v1/payroll/tax/optimization", "/v1/payroll/tax/regime-comp
       const res = await app.inject({
         method: "GET",
         url: `${path}?employeeId=${EMP_OWN}`,
-        headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+        headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
       });
       await app.close();
       expect(res.statusCode).toBe(200);
@@ -59,7 +71,7 @@ for (const path of ["/v1/payroll/tax/optimization", "/v1/payroll/tax/regime-comp
       const res = await app.inject({
         method: "GET",
         url: path,
-        headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+        headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
       });
       await app.close();
       expect(res.statusCode).toBe(200);

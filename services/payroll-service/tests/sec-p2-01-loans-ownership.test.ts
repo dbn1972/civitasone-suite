@@ -4,11 +4,11 @@
  * NO ownership check — any authenticated `employee`-role caller could pass
  * (or discover, by iterating) another employee's UUID / loan id and read
  * their co-worker's loan principal, EMI, interest rate and full repayment
- * schedule (IDOR). All three routes now call enforceEmployeeOwnership(...),
+ * schedule (IDOR). All three routes now call scopeEmployeeId(...) (shared/employee-scope.ts),
  * the same guard already used by payslip-pdf/routes.ts (SEC-P1-01) and
  * tax/routes.ts.
  */
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -20,8 +20,20 @@ import { payrollLoans } from "../src/modules/loans/schema.js";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
 const ADMIN_ACTOR = randomUUID();
+const EMP_ACTOR = randomUUID();
 const EMP_OWN = randomUUID();
 const EMP_OTHER = randomUUID();
+
+// hrms-client is mocked: the employee's JWT subject resolves to a DIFFERENT
+// hrms employee id (EMP_OWN). Ownership must be decided on that resolved id,
+// never by comparing the raw actorId (P0 id-space fix).
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
+  return {
+    ...actual,
+    resolveActorEmployeeId: vi.fn(async (_tenant: string, actorId: string) => (actorId === EMP_ACTOR ? EMP_OWN : null)),
+  };
+});
 const LOAN_OWN = randomUUID();
 const LOAN_OTHER = randomUUID();
 
@@ -59,7 +71,7 @@ describe("GET /v1/payroll/loans?empId= — ownership (SEC-P2-01)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/payroll/loans?empId=${EMP_OTHER}`,
-      headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+      headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(403);
@@ -70,7 +82,7 @@ describe("GET /v1/payroll/loans?empId= — ownership (SEC-P2-01)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/payroll/loans?empId=${EMP_OWN}`,
-      headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+      headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(200);
@@ -100,7 +112,7 @@ describe("GET /v1/payroll/loans/:id — ownership (SEC-P2-01)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/payroll/loans/${LOAN_OTHER}`,
-      headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+      headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(403);
@@ -111,7 +123,7 @@ describe("GET /v1/payroll/loans/:id — ownership (SEC-P2-01)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/payroll/loans/${LOAN_OWN}`,
-      headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+      headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(200);
@@ -137,7 +149,7 @@ describe("GET /v1/payroll/loans/:id/schedule — ownership (SEC-P2-01)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/payroll/loans/${LOAN_OTHER}/schedule`,
-      headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+      headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(403);
@@ -148,7 +160,7 @@ describe("GET /v1/payroll/loans/:id/schedule — ownership (SEC-P2-01)", () => {
     const res = await app.inject({
       method: "GET",
       url: `/v1/payroll/loans/${LOAN_OWN}/schedule`,
-      headers: { authorization: `Bearer ${token(EMP_OWN, ["employee"])}` },
+      headers: { authorization: `Bearer ${token(EMP_ACTOR, ["employee"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(200);

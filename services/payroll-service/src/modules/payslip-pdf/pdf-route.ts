@@ -9,12 +9,14 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { eq, and } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
+const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 
 const pathParamSchema = z.object({ id: z.string().uuid() });
 
@@ -57,7 +59,7 @@ export async function payslipDownloadRoutes(app: FastifyInstance): Promise<void>
     // SEC-P1-02: a self-service `employee` caller may only download their OWN
     // payslip — without this any employee could download any co-worker's slip
     // by iterating slip IDs (IDOR).
-    enforceEmployeeOwnership(ctx, slip.employeeId);
+    await scopeEmployeeId(ctx, slip.employeeId, READER_STAFF_ROLES);
 
     const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)
       .where(and(eq(payrollRuns.id, slip.runId), eq(payrollRuns.tenantId, ctx.tenantId)))

@@ -38,6 +38,10 @@ import { taxDeclarations } from "../src/modules/tax/schema.js";
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT   = "90000000-4801-4000-8000-000000000001";
 const EMPLOYEE = "70000000-4801-4000-8000-0000000000e1";
+// P0 id-space fix: the employee's JWT subject (login user id) is a DIFFERENT
+// id from their hrms employee id; ownership is decided on the id hrms
+// resolves (shared/employee-scope.ts), never on the raw actorId.
+const EMPLOYEE_LOGIN = "70000000-4801-4000-8000-0000000000f1";
 const FY = "2025-26"; // startYear 2025 -> HRA snapshot month resolved as 2026-03
 
 // Employee fixture: Rs 30,000/month basic, metro (X-class) city, 50% DA (top
@@ -51,6 +55,8 @@ const RENT_PAID_MINOR = 20_000_000; // Rs 2,00,000/year declared rent (the sweep
 const ANNUAL_GROSS_MINOR = 60_000_000n; // Rs 6,00,000 — one seeded slip stands in for the FY total (dom-025's own convention)
 
 vi.mock("../src/shared/hrms-client.js", () => ({
+  resolveActorEmployeeId: vi.fn(async (_t: string, actorId: string) =>
+    actorId === "70000000-4801-4000-8000-0000000000f1" ? "70000000-4801-4000-8000-0000000000e1" : null),
   fetchPayrollInput: vi.fn(async () => ({
     month: "2026-03",
     employees: [{
@@ -150,7 +156,7 @@ describe("BUG-HRA-1 — old regime: declared rent now produces a real Sec 10(13A
         const submit = await app.inject({
           method: "POST",
           url: "/v1/payroll/tax-declarations",
-          headers: { authorization: `Bearer ${token(EMPLOYEE)}` },
+          headers: { authorization: `Bearer ${token(EMPLOYEE_LOGIN)}` },
           payload: { fy: FY, regime: "old", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: RENT_PAID_MINOR },
         });
         expect(submit.statusCode).toBe(202);
@@ -184,7 +190,7 @@ describe("BUG-HRA-1 — old regime: declared rent now produces a real Sec 10(13A
         const comp = await app.inject({
           method: "GET",
           url: `/v1/payroll/tax/computation?fy=${FY}&regime=old`,
-          headers: { authorization: `Bearer ${token(EMPLOYEE)}` },
+          headers: { authorization: `Bearer ${token(EMPLOYEE_LOGIN)}` },
         });
         expect(comp.statusCode).toBe(200);
         const body = comp.json();
@@ -218,7 +224,7 @@ describe("BUG-HRA-1 — new regime: no Sec 10(13A) exemption, by statute", () =>
         const submit = await app.inject({
           method: "POST",
           url: "/v1/payroll/tax-declarations",
-          headers: { authorization: `Bearer ${token(EMPLOYEE)}` },
+          headers: { authorization: `Bearer ${token(EMPLOYEE_LOGIN)}` },
           payload: { fy: FY, regime: "new", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: RENT_PAID_MINOR },
         });
         expect(submit.statusCode).toBe(202);
@@ -247,7 +253,7 @@ describe("BUG-HRA-1 — old regime, no rent declared", () => {
         const submit = await app.inject({
           method: "POST",
           url: "/v1/payroll/tax-declarations",
-          headers: { authorization: `Bearer ${token(EMPLOYEE)}` },
+          headers: { authorization: `Bearer ${token(EMPLOYEE_LOGIN)}` },
           payload: { fy: FY, regime: "old", section80c: 100_000, section80d: 0, otherDeductions: 0, rentPaidMinor: 0 },
         });
         expect(submit.statusCode).toBe(202);

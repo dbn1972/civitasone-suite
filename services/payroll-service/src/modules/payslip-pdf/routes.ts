@@ -1,12 +1,14 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { eq, and } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { fetchPayrollInput, fetchEmployeeSummaries, fetchDefaultSlipTemplate, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
+const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 
 const pathParamSchema = z.object({
   id: z.string().uuid(),
@@ -100,7 +102,7 @@ export async function payslipPdfRoutes(app: FastifyInstance): Promise<void> {
     // SEC-P1-01: a self-service `employee` caller may only download their OWN
     // payslip — without this, any employee could fetch any co-worker's slip
     // (gross/net/PAN/IFSC/UAN) by iterating slip ids.
-    enforceEmployeeOwnership(ctx, slip.employeeId);
+    await scopeEmployeeId(ctx, slip.employeeId, READER_STAFF_ROLES);
 
     // Fetch the run for month info
     const runRows = await scopedRead((tx) => tx.select().from(payrollRuns)

@@ -2,7 +2,8 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { eq, and } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
-import { resolveContext, requireRole, enforceEmployeeOwnership, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { buildForm16, parseFy } from "../tax/form16.js";
 import { HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { renderPdf } from "@civitasone/render";
@@ -18,6 +19,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 
 const READER_ROLES = ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer", "employee"];
+const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 const ADMIN_ROLES = ["payroll_admin", "super_admin"];
 const AUDIT_TOPIC = "audit.event.record";
 
@@ -121,8 +123,9 @@ export async function form16PdfRoutes(app: FastifyInstance): Promise<void> {
 
     const { employeeId: requestedId } = z.object({ employeeId: z.string().uuid() }).parse(req.params);
 
-    // Self-service enforcement: employee role can only access own employeeId
-    const employeeId = enforceEmployeeOwnership(ctx, requestedId);
+    // Self-service enforcement: a non-staff caller can only access their own
+    // (hrms-resolved) employeeId.
+    const employeeId = await scopeEmployeeId(ctx, requestedId, READER_STAFF_ROLES);
 
     const q = z.object({
       fy: z.string().regex(/^\d{4}-\d{2}$/),

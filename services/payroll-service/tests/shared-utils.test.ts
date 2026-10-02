@@ -6,8 +6,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// context.ts — HttpError, resolveContext, requireRole, isSelfServiceEmployee,
-//              enforceEmployeeOwnership
+// context.ts — HttpError, resolveContext, requireRole, isSelfServiceEmployee
+// (employee ownership scoping: tests/payslip-ownership.test.ts)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe("shared/context — HttpError", () => {
@@ -80,64 +80,6 @@ describe("shared/context — isSelfServiceEmployee", () => {
     expect(isSelfServiceEmployee(ctx)).toBe(false);
   });
 });
-
-describe("shared/context — enforceEmployeeOwnership", () => {
-  it("returns actorId for self-service employee with no requested id", async () => {
-    const { enforceEmployeeOwnership } = await import("../src/shared/context.js");
-    const ctx = {
-      actorId: "emp-1", tenantId: "t1", roles: ["employee"],
-      correlationId: "c1", actorType: "user" as const,
-    } as never;
-    expect(enforceEmployeeOwnership(ctx, undefined)).toBe("emp-1");
-  });
-
-  it("returns actorId when self-service employee requests own id", async () => {
-    const { enforceEmployeeOwnership } = await import("../src/shared/context.js");
-    const ctx = {
-      actorId: "emp-1", tenantId: "t1", roles: ["employee"],
-      correlationId: "c1", actorType: "user" as const,
-    } as never;
-    expect(enforceEmployeeOwnership(ctx, "emp-1")).toBe("emp-1");
-  });
-
-  it("throws 403 when self-service employee requests another employee id", async () => {
-    const { enforceEmployeeOwnership, HttpError } = await import("../src/shared/context.js");
-    const ctx = {
-      actorId: "emp-1", tenantId: "t1", roles: ["employee"],
-      correlationId: "c1", actorType: "user" as const,
-    } as never;
-    expect(() => enforceEmployeeOwnership(ctx, "emp-999")).toThrow();
-    try {
-      enforceEmployeeOwnership(ctx, "emp-999");
-    } catch (e) {
-      expect((e as { status: number }).status).toBe(403);
-    }
-  });
-
-  it("passes through requested id for privileged roles", async () => {
-    const { enforceEmployeeOwnership } = await import("../src/shared/context.js");
-    const ctx = {
-      actorId: "admin-1", tenantId: "t1", roles: ["payroll_admin"],
-      correlationId: "c1", actorType: "user" as const,
-    } as never;
-    expect(enforceEmployeeOwnership(ctx, "emp-999")).toBe("emp-999");
-  });
-
-  it("throws 400 when privileged role has no employeeId", async () => {
-    const { enforceEmployeeOwnership } = await import("../src/shared/context.js");
-    const ctx = {
-      actorId: "admin-1", tenantId: "t1", roles: ["payroll_admin"],
-      correlationId: "c1", actorType: "user" as const,
-    } as never;
-    expect(() => enforceEmployeeOwnership(ctx, undefined)).toThrow();
-    try {
-      enforceEmployeeOwnership(ctx, undefined);
-    } catch (e) {
-      expect((e as { status: number }).status).toBe(400);
-    }
-  });
-});
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // deterministic-id.ts
 // ═══════════════════════════════════════════════════════════════════════════════

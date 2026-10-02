@@ -21,9 +21,22 @@ const OTHER_EMPLOYEE_ID = "aaaaaaaa-bbbb-4000-8000-000000000002";
 function adminToken() {
   return signToken({ sub: EMPLOYEE_ID, tid: TENANT, roles: ["payroll_admin", "super_admin"], sid: "s1" }, SECRET);
 }
-function employeeToken(empId = EMPLOYEE_ID) {
-  return signToken({ sub: empId, tid: TENANT, roles: ["employee"], sid: "s1" }, SECRET);
+// P0 id-space fix: the employee's JWT subject (login user id) is a DIFFERENT
+// id from their hrms employee id; ownership is decided on the id hrms
+// resolves (shared/employee-scope.ts), never on the raw actorId.
+const EMPLOYEE_LOGIN = "aaaaaaaa-bbbb-4000-8000-0000000000f1";
+function employeeToken(_ownEmployeeId = EMPLOYEE_ID) {
+  return signToken({ sub: EMPLOYEE_LOGIN, tid: TENANT, roles: ["employee"], sid: "s1" }, SECRET);
 }
+
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
+  return {
+    ...actual,
+    resolveActorEmployeeId: vi.fn(async (_t: string, actorId: string) =>
+      actorId === "aaaaaaaa-bbbb-4000-8000-0000000000f1" ? "aaaaaaaa-bbbb-4000-8000-000000000001" : null),
+  };
+});
 
 // ─── Mocks ──────────────────────────────────────────────────────────────────
 

@@ -36,7 +36,11 @@ function adminToken(roles = ["payroll_admin", "super_admin"]) {
 function readerToken() {
   return signToken({ sub: ACTOR, tid: TENANT, roles: ["payroll_admin", "hr_admin", "finance_officer"], sid: "s1" }, SECRET);
 }
-function employeeToken(sub = ACTOR) {
+// P0 id-space fix: the employee's JWT subject (login user id) is a DIFFERENT
+// id from their hrms employee id; ownership is decided on the id hrms
+// resolves (shared/employee-scope.ts), never on the raw actorId.
+const EMPLOYEE_LOGIN = "aaaaaaaa-bbbb-4000-8000-0000000000f1";
+function employeeToken(sub = EMPLOYEE_LOGIN) {
   return signToken({ sub, tid: TENANT, roles: ["employee"], sid: "s1" }, SECRET);
 }
 function citizenToken() {
@@ -62,6 +66,8 @@ function waitForConsumer(ms = 80) {
 // (HRMS/render/storage) — same approach, reused here for this file's own
 // "409 conflict" bulk-generate test.
 vi.mock("../src/shared/hrms-client.js", () => ({
+  resolveActorEmployeeId: vi.fn(async (_t: string, actorId: string) =>
+    actorId === "aaaaaaaa-bbbb-4000-8000-0000000000f1" ? "aaaaaaaa-bbbb-4000-8000-000000000001" : null),
   fetchPayrollInput: vi.fn(async () => {
     await new Promise((r) => setTimeout(r, 150));
     return { month: "2024-03", employees: [], lopDays: {} };

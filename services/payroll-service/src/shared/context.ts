@@ -54,24 +54,3 @@ export function isSelfServiceEmployee(ctx: RequestContext): boolean {
   const privileged = PRIVILEGED_PAYROLL_ROLES.some((r) => ctx.roles.includes(r));
   return !privileged && ctx.roles.includes("employee");
 }
-
-/**
- * Ownership guard for self-service employees. For a self-service `employee`
- * caller, forces the effective employeeId to their own actorId and rejects any
- * request that names a different employee (403). Privileged roles / service
- * accounts pass through the requested id unchanged (act-on-behalf).
- *
- * Returns the effective employeeId the caller is authorised to access.
- */
-export function enforceEmployeeOwnership(ctx: RequestContext, requestedEmployeeId: string | undefined): string {
-  if (isSelfServiceEmployee(ctx)) {
-    if (requestedEmployeeId && requestedEmployeeId !== ctx.actorId) {
-      throw new HttpError(403, "FORBIDDEN", "employees may only access their own records");
-    }
-    return ctx.actorId;
-  }
-  if (!requestedEmployeeId) {
-    throw new HttpError(400, "VALIDATION_FAILED", "employeeId is required");
-  }
-  return requestedEmployeeId;
-}

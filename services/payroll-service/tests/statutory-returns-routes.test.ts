@@ -14,8 +14,17 @@
  * - GET /v1/payroll/statutory/challans (happy, 400, 401, 403)
  * - GET /v1/payroll/statutory/reconcile (happy, 400, 401, 403)
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, vi, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
+
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
+  return {
+    ...actual,
+    resolveActorEmployeeId: vi.fn(async (_t: string, actorId: string) =>
+      actorId === "aaaaaaaa-bbbb-4000-8000-0000000000f1" ? "aaaaaaaa-bbbb-4000-8000-000000000001" : null),
+  };
+});
 import { buildApp } from "../src/app.js";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -31,7 +40,11 @@ function adminToken(roles = ["payroll_admin", "super_admin"]) {
 function filerToken() {
   return signToken({ sub: ACTOR, tid: TENANT, roles: ["payroll_admin", "hr_admin", "finance_officer"], sid: "s1" }, SECRET);
 }
-function employeeToken(sub = ACTOR) {
+// P0 id-space fix: the employee's JWT subject (login user id) is a DIFFERENT
+// id from their hrms employee id; ownership is decided on the id hrms
+// resolves (shared/employee-scope.ts), never on the raw actorId.
+const EMPLOYEE_LOGIN = "aaaaaaaa-bbbb-4000-8000-0000000000f1";
+function employeeToken(sub = EMPLOYEE_LOGIN) {
   return signToken({ sub, tid: TENANT, roles: ["employee"], sid: "s1" }, SECRET);
 }
 function citizenToken() {
