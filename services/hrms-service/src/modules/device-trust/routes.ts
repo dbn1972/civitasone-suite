@@ -329,27 +329,36 @@ export async function deviceTrustRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ["hr_admin", "it_admin", "super_admin"]);
     const body = policyUpdateSchema.parse(req.body);
 
-    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `INSERT INTO hrms.device_policies (tenant_id, min_os_version_android, min_os_version_ios,
-        min_app_version, block_rooted, require_screen_lock, require_biometric, max_inactive_days, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-       ON CONFLICT (tenant_id) DO UPDATE SET
-        min_os_version_android = COALESCE($2, hrms.device_policies.min_os_version_android),
-        min_os_version_ios = COALESCE($3, hrms.device_policies.min_os_version_ios),
-        min_app_version = COALESCE($4, hrms.device_policies.min_app_version),
-        block_rooted = COALESCE($5, hrms.device_policies.block_rooted),
-        require_screen_lock = COALESCE($6, hrms.device_policies.require_screen_lock),
-        require_biometric = COALESCE($7, hrms.device_policies.require_biometric),
-        max_inactive_days = COALESCE($8, hrms.device_policies.max_inactive_days),
-        updated_at = NOW()`,
-      [
-        ctx.tenantId,
-        body.minOsVersionAndroid ?? null, body.minOsVersionIos ?? null,
-        body.minAppVersion ?? null, body.blockRooted ?? null,
-        body.requireScreenLock ?? null, body.requireBiometric ?? null,
-        body.maxInactiveDays ?? null,
-      ],
-    ));
+    // A tenant's FIRST (partial) PATCH used to INSERT explicit NULLs for every
+    // omitted field; an explicit NULL does not fall back to the column
+    // DEFAULT, so the NOT NULL columns (migration 0019) rejected it with
+    // `null value in column "min_os_version_android"`. Seed the row from the
+    // migration's own defaults first, then apply only the supplied fields.
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      await pool.query(
+        `INSERT INTO hrms.device_policies (tenant_id) VALUES ($1) ON CONFLICT (tenant_id) DO NOTHING`,
+        [ctx.tenantId],
+      );
+      await pool.query(
+        `UPDATE hrms.device_policies SET
+          min_os_version_android = COALESCE($2, min_os_version_android),
+          min_os_version_ios = COALESCE($3, min_os_version_ios),
+          min_app_version = COALESCE($4, min_app_version),
+          block_rooted = COALESCE($5, block_rooted),
+          require_screen_lock = COALESCE($6, require_screen_lock),
+          require_biometric = COALESCE($7, require_biometric),
+          max_inactive_days = COALESCE($8, max_inactive_days),
+          updated_at = NOW()
+         WHERE tenant_id = $1`,
+        [
+          ctx.tenantId,
+          body.minOsVersionAndroid ?? null, body.minOsVersionIos ?? null,
+          body.minAppVersion ?? null, body.blockRooted ?? null,
+          body.requireScreenLock ?? null, body.requireBiometric ?? null,
+          body.maxInactiveDays ?? null,
+        ],
+      );
+    });
 
     return reply.send({ status: "updated" });
   });

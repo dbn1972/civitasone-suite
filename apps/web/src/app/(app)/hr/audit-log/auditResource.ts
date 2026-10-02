@@ -105,6 +105,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "separation",
   "service_book",
   "sponsor_bank_config",
+  "statutory_ecr",
   "statutory_return",
   "tax_declaration",
   "tds_challan",

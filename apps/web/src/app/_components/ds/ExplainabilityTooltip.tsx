@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, useRef, useEffect, type ReactNode } from "react";
+import { cloneElement, isValidElement, useId, useState, useRef, useEffect, type ReactNode } from "react";
 
 export interface ExplainabilityFactor {
   feature: string;
@@ -68,6 +68,16 @@ export function ExplainabilityTooltip({ factors, children }: ExplainabilityToolt
 
   const maxContribution = Math.max(...factors.map((f) => Math.abs(f.contribution)), 1);
 
+  // Link the trigger to the open tooltip (aria-describedby) so screen readers
+  // announce the factors when the trigger receives focus.
+  const trigger = isValidElement<{ "aria-describedby"?: string }>(children)
+    ? cloneElement(children, {
+        "aria-describedby": open
+          ? [children.props["aria-describedby"], id].filter(Boolean).join(" ")
+          : children.props["aria-describedby"],
+      })
+    : children;
+
   return (
     <span
       ref={wrapRef}
@@ -84,7 +94,7 @@ export function ExplainabilityTooltip({ factors, children }: ExplainabilityToolt
         }
       }}
     >
-      {children}
+      {trigger}
       {open && (
         <span
           id={id}

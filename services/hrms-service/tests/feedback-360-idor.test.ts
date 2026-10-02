@@ -205,11 +205,20 @@ describe("POST /v1/hrms/feedback/responses — nominated-rater verification, ser
     });
     expect(r.statusCode).toBe(201);
 
-    // Verify directly against the DB (bypassing app-layer trust entirely):
-    const rows = await sqlPool.query<{ rater_group: string }>(
-      `SELECT rater_group FROM employee.feedback_responses WHERE tenant_id = $1 AND cycle_id = $2 AND employee_id = $3`,
-      [TENANT, cycleId, aliceEmpId],
-    );
+    // Verify directly against the DB (bypassing app-layer trust entirely).
+    // employee.feedback_responses has FORCE ROW LEVEL SECURITY, so the
+    // read-back must carry app.tenant_id on the SAME connection. A bare
+    // sqlPool.query() lands on whichever pooled connection is free -- not
+    // necessarily the one beforeAll() set the session GUC on -- and RLS then
+    // silently returns zero rows, which looked like "201 but nothing
+    // persisted". The route does persist the server-derived 'peer' row.
+    const rows = { rows: await sqlClient.begin(async (sql) => {
+      await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [TENANT]);
+      return sql.unsafe(
+        `SELECT rater_group FROM employee.feedback_responses WHERE tenant_id = $1 AND cycle_id = $2 AND employee_id = $3`,
+        [TENANT, cycleId, aliceEmpId],
+      );
+    }) as unknown as Array<{ rater_group: string }> };
     expect(rows.rows.some((row) => row.rater_group === "peer")).toBe(true);
     expect(rows.rows.some((row) => row.rater_group === "manager")).toBe(false);
   });

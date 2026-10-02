@@ -4,6 +4,7 @@ import { z } from "zod";
 import { resolveContext, HttpError } from "../../shared/context.js";
 import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { escapeHtml } from "../recruitment/application-pdf.js";
 
 /**
  * Audit: employee.hrms_employees and hrms.visiting_cards are both FORCE ROW
@@ -14,29 +15,17 @@ import { withRawTenantGuc } from "@civitasone/db";
  * .../me/signature) the same way social/routes.ts's withTenantGuc already
  * does elsewhere in this service.
  *
- * IMPORTANT -- this fix alone does NOT make these routes work end-to-end.
- * Independently of the RLS gap, every query below that touches
- * employee.hrms_employees references columns that do not exist on the real
- * table (confirmed live): first_name, last_name, designation, department,
- * phone, employee_code, photo_url, branch, and the WHERE-clause user_id are
- * all either missing or misnamed -- the real table has full_name (one
- * field), mobile, photo_key, user_ref, and department_id/designation_id as
- * uuid FKs (no plain-text department/designation column at all; no
- * employee_code equivalent; no branch column). GET .../me additionally joins
- * public.tenants, which does not exist under any name. So today every route
- * here 500s with "column ... does not exist" before RLS is ever reached,
- * both before and after this fix -- this is a separate, deeper, pre-existing
- * defect (wrong/missing columns, not a tenant-scoping gap), out of scope for
- * a "swap in the right tenant-scoping call" fix: rendering designation/
- * department as text needs a join to hrms_designations/hrms_departments,
- * there's no established employee_code/branch equivalent to fall back to,
- * and dropping the tenants join changes the response shape. Left every query
- * exactly as originally written (columns and all) and applied only the GUC
- * wrap, so the tenant-scoping half of the fix is already correct and in
- * place once this file's column references get their own dedicated fix
- * (same shape as PR #1592's "stop 4 HRMS endpoints 500ing on wrong table/
- * schema references"). Flagged in full in the PR description; not fixed
- * here.
+ * Column alignment (test-triage fix): the authenticated /me* queries used
+ * to reference columns that never existed on employee.hrms_employees
+ * (first_name/last_name, designation, department, phone, employee_code,
+ * photo_url, branch, user_id) plus a non-existent public.tenants join, so
+ * every /me* route 500'd. They now read the real schema via EMP_CARD_COLUMNS
+ * / EMP_CARD_JOINS below: full_name, mobile, employee_no, user_ref, and the
+ * designation/department NAMES via employee.hrms_designations /
+ * employee.hrms_departments. There is no photo URL (photo_key is a private
+ * storage key, not a URL), no branch column and no tenant-name table in
+ * this service's DB, so photo_url/branch/org_name are NULL and orgName falls
+ * back to the department name, which was already the route's fallback.
  *
  * GET /visiting-card/public/:code is, on top of the above, ALSO not wrapped
  * in withTenantGuc: it has no auth and no ctx.tenantId at all (that is the
@@ -49,7 +38,9 @@ import { withRawTenantGuc } from "@civitasone/db";
  * builds a raw-sqlClient equivalent of that policy read, so the route is
  * left exactly as-is rather than bolting on a new, unreviewed cross-tenant
  * bypass for a public/no-auth endpoint. Flagged in the PR description as a
- * recommended follow-up.
+ * recommended follow-up -- tracked in issue #1776 (needs an unguessable
+ * per-card share token + a reviewed cross-tenant read; must NOT be fixed by
+ * keying a bypass on the guessable employee number).
  */
 function withTenantGuc<T>(
   tenantId: string,
@@ -87,6 +78,8 @@ function withTenantGuc<T>(
  * - Standard officer/staff → Indigo gradient
  */
 
+const HTTP_URL = /^https?:\/\//i;
+
 const updateCardSchema = z.object({
   displayName: z.string().min(2).max(100).optional(),
   suffix: z.string().max(50).optional(), // e.g. "IAS", "PhD", "MBBS"
@@ -95,14 +88,26 @@ const updateCardSchema = z.object({
   altPhone: z.string().max(20).optional(),
   email: z.string().email().optional(),
   altEmail: z.string().email().optional(),
-  website: z.string().url().optional(),
-  linkedIn: z.string().url().optional(),
+  // z.string().url() alone accepts javascript:/data: URLs; these end up as
+  // hrefs in the email signature, so only http(s) is allowed.
+  website: z.string().url().refine((u) => HTTP_URL.test(u), "must be an http(s) URL").optional(),
+  linkedIn: z.string().url().refine((u) => HTTP_URL.test(u), "must be an http(s) URL").optional(),
   twitter: z.string().max(50).optional(),
   address: z.string().max(300).optional(),
   tagline: z.string().max(150).optional(), // e.g. "Digital India Corporation, MeitY"
   showPersonalPhone: z.boolean().optional(),
   cardTier: z.enum(["gold", "silver", "blue", "indigo", "emerald"]).optional(),
 });
+
+/**
+ * Real-schema projection of the employee fields a card needs, aliased to the
+ * names the handlers below read. Pair with EMP_CARD_JOINS (alias `e` is
+ * employee.hrms_employees).
+ */
+const EMP_CARD_COLUMNS = `e.id, e.full_name, dsg.name AS designation, dep.name AS department, e.email,
+              e.mobile AS phone, e.employee_no AS employee_code, NULL::text AS photo_url, NULL::text AS branch`;
+const EMP_CARD_JOINS = `LEFT JOIN employee.hrms_designations dsg ON dsg.id = e.designation_id AND dsg.tenant_id = e.tenant_id
+       LEFT JOIN employee.hrms_departments dep ON dep.id = e.department_id AND dep.tenant_id = e.tenant_id`;
 
 export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
@@ -114,23 +119,22 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
 
     // Get employee profile
     const emp = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT e.id, e.first_name, e.last_name, e.designation, e.department, e.email,
-              e.phone, e.employee_code, e.photo_url, e.branch,
+      `SELECT ${EMP_CARD_COLUMNS},
               vc.display_name, vc.suffix, vc.title_override, vc.alt_phone, vc.alt_email,
               vc.website, vc.linkedin, vc.twitter, vc.address, vc.tagline,
               vc.show_personal_phone, vc.card_tier, vc.share_count, vc.scan_count,
-              t.name AS org_name
+              NULL::text AS org_name
        FROM employee.hrms_employees e
+       ${EMP_CARD_JOINS}
        LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
-       LEFT JOIN public.tenants t ON t.id = e.tenant_id
-       WHERE e.user_id = $1 AND e.tenant_id = $2`,
+       WHERE e.user_ref = $1 AND e.tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     ));
 
     if (emp.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Employee not found");
     const e = emp.rows[0];
 
-    const name = e.display_name || `${e.first_name} ${e.last_name}`.trim();
+    const name = e.display_name || e.full_name;
     const tier = e.card_tier || inferTier(e.designation ?? "");
     const orgName = e.org_name || e.department || "";
 
@@ -187,43 +191,57 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
   /** PATCH /v1/hrms/visiting-card/me — customize my card */
   app.patch("/v1/hrms/visiting-card/me", async (req, reply) => {
     const ctx = resolveContext(req);
-    const body = updateCardSchema.parse(req.body);
+    // safeParse -> 400: this module has no ZodError handler, so a bare
+    // .parse() surfaced invalid input (e.g. a javascript: URL) as a 500.
+    const parsed = updateCardSchema.safeParse(req.body ?? {});
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    const body = parsed.data;
 
     // Get employee ID
     const empRow = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+      `SELECT id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     ));
     if (empRow.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Employee not found");
     const employeeId = empRow.rows[0].id;
 
-    // Upsert visiting card preferences
-    await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `INSERT INTO hrms.visiting_cards (id, tenant_id, employee_id, display_name, suffix, title_override,
-        alt_phone, alt_email, website, linkedin, twitter, address, tagline, show_personal_phone, card_tier, updated_at)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
-       ON CONFLICT (tenant_id, employee_id) DO UPDATE SET
-        display_name = COALESCE($4, hrms.visiting_cards.display_name),
-        suffix = COALESCE($5, hrms.visiting_cards.suffix),
-        title_override = COALESCE($6, hrms.visiting_cards.title_override),
-        alt_phone = COALESCE($7, hrms.visiting_cards.alt_phone),
-        alt_email = COALESCE($8, hrms.visiting_cards.alt_email),
-        website = COALESCE($9, hrms.visiting_cards.website),
-        linkedin = COALESCE($10, hrms.visiting_cards.linkedin),
-        twitter = COALESCE($11, hrms.visiting_cards.twitter),
-        address = COALESCE($12, hrms.visiting_cards.address),
-        tagline = COALESCE($13, hrms.visiting_cards.tagline),
-        show_personal_phone = COALESCE($14, hrms.visiting_cards.show_personal_phone),
-        card_tier = COALESCE($15, hrms.visiting_cards.card_tier),
-        updated_at = NOW()`,
-      [
-        randomUUID(), ctx.tenantId, employeeId,
-        body.displayName ?? null, body.suffix ?? null, body.title ?? null,
-        body.altPhone ?? null, body.altEmail ?? null, body.website ?? null,
-        body.linkedIn ?? null, body.twitter ?? null, body.address ?? null,
-        body.tagline ?? null, body.showPersonalPhone ?? null, body.cardTier ?? null,
-      ],
-    ));
+    // Upsert visiting card preferences. A first (partial) PATCH used to INSERT
+    // explicit NULLs for omitted fields; an explicit NULL skips the column
+    // DEFAULT, so NOT NULL show_personal_phone/card_tier rejected it. Create
+    // the row from the table defaults first, then apply only supplied fields.
+    await withTenantGuc(ctx.tenantId, async (pool) => {
+      await pool.query(
+        `INSERT INTO hrms.visiting_cards (id, tenant_id, employee_id) VALUES ($1, $2, $3)
+         ON CONFLICT (tenant_id, employee_id) DO NOTHING`,
+        [randomUUID(), ctx.tenantId, employeeId],
+      );
+      await pool.query(
+        `UPDATE hrms.visiting_cards SET
+          display_name = COALESCE($3, display_name),
+          suffix = COALESCE($4, suffix),
+          title_override = COALESCE($5, title_override),
+          alt_phone = COALESCE($6, alt_phone),
+          alt_email = COALESCE($7, alt_email),
+          website = COALESCE($8, website),
+          linkedin = COALESCE($9, linkedin),
+          twitter = COALESCE($10, twitter),
+          address = COALESCE($11, address),
+          tagline = COALESCE($12, tagline),
+          show_personal_phone = COALESCE($13, show_personal_phone),
+          card_tier = COALESCE($14, card_tier),
+          updated_at = NOW()
+         WHERE tenant_id = $1 AND employee_id = $2`,
+        [
+          ctx.tenantId, employeeId,
+          body.displayName ?? null, body.suffix ?? null, body.title ?? null,
+          body.altPhone ?? null, body.altEmail ?? null, body.website ?? null,
+          body.linkedIn ?? null, body.twitter ?? null, body.address ?? null,
+          body.tagline ?? null, body.showPersonalPhone ?? null, body.cardTier ?? null,
+        ],
+      );
+    });
 
     return reply.send({ status: "updated" });
   });
@@ -285,7 +303,7 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
     const { method } = (req.body as any) ?? {}; // whatsapp, email, qr, nfc, copy
 
     const empRow = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT id FROM employee.hrms_employees WHERE user_id = $1 AND tenant_id = $2`,
+      `SELECT id FROM employee.hrms_employees WHERE user_ref = $1 AND tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     ));
     if (empRow.rowCount === 0) return reply.send({ status: "ok" });
@@ -305,35 +323,42 @@ export async function visitingCardRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
 
     const emp = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT e.first_name, e.last_name, e.designation, e.department, e.email, e.phone, e.photo_url,
+      `SELECT ${EMP_CARD_COLUMNS},
               vc.display_name, vc.suffix, vc.title_override, vc.website, vc.linkedin, vc.tagline
        FROM employee.hrms_employees e
+       ${EMP_CARD_JOINS}
        LEFT JOIN hrms.visiting_cards vc ON vc.employee_id = e.id AND vc.tenant_id = e.tenant_id
-       WHERE e.user_id = $1 AND e.tenant_id = $2`,
+       WHERE e.user_ref = $1 AND e.tenant_id = $2`,
       [ctx.actorId, ctx.tenantId],
     ));
     if (emp.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Employee not found");
     const e = emp.rows[0];
-    const name = e.display_name || `${e.first_name} ${e.last_name}`.trim();
+    const name = e.display_name || e.full_name;
     const title = e.title_override || e.designation;
     const suffix = e.suffix ? `, ${e.suffix}` : "";
 
+    // Every interpolated value is HTML-escaped (most are user-entered via
+    // PATCH /me), and links are only emitted for http(s) URLs -- rows written
+    // before the schema refine (or directly) may still hold other schemes.
+    const h = escapeHtml;
+    const website = typeof e.website === "string" && HTTP_URL.test(e.website) ? e.website : null;
+    const linkedin = typeof e.linkedin === "string" && HTTP_URL.test(e.linkedin) ? e.linkedin : null;
     const html = `<table cellpadding="0" cellspacing="0" style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;font-size:13px;color:#1e293b;">
   <tr><td style="padding-bottom:8px;border-bottom:2px solid #6366f1;">
-    <strong style="font-size:15px;color:#1e293b;">${name}${suffix}</strong><br/>
-    <span style="color:#64748b;">${title}</span><br/>
-    <span style="color:#64748b;">${e.department}</span>
+    <strong style="font-size:15px;color:#1e293b;">${h(name)}${h(suffix)}</strong><br/>
+    <span style="color:#64748b;">${h(title)}</span><br/>
+    <span style="color:#64748b;">${h(e.department)}</span>
   </td></tr>
   <tr><td style="padding-top:8px;">
-    ${e.phone ? `<span>📱 ${e.phone}</span><br/>` : ""}
-    ${e.email ? `<span>✉️ <a href="mailto:${e.email}" style="color:#6366f1;text-decoration:none;">${e.email}</a></span><br/>` : ""}
-    ${e.website ? `<span>🌐 <a href="${e.website}" style="color:#6366f1;text-decoration:none;">${e.website}</a></span><br/>` : ""}
-    ${e.linkedin ? `<span>🔗 <a href="${e.linkedin}" style="color:#6366f1;text-decoration:none;">LinkedIn</a></span>` : ""}
+    ${e.phone ? `<span>📱 ${h(e.phone)}</span><br/>` : ""}
+    ${e.email ? `<span>✉️ <a href="mailto:${h(e.email)}" style="color:#6366f1;text-decoration:none;">${h(e.email)}</a></span><br/>` : ""}
+    ${website ? `<span>🌐 <a href="${h(website)}" style="color:#6366f1;text-decoration:none;">${h(website)}</a></span><br/>` : ""}
+    ${linkedin ? `<span>🔗 <a href="${h(linkedin)}" style="color:#6366f1;text-decoration:none;">LinkedIn</a></span>` : ""}
   </td></tr>
-  ${e.tagline ? `<tr><td style="padding-top:6px;font-size:11px;color:#94a3b8;font-style:italic;">${e.tagline}</td></tr>` : ""}
+  ${e.tagline ? `<tr><td style="padding-top:6px;font-size:11px;color:#94a3b8;font-style:italic;">${h(e.tagline)}</td></tr>` : ""}
 </table>`;
 
-    return reply.send({ html, plainText: `${name}${suffix}\n${title}\n${e.department}\n${e.phone ?? ""}\n${e.email ?? ""}` });
+    return reply.send({ html, plainText: `${name}${suffix}\n${title}\n${e.department ?? ""}\n${e.phone ?? ""}\n${e.email ?? ""}` });
   });
 }
 
