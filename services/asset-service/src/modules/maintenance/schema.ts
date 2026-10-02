@@ -35,6 +35,10 @@ export const assetWorkOrders = maintenanceSchema.table("asset_work_orders", {
   costMinor:     bigint("cost_minor", { mode: "bigint" }).notNull().default(0n),
   currency:      char("currency", { length: 3 }).notNull().default("INR"),
   notes:         text("notes"),
+  // GAP-ASSETS-MAINTENANCE-01: column already exists in the DB (migration 0002,
+  // CHECK preventive|corrective|amc|breakdown) but was not mapped, so every
+  // work order silently stayed 'corrective'.
+  maintenanceType: varchar("maintenance_type", { length: 16 }).notNull().default("corrective"),
   createdAt:     timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:     timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:     uuid("created_by").notNull(),

@@ -36,9 +36,10 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/projects/auc", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
-    const body = z.object({ projectCode: z.string(), name: z.string(), wbsRef: z.string().optional(), amountMinor: z.number().int().nonnegative().default(0) }).parse(req.body);
+    const body = z.object({ projectCode: z.string(), name: z.string(), wbsRef: z.string().optional(), amountMinor: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).default(0), reason: z.string().trim().min(3).max(500) }).parse(req.body);
     const id = randomUUID();
-    await publishF3Write(ctx, "auc_create", id, { projectCode: body.projectCode, name: body.name, wbsRef: body.wbsRef, amountMinor: body.amountMinor });
+    // amountMinor is PAISE; z.number().int() must stay a safe integer (the web form rejects larger values client-side).
+    await publishF3Write(ctx, "auc_create", id, { projectCode: body.projectCode, name: body.name, wbsRef: body.wbsRef, amountMinor: body.amountMinor, reason: body.reason });
     return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 
@@ -150,16 +151,43 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const q = req.query as { limit?: string; offset?: string };
     const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
     const offset = Math.max(0, Number(q.offset) || 0);
-    const all = await repo.listLocations(ctx.tenantId);
-    return reply.send({ data: all.slice(offset, offset + limit) });
+    const rows = await repo.listLocations(ctx.tenantId, limit, offset);
+    return reply.send({ data: rows, limit, offset });
   });
 
   app.post("/v1/assets/locations", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
-    const body = z.object({ code: z.string(), name: z.string(), orgUnit: z.string().optional(), parentId: z.string().uuid().optional() }).parse(req.body);
+    const body = z.object({
+      code: z.string().trim().min(1).max(64), name: z.string().trim().min(1).max(256),
+      // org_unit is varchar(64): reject longer values here instead of crashing the consumer.
+      orgUnit: z.string().trim().max(64).optional(), parentId: z.string().uuid().optional(),
+    }).parse(req.body);
+    // GAP-ASSETS-LOCATIONS-06: (tenant_id, code) is UNIQUE in the table, but the insert runs in the
+    // async consumer, so a duplicate used to be accepted (202) and then silently dropped. Reject it up front.
+    if (await repo.findLocationByCode(ctx.tenantId, body.code)) {
+      throw new HttpError(409, "DUPLICATE_CODE", "a location with this code already exists");
+    }
+    if (body.parentId && !(await repo.findLocationById(ctx.tenantId, body.parentId))) {
+      throw new HttpError(400, "INVALID_PARENT", "parent location not found");
+    }
     const id = randomUUID();
     await publishF3Write(ctx, "location_create", id, { code: body.code, name: body.name, orgUnit: body.orgUnit, parentId: body.parentId });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // GAP-ASSETS-LOCATIONS-02: edit name / org unit. The code is deliberately immutable.
+  app.patch("/v1/assets/locations/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ASSET_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({
+      name: z.string().trim().min(1).max(256).optional(),
+      orgUnit: z.string().trim().max(64).nullable().optional(),
+    }).refine((b) => b.name !== undefined || b.orgUnit !== undefined, { message: "nothing to update" }).parse(req.body);
+    const existing = await repo.findLocationById(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "location not found");
+    await publishF3Write(ctx, "location_update", id, { name: body.name, orgUnit: body.orgUnit === "" ? null : body.orgUnit });
     return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 

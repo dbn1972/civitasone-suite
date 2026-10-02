@@ -278,6 +278,14 @@ describe("StatusPill cheque register statuses", () => {
     expect(pillTone(status)).toBe(tone);
   });
 
+  it.each([
+    ["under_construction", "warn"],
+    ["capitalized", "good"],
+    ["scheduled", "info"],
+  ])("%s has a deliberate tone (GAP-ASSETS-PROJECTS-06 / MAINTENANCE-03)", (status, tone) => {
+    expect(pillTone(status)).toBe(tone);
+  });
+
   it("an explicit variant overrides the global map (GAP-FINANCE-AUDIT-PARAS-01)", () => {
     const { container } = render(<StatusPill status="open" variant="bad" />);
     const el = container.querySelector(".pill");

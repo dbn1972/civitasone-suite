@@ -120,6 +120,9 @@ const STATUS_MAP: Record<string, PillVariant> = {
 
   // Recruitment pipeline / job-opening lifecycle
   scheduled: "info",
+  // GAP-ASSETS-PROJECTS-06: AUC lifecycle -- WIP still accumulating is "warn", capitalized is "good".
+  "under construction": "warn",
+  capitalized: "good",
   cancelled: "bad",
   validated: "good",
   selected: "good",

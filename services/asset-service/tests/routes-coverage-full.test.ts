@@ -751,7 +751,7 @@ describe("Enterprise routes", () => {
     const res = await app.inject({
       method: "POST", url: "/v1/assets/projects/auc",
       headers: authHeader(),
-      payload: { projectCode: "PRJ-001", name: "New Building" },
+      payload: { projectCode: "PRJ-001", name: "New Building", reason: "Sanctioned" },
     });
     expect([202, 500]).toContain(res.statusCode);
   });

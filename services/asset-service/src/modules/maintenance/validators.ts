@@ -38,6 +38,8 @@ export const workOrderBody = z.object({
   planId:        z.string().uuid().optional(),
   scheduledDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   notes:         z.string().optional(),
+  // GAP-ASSETS-MAINTENANCE-01: optional so older clients keep working; the DB default is 'corrective'.
+  maintenanceType: z.enum(["preventive", "corrective", "amc", "breakdown"]).optional(),
 });
 export type WorkOrderBody = z.infer<typeof workOrderBody>;
 

@@ -67,4 +67,18 @@ describe("AucTable", () => {
     expect(screen.queryByText(/NOT_FOUND: AUC not found/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });
+
+  it("renders View asset as a client-side link with the asset href (GAP-ASSETS-PROJECTS-07)", () => {
+    const CAP: AucRow = { ...UNDER_CONSTRUCTION, id: "22222222-2222-2222-2222-222222222222", projectCode: "AUC-009", status: "capitalized", assetId: "33333333-3333-3333-3333-333333333333" };
+    render(<AucTable rows={[CAP]} />);
+    const link = screen.getByRole("link", { name: "View capitalized asset for project AUC-009" });
+    expect(link).toHaveAttribute("href", "/assets/33333333-3333-3333-3333-333333333333");
+  });
+
+  it("shows tone-mapped status pills for both lifecycle states (GAP-ASSETS-PROJECTS-06)", () => {
+    const CAP: AucRow = { ...UNDER_CONSTRUCTION, id: "22222222-2222-2222-2222-222222222222", projectCode: "AUC-009", status: "capitalized", assetId: null };
+    const { container } = render(<AucTable rows={[UNDER_CONSTRUCTION, CAP]} />);
+    expect(container.querySelector(".pill.warn")?.textContent).toBe("Under Construction");
+    expect(container.querySelector(".pill.good")?.textContent).toBe("Capitalized");
+  });
 });

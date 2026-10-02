@@ -1,5 +1,6 @@
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { LoadErrorState } from "@/app/_components/ds/LoadErrorState";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { AucForm } from "./AucForm";
@@ -19,7 +20,8 @@ async function getAucProjects(): Promise<LoaderResult<AucRow[]>> {
 }
 
 export default async function ProjectsAucPage() {
-  const { data: rows, source } = await getAucProjects();
+  const result = await getAucProjects();
+  const { data: rows, source } = result;
 
   const underConstruction = rows.filter((r) => r.status === "under_construction");
   const capitalized = rows.filter((r) => r.status === "capitalized");
@@ -53,11 +55,16 @@ export default async function ProjectsAucPage() {
         )}
       </StatGrid>
 
-      <AucForm />
+      {/* GAP-ASSETS-PROJECTS-01: while the register could not be loaded we cannot
+          check for duplicate project codes, so the create form is disabled with a
+          notice (the server's own duplicate rejection stays the real guard). */}
+      <AucForm
+        disabledReason={source === "error" ? "The AUC register could not be loaded, so duplicate project codes cannot be checked. Retry loading before creating a project." : undefined}
+      />
 
       <Card title="AUC register">
-        {source === "error" && rows.length === 0 ? (
-          <DataSourceBadge source="error" />
+        {source === "error" ? (
+          <LoadErrorState result={result} area="AUC projects" backHref="/assets" backLabel="Assets" />
         ) : (
           <AucTable rows={rows} />
         )}

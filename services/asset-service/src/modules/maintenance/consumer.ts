@@ -42,6 +42,7 @@ export function registerMaintenanceConsumers(rawQueue: Queue): void {
     try {
       const p = msg.payload as {
         id: string; assetId: string; tenantId: string; planId?: string; scheduledDate: string; notes?: string;
+        maintenanceType?: "preventive" | "corrective" | "amc" | "breakdown";
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -49,7 +50,8 @@ export function registerMaintenanceConsumers(rawQueue: Queue): void {
           id: p.id, tenantId: p.tenantId, assetId: p.assetId,
           planId: p.planId ?? null, scheduledDate: p.scheduledDate,
           completedDate: null, status: "open", costMinor: 0n, currency: "INR",
-          notes: p.notes ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
+          notes: p.notes ?? null, maintenanceType: p.maintenanceType ?? "corrective",
+          createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await audit(tx, msg, "create", "work_order", p.id);
       });
