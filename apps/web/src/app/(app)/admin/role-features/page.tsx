@@ -28,6 +28,7 @@ export default async function RoleFeaturesPage() {
     getAdminRolesList(),
     getRoleFeatureGrants(),
   ]);
-  const source = rolesSource === "error" || grantsSource === "error" ? "error" : "api";
-  return <RoleFeaturesManager roles={roles} initialGrants={grants} source={source} />;
+  // GAP-ADMIN-ROLE-FEATURES-06: the two fetches fail independently; pass both so the
+  // page can name the failed part and stop writing over grants it could not read.
+  return <RoleFeaturesManager roles={roles} initialGrants={grants} rolesSource={rolesSource === "error" ? "error" : "api"} grantsSource={grantsSource === "error" ? "error" : "api"} />;
 }

@@ -1,13 +1,17 @@
+import { SkeletonCard, SkeletonTable } from "@/app/_components/ds";
+
+// GAP-ADMIN-ROLE-FEATURES-06: same ds skeleton primitives as the sibling admin routes
+// (was Tailwind animate-pulse utilities).
 export default function Loading() {
   return (
-    <div className="space-y-4 p-6" aria-label="Loading">
-      <div className="h-8 w-48 animate-pulse rounded bg-gray-200" />
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="h-24 animate-pulse rounded-lg bg-gray-100" />
-        ))}
+    <div className="page-main wrap" aria-busy="true" aria-label="Loading">
+      <div className="grid g-4">
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
+        <SkeletonCard />
       </div>
-      <div className="h-64 animate-pulse rounded-lg bg-gray-100" />
+      <SkeletonTable />
     </div>
   );
 }

@@ -11,12 +11,12 @@ import { ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
 // routes.ts) — but its unit-type taxonomy is flat (department/division/
 // section/unit/branch, cycle-checked on reparent), with no "Ministry"
 // level, so the page's fixed 5-level model was rebuilt around the real
-// types. Every action (create, rename) is now a real POST/PATCH against
+// types. Every action (create, rename, move) is now a real POST/PATCH against
 // GET /v1/admin/org-hierarchy's actual data, followed by a refetch — there
 // is no client-side tree state that can drift from the server.
 export default async function OrgHierarchyPage() {
   // GAP-ADMIN-ORG-01: tenant-service org-hierarchy requires tenant_admin or higher.
   requireAnyRole(ADMIN_TENANT_ROLES);
-  const { data: units, source } = await getAdminOrgUnits();
-  return <OrgHierarchyManager initialUnits={units} source={source} />;
+  const { data: units, source, status, errorMessage } = await getAdminOrgUnits();
+  return <OrgHierarchyManager initialUnits={units} source={source} errorStatus={status} errorMessage={errorMessage} />;
 }

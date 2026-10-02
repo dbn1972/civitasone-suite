@@ -1,6 +1,7 @@
 "use client";
 import { useMemo, useState } from "react";
-import { Button, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
+import { Button, ConfirmDialog, Modal, PageHeader, RefreshErrorState, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminRoleSummary, RoleFeatureGrant } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
@@ -50,21 +51,50 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
   }
 }
 
+/** Re-read the real grants (the write path is async, so a 202 body is not the source of truth). */
+async function fetchGrants(): Promise<RoleFeatureGrant[] | null> {
+  try {
+    const res = await fetch("/api/proxy/v1/policy/role-features", { cache: "no-store" });
+    if (!res.ok) return null;
+    const body = (await res.json()) as { data?: unknown } | unknown[];
+    const rows = Array.isArray(body) ? body : Array.isArray(body.data) ? body.data : null;
+    if (!rows) return null;
+    return rows
+      .filter((g): g is Record<string, unknown> => typeof g === "object" && g !== null)
+      .map((g) => ({ id: String(g.id ?? ""), roleName: String(g.roleName ?? ""), featureKey: String(g.featureKey ?? ""), granted: g.granted !== false }));
+  } catch {
+    return null;
+  }
+}
+
+// What the confirm dialog is currently asking about.
+type Pending =
+  | { kind: "toggle"; role: string; roleName: string; feature: string; revoke: boolean }
+  | { kind: "preset"; role: string; roleName: string; label: string; features: string[] };
+
 export function RoleFeaturesManager({
   roles,
   initialGrants,
-  source,
+  rolesSource,
+  grantsSource,
 }: {
   roles: AdminRoleSummary[];
   initialGrants: RoleFeatureGrant[];
-  source: "api" | "error";
+  rolesSource: "api" | "error";
+  grantsSource: "api" | "error";
 }) {
+  const t = useTranslations("roleFeatures");
   const [grants, setGrants] = useState<RoleFeatureGrant[]>(initialGrants);
   const [selectedRole, setSelectedRole] = useState<string>(roles[0]?.key ?? "");
   const [showPreview, setShowPreview] = useState(false);
   const [busyKey, setBusyKey] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pending, setPending] = useState<Pending | null>(null);
+
+  // GAP-ADMIN-ROLE-FEATURES-06: with the grants unknown the matrix would show
+  // every box unticked, and a click would POST over state we cannot see.
+  const grantsUnknown = grantsSource === "error";
 
   const grantByCell = useMemo(() => {
     const m = new Map<string, RoleFeatureGrant>();
@@ -76,7 +106,13 @@ export function RoleFeaturesManager({
     return grantByCell.has(`${role}:${feature}`);
   }
 
-  async function handleToggleGrant(role: string, feature: string) {
+  async function resync() {
+    const fresh = await fetchGrants();
+    if (fresh) setGrants(fresh);
+    return fresh;
+  }
+
+  async function doToggle(role: string, feature: string) {
     const cellKey = `${role}:${feature}`;
     setBusyKey(cellKey);
     setError(null);
@@ -85,46 +121,73 @@ export function RoleFeaturesManager({
     if (existing) {
       const result = await callApi(`/${existing.id}`, "DELETE");
       if (!result.ok) {
-        setError(result.message ?? "Revoke failed");
+        setError(result.message ?? t("revokeFailed"));
       } else {
         setGrants((prev) => prev.filter((g) => g.id !== existing.id));
-        setNotice("Revoked — the change is queued and may take a moment to fully apply.");
+        setNotice(t("noticeRevoked"));
       }
     } else {
       const result = await callApi("", "POST", { roleName: role, featureKey: feature, granted: true });
       if (!result.ok) {
-        setError(result.message ?? "Grant failed");
+        setError(result.message ?? t("grantFailed"));
       } else {
         const id = (result.json as { id?: string } | undefined)?.id;
-        if (id) setGrants((prev) => [...prev, { id, roleName: role, featureKey: feature, granted: true }]);
-        setNotice("Granted — the change is queued and may take a moment to fully apply.");
+        if (id) {
+          setGrants((prev) => [...prev, { id, roleName: role, featureKey: feature, granted: true }]);
+          setNotice(t("noticeGranted"));
+        } else {
+          // 202 with no id: never claim "Granted" for a box that stays unticked --
+          // re-read the real grants and report what actually landed.
+          const fresh = await resync();
+          if (fresh?.some((g) => g.granted && g.roleName === role && g.featureKey === feature)) setNotice(t("noticeGranted"));
+          else setNotice(t("grantNotConfirmed"));
+        }
       }
     }
     setBusyKey(null);
   }
 
-  async function handlePresetApply(role: string, features: string[]) {
+  async function doPreset(role: string, features: string[]) {
     setError(null);
     setNotice(null);
+    const todo = features.filter((f) => !isGranted(role, f));
     let granted = 0;
-    for (const feature of features) {
-      if (isGranted(role, feature)) continue;
-      const cellKey = `${role}:${feature}`;
-      setBusyKey(cellKey);
+    let missingId = false;
+    let failedAt: string | null = null;
+    for (const feature of todo) {
+      setBusyKey(`${role}:${feature}`);
       const result = await callApi("", "POST", { roleName: role, featureKey: feature, granted: true });
-      if (result.ok) {
-        const id = (result.json as { id?: string } | undefined)?.id;
-        if (id) {
-          setGrants((prev) => [...prev, { id, roleName: role, featureKey: feature, granted: true }]);
-          granted++;
-        }
-      } else {
-        setError(result.message ?? `Grant failed for ${feature}`);
+      if (!result.ok) {
+        failedAt = feature;
         break;
       }
+      const id = (result.json as { id?: string } | undefined)?.id;
+      if (id) setGrants((prev) => [...prev, { id, roleName: role, featureKey: feature, granted: true }]);
+      else missingId = true;
+      granted++;
     }
     setBusyKey(null);
-    if (granted > 0) setNotice(`Granted ${granted} feature${granted === 1 ? "" : "s"} — changes are queued and may take a moment to fully apply.`);
+    // Accepted without an id: re-read the real grants so the ticks match the server.
+    if (missingId) await resync();
+    if (failedAt) {
+      // GAP-ADMIN-ROLE-FEATURES-04: no bulk endpoint, so a partial result is possible by
+      // design. Say exactly what happened and that nothing was rolled back.
+      setError(t("presetPartial", { granted, total: todo.length, feature: failedAt }));
+    } else if (granted > 0) {
+      setNotice(t("presetOk", { count: granted }));
+    }
+  }
+
+  function requestToggle(role: AdminRoleSummary, feature: string) {
+    setPending({ kind: "toggle", role: role.key, roleName: role.name, feature, revoke: isGranted(role.key, feature) });
+  }
+
+  async function confirmPending() {
+    const p = pending;
+    setPending(null);
+    if (!p) return;
+    if (p.kind === "toggle") await doToggle(p.role, p.feature);
+    else await doPreset(p.role, p.features);
   }
 
   const roleGrants = grants.filter((g) => g.roleName === selectedRole && g.granted);
@@ -146,62 +209,71 @@ export function RoleFeaturesManager({
   const presets = useMemo(() => {
     const byPrefix = (prefix: string) => FEATURE_KEYS.filter((f) => f.startsWith(prefix));
     return [
-      { label: "Grant all Finance features", features: byPrefix("finance.") },
-      { label: "Grant all HR features", features: byPrefix("hrms.") },
-      { label: "Grant all Procurement features", features: byPrefix("procurement.") },
+      { label: t("presetFinance"), features: byPrefix("finance.") },
+      { label: t("presetHr"), features: byPrefix("hrms.") },
+      { label: t("presetProcurement"), features: byPrefix("procurement.") },
     ].filter((p) => p.features.length > 0);
-  }, []);
+  }, [t]);
+
+  const selectedRoleName = roles.find((r) => r.key === selectedRole)?.name ?? selectedRole;
+  const adminKey = (f: string) => f.startsWith("admin.");
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="Role Feature Visibility" subtitle="Control which features are visible to each role." back="/admin" />
-      <DataSourceBadge source={source} message="Couldn't load role/feature data — showing nothing" />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/admin" />
+      {/* GAP-ADMIN-ROLE-FEATURES-06: name the part that failed, not just "something". */}
+      <DataSourceBadge source={rolesSource} message={t("rolesLoadFailed")} />
+      {grantsUnknown && (
+        <div style={{ marginBottom: 14 }}>
+          <RefreshErrorState error={toHumanError("load", { area: t("grantsArea") })} backHref="/admin" />
+        </div>
+      )}
       {error && (
-        <div role="alert" style={{ background: "#fef2f2", color: "#b42318", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+        <div role="alert" style={{ background: "var(--badbg, #fef2f2)", color: "var(--bad, #b42318)", border: "1px solid var(--badbd, #fecaca)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           {error}
         </div>
       )}
-      {notice && !error && (
-        <div role="status" style={{ background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
+      {notice && (
+        <div role="status" style={{ background: "var(--infobg, #eff6ff)", color: "var(--info, #1d4ed8)", border: "1px solid var(--infobd, #bfdbfe)", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           {notice}
         </div>
       )}
       <StatGrid>
-        <StatCard icon="👥" iconBg="#eef2ff" label="Roles" value={roles.length} />
-        <StatCard icon="🔑" iconBg="#ecfdf3" label="Feature keys" value={featureRows.length} />
-        <StatCard icon="✅" iconBg="#dbeafe" label="Active grants" value={totalGrants} />
-        <StatCard icon="📋" iconBg="#fef3c7" label="Selected role's grants" value={roleGrants.length} />
+        <StatCard icon="👥" iconBg="#eef2ff" label={t("statRoles")} value={roles.length} />
+        <StatCard icon="🔑" iconBg="#ecfdf3" label={t("statFeatureKeys")} value={featureRows.length} />
+        <StatCard icon="✅" iconBg="#dbeafe" label={t("statActiveGrants")} value={grantsUnknown ? null : totalGrants} />
+        <StatCard icon="📋" iconBg="#fef3c7" label={t("statRoleGrants")} value={grantsUnknown ? null : roleGrants.length} />
       </StatGrid>
 
-      {grantsForUnlistedRoles > 0 && (
+      {!grantsUnknown && grantsForUnlistedRoles > 0 && (
         <p role="note" style={{ margin: "10px 0 0", fontSize: 12.5, color: "var(--mut)" }}>
-          {grantsForUnlistedRoles} more active grant{grantsForUnlistedRoles === 1 ? " belongs" : "s belong"} to roles that are not listed in this matrix and are not counted above.
+          {t("unlistedRoleGrants", { count: grantsForUnlistedRoles })}
         </p>
       )}
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-            <label htmlFor="role-select" style={{ fontWeight: 600 }}>Role:</label>
+            <label htmlFor="role-select" style={{ fontWeight: 600 }}>{t("roleLabel")}</label>
             <select id="role-select" className="input" value={selectedRole} onChange={(e) => setSelectedRole(e.target.value)} style={{ width: 220 }}>
-              {roles.length === 0 && <option value="">No roles available</option>}
+              {roles.length === 0 && <option value="">{t("noRolesAvailable")}</option>}
               {roles.map((r) => <option key={r.id} value={r.key}>{r.name}</option>)}
             </select>
           </div>
-          <Button type="button" onClick={() => setShowPreview(true)} disabled={!selectedRole}>👁 Preview</Button>
+          <Button type="button" onClick={() => setShowPreview(true)} disabled={!selectedRole || grantsUnknown}>{t("preview")}</Button>
         </div>
       </div>
 
       {presets.length > 0 && (
         <div className="card" style={{ marginTop: 12 }}>
-          <h4 style={{ margin: "0 0 8px" }}>Quick Presets — apply to {selectedRole || "…"}</h4>
+          <h4 style={{ margin: "0 0 8px" }}>{t("presetsTitle", { role: selectedRole || "…" })}</h4>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             {presets.map((preset) => (
               <Button
                 key={preset.label}
                 size="sm"
-                disabled={!selectedRole || busyKey !== null}
-                onClick={() => void handlePresetApply(selectedRole, preset.features)}
+                disabled={!selectedRole || busyKey !== null || grantsUnknown}
+                onClick={() => setPending({ kind: "preset", role: selectedRole, roleName: selectedRoleName, label: preset.label, features: preset.features })}
                 style={{ fontSize: 12 }}
               >
                 {preset.label}
@@ -211,15 +283,15 @@ export function RoleFeaturesManager({
         </div>
       )}
 
-      <div className="card" style={{ marginTop: 12, overflowX: "auto" }}>
-        <h4 style={{ margin: "0 0 12px" }}>Feature Matrix</h4>
+      <div className="card" style={{ marginTop: 12, overflowX: "auto" }} aria-busy={busyKey !== null}>
+        <h4 style={{ margin: "0 0 12px" }}>{t("matrixTitle")}</h4>
         {roles.length === 0 ? (
-          <p style={{ color: "var(--mut)", fontSize: 13 }}>No roles are defined for this tenant yet.</p>
+          <p style={{ color: "var(--mut)", fontSize: 13 }}>{t("noRolesDefined")}</p>
         ) : (
-          <table className="data-table" role="table" aria-label="Role-feature matrix">
+          <table className="data-table" role="table" aria-label={t("matrixAria")}>
             <thead>
               <tr>
-                <th scope="col" style={{ position: "sticky", insetInlineStart: 0, background: "var(--panel)", zIndex: 1 }}>Feature</th>
+                <th scope="col" style={{ position: "sticky", insetInlineStart: 0, background: "var(--panel)", zIndex: 1 }}>{t("colFeature")}</th>
                 {roles.map((r) => (
                   <th scope="col" key={r.id} style={{ textAlign: "center", fontSize: 11 }}>{r.name}</th>
                 ))}
@@ -230,7 +302,7 @@ export function RoleFeaturesManager({
                 <tr key={feature}>
                   <td style={{ position: "sticky", insetInlineStart: 0, background: "var(--panel)", fontFamily: "monospace", fontSize: 12 }}>
                     {feature}
-                    {!catalogue.has(feature) && <span className="pill warn" style={{ marginLeft: 8, fontFamily: "inherit" }}>not in catalogue</span>}
+                    {!catalogue.has(feature) && <span className="pill warn" style={{ marginLeft: 8, fontFamily: "inherit" }}>{t("notInCatalogue")}</span>}
                   </td>
                   {roles.map((r) => {
                     const cellKey = `${r.key}:${feature}`;
@@ -239,9 +311,10 @@ export function RoleFeaturesManager({
                         <input
                           type="checkbox"
                           checked={isGranted(r.key, feature)}
-                          disabled={busyKey === cellKey}
-                          onChange={() => void handleToggleGrant(r.key, feature)}
-                          aria-label={`${r.name} access to ${feature}`}
+                          disabled={busyKey !== null || grantsUnknown}
+                          aria-busy={busyKey === cellKey}
+                          onChange={() => requestToggle(r, feature)}
+                          aria-label={t("cellAria", { role: r.name, feature })}
                         />
                       </td>
                     );
@@ -253,29 +326,51 @@ export function RoleFeaturesManager({
         )}
       </div>
 
-      {showPreview && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Feature Preview">
-          <div className="modal-content" style={{ maxWidth: 500, padding: 24, borderRadius: 8, background: "#fff" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <h3>Preview: As {roles.find((r) => r.key === selectedRole)?.name ?? selectedRole}</h3>
-              <Button variant="ghost" onClick={() => setShowPreview(false)} aria-label="Close preview">✕</Button>
-            </div>
-            <p style={{ color: "#666", margin: "8px 0 16px" }}>This role's real granted features:</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {roleGrants.length === 0 ? (
-                <p style={{ color: "#999" }}>No features granted to this role.</p>
-              ) : (
-                roleGrants.map((g) => (
-                  <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderRadius: 4, background: "#f0fdf4" }}>
-                    <span style={{ color: "#16a34a" }}>✅</span>
-                    <span style={{ fontFamily: "monospace", fontSize: 13 }}>{g.featureKey}</span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
+      {/* GAP-ADMIN-ROLE-FEATURES-03/-04: every grant/revoke and every preset is confirmed first.
+          policy-service's grant/revoke commands take no reason (the audit trail records the
+          actor and the grant), so none is collected here -- a reason that goes nowhere would
+          only look like a record. */}
+      <ConfirmDialog
+        open={pending !== null}
+        title={
+          pending?.kind === "preset"
+            ? t("confirmPresetTitle", { label: pending.label, role: pending.roleName })
+            : pending
+              ? t(pending.revoke ? "confirmRevokeTitle" : "confirmGrantTitle", { feature: pending.feature, role: pending.roleName })
+              : ""
+        }
+        description={
+          pending?.kind === "preset"
+            ? t("confirmPresetBody", { count: pending.features.filter((f) => !isGranted(pending.role, f)).length })
+            : pending
+              ? `${t(pending.revoke ? "confirmRevokeBody" : "confirmGrantBody")}${adminKey(pending.feature) ? ` ${t("confirmAdminNote")}` : ""}`
+              : undefined
+        }
+        confirmLabel={pending?.kind === "toggle" && pending.revoke ? t("confirmRevokeAction") : t("confirmGrantAction")}
+        cancelLabel={t("cancel")}
+        danger={pending?.kind === "toggle" && (pending.revoke || adminKey(pending.feature))}
+        onConfirm={() => void confirmPending()}
+        onCancel={() => setPending(null)}
+      />
+
+      <Modal open={showPreview} onClose={() => setShowPreview(false)} title={t("previewTitle", { role: selectedRoleName })} size="md">
+        <p style={{ color: "var(--mut)", margin: "8px 0 16px" }}>{t("previewIntro")}</p>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {roleGrants.length === 0 ? (
+            <p style={{ color: "var(--mut)" }}>{t("previewEmpty")}</p>
+          ) : (
+            roleGrants.map((g) => (
+              <div key={g.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "4px 8px", borderRadius: 4, background: "var(--goodbg, #f0fdf4)" }}>
+                <span style={{ color: "var(--good, #16a34a)" }} aria-hidden="true">✅</span>
+                <span style={{ fontFamily: "monospace", fontSize: 13 }}>{g.featureKey}</span>
+              </div>
+            ))
+          )}
         </div>
-      )}
+        <div style={{ marginTop: 16, textAlign: "end" }}>
+          <Button variant="ghost" onClick={() => setShowPreview(false)}>{t("previewClose")}</Button>
+        </div>
+      </Modal>
     </div>
   );
 }

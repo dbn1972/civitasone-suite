@@ -11,6 +11,8 @@ import * as commands from "./commands.js";
 import { grantFeatureBody, roleParam, grantIdParam, evaluateQuery } from "./validators.js";
 import { roleFeatureGrants } from "./schema.js";
 import { eq, and, inArray } from "drizzle-orm";
+import { assertMayManageFeature, findGrantFeatureKey } from "./authorize.js";
+import { isPlatformCaller } from "./authority.js";
 
 const ADMIN_ROLES = ["platform_admin", "super_admin", "tenant_admin"];
 const RESOURCE = "role_feature_grant";
@@ -51,6 +53,8 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const body = safeParse(grantFeatureBody, req.body);
+    // A tenant_admin may not hand out admin/platform features it does not itself hold.
+    await assertMayManageFeature(ctx, body.featureKey);
     const result = await commands.grantFeature(ctx, body);
     return reply.code(202).send(result);
   });
@@ -60,6 +64,11 @@ export async function roleFeatureRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ADMIN_ROLES);
     const { id } = safeParse(grantIdParam, req.params);
+    if (!isPlatformCaller(ctx.roles)) {
+      const featureKey = await findGrantFeatureKey(ctx, id);
+      if (featureKey === null) throw new HttpError(404, "NOT_FOUND", "role feature grant not found");
+      await assertMayManageFeature(ctx, featureKey);
+    }
     const result = await commands.revokeFeature(ctx, id);
     return reply.code(202).send(result);
   });
