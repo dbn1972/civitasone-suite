@@ -1,21 +1,15 @@
+import { Suspense } from "react";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { PageHeader, StatGrid, StatCard, Card, StatusPill } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState, SkeletonBar } from "@/app/_components/ds";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate } from "@/lib/formatters";
 import { RunsTable, type RunRow } from "./RunsTable";
 import { ExceptionsPanel, type ExceptionRow } from "./ExceptionsPanel";
+import { SubledgerSection } from "./SubledgerSection";
+import { canActOnExceptions, latestStartedAt } from "./reconHelpers";
 
 type ProviderRow = { key: string; sourceSystem: string; targetSystem: string } & Record<string, unknown>;
-
-type SubledgerRecon = {
-  side: "ap" | "ar";
-  controlAccountCode: string;
-  controlAccountResolved: boolean;
-  subledgerBalanceMinor: string;
-  controlAccountBalanceMinor: string;
-  differenceMinor: string;
-  isReconciled: boolean;
-};
 
 async function getRuns(): Promise<LoaderResult<RunRow[]>> {
   return fetchJson<unknown, RunRow[]>("/api/v1/finance/recon/runs", [], {
@@ -47,34 +41,22 @@ async function getProviders(): Promise<LoaderResult<ProviderRow[]>> {
   });
 }
 
-async function getSubledgerRecon(side: "ap" | "ar"): Promise<LoaderResult<SubledgerRecon | null>> {
-  return fetchJson<unknown, SubledgerRecon | null>(`/api/v1/finance/subledger-gl-reconciliation?side=${side}`, null, {
-    telemetryKey: `finance.recon.subledger.${side}`,
-    mapResponse: (p) => {
-      const data = (p as { data?: SubledgerRecon })?.data;
-      return data ?? null;
-    },
-  });
-}
-
 export default async function ReconciliationWorkbenchPage() {
-  const [runsResult, exceptionsResult, providersResult, apResult, arResult] = await Promise.all([
+  // The subledger card streams separately (<SubledgerSection> under Suspense),
+  // so its two aggregate queries never delay these three.
+  const [runsResult, exceptionsResult, providersResult] = await Promise.all([
     getRuns(),
     getExceptions(),
     getProviders(),
-    getSubledgerRecon("ap"),
-    getSubledgerRecon("ar"),
   ]);
 
   const runs = runsResult.data;
   const exceptions = exceptionsResult.data;
   const providers = providersResult.data;
-  const ap = apResult.data;
-  const ar = arResult.data;
-
-  const anyError = [runsResult.source, exceptionsResult.source, providersResult.source, apResult.source, arResult.source].includes(
-    "error",
-  );
+  const anyError = [runsResult.source, exceptionsResult.source, providersResult.source].includes("error");
+  const canAct = canActOnExceptions(getSessionRoles());
+  // Newest run by date, not runs[0]: the API order is not a contract (GAP-FINANCE-RECONCILIATION-07).
+  const lastRunStartedAt = latestStartedAt(runs);
 
   const openExceptions = exceptions.filter((e) => e.status === "open" || e.status === "investigating").length;
   const unbalancedRuns = runs.filter((r) => !r.balanced).length;
@@ -97,7 +79,7 @@ export default async function ReconciliationWorkbenchPage() {
 
       <Card title="Reconciliation Runs">
         {runsResult.source === "error" && runs.length === 0 ? (
-          <DataSourceBadge source="error" />
+          <LoadErrorState result={runsResult} area="reconciliation runs" backHref="/finance" />
         ) : (
           <RunsTable runs={runs} />
         )}
@@ -105,67 +87,21 @@ export default async function ReconciliationWorkbenchPage() {
 
       <Card title="Exceptions">
         {exceptionsResult.source === "error" && exceptions.length === 0 ? (
-          <DataSourceBadge source="error" />
+          <LoadErrorState result={exceptionsResult} area="reconciliation exceptions" backHref="/finance" />
         ) : (
-          <ExceptionsPanel exceptions={exceptions} />
+          <ExceptionsPanel exceptions={exceptions} canAct={canAct} />
         )}
       </Card>
 
       <Card title="Subledger ↔ GL Reconciliation">
-          <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit,minmax(280px,1fr))" }}>
-            {([
-              ["AP (Payables)", ap, apResult.source],
-              ["AR (Receivables)", ar, arResult.source],
-            ] as const).map(([label, recon, side]) => (
-              <div key={label} className="pad" style={{ border: "1px solid var(--line)", borderRadius: 12 }}>
-                <h4 style={{ margin: "0 0 8px", fontSize: 14 }}>{label}</h4>
-                {recon === null ? (
-                  side === "error" ? (
-                    <DataSourceBadge source="error" />
-                  ) : (
-                    <p style={{ color: "var(--ink2)", fontSize: 13 }}>No data available.</p>
-                  )
-                ) : (
-                  // definition-list: a <dl>'s only valid direct children are
-                  // dt/dd (optionally grouped in <div>s that each contain a
-                  // dt+dd pair), plus <script>/<template>. The StatusPill row
-                  // below is neither a term nor a description, so it moved
-                  // outside the <dl> as a sibling instead. UX-005 tranche 5.
-                  <>
-                    <dl style={{ display: "grid", gap: 6, margin: 0, fontSize: 13.5 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <dt>Control account</dt>
-                        <dd>
-                          {recon.controlAccountCode}
-                          {!recon.controlAccountResolved ? " (unresolved)" : ""}
-                        </dd>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <dt>Subledger balance</dt>
-                        <dd className="mono">{formatMoney(recon.subledgerBalanceMinor)}</dd>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between" }}>
-                        <dt>Control (GL) balance</dt>
-                        <dd className="mono">{formatMoney(recon.controlAccountBalanceMinor)}</dd>
-                      </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontWeight: 600 }}>
-                        <dt>Difference</dt>
-                        <dd className="mono">{formatMoney(recon.differenceMinor)}</dd>
-                      </div>
-                    </dl>
-                    <div style={{ marginTop: 6 }}>
-                      <StatusPill status={recon.isReconciled ? "cleared" : "breached"} label={recon.isReconciled ? "Reconciled" : "Not reconciled"} />
-                    </div>
-                  </>
-                )}
-              </div>
-            ))}
-          </div>
+        <Suspense fallback={<SkeletonBar h={120} />}>
+          <SubledgerSection />
+        </Suspense>
       </Card>
 
       <Card title="Providers">
         {providersResult.source === "error" ? (
-          <DataSourceBadge source="error" />
+          <LoadErrorState result={providersResult} area="reconciliation providers" backHref="/finance" />
         ) : providers.length === 0 ? (
           <p style={{ color: "var(--ink2)", fontSize: 13 }}>No reconciliation providers registered.</p>
         ) : (
@@ -179,9 +115,9 @@ export default async function ReconciliationWorkbenchPage() {
         )}
       </Card>
 
-      {runs.length > 0 && (
+      {lastRunStartedAt && (
         <p style={{ marginTop: 16, color: "var(--ink2)", fontSize: 12 }}>
-          Last run started {formatIndianDate(runs[0]?.startedAt)}.
+          Last run started {formatIndianDate(lastRunStartedAt)}.
         </p>
       )}
     </div>

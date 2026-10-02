@@ -5,6 +5,8 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { getPfmsTreasuryMode } from "./pfms-client.js";
+import { isEnabled as isPaymentRailEnabled } from "./adapter.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
@@ -66,7 +68,19 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const cfg = await repo.getTenantConfig(ctx.tenantId);
-    return reply.send(cfg ?? { agencyCode: null, defaultDdo: null });
+    // GAP-FINANCE-PFMS-05: two DIFFERENT integrations are gated by two different
+    // env families, so they are reported separately and never merged:
+    //  - paymentRail: the e-Kuber adapter behind POST /v1/finance/pfms/payments
+    //    (adapter.ts: PFMS_ENABLED / PFMS_BASE_URL / PFMS_API_KEY). It has NO
+    //    sandbox: it either pays for real ("live") or returns 503 ("disabled").
+    //  - treasuryMode: the treasury client behind salary-bill / payment-advice
+    //    (pfms-client.ts: PFMS_TREASURY_*), which does have a simulated "sandbox".
+    // No credentials are exposed, only the derived state.
+    return reply.send({
+      ...(cfg ?? { agencyCode: null, defaultDdo: null }),
+      paymentRail: isPaymentRailEnabled() ? "live" : "disabled",
+      treasuryMode: getPfmsTreasuryMode(),
+    });
   });
 
   app.get("/v1/finance/pfms/batches", async (req, reply) => {

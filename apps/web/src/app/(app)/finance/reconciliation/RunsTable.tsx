@@ -1,6 +1,7 @@
 "use client";
 
-import { DataTable, StatusPill } from "@/app/_components/ds";
+import { useState } from "react";
+import { DataTable, Segmented, StatusPill } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 
 export type RunRow = {
@@ -20,14 +21,24 @@ export type RunRow = {
 
 type Row = RunRow & { balancedLabel: string; startedLabel: string };
 
+const ALL_RUNS = "All runs";
+const UNBALANCED_ONLY = "Unbalanced only";
+
 export function RunsTable({ runs }: { runs: RunRow[] }) {
-  const rows: Row[] = runs.map((r) => ({
+  // GAP-FINANCE-RECONCILIATION-07: a clean run is noise when triaging.
+  const [view, setView] = useState<string>(ALL_RUNS);
+  const visibleRuns = view === UNBALANCED_ONLY ? runs.filter((r) => !r.balanced) : runs;
+  const rows: Row[] = visibleRuns.map((r) => ({
     ...r,
     balancedLabel: r.balanced ? "Balanced" : "Unbalanced",
     startedLabel: formatIndianDate(r.startedAt),
   }));
 
   return (
+    <>
+    <div style={{ marginBottom: 12 }}>
+      <Segmented options={[ALL_RUNS, UNBALANCED_ONLY]} value={view} onChange={setView} />
+    </div>
     <DataTable<Row>
       columns={[
         { key: "provider", label: "Provider" },
@@ -54,8 +65,13 @@ export function RunsTable({ runs }: { runs: RunRow[] }) {
       filterPlaceholder="Filter by provider or source…"
       pageSize={15}
       emptyIcon="🔁"
-      emptyTitle="No reconciliation runs yet"
-      emptyMessage="Reconciliation runs will appear here once the reconciliation engine has executed."
+      emptyTitle={view === UNBALANCED_ONLY ? "No unbalanced runs" : "No reconciliation runs yet"}
+      emptyMessage={
+        view === UNBALANCED_ONLY
+          ? "Every run is balanced."
+          : "Reconciliation runs will appear here once the reconciliation engine has executed."
+      }
     />
+    </>
   );
 }

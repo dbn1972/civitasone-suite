@@ -59,7 +59,10 @@ export function registerReconConsumers(queue: Queue): void {
       const resolving = next === "resolved" || next === "written_off";
       await repo.updateBreakStatus(tx, p.tenantId, p.id, {
         status: next,
-        resolutionNote: p.note ?? null,
+        // Only a closing action writes the note. investigate/reopen must NOT touch the
+        // stored resolutionNote (it was wiped to null before); their note, if any,
+        // is kept in the audit event below.
+        ...(resolving ? { resolutionNote: p.note ?? null } : {}),
         resolvedBy: resolving ? msg.actorId : null,
         resolvedAt: resolving ? new Date() : null,
       });
@@ -83,6 +86,10 @@ export function registerReconConsumers(queue: Queue): void {
           resourceType: "recon_break",
           resourceId: p.id,
           outcome: "success",
+          exceptionAction: p.action,
+          previousStatus: existing.status,
+          newStatus: next,
+          ...(p.note ? { note: p.note } : {}),
         },
       });
     });

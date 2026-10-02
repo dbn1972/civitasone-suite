@@ -6,7 +6,7 @@ import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { parseRupeesToPaise } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
-import type { PfmsMode } from "./types";
+import type { PfmsPaymentRail } from "./types";
 
 type SubmitResult = {
   referenceId: string;
@@ -14,14 +14,18 @@ type SubmitResult = {
   status: "accepted" | "rejected";
   message?: string;
   timestamp: string;
-  mode?: PfmsMode;
 };
 
 type FieldKey = "referenceId" | "beneficiaryCode" | "amount" | "purposeCode";
 
 interface SubmitPaymentFormProps {
-  /** Reports the `mode` field of a successful response, once the backend adapter rollout starts sending it. */
-  onModeObserved?: (mode: PfmsMode) => void;
+  /**
+   * State of the e-Kuber adapter this form posts to (GAP-FINANCE-PFMS-05). The
+   * adapter has NO sandbox: it either pays for real or answers 503, so this form
+   * never says "simulated". "disabled" disables submit; null (backend did not
+   * say) gets neutral copy that does not claim a real payment either.
+   */
+  rail?: PfmsPaymentRail | null;
 }
 
 /**
@@ -35,7 +39,7 @@ interface SubmitPaymentFormProps {
  * The adapter fails closed with 503 INTEGRATION_DISABLED when PFMS_ENABLED is
  * not set in this environment; that surfaces as a server error in the dialog.
  */
-export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
+export function SubmitPaymentForm({ rail = null }: SubmitPaymentFormProps) {
   const t = useTranslations("pfmsSubmitPaymentForm");
   const [referenceId, setReferenceId] = useState("");
   const [beneficiaryCode, setBeneficiaryCode] = useState("");
@@ -117,7 +121,6 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
       });
       setConfirmOpen(false);
       setResult(res.data);
-      if (res.data.mode) onModeObserved?.(res.data.mode);
       setMessage(t("successMessage", { ref: res.data.referenceId, status: res.data.status }));
       setReferenceId("");
       setBeneficiaryCode("");
@@ -261,7 +264,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
           </div>
 
           <div>
-            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy || rail === "disabled"}>
               {t("submitButton")}
             </Button>
           </div>
@@ -284,7 +287,7 @@ export function SubmitPaymentForm({ onModeObserved }: SubmitPaymentFormProps) {
         errorMessage={dialogError}
         description={
           <>
-            {t.rich("confirmDescription", {
+            {t.rich(rail === "live" ? "confirmDescription" : "confirmDescriptionUnknown", {
               referenceId,
               beneficiaryCode,
               amount: paiseAmount ? formatMoney(paiseAmount) : "",

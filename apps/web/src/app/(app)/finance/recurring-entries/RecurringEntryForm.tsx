@@ -2,19 +2,21 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card, ConfirmDialog } from "../../../_components/ds";
+import Link from "next/link";
+import { Button, Card, ConfirmDialog, RefreshErrorState } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { parseRupeesToPaise } from "@/lib/money";
+import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
+import { toHumanError } from "@/lib/messages";
+import { FREQUENCIES, VOUCHER_TYPES, isValidFrequency, isValidVoucherType, validateRunDates } from "./recurringForm";
 
 export type AccountOption = { id: string; code: string; name: string };
 
-type Props = { accounts: AccountOption[] };
-
-const FREQUENCIES = ["daily", "weekly", "monthly", "quarterly", "yearly"] as const;
-
-function rupeesToPaise(val: string): number {
-  const n = parseFloat(val);
-  return Number.isNaN(n) ? 0 : Math.round(n * 100);
-}
+type Props = {
+  accounts: AccountOption[];
+  /** The chart-of-accounts fetch failed (as opposed to returning an empty list). */
+  accountsError?: boolean;
+};
 
 type FieldErrors = {
   name?: string;
@@ -22,9 +24,11 @@ type FieldErrors = {
   creditAccountId?: string;
   amount?: string;
   nextRunDate?: string;
+  endDate?: string;
+  voucherType?: string;
 };
 
-export function RecurringEntryForm({ accounts }: Props) {
+export function RecurringEntryForm({ accounts, accountsError = false }: Props) {
   const router = useRouter();
 
   const [name, setName] = useState("");
@@ -57,12 +61,22 @@ export function RecurringEntryForm({ accounts }: Props) {
   const creditErrId = useId();
   const amountErrId = useId();
   const nextRunErrId = useId();
+  const endDateErrId = useId();
+  const amountPreviewId = useId();
 
   const nameRef = useRef<HTMLInputElement>(null);
   const debitRef = useRef<HTMLSelectElement>(null);
   const creditRef = useRef<HTMLSelectElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const nextRunRef = useRef<HTMLInputElement>(null);
+  const endDateRef = useRef<HTMLInputElement>(null);
+
+  const noAccounts = !accountsError && accounts.length === 0;
+  const blocked = accountsError || noAccounts;
+  const today = todayIST();
+  // Money is parsed to paise digit-string with BigInt, never parseFloat: "1,20,000" is
+  // 12000000 paise, "1.005" and "12abc" are rejected (GAP-FINANCE-RECURRING-ENTRIES-05).
+  const paise = parseRupeesToPaise(amount);
 
   function validate(): boolean {
     const next: FieldErrors = {};
@@ -72,9 +86,12 @@ export function RecurringEntryForm({ accounts }: Props) {
     if (debitAccountId && creditAccountId && debitAccountId === creditAccountId) {
       next.creditAccountId = "Credit account must differ from the debit account.";
     }
-    const paise = rupeesToPaise(amount);
-    if (!amount.trim() || paise <= 0) next.amount = "Enter an amount greater than zero.";
-    if (!nextRunDate) next.nextRunDate = "Next run date is required.";
+    if (paise === null || !Number.isSafeInteger(Number(paise))) {
+      next.amount = "Enter a valid amount like 1,20,000.50 (rupees, at most 2 decimals, greater than zero).";
+    }
+    if (!isValidVoucherType(voucherType)) next.voucherType = "Choose a voucher type from the list.";
+    if (!isValidFrequency(frequency)) next.voucherType = next.voucherType ?? "Choose a frequency from the list.";
+    Object.assign(next, validateRunDates(nextRunDate, endDate, today));
 
     setErrors(next);
     if (next.name) { nameRef.current?.focus(); return false; }
@@ -82,13 +99,15 @@ export function RecurringEntryForm({ accounts }: Props) {
     if (next.creditAccountId) { creditRef.current?.focus(); return false; }
     if (next.amount) { amountRef.current?.focus(); return false; }
     if (next.nextRunDate) { nextRunRef.current?.focus(); return false; }
+    if (next.endDate) { endDateRef.current?.focus(); return false; }
+    if (next.voucherType) return false;
     return Object.keys(next).length === 0;
   }
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
-    if (!validate()) return;
+    if (blocked || !validate()) return;
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -107,7 +126,8 @@ export function RecurringEntryForm({ accounts }: Props) {
             frequency,
             debitAccountId,
             creditAccountId,
-            amountMinor: rupeesToPaise(amount),
+            // The create route takes a JSON integer; safe-integer was checked in validate().
+            amountMinor: Number(paise),
             narration: narration.trim() || undefined,
             nextRunDate,
             endDate: endDate || undefined,
@@ -134,9 +154,21 @@ export function RecurringEntryForm({ accounts }: Props) {
   const creditAccount = accounts.find((a) => a.id === creditAccountId);
 
   return (
-    <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
+    <form onSubmit={handleSubmit} noValidate style={{ marginBottom: 16 }}>
       <Card title="Create Recurring Entry" padding>
         <div style={{ display: "grid", gap: 14 }}>
+          {accountsError && (
+            <RefreshErrorState
+              error={toHumanError("load", { area: "chart of accounts" })}
+              backHref="/finance"
+            />
+          )}
+          {noAccounts && (
+            <p role="alert" className="pill warn" style={{ width: "fit-content" }}>
+              No accounts defined. Create accounts in the{" "}
+              <Link href="/finance/chart-of-accounts">Chart of Accounts</Link> before adding a recurring entry.
+            </p>
+          )}
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={nameId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -212,9 +244,13 @@ export function RecurringEntryForm({ accounts }: Props) {
                 onChange={(e) => setAmount(e.target.value)}
                 aria-required="true"
                 aria-invalid={!!errors.amount || undefined}
-                aria-describedby={errors.amount ? amountErrId : undefined}
+                aria-describedby={errors.amount ? `${amountErrId} ${amountPreviewId}` : amountPreviewId}
+                autoComplete="off"
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              <span id={amountPreviewId} style={{ fontSize: 12, color: "var(--ink2)" }}>
+                {paise !== null ? formatMoney(paise) : "Enter rupees, e.g. 1,20,000.50"}
+              </span>
               {errors.amount && <p id={amountErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.amount}</p>}
             </div>
 
@@ -226,6 +262,7 @@ export function RecurringEntryForm({ accounts }: Props) {
                 id={nextRunId}
                 ref={nextRunRef}
                 type="date"
+                min={today}
                 value={nextRunDate}
                 onChange={(e) => setNextRunDate(e.target.value)}
                 aria-required="true"
@@ -240,11 +277,16 @@ export function RecurringEntryForm({ accounts }: Props) {
               <label htmlFor={endDateId} style={{ fontSize: 13, fontWeight: 600 }}>End Date</label>
               <input
                 id={endDateId}
+                ref={endDateRef}
                 type="date"
+                min={nextRunDate || today}
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                aria-invalid={!!errors.endDate || undefined}
+                aria-describedby={errors.endDate ? endDateErrId : undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
+              {errors.endDate && <p id={endDateErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.endDate}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -263,13 +305,18 @@ export function RecurringEntryForm({ accounts }: Props) {
 
             <div style={{ display: "grid", gap: 6 }}>
               <label style={{ fontSize: 13, fontWeight: 600 }} htmlFor={voucherTypeId}>Voucher Type</label>
-              <input
+              <select
                 id={voucherTypeId}
                 value={voucherType}
                 onChange={(e) => setVoucherType(e.target.value)}
-                maxLength={20}
+                aria-invalid={!!errors.voucherType || undefined}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+              >
+                {VOUCHER_TYPES.map((v) => (
+                  <option key={v.value} value={v.value}>{v.label}</option>
+                ))}
+              </select>
+              {errors.voucherType && <p role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.voucherType}</p>}
             </div>
 
             <div style={{ display: "grid", gap: 6 }}>
@@ -284,7 +331,7 @@ export function RecurringEntryForm({ accounts }: Props) {
           </div>
 
           <div>
-            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy || blocked}>
               Create Recurring Entry
             </Button>
           </div>
@@ -308,6 +355,21 @@ export function RecurringEntryForm({ accounts }: Props) {
             Create a {frequency} standing entry <strong>{name}</strong> debiting{" "}
             <strong>{debitAccount ? `${debitAccount.code} — ${debitAccount.name}` : debitAccountId}</strong> and
             crediting <strong>{creditAccount ? `${creditAccount.code} — ${creditAccount.name}` : creditAccountId}</strong>.
+            <dl style={{ margin: "12px 0 0", display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 16px" }}>
+              <dt>Amount</dt>
+              <dd style={{ margin: 0 }}><strong>{paise !== null ? formatMoney(paise) : "—"}</strong> each time it runs</dd>
+              <dt>Voucher type</dt>
+              <dd style={{ margin: 0 }}>{VOUCHER_TYPES.find((v) => v.value === voucherType)?.label ?? voucherType}</dd>
+              <dt>Next run</dt>
+              <dd style={{ margin: 0 }}>{formatIndianDate(nextRunDate)}</dd>
+              <dt>Ends</dt>
+              <dd style={{ margin: 0 }}>{endDate ? formatIndianDate(endDate) : "No end date"}</dd>
+              {narration.trim() ? (<><dt>Narration</dt><dd style={{ margin: 0 }}>{narration.trim()}</dd></>) : null}
+            </dl>
+            <p style={{ margin: "8px 0 0" }}>
+              This records the schedule only. Nothing is posted automatically: templates that fall due are flagged at
+              period close, and the journal must be posted by hand.
+            </p>
           </>
         }
         onConfirm={() => void createEntry()}

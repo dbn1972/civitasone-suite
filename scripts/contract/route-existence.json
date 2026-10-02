@@ -2,9 +2,9 @@
   "generatedAt": "2026-09-29",
   "counts": {
     "realRoutes": 848,
-    "totalLinks": 1589,
+    "totalLinks": 1588,
     "byKind": {
-      "href": 1338,
+      "href": 1337,
       "navigate": 162,
       "helperReturn": 21,
       "rowLinkPrefix": 68
@@ -4979,14 +4979,6 @@
       "kind": "href",
       "target": "/finance/expenditure/scheme-tracking",
       "resolved": "/finance/expenditure/scheme-tracking",
-      "ok": true
-    },
-    {
-      "file": "apps/web/src/app/(app)/finance/page.tsx",
-      "line": 29,
-      "kind": "href",
-      "target": "/finance/treasury/pfms",
-      "resolved": "/finance/treasury/pfms",
       "ok": true
     },
     {

@@ -4177,7 +4177,8 @@
     "statPendingSignature": "Pending Signature",
     "statTotalBatchValue": "Total Batch Value",
     "routeErrorBackLabel": "Back to Finance",
-    "routeErrorArea": "PFMS Ops Console"
+    "routeErrorArea": "PFMS Ops Console",
+    "unreadableAmounts": "{count, plural, one {# batch has an unreadable amount} other {# batches have unreadable amounts}}, so the total batch value is not shown."
   },
   "pfmsAdviceStatusLookup": {
     "title": "Check Payment Advice Status",
@@ -4246,7 +4247,14 @@
     "confirmTitle": "Generate this payment advice?",
     "confirmLabel": "Generate advice",
     "confirmDescription": "Generate a treasury payment advice for <b>{payeeName}</b> ({amount}). This submits to the treasury workflow and cannot be undone.",
-    "amountAboveFallback": "amount above"
+    "amountAboveFallback": "amount above",
+    "billSelectLabel": "Bill",
+    "billSelectPlaceholder": "Select a bill…",
+    "billSelectRequired": "Select a bill.",
+    "payeeAccountNoConfirmLabel": "Re-enter account number",
+    "payeeAccountNoMismatch": "Account numbers do not match.",
+    "billSearchLabel": "Search bills",
+    "billSearchPlaceholder": "Search by bill number or vendor…"
   },
   "pfmsPaymentStatusLookup": {
     "title": "Check Payment Status",
@@ -4264,7 +4272,21 @@
   },
   "pfmsPaymentsPanel": {
     "sandboxModeTitle": "Sandbox Mode",
-    "sandboxModeMessage": "PFMS credentials are not configured. Submissions are simulated and will not reach the government payment gateway."
+    "sandboxModeMessage": "PFMS credentials are not configured. Submissions are simulated and will not reach the government payment gateway.",
+    "tabSubmit": "Submit Payment",
+    "tabStatus": "Payment Status",
+    "tabSalaryBill": "Salary Bill",
+    "tabAdvice": "Payment Advice",
+    "unknownModeTitle": "PFMS mode unknown",
+    "unknownModeMessage": "Could not determine whether PFMS is in sandbox or live mode. Do not assume a submission is only simulated; confirm the mode with your administrator before submitting.",
+    "liveModeTitle": "Live mode",
+    "liveModeMessage": "Submissions are sent to the government PFMS gateway and cannot be recalled from this console.",
+    "railLiveTitle": "PFMS payments are live",
+    "railLiveMessage": "Payments submitted here go to the government PFMS/e-Kuber gateway and cannot be recalled from this console. There is no sandbox on this route.",
+    "railDisabledTitle": "PFMS payments are disabled on this server",
+    "railDisabledMessage": "The PFMS payment integration is not configured here, so payments cannot be submitted or checked. Ask your administrator to enable it.",
+    "railUnknownTitle": "PFMS payment status unknown",
+    "railUnknownMessage": "Could not determine whether PFMS payments are enabled on this server. Do not assume a submission is harmless: if PFMS is enabled it is a real payment."
   },
   "pfmsSalaryBillForm": {
     "monthRequired": "Month must be in YYYY-MM format.",
@@ -4321,7 +4343,8 @@
     "networkErrorFallback": "Network error. Please try again.",
     "confirmTitle": "Submit this payment to PFMS?",
     "confirmLabel": "Submit payment",
-    "confirmDescription": "Submit payment <b>{referenceId}</b> of <b>{amount}</b> for beneficiary <b>{beneficiaryCode}</b> to PFMS/e-Kuber. This initiates a real payment submission and cannot be recalled from this console."
+    "confirmDescription": "Submit payment <b>{referenceId}</b> of <b>{amount}</b> for beneficiary <b>{beneficiaryCode}</b> to PFMS/e-Kuber. This initiates a real payment submission and cannot be recalled from this console.",
+    "confirmDescriptionUnknown": "Submit payment <b>{referenceId}</b> of <b>{amount}</b> for beneficiary <b>{beneficiaryCode}</b> to PFMS/e-Kuber. The server did not say whether PFMS payments are enabled; if they are, this is a real payment and cannot be recalled from this console."
   },
   "procurement": {
     "title": "Procurement",

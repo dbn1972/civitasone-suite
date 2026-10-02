@@ -68,6 +68,7 @@ describe("ExceptionsPanel", () => {
     fireEvent.click(screen.getByLabelText("Resolve exception UTR12345"));
 
     await waitFor(() => expect(screen.getByText("Resolve this exception?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Matched manually to bank UTR12345" } });
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
 
     await waitFor(() => {
@@ -94,6 +95,7 @@ describe("ExceptionsPanel", () => {
     fireEvent.click(screen.getByLabelText("Resolve exception UTR12345"));
 
     await waitFor(() => expect(screen.getByText("Resolve this exception?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/Reason/), { target: { value: "Matched manually to bank UTR12345" } });
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
 
     const alert = await screen.findByRole("alert");
@@ -119,5 +121,91 @@ describe("ExceptionsPanel", () => {
     const dialog = screen.getByRole("alertdialog");
     expect(within(dialog).getByText("settled")).toBeInTheDocument();
     expect(within(dialog).getByText("pending")).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-RECONCILIATION-01 / DETAIL-01: a justification is mandatory and is sent as `note`.
+  it("blocks Write off until a reason of minimum length is given, and sends it as note", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
+    render(<ExceptionsPanel exceptions={[OPEN_EXCEPTION]} />);
+    fireEvent.click(screen.getByLabelText("Write off exception UTR12345"));
+    const dialog = screen.getByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Write off" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(fetchSpy).not.toHaveBeenCalled();
+
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "too short" } });
+    expect(confirm).toBeDisabled();
+
+    fireEvent.change(within(dialog).getByLabelText(/Reason/), { target: { value: "Bank charge, approved by CFO memo 12" } });
+    expect(confirm).not.toBeDisabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    const init = fetchSpy.mock.calls[0]![1] as RequestInit;
+    expect(JSON.parse(init.body as string)).toEqual({ action: "write_off", note: "Bank charge, approved by CFO memo 12" });
+  });
+
+  it("does not require a note for investigate, but still sends one when typed", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 202 }));
+    render(<ExceptionsPanel exceptions={[OPEN_EXCEPTION]} />);
+    fireEvent.click(screen.getByLabelText("Investigate exception UTR12345"));
+    const dialog = screen.getByRole("alertdialog");
+    const confirm = within(dialog).getByRole("button", { name: "Investigate" });
+    expect(confirm).not.toBeDisabled();
+    fireEvent.click(confirm);
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalledTimes(1));
+    expect(JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string)).toEqual({ action: "investigate" });
+  });
+
+  it("shows the resolution note and date on a resolved row", () => {
+    render(
+      <ExceptionsPanel
+        exceptions={[
+          {
+            ...RESOLVED_EXCEPTION,
+            resolutionNote: "Matched to UTR on bank statement",
+            resolvedBy: "11111111-aaaa-4000-8000-000000000001",
+            resolvedAt: "2026-07-02T00:00:00.000Z",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText("Matched to UTR on bank statement")).toBeInTheDocument();
+    expect(screen.getByText(/02\/07\/2026|02 Jul 2026/)).toBeInTheDocument();
+    // a raw actor UUID is never shown as a name
+    expect(screen.queryByText(/11111111-aaaa/)).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-RECONCILIATION-03 / DETAIL-05
+  it("renders read-only with no action buttons when canAct is false", () => {
+    render(<ExceptionsPanel exceptions={[OPEN_EXCEPTION, RESOLVED_EXCEPTION]} canAct={false} />);
+    expect(screen.getByText("UTR12345")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Write off exception/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Reopen exception/)).not.toBeInTheDocument();
+    expect(screen.getByRole("note")).toHaveTextContent(/read-only access/);
+  });
+
+  // GAP-FINANCE-RECONCILIATION-04: an open break is red, not green.
+  it("tones status pills: open red, investigating amber, resolved green, written off neutral", () => {
+    const rows: ExceptionRow[] = [
+      OPEN_EXCEPTION,
+      { ...OPEN_EXCEPTION, id: "a", breakKey: "K-INV", status: "investigating" },
+      RESOLVED_EXCEPTION,
+      { ...OPEN_EXCEPTION, id: "b", breakKey: "K-WO", status: "written_off" },
+    ];
+    render(<ExceptionsPanel exceptions={rows} />);
+    expect(screen.getByText("Open").className).toContain("bad");
+    expect(screen.getByText("Investigating").className).toContain("warn");
+    expect(screen.getByText("Resolved").className).toContain("good");
+    expect(screen.getByText("Written Off").className).toContain("mut");
+  });
+
+  // GAP-FINANCE-RECONCILIATION-05: Actions lead the row so they stay reachable on a phone.
+  it("puts the Actions column first and folds provider/type under the break key", () => {
+    const { container } = render(<ExceptionsPanel exceptions={[OPEN_EXCEPTION]} />);
+    const headers = Array.from(container.querySelectorAll("thead th")).map((h) => h.textContent);
+    expect(headers[0]).toBe("Actions");
+    expect(headers).not.toContain("Provider");
+    expect(screen.getByText(/book-vs-bank · value_mismatch/)).toBeInTheDocument();
   });
 });

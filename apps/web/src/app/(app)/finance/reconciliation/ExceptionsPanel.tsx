@@ -6,6 +6,12 @@ import { Button, DataTable, StatusPill, ConfirmDialog } from "@/app/_components/
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import {
+  MAX_NOTE_LENGTH,
+  MIN_NOTE_LENGTH,
+  exceptionStatusVariant,
+  readableActor,
+} from "./reconHelpers";
 
 export type ExceptionStatus = "open" | "investigating" | "resolved" | "written_off";
 export type ExceptionAction = "investigate" | "resolve" | "write_off" | "reopen";
@@ -67,21 +73,38 @@ export function formatBreakValue(row: Pick<ExceptionRow, "fieldType">, value: st
   return row.fieldType === "amount" ? formatMoney(value) : value;
 }
 
-export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) {
+/** Actions whose justification is mandatory (resolve / write-off close the break). */
+const NOTE_REQUIRED: ReadonlySet<ExceptionAction> = new Set(["resolve", "write_off"]);
+
+export function ExceptionsPanel({
+  exceptions,
+  canAct = true,
+}: {
+  exceptions: ExceptionRow[];
+  /**
+   * Whether the session may act on exceptions (GAP-FINANCE-RECONCILIATION-03).
+   * False renders the table read-only with no action buttons. Defaults to true
+   * so callers that have not resolved a role keep today's behaviour; the server
+   * is the authority either way.
+   */
+  canAct?: boolean;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState<{ row: ExceptionRow; action: ExceptionAction } | null>(null);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
 
-  async function runAction() {
+  async function runAction(note?: string) {
     if (!pending) return;
     setBusy(true);
     setDialogError(undefined);
     try {
       const res = await browserFetch(`v1/finance/recon/exceptions/${pending.row.id}/action`, {
         method: "POST",
-        body: JSON.stringify({ action: pending.action }),
+        // `note` is the audited justification (GAP-FINANCE-RECONCILIATION-01):
+        // the backend persists it as resolutionNote and writes it to the audit event.
+        body: JSON.stringify(note ? { action: pending.action, note } : { action: pending.action }),
       });
       if (!res.ok) {
         setDialogError(await errorMessageFromResponse(res, "save", "reconciliation exception"));
@@ -97,22 +120,65 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
     }
   }
 
+  // Dense 11-column layout collapsed (GAP-FINANCE-RECONCILIATION-05): provider and
+  // break type ride under the break key, source/target share one cell, and the
+  // Actions column leads so it stays reachable on a phone without scrolling
+  // horizontally.
+  const actionsColumn = {
+    key: "id" as const,
+    label: "Actions",
+    sortable: false,
+    render: (row: ExceptionRow) => {
+      const actions = AVAILABLE_ACTIONS[row.status] ?? [];
+      if (actions.length === 0) {
+        return <span style={{ color: "var(--ink2)", fontSize: 13 }}>—</span>;
+      }
+      return (
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {actions.map((action) => (
+            <Button
+              key={action}
+              type="button"
+              variant="ghost"
+              size="sm"
+              aria-label={`${ACTION_LABEL[action]} exception ${row.breakKey}`}
+              onClick={() => {
+                setDialogError(undefined);
+                setPending({ row, action });
+              }}
+            >
+              {ACTION_LABEL[action]}
+            </Button>
+          ))}
+        </div>
+      );
+    },
+  };
+
   const columns = [
-    { key: "breakKey" as const, label: "Break Key", render: (row: ExceptionRow) => <span className="mono">{row.breakKey}</span> },
-    { key: "provider" as const, label: "Provider" },
-    { key: "breakType" as const, label: "Type" },
+    ...(canAct ? [actionsColumn] : []),
+    {
+      key: "breakKey" as const,
+      label: "Break Key",
+      render: (row: ExceptionRow) => (
+        <div>
+          <span className="mono">{row.breakKey}</span>
+          <div style={{ color: "var(--ink2)", fontSize: 12 }}>
+            {row.provider} · {row.breakType}
+          </div>
+        </div>
+      ),
+    },
     { key: "field" as const, label: "Field", render: (row: ExceptionRow) => row.field ?? "—" },
     {
       key: "sourceValue" as const,
-      label: "Source Value",
+      label: "Source → Target",
       align: "right" as const,
-      render: (row: ExceptionRow) => formatBreakValue(row, row.sourceValue),
-    },
-    {
-      key: "targetValue" as const,
-      label: "Target Value",
-      align: "right" as const,
-      render: (row: ExceptionRow) => formatBreakValue(row, row.targetValue),
+      render: (row: ExceptionRow) => (
+        <span>
+          {formatBreakValue(row, row.sourceValue)} → {formatBreakValue(row, row.targetValue)}
+        </span>
+      ),
     },
     {
       key: "deltaMinor" as const,
@@ -130,38 +196,31 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
         />
       ),
     },
-    { key: "status" as const, label: "Status", cellType: "status" as const },
-    { key: "createdAt" as const, label: "Detected", render: (row: ExceptionRow) => formatIndianDate(row.createdAt) },
     {
-      key: "id" as const,
-      label: "Actions",
-      sortable: false,
+      key: "status" as const,
+      label: "Status",
       render: (row: ExceptionRow) => {
-        const actions = AVAILABLE_ACTIONS[row.status] ?? [];
-        if (actions.length === 0) {
-          return <span style={{ color: "var(--ink2)", fontSize: 13 }}>—</span>;
-        }
+        const closed = row.status === "resolved" || row.status === "written_off";
+        const by = readableActor(row.resolvedBy);
         return (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {actions.map((action) => (
-              <Button
-                key={action}
-                type="button"
-                variant="ghost"
-                size="sm"
-                aria-label={`${ACTION_LABEL[action]} exception ${row.breakKey}`}
-                onClick={() => {
-                  setDialogError(undefined);
-                  setPending({ row, action });
-                }}
-              >
-                {ACTION_LABEL[action]}
-              </Button>
-            ))}
+          <div>
+            <StatusPill status={row.status} variant={exceptionStatusVariant(row.status)} />
+            {closed && (row.resolutionNote || row.resolvedAt) ? (
+              <div style={{ color: "var(--ink2)", fontSize: 12, marginTop: 4, maxWidth: 260 }}>
+                {row.resolutionNote ? <div>{row.resolutionNote}</div> : null}
+                {row.resolvedAt ? (
+                  <div>
+                    {by ? `${by} · ` : ""}
+                    {formatIndianDate(row.resolvedAt)}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
         );
       },
     },
+    { key: "createdAt" as const, label: "Detected", render: (row: ExceptionRow) => formatIndianDate(row.createdAt) },
   ];
 
   return (
@@ -171,8 +230,15 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
           {message}
         </p>
       )}
+      {!canAct && (
+        <p role="note" style={{ margin: "0 0 12px", color: "var(--ink2)", fontSize: 13 }}>
+          You have read-only access to reconciliation. Resolving or writing off a break needs the finance officer,
+          finance admin or super admin role.
+        </p>
+      )}
       <DataTable<ExceptionRow>
         columns={columns}
+        filterKeys={["breakKey", "provider", "breakType", "field", "status"]}
         rows={exceptions}
         sortable
         filterable
@@ -188,6 +254,11 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
         title={pending ? `${ACTION_LABEL[pending.action]} this exception?` : ""}
         confirmLabel={pending ? ACTION_LABEL[pending.action] : "Confirm"}
         danger={pending?.action === "write_off"}
+        requireReason={pending ? NOTE_REQUIRED.has(pending.action) : false}
+        optionalReason={pending ? !NOTE_REQUIRED.has(pending.action) : false}
+        reasonLabel={pending && NOTE_REQUIRED.has(pending.action) ? "Reason (required, recorded in the audit trail)" : "Note (optional)"}
+        minReasonLength={MIN_NOTE_LENGTH}
+        maxReasonLength={MAX_NOTE_LENGTH}
         busy={busy}
         errorMessage={dialogError}
         description={
@@ -214,7 +285,7 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
             </>
           ) : null
         }
-        onConfirm={() => void runAction()}
+        onConfirm={(reason) => void runAction(reason)}
         onCancel={() => !busy && setPending(null)}
       />
     </>

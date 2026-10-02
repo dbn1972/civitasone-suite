@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -91,5 +91,88 @@ describe("PfmsOpsConsolePage", () => {
     renderPage(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-PFMS-04: one corrupt amount must not take the whole page into error.tsx.
+  it("degrades the Total stat to a dash with a note when a batch amount is unreadable", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/batches")) {
+        return Promise.resolve({
+          data: [
+            { id: "b1", pfmsId: "PFMS-0001", type: "salary", channel: "treasury_batch", amountMinor: "12.50", agencyCode: null, schemeCode: null, ddoCode: null, submissionStatus: "pending", signedAt: null },
+            { id: "b2", pfmsId: "PFMS-0002", type: "salary", channel: "treasury_batch", amountMinor: "250", agencyCode: null, schemeCode: null, ddoCode: null, submissionStatus: "pending", signedAt: null },
+          ],
+          source: "api",
+        });
+      }
+      if (path.includes("/departments") || path.includes("/bills")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: null, source: "api" });
+    });
+    const ui = await PfmsOpsConsolePage();
+    renderPage(ui);
+    expect(screen.getByText("PFMS-0001")).toBeInTheDocument();
+    expect(screen.getByText(/1 batch has an unreadable amount/)).toBeInTheDocument();
+    // the Total stat shows a dash rather than a partial, misleading sum
+    expect(screen.getByText("Total Batch Value").parentElement).toHaveTextContent("—");
+  });
+
+  it("shows the real total when every amount is readable (no note)", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/batches")) {
+        return Promise.resolve({
+          data: [{ id: "b1", pfmsId: "PFMS-0001", type: "salary", channel: "treasury_batch", amountMinor: "250", agencyCode: null, schemeCode: null, ddoCode: null, submissionStatus: "pending", signedAt: null }],
+          source: "api",
+        });
+      }
+      if (path.includes("/departments") || path.includes("/bills")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: null, source: "api" });
+    });
+    const ui = await PfmsOpsConsolePage();
+    renderPage(ui);
+    expect(screen.getAllByText("₹2.50").length).toBeGreaterThan(0);
+    expect(screen.queryByText(/unreadable amount/)).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-PFMS-05: config.mode reaches the Payments tab banner.
+  it("passes config.paymentRail / treasuryMode to the Payments tab so the banner shows before any submit", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/batches") || path.includes("/departments") || path.includes("/bills")) return Promise.resolve({ data: [], source: "api" });
+      return Promise.resolve({ data: { agencyCode: "AG01", defaultDdo: "D", paymentRail: "disabled", treasuryMode: "sandbox" }, source: "api" });
+    });
+    const ui = await PfmsOpsConsolePage();
+    renderPage(ui);
+    // mapResponse is bypassed by the mock, so the page must cope with the raw payload too.
+    fireEvent.click(screen.getByText("Payments"));
+    expect(screen.getAllByText("PFMS payments are disabled on this server").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("tab", { name: "Salary Bill" }));
+    expect(screen.getAllByText("Sandbox Mode").length).toBeGreaterThan(0);
+  });
+
+  // GAP-FINANCE-PFMS-07: the bill picker pages through ALL bills (default page is 50), keeping payable ones.
+  it("loads bills page by page until a short page, keeping only payable bills", async () => {
+    const bill = (i: number, status: string) => ({ id: `id-${i}`, billNo: `B-${i}`, vendor: "", amount: "100", status });
+    const pages: Record<string, unknown[]> = {
+      "offset=0": Array.from({ length: 500 }, (_, i) => bill(i, i % 2 ? "passed" : "pending")),
+      "offset=500": [bill(900, "passed"), bill(901, "paid")],
+    };
+    const billCalls: string[] = [];
+    fetchJsonMock.mockImplementation(async (path: string, fallback: unknown, opts: { mapResponse?: (p: unknown) => unknown }) => {
+      if (path.includes("/bills")) {
+        billCalls.push(path);
+        const key = Object.keys(pages).find((k) => path.includes(k))!;
+        return { data: opts.mapResponse!({ data: pages[key] }), source: "api" };
+      }
+      if (path.includes("/batches") || path.includes("/departments")) return { data: [], source: "api" };
+      return { data: null, source: "api" };
+    });
+    const ui = await PfmsOpsConsolePage();
+    renderPage(ui);
+    expect(billCalls).toHaveLength(2);
+    expect(billCalls[1]).toContain("offset=500");
+    fireEvent.click(screen.getByText("Payments"));
+    fireEvent.click(screen.getByRole("tab", { name: "Payment Advice" }));
+    const select = screen.getByLabelText(/^Bill \*/) as HTMLSelectElement;
+    // 250 payable on page 1 + 1 payable on page 2 + the placeholder option
+    expect(select.options).toHaveLength(252);
   });
 });

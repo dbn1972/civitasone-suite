@@ -6,17 +6,19 @@ import { Card, Tabs } from "../../../_components/ds";
 import { BatchesPanel } from "./BatchesPanel";
 import { ConfigPanel } from "./ConfigPanel";
 import { PaymentsPanel } from "./PaymentsPanel";
-import type { PfmsBatchRow, PfmsConfig, PfmsDepartment } from "./types";
+import type { PfmsBatchRow, PfmsBill, PfmsConfig, PfmsDepartment } from "./types";
 
 interface PfmsConsoleProps {
   batches: PfmsBatchRow[];
   config: PfmsConfig | null;
   departments?: PfmsDepartment[];
+  /** Bills the payment-advice form can pick from (GAP-FINANCE-PFMS-07). */
+  bills?: PfmsBill[];
   /** Whether the session may download a batch bank file (GAP-FINANCE-PFMS-03). Defaults to true; the server is still the authority. */
   canDownloadBankFile?: boolean;
 }
 
-export function PfmsConsole({ batches, config, departments = [], canDownloadBankFile = true }: PfmsConsoleProps) {
+export function PfmsConsole({ batches, config, departments = [], bills = [], canDownloadBankFile = true }: PfmsConsoleProps) {
   const t = useTranslations("pfmsConsole");
   // The shared Tabs design-system component uses each tab string as both its
   // display label and its identity (selection compares by ===, and it doubles
@@ -34,7 +36,12 @@ export function PfmsConsole({ batches, config, departments = [], canDownloadBank
 
       {active === TABS[0] && <BatchesPanel batches={batches} canDownloadBankFile={canDownloadBankFile} />}
       {active === TABS[1] && <ConfigPanel config={config} />}
-      {active === TABS[2] && <PaymentsPanel departments={departments} />}
+      {active === TABS[2] && <PaymentsPanel
+          departments={departments}
+          bills={bills}
+          paymentRail={config?.paymentRail ?? null}
+          initialTreasuryMode={config?.treasuryMode ?? null}
+        />}
     </Card>
   );
 }

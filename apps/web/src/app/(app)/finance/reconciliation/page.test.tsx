@@ -9,6 +9,13 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+// The subledger card is an async server component streamed under <Suspense>;
+// it has its own test (SubledgerSection.test.tsx), so it is stubbed here.
+vi.mock("./SubledgerSection", () => ({ SubledgerSection: () => <p>subledger stub</p> }));
+
+const rolesMock = vi.fn<() => string[]>(() => []);
+vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
+
 import ReconciliationWorkbenchPage from "./page";
 
 const RUN = {
@@ -84,6 +91,7 @@ function mockAllSuccess() {
 describe("ReconciliationWorkbenchPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    rolesMock.mockReset().mockReturnValue([]);
   });
 
   it("renders runs and exceptions", async () => {
@@ -93,8 +101,7 @@ describe("ReconciliationWorkbenchPage", () => {
 
     expect(screen.getAllByText("book-vs-bank").length).toBeGreaterThan(0);
     expect(screen.getByText("UTR12345")).toBeInTheDocument();
-    expect(screen.getByText("Reconciled")).toBeInTheDocument();
-    expect(screen.getByText("Not reconciled")).toBeInTheDocument();
+    expect(screen.getByText("subledger stub")).toBeInTheDocument();
   });
 
   it("renders empty states when there is no data", async () => {
@@ -119,8 +126,41 @@ describe("ReconciliationWorkbenchPage", () => {
     const ui = await ReconciliationWorkbenchPage();
     render(ui);
 
-    const badges = screen.getAllByText("Couldn't load — showing nothing");
-    expect(badges.length).toBeGreaterThan(0);
+    // each failed section has its own retryable error state (GAP-FINANCE-RECONCILIATION-06)
+    expect(screen.getAllByRole("button", { name: "Try again" }).length).toBeGreaterThanOrEqual(3);
     expect(screen.queryByText("No reconciliation runs yet")).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-RECONCILIATION-07: the footer date is the newest run, not runs[0].
+  it("shows the newest run date in the footer even when the API order is oldest-first", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (path.includes("/recon/runs"))
+        return Promise.resolve({
+          data: [
+            { ...RUN, startedAt: "2026-07-01T00:00:00.000Z" },
+            { ...RUN, id: "99999999-9999-9999-9999-999999999999", startedAt: "2026-09-15T00:00:00.000Z" },
+          ],
+          source: "api",
+        });
+      return Promise.resolve({ data: [], source: "api" });
+    });
+    render(await ReconciliationWorkbenchPage());
+    expect(screen.getByText(/Last run started .*(15\/09\/2026|15 Sep 2026)/)).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-RECONCILIATION-03: audit_officer sees no action buttons.
+  it("renders exceptions read-only for an audit_officer session", async () => {
+    mockAllSuccess();
+    rolesMock.mockReturnValue(["audit_officer"]);
+    render(await ReconciliationWorkbenchPage());
+    expect(screen.getByText("UTR12345")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Write off exception/)).not.toBeInTheDocument();
+  });
+
+  it("offers actions to a finance_admin session", async () => {
+    mockAllSuccess();
+    rolesMock.mockReturnValue(["finance_admin"]);
+    render(await ReconciliationWorkbenchPage());
+    expect(screen.getByLabelText("Write off exception UTR12345")).toBeInTheDocument();
   });
 });

@@ -1,6 +1,9 @@
 import { getTranslations } from "next-intl/server";
+import { PageSkeleton } from "../_components/PageSkeleton";
 
+// Mirrors the page (header, stat cards, table) so nothing jumps
+// when the content arrives. Label is localised via msg.loading.
 export default async function Loading() {
   const t = await getTranslations("msg");
-  return <div className="page-main wrap"><div className="skeleton" role="status" aria-live="polite" aria-label={t("loading")} /></div>;
+  return <PageSkeleton label={t("loading")} statCards={4} rows={6} />;
 }

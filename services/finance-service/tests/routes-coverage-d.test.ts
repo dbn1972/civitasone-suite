@@ -57,7 +57,7 @@ describe("Finance POST routes — valid payloads hitting handlers", () => {
     },
     {
       url: "/v1/finance/recurring-entries",
-      payload: { name: "Monthly Rent", headId: randomUUID(), frequency: "monthly", amountMinor: 50000, narration: "Rent", debitAccountId: randomUUID(), creditAccountId: randomUUID(), nextRunDate: "2026-07-01" },
+      payload: { name: "Monthly Rent", headId: randomUUID(), frequency: "monthly", amountMinor: 50000, narration: "Rent", debitAccountId: randomUUID(), creditAccountId: randomUUID(), nextRunDate: "2099-01-01" },
     },
     {
       url: "/v1/finance/instruments",
