@@ -18,43 +18,14 @@ export interface SalaryStructureCardProps {
   isDefault: boolean;
   status: string;
   components: ComponentItem[];
-}
-
-// Infer GoI pay bands from structure name
-function inferPayBands(name: string): string[] {
-  const lower = name.toLowerCase();
-  if (lower.includes("mts") || lower.includes("multi-task") || lower.includes("group d") || lower.includes("level 1") || lower.includes("level 2")) {
-    return ["MTS", "Helper"];
-  }
-  if (lower.includes("ldc") || lower.includes("level 3")) {
-    return ["LDC"];
-  }
-  if (lower.includes("udc") || lower.includes("level 4")) {
-    return ["UDC", "LDC"];
-  }
-  if (lower.includes("assistant") && !lower.includes("section") && (lower.includes("level 5") || lower.includes("level 6"))) {
-    return ["Assistant", "UDC"];
-  }
-  if (lower.includes("section officer") || lower.includes("level 7") || lower.includes("level 8")) {
-    return ["Section Officer", "Assistant SO"];
-  }
-  if (lower.includes("director") || lower.includes("level 9") || lower.includes("level 10") || lower.includes("level 11")) {
-    return ["Dy. Director", "Director"];
-  }
-  if (lower.includes("group a") || lower.includes("gazetted") || lower.includes("ias") || lower.includes("ips")) {
-    return ["Section Officer", "Dy. Director", "Director", "Jt. Secretary"];
-  }
-  if (lower.includes("group b")) {
-    return ["Assistant", "Section Officer"];
-  }
-  if (lower.includes("group c")) {
-    return ["MTS", "LDC", "UDC"];
-  }
-  if (lower.includes("contractual") || lower.includes("contract") || lower.includes("adhoc")) {
-    return ["Contractual"];
-  }
-  // Default: all bands
-  return ["MTS", "LDC", "UDC", "Assistant", "Section Officer"];
+  // GAP-PAYROLL-STRUCTURES-05: components={[]} is ambiguous -- it means
+  // "genuinely no components configured yet" on a healthy fetch, but the
+  // same empty array is what every structure card got silently handed when
+  // GET /v1/payroll/components itself failed. An outage looking identical
+  // to "not yet configured" could prompt an admin to recreate components
+  // that are not actually missing. Defaults to false so existing callers
+  // (tests, storybook-style usage) are unaffected.
+  componentsUnavailable?: boolean;
 }
 
 function buildChartData(components: ComponentItem[], t: (key: string, values?: Record<string, string | number | Date>) => string) {
@@ -75,9 +46,8 @@ function buildChartData(components: ComponentItem[], t: (key: string, values?: R
   ].filter((d) => d.value > 0);
 }
 
-export function SalaryStructureCard({ name, isDefault, status, components }: SalaryStructureCardProps) {
+export function SalaryStructureCard({ name, isDefault, status, components, componentsUnavailable = false }: SalaryStructureCardProps) {
   const t = useTranslations("salaryStructureCard");
-  const payBands = inferPayBands(name);
   const hasComponents = components.length > 0;
   // COMP-004 fix-up (round 3): this card used to substitute a hardcoded
   // GOI_STANDARD_PCT reference breakdown into the donut chart whenever a
@@ -129,81 +99,53 @@ export function SalaryStructureCard({ name, isDefault, status, components }: Sal
         <h3 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>{name}</h3>
       </div>
       <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--mut)" }}>
-        {hasComponents
-          ? t("componentCount", { count: components.length })
-          : t("noComponentsConfiguredYet")}{" "}
+        {componentsUnavailable
+          ? t("componentsUnavailable")
+          : hasComponents
+            ? t("componentCount", { count: components.length })
+            : t("noComponentsConfiguredYet")}{" "}
         &bull; <span style={{ textTransform: "capitalize" }}>{status}</span>
       </p>
 
-      <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ flex: "0 0 auto" }}>
-          <p
+      <div style={{ flex: "0 0 auto" }}>
+        <p
+          style={{
+            margin: "0 0 6px",
+            fontSize: 11,
+            fontWeight: 600,
+            color: "var(--mut)",
+            textTransform: "uppercase",
+            letterSpacing: "0.05em",
+          }}
+        >
+          {/* GAP-PAYROLL-STRUCTURES-04: this heading used to say "% of Gross"
+              over a donut whose values are component COUNTS by type, not a
+              share of gross pay (components carry no amounts here) -- the
+              chart was mislabeled, not wrong; the label now says what it
+              actually shows. */}
+          {t("componentsByTypeLabel")}
+        </p>
+        {hasComponents ? (
+          <Chart type="donut" data={chartData} height={130} />
+        ) : (
+          <div
             style={{
-              margin: "0 0 6px",
+              width: 130,
+              height: 130,
+              borderRadius: "50%",
+              border: "2px dashed var(--line)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              textAlign: "center",
+              padding: 12,
               fontSize: 11,
-              fontWeight: 600,
               color: "var(--mut)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
             }}
           >
-            {t("pctOfGrossLabel")}
-          </p>
-          {hasComponents ? (
-            <Chart type="donut" data={chartData} height={130} />
-          ) : (
-            <div
-              style={{
-                width: 130,
-                height: 130,
-                borderRadius: "50%",
-                border: "2px dashed var(--line)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                textAlign: "center",
-                padding: 12,
-                fontSize: 11,
-                color: "var(--mut)",
-              }}
-            >
-              {t("noComponentsConfigured")}
-            </div>
-          )}
-        </div>
-
-        <div style={{ flex: 1, minWidth: 160, paddingTop: 20 }}>
-          <p
-            style={{
-              margin: "0 0 8px",
-              fontSize: 11,
-              fontWeight: 600,
-              color: "var(--mut)",
-              textTransform: "uppercase",
-              letterSpacing: "0.05em",
-            }}
-          >
-            {t("applicablePayLevelsLabel")}
-          </p>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {payBands.map((band) => (
-              <span
-                key={band}
-                style={{
-                  background: "var(--infobg, #eff6ff)",
-                  color: "var(--infofg, #1d4ed8)",
-                  fontSize: 11,
-                  fontWeight: 500,
-                  padding: "3px 10px",
-                  borderRadius: 20,
-                  border: "1px solid var(--infoline, #bfdbfe)",
-                }}
-              >
-                {band}
-              </span>
-            ))}
+            {componentsUnavailable ? t("componentsUnavailable") : t("noComponentsConfigured")}
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

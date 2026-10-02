@@ -155,4 +155,43 @@ describe("PayStructuresPage", () => {
       expect(screen.queryByText("Create Pay Structure")).not.toBeInTheDocument();
     },
   );
+
+  // GAP-PAYROLL-STRUCTURES-05: a components-endpoint outage used to blank
+  // the stat tile to "—" with no other signal; the grid itself still
+  // rendered "No components yet" (the generic, healthy empty state) and
+  // every structure card said "No components configured yet" -- identical
+  // to a tenant that genuinely has none, which could prompt an admin to
+  // recreate components that are not actually missing.
+  it("shows a retryable error for the component grid (not the generic empty state) when only the components fetch fails", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({
+        data: [{ id: "s1", name: "Structure With Components Down", isDefault: true, status: "active" }],
+        source: "api",
+      })
+      .mockResolvedValueOnce({ data: [], source: "error" });
+
+    const ui = await PayStructuresPage();
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+    expect(screen.queryByText("No components yet")).not.toBeInTheDocument();
+    expect(screen.getAllByText(/couldn't load/i).length).toBeGreaterThan(0);
+    // The structure card itself must say "unavailable", not "not configured
+    // yet" -- rendered twice per card (summary line + donut placeholder).
+    expect(screen.getAllByText(/Components unavailable/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("No components configured yet")).not.toBeInTheDocument();
+  });
+
+  it("still shows the structures list when only the components fetch fails (independent loaders)", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({
+        data: [{ id: "s1", name: "Structure With Components Down", isDefault: true, status: "active" }],
+        source: "api",
+      })
+      .mockResolvedValueOnce({ data: [], source: "error" });
+
+    const ui = await PayStructuresPage();
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+
+    expect(screen.getByText("Structure With Components Down")).toBeInTheDocument();
+  });
 });

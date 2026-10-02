@@ -1,6 +1,6 @@
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState } from "../../../../_components/ds";
-import { SkeletonTable } from "../../../../_components/ds";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { CreateStructureForm } from "./CreateStructureForm";
 import { SalaryStructureCard } from "./SalaryStructureCard";
 import { ComponentGrid } from "./ComponentGrid";
@@ -100,6 +100,14 @@ export default async function PayStructuresPage() {
         subtitle={t("subtitle")}
         back="/hr/payroll" backLabel="Back to Payroll"
       />
+      {/* GAP-PAYROLL-STRUCTURES-05: structures and components are
+          independent fetches with no visible error source at all before --
+          the stat tiles alone (dashes on error) don't say WHAT failed or
+          that a retry might help. */}
+      <DataSourceBadge
+        source={structuresErrored || componentsErrored ? "error" : "api"}
+        message={t("loadErrorMessage")}
+      />
       <StatGrid>
         <StatCard icon="🧱" iconBg="var(--infobg)" label={t("statTotal")} value={structuresErrored ? "—" : structures.length} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={active ?? "—"} />
@@ -140,6 +148,7 @@ export default async function PayStructuresPage() {
                 isDefault={s.isDefault}
                 status={s.status}
                 components={componentsByStructure[s.id] ?? []}
+                componentsUnavailable={componentsErrored}
               />
             ))}
           </div>
@@ -147,16 +156,22 @@ export default async function PayStructuresPage() {
       )}
 
       <Card title={t("componentGridTitle")}>
-        <ComponentGrid
-          components={rawComponents.map((c) => ({
-            id: c.id,
-            code: c.code,
-            name: c.name,
-            componentType: c.componentType,
-            isTaxable: c.isTaxable,
-            structureId: c.structureId,
-          }))}
-        />
+        {componentsErrored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: t("componentsArea") })} backHref="/hr/payroll" />
+          </div>
+        ) : (
+          <ComponentGrid
+            components={rawComponents.map((c) => ({
+              id: c.id,
+              code: c.code,
+              name: c.name,
+              componentType: c.componentType,
+              isTaxable: c.isTaxable,
+              structureId: c.structureId,
+            }))}
+          />
+        )}
       </Card>
     </div>
   );
