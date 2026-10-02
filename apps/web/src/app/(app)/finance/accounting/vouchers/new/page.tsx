@@ -1,5 +1,4 @@
-import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { PageHeader, Card } from "../../../../../_components/ds";
+import { PageHeader, Card, LoadErrorState } from "../../../../../_components/ds";
 import { getChartOfAccounts } from "../../../../../_data/loaders";
 import { JournalEntryForm } from "../../../journal-entry/JournalEntryForm";
 
@@ -10,7 +9,8 @@ import { JournalEntryForm } from "../../../journal-entry/JournalEntryForm";
  * post identical, validated, balanced journals.
  */
 export default async function NewVoucherPage() {
-  const { data: accounts, source } = await getChartOfAccounts();
+  const result = await getChartOfAccounts();
+  const { data: accounts, source } = result;
 
   return (
     <>
@@ -18,12 +18,17 @@ export default async function NewVoucherPage() {
         title="New Journal Voucher"
         subtitle="Create a balanced double-entry voucher — debit must equal credit."
         back="/finance/accounting/general-ledger"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
 
-      <Card title="Voucher entry" padding>
-        <JournalEntryForm accounts={accounts} redirectTo="/finance/accounting/general-ledger" />
-      </Card>
+      {/* GAP-FINANCE-VOUCHERS-NEW-01: when the chart of accounts could not be
+          loaded the form is NOT rendered -- no free-text account codes. */}
+      {source === "error" ? (
+        <LoadErrorState result={result} area="chart of accounts" backHref="/finance/accounting/general-ledger" />
+      ) : (
+        <Card title="Voucher entry" padding>
+          <JournalEntryForm accounts={accounts} redirectTo="/finance/accounting/general-ledger" />
+        </Card>
+      )}
     </>
   );
 }

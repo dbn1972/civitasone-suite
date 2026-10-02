@@ -14,6 +14,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, submitReappropriationBody } from "./validators.js";
 import * as repo from "./repo.js";
+import { assertValidHeadParent, DomainError } from "./domain.js";
 import { db } from "../../shared/db.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -212,17 +213,30 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
       level:          z.number().int().min(0).max(2),   // 0=major 1=minor 2=sub-minor
       hoaCode:        z.string().length(18).optional(),
       classification: z.enum(["asset", "liability", "equity", "income", "expense"]).optional(),
+      // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: opaque parent head id (no FK
+      // across services); required for level 1/2, forbidden for level 0.
+      parentId:       z.string().uuid().optional(),
     }).parse(req.body);
+    const parent = body.parentId ? await repo.findHeadByIdAndTenant(body.parentId, ctx.tenantId) : null;
+    try {
+      assertValidHeadParent(body.level, body.parentId !== undefined, parent);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
+      throw err;
+    }
     const id = randomUUID();
     await db.transaction(async (tx) => {
       await repo.insertHead(tx, {
         id, tenantId: ctx.tenantId,
         code: body.code, name: body.name, level: body.level,
         hoaCode: body.hoaCode ?? null, classification: body.classification ?? null,
+        parentId: body.parentId ?? null,
         createdBy: ctx.actorId, updatedBy: ctx.actorId,
       });
     });
-    return reply.code(201).send({ id, code: body.code, name: body.name, level: body.level, status: "created" });
+    return reply.code(201).send({
+      id, code: body.code, name: body.name, level: body.level, parentId: body.parentId ?? null, status: "created",
+    });
   });
 
   // PATCH /v1/finance/accounts/:id — update head name / classification

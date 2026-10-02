@@ -1,53 +1,23 @@
-import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getFinanceAuditParaById } from "@/app/_data/loaders";
-import { formatMoney } from "@/lib/formatters";
-
-function field(data: Record<string, unknown>, ...keys: string[]): string {
-  for (const key of keys) {
-    const v = data[key];
-    if (typeof v === "string" && v.length > 0) return v;
-    if (typeof v === "number") return String(v);
-  }
-  return "—";
-}
-
-/** Best-effort minor-unit amount from a loosely-typed record (number | numeric string | bigint). */
-function amountMinorOf(data: Record<string, unknown>, ...keys: string[]): number | undefined {
-  for (const key of keys) {
-    const v = data[key];
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "bigint") return Number(v);
-    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
-  }
-  return undefined;
-}
-
-/** Long-form text field with an honest fallback instead of a bare dash. */
-function longText(data: Record<string, unknown>, fallback: string, ...keys: string[]): string {
-  for (const key of keys) {
-    const v = data[key];
-    if (typeof v === "string" && v.trim().length > 0) return v;
-  }
-  return fallback;
-}
-
-type TimelineRow = { date: string; event: string; actor: string };
-
-function timelineOf(data: Record<string, unknown>): TimelineRow[] {
-  const raw = data["timeline"] ?? data["events"] ?? data["history"];
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .filter((r): r is Record<string, unknown> => r !== null && typeof r === "object")
-    .map((r) => ({
-      date: field(r, "date", "at", "createdAt"),
-      event: field(r, "event", "title", "description"),
-      actor: field(r, "actor", "by", "user"),
-    }));
-}
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { auditParaTone } from "../auditParaTone";
 
 export default async function AuditParaDetailPage({ params }: { params: { id: string } }) {
-  const { data: para, source } = await getFinanceAuditParaById(params.id);
+  const result = await getFinanceAuditParaById(params.id);
+  const { data: para, source, status } = result;
+
+  // GAP-FINANCE-AUDIT-PARAS-DETAIL-01: only a real 404 means "not found". Any
+  // other failed load (5xx / network / schema) is an outage the user can retry,
+  // and a 403 is a permission decision -- never "may have been removed".
+  if (source === "error" && status !== 404) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Audit Para Detail" back="/finance/audit-paras" />
+        <LoadErrorState result={result} area="audit para" backHref="/finance/audit-paras" />
+      </div>
+    );
+  }
 
   if (!para) {
     return (
@@ -58,65 +28,46 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
     );
   }
 
-  const paraNo = field(para, "paraNo", "paraNumber");
-  const dept = field(para, "dept", "department");
-  const status = field(para, "status");
-  // "source" here is the issuing authority (CAG | AG | internal) — a real, always-populated
-  // column on finance_audit_paras, unlike the fabricated "Year" stat it replaces below.
-  const paraSource = field(para, "source");
-  const amountMinor = amountMinorOf(para, "moneyValueMinor", "amountMinor", "amount");
-  const timeline = timelineOf(para);
-
+  // GAP-FINANCE-AUDIT-PARAS-DETAIL-02: read the typed FinanceAuditParaSummary
+  // contract directly (finance-service audit/routes.ts serialize() returns
+  // exactly these fields for the detail endpoint). No alias lists: a backend
+  // rename now fails the loader's zod schema (source "error") instead of
+  // silently rendering "No ... on file". Amount is moneyValueMinor (paise).
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={`Audit Para ${paraNo}`}
-        subtitle={dept !== "—" ? dept : undefined}
+        title={`Audit Para ${para.paraNo}`}
+        subtitle={para.dept || undefined}
         back="/finance/audit-paras"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#fce7ee" label="Amount" value={amountMinor !== undefined ? formatMoney(amountMinor) : "—"} />
-        <StatCard icon="🏛️" iconBg="#e7edfd" label="Source" value={paraSource} />
-        <StatCard icon="🏢" iconBg="#fffaeb" label="Department" value={dept} />
-        <StatCard icon="⏳" iconBg="#fce7ee" label="Status" value={status} />
+        <StatCard icon="₹" iconBg="#fce7ee" label="Amount" value={formatMoney(para.moneyValueMinor)} />
+        <StatCard icon="🏛️" iconBg="#e7edfd" label="Source" value={para.source} />
+        <StatCard icon="🏢" iconBg="#fffaeb" label="Department" value={para.dept} />
+        <StatCard icon="⏳" iconBg="#fce7ee" label="Status" value={para.status} />
       </StatGrid>
 
-      <Card title="Observation" padding>
-        <p style={{ margin: 0, lineHeight: 1.6 }}>
-          {longText(para, "No observation on file.", "observation", "narrative", "description", "subject")}
-        </p>
-      </Card>
-
-      <Card title="Department Reply" padding>
-        <p style={{ margin: 0, lineHeight: 1.6 }}>
-          {longText(para, "No reply on file.", "reply", "departmentReply", "response")}
-        </p>
-      </Card>
-
-      <Card title="Action Taken" padding>
-        <p style={{ margin: 0, lineHeight: 1.6 }}>
-          {longText(para, "No action recorded.", "actionTaken", "action")}
-        </p>
-        <div style={{ marginTop: 12 }}>
-          <span className="label">Current Status: </span><StatusPill status={status} />
+      <Card title="Register record" padding>
+        <div style={{ marginBottom: 12 }}>
+          <span className="label">Current Status: </span>
+          <StatusPill status={para.status} variant={auditParaTone(para.status)} />
         </div>
+        <dl style={{ margin: 0, display: "grid", gridTemplateColumns: "max-content 1fr", gap: "6px 16px" }}>
+          <dt className="label">Raised</dt>
+          <dd style={{ margin: 0 }}>{formatIndianDate(para.createdAt)}</dd>
+          <dt className="label">Last updated</dt>
+          <dd style={{ margin: 0 }}>{formatIndianDate(para.updatedAt)}</dd>
+          <dt className="label">Version</dt>
+          <dd style={{ margin: 0 }}>{para.version}</dd>
+        </dl>
       </Card>
 
-      <Card title="Timeline" padding>
-        {timeline.length === 0 ? ( // ux-001-ok: `timeline` is derived purely from `para`, only reachable past the earlier `if (!para) return` guard above (source==="error" implies a null para per the loader contract) -- this is a genuinely history-free record, never a masked fetch failure
-          <EmptyState icon="🕒" title="No timeline recorded" message="No history events have been recorded for this audit para." />
-        ) : (
-          <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Audit para timeline">
-            {timeline.map((item, i) => (
-              <li key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < timeline.length - 1 ? "1px solid var(--border)" : "none" }}>
-                <span style={{ minWidth: 100, fontSize: 13, color: "var(--muted)" }}>{item.date}</span>
-                <span style={{ flex: 1 }}>{item.event}</span>
-                <span style={{ fontSize: 13, color: "var(--muted)" }}>{item.actor}</span>
-              </li>
-            ))}
-          </ol>
-        )}
+      <Card title="Observation, reply and timeline" padding>
+        <EmptyState
+          icon="🕒"
+          title="Not captured in the audit register yet"
+          message="The audit register stores the para number, source, department, amount and status. Observation text, department reply, action taken and a history timeline are not recorded by the service yet."
+        />
       </Card>
     </div>
   );

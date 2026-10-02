@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
 
 const refreshMock = vi.fn();
 vi.mock("next/navigation", () => ({
@@ -100,5 +100,24 @@ describe("ExceptionsPanel", () => {
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
     expect(alert.textContent).not.toMatch(/INVALID_TRANSITION/);
     expect(alert.textContent).not.toMatch(/cannot resolve an exception/);
+  });
+
+  // GAP-FINANCE-RECONCILIATION-02: the officer must see the money at stake in the dialog.
+  it("shows source value, target value and delta in the write-off confirmation", () => {
+    render(<ExceptionsPanel exceptions={[{ ...OPEN_EXCEPTION, deltaMinor: "4500000", sourceValue: "9000000", targetValue: "4500000" }]} />);
+    fireEvent.click(screen.getByLabelText("Write off exception UTR12345"));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText("Delta")).toBeInTheDocument();
+    expect(within(dialog).getAllByText("₹45,000.00").length).toBeGreaterThanOrEqual(2); // delta + writing-off line (and target)
+    expect(within(dialog).getByText("₹90,000.00")).toBeInTheDocument();
+    expect(dialog.textContent).toMatch(/You are writing off\s*₹45,000\.00/);
+  });
+
+  it("shows raw source/target values for non-amount breaks", () => {
+    render(<ExceptionsPanel exceptions={[{ ...OPEN_EXCEPTION, field: "status", fieldType: "string", sourceValue: "settled", targetValue: "pending", deltaMinor: null }]} />);
+    fireEvent.click(screen.getByLabelText("Resolve exception UTR12345"));
+    const dialog = screen.getByRole("alertdialog");
+    expect(within(dialog).getByText("settled")).toBeInTheDocument();
+    expect(within(dialog).getByText("pending")).toBeInTheDocument();
   });
 });

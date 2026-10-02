@@ -1,4 +1,4 @@
-import { eq, and, sql } from "drizzle-orm";
+import { eq, and, gte, lte, sql } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { financeSanctions, financeBudgets } from "../budget/schema.js";
@@ -24,9 +24,28 @@ export function computeBudgetUtilisationPct(expenditureMinor: number, sanctioned
   return sanctionedMinor > 0 ? Math.round((expenditureMinor / sanctionedMinor) * 100) : null;
 }
 
-export async function getDashboard(tenantId: string) {
+/**
+ * GAP-FINANCE-DASHBOARD-02: Indian fiscal-year bounds ("2026-27" ->
+ * 2026-04-01..2027-03-31). Returns null for anything that is not a real,
+ * consecutive FY label so a typo can never silently widen or shift the window.
+ */
+export function fyDateBounds(fy: string): { start: string; end: string } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(fy);
+  if (!m) return null;
+  const startYear = Number(m[1]);
+  if (Number(m[2]) !== (startYear + 1) % 100) return null;
+  return { start: `${startYear}-04-01`, end: `${startYear + 1}-03-31` };
+}
+
+/**
+ * `fy` (optional): scope expenditure to ledger postings dated inside that FY
+ * and budget estimates to that FY. Omitted -> legacy all-time totals.
+ */
+export async function getDashboard(tenantId: string, fy?: string) {
+  const bounds = fy ? fyDateBounds(fy) : null;
+  if (fy && !bounds) throw new Error("invalid fiscal year");
   return cache.getOrLoad(
-    cache.makeKey(tenantId, "dashboard", "summary"),
+    cache.makeKey(tenantId, "dashboard", `summary:${fy ?? "all"}`),
     async () => {
       return scopedRead(async (tx) => {
         const [[pendingRow], [payRow], [expRow], [budgetRow]] = await Promise.all([
@@ -38,10 +57,14 @@ export async function getDashboard(tenantId: string) {
             .where(eq(financePayments.tenantId, tenantId)),
           tx.select({ total: sql<number>`coalesce(sum(${financeLedger.debitMinor}), 0)::bigint` })
             .from(financeLedger)
-            .where(eq(financeLedger.tenantId, tenantId)),
+            .where(bounds
+              ? and(eq(financeLedger.tenantId, tenantId), gte(financeLedger.postingDate, bounds.start), lte(financeLedger.postingDate, bounds.end))
+              : eq(financeLedger.tenantId, tenantId)),
           tx.select({ totalBE: sql<number>`coalesce(sum(be_minor), 0)::bigint` })
             .from(financeBudgets)
-            .where(eq(financeBudgets.tenantId, tenantId)),
+            .where(fy
+              ? and(eq(financeBudgets.tenantId, tenantId), eq(financeBudgets.fy, fy))
+              : eq(financeBudgets.tenantId, tenantId)),
         ]);
         const sanctioned = Number(budgetRow?.totalBE ?? 0);
         const expenditure = Number(expRow?.total ?? 0);

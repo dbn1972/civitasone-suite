@@ -14,7 +14,7 @@ export default async function EPaymentsPage() {
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="e-Payment Orders"
-        subtitle="Electronic payment orders with bank references and status tracking."
+        subtitle="Electronic payment orders with status tracking."
         back="/finance"
       />
       <StatGrid>

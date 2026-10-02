@@ -17,7 +17,7 @@ export default async function PfmsPage() {
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title="PFMS Integration"
-        subtitle="Public Financial Management System — payment scroll tracking and beneficiary verification."
+        subtitle="Public Financial Management System — payment scroll tracking."
         back="/finance"
       />
       <StatGrid>

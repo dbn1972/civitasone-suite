@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { DataTable, Segmented, EmptyState } from "../../../../_components/ds";
+import { DataTable, Segmented, EmptyState, RefreshErrorState, StatGrid, StatCard } from "../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
+import { balanceSheetTotals, incomeExpenditureTotals, rupeesNumberToPaise } from "./statementTotals";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { FinancialStatementSummary } from "@civitasone/types";
 import { formatMoney } from "@/lib/formatters";
@@ -25,14 +27,11 @@ const TYPE_FILTER: Record<StatementType, ((s: FinancialStatementSummary) => bool
 interface StatementsTableProps {
   statements: FinancialStatementSummary[];
   source?: "api" | "error";
-  /** Fiscal year label ("2026-27") the caller resolved from `?fy=` — shown in
-   * the segmented-control header instead of a hardcoded year. */
-  fy?: string;
 }
 
 type StatRow = FinancialStatementSummary & Record<string, unknown>;
 
-export function StatementsTable({ statements, source = "api", fy }: StatementsTableProps) {
+export function StatementsTable({ statements, source = "api" }: StatementsTableProps) {
   const [activeType, setActiveType] = useState<StatementType>("R&P");
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<FinancialStatementSummary[]>(
     "finance.financialStatements",
@@ -44,10 +43,16 @@ export function StatementsTable({ statements, source = "api", fy }: StatementsTa
   const filterFn = TYPE_FILTER[activeType];
   const filtered = (filterFn ? rows.filter(filterFn) : rows) as StatRow[];
 
-  const totalOpening = filtered.reduce((s, st) => s + (st.openingBalance as number), 0);
-  const totalReceipts = filtered.reduce((s, st) => s + (st.receipts as number), 0);
-  const totalPayments = filtered.reduce((s, st) => s + (st.payments as number), 0);
-  const totalClosing = filtered.reduce((s, st) => s + (st.closingBalance as number), 0);
+  // GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-02: totals are derived per
+  // statement (never summed across account classes).
+  const ie = incomeExpenditureTotals(rows);
+  const bs = balanceSheetTotals(rows);
+
+  // GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-01: a failed load with nothing
+  // cached is an error, not a table of zeros.
+  if (provenance === "error-no-data") {
+    return <RefreshErrorState error={toHumanError("load", { area: "financial statements" })} backHref="/finance" />;
+  }
 
   return (
     <div>
@@ -57,9 +62,43 @@ export function StatementsTable({ statements, source = "api", fy }: StatementsTa
           (UX-002's pattern; the page used to render a second, independent
           badge from the raw `source` prop — removed). */}
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+      {activeType === "I&E" && rows.length > 0 ? (
+        <StatGrid>
+          <StatCard icon="📥" iconBg="#ecfdf3" label="Total Income" value={formatMoney(ie.totalIncome)} />
+          <StatCard icon="📤" iconBg="#fef3f2" label="Total Expenditure" value={formatMoney(ie.totalExpenditure)} />
+          <StatCard
+            icon="💰"
+            iconBg="#eff6ff"
+            label={ie.surplus < 0n ? "Deficit" : "Surplus"}
+            value={formatMoney(ie.surplus < 0n ? -ie.surplus : ie.surplus)}
+            delta={ie.surplus < 0n ? "Deficit" : "Surplus"}
+            up={ie.surplus >= 0n}
+          />
+        </StatGrid>
+      ) : null}
+      {activeType === "Balance Sheet" && rows.length > 0 ? (
+        <StatGrid>
+          <StatCard icon="🏛️" iconBg="#e7edfd" label="Total Assets" value={formatMoney(bs.totalAssets)} />
+          <StatCard icon="📑" iconBg="#fef3f2" label="Total Liabilities" value={formatMoney(bs.totalLiabilities)} />
+          <StatCard
+            icon="💰"
+            iconBg="#eff6ff"
+            label={bs.surplus < 0n ? "Current-period deficit" : "Current-period surplus"}
+            value={formatMoney(bs.surplus < 0n ? -bs.surplus : bs.surplus)}
+          />
+          <StatCard
+            icon="⚖️"
+            iconBg="#ecfdf3"
+            label="Balance check"
+            value={bs.balanced ? "Balanced" : "Unbalanced"}
+            delta={bs.balanced ? "Assets = Liabilities + surplus" : `Difference ${formatMoney(bs.difference < 0n ? -bs.difference : bs.difference)}`}
+            up={bs.balanced}
+          />
+        </StatGrid>
+      ) : null}
       <div className="card-h" style={{ marginBottom: "1rem" }}>
         <span style={{ fontWeight: 500, color: "var(--ink2)" }}>
-          {TYPE_LABEL[activeType]}{fy ? ` · FY ${fy}` : ""}
+          {TYPE_LABEL[activeType]} · cumulative, all periods
         </span>
         <Segmented
           options={[...STATEMENT_TYPES]}
@@ -81,8 +120,8 @@ export function StatementsTable({ statements, source = "api", fy }: StatementsTa
                 label: "Opening",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Opening ${formatMoney(st.openingBalance as number)}`}>
-                    {formatMoney(st.openingBalance as number)}
+                  <span aria-label={`Opening ${formatMoney(rupeesNumberToPaise(st.openingBalance as number))}`}>
+                    {formatMoney(rupeesNumberToPaise(st.openingBalance as number))}
                   </span>
                 ),
               },
@@ -91,8 +130,8 @@ export function StatementsTable({ statements, source = "api", fy }: StatementsTa
                 label: "Receipts",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Receipts ${formatMoney(st.receipts as number)}`}>
-                    {formatMoney(st.receipts as number)}
+                  <span aria-label={`Receipts ${formatMoney(rupeesNumberToPaise(st.receipts as number))}`}>
+                    {formatMoney(rupeesNumberToPaise(st.receipts as number))}
                   </span>
                 ),
               },
@@ -101,8 +140,8 @@ export function StatementsTable({ statements, source = "api", fy }: StatementsTa
                 label: "Payments",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Payments ${formatMoney(st.payments as number)}`}>
-                    {formatMoney(st.payments as number)}
+                  <span aria-label={`Payments ${formatMoney(rupeesNumberToPaise(st.payments as number))}`}>
+                    {formatMoney(rupeesNumberToPaise(st.payments as number))}
                   </span>
                 ),
               },
@@ -111,8 +150,8 @@ export function StatementsTable({ statements, source = "api", fy }: StatementsTa
                 label: "Closing",
                 align: "right",
                 render: (st) => (
-                  <span aria-label={`Closing ${formatMoney(st.closingBalance as number)}`}>
-                    {formatMoney(st.closingBalance as number)}
+                  <span aria-label={`Closing ${formatMoney(rupeesNumberToPaise(st.closingBalance as number))}`}>
+                    {formatMoney(rupeesNumberToPaise(st.closingBalance as number))}
                   </span>
                 ),
               },
@@ -120,11 +159,12 @@ export function StatementsTable({ statements, source = "api", fy }: StatementsTa
             rows={filtered}
             sortable
           />
-          <div className="dt-toolbar" style={{ justifyContent: "flex-end", borderTop: "1px solid var(--line)" }}>
-            <span style={{ fontSize: 13, color: "var(--ink2)" }}>
-              Total — Opening: <strong>{formatMoney(totalOpening)}</strong> · Receipts: <strong>{formatMoney(totalReceipts)}</strong> · Payments: <strong>{formatMoney(totalPayments)}</strong> · Closing: <strong>{formatMoney(totalClosing)}</strong>
-            </span>
-          </div>
+          {activeType === "R&P" ? (
+            <p style={{ fontSize: 13, color: "var(--ink2)", margin: "8px 0 0" }}>
+              Grand totals are not shown: the statements feed does not mark which heads are cash or bank, and a
+              total across all account classes has no accounting meaning.
+            </p>
+          ) : null}
         </>
       )}
     </div>

@@ -2,6 +2,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 const getFinanceChallanByIdMock = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
+}));
 vi.mock("@/app/_data/loaders", () => ({
   getFinanceChallanById: (...args: unknown[]) => getFinanceChallanByIdMock(...args),
 }));
@@ -59,5 +62,26 @@ describe("ChallanDetailPage", () => {
     expect(screen.getByText("Challan detail not available")).toBeInTheDocument();
     expect(screen.queryByText(/CHN\/2024\/001/)).not.toBeInTheDocument();
     expect(screen.queryByText("₹15,00,000")).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-REVENUE-CHALLANS-DETAIL-02: a failed load is not "not found".
+  it("shows a retry state, not 'not available', when the load fails (5xx)", async () => {
+    getFinanceChallanByIdMock.mockResolvedValue({ data: null, source: "error", status: 503 });
+    render(await ChallanDetailPage({ params: { id: "c1" } }));
+    expect(screen.queryByText("Challan detail not available")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+  });
+
+  it("shows the access-restricted state, with no retry, on a 403", async () => {
+    getFinanceChallanByIdMock.mockResolvedValue({ data: null, source: "error", status: 403, errorMessage: "Not allowed" });
+    render(await ChallanDetailPage({ params: { id: "c1" } }));
+    expect(screen.queryByText("Challan detail not available")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /try again|retry/i })).not.toBeInTheDocument();
+  });
+
+  it("still shows the not-found state for a genuine 404", async () => {
+    getFinanceChallanByIdMock.mockResolvedValue({ data: null, source: "error", status: 404 });
+    render(await ChallanDetailPage({ params: { id: "nope" } }));
+    expect(screen.getByText("Challan detail not available")).toBeInTheDocument();
   });
 });

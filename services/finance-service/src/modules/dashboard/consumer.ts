@@ -18,7 +18,8 @@ export function registerDashboardConsumers(queue: Queue): void {
         payload: { service: "finance", action: "dashboard_refresh", resourceType: "dashboard", resourceId: msg.tenantId, outcome: "success" },
       });
     });
-    await cache.invalidate(cache.makeKey(p.tenantId, "dashboard", "summary"));
+    // Keys are dashboard:summary:<fy|all> (one per FY) -- invalidate by prefix so every FY entry goes.
+    await cache.invalidateResource(p.tenantId, "dashboard");
     log.info({ id: msg.messageId }, "Processed dashboard.refresh");
   });
 }

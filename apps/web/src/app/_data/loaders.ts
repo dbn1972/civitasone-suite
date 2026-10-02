@@ -683,7 +683,13 @@ function mapAccounts(payload: unknown): AccountSummary[] | null {
     if (!code || !name) continue;
     if (type !== "asset" && type !== "liability" && type !== "equity" && type !== "income" && type !== "expense") continue;
     if (status !== "active" && status !== "inactive") continue;
-    mapped.push({ code, name, type, currency, balanceDisplay, status });
+    const id = toText(row.id);
+    const parentId = toText(row.parentId);
+    mapped.push({
+      code, name, type, currency, balanceDisplay, status,
+      ...(id ? { id } : {}),
+      ...(parentId ? { parentId } : {}),
+    });
   }
   return mapped.length > 0 ? mapped : null;
 }
@@ -1377,7 +1383,9 @@ export async function getProcurementApprovals(): Promise<LoaderResult<ApprovalSu
 
 export async function getChartOfAccounts(): Promise<LoaderResult<AccountSummary[]>> {
   return fetchJson<unknown, AccountSummary[]>(
-    "/api/v1/finance/accounts",
+    // limit=500 is the route maximum; the default of 50 silently truncated the
+    // posting dropdowns (GAP-FINANCE-JOURNAL-ENTRY-01: codes must come from the full chart).
+    "/api/v1/finance/accounts?limit=500",
     [] as AccountSummary[],
     {
       revalidateSeconds: 30,
@@ -1927,8 +1935,10 @@ const FINANCE_DASHBOARD_EMPTY: FinanceDashboard = {
   totalExpenditure: 0,
 };
 
-export async function getFinanceDashboard(): Promise<LoaderResult<FinanceDashboard>> {
-  return fetchJson<unknown, FinanceDashboard>("/api/v1/finance/dashboard", FINANCE_DASHBOARD_EMPTY, {
+export async function getFinanceDashboard(fy?: string): Promise<LoaderResult<FinanceDashboard>> {
+  // GAP-FINANCE-DASHBOARD-02: finance-service scopes the figures to ?fy=.
+  const qs = fy ? `?fy=${encodeURIComponent(fy)}` : "";
+  return fetchJson<unknown, FinanceDashboard>(`/api/v1/finance/dashboard${qs}`, FINANCE_DASHBOARD_EMPTY, {
     revalidateSeconds: 60,
     telemetryKey: "finance.dashboard",
     responseSchema: FinanceDashboardSchema,
@@ -2029,8 +2039,18 @@ export async function getFinancePFMSScrolls(): Promise<LoaderResult<PfmsBatchSum
   });
 }
 
-export async function getFinanceCashBook(): Promise<LoaderResult<CashBookEntry[]>> {
-  return fetchJson<unknown, CashBookEntry[]>("/api/v1/finance/cash-book", [], {
+export type CashBookQuery = { type?: "cash" | "bank"; from?: string; to?: string };
+
+export async function getFinanceCashBook(query: CashBookQuery = {}): Promise<LoaderResult<CashBookEntry[]>> {
+  // GAP-FINANCE-TREASURY-CASH-BANK-01: finance-service's cash-book route takes
+  // type (cash|bank) and from/to (YYYY-MM-DD). Values are validated by the page
+  // and encoded here; only the params that were chosen are sent.
+  const qs = new URLSearchParams();
+  if (query.type) qs.set("type", query.type);
+  if (query.from) qs.set("from", query.from);
+  if (query.to) qs.set("to", query.to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return fetchJson<unknown, CashBookEntry[]>(`/api/v1/finance/cash-book${suffix}`, [], {
     revalidateSeconds: 30,
     telemetryKey: "finance.cashbook",
     responseSchema: CashBookEntryListSchema,

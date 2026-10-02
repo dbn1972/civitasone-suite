@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
-import { formatMoney } from "@/lib/formatters";
-import { Button, ConfirmDialog, HelpTip } from "@/app/_components/ds";
+import { formatMoney, todayIST } from "@/lib/formatters";
+import { parseMinorOrZero } from "@/lib/money";
+import { Button, ConfirmDialog, EmptyState, HelpTip } from "@/app/_components/ds";
 import { explain } from "@/lib/glossary";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
@@ -28,9 +30,30 @@ function emptyLine(defaultCode = ""): JournalLine {
   return { id: nextId(), accountCode: defaultCode, debit: "", credit: "" };
 }
 
-function rupeesToPaise(val: string): number {
-  const n = parseFloat(val);
-  return isNaN(n) ? 0 : Math.round(n * 100);
+/**
+ * GAP-FINANCE-JOURNAL-ENTRY-02: amounts are parsed string -> bigint paise with
+ * no float maths (lib/money parseMinorOrZero). An unparseable entry (3+
+ * decimals, exponent, negative...) is `null`: it is surfaced as a field error
+ * and counted as 0 in the running totals so the form can never post a
+ * silently-rounded amount.
+ */
+function paiseOf(val: string): bigint {
+  return parseMinorOrZero(val) ?? 0n;
+}
+const AMOUNT_ERROR = "Enter an amount with at most 2 decimals.";
+const AMOUNT_COMMA_ERROR = "Enter digits and an optional decimal point only - remove the commas (e.g. 100000.50).";
+function amountErrorFor(val: string): string {
+  return val.includes(",") ? AMOUNT_COMMA_ERROR : AMOUNT_ERROR;
+}
+
+/** Lakh-grouped preview under an amount input (GAP-FINANCE-JOURNAL-ENTRY-02). */
+function amountPreview(val: string) {
+  const minor = parseMinorOrZero(val);
+  if (minor === null) {
+    return <span role="alert" style={{ fontSize: "0.7rem", color: "#b91c1c", display: "block" }}>{amountErrorFor(val)}</span>;
+  }
+  if (minor === 0n) return null;
+  return <span style={{ fontSize: "0.7rem", color: "var(--ink2, #475569)", display: "block" }}>= {formatMoney(minor)}</span>;
 }
 
 type FieldErrors = {
@@ -41,13 +64,20 @@ type FieldErrors = {
   balance?: string;
 };
 
-export function JournalEntryForm({ accounts, redirectTo }: Props) {
-  const defaultDebit  = accounts.find((a) => a.type === "asset")?.code     ?? accounts[0]?.code ?? "1000";
-  const defaultCredit = accounts.find((a) => a.type === "liability")?.code ?? accounts[1]?.code ?? "2000";
+export function JournalEntryForm({ accounts: allAccounts, redirectTo }: Props) {
+  // GAP-FINANCE-JOURNAL-ENTRY-01: only active, leaf heads are postable. A head
+  // that is some other head's parent is a group head, which the GL consumer
+  // refuses (DOM-010 NOT_LEAF_ACCOUNT), so it is not offered.
+  const groupHeadIds = new Set(allAccounts.map((a) => a.parentId).filter((p): p is string => Boolean(p)));
+  const accounts = allAccounts.filter((a) => a.status !== "inactive" && !(a.id && groupHeadIds.has(a.id)));
+  const postableCodes = new Set(accounts.map((a) => a.code));
+  // No invented "1000"/"2000" fallbacks: defaults come only from the loaded chart.
+  const defaultDebit  = accounts.find((a) => a.type === "asset")?.code     ?? accounts[0]?.code ?? "";
+  const defaultCredit = accounts.find((a) => a.type === "liability")?.code ?? accounts[1]?.code ?? "";
 
   const [voucherNo,  setVoucherNo]  = useState("");
   const [narration,  setNarration]  = useState("");
-  const [postingDate, setPostingDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [postingDate, setPostingDate] = useState(() => todayIST());
   const [lines, setLines] = useState<JournalLine[]>([
     emptyLine(defaultDebit),
     emptyLine(defaultCredit),
@@ -56,6 +86,10 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
   const [status,  setStatus]  = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   const [message, setMessage] = useState("");
   const [confirmOpen, setConfirmOpen] = useState(false);
+  // GAP-FINANCE-VOUCHERS-NEW-02: after a successful post with a redirectTo the
+  // clerk stays on a success panel (no instant hard navigation) and chooses
+  // between viewing the GL and posting another voucher.
+  const [posted, setPosted] = useState<{ voucherNo: string; queued: boolean } | null>(null);
   const formError = useFormError("journal entry");
   // EVT-4 (accounting-high-findings): one idempotency key per logical
   // submission attempt. The backend mechanism (idempotentId() in
@@ -89,10 +123,10 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
   }
 
   /* ── totals ─────────────────────────────────────────────────── */
-  const totalDebitPaise  = lines.reduce((s, l) => s + rupeesToPaise(l.debit),  0);
-  const totalCreditPaise = lines.reduce((s, l) => s + rupeesToPaise(l.credit), 0);
+  const totalDebitPaise  = lines.reduce((s, l) => s + paiseOf(l.debit),  0n);
+  const totalCreditPaise = lines.reduce((s, l) => s + paiseOf(l.credit), 0n);
   const diffPaise = totalDebitPaise - totalCreditPaise;
-  const balanced = totalDebitPaise > 0 && diffPaise === 0;
+  const balanced = totalDebitPaise > 0n && diffPaise === 0n;
 
   /* ── validation (per-field) ─────────────────────────────────── */
   function validate(): FieldErrors {
@@ -102,16 +136,19 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
     if (!postingDate) e.postingDate = "Posting date is required.";
     const lineErrs: Record<number, string> = {};
     lines.forEach((l) => {
-      if (!l.accountCode.trim()) lineErrs[l.id] = "Select an account.";
-      else if (rupeesToPaise(l.debit) > 0 && rupeesToPaise(l.credit) > 0)
+      const debit = parseMinorOrZero(l.debit);
+      const credit = parseMinorOrZero(l.credit);
+      if (!l.accountCode.trim() || !postableCodes.has(l.accountCode.trim())) lineErrs[l.id] = "Select an account from the list.";
+      else if (debit === null || credit === null) lineErrs[l.id] = amountErrorFor(debit === null ? l.debit : l.credit);
+      else if (debit > 0n && credit > 0n)
         lineErrs[l.id] = "A line cannot have both a debit and a credit.";
     });
     if (Object.keys(lineErrs).length) e.lines = lineErrs;
     if (!balanced) {
       e.balance =
-        totalDebitPaise === 0
+        totalDebitPaise === 0n
           ? "Enter at least one debit and matching credit."
-          : `Journal does not balance — debit ${formatMoney(totalDebitPaise)} vs credit ${formatMoney(totalCreditPaise)} (difference ${formatMoney(Math.abs(diffPaise))}).`;
+          : `Journal does not balance — debit ${formatMoney(totalDebitPaise)} vs credit ${formatMoney(totalCreditPaise)} (difference ${formatMoney(diffPaise < 0n ? -diffPaise : diffPaise)}).`;
     }
     return e;
   }
@@ -149,8 +186,8 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
         // or a real bigint — JSON has neither a bigint type nor an implicit
         // number->string coercion, so sending the raw number here made every
         // submission 400 with "Invalid input" on both fields, every time.
-        debitMinor:   String(rupeesToPaise(l.debit)),
-        creditMinor:  String(rupeesToPaise(l.credit)),
+        debitMinor:   paiseOf(l.debit).toString(),
+        creditMinor:  paiseOf(l.credit).toString(),
       })),
     };
 
@@ -161,6 +198,8 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
     });
 
     if (res.status === 200 || res.status === 201 || res.status === 202) {
+      // Read the body once; only use fields that exist -- never invent a journal id.
+      await res.json().catch(() => null);
       setConfirmOpen(false);
       setStatus("accepted");
       // Activation funnel: a posted journal is a real first transaction.
@@ -174,13 +213,13 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
       // distinct entry can't be deduped against this one's messageId.
       setIdempotencyKey(crypto.randomUUID());
       if (redirectTo) {
-        window.location.assign(redirectTo);
+        setPosted({ voucherNo: voucherNo.trim(), queued: res.status === 202 });
         return;
       }
       /* reset form */
       setVoucherNo("");
       setNarration("");
-      setPostingDate(new Date().toISOString().slice(0, 10));
+      setPostingDate(todayIST());
       setLines([emptyLine(defaultDebit), emptyLine(defaultCredit)]);
       setErrors({});
       return;
@@ -194,6 +233,55 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
   }
 
   const errId = "jv-form-error";
+
+  function postAnother() {
+    setPosted(null);
+    setStatus("idle");
+    setMessage("");
+    setVoucherNo("");
+    setNarration("");
+    setPostingDate(todayIST());
+    setLines([emptyLine(defaultDebit), emptyLine(defaultCredit)]);
+    setErrors({});
+  }
+
+  // GAP-FINANCE-JOURNAL-ENTRY-01 / VOUCHERS-NEW-01: never offer free-text
+  // account codes. With no postable heads there is nothing valid to post to.
+  if (accounts.length === 0) {
+    return (
+      <EmptyState
+        icon="📒"
+        title="No accounts configured"
+        message="No accounts configured - create accounts in Chart of Accounts first."
+        action={<Link href="/finance/chart-of-accounts" className="btn primary">Open Chart of Accounts</Link>}
+      />
+    );
+  }
+
+  if (posted && redirectTo) {
+    return (
+      <div role="status" aria-live="polite" style={{ padding: "8px 0" }}>
+        <p style={{ fontSize: "0.95rem", fontWeight: 600, margin: "0 0 4px", color: "#15803d" }}>
+          {posted.queued
+            ? "Journal entry accepted for processing (202)."
+            : "Journal entry posted successfully."}
+        </p>
+        <p style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--ink2, #475569)" }}>
+          Voucher <strong>{posted.voucherNo}</strong>
+          {posted.queued ? " is queued and may take a moment to appear in the General Ledger." : " has been posted."}
+        </p>
+        <div style={{ display: "flex", gap: 8 }}>
+          <Link
+            className="btn primary"
+            href={`${redirectTo}?posted=${encodeURIComponent(posted.voucherNo)}&state=${posted.queued ? "queued" : "posted"}`}
+          >
+            View in General Ledger
+          </Link>
+          <Button type="button" onClick={postAnother} style={{ minHeight: 44 }}>Post another</Button>
+        </div>
+      </div>
+    );
+  }
 
   /* ── render ─────────────────────────────────────────────────── */
   return (
@@ -290,51 +378,48 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
               alignItems: "center",
             }}
           >
-            {accounts.length > 0 ? (
-              <select
-                className="input"
-                value={line.accountCode}
-                onChange={(e) => updateLine(line.id, "accountCode", e.target.value)}
-                aria-label={`Account code, line ${idx + 1}`}
-                aria-invalid={lineErr ? true : undefined}
-              >
-                <option value="">— select account —</option>
-                {accounts.map((a) => (
-                  <option key={a.code} value={a.code}>
-                    {a.code} — {a.name}
-                  </option>
-                ))}
-              </select>
-            ) : (
+            <select
+              className="input"
+              value={line.accountCode}
+              onChange={(e) => updateLine(line.id, "accountCode", e.target.value)}
+              aria-label={`Account code, line ${idx + 1}`}
+              aria-invalid={lineErr ? true : undefined}
+            >
+              <option value="">— select account —</option>
+              {accounts.map((a) => (
+                <option key={a.code} value={a.code}>
+                  {a.code} — {a.name}
+                </option>
+              ))}
+            </select>
+            <div>
               <input
                 className="input"
-                placeholder="Account code"
-                value={line.accountCode}
-                onChange={(e) => updateLine(line.id, "accountCode", e.target.value)}
-                aria-label={`Account code, line ${idx + 1}`}
-                aria-invalid={lineErr ? true : undefined}
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="0.00"
+                value={line.debit}
+                onChange={(e) => updateLine(line.id, "debit", e.target.value)}
+                aria-label={`Debit amount, line ${idx + 1}`}
+                aria-invalid={parseMinorOrZero(line.debit) === null ? true : undefined}
               />
-            )}
-            <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={line.debit}
-              onChange={(e) => updateLine(line.id, "debit", e.target.value)}
-              aria-label={`Debit amount, line ${idx + 1}`}
-            />
-            <input
-              className="input"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={line.credit}
-              onChange={(e) => updateLine(line.id, "credit", e.target.value)}
-              aria-label={`Credit amount, line ${idx + 1}`}
-            />
+              {amountPreview(line.debit)}
+            </div>
+            <div>
+              <input
+                className="input"
+                type="text"
+                inputMode="decimal"
+                autoComplete="off"
+                placeholder="0.00"
+                value={line.credit}
+                onChange={(e) => updateLine(line.id, "credit", e.target.value)}
+                aria-label={`Credit amount, line ${idx + 1}`}
+                aria-invalid={parseMinorOrZero(line.credit) === null ? true : undefined}
+              />
+              {amountPreview(line.credit)}
+            </div>
             <Button
               type="button"
               onClick={() => removeLine(line.id)}
@@ -382,10 +467,10 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
             row's actual background (#eaecf0 / --line) -- just under 4.5:1,
             since --mut was tuned for white/near-white. var(--ink2) reaches
             6.5:1 here. UX-005 tranche 5. */}
-        <span className="num" style={{ color: totalDebitPaise > 0 ? "var(--primary-d, #1e40af)" : "var(--ink2)" }}>
+        <span className="num" style={{ color: totalDebitPaise > 0n ? "var(--primary-d, #1e40af)" : "var(--ink2)" }}>
           {formatMoney(totalDebitPaise)}
         </span>
-        <span className="num" style={{ color: totalCreditPaise > 0 ? "var(--primary-d, #1e40af)" : "var(--ink2)" }}>
+        <span className="num" style={{ color: totalCreditPaise > 0n ? "var(--primary-d, #1e40af)" : "var(--ink2)" }}>
           {formatMoney(totalCreditPaise)}
         </span>
         <span
@@ -393,14 +478,14 @@ export function JournalEntryForm({ accounts, redirectTo }: Props) {
           aria-live="polite"
           style={{
             fontSize: "0.78rem",
-            color: balanced ? "#15803d" : totalDebitPaise === 0 ? "#64748b" : "#b91c1c",
+            color: balanced ? "#15803d" : totalDebitPaise === 0n ? "#64748b" : "#b91c1c",
             fontWeight: 700,
             whiteSpace: "nowrap",
           }}
         >
           {balanced ? (
             <><span aria-hidden="true">✓ </span>Balanced</>
-          ) : totalDebitPaise === 0 ? (
+          ) : totalDebitPaise === 0n ? (
             "Not started"
           ) : (
             <><span aria-hidden="true">✗ </span>Out of balance</>

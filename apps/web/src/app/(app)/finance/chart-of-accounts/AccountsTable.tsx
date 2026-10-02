@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import type { AccountSummary } from "@civitasone/types";
-import { Card, DataTable, Segmented, StatusPill, EmptyState } from "../../../_components/ds";
+import { Card, DataTable, Segmented, StatusPill, EmptyState, StatGrid, StatCard, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -28,6 +29,16 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
     (d) => d.length === 0,
   );
 
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-01: a failed load with nothing cached is an
+  // error, never "No accounts set up yet - add your first head" (which would
+  // push the officer to create heads on top of a live chart).
+  if (provenance === "error-no-data") {
+    return <RefreshErrorState error={toHumanError("load", { area: "chart of accounts" })} backHref="/finance" />;
+  }
+
+  const majorHeads = rows.filter((a) => a.type === "asset" || a.type === "liability").length;
+  const activeCount = rows.filter((a) => a.status === "active").length;
+
   const q = search.trim().toLowerCase();
 
   const filtered = rows.filter((a) => {
@@ -48,6 +59,13 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
   }
 
   return (
+    <>
+    <StatGrid>
+      <StatCard icon="🧱" iconBg="#e7edfd" label="Heads of Account" value={rows.length} />
+      <StatCard icon="🏛️" iconBg="#eff6ff" label="Asset / Liability" value={majorHeads} />
+      <StatCard icon="🔢" iconBg="#ecfdf3" label="Income / Expense" value={rows.length - majorHeads} />
+      <StatCard icon="✅" iconBg="#fffaeb" label="Active" value={activeCount} delta="CGA" up={true} />
+    </StatGrid>
     <Card
       title="Chart of Accounts · List of Major & Minor Heads (LMMHA)"
       link={
@@ -147,5 +165,6 @@ export function AccountsTable({ accounts, source = "api" }: AccountsTableProps) 
         />
       )}
     </Card>
+    </>
   );
 }

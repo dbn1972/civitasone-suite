@@ -1,6 +1,6 @@
 import { humanizeStatus } from "@/lib/formatters";
 
-type PillVariant = "good" | "warn" | "mut" | "bad" | "info";
+export type PillVariant = "good" | "warn" | "mut" | "bad" | "info";
 
 const STATUS_MAP: Record<string, PillVariant> = {
   active: "good",
@@ -153,6 +153,16 @@ const STATUS_MAP: Record<string, PillVariant> = {
   "not loaded": "mut",
   "pan ok": "good",
   "pan missing": "bad",
+
+  // Cheque / DD register (finance-service treasury: issued -> presented ->
+  // cleared | bounced | cancelled; GAP-FINANCE-TREASURY-CHEQUES-01). A bounced
+  // instrument is the exception the register exists to surface, so it must not
+  // share the neutral fallback with a merely presented one. "cleared" (good)
+  // and "cancelled" (bad, recruitment-shared) already map above.
+  bounced: "bad",
+  stale: "bad",
+  presented: "warn",
+  issued: "info", // explicit: this is the neutral starting state, not an unmapped word
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any
@@ -180,10 +190,16 @@ function normalizeStatusKey(status: string): string {
 interface StatusPillProps {
   status: string;
   label?: string;
+  /**
+   * Explicit tone that overrides the global STATUS_MAP -- for registers where a
+   * word means something different from the app-wide default (e.g. an "open"
+   * audit para is unresolved/red, not green; GAP-FINANCE-AUDIT-PARAS-01).
+   */
+  variant?: PillVariant;
 }
 
-export function StatusPill({ status, label }: StatusPillProps) {
-  const variant: PillVariant = STATUS_MAP[normalizeStatusKey(status)] ?? "info";
+export function StatusPill({ status, label, variant: variantOverride }: StatusPillProps) {
+  const variant: PillVariant = variantOverride ?? STATUS_MAP[normalizeStatusKey(status)] ?? "info";
   // Bug fix: this used to fall back to the raw `status` value itself
   // ("pending", "active", "na", ...) whenever a caller didn't pass an
   // explicit label -- a real database enum value shown verbatim, unstyled

@@ -34,7 +34,7 @@ describe("FinanceDashboardPage", () => {
 
   it("renders real formatted stat values when the loader succeeds", async () => {
     mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
-    render(await FinanceDashboardPage());
+    render(await FinanceDashboardPage({}));
     // Labels come back as their raw translation key under the mocked
     // getTranslations, so look up each stat by that key and assert on its
     // own card rather than on the value text directly -- "62.5%" is both
@@ -53,12 +53,28 @@ describe("FinanceDashboardPage", () => {
       data: { budgetUtilisationPct: null, pendingSanctions: 0, paymentsThisMonth: 0, totalExpenditure: 0 },
       source: "error",
     });
-    render(await FinanceDashboardPage());
+    render(await FinanceDashboardPage({}));
     const dashes = screen.getAllByText("—");
     // budgetUtilisation, expenditureYtd, paymentsMtd, pendingApprovals
     expect(dashes.length).toBe(4);
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
     expect(screen.queryByText(/^0 /)).not.toBeInTheDocument();
     expect(screen.queryByText("0%")).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-DASHBOARD-02: the FY selector must actually drive the loader.
+  it("passes the selected fiscal year to the dashboard endpoint and shows it", async () => {
+    mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
+    render(await FinanceDashboardPage({ searchParams: { fy: "2025-26" } }));
+    const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
+    expect(paths.some((p) => p.includes("/api/v1/finance/dashboard?fy=2025-26"))).toBe(true);
+    expect(screen.getByText(/FY 2025-26/)).toBeInTheDocument();
+  });
+
+  it("ignores an unrecognised fy value instead of forwarding it", async () => {
+    mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
+    render(await FinanceDashboardPage({ searchParams: { fy: "1999-00; drop" } }));
+    const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
+    expect(paths.some((p) => p.includes("drop"))).toBe(false);
   });
 });

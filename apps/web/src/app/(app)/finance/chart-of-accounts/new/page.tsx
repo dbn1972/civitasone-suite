@@ -15,10 +15,17 @@
  */
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, PageHeader, Card } from "../../../../_components/ds";
+import { Button, PageHeader, Card, ConfirmDialog } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 
-type AccountRow = { id: string; code?: string; name?: string; hoaCode?: string };
+type AccountRow = {
+  id: string;
+  code?: string;
+  name?: string;
+  hoaCode?: string | null;
+  /** 0 = major, 1 = minor, 2 = sub-minor */
+  level?: number;
+};
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
@@ -69,6 +76,11 @@ export default function MapHeadOfAccountPage() {
   const [level, setLevel] = useState("0");
   const [classification, setClassification] = useState<(typeof CLASSIFICATION_OPTIONS)[number]>("");
   const [createHoaCode, setCreateHoaCode] = useState("");
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: a minor/sub-minor head must name its
+  // parent (a head exactly one level above it).
+  const [parentId, setParentId] = useState("");
+  const levelNum = Number(level);
+  const parentOptions = accounts.filter((a) => a.level === levelNum - 1);
   const [createBusy, setCreateBusy] = useState(false);
   const [createMessage, setCreateMessage] = useState("");
   const [createIsError, setCreateIsError] = useState(false);
@@ -76,6 +88,11 @@ export default function MapHeadOfAccountPage() {
 
   async function submitCreate(e: React.FormEvent) {
     e.preventDefault();
+    if (levelNum > 0 && !parentId) {
+      setCreateIsError(true);
+      setCreateMessage("Select a parent head for a minor or sub-minor head.");
+      return;
+    }
     setCreateBusy(true);
     setCreateMessage("");
     setCreateIsError(false);
@@ -90,6 +107,7 @@ export default function MapHeadOfAccountPage() {
           level: Number(level),
           hoaCode: createHoaCode || undefined,
           classification: classification || undefined,
+          parentId: levelNum > 0 ? parentId : undefined,
         }),
       });
       if (!res.ok) {
@@ -97,7 +115,13 @@ export default function MapHeadOfAccountPage() {
         setCreateMessage((await createFormError.fromResponse(res, "save")).message);
         return;
       }
-      setCreateMessage(`Head of account "${code}" created.`);
+      const parentHead = accounts.find((a) => a.id === parentId);
+      setCreateMessage(
+        parentHead
+          ? `Head of account "${code}" created under ${parentHead.code ?? parentHead.id} (${parentHead.name ?? ""}).`
+          : `Head of account "${code}" created.`,
+      );
+      setParentId("");
       setCode("");
       setName("");
       setLevel("0");
@@ -119,10 +143,21 @@ export default function MapHeadOfAccountPage() {
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const mapFormError = useFormError("HoA code");
+  const selectedHead = accounts.find((a) => a.id === accountId);
+  const currentHoa = selectedHead?.hoaCode ? selectedHead.hoaCode : null;
 
-  async function submitMap(e: React.FormEvent) {
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01: submitting only opens the confirm
+  // dialog (old -> new code + mandatory reason); the PATCH happens on confirm.
+  function submitMap(e: React.FormEvent) {
     e.preventDefault();
+    setMessage("");
+    setIsError(false);
+    setConfirmOpen(true);
+  }
+
+  async function doMap(reason: string | undefined) {
     setBusy(true);
     setMessage("");
     setIsError(false);
@@ -131,18 +166,20 @@ export default function MapHeadOfAccountPage() {
       const res = await fetch(`/api/proxy/v1/finance/accounts/${accountId}/hoa`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ hoaCode }),
+        body: JSON.stringify({ hoaCode, reason }),
       });
+      setConfirmOpen(false);
       if (!(res.ok || res.status === 202)) {
         setIsError(true);
         setMessage((await mapFormError.fromResponse(res, "save")).message);
         return;
       }
-      setMessage("Head of Account code saved.");
+      setMessage(res.status === 202 ? "HoA code change submitted for approval." : "Head of Account code saved.");
       setHoaCode("");
       router.refresh();
       setTimeout(() => router.push("/finance/chart-of-accounts"), 700);
     } catch {
+      setConfirmOpen(false);
       setIsError(true);
       setMessage(mapFormError.fromException("save").message);
     } finally {
@@ -184,12 +221,28 @@ export default function MapHeadOfAccountPage() {
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="new-level">Level</label>
-              <select id="new-level" value={level} onChange={(e) => setLevel(e.target.value)} style={inputStyle}>
+              <select id="new-level" value={level} onChange={(e) => { setLevel(e.target.value); setParentId(""); }} style={inputStyle}>
                 {LEVEL_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
             </div>
+            {levelNum > 0 ? (
+              <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+                <label className="l" htmlFor="new-parent">Parent head</label>
+                <select id="new-parent" required value={parentId} onChange={(e) => setParentId(e.target.value)} style={inputStyle}>
+                  <option value="" disabled>Select a parent head…</option>
+                  {parentOptions.map((a) => (
+                    <option key={a.id} value={a.id}>{[a.code, a.name].filter(Boolean).join(" · ") || a.id}</option>
+                  ))}
+                </select>
+                {!loadError && parentOptions.length === 0 ? ( // ux-001-ok: a failed accounts load is reported by the loadError banner; this hint only shows after a successful (empty) load
+                  <span className="sub" style={{ fontSize: 12 }}>
+                    No {levelNum === 1 ? "major" : "minor"} head exists yet - create one first.
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="new-classification">Classification</label>
               <select id="new-classification" value={classification} onChange={(e) => setClassification(e.target.value as typeof classification)} style={inputStyle}>
@@ -216,7 +269,7 @@ export default function MapHeadOfAccountPage() {
               )}
             </div>
           </div>
-          <Button type="submit" disabled={createBusy || !code || !name} aria-busy={createBusy} style={{ marginTop: 12 }}>
+          <Button type="submit" disabled={createBusy || !code || !name || (levelNum > 0 && !parentId)} aria-busy={createBusy} style={{ marginTop: 12 }}>
             {createBusy ? "Creating…" : "Create head"}
           </Button>
         </form>
@@ -257,11 +310,42 @@ export default function MapHeadOfAccountPage() {
               )}
             </div>
           </div>
+          {accountId ? (
+            <p className="sub" style={{ fontSize: 13, marginTop: 8 }}>
+              Current PFMS HoA code:{" "}
+              <strong className="mono">{currentHoa ?? "Not mapped"}</strong>
+            </p>
+          ) : null}
           <Button type="submit" disabled={busy || !accountId} aria-busy={busy} style={{ marginTop: 12 }}>
             {busy ? "Saving…" : "Save HoA code"}
           </Button>
         </form>
       </Card>
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Change PFMS HoA code?"
+        danger
+        requireReason
+        minReasonLength={5}
+        maxReasonLength={500}
+        reasonLabel="Reason for changing PFMS HoA code"
+        confirmLabel="Change HoA code"
+        description={
+          <>
+            <p style={{ margin: "0 0 8px" }}>
+              HoA codes drive PFMS payment and budget mapping; a wrong code silently misroutes money.
+            </p>
+            <p style={{ margin: 0 }}>
+              {selectedHead ? <strong>{[selectedHead.code, selectedHead.name].filter(Boolean).join(" · ")}</strong> : null}
+              <br />
+              <span className="mono">{currentHoa ?? "Not mapped"}</span> → <strong className="mono">{hoaCode}</strong>
+            </p>
+          </>
+        }
+        busy={busy}
+        onConfirm={(reason) => { void doMap(reason); }}
+        onCancel={() => { if (!busy) setConfirmOpen(false); }}
+      />
     </>
   );
 }

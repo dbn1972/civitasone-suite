@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { rupeesToMinorString, percentToBps } from "./money";
+import { rupeesToMinorString, percentToBps, parseMinorOrZero } from "./money";
 
 describe("rupeesToMinorString", () => {
   it("converts whole rupees", () => {
@@ -123,5 +123,26 @@ describe("applyBpsToMinor", () => {
     // 0.06 x 8.33% = 0.4998 paise -> 0; 0.07 -> 0.5831 -> 1
     expect(applyBpsToMinor(6n, 833)).toBe(0n);
     expect(applyBpsToMinor(7n, 833)).toBe(1n);
+  });
+});
+
+describe("parseMinorOrZero (GAP-FINANCE-JOURNAL-ENTRY-02)", () => {
+  it("treats blank as zero and parses exact paise", () => {
+    expect(parseMinorOrZero("")).toBe(0n);
+    expect(parseMinorOrZero("   ")).toBe(0n);
+    expect(parseMinorOrZero("10.10")).toBe(1010n);
+    expect(parseMinorOrZero("1234567.89")).toBe(123456789n);
+    expect(parseMinorOrZero("0")).toBe(0n);
+  });
+  it("rejects values that cannot be represented exactly in paise", () => {
+    expect(parseMinorOrZero("0.285")).toBeNull();
+    expect(parseMinorOrZero("1.005")).toBeNull();
+    expect(parseMinorOrZero("1e5")).toBeNull();
+    expect(parseMinorOrZero("Infinity")).toBeNull();
+    expect(parseMinorOrZero("-5")).toBeNull();
+    expect(parseMinorOrZero("1,000")).toBeNull();
+  });
+  it("sums 0.1 + 0.2 exactly", () => {
+    expect((parseMinorOrZero("0.1") ?? 0n) + (parseMinorOrZero("0.2") ?? 0n)).toBe(30n);
   });
 });

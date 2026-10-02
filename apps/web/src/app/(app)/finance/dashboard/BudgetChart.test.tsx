@@ -20,27 +20,20 @@ import { BudgetChart } from "./BudgetChart";
 // and BudgetChart passes `formatRupees` so every number the chart shows,
 // bar label or donut total, is both correctly-scaled AND currency-formatted.
 describe("BudgetChart — Issue #5 (100x scale) + Issue #15 (currency formatting)", () => {
-  it("renders category bars already rupee-scaled AND currency-formatted, summing to the true expenditure", () => {
-    // Live-verified figure: 500000 paise = real expenditure of ₹5,000.00.
-    render(<BudgetChart utilisationPct={45} expenditure={500000} />);
-    // 35/25/20/12/8% splits of ₹5,000 -> 1750/1250/1000/600/400 rupees,
-    // rendered through formatRupees() (Issue #15) — NOT the pre-#5-fix
-    // 175000/125000/100000/60000/40000 (raw, unconverted paise), and NOT
-    // the post-#5/pre-#15 bare "1750" etc (correct scale, no ₹/grouping).
-    expect(screen.getByText("₹1,750.00")).toBeInTheDocument();
-    expect(screen.getByText("₹1,250.00")).toBeInTheDocument();
-    expect(screen.getByText("₹1,000.00")).toBeInTheDocument();
-    expect(screen.getByText("₹600.00")).toBeInTheDocument();
-    expect(screen.getByText("₹400.00")).toBeInTheDocument();
-    // The old, 100x-inflated values (Issue #5's reported symptom) must be gone.
-    expect(screen.queryByText("175000")).not.toBeInTheDocument();
-    expect(screen.queryByText("125000")).not.toBeInTheDocument();
-    expect(screen.queryByText("100000")).not.toBeInTheDocument();
-    // The correctly-scaled-but-still-raw values (Issue #15's reported
-    // symptom — what a reader actually saw after #5 alone) must be gone too.
-    expect(screen.queryByText("1750")).not.toBeInTheDocument();
-    expect(screen.queryByText("1250")).not.toBeInTheDocument();
-    expect(screen.queryByText("1000")).not.toBeInTheDocument();
+  // GAP-FINANCE-DASHBOARD-01: the old "Expenditure by Category" bars were
+  // fabricated from fixed percentage shares of total spend. With no category
+  // split from the API there must be NO bars and no invented category labels.
+  it("renders no fabricated category bars when no category breakdown is available", () => {
+    render(<BudgetChart utilisationPct={45} expenditure={1000000} />);
+    expect(screen.queryByText("Salaries")).not.toBeInTheDocument();
+    expect(screen.queryByText("Infra")).not.toBeInTheDocument();
+    expect(screen.queryByText("Programs")).not.toBeInTheDocument();
+    expect(screen.queryByText("Grants")).not.toBeInTheDocument();
+    expect(screen.queryByText("Expenditure by Category")).not.toBeInTheDocument();
+    expect(screen.getByText("Category breakdown not available")).toBeInTheDocument();
+    // Fixed-share amounts of the Rs 10,000 spend (35% -> 3,500, 25% -> 2,500) must not appear.
+    expect(screen.queryByText("₹3,500.00")).not.toBeInTheDocument();
+    expect(screen.queryByText("₹2,500.00")).not.toBeInTheDocument();
   });
 
   it("donut centre total and legend value agree on the same, now-formatted magnitude (Issue #15)", () => {
