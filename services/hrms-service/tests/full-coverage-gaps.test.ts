@@ -75,7 +75,7 @@ describe("claims", () => {
 });
 
 describe("visiting-card", () => {
-  it("GET me", async () => { expect([200, 500]).toContain(await hit("GET", "/v1/hrms/visiting-card/me", emp)); });
+  it("GET me", async () => { expect([200, 404]).toContain(await hit("GET", "/v1/hrms/visiting-card/me", emp)); });
 });
 
 describe("goals", () => {

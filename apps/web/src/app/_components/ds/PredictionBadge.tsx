@@ -35,7 +35,12 @@ function getColorClasses(level: "high" | "medium" | "low"): string {
 /**
  * PredictionBadge — inline colored badge showing ML prediction confidence.
  * Colors: green (>0.70), amber (0.40–0.70), red (<0.40).
- * Keyboard accessible: focusable via tabIndex, tooltip shown on focus.
+ * Keyboard accessible: with explainability factors the badge IS the tooltip
+ * trigger, so it renders as a real <button type="button"> (focusable, no
+ * tabIndex on a non-interactive role); focusing it opens the factor tooltip,
+ * which ExplainabilityTooltip links back to it via aria-describedby (WAI-ARIA
+ * tooltip pattern, same as HelpTip). Escape closes it. Without factors there
+ * is nothing to reveal, so it stays a non-focusable role="status" span.
  * Includes full aria-label with text explanation.
  */
 export function PredictionBadge({
@@ -51,12 +56,9 @@ export function PredictionBadge({
 
   const ariaLabel = `${label}, ${level} confidence${isFallback ? ", fallback model" : ""}${staleness ? `, predicted ${staleness}` : ""}`;
 
-  const badge = (
-    <span
-      role="status"
-      aria-label={ariaLabel}
-      className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium leading-5 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${colorClasses}`}
-    >
+  const className = `inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium leading-5 focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-blue-500 ${colorClasses}`;
+  const content = (
+    <>
       <span className="inline-block h-1.5 w-1.5 rounded-full bg-current" aria-hidden="true" />
       <span>{label}</span>
       {isFallback && (
@@ -73,16 +75,22 @@ export function PredictionBadge({
           {staleness}
         </span>
       )}
-    </span>
+    </>
   );
 
   if (factors && factors.length > 0) {
     return (
       <ExplainabilityTooltip factors={factors}>
-        {badge}
+        <button type="button" aria-label={ariaLabel} className={className}>
+          {content}
+        </button>
       </ExplainabilityTooltip>
     );
   }
 
-  return badge;
+  return (
+    <span role="status" aria-label={ariaLabel} className={className}>
+      {content}
+    </span>
+  );
 }

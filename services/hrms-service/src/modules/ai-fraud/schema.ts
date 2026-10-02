@@ -17,8 +17,11 @@ export const hrmsFraudAlerts = empSchema.table("hrms_fraud_alerts", {
   resolvedBy:      uuid("resolved_by"),
   resolvedAt:      timestamp("resolved_at", { withTimezone: true }),
   resolutionNotes: text("resolution_notes"),
-  createdBy:       uuid("created_by").notNull(),
-  updatedBy:       uuid("updated_by").notNull(),
+  // No createdBy/updatedBy: commit 76823be60 added them here without a
+  // migration, so employee.hrms_fraud_alerts (migration 0011) never had them
+  // and every tx.select() of this table -- GET /v1/hrms/ai/alerts -- failed
+  // with `column "created_by" does not exist`. Alerts are machine-generated
+  // by the scan (no human author), and no writer ever set these fields.
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 });

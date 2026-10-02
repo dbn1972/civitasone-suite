@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { PredictionBadge } from "./PredictionBadge";
 
 describe("PredictionBadge", () => {
@@ -110,32 +110,52 @@ describe("PredictionBadge", () => {
   });
 
   describe("keyboard focus behavior", () => {
-    it("is focusable via tabIndex", () => {
-      const { container } = render(
-        <PredictionBadge confidence={0.72} label="72% conversion" />
-      );
-      const badge = container.querySelector("[role='status']") as HTMLElement;
-      expect(badge).toHaveAttribute("tabindex", "0");
+    const factors = [
+      { feature: "daysInStage", contribution: 0.8, direction: "positive" as const },
+    ];
+
+    it("with factors, the badge is a real type=button trigger (keyboard focusable, no tabIndex hack)", () => {
+      render(<PredictionBadge confidence={0.72} label="72% conversion" factors={factors} />);
+      const badge = screen.getByRole("button", { name: /confidence/ });
+      expect(badge.tagName).toBe("BUTTON");
+      expect(badge).toHaveAttribute("type", "button");
+      expect(badge).not.toHaveAttribute("tabindex");
+      expect(badge).toHaveAttribute("aria-label", "72% conversion, high confidence");
+    });
+
+    it("without factors, the badge is a non-focusable status span (nothing to reveal)", () => {
+      render(<PredictionBadge confidence={0.72} label="72% conversion" />);
+      expect(screen.queryByRole("button")).not.toBeInTheDocument();
+      const badge = screen.getByRole("status");
+      expect(badge.tagName).toBe("SPAN");
+      expect(badge).not.toHaveAttribute("tabindex");
+      act(() => badge.focus());
+      expect(document.activeElement).not.toBe(badge);
     });
 
     it("has focus ring styles", () => {
-      const { container } = render(
-        <PredictionBadge confidence={0.72} label="72% conversion" />
-      );
-      const badge = container.querySelector("[role='status']") as HTMLElement;
-      expect(badge.className).toContain("focus:ring-2");
+      render(<PredictionBadge confidence={0.72} label="72% conversion" factors={factors} />);
+      expect(screen.getByRole("button", { name: /confidence/ }).className).toContain("focus:ring-2");
     });
 
     it("shows tooltip on focus when factors are provided", () => {
-      const factors = [
-        { feature: "daysInStage", contribution: 0.8, direction: "positive" as const },
-      ];
-      const { container } = render(
-        <PredictionBadge confidence={0.72} label="72% conversion" factors={factors} />
-      );
-      const badge = container.querySelector("[role='status']") as HTMLElement;
-      fireEvent.focus(badge);
+      render(<PredictionBadge confidence={0.72} label="72% conversion" factors={factors} />);
+      fireEvent.focus(screen.getByRole("button", { name: /confidence/ }));
       expect(screen.getByRole("tooltip")).toBeInTheDocument();
+    });
+
+    it("links the focused badge to its tooltip via aria-describedby, and unlinks on Escape", () => {
+      render(<PredictionBadge confidence={0.72} label="72% conversion" factors={factors} />);
+      const badge = screen.getByRole("button", { name: /confidence/ });
+      expect(badge).not.toHaveAttribute("aria-describedby");
+      // Real keyboard-style focus (not a synthetic event).
+      act(() => badge.focus());
+      expect(document.activeElement).toBe(badge);
+      const tooltip = screen.getByRole("tooltip");
+      expect(badge.getAttribute("aria-describedby")).toBe(tooltip.id);
+      fireEvent.keyDown(document, { key: "Escape" });
+      expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+      expect(badge).not.toHaveAttribute("aria-describedby");
     });
   });
 
