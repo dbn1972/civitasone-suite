@@ -134,7 +134,9 @@
     "filterPeriodPlaceholder": "उदा. 2025-26",
     "filterApplyBtn": "लागू करें",
     "filterClearBtn": "साफ़ करें",
-    "showingOfTotal": "{total} में से {shown} दिखाए जा रहे हैं — अधिक देखने के लिए फ़िल्टर संकुचित करें"
+    "showingOfTotal": "{total} में से {shown} दिखाए जा रहे हैं — अधिक देखने के लिए फ़िल्टर संकुचित करें",
+    "cycleProgressTitle": "चक्र प्रगति",
+    "cycleProgressSummary": "{total} में से {finalised} अंतिम रूप दिए गए ({pct}%)"
   },
   "aparDetail": {
     "detailPageTitle": "APAR विवरण",

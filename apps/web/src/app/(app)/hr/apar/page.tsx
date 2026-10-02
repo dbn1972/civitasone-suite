@@ -11,6 +11,7 @@ import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "../../.
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson } from "@/app/_data/apiClient";
 import { APARFlowList, type AparRecord } from "./_components/APARFlowCard";
+import { APARCycleProgress } from "./_components/APARCycleProgress";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
@@ -134,6 +135,18 @@ export default async function AparListPage({
         <StatCard icon="📨" iconBg="var(--warnbg, #fff7e6)" label={t("statAwaitingClosure")}  value={errored ? null : counts.awaitingClosure} />
         <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statFinalised")}        value={errored ? null : counts.finalised} />
       </StatGrid>
+
+      {/* GAP-HR-APPRAISALS-02: a single at-a-glance "how far along is this
+          cycle" read, distinct from the five individual stat tiles above.
+          Hidden on error (no 0%) and when there is nothing to show a
+          percentage of (total === 0) -- see APARCycleProgress's own doc
+          comment for why this takes the already server-computed
+          total/counts.finalised rather than deriving from `apars` (which is
+          only the current, possibly-truncated batch -- GAP-HR-APAR-06).
+          Unfiltered view only: the backend applies ?status=/?period= to
+          `total` but not to `counts`, so a filtered view would mix two
+          different sets (e.g. "25 of 3 finalised"). */}
+      {!errored && !statusFilter && !periodFilter && <APARCycleProgress total={total} finalised={counts.finalised} />}
 
       {!errored && (
         <form method="get" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap", margin: "4px 0 16px" }}>
