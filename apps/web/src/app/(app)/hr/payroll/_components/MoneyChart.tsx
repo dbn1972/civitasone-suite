@@ -12,6 +12,6 @@ import { formatMoney } from "@/lib/formatters";
  * cannot pass a function across that boundary. This wrapper owns the
  * formatter on the client side so server pages pass only plain data.
  */
-export function MoneyChart({ type, data, height }: { type: "bar" | "line"; data: ChartDataPoint[]; height?: number }) {
-  return <Chart type={type} data={data} height={height} valueFormatter={(v) => formatMoney(v)} />;
+export function MoneyChart({ type, data, height, title = "Amount trend" }: { type: "bar" | "line"; data: ChartDataPoint[]; height?: number; title?: string }) {
+  return <Chart type={type} data={data} height={height} title={title} valueFormatter={(v) => formatMoney(v)} />;
 }

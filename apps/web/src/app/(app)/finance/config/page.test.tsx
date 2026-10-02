@@ -46,4 +46,38 @@ describe("FinanceConfigPage (GAP-FINANCE-CONFIG-01/-02)", () => {
     expect(screen.getAllByText("2026-27").length).toBeGreaterThan(0);
     expect(screen.queryByRole("button", { name: "Add bank account" })).not.toBeInTheDocument();
   });
+
+  // GAP-FINANCE-CONFIG-03 (already implemented on main; pinned here)
+  it("on a failed load the stat cards read a dash, not 'Not set' or 0", async () => {
+    respond({ data: [], source: "error", status: 500 }, { data: [], source: "error", status: 500 });
+    render(await FinanceConfigPage());
+    expect(screen.getByText("Active FY").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByText("Bank Accounts", { selector: ".lab" }).closest(".stat")).toHaveTextContent("—");
+    expect(screen.queryByText("Not set")).not.toBeInTheDocument();
+  });
+
+  it("a successful load with no active year still says 'Not set'", async () => {
+    respond({ data: [{ ...FY, status: "draft" }], source: "api" }, { data: [], source: "api" });
+    render(await FinanceConfigPage());
+    expect(screen.getByText("Active FY").closest(".stat")).toHaveTextContent("Not set");
+  });
+
+  // GAP-FINANCE-CONFIG-04
+  it("renders financial-year dates in the Indian format, not the raw ISO string", async () => {
+    respond({ data: [FY], source: "api" }, { data: [BANK], source: "api" });
+    render(await FinanceConfigPage());
+    expect(screen.getByText("01 Apr 2026")).toBeInTheDocument();
+    expect(screen.getByText("31 Mar 2027")).toBeInTheDocument();
+    expect(screen.queryByText("2026-04-01")).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-CONFIG-06
+  it("keeps the Opening Balances card visible without an active year, disabled with a hint", async () => {
+    respond({ data: [{ ...FY, status: "draft" }], source: "api" }, { data: [BANK], source: "api" });
+    render(await FinanceConfigPage());
+    expect(screen.getByText("Opening Balances")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Enter opening balances" })).not.toBeInTheDocument();
+    expect(screen.getByText(/Activate a financial year first/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Enter opening balances" })).toBeDisabled();
+  });
 });

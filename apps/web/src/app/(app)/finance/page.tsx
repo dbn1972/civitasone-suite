@@ -6,7 +6,7 @@ import { PageHeader } from "../../_components/ds";
 const financeSections: NavTile[] = [
 	// Existing
 	{ title: "Dashboard", description: "Key finance KPIs and quick navigation.", href: "/finance/dashboard" },
-	{ title: "Chart of Accounts", description: "Hierarchical account tree with status and balance visibility.", href: "/finance/chart-of-accounts" },
+	{ title: "Chart of Accounts", description: "List of account heads with type, status and balance visibility.", href: "/finance/chart-of-accounts" },
 
 	// Budget
 	{ title: "Budget Formulation", section: "Budget", description: "Sanctioned, released, and utilisation by major head.", href: "/finance/budget/formulation" },

@@ -1,33 +1,45 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader } from "@/app/_components/ds";
 import { getFinanceDebt } from "@/app/_data/loaders";
-import { DebtTable } from "./DebtTable";
+import { getTranslations } from "next-intl/server";
+import { DebtTable, type DebtLabels } from "./DebtTable";
 
 export default async function DebtPage() {
-  const { data: loans, source } = await getFinanceDebt();
-  const active = loans.filter((l) => String(l.status).toLowerCase() === "active").length;
-  const closedCount = loans.filter((l) => String(l.status).toLowerCase() === "closed").length;
+  const result = await getFinanceDebt();
+  const t = await getTranslations("financeDebt");
+  // GAP-FINANCE-DEBT-01: the subtitle names only what the screen shows. The
+  // table (treasury.finance_debt) has no lender, outstanding-balance or EMI
+  // schedule, so none is promised here.
+  const labels: DebtLabels = {
+    totalLoans: t("totalLoans"),
+    active: t("active"),
+    closed: t("closed"),
+    totalPrincipal: t("totalPrincipal"),
+    mixedCurrency: t("mixedCurrency"),
+    portfolio: t("portfolio"),
+    instrument: t("colInstrument"),
+    source: t("colSource"),
+    principal: t("colPrincipal"),
+    maturity: t("colMaturity"),
+    status: t("colStatus"),
+    search: t("search"),
+    emptyTitle: t("emptyTitle"),
+    emptyMessage: t("emptyMessage"),
+    loadArea: t("loadArea"),
+    sources: { rbi: t("sourceRbi"), market: t("sourceMarket"), central_govt: t("sourceCentralGovt") },
+  };
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader
-        title="Debt Management"
-        subtitle="Loans, EMI schedules, and lender-wise outstanding debt."
-        back="/finance"
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/finance" />
+      {/* UX-012 / DEBT-03: stat cards and the data-source badge both live inside
+          DebtTable, driven by the one useSeededResource call that produces its rows. */}
+      <DebtTable
+        loans={result.data}
+        source={result.source === "error" ? "error" : "api"}
+        errorStatus={result.status}
+        errorMessage={result.errorMessage}
+        labels={labels}
       />
-      <StatGrid>
-        <StatCard icon="🏦" iconBg="#e7edfd" label="Total Loans" value={loans.length} />
-        <StatCard icon="📈" iconBg="#ecfdf3" label="Active" value={active} />
-        <StatCard icon="✅" iconBg="#fffaeb" label="Closed" value={closedCount} />
-        {/* treasury.finance_debt has no "lender" column — "source" (RBI|market|central_govt) is the closest real field. */}
-        <StatCard icon="💰" iconBg="#eff6ff" label="Sources" value={new Set(loans.map((l) => l.source)).size} />
-      </StatGrid>
-      {/* UX-012: the data-source badge now lives inside DebtTable, driven by
-          the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree
-          with the table's own cache state (UX-002's pattern). */}
-      <Card title="Loan Portfolio">
-        <DebtTable loans={loans} source={source === "error" ? "error" : "api"} />
-      </Card>
     </div>
   );
 }

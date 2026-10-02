@@ -90,37 +90,39 @@ function formatBalanceMinor(minor: bigint): string {
   return `${negative ? "-" : ""}${grouped}.${paise.toString().padStart(2, "0")}`;
 }
 
-export async function listAccounts(tenantId: string, limit: number): Promise<AccountListItem[]> {
-  const rows = await cache.getOrLoad(
-    cache.makeKey(tenantId, "accounts", `list:${limit}`),
-    async () => {
-      const [heads, balanceRows] = await Promise.all([
-        repo.listHeads(tenantId, limit),
-        glRepo.getTrialBalance(tenantId),
-      ]);
-      const balanceByHead = new Map(balanceRows.map((b) => [b.headId, b]));
-      return heads.map((h) => {
-        const type = mapAccountType(h.classification, h.code);
-        const bal = balanceByHead.get(h.id);
-        const balanceMinor = computeBalanceMinor(type, bal?.totalDebit ?? 0n, bal?.totalCredit ?? 0n);
-        return {
-          id: h.id,
-          code: h.code,
-          hoaCode: h.hoaCode ?? null,
-          name: h.name,
-          // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: hierarchy placement, so the
-          // create form can offer only heads one level up as a parent.
-          level: h.level,
-          parentId: h.parentId ?? null,
-          type,
-          currency: "INR",
-          balanceDisplay: formatBalanceMinor(balanceMinor),
-          status: "active" as const,
-        };
-      });
-    },
-    60
-  );
+export async function listAccounts(tenantId: string, limit: number, search?: string): Promise<AccountListItem[]> {
+  const term = search?.trim() || undefined;
+  const load = async (): Promise<AccountListItem[]> => {
+    const [heads, balanceRows] = await Promise.all([
+      repo.listHeads(tenantId, limit, term),
+      glRepo.getTrialBalance(tenantId),
+    ]);
+    const balanceByHead = new Map(balanceRows.map((b) => [b.headId, b]));
+    return heads.map((h) => {
+      const type = mapAccountType(h.classification, h.code);
+      const bal = balanceByHead.get(h.id);
+      const balanceMinor = computeBalanceMinor(type, bal?.totalDebit ?? 0n, bal?.totalCredit ?? 0n);
+      return {
+        id: h.id,
+        code: h.code,
+        hoaCode: h.hoaCode ?? null,
+        name: h.name,
+        // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: hierarchy placement, so the
+        // create form can offer only heads one level up as a parent.
+        level: h.level,
+        parentId: h.parentId ?? null,
+        type,
+        currency: "INR",
+        balanceDisplay: formatBalanceMinor(balanceMinor),
+        status: "active" as const,
+      };
+    });
+  };
+  // A search (GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-04) is a one-off lookup and is
+  // never cached: account writes invalidate only the plain `list:<limit>` key.
+  const rows = term
+    ? await load()
+    : await cache.getOrLoad(cache.makeKey(tenantId, "accounts", `list:${limit}`), load, 60);
   return rows ?? [];
 }
 

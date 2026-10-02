@@ -37,33 +37,32 @@ describe("BudgetChart — Issue #5 (100x scale) + Issue #15 (currency formatting
   });
 
   it("donut centre total and legend value agree on the same, now-formatted magnitude (Issue #15)", () => {
-    // No sanctioned budget on record (Issue #7) -> remaining is 0, so the
-    // donut's centre total is exactly `utilized`, unambiguously.
-    render(<BudgetChart utilisationPct={null} expenditure={500000} />);
-    // Two elements legitimately show "₹5,000.00" here: the donut's SVG
-    // centre total AND the legend row's own value span for "Utilized"
-    // (value === total, since remaining is 0) — both correctly rupee-scaled
-    // AND currency-formatted (Issue #15), which is exactly the point of
-    // this test, so assert both exist rather than picking one via
-    // getByText (which requires a unique match).
-    expect(screen.getAllByText("₹5,000.00")).toHaveLength(2); // formatted donut centre total + legend value, both in rupees
-    // The pre-#15-fix raw (but correctly-scaled) value must be gone from
-    // both of those spots.
+    // Sanctioned total supplied: 5,000 spent of 10,000 -> exact remaining 5,000.
+    render(<BudgetChart utilisationPct={50} expenditure={500000} sanctionedMinor="1000000" />);
+    // The pre-#15 raw digits and the pre-#5 paise value must not appear.
     expect(screen.queryByText("5000")).not.toBeInTheDocument();
-    // Anchored: the donut slice's <title> tooltip also contains this same
-    // label text as a substring ("Utilized (₹5,000.00): ₹5,000.00 (100.0%)")
-    // — an unanchored match would find both and fail as ambiguous.
-    expect(screen.getByText(/^Utilized \(₹5,000\.00\)$/)).toBeInTheDocument(); // formatted legend, same quantity
-    // The pre-#5-fix bug's signature number (the raw, unconverted paise
-    // value) must not appear anywhere on the page.
     expect(screen.queryByText("500000")).not.toBeInTheDocument();
+    expect(screen.getByText(/^Utilized \(₹5,000\.00\)$/)).toBeInTheDocument();
+    expect(screen.getByText(/^Remaining \(₹5,000\.00\)$/)).toBeInTheDocument();
   });
 
-  it("does not throw and shows zero remaining when utilisationPct is null (no sanctioned budget, UX-006)", () => {
+  // GAP-FINANCE-DASHBOARD-04
+  it("pct=25, expenditure 25000000 paise gives Remaining ₹7,50,000.00 exactly (no float back-computation)", () => {
+    render(<BudgetChart utilisationPct={25} expenditure={25000000} sanctionedMinor="100000000" />);
+    expect(screen.getByText(/^Remaining \(₹7,50,000\.00\)$/)).toBeInTheDocument();
+  });
+
+  it("pct=120 renders 'Overspent by' and no 'Remaining ₹0.00' legend", () => {
+    render(<BudgetChart utilisationPct={120} expenditure={120000} sanctionedMinor="100000" />);
+    expect(screen.getByText(/Over budget estimate by ₹200\.00/)).toBeInTheDocument();
+    expect(screen.queryByText(/Remaining/)).not.toBeInTheDocument();
+  });
+
+  it("pct=null renders the no-budget message, not a ₹0.00 Remaining slice", () => {
     expect(() => render(<BudgetChart utilisationPct={null} expenditure={500000} />)).not.toThrow();
-    // Anchored for the same reason as above: the donut slice's <title>
-    // tooltip also contains this label text as a substring.
-    expect(screen.getByText(/^Remaining \(₹0\.00\)$/)).toBeInTheDocument();
+    expect(screen.getByText("No budget estimate")).toBeInTheDocument();
+    expect(screen.getByText(/Expenditure recorded so far: ₹5,000\.00/)).toBeInTheDocument();
+    expect(screen.queryByText(/Remaining/)).not.toBeInTheDocument();
   });
 
   it("does not render Infinity when utilisationPct is 0 (pre-existing guard preserved)", () => {
@@ -88,13 +87,32 @@ describe("BudgetChart — Issue #5 (100x scale) + Issue #15 (currency formatting
   // this test's stronger assertions makes it fail with the literal "NaN"
   // text found in the container; the old `not.toThrow()`-only version kept
   // passing throughout.
-  it("handles zero expenditure without throwing, and without silently rendering NaN (both donut slices are zero: utilized=0, remaining=0)", () => {
+  it("handles zero expenditure with no budget without throwing or rendering NaN", () => {
     const { container } = render(<BudgetChart utilisationPct={null} expenditure={0} />);
     expect(container.innerHTML).not.toContain("NaN");
-    // An honest empty state, not a broken/blank arc. Two elements
-    // legitimately say "No data": the ring's <title> tooltip and the
-    // visible centre <text> label (getAllByText, same convention as this
-    // file's own "agree on the same... magnitude" test above).
-    expect(screen.getAllByText("No data").length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText("No budget estimate")).toBeInTheDocument();
+  });
+
+  it("zero expenditure against a real budget draws a full-remaining donut with no NaN", () => {
+    const { container } = render(<BudgetChart utilisationPct={0} expenditure={0} sanctionedMinor="100000" />);
+    expect(container.innerHTML).not.toContain("NaN");
+    expect(screen.getByText(/^Remaining \(₹1,000\.00\)$/)).toBeInTheDocument();
+  });
+});
+
+describe("BudgetChart old-API fallback (D1)", () => {
+  it("101% without sanctionedMinor says 'Over budget' with no rupee overspend figure", () => {
+    render(<BudgetChart utilisationPct={101} expenditure={10100} />);
+    expect(screen.getByText(/Over budget$/)).toBeInTheDocument();
+    expect(screen.queryByText(/Over budget estimate by/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Remaining/)).not.toBeInTheDocument();
+  });
+  it("100.4% without sanctionedMinor is over budget, not 'within, remaining 0'", () => {
+    render(<BudgetChart utilisationPct={100.4} expenditure={10040} />);
+    expect(screen.getByText(/Over budget$/)).toBeInTheDocument();
+  });
+  it("50% without sanctionedMinor shows Remaining as a dash, not an invented amount", () => {
+    render(<BudgetChart utilisationPct={50} expenditure={10000} />);
+    expect(screen.getByText(/^Remaining \(—\)$/)).toBeInTheDocument();
   });
 });

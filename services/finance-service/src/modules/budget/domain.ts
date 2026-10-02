@@ -132,6 +132,14 @@ export function assertSanctionApproverDistinct(createdBy: string, approverId: st
   }
 }
 
+/**
+ * GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-04: LIKE pattern for the head search box.
+ * `%`, `_` and `\\` typed by the user are literals, not wildcards.
+ */
+export function headSearchPattern(q: string): string {
+  return `%${q.trim().replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+}
+
 export { assertValidPfmsHoA, assertValidDdoCode } from "../../shared/pfms.js";
 
 export type HeadType = HeadNature;

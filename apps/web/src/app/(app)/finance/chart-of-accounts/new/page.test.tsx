@@ -93,12 +93,10 @@ describe("MapHeadOfAccountPage", () => {
     fireEvent.change(await screen.findByLabelText("Reason for changing PFMS HoA code"), { target: { value: "Aligning with PFMS mapping" } });
     fireEvent.click(screen.getByRole("button", { name: "Change HoA code" }));
 
-    // The map flow's banner is role="status" regardless of error state
-    // (pre-existing, out of scope here -- this fix is about message
-    // content, not the ARIA role).
-    const banner = await screen.findByRole("status");
-    await waitFor(() => expect(banner).toHaveTextContent(/couldn't save/i));
-    expect(banner.textContent).not.toMatch(/\b500\b/);
+    // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-03: a failed save is announced as an alert.
+    const banner = (await screen.findByText(/couldn't save/i)).closest("[role='alert']");
+    expect(banner).not.toBeNull();
+    expect(banner!.textContent).not.toMatch(/\b500\b/);
   });
 
   // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01
@@ -164,5 +162,67 @@ describe("MapHeadOfAccountPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create head/i }));
     await waitFor(() => expect(posts.length).toBe(1));
     expect(JSON.parse(posts[0]!)).toMatchObject({ code: "2101", level: 1, parentId: "maj-1" });
+  });
+
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-03
+  it("a successful map save is announced as a status, not an alert", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if (init?.method === "PATCH") return new Response(JSON.stringify({ status: "updated" }), { status: 200 });
+      return new Response(JSON.stringify({ data: ACCOUNTS }), { status: 200 });
+    });
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2110 · Sundry Creditors").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Head of account"), { target: { value: "acc-1" } });
+    fireEvent.change(screen.getByLabelText("PFMS HoA code"), { target: { value: "123456789012345678" } });
+    fireEvent.click(screen.getByRole("button", { name: /save hoa code/i }));
+    fireEvent.change(await screen.findByLabelText("Reason for changing PFMS HoA code"), { target: { value: "Aligning with PFMS mapping" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change HoA code" }));
+    expect(await screen.findByRole("status")).toHaveTextContent(/saved/i);
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-05
+  it("a failed load offers Retry, disables the head picker and Save, and Retry recovers", async () => {
+    let healthy = false;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      healthy ? new Response(JSON.stringify({ data: ACCOUNTS }), { status: 200 }) : new Response("", { status: 500 }));
+    render(<MapHeadOfAccountPage />);
+    const alert = await screen.findByRole("alert");
+    await waitFor(() => expect(alert).toHaveTextContent(/couldn't load/i));
+    expect(screen.getByLabelText("Head of account")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /save hoa code/i })).toBeDisabled();
+
+    healthy = true;
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
+    expect(screen.getByLabelText("Head of account")).not.toBeDisabled();
+    expect(screen.getAllByText("2110 · Sundry Creditors").length).toBeGreaterThan(0);
+  });
+
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-04
+  it("says the list is capped and finds a head beyond the cap via server search", async () => {
+    const urls: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      urls.push(String(url));
+      if (String(url).includes("q=450")) {
+        return new Response(JSON.stringify({ data: [{ id: "h450", code: "450", name: "Deep Head", level: 0 }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: ACCOUNTS, pagination: { hasMore: true, pageSize: 200 } }), { status: 200 });
+    });
+    render(<MapHeadOfAccountPage />);
+    expect(await screen.findByText(/Showing the first 200 heads/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Find a head by code or name"), { target: { value: "450" } });
+    await waitFor(() => expect(screen.getAllByText("450 · Deep Head").length).toBeGreaterThan(0));
+    expect(urls.some((u) => u.includes("/finance/accounts?q=450"))).toBe(true);
+  });
+
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-06
+  it("the title expands the LMMHA acronym through a Term tooltip", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: ACCOUNTS }), { status: 200 }));
+    render(<MapHeadOfAccountPage />);
+    const heading = screen.getByRole("heading", { level: 1 });
+    expect(heading).toHaveTextContent("LMMHA");
+    expect(heading.querySelector("button, [role='tooltip'], [aria-describedby], abbr, [tabindex]")).not.toBeNull();
+    await waitFor(() => expect(screen.getAllByText("2110 · Sundry Creditors").length).toBeGreaterThan(0));
   });
 });

@@ -367,6 +367,8 @@ tr.clickable:hover{background:var(--primary-soft)!important}
    ACCESSIBILITY FOUNDATIONS (WCAG 2.2 AA)
    ============================================================ */
 :root{--focus-ring:var(--indigo,#6366f1)}
+/* Chart palette tokens (GAP-FINANCE-DASHBOARD-07): finance BudgetChart reads these instead of hex literals. */
+:root{--chart-1:#4f46e5;--chart-neutral:#e5e7eb;--chart-warn:#b42318}
 
 /* Global visible focus indicator — keyboard only, never on mouse click.
    Applies to links, buttons, inputs, segmented controls, table rows, etc. */

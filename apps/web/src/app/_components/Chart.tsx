@@ -27,6 +27,12 @@ interface ChartProps {
    * quantity.
    */
   valueFormatter?: (value: number) => string;
+  /**
+   * Opt-out: skip the built-in visually-hidden data table when the consumer
+   * already renders its own (e.g. inventory/ForecastChart), so assistive tech
+   * does not get two tables for one chart.
+   */
+  hideDataTable?: boolean;
 }
 
 const DEFAULT_COLORS = [
@@ -49,10 +55,13 @@ function BarChart({
   data,
   height,
   valueFormatter = defaultValueFormatter,
+  ariaLabel,
 }: {
   data: ChartDataPoint[];
   height: number;
   valueFormatter?: (value: number) => string;
+  /** Accessible name for the drawing (GAP-FINANCE-DASHBOARD-07). */
+  ariaLabel?: string;
 }) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const barWidth = Math.max(20, Math.min(60, (600 - data.length * 8) / data.length));
@@ -60,7 +69,7 @@ function BarChart({
   const chartHeight = height - 40;
 
   return (
-    <svg width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`} preserveAspectRatio="xMidYMid meet">
+    <svg role="img" aria-label={ariaLabel} width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`} preserveAspectRatio="xMidYMid meet">
       {data.map((d, i) => {
         const barHeight = (d.value / maxVal) * (chartHeight - 20);
         const x = 20 + i * (barWidth + 8);
@@ -106,10 +115,13 @@ function DonutChart({
   data,
   height,
   valueFormatter = defaultValueFormatter,
+  ariaLabel,
 }: {
   data: ChartDataPoint[];
   height: number;
   valueFormatter?: (value: number) => string;
+  /** Accessible name for the drawing (GAP-FINANCE-DASHBOARD-07). */
+  ariaLabel?: string;
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const cx = height / 2;
@@ -127,7 +139,7 @@ function DonutChart({
   if (total === 0) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <svg width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
+        <svg role="img" aria-label={ariaLabel} width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
           <circle
             cx={cx}
             cy={cy}
@@ -203,7 +215,7 @@ function DonutChart({
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-      <svg width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
+      <svg role="img" aria-label={ariaLabel} width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
         {slices}
         <text x={cx} y={cy - 6} textAnchor="middle" fontSize={16} fontWeight={700} fill="#1e293b">
           {valueFormatter(total)}
@@ -240,10 +252,13 @@ function LineChart({
   data,
   height,
   valueFormatter = defaultValueFormatter,
+  ariaLabel,
 }: {
   data: ChartDataPoint[];
   height: number;
   valueFormatter?: (value: number) => string;
+  /** Accessible name for the drawing (GAP-FINANCE-DASHBOARD-07). */
+  ariaLabel?: string;
 }) {
   const maxVal = Math.max(...data.map((d) => d.value), 1);
   const chartWidth = Math.max(400, data.length * 60);
@@ -255,7 +270,7 @@ function LineChart({
   const pathD = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x} ${p.y}`).join(" ");
 
   return (
-    <svg width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`} preserveAspectRatio="xMidYMid meet">
+    <svg role="img" aria-label={ariaLabel} width="100%" height={height} viewBox={`0 0 ${chartWidth} ${height}`} preserveAspectRatio="xMidYMid meet">
       <path d={pathD} fill="none" stroke="#4f46e5" strokeWidth={2} strokeLinejoin="round" />
       {points.map((p, i) => (
         <g key={i}>
@@ -274,10 +289,13 @@ function PieChart({
   data,
   height,
   valueFormatter = defaultValueFormatter,
+  ariaLabel,
 }: {
   data: ChartDataPoint[];
   height: number;
   valueFormatter?: (value: number) => string;
+  /** Accessible name for the drawing (GAP-FINANCE-DASHBOARD-07). */
+  ariaLabel?: string;
 }) {
   const total = data.reduce((s, d) => s + d.value, 0);
   const cx = height / 2;
@@ -290,7 +308,7 @@ function PieChart({
   if (total === 0) {
     return (
       <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-        <svg width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
+        <svg role="img" aria-label={ariaLabel} width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
           <circle cx={cx} cy={cy} r={r} fill={NO_DATA_COLOR}>
             <title>No data</title>
           </circle>
@@ -335,7 +353,7 @@ function PieChart({
 
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-      <svg width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
+      <svg role="img" aria-label={ariaLabel} width={height} height={height} viewBox={`0 0 ${height} ${height}`}>
         {slices}
       </svg>
       <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -352,7 +370,9 @@ function PieChart({
   );
 }
 
-export function Chart({ type, data, title, height = 200, valueFormatter }: ChartProps) {
+export function Chart({ type, data, title, height = 200, valueFormatter, hideDataTable = false }: ChartProps) {
+  const fmt = valueFormatter ?? defaultValueFormatter;
+  const ariaLabel = title ?? `${type} chart`;
   return (
     <div style={{ width: "100%" }}>
       {title && (
@@ -360,10 +380,22 @@ export function Chart({ type, data, title, height = 200, valueFormatter }: Chart
           {title}
         </h4>
       )}
-      {type === "bar" && <BarChart data={data} height={height} valueFormatter={valueFormatter} />}
-      {type === "line" && <LineChart data={data} height={height} valueFormatter={valueFormatter} />}
-      {type === "donut" && <DonutChart data={data} height={height} valueFormatter={valueFormatter} />}
-      {type === "pie" && <PieChart data={data} height={height} valueFormatter={valueFormatter} />}
+      {type === "bar" && <BarChart data={data} height={height} valueFormatter={valueFormatter} ariaLabel={ariaLabel} />}
+      {type === "line" && <LineChart data={data} height={height} valueFormatter={valueFormatter} ariaLabel={ariaLabel} />}
+      {type === "donut" && <DonutChart data={data} height={height} valueFormatter={valueFormatter} ariaLabel={ariaLabel} />}
+      {type === "pie" && <PieChart data={data} height={height} valueFormatter={valueFormatter} ariaLabel={ariaLabel} />}
+      {/* GAP-FINANCE-DASHBOARD-07: the drawing alone is not readable by a screen
+          reader (no data table). Same values, as a visually-hidden table. */}
+      {hideDataTable ? null : <table className="sr-only" aria-label={ariaLabel}>
+        <thead>
+          <tr><th scope="col">Item and value</th></tr>
+        </thead>
+        <tbody>
+          {data.map((d, i) => (
+            <tr key={i}><td>{`${d.label}: ${fmt(d.value)}`}</td></tr>
+          ))}
+        </tbody>
+      </table>}
     </div>
   );
 }

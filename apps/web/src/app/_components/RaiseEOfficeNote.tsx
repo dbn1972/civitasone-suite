@@ -20,7 +20,10 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, EntityPicker, Field, StatusPill } from "./ds";
+import { Button, EntityPicker, Field, Select, StatusPill } from "./ds";
+import { errorMessageFromResponse } from "@/lib/api/browserClient";
+import { toHumanError } from "@/lib/messages";
+import { isEofficeFileInFlight } from "./eofficeFileStatus";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 export type RaiseEOfficeNoteProps = {
@@ -44,20 +47,44 @@ export type RaiseEOfficeNoteProps = {
    * loop visually until the eOffice decision callback lands.
    */
   notifyPath?: string;
+  /**
+   * Optional (GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-01): reports the linked
+   * eFile lookup to a parent that needs to react to it (e.g. hide a competing
+   * direct-approve button). Called whenever the lookup settles; pages that do
+   * not pass it behave exactly as before.
+   */
+  onLinkedFileChange?: (state: { loading: boolean; file: LinkedFile | null }) => void;
+  /**
+   * Opt-in: when the linked file is no longer in flight (e.g. rejected or
+   * closed) offer "Raise for approval" again instead of locking the record
+   * behind a dead file. Default off, so the other pages keep today's behaviour.
+   */
+  allowRaiseAfterTerminal?: boolean;
 };
 
-type LinkedFile = {
+export type LinkedFile = {
   id: string;
   file_no: string;
   status: string;
 };
 
+/** Classification options shown to the officer (GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-03). */
+const CLASSIFICATION_OPTIONS: { value: NonNullable<RaiseEOfficeNoteProps["classification"]>; label: string }[] = [
+  { value: "public", label: "Public" },
+  { value: "confidential", label: "Confidential" },
+  { value: "secret", label: "Secret" },
+  { value: "top_secret", label: "Top secret" },
+];
+
+/** A failed raise whose message is already plain-language (safe to show). */
+class RaiseFailed extends Error {}
+
 export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   const {
     refType, refId, subject, dept,
     amountMinor, defaultApprovalChain = "estab.generic.standard",
-    classification = "confidential", priority = "normal",
-    notifyPath,
+    classification: classificationProp = "confidential", priority = "normal",
+    notifyPath, onLinkedFileChange, allowRaiseAfterTerminal = false,
   } = props;
 
   const [file, setFile] = useState<LinkedFile | null>(null);
@@ -66,6 +93,9 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [warning, setWarning] = useState("");
+  // The classification the officer sees and can change; seeded from the prop.
+  const [classification, setClassification] = useState<NonNullable<RaiseEOfficeNoteProps["classification"]>>(classificationProp);
 
   // GAP-HR-DISCIPLINARY-DETAIL-05: these were raw free-text UUID inputs with
   // no entity picker and no validation beyond "looks like a UUID" -- a
@@ -102,9 +132,17 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     return () => controller.abort();
   }, [loadStatus]);
 
+  useEffect(() => {
+    onLinkedFileChange?.({ loading, file });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- report only when the lookup result changes, not when the parent re-creates the callback.
+  }, [loading, file]);
+
+  const raisable = !file || (allowRaiseAfterTerminal && !isEofficeFileInFlight(file.status));
+
   const submit = useCallback(async () => {
     setError("");
     setMessage("");
+    setWarning("");
     if (!initiatedBy) { setError("Choose the initiating officer."); return; }
     if (!currentWith) { setError("Choose who to forward to."); return; }
     if (note.trim().length < 3) { setError("Add a note explaining the proposal."); return; }
@@ -122,23 +160,36 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Failed to raise eFile");
+      // Never print the raw response body (JSON / stack text) at an officer.
+      if (!res.ok) throw new RaiseFailed(await errorMessageFromResponse(res, "save", "eFile"));
       const body = (await res.json()) as { id?: string; fileNo?: string };
       // Close the loop on the source side: move the originating entity to
       // "pending approval" so its own screen reflects the in-flight decision.
+      let notifyFailed = false;
       if (notifyPath) {
         try {
-          await fetch(notifyPath, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+          const nres = await fetch(notifyPath, { method: "POST", headers: { "content-type": "application/json" }, body: "{}" });
+          notifyFailed = !nres.ok;
         } catch {
-          /* best-effort; the eOffice file is already raised */
+          notifyFailed = true;
         }
+      }
+      // The eOffice file is already raised, so this is a warning (not a
+      // failure): the source record's status may not yet reflect the file.
+      if (notifyFailed) {
+        setWarning("The eFile was raised, but the record could not be marked as awaiting approval. Refresh the page; if its status has not changed, contact the Finance helpdesk.");
       }
       setMessage(`Raised eFile ${body.fileNo ?? ""} for approval. Routing by amount via the approval matrix.`);
       setOpen(false);
       setNote("");
       setTimeout(() => void loadStatus(), 900);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to raise eFile");
+      if (err instanceof RaiseFailed) {
+        setError(err.message);
+      } else {
+        const human = toHumanError("save", { area: "eFile" });
+        setError(`${human.what} ${human.next}`);
+      }
     } finally {
       setSaving(false);
     }
@@ -156,6 +207,11 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
             <span className="mono" style={{ fontSize: "0.8125rem" }}>{file.file_no}</span>
             <StatusPill status={file.status} />
             <a className="btn ghost" href={`/estab/files/${file.id}`}>Open file</a>
+            {raisable ? (
+              <Button variant="primary" onClick={() => setOpen((v) => !v)}>
+                {open ? "Cancel" : "Raise for approval"}
+              </Button>
+            ) : null}
           </span>
         ) : (
           <Button variant="primary" onClick={() => setOpen((v) => !v)}>
@@ -168,8 +224,9 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
         {message ? <p className="pad" style={{ color: "#047857", fontSize: "0.8125rem", paddingBottom: 0 }}>{message}</p> : null}
         {error ? <p className="pad" style={{ color: "#b91c1c", fontSize: "0.8125rem", paddingBottom: 0 }}>{error}</p> : null}
       </div>
+      {warning ? <p role="alert" className="pad" style={{ color: "#b45309", fontSize: "0.8125rem", paddingBottom: 0 }}>{warning}</p> : null}
 
-      {!file && open ? (
+      {raisable && open ? (
         <div className="pad" style={{ display: "grid", gap: 12 }}>
           <p style={{ fontSize: "0.8125rem", color: "#64748b", margin: 0 }}>
             Raising sends this {refType.replace(/_/g, " ")} to eOffice for a formal, tamper-proof decision.
@@ -205,6 +262,11 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
               />
             </Field>
           </div>
+          <Field label="Classification">
+            <Select value={classification} onChange={(e) => setClassification(e.target.value as typeof classification)}>
+              {CLASSIFICATION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
+          </Field>
           <label style={{ display: "grid", gap: 4, fontSize: "0.8125rem" }}>
             <span>Proposal note</span>
             <textarea value={note} rows={3} placeholder="Justification / proposal for approval…" onChange={(e) => setNote(e.target.value)} />

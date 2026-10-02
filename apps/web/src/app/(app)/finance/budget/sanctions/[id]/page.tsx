@@ -1,9 +1,16 @@
 import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadErrorState } from "../../../../../_components/ds";
 import { getFinanceSanctionById } from "../../../../../_data/loaders";
-import { formatIndianDate, formatMoney } from "@/lib/formatters";
-import { SanctionApproveAction } from "../../../_components/FinanceActions";
+import { formatIndianDate, formatIndianDateTime, formatMoney } from "@/lib/formatters";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { SanctionLineItemsTable } from "./SanctionLineItemsTable";
-import { RaiseEOfficeNote } from "../../../../../_components/RaiseEOfficeNote";
+import { SanctionApprovalPanel } from "./SanctionApprovalPanel";
+import { SANCTION_APPROVER_ROLES, normalizeSanctionStatus } from "./sanctionApproval";
+
+/** GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-06: an unparseable timestamp reads "—", never raw text. */
+function formatTrailTimestamp(ts: string | null | undefined): string {
+  if (!ts || Number.isNaN(new Date(ts).getTime())) return "—";
+  return formatIndianDateTime(ts);
+}
 
 export default async function SanctionDetailPage({ params }: { params: { id: string } }) {
   const result = await getFinanceSanctionById(params.id);
@@ -34,7 +41,10 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
     );
   }
 
-  const isPending = sanction.status === "pending";
+  const isPending = normalizeSanctionStatus(sanction.status) === "pending";
+  // DETAIL-04: direct approval is an approver-role action server-side
+  // (finance_admin/super_admin, plus a distinct-approver 409); only offer it to them.
+  const canApprove = getSessionRoles().some((r) => SANCTION_APPROVER_ROLES.includes(r));
 
   return (
     <>
@@ -49,10 +59,7 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
         subtitle={sanction.subject}
         back="/finance/budget/sanctions"
         actions={
-          <>
-            <StatusPill status={sanction.status} />
-            {isPending ? <SanctionApproveAction id={params.id} /> : null}
-          </>
+          <StatusPill status={sanction.status} />
         }
       />
 
@@ -80,13 +87,15 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
         </div>
       </Card>
 
-      <RaiseEOfficeNote
-        refType="finance_sanction"
-        refId={params.id}
+      <SanctionApprovalPanel
+        id={params.id}
+        isPending={isPending}
+        canApprove={canApprove}
         subject={sanction.subject}
         dept={sanction.majorHead ?? "Finance"}
         amountMinor={sanction.amount}
         defaultApprovalChain="file_noting"
+        classification="confidential"
         notifyPath={`/api/proxy/v1/finance/sanctions/${params.id}/submit-approval`}
       />
 
@@ -106,7 +115,7 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
                 <div className="tl-dot" />
                 <div className="tl-body">
                   <div className="tl-title">{step.actor} — {step.action}</div>
-                  <div className="tl-sub">{step.timestamp}</div>
+                  <div className="tl-sub">{formatTrailTimestamp(step.timestamp)}</div>
                 </div>
               </li>
             ))}

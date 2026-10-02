@@ -31,3 +31,47 @@ describe("AccountsTable (GAP-FINANCE-CHART-OF-ACCOUNTS-01)", () => {
     expect(screen.getByText(/No accounts set up yet/)).toBeInTheDocument();
   });
 });
+
+// ── GAP-FINANCE-CHART-OF-ACCOUNTS-02/-03/-04 ───────────────────────────────
+import { fireEvent } from "@testing-library/react";
+
+const ROW = (i: number, type: "asset" | "liability" | "equity" | "income" | "expense", balanceDisplay = "0.00") => ({
+  id: `h${i}`, code: String(1000 + i), name: `Head ${i}`, type, currency: "INR", balanceDisplay, status: "active" as const,
+});
+
+describe("AccountsTable stat cards, equity filter, balance sign, paging", () => {
+  beforeEach(() => mockedHook.mockReset());
+
+  it("Income / Expense counts only income+expense; equity has its own card (2 asset, 1 equity, 3 income)", () => {
+    seed([ROW(1, "asset"), ROW(2, "asset"), ROW(3, "equity"), ROW(4, "income"), ROW(5, "income"), ROW(6, "income")], "live");
+    render(<AccountsTable accounts={[]} source="api" />);
+    expect(screen.getByText("Income / Expense").closest(".stat")).toHaveTextContent("3");
+    expect(screen.getByText("Asset / Liability").closest(".stat")).toHaveTextContent("2");
+    expect(screen.getByText("Equity", { selector: ".lab" }).closest(".stat")).toHaveTextContent("1");
+  });
+
+  it("the Equity segment shows equity heads", () => {
+    seed([ROW(1, "asset"), ROW(3, "equity")], "live");
+    render(<AccountsTable accounts={[]} source="api" />);
+    expect(screen.getByText("Head 1")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "Equity" }));
+    expect(screen.queryByText("Head 1")).not.toBeInTheDocument();
+    expect(screen.getByText("Head 3")).toBeInTheDocument();
+  });
+
+  it("a negative balance puts the sign before the rupee symbol", () => {
+    seed([ROW(1, "asset", "-12,345.67")], "live");
+    render(<AccountsTable accounts={[]} source="api" />);
+    expect(screen.getByText("-₹12,345.67")).toBeInTheDocument();
+    expect(screen.queryByText("₹-12,345.67")).not.toBeInTheDocument();
+  });
+
+  it("500 rows render 20 per page with a pager and a CSV export", () => {
+    seed(Array.from({ length: 500 }, (_, i) => ROW(i, "asset")), "live");
+    render(<AccountsTable accounts={[]} source="api" />);
+    expect(screen.getByText("Head 0")).toBeInTheDocument();
+    expect(screen.queryByText("Head 20")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /csv/i })).toBeInTheDocument();
+    expect(screen.getByText(/Page 1 of 25/)).toBeInTheDocument();
+  });
+});

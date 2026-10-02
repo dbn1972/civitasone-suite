@@ -538,6 +538,9 @@ export const FinanceDashboardSchema = z.object({
   pendingSanctions: z.number().default(0),
   paymentsThisMonth: z.number().default(0),
   totalExpenditure: z.number().default(0),
+  // Total budget estimate (BE only, no RE) in minor units, as a bigint-safe decimal
+  // string (GAP-FINANCE-DASHBOARD-04). Optional so an older API still parses.
+  sanctionedMinor: z.string().regex(/^\d+$/).optional(),
 });
 
 // Bigint-safe strings, not z.number(): budget/queries.ts's listBudgetSummaries
