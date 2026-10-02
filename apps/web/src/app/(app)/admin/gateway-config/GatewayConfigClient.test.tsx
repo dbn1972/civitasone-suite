@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { GatewayConfigClient, diffGatewayConfig, jwtModeLabel } from "./GatewayConfigClient";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { GatewayConfigClient, diffGatewayConfig, jwtModeLabel, validateGatewayConfig } from "./GatewayConfigClient";
 
 const CONFIG = {
   jwtEdgeVerify: "true",
@@ -89,5 +91,61 @@ describe("GatewayConfigClient", () => {
     await waitFor(() => expect(fetchMock.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === "PATCH")).toBe(true));
     const patch = fetchMock.mock.calls.find(([, i]) => (i as RequestInit | undefined)?.method === "PATCH");
     expect(JSON.parse(String((patch?.[1] as RequestInit).body))).toEqual({ jwtEdgeVerify: "off", reason: "Keycloak outage workaround" });
+  });
+});
+
+// GAP-ADMIN-GATEWAY-CONFIG-04
+describe("gateway config validation", () => {
+  it("empty and out-of-range numbers are errors carrying the bounds; valid config is clean", () => {
+    expect(validateGatewayConfig({ ...CONFIG })).toEqual({});
+    expect(validateGatewayConfig({ ...CONFIG, rateLimitMax: "" }).rateLimitMax).toMatch(/Global rate limit must be a whole number from 10 to 1,00,000/);
+    expect(validateGatewayConfig({ ...CONFIG, authRateLimitMax: 2 }).authRateLimitMax).toMatch(/from 3 to 1,000/);
+    expect(validateGatewayConfig({ ...CONFIG, cbFailureThreshold: 1.5 }).cbFailureThreshold).toBeDefined();
+  });
+});
+
+describe("GatewayConfigClient validation", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    fetchMock.mockImplementation((url: string) =>
+      Promise.resolve(url.includes("breakers") ? json({ breakers: [] }) : json({ data: { ...CONFIG } })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("clearing Global Rate Limit shows a field error, disables Save and sends no PATCH (it does not become 0)", async () => {
+    render(<GatewayConfigClient />);
+    const field = (await screen.findByLabelText("Global Rate Limit")) as HTMLInputElement;
+    fireEvent.change(field, { target: { value: "" } });
+    expect(field.value).toBe("");
+    expect(screen.getByText(/Global rate limit must be a whole number/)).toBeInTheDocument();
+    const save = screen.getByRole("button", { name: /Fix 1 invalid field/ });
+    expect(save).toBeDisabled();
+    fireEvent.click(save);
+    expect(fetchMock.mock.calls.some(([, i]) => (i as RequestInit | undefined)?.method === "PATCH")).toBe(false);
+  });
+
+  it("a value below the minimum is rejected client-side with the minimum in the message", async () => {
+    render(<GatewayConfigClient />);
+    fireEvent.change(await screen.findByLabelText("Auth Rate Limit"), { target: { value: "1" } });
+    expect(screen.getByText(/from 3 to 1,000/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Fix 1 invalid field/ })).toBeDisabled();
+  });
+
+  // GAP-ADMIN-GATEWAY-CONFIG-05
+  it("no hex literal remains and the cards use the responsive grid class", () => {
+    const src = readFileSync(join(__dirname, "GatewayConfigClient.tsx"), "utf8");
+    expect(src).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
+    expect(src).not.toContain('gridTemplateColumns: "1fr 1fr"');
+    expect(src).toContain('className="grid g-2"');
+  });
+
+  it("makes no dead /api/ops/breakers call and says breaker status is not available yet", async () => {
+    render(<GatewayConfigClient />);
+    await screen.findByLabelText("Global Rate Limit");
+    expect(fetchMock.mock.calls.some(([u]) => String(u).includes("breakers"))).toBe(false);
+    expect(screen.getAllByText(/Not available yet/).length).toBeGreaterThan(0);
   });
 });

@@ -156,4 +156,15 @@ describe("Sidebar", () => {
       expect(screen.getByRole("link", { name: /^Finance$/ })).toBeInTheDocument();
     });
   });
+  // GAP-ADMIN-HOME-04
+  describe("Administration entry", () => {
+    it.each(["platform_admin", "super_admin", "tenant_admin"])("is shown to %s and links to /admin", (role) => {
+      render(<Sidebar enabledModules={null} roles={[role]} />);
+      expect(screen.getByRole("link", { name: /Administration/ })).toHaveAttribute("href", "/admin");
+    });
+    it("is hidden from roles the hub does not admit", () => {
+      render(<Sidebar enabledModules={null} roles={["hr_admin"]} />);
+      expect(screen.queryByRole("link", { name: /Administration/ })).not.toBeInTheDocument();
+    });
+  });
 });

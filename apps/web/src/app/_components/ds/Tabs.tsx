@@ -1,14 +1,35 @@
 "use client";
 
-import { useRef, type KeyboardEvent } from "react";
+import { useRef, type KeyboardEvent, type ReactNode } from "react";
 
 interface TabsProps {
   tabs: string[];
   active: string;
   onChange: (tab: string) => void;
+  /** Accessible name for the tablist (e.g. "Environment scope"). */
+  ariaLabel?: string;
+  /**
+   * When set, each tab gets an id and aria-controls pointing at the matching
+   * <TabPanel idPrefix=...> (GAP-ADMIN-INTEGRATIONS-05). Optional so existing
+   * call sites that render no panel are unaffected.
+   */
+  idPrefix?: string;
 }
 
-export function Tabs({ tabs, active, onChange }: TabsProps) {
+function slug(tab: string): string {
+  return tab.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+/** The tab panel a <Tabs idPrefix> controls; labelled by the active tab. */
+export function TabPanel({ idPrefix, active, children }: { idPrefix: string; active: string; children: ReactNode }) {
+  return (
+    <div role="tabpanel" id={`${idPrefix}-panel`} aria-labelledby={`${idPrefix}-tab-${slug(active)}`}>
+      {children}
+    </div>
+  );
+}
+
+export function Tabs({ tabs, active, onChange, ariaLabel, idPrefix }: TabsProps) {
   // Roving tabindex: only the selected tab sits in the page Tab order: the
   // WAI-ARIA tabs pattern moves focus *within* the tablist with the arrow
   // keys instead. Refs let us move DOM focus to the newly-active tab after
@@ -39,7 +60,7 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
   }
 
   return (
-    <div className="tabs" role="tablist">
+    <div className="tabs" role="tablist" aria-label={ariaLabel}>
       {tabs.map((tab, index) => {
         const selected = tab === active;
         return (
@@ -51,6 +72,8 @@ export function Tabs({ tabs, active, onChange }: TabsProps) {
             className={selected ? "on" : undefined}
             onClick={() => onChange(tab)}
             role="tab"
+            id={idPrefix ? `${idPrefix}-tab-${slug(tab)}` : undefined}
+            aria-controls={idPrefix ? `${idPrefix}-panel` : undefined}
             aria-selected={selected}
             tabIndex={selected ? 0 : -1}
             onKeyDown={(e) => onTabKeyDown(e, index)}

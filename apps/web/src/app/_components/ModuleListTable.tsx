@@ -5,6 +5,10 @@ import { DataSourceBadge } from "./DataSourceBadge";
 import type { ModuleRowSummary } from "@civitasone/types";
 import { useSeededResource } from "@/lib/sync/resource";
 
+// GAP-ADMIN-GATEWAY-ROUTES-02: only UUID-shaped ids are shortened; slug ids
+// ("hrms-leave-requests") used to collapse to a shared 8-char prefix.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 /** Offline-capable table body for ModuleListPage. Cache key is derived from the
  * page title so each module list keeps its own encrypted cached copy. */
 export function ModuleListTable({
@@ -47,7 +51,7 @@ export function ModuleListTable({
           <tbody>
             {data.map((row) => (
               <tr key={row.id}>
-                <td><span className="mono">{row.id.slice(0, 8)}</span></td>
+                <td><span className="mono" title={row.id}>{UUID_RE.test(row.id) ? row.id.slice(0, 8) : row.id}</span></td>
                 <td>{row.label}</td>
                 <td>{row.sublabel ?? "—"}</td>
                 <td>{row.status ?? "—"}</td>

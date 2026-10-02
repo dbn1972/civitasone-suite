@@ -1,5 +1,10 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  Wrench,
+  KeyRound,
+  Flag,
+  Settings,
+  Radio,
   Landmark,
   Users,
   ShoppingCart,
@@ -132,6 +137,12 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "💸": Banknote,
   "🎫": Ticket,
   "🔁": Repeat,
+  // Admin hub tiles (GAP-ADMIN-HOME-05)
+  "🔑": KeyRound,
+  "🚩": Flag,
+  "⚙": Settings,
+  "📡": Radio,
+  "🧰": Wrench,
 };
 
 // Variation Selector-16 (U+FE0F) makes an otherwise-identical emoji string

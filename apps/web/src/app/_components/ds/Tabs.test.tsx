@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { Tabs } from "./Tabs";
+import { Tabs, TabPanel } from "./Tabs";
 
 describe("Tabs", () => {
   const tabs = ["All", "Pending", "Approved"];
@@ -89,5 +89,42 @@ describe("Tabs", () => {
     render(<Tabs tabs={tabs} active="All" onChange={onChange} />);
     fireEvent.keyDown(screen.getByText("All"), { key: "End" });
     expect(onChange).toHaveBeenCalledWith("Approved");
+  });
+});
+
+// GAP-ADMIN-INTEGRATIONS-05
+describe("Tabs a11y wiring", () => {
+  const tabs = ["prod", "staging", "dev"];
+
+  it("names the tablist and wires each tab to its panel via id / aria-controls / aria-labelledby", () => {
+    render(
+      <>
+        <Tabs tabs={tabs} active="staging" onChange={vi.fn()} ariaLabel="Environment scope" idPrefix="env" />
+        <TabPanel idPrefix="env" active="staging">body</TabPanel>
+      </>,
+    );
+    expect(screen.getByRole("tablist", { name: "Environment scope" })).toBeInTheDocument();
+    const tab = screen.getByRole("tab", { name: "staging" });
+    expect(tab).toHaveAttribute("aria-controls", "env-panel");
+    const panel = screen.getByRole("tabpanel");
+    expect(panel).toHaveAttribute("id", "env-panel");
+    expect(panel).toHaveAttribute("aria-labelledby", tab.id);
+  });
+
+  it("ArrowRight activates and focuses the next tab; Space activates a focused tab", () => {
+    const onChange = vi.fn();
+    render(<Tabs tabs={tabs} active="prod" onChange={onChange} idPrefix="env" />);
+    const prod = screen.getByRole("tab", { name: "prod" });
+    prod.focus();
+    fireEvent.keyDown(prod, { key: "ArrowRight" });
+    expect(onChange).toHaveBeenLastCalledWith("staging");
+    expect(screen.getByRole("tab", { name: "staging" })).toHaveFocus();
+    fireEvent.keyDown(screen.getByRole("tab", { name: "dev" }), { key: " " });
+    expect(onChange).toHaveBeenLastCalledWith("dev");
+  });
+
+  it("call sites that pass no idPrefix get no dangling aria-controls", () => {
+    render(<Tabs tabs={tabs} active="prod" onChange={vi.fn()} />);
+    expect(screen.getByRole("tab", { name: "prod" })).not.toHaveAttribute("aria-controls");
   });
 });

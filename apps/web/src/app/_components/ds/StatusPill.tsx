@@ -163,6 +163,15 @@ const STATUS_MAP: Record<string, PillVariant> = {
   stale: "bad",
   presented: "warn",
   issued: "info", // explicit: this is the neutral starting state, not an unmapped word
+
+  // Platform admin lists (GAP-ADMIN-ENTITLEMENTS-06, GAP-ADMIN-GATEWAYS-04/05): only
+  // unambiguous words. "revoked" entitlement; communication-gateway health. An
+  // outage must read red, a degraded gateway amber, a standby one neutral --
+  // none of these used to have a key, so all fell back to the blue "info" pill.
+  revoked: "bad",
+  degraded: "warn",
+  down: "bad",
+  standby: "mut",
 };
 // Deliberately NOT added: a generic "flagged" key. tenant-admin/security/SecurityTable.tsx
 // has its own inline outcome->variant mapping that fails closed to "bad" for any

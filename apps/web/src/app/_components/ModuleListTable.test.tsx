@@ -92,4 +92,18 @@ describe("ModuleListTable", () => {
     expect(screen.queryByText(/Showing saved data/i)).not.toBeInTheDocument();
     expect(screen.getByText("No records")).toBeInTheDocument();
   });
+  // GAP-ADMIN-GATEWAY-ROUTES-02
+  it("slug ids are shown in full (two ids sharing an 8-char prefix stay distinguishable); UUIDs are still shortened with the full id in the title", () => {
+    const slugRows = [
+      { id: "hrms-leave-requests", label: "A" },
+      { id: "hrms-leave-approvals", label: "B" },
+      { id: "3f2a9c1e-1111-4000-8000-000000000001", label: "C" },
+    ];
+    mockedHook.mockReturnValue({ data: slugRows, fromCache: false, offline: false, cachedAt: null, provenance: "live" } as never);
+    render(<ModuleListTable cacheKey="test" rows={slugRows} source="api" />);
+    expect(screen.getByText("hrms-leave-requests")).toBeInTheDocument();
+    expect(screen.getByText("hrms-leave-approvals")).toBeInTheDocument();
+    const short = screen.getByText("3f2a9c1e");
+    expect(short).toHaveAttribute("title", "3f2a9c1e-1111-4000-8000-000000000001");
+  });
 });

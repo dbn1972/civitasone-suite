@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Button, ConfirmDialog, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { Button, ConfirmDialog, DataTable, Modal, PageHeader, RefreshErrorState, StatGrid, StatCard, useToast } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminFeatureFlagRow } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
+import { parseSegments, validateFlagForm } from "./flagForm";
 
 function getStatusBadge(flag: AdminFeatureFlagRow) {
   if (flag.killSwitch) return <span className="pill bad">Killed</span>;
@@ -13,6 +14,15 @@ function getStatusBadge(flag: AdminFeatureFlagRow) {
   if (flag.rolloutPercent === 100) return <span className="pill good">Active</span>;
   return <span className="pill warn">Partial ({flag.rolloutPercent}%)</span>;
 }
+
+/** Sortable status text for the Status column. */
+function statusText(flag: AdminFeatureFlagRow): string {
+  if (flag.killSwitch) return "Killed";
+  if (!flag.enabled) return "Disabled";
+  return flag.rolloutPercent === 100 ? "Active" : `Partial (${flag.rolloutPercent}%)`;
+}
+
+type FlagTableRow = AdminFeatureFlagRow & { status: string; actions: string };
 
 /**
  * Plain-language failure message for a failed flag toggle/kill-switch call.
@@ -40,17 +50,37 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
   }
 }
 
+type PendingEdit = { flag: AdminFeatureFlagRow; patch: Record<string, unknown> };
+
 export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: AdminFeatureFlagRow[]; source: "api" | "error" }) {
   const [flags, setFlags] = useState<AdminFeatureFlagRow[]>(initialFlags);
-  const [showModal, setShowModal] = useState(false);
+  // null = closed, "create" = new flag, otherwise the flag being edited.
+  const [dialog, setDialog] = useState<null | "create" | AdminFeatureFlagRow>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   // GAP-ADMIN-FEATURE-FLAGS-01: Kill only opens a confirmation; nothing is
   // sent until the operator confirms with a reason.
   const [killTarget, setKillTarget] = useState<AdminFeatureFlagRow | null>(null);
   const [killError, setKillError] = useState<string | undefined>(undefined);
+  // GAP-ADMIN-FEATURE-FLAGS-04: a rollout INCREASE changes live traffic -> explicit confirm.
+  const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+  const [pendingError, setPendingError] = useState<string | undefined>(undefined);
+  // Enabling/disabling changes live behaviour for everyone the flag targets -> confirm first.
+  const [toggleTarget, setToggleTarget] = useState<AdminFeatureFlagRow | null>(null);
   const formError = useFormError("feature flag");
+  const { toast } = useToast();
+
+  // GAP-ADMIN-FEATURE-FLAGS-03: a failed load must not read as an empty registry.
+  if (source === "error" && initialFlags.length === 0) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Feature Flags" subtitle="Platform feature toggles with gradual rollout controls and kill switch." back="/admin" />
+        <RefreshErrorState error={toHumanError("load", { area: "feature flags" })} backHref="/admin" />
+      </div>
+    );
+  }
 
   const activeCount = flags.filter((f) => f.enabled && f.rolloutPercent === 100 && !f.killSwitch).length;
   const partialCount = flags.filter((f) => f.enabled && f.rolloutPercent > 0 && f.rolloutPercent < 100 && !f.killSwitch).length;
@@ -59,11 +89,14 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
   async function refresh() {
     try {
       const res = await fetch("/api/proxy/v1/admin/feature-flags/manage", { cache: "no-store" });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("refresh failed");
       const body = (await res.json()) as { data?: AdminFeatureFlagRow[] };
       if (Array.isArray(body.data)) setFlags(body.data);
     } catch {
-      // keep current state — the mutation itself already reported success/failure
+      // The mutation itself succeeded, but the list on screen may be stale: say so
+      // rather than silently showing old rows (GAP-ADMIN-FEATURE-FLAGS-03).
+      const human = toHumanError("load", { area: "the updated feature flags" });
+      setError(`${human.what} ${human.next}`);
     }
   }
 
@@ -92,26 +125,70 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
     setBusyId(null);
   }
 
-  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
+  function closeDialog() {
+    if (creating) return;
+    setDialog(null);
+    setFieldErrors({});
+    formError.clear();
+  }
+
+  async function sendEdit(flag: AdminFeatureFlagRow, patch: Record<string, unknown>): Promise<boolean> {
+    setCreating(true);
+    const result = await callApi(`/${flag.id}`, "PUT", patch);
+    setCreating(false);
+    if (!result.ok) return false;
+    toast.success(`Flag updated: ${flag.name}`);
+    await refresh();
+    return true;
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     formError.clear();
-    setCreating(true);
+    const editing = dialog !== null && dialog !== "create" ? dialog : null;
     const fd = new FormData(e.currentTarget);
-    const segmentsRaw = String(fd.get("segments") ?? "");
-    const body = {
-      key: String(fd.get("key") ?? ""),
+    const parsed = validateFlagForm({
+      key: editing ? editing.key : String(fd.get("key") ?? ""),
       name: String(fd.get("name") ?? ""),
       description: String(fd.get("description") ?? ""),
-      rolloutPercent: Number(fd.get("rollout") ?? 0),
-      targetSegments: segmentsRaw.split(",").map((s) => s.trim()).filter(Boolean),
-      enabled: false,
-    };
+      rolloutPercent: fd.get("rollout") === "" ? Number.NaN : Number(fd.get("rollout") ?? 0),
+      targetSegments: parseSegments(String(fd.get("segments") ?? "")),
+      owner: String(fd.get("owner") ?? ""),
+    });
+    if (!parsed.ok) {
+      setFieldErrors(parsed.errors);
+      return;
+    }
+    setFieldErrors({});
+    const v = parsed.value;
+
+    if (editing) {
+      const patch = {
+        name: v.name,
+        description: v.description,
+        rolloutPercent: v.rolloutPercent,
+        targetSegments: v.targetSegments,
+        owner: v.owner,
+      };
+      if (v.rolloutPercent > editing.rolloutPercent) {
+        setDialog(null);
+        setPendingError(undefined);
+        setPendingEdit({ flag: editing, patch });
+        return;
+      }
+      const ok = await sendEdit(editing, patch);
+      if (ok) closeDialog();
+      else setError(featureFlagError());
+      return;
+    }
+
+    setCreating(true);
     try {
       const res = await fetch("/api/proxy/v1/admin/feature-flags/manage", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({ ...v, enabled: false }),
       });
       setCreating(false);
       if (!res.ok) {
@@ -119,7 +196,8 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
         setError(resolved.message);
         return;
       }
-      setShowModal(false);
+      setDialog(null);
+      toast.success(`Flag created: ${v.name}`);
       await refresh();
     } catch {
       setCreating(false);
@@ -127,13 +205,17 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
     }
   }
 
+  const rows: FlagTableRow[] = flags.map((f) => ({ ...f, status: statusText(f), actions: f.id }));
+  const editing = dialog !== null && dialog !== "create" ? dialog : null;
+  const formKey = editing ? editing.id : "create";
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Feature Flags" subtitle="Platform feature toggles with gradual rollout controls and kill switch." back="/admin" />
       <DataSourceBadge source={source} />
       {error && (
-        <div role="alert" style={{ background: "#fef2f2", color: "#b42318", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
-          {error}
+        <div role="alert" className="alert bad">
+          <p>{error}</p>
         </div>
       )}
       <StatGrid>
@@ -146,57 +228,75 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Flag Registry</h3>
-          <Button onClick={() => setShowModal(true)}>
+          <Button onClick={() => setDialog("create")}>
             + Create Flag
           </Button>
         </div>
 
-        <div style={{ overflowX: "auto" }}>
-          <table className="data-table" role="table" aria-label="Feature flags list">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Key</th>
-                <th scope="col">Status</th>
-                <th scope="col">Rollout</th>
-                <th scope="col">Segments</th>
-                <th scope="col">Enabled</th>
-                <th scope="col">Kill Switch</th>
-              </tr>
-            </thead>
-            <tbody>
-              {flags.length === 0 && (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: 32, color: "var(--mut)" }}>No feature flags configured yet.</td></tr>
-              )}
-              {flags.map((flag) => (
-                <tr key={flag.id}>
-                  <td><strong>{flag.name}</strong><br /><small style={{ color: "#666" }}>{flag.description}</small></td>
-                  <td><code>{flag.key}</code></td>
-                  <td>{getStatusBadge(flag)}</td>
-                  <td>{flag.rolloutPercent}%</td>
-                  <td>{flag.targetSegments.length > 0 ? flag.targetSegments.join(", ") : "—"}</td>
-                  <td>
-                    <label className="toggle" aria-label={`Toggle ${flag.name}`}>
-                      <input type="checkbox" checked={flag.enabled} disabled={flag.killSwitch || busyId === flag.id} onChange={() => void handleToggle(flag)} />
-                      <span className="toggle-slider" />
-                    </label>
-                  </td>
-                  <td>
-                    <Button
-                      variant="danger"
-                      size="sm"
-                      onClick={() => { setKillError(undefined); setKillTarget(flag); }}
-                      disabled={flag.killSwitch || busyId === flag.id}
-                      aria-label={`Kill switch for ${flag.name}`}
-                    >
-                      {flag.killSwitch ? "Killed" : "🛑 Kill"}
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable<FlagTableRow>
+          columns={[
+            { key: "name", label: "Name", render: (f) => (<><strong>{f.name}</strong><br /><small className="mut">{f.description}</small></>) },
+            { key: "key", label: "Key", render: (f) => <code>{f.key}</code> },
+            { key: "owner", label: "Owner", render: (f) => f.owner || "—" },
+            { key: "status", label: "Status", render: (f) => getStatusBadge(f) },
+            { key: "rolloutPercent", label: "Rollout", render: (f) => `${f.rolloutPercent}%` },
+            { key: "targetSegments", label: "Segments", sortable: false, render: (f) => (f.targetSegments.length > 0 ? f.targetSegments.join(", ") : "—") },
+            {
+              key: "enabled",
+              label: "Enabled",
+              render: (f) => (
+                <label className="toggle">
+                  <input
+                    type="checkbox"
+                    role="switch"
+                    aria-label={`Toggle ${f.name}`}
+                    checked={f.enabled}
+                    disabled={f.killSwitch || busyId === f.id}
+                    onChange={() => setToggleTarget(f)}
+                  />
+                  <span className="toggle-slider" />
+                  <span> {f.enabled ? "On" : "Off"}</span>
+                </label>
+              ),
+            },
+            {
+              key: "actions",
+              label: "Actions",
+              sortable: false,
+              render: (f) => (
+                <span style={{ display: "inline-flex", gap: 6 }}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setDialog(f)}
+                    disabled={f.killSwitch || busyId === f.id}
+                    aria-label={`Edit ${f.name}`}
+                  >
+                    Edit
+                  </Button>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => { setKillError(undefined); setKillTarget(f); }}
+                    disabled={f.killSwitch || busyId === f.id}
+                    aria-label={`Kill switch for ${f.name}`}
+                  >
+                    {f.killSwitch ? "Killed" : "🛑 Kill"}
+                  </Button>
+                </span>
+              ),
+            },
+          ]}
+          rows={rows}
+          rowKey={(r) => r.id}
+          sortable
+          filterable
+          filterPlaceholder="Search flags by name or key…"
+          pageSize={15}
+          emptyIcon="🚩"
+          emptyTitle="No feature flags"
+          emptyMessage="No feature flags configured yet."
+        />
       </div>
 
       <ConfirmDialog
@@ -221,54 +321,106 @@ export function FeatureFlagsManager({ initialFlags, source }: { initialFlags: Ad
         onCancel={() => { setKillTarget(null); setKillError(undefined); }}
       />
 
-      {showModal && (
-        <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Create Feature Flag">
-          <div className="modal-content" style={{ maxWidth: 500, padding: 24, borderRadius: 8, background: "#fff" }}>
-            <h3>Create Feature Flag</h3>
-            <form onSubmit={handleCreate}>
-              <div style={{ marginBottom: 12 }}>
-                <label htmlFor="flag-name">Name</label>
-                <input id="flag-name" name="name" type="text" className="input" placeholder="My Feature" required />
-                {formError.fieldError("name") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("name")}</span>
-                )}
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label htmlFor="flag-key">Key</label>
-                <input id="flag-key" name="key" type="text" className="input" placeholder="my-feature" pattern="[a-z0-9_-]+" required />
-                {formError.fieldError("key") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("key")}</span>
-                )}
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label htmlFor="flag-desc">Description</label>
-                <textarea id="flag-desc" name="description" className="input" placeholder="Description..." />
-                {formError.fieldError("description") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("description")}</span>
-                )}
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label htmlFor="flag-rollout">Rollout Percent: </label>
-                <input id="flag-rollout" name="rollout" type="range" min={0} max={100} defaultValue={0} style={{ width: "100%" }} />
-                {formError.fieldError("rolloutPercent") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("rolloutPercent")}</span>
-                )}
-              </div>
-              <div style={{ marginBottom: 12 }}>
-                <label htmlFor="flag-segments">Target Segments (comma-separated)</label>
-                <input id="flag-segments" name="segments" type="text" className="input" placeholder="beta, internal" />
-                {formError.fieldError("targetSegments") && (
-                  <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("targetSegments")}</span>
-                )}
-              </div>
-              <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
-                <Button type="button" variant="ghost" onClick={() => setShowModal(false)} disabled={creating}>Cancel</Button>
-                <Button type="submit" disabled={creating} loading={creating}>{creating ? "Creating…" : "Save"}</Button>
-              </div>
-            </form>
+      <ConfirmDialog
+        open={toggleTarget !== null}
+        title={toggleTarget ? `${toggleTarget.enabled ? "Disable" : "Enable"} ${toggleTarget.name}?` : "Change flag"}
+        description={
+          toggleTarget
+            ? `${toggleTarget.enabled ? "Turns" : "Turns on"} "${toggleTarget.key}" ${toggleTarget.enabled ? "off" : `at ${toggleTarget.rolloutPercent}% rollout`} immediately for everyone it targets.`
+            : undefined
+        }
+        confirmLabel={toggleTarget?.enabled ? "Disable flag" : "Enable flag"}
+        danger={toggleTarget?.enabled === true}
+        busy={toggleTarget !== null && busyId === toggleTarget.id}
+        onConfirm={() => {
+          const f = toggleTarget;
+          setToggleTarget(null);
+          if (f) void handleToggle(f);
+        }}
+        onCancel={() => setToggleTarget(null)}
+      />
+
+      <ConfirmDialog
+        open={pendingEdit !== null}
+        title={pendingEdit ? `Increase rollout: ${pendingEdit.flag.name}` : "Increase rollout"}
+        description={
+          pendingEdit
+            ? `Raises "${pendingEdit.flag.key}" from ${pendingEdit.flag.rolloutPercent}% to ${String(pendingEdit.patch.rolloutPercent)}% of its audience. This changes live traffic as soon as it is applied.`
+            : undefined
+        }
+        confirmLabel="Apply rollout change"
+        busy={creating}
+        errorMessage={pendingError}
+        onConfirm={() => {
+          if (!pendingEdit) return;
+          void (async () => {
+            setPendingError(undefined);
+            const ok = await sendEdit(pendingEdit.flag, pendingEdit.patch);
+            if (ok) setPendingEdit(null);
+            else setPendingError(featureFlagError());
+          })();
+        }}
+        onCancel={() => { setPendingEdit(null); setPendingError(undefined); }}
+      />
+
+      {/* GAP-ADMIN-FEATURE-FLAGS-06: Modal supplies focus-in, Tab trap, Escape, overlay
+          click and focus return to the trigger. Closing is blocked while a save is in flight. */}
+      <Modal
+        open={dialog !== null}
+        onClose={closeDialog}
+        closeOnOverlayClick={!creating}
+        size="md"
+        title={editing ? `Edit feature flag: ${editing.name}` : "Create Feature Flag"}
+      >
+        <form onSubmit={(e) => void handleSubmit(e)} key={formKey} noValidate>
+          <div style={{ marginBottom: 12 }}>
+            <label htmlFor="flag-name">Name</label>
+            <input id="flag-name" name="name" type="text" className="input" placeholder="My Feature" defaultValue={editing?.name ?? ""} required />
+            {(fieldErrors.name ?? formError.fieldError("name")) && (
+              <span role="alert" className="mut" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.name ?? formError.fieldError("name")}</span>
+            )}
           </div>
-        </div>
-      )}
+          <div style={{ marginBottom: 12 }}>
+            <label htmlFor="flag-key">Key</label>
+            <input id="flag-key" name="key" type="text" className="input" placeholder="my-feature" defaultValue={editing?.key ?? ""} readOnly={editing !== null} required />
+            {(fieldErrors.key ?? formError.fieldError("key")) && (
+              <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.key ?? formError.fieldError("key")}</span>
+            )}
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label htmlFor="flag-desc">Description</label>
+            <textarea id="flag-desc" name="description" className="input" placeholder="Description..." defaultValue={editing?.description ?? ""} />
+            {(fieldErrors.description ?? formError.fieldError("description")) && (
+              <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.description ?? formError.fieldError("description")}</span>
+            )}
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label htmlFor="flag-owner">Owner</label>
+            <input id="flag-owner" name="owner" type="text" className="input" placeholder="team or person" defaultValue={editing?.owner ?? ""} />
+            {fieldErrors.owner && (
+              <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.owner}</span>
+            )}
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label htmlFor="flag-rollout">Rollout Percent (0-100)</label>
+            <input id="flag-rollout" name="rollout" type="number" min={0} max={100} step={1} className="input" defaultValue={editing?.rolloutPercent ?? 0} />
+            {(fieldErrors.rolloutPercent ?? formError.fieldError("rolloutPercent")) && (
+              <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.rolloutPercent ?? formError.fieldError("rolloutPercent")}</span>
+            )}
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            <label htmlFor="flag-segments">Target Segments (comma-separated)</label>
+            <input id="flag-segments" name="segments" type="text" className="input" placeholder="beta, internal" defaultValue={editing?.targetSegments.join(", ") ?? ""} />
+            {(fieldErrors.targetSegments ?? formError.fieldError("targetSegments")) && (
+              <span role="alert" style={{ display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 }}>{fieldErrors.targetSegments ?? formError.fieldError("targetSegments")}</span>
+            )}
+          </div>
+          <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+            <Button type="button" variant="ghost" onClick={closeDialog} disabled={creating}>Cancel</Button>
+            <Button type="submit" disabled={creating} loading={creating}>{creating ? "Saving…" : "Save"}</Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }
