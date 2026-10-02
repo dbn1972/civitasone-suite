@@ -127,6 +127,31 @@ function keyring(): Keyring {
   return cachedRing;
 }
 
+/**
+ * Boot-time fail-closed check: throws unless PII_ENC_KEY (and any
+ * PII_ENC_KEYRING) is usable. Called from index.ts / worker.ts in production
+ * so a misconfigured process refuses to start instead of 500-ing (or, worse,
+ * retrying a secret-bearing message) at first use.
+ */
+export function assertPiiKeyConfigured(): void {
+  keyring();
+}
+
+// Same allow-list as ecosystem.config.js IS_PROD_FALLBACK_ALLOWED_ENVS
+// (SEC-017): only NODE_ENV exactly "development" or "test" may boot without
+// the key; unset, "production", "staging", "uat", a typo ... all require it.
+const PII_KEY_OPTIONAL_ENVS = new Set(["development", "test"]);
+
+/** True when this environment must have a usable PII key at boot. */
+export function requiresPiiKeyAtBoot(env: NodeJS.ProcessEnv = process.env): boolean {
+  return !PII_KEY_OPTIONAL_ENVS.has(env.NODE_ENV ?? "");
+}
+
+/** Boot hook for index.ts / worker.ts: fail closed outside development/test. */
+export function assertPiiKeyAtBoot(env: NodeJS.ProcessEnv = process.env): void {
+  if (requiresPiiKeyAtBoot(env)) assertPiiKeyConfigured();
+}
+
 /** Test/maintenance hook: drop the cached keyring (e.g. after env change). */
 export function resetPiiKeyCache(): void {
   cachedRing = null;

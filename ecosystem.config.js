@@ -412,6 +412,15 @@ const PROCUREMENT_PII_KEY = piiKey("PROCUREMENT_PII_KEY", "procurement", "procur
 // worker("finance") actually read.
 const FINANCE_PII_KEY = piiKey("FINANCE_PII_KEY", "finance", "finance-service");
 
+// payroll-service's pii-crypto (src/shared/pii-crypto.ts) reads the generic
+// `PII_ENC_KEY` too and was never wired: every encryptedText write (pensioner
+// PII, sponsor/statutory config) and every DSC-config upload threw "PII_ENC_KEY
+// is required". The DSC passphrase / keystore are sealed with this key in the
+// route handler (never plaintext on the queue) and opened only at signing time.
+// Same shape as FINANCE_PII_KEY: own env name + host key file, fail closed in
+// prod. Rotating it requires PII_ENC_KEYRING to keep old ciphertext readable.
+const PAYROLL_PII_KEY = piiKey("PAYROLL_PII_KEY", "payroll", "payroll-service");
+
 // NOTE on inspection-service: it validates a required-env allowlist at boot
 // (DATABASE_URL, QUEUE_DRIVER, S3_BUCKET_NAME, HRMS_SERVICE_URL — see its
 // app.ts). All four are ALREADY supplied by its svc()/worker() entries below.
@@ -519,7 +528,7 @@ module.exports = {
     svc("estab",        3010, "estab_svc",         "civitas_estab", {}, { graceful: true }), // PERF-015
     svc("stock",        3011, "stock_svc",         "civitas_stock", {}, { graceful: true }), // PERF-015
     svc("hrms",         3012, "hrms_svc",          "civitas_hrms", { PII_ENC_KEY, ID_CARD_QR_SECRET, CANDIDATE_JWT_SECRET }, { graceful: true }), // PERF-003
-    svc("payroll",      3013, "payroll_svc",       "civitas_payroll", {}, { graceful: true }), // PERF-003
+    svc("payroll",      3013, "payroll_svc",       "civitas_payroll", { PII_ENC_KEY: PAYROLL_PII_KEY }, { graceful: true }), // PERF-003
     svc("project",      3014, "project_svc",       "civitas_project", {}, { graceful: true }), // PERF-015
     svc("asset",        3015, "asset_svc",         "civitas_asset", {}, { graceful: true }), // PERF-015
 
@@ -558,6 +567,7 @@ module.exports = {
     }, "dist/worker.js", { graceful: true }), // PERF-003
     worker("workflow",     "workflow_svc",     "civitas_workflow", { WORKFLOW_SCANNER_DATABASE_URL: scannerDbUrl("workflow_scanner", "civitas_workflow", "WORKFLOW_SCANNER_DATABASE_URL") }),
     worker("payroll",      "payroll_svc",      "civitas_payroll", {
+      PII_ENC_KEY: PAYROLL_PII_KEY,
       PAYROLL_SCANNER_DATABASE_URL: scannerDbUrl("payroll_scanner", "civitas_payroll", "PAYROLL_SCANNER_DATABASE_URL"),
     }, "dist/worker.js", { graceful: true }), // PERF-003
     worker("hrms",         "hrms_svc",         "civitas_hrms", { PII_ENC_KEY }, "dist/worker.js", { graceful: true }), // PERF-003

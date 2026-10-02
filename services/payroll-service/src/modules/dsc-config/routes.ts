@@ -16,6 +16,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { sealDscPassphrase, sealP12 } from "./secret.js";
 
 const ADMIN_ROLES = ["payroll_admin", "super_admin"];
 const MAX_P12_SIZE = 10 * 1024; // 10 KB limit per requirement
@@ -97,13 +98,20 @@ export async function dscConfigRoutes(app: FastifyInstance): Promise<void> {
       throw new HttpError(400, "DSC_INVALID", "failed to parse P12 keystore — check file and passphrase");
     }
 
-    // Upload P12 to S3 (object store side-effect; durable DB write is via consumer)
+    // Seal BOTH secrets before any side effect: the queue message, the
+    // consumer, the DB row, the read cache and the object store only ever see
+    // ciphertext. Throws (-> 500, nothing uploaded/published) if PII_ENC_KEY
+    // is not configured — fail closed.
+    const passphraseSealed = sealDscPassphrase(body.passphrase);
+    const sealedP12 = sealP12(p12Buffer);
+
+    // Upload sealed P12 to S3 (object store side-effect; durable DB write is via consumer)
     const storageRef = `dsc/${ctx.tenantId}/signing.p12`;
-    await putObject(storageRef, p12Buffer, "application/x-pkcs12");
+    await putObject(storageRef, sealedP12, "application/octet-stream");
 
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertDscConfig(ctx, {
       storageRef,
-      passphrase: body.passphrase,
+      passphraseSealed,
       subjectCn: certInfo.subjectCN,
       serialNumber: certInfo.serialNumber,
       notBefore: certInfo.notBefore.toISOString(),

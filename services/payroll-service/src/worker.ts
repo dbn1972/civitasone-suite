@@ -18,6 +18,7 @@ import { registerChallanConsumers } from "./modules/statutory-returns/challan-co
 import { registerDscConfigConsumers } from "./modules/dsc-config/consumer.js";
 import { registerSponsorConfigConsumers } from "./modules/sponsor-config/consumer.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
+import { assertPiiKeyAtBoot } from "./shared/pii-crypto.js";
 
 const log = pino({ name: "payroll-worker" });
 
@@ -37,6 +38,11 @@ function assertScannerConfigured(): void {
 }
 
 assertScannerConfigured();
+
+// Fail closed outside development/test (same rule as ecosystem.config.js):
+// DSC secrets + PII columns are sealed with PII_ENC_KEY; refuse to start
+// rather than fail per-message.
+assertPiiKeyAtBoot();
 
 // Wrap queue.subscribe to set tenant context from message — consumers/handlers
 // run db.transaction() without this and RLS policies would otherwise be inert

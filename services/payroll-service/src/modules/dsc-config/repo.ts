@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
-import { dscConfig, type DscConfigRow, type DscConfigInsert } from "./schema.js";
+import { dscConfig, DSC_CACHE_RESOURCE, type DscConfigRow, type DscConfigInsert } from "./schema.js";
 
-const CACHE_RESOURCE = "dsc_config";
+const CACHE_RESOURCE = DSC_CACHE_RESOURCE;
 
 export async function findByTenantId(tenantId: string): Promise<DscConfigRow | null> {
   return cache.getOrLoad<DscConfigRow | null>(
@@ -23,7 +23,7 @@ export async function upsert(tenantId: string, data: DscConfigInsert): Promise<v
       target: dscConfig.tenantId,
       set: {
         storageRef: data.storageRef,
-        passphrase: data.passphrase,
+        passphraseSealed: data.passphraseSealed,
         subjectCn: data.subjectCn,
         serialNumber: data.serialNumber,
         notBefore: data.notBefore,
