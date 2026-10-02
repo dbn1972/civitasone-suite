@@ -1,29 +1,60 @@
 "use client";
-import { DataTable } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { useSeededResource } from "@/lib/sync/resource";
-type Row = Record<string, unknown>;
-export function EntitlementsTable({ entitlements, source = "api" }: { entitlements: Row[]; source?: "api" | "error" }) {
-  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("sa.entitlements", entitlements, source, (d) => d.length === 0);
+import { DataTable, ProgressBar, StatCard } from "@/app/_components/ds";
+import { SeededAdminList } from "../_components/SeededAdminList";
+import { summarizeEntitlements, toEntitlementRow, type EntitlementRow } from "./entitlementModel";
+
+type RawRow = Record<string, unknown>;
+
+/** GAP-ADMIN-ENTITLEMENTS-04: usage cell -- text + bar + pill, so over-limit is never colour-only. */
+function UsageCell({ row }: { row: EntitlementRow }) {
   return (
-    <>
-      {/* UX-012: this badge is the ONLY place that reports data provenance for
-          the rows shown below — it reads the same useSeededResource call as
-          `rows`, so it can never disagree with what the table shows
-          (UX-002's pattern; the page used to render a second, independent
-          badge from the raw `source` prop — removed). */}
-      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      <DataTable<Row>
-        columns={[
-          { key: "module", label: "Module" },
-          { key: "edition", label: "Edition" },
-          { key: "tenant", label: "Tenant Override" },
-          { key: "limit", label: "Limit" },
-          { key: "used", label: "Used", align: "right" },
-          { key: "status", label: "Status", cellType: "status" },
-        ]}
-        rows={rows} sortable filterable filterPlaceholder="Search entitlements…" pageSize={15} exportable exportFilename="entitlements" emptyIcon="🔑" emptyTitle="No entitlements" emptyMessage="No entitlements configured."
-      />
-    </>
+    <span>
+      {row.usage}
+      {row.usedPct !== null && <ProgressBar value={row.usedPct} />}
+      {row.limitState === "over" && <span className="pill bad">Over limit</span>}
+      {row.limitState === "near" && <span className="pill warn">Near limit</span>}
+    </span>
+  );
+}
+
+export function EntitlementsTable({ entitlements, source = "api", unavailable = false }: { entitlements: RawRow[]; source?: "api" | "error"; unavailable?: boolean }) {
+  return (
+    <SeededAdminList<RawRow>
+      cacheKey="sa.entitlements"
+      initialRows={entitlements}
+      source={source}
+      unavailable={unavailable}
+      area="entitlements"
+      cardTitle="Entitlements"
+      stats={(raw) => {
+        const s = raw ? summarizeEntitlements(raw.map(toEntitlementRow)) : null;
+        return (
+          <>
+            <StatCard icon="🔑" iconBg="#eef2ff" label="Total Entitlements" value={s?.total ?? null} />
+            <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={s?.active ?? null} />
+            <StatCard icon="⛔" iconBg="#fffaeb" label="Revoked" value={s?.revoked ?? null} />
+            <StatCard icon="⏸️" iconBg="#f2f4f7" label="Other inactive" value={s?.otherInactive ?? null} />
+            <StatCard icon="📦" iconBg="#eff6ff" label="Editions" value={s?.editions ?? null} />
+            <StatCard icon="⚠️" iconBg="#fef3f2" label="At / over limit" value={s?.atLimit ?? null} />
+          </>
+        );
+      }}
+    >
+      {(raw) => (
+        <DataTable<EntitlementRow>
+          columns={[
+            { key: "module", label: "Module" },
+            { key: "edition", label: "Edition" },
+            { key: "tenant", label: "Tenant Override" },
+            { key: "limit", label: "Limit" },
+            { key: "usage", label: "Used / Limit", render: (r) => <UsageCell row={r} /> },
+            { key: "status", label: "Status", cellType: "status" },
+          ]}
+          rows={raw.map(toEntitlementRow)}
+          sortable filterable filterPlaceholder="Search entitlements…" pageSize={15} exportable exportFilename="entitlements"
+          emptyIcon="🔑" emptyTitle="No entitlements" emptyMessage="No entitlements configured."
+        />
+      )}
+    </SeededAdminList>
   );
 }

@@ -168,7 +168,11 @@ export type ChangeRow = {
   status: string;
   note: string | null;
   proposedBy: string;
+  /** Display names, when the backend resolves them; the raw ids above are never shown. */
+  proposedByName?: string | null;
   approvedBy: string | null;
+  approvedByName?: string | null;
+  approvedAt?: string | null;
   secretChanged: boolean;
   createdAt: string | null;
   rejectedReason: string | null;

@@ -286,3 +286,15 @@ describe("StatusPill cheque register statuses", () => {
     expect(el?.textContent).toBe("Open");
   });
 });
+
+describe("platform admin status keys (GAP-ADMIN-ENTITLEMENTS-06 / GAP-ADMIN-GATEWAYS-04)", () => {
+  it.each([
+    ["revoked", "bad"],
+    ["down", "bad"],
+    ["degraded", "warn"],
+    ["standby", "mut"],
+  ])("%s renders the %s pill", (status, variant) => {
+    const { container } = render(<StatusPill status={status} />);
+    expect(container.querySelector(`.pill.${variant}`)).toBeInTheDocument();
+  });
+});

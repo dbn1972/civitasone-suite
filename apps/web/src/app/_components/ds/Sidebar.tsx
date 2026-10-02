@@ -17,6 +17,7 @@ import {
   LucideIcon,
 } from "lucide-react";
 import { FINANCE_ROLES } from "@/lib/auth/workRoles";
+import { ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
 
 const COLLAPSED_KEY = "civitas-sidebar-collapsed";
 
@@ -139,6 +140,9 @@ const NAV: NavGroup[] = [
       { icon: Bell, label: "Notifications", href: "/notifications", moduleKey: null },
       { icon: CreditCard, label: "Identity", href: "/identity", moduleKey: "identity" },
       { icon: Building, label: "Tenant", href: "/tenant", moduleKey: "tenant" },
+      // GAP-ADMIN-HOME-04: the /admin hub had no nav entry. The hub admits tenant_admin and above
+      // (each tile is then filtered to what the caller's role may open), so gate on the same list.
+      { icon: ShieldCheck, label: "Administration", href: "/admin", moduleKey: null, rolesAllowed: ADMIN_TENANT_ROLES },
       { icon: Shield, label: "Tenant Admin", href: "/tenant-admin", moduleKey: null },
       { icon: Wrench, label: "Change & Release", href: "/change", moduleKey: null },
     ],

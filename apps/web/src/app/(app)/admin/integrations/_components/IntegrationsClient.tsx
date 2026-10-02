@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Button, ErrorState, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
+import { Button, ErrorState, PageHeader, SkeletonCard, StatGrid, StatCard, TabPanel, Tabs } from "@/app/_components/ds";
 import {
   CATEGORIES,
   ENV_SCOPES,
@@ -15,6 +15,15 @@ import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 
 const API = "/api/proxy/v1/admin/integrations";
+
+/**
+ * GAP-ADMIN-INTEGRATIONS-05: "Configured" = a secret is stored or the row is past
+ * "unconfigured". `enabled` alone is NOT configuration: an enabled-but-empty
+ * provider used to count, disagreeing with its own "Not configured" card pill.
+ */
+export function countConfigured(rows: Pick<IntegrationRow, "hasSecret" | "status">[]): number {
+  return rows.filter((r) => r.hasSecret || r.status !== "unconfigured").length;
+}
 
 export function IntegrationsClient() {
   const [env, setEnv] = useState<EnvScope>("prod");
@@ -71,7 +80,7 @@ export function IntegrationsClient() {
   const countsKnown = !loading && error === null;
   const connected = forEnv.filter((r) => r.status === "connected").length;
   const failed = forEnv.filter((r) => r.status === "failed").length;
-  const configured = forEnv.filter((r) => r.hasSecret || r.enabled).length;
+  const configured = countConfigured(forEnv);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -90,16 +99,7 @@ export function IntegrationsClient() {
 
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", margin: "20px 0 8px", flexWrap: "wrap", gap: 12 }}>
         <div style={{ fontSize: 13, color: "var(--ink2)" }}>Environment scope</div>
-        <div className="seg" role="tablist" aria-label="Environment scope">
-          {ENV_SCOPES.map((s) => (
-            <span key={s} role="tab" aria-selected={s === env} tabIndex={0}
-              className={s === env ? "on" : undefined}
-              onClick={() => setEnv(s)}
-              onKeyDown={(e) => e.key === "Enter" && setEnv(s)}>
-              {s}
-            </span>
-          ))}
-        </div>
+        <Tabs tabs={[...ENV_SCOPES]} active={env} onChange={(t) => setEnv(t as EnvScope)} ariaLabel="Environment scope" idPrefix="int-page-env" />
       </div>
 
       {error && hasLoaded && (
@@ -108,15 +108,17 @@ export function IntegrationsClient() {
           <Button size="sm" onClick={() => { void load(); }}>Retry</Button>
         </div>
       )}
+      <TabPanel idPrefix="int-page-env" active={env}>
       {loading && !hasLoaded ? (
-        <div style={{ padding: 48, textAlign: "center", color: "var(--ink2)" }}>Loading integrations…</div>
+        <div aria-busy="true" aria-label="Loading integrations" className="grid g-3" style={{ marginTop: 22 }}><SkeletonCard /><SkeletonCard /><SkeletonCard /></div>
       ) : error && !hasLoaded ? (
         // The first load failed: every provider would read "Not configured",
         // which is false and invites re-entering credentials over a live
         // secret. Show a retry instead of the grid.
         <ErrorState error={toHumanError("load", { area: "integrations" })} onRetry={() => { void load(); }} backHref="/admin" />
       ) : (
-        CATEGORIES.map((cat) => {
+        <>
+        {CATEGORIES.map((cat) => {
           const provs = PROVIDER_META.filter((p) => p.category === cat.id);
           if (provs.length === 0) return null; // ux-001-ok: grouping a static PROVIDER_META catalog by category, not a loader result
           return (
@@ -158,8 +160,10 @@ export function IntegrationsClient() {
               </div>
             </section>
           );
-        })
+        })}
+        </>
       )}
+      </TabPanel>
 
       {open && (
         <IntegrationDrawer

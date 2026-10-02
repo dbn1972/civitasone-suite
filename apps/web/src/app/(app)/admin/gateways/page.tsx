@@ -1,4 +1,5 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import Link from "next/link";
+import { PageHeader } from "@/app/_components/ds";
 import { getSAGateways } from "@/app/_data/loaders";
 import { GatewaysTable } from "./GatewaysTable";
 import { AdminAccessDenied, sessionHasAnyRole } from "../_components/AdminAccessGate";
@@ -10,35 +11,26 @@ export default async function GatewaysPage() {
   if (!sessionHasAnyRole(PLATFORM_ADMIN_ROLES)) {
     return <AdminAccessDenied title="Communication Gateways" area="communication gateways" roles={PLATFORM_ADMIN_ROLES} />;
   }
-  const { data: gateways, source } = await getSAGateways();
-  const active = gateways.filter((g) => String(g.status).toLowerCase() === "active").length;
-  const degraded = gateways.filter((g) => String(g.status).toLowerCase() === "degraded").length;
+  const { data: gateways, source, status } = await getSAGateways();
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      {/* UX-012: the data-source badge now lives inside GatewaysTable,
-          driven by the same useSeededResource call that produces its rows —
-          not a second, independent read of `source` here that could
-          disagree with the table's own cache state (UX-002's pattern). */}
+      {/* GAP-ADMIN-GATEWAYS-02/03: stats, provenance badge, error state and table all live in
+          GatewaysTable, fed by ONE useSeededResource call. */}
+      {/* GAP-ADMIN-GATEWAYS-06: the two API-gateway links are page actions (client-side nav), and
+          the subtitle says which "gateway" this page is about. */}
       <PageHeader
         title="Communication Gateways"
-        subtitle="SMS, email, WhatsApp and push notification gateway status."
+        subtitle="SMS, email, WhatsApp and push notification gateway status. This is not the API gateway: its edge config and route catalogue are linked in the page header."
         back="/admin"
+        actions={
+          <>
+            <Link href="/admin/gateway-config" className="btn ghost">API gateway: edge config</Link>
+            <Link href="/admin/gateway-routes" className="btn ghost">API gateway: route catalogue</Link>
+          </>
+        }
       />
-      <p className="back" style={{ marginTop: 8 }}>
-        <a href="/admin/gateway-config">Edge config</a>
-        {" · "}
-        <a href="/admin/gateway-routes">API route catalogue</a>
-      </p>
-      <StatGrid>
-        <StatCard icon="📡" iconBg="#eef2ff" label="Total Gateways" value={gateways.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Degraded" value={degraded} />
-        <StatCard icon="📨" iconBg="#fce7ee" label="Standby" value={gateways.length - active - degraded} />
-      </StatGrid>
-      <Card title="Gateway Status">
-        <GatewaysTable gateways={gateways} source={source === "error" ? "error" : "api"} />
-      </Card>
+      <GatewaysTable gateways={gateways} source={source === "error" ? "error" : "api"} unavailable={status === 404 || status === 501} />
     </div>
   );
 }
