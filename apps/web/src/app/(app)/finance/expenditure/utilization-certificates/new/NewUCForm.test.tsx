@@ -8,7 +8,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: refreshMock }),
 }));
 
-import NewUCPage from "./page";
+import { NewUCForm } from "./NewUCForm";
 
 // UX-017 (tranche 10): see AdvancesTable/NewAdvancePage's identical note --
 // NewUCPage is a "use client" component calling useTranslations(), so it
@@ -29,7 +29,7 @@ function fillForm() {
   fireEvent.click(screen.getByLabelText(/I certify that the grant was utilised/));
 }
 
-describe("NewUCPage", () => {
+describe("NewUCForm", () => {
   beforeEach(() => {
     refreshMock.mockReset();
     vi.restoreAllMocks();
@@ -38,7 +38,7 @@ describe("NewUCPage", () => {
   it("submits a utilization certificate (happy path, 202 accepted)", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
 
-    renderPage(<NewUCPage />);
+    renderPage(<NewUCForm schemes={[]} />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Submit certificate" }));
@@ -60,7 +60,7 @@ describe("NewUCPage", () => {
       new Response(JSON.stringify({ message: "scheme_closed: grant window has ended" }), { status: 422 }),
     );
 
-    renderPage(<NewUCPage />);
+    renderPage(<NewUCForm schemes={[]} />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Submit certificate" }));
@@ -73,7 +73,7 @@ describe("NewUCPage", () => {
   // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-01
   it("makes no request without the declaration ticked", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
-    renderPage(<NewUCPage />);
+    renderPage(<NewUCForm schemes={[]} />);
     fillForm();
     fireEvent.click(screen.getByLabelText(/I certify that the grant was utilised/)); // untick
     fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
@@ -83,7 +83,7 @@ describe("NewUCPage", () => {
 
   it("with the declaration ticked shows a confirm dialog, then POSTs exactly once with an idempotency key", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
-    renderPage(<NewUCPage />);
+    renderPage(<NewUCForm schemes={[]} />);
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
     expect(await screen.findByRole("alertdialog")).toHaveTextContent("₹1,000.00");
@@ -99,7 +99,7 @@ describe("NewUCPage", () => {
   // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-02
   it("sends grant ref and period, and rejects period start after end with no POST", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
-    renderPage(<NewUCPage />);
+    renderPage(<NewUCForm schemes={[]} />);
     fillForm();
     fireEvent.change(screen.getByLabelText("Grant reference"), { target: { value: "GR-9" } });
     fireEvent.change(screen.getByLabelText("Period from"), { target: { value: "2026-04-10" } });
@@ -114,5 +114,30 @@ describe("NewUCPage", () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
     expect(JSON.parse(init.body as string)).toMatchObject({ grantRef: "GR-9", periodFrom: "2026-04-10", periodTo: "2026-06-30", amountMinor: "100000" });
+  });
+
+  // GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-NEW-03
+  it("offers a scheme picker, blocks an empty selection, and sends the chosen scheme", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 202 }));
+    renderPage(<NewUCForm schemes={[{ code: "PMAY", name: "Housing Scheme" }, { code: "MGN", name: "Rural Jobs" }]} />);
+    const picker = screen.getByLabelText("Scheme / grant") as HTMLSelectElement;
+    expect(picker.tagName).toBe("SELECT");
+    fillForm();
+    fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
+    expect(await screen.findByText("Select the scheme this certificate is for.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(picker, { target: { value: "Housing Scheme" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit uc/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Submit certificate" }));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(init.body as string)).toMatchObject({ scheme: "Housing Scheme" });
+  });
+
+  it("disables submit when the scheme list failed to load (no free-text fallback)", () => {
+    renderPage(<NewUCForm schemes={null} />);
+    expect((screen.getByLabelText("Scheme / grant") as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.getByRole("button", { name: /submit uc/i })).toBeDisabled();
   });
 });

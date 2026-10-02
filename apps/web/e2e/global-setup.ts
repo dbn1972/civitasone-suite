@@ -87,41 +87,6 @@ const FIXTURES: Record<string, unknown> = {
       status: 'Pending',
     },
   ],
-  // Expense claims: GFR 2017 Rule 11
-  '/api/v1/finance/expenses': [
-    {
-      id: 'exp-e2e-001',
-      employeeName: 'Amit Trivedi',
-      employeeCode: 'EMP-E-001',
-      category: 'office_supplies',
-      description: 'Stationery for Q3',
-      amount: 5000,
-      currency: 'INR',
-      receiptAttached: true,
-      ddoCountersigned: false,
-      status: 'pending',
-      submittedDate: '2026-08-01',
-    },
-  ],
-  // Loans: GFR 2017 Chapter 23 — HBA record for LoanSummaryCard test
-  '/api/v1/finance/loans': [
-    {
-      id: 'loan-e2e-001',
-      employeeName: 'Vikram Mehta',
-      employeeCode: 'EMP-HBA-001',
-      loanType: 'hba',
-      sanctionedAmount: 2500000,
-      outstandingBalance: 1800000,
-      emiAmount: 25000,
-      interestRate: 8.5,
-      nextDueDate: '2026-09-01',
-      totalInterestPayable: 450000,
-      tenureMonths: 120,
-      paidMonths: 24,
-      status: 'active',
-      currency: 'INR',
-    },
-  ],
 
   // REL-023: these 5 HRMS-facing benefit routes moved from /finance/* to
   // /hr/* (see the finance/{advances,travel,medical,expenses,loans}/page.tsx

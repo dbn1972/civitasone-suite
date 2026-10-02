@@ -1,6 +1,7 @@
 import { PageHeader, Card, LoadErrorState } from "../../../../../_components/ds";
 import { getChartOfAccounts } from "../../../../../_data/loaders";
 import { JournalEntryForm } from "../../../journal-entry/JournalEntryForm";
+import { getPeriods } from "../../../period-close/periodsLoader";
 
 /**
  * New Journal Voucher — consolidated onto the single balanced-guarded
@@ -9,8 +10,10 @@ import { JournalEntryForm } from "../../../journal-entry/JournalEntryForm";
  * post identical, validated, balanced journals.
  */
 export default async function NewVoucherPage() {
-  const result = await getChartOfAccounts();
+  const [result, periodsResult] = await Promise.all([getChartOfAccounts(), getPeriods()]);
   const { data: accounts, source } = result;
+  // GAP-FINANCE-JOURNAL-ENTRY-03: null = periods failed to load (shown as unverified).
+  const periods = periodsResult.source === "error" ? null : periodsResult.data.map((p) => ({ period: p.period, status: p.status }));
 
   return (
     <>
@@ -26,7 +29,7 @@ export default async function NewVoucherPage() {
         <LoadErrorState result={result} area="chart of accounts" backHref="/finance/accounting/general-ledger" />
       ) : (
         <Card title="Voucher entry" padding>
-          <JournalEntryForm accounts={accounts} redirectTo="/finance/accounting/general-ledger" />
+          <JournalEntryForm accounts={accounts} redirectTo="/finance/accounting/general-ledger" periods={periods} />
         </Card>
       )}
     </>

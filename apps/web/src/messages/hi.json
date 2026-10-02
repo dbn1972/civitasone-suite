@@ -2348,7 +2348,11 @@
     "errorDeclaration": "जमा करने के लिए घोषणा पर टिक करें।",
     "confirmTitle": "यह उपयोगिता प्रमाणपत्र जमा करें?",
     "confirmDescription": "यह प्रमाणित करता है कि UC {ucNo} के अंतर्गत {amount} स्वीकृत प्रयोजन के लिए उपयोग किए गए। यह एक सांविधिक प्रमाणपत्र है और आपके नाम से दर्ज होगा।",
-    "confirmLabel": "प्रमाणपत्र जमा करें"
+    "confirmLabel": "प्रमाणपत्र जमा करें",
+    "errorSchemeRequired": "इस प्रमाणपत्र की योजना चुनें।",
+    "errorSchemesUnavailable": "योजनाओं की सूची लोड नहीं हो सकी। पुनः प्रयास के लिए पृष्ठ रीफ़्रेश करें।",
+    "schemePlaceholder": "— योजना चुनें —",
+    "noSchemes": "अभी कोई योजना सेट नहीं है, इसलिए यह फ़ील्ड आवश्यक नहीं है।"
   },
   "expenditureUtilizationCertificates": {
     "title": "उपयोगिता प्रमाणपत्र",
@@ -2357,7 +2361,8 @@
     "statTotal": "कुल UC",
     "statSubmittedVerified": "प्रस्तुत / सत्यापित",
     "statPendingSubmission": "प्रस्तुति लंबित",
-    "statCoveredAmount": "कवर की गई राशि",
+    "statCoveredAmount": "कवर की गई राशि (प्रस्तुत / सत्यापित)",
+    "statPendingAmount": "लंबित राशि",
     "cardTitle": "उपयोगिता प्रमाणपत्र",
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
     "routeErrorArea": "वित्त पृष्ठ",
@@ -2429,6 +2434,7 @@
   },
   "finance": {
     "title": "वित्त",
+    "subtitle": "खाता-बही, बजट, व्यय, कोषागार, राजस्व और सांविधिक रिपोर्टिंग।",
     "budget": "बजट",
     "expenditure": "व्यय",
     "challan": "चालान",

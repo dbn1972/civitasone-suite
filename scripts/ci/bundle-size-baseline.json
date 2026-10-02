@@ -1613,11 +1613,6 @@
       "sizeBytes": 2680,
       "firstLoadJsBytes": 149000
     },
-    "/finance/expenses": {
-      "marker": "ƒ",
-      "sizeBytes": 1490,
-      "firstLoadJsBytes": 89400
-    },
     "/finance/fiscal-years": {
       "marker": "ƒ",
       "sizeBytes": 4240,
@@ -1632,11 +1627,6 @@
       "marker": "ƒ",
       "sizeBytes": 157,
       "firstLoadJsBytes": 152000
-    },
-    "/finance/loans": {
-      "marker": "ƒ",
-      "sizeBytes": 1490,
-      "firstLoadJsBytes": 89400
     },
     "/finance/medical": {
       "marker": "ƒ",

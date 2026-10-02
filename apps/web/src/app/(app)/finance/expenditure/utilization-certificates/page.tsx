@@ -36,6 +36,7 @@ export default async function UCsPage() {
         <StatCard icon="⏳" iconBg="#fffaeb" label={t("statPendingSubmission")} value={failed ? null : stats.pending} />
         <StatCard icon="↩️" iconBg="#fef3f2" label={t("statRejected")} value={failed ? null : stats.rejected} />
         <StatCard icon="💰" iconBg="#eff6ff" label={t("statCoveredAmount")} value={failed ? null : formatMoney(stats.covered)} />
+        <StatCard icon="🕒" iconBg="#fffaeb" label={t("statPendingAmount")} value={failed ? null : formatMoney(stats.pendingAmount)} />
       </StatGrid>
 
       {/* UX-012: the data-source badge now lives inside UCsTable, driven by

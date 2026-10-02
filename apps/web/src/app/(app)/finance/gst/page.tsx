@@ -3,9 +3,13 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { currentMonthPeriod } from "@/lib/fiscalYear";
+import { estimateCashPayable, gstHeadTotals, sumMinor, PERIOD_PATTERN } from "@/lib/finance/gstTotals";
 import { PeriodSelector } from "./PeriodSelector";
 import { GstConsole } from "./GstConsole";
 import type { SummaryRow, LedgerRow, ItcRow } from "./types";
+
+/** The endpoint default is 100 rows, which would silently truncate a busy month and its export. 500 is the maximum. */
+const GST_LEDGER_LIMIT = 500;
 
 type SummaryResponse = { period: string; summary: SummaryRow[] };
 type ItcResponse = { period: string; reconciliation: ItcRow[] };
@@ -18,7 +22,7 @@ async function getSummary(period: string): Promise<LoaderResult<SummaryRow[]>> {
 }
 
 async function getLedger(period: string): Promise<LoaderResult<LedgerRow[]>> {
-  return fetchJson<unknown, LedgerRow[]>(`/api/v1/finance/gst/ledger?period=${encodeURIComponent(period)}`, [], {
+  return fetchJson<unknown, LedgerRow[]>(`/api/v1/finance/gst/ledger?period=${encodeURIComponent(period)}&limit=${GST_LEDGER_LIMIT}`, [], {
     telemetryKey: "finance.gst.ledger",
     mapResponse: (p) => {
       const arr = Array.isArray(p) ? p : (p as { data?: LedgerRow[] })?.data;
@@ -35,7 +39,11 @@ async function getItcReconciliation(period: string): Promise<LoaderResult<ItcRow
 }
 
 export default async function GstConsolePage({ searchParams }: { searchParams?: { period?: string } }) {
-  const period = searchParams?.period && /^\d{4}-\d{2}$/.test(searchParams.period) ? searchParams.period : currentMonthPeriod();
+  const requested = searchParams?.period;
+  const periodValid = !!requested && PERIOD_PATTERN.test(requested);
+  const period = periodValid ? requested : currentMonthPeriod();
+  // GAP-FINANCE-GST-06: an unusable ?period= is called out, not silently swapped.
+  const invalidRequested = requested !== undefined && requested !== "" && !periodValid ? requested : null;
 
   const [
     { data: summary, source: summarySource },
@@ -48,16 +56,18 @@ export default async function GstConsolePage({ searchParams }: { searchParams?: 
   // an api-ok empty list is a genuine empty period.
   const errors = { summary: summarySource === "error", ledger: ledgerSource === "error", itc: itcSource === "error" };
   const source = errors.summary || errors.ledger || errors.itc ? "error" : "api";
-  const money = (failed: boolean, v: number) => (failed ? null : formatMoney(v));
+  const money = (v: bigint | null) => (v === null ? null : formatMoney(v));
 
-  const outputTax = summary
-    .filter((r) => r.direction === "output")
-    .reduce((s, r) => s + Number(r.total_tax ?? 0), 0);
-  const inputTax = summary
-    .filter((r) => r.direction === "input")
-    .reduce((s, r) => s + Number(r.total_tax ?? 0), 0);
-  const netPayable = itc.reduce((s, r) => s + Number(r.net_payable ?? 0), 0);
+  // GAP-FINANCE-GST-04: exact paise (bigint); an unparseable value renders "—", never 0.
+  const outputTax = errors.summary ? null : sumMinor(summary.filter((r) => r.direction === "output").map((r) => r.total_tax));
+  const summaryInputTax = errors.summary ? null : sumMinor(summary.filter((r) => r.direction === "input").map((r) => r.total_tax));
   const transactionCount = summary.reduce((s, r) => s + Number(r.transaction_count ?? 0), 0);
+  // GAP-FINANCE-GST-02/03: ITC and payable come from the reconciliation (head-wise).
+  const totals = errors.itc ? null : gstHeadTotals(itc);
+  const itcMismatch =
+    totals !== null && summaryInputTax !== null && totals.itcAvailable !== summaryInputTax;
+  const estimate = errors.itc ? null : estimateCashPayable(itc);
+  const payableLabel = totals === null ? null : totals.payable === 0n ? "Nil" : formatMoney(totals.payable);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -75,19 +85,42 @@ export default async function GstConsolePage({ searchParams }: { searchParams?: 
         </>
       )}
 
+      {invalidRequested && (
+        <div role="status" className="banner" style={{ background: "#fffbe6", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+          &quot;{invalidRequested}&quot; is not a valid period (use YYYY-MM, month 01 to 12). Showing {period} instead.
+        </div>
+      )}
+
       <PeriodSelector period={period} />
 
       <StatGrid>
-        <StatCard icon="📤" iconBg="#fef3f2" label="Output Tax" value={money(errors.summary, outputTax)} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="ITC Available (Input Tax)" value={money(errors.summary, inputTax)} />
+        <StatCard icon="📤" iconBg="#fef3f2" label="Output Tax" value={money(outputTax)} />
+        <StatCard icon="📥" iconBg="#ecfdf3" label="Input Tax Credit Available" value={money(totals?.itcAvailable ?? null)} />
         <StatCard
-          icon={errors.itc ? "⚠️" : netPayable >= 0 ? "⚠️" : "✅"}
-          iconBg={errors.itc || netPayable >= 0 ? "#fffbe6" : "#e6f7f0"}
-          label="Net GST Payable"
-          value={money(errors.itc, netPayable)}
+          icon={totals === null || totals.payable > 0n ? "⚠️" : "✅"}
+          iconBg={totals === null || totals.payable > 0n ? "#fffbe6" : "#e6f7f0"}
+          label="Net balance by tax head (before credit utilisation)"
+          value={payableLabel}
         />
+        <StatCard icon="↪️" iconBg="#eff6ff" label="Surplus credit by head" value={money(totals?.creditCarriedForward ?? null)} />
+        <StatCard icon="🧮" iconBg="#eff6ff" label="Estimated cash payable after set-off" value={money(estimate?.cashPayable ?? null)} />
         <StatCard icon="🧾" iconBg="#eff6ff" label="Transactions" value={errors.summary ? null : transactionCount} />
       </StatGrid>
+      {itcMismatch && totals !== null && summaryInputTax !== null && (
+        <div role="alert" className="banner" style={{ background: "#fffbe6", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+          <strong>Mismatch:</strong> input tax on the summary ({formatMoney(summaryInputTax)}) differs from ITC available on
+          the reconciliation ({formatMoney(totals.itcAvailable)}). Review the ITC Reconciliation tab before filing.
+        </div>
+      )}
+      <p style={{ fontSize: 12, color: "var(--mut)", margin: "0 0 12px" }}>
+        Balances are per tax head before the statutory credit set-off (IGST credit is applied against IGST, then CGST, then SGST; CGST and SGST credit against their own head, then IGST). Cash payable is finalised in GSTR-3B. Indicative only.
+      </p>
+
+      {ledgerSource !== "error" && ledger.length >= GST_LEDGER_LIMIT && (
+        <div role="status" className="banner" style={{ background: "#fffbe6", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+          The ledger shows the first {GST_LEDGER_LIMIT} entries for this period; the list and its CSV export may be incomplete.
+        </div>
+      )}
 
       <Card title={`GST / ITC — ${period}`}>
         <GstConsole period={period} summary={summary} ledger={ledger} itc={itc} errors={errors} />

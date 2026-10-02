@@ -63,3 +63,29 @@ describe("GstConsole failed sources", () => {
     expect(screen.getByText("No GST summary for this period")).toBeInTheDocument();
   });
 });
+
+// GAP-FINANCE-GST-05
+describe("GstConsole ledger columns and export (GAP-FINANCE-GST-05)", () => {
+  const ledger = [
+    {
+      id: "1", invoice_id: "inv-1", invoice_no: "INV-001", invoice_date: "2026-06-05",
+      party_gstin: "27AAAAA0000A1Z5", party_name: "Vendor Co", gst_type: "CGST", direction: "output",
+      taxable_minor: 10000000, tax_minor: 900000, rate_pct: 9, hsn_code: "9954", period: "2026-06", status: "posted", created_at: "2026-06-05T00:00:00Z",
+    },
+  ];
+  it("defaults to 8 columns (HSN, Rate, Status hidden) and shows all 11 on request", () => {
+    render(<GstConsole period="2026-06" summary={[]} ledger={ledger} itc={[]} />);
+    fireEvent.click(screen.getByText("GST Ledger"));
+    expect(screen.getAllByRole("columnheader")).toHaveLength(8);
+    expect(screen.queryByText("HSN")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/Show all columns/));
+    expect(screen.getAllByRole("columnheader")).toHaveLength(11);
+    expect(screen.getByText("HSN")).toBeInTheDocument();
+  });
+
+  it("offers a CSV export", () => {
+    render(<GstConsole period="2026-06" summary={[]} ledger={ledger} itc={[]} />);
+    fireEvent.click(screen.getByText("GST Ledger"));
+    expect(screen.getByRole("button", { name: /csv/i })).toBeInTheDocument();
+  });
+});

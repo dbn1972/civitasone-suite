@@ -34,7 +34,7 @@ describe("expenditure list pages on a FAILED load (FAILMASK)", () => {
     ["bills", "getFinanceBills", () => BillsPage(), 4],
     ["guarantees", "getFinanceGuarantees", () => GuaranteesPage(), 4],
     ["scheme tracking", "getFinanceSchemes", () => SchemeTrackingPage(), 4],
-    ["utilization certificates", "getFinanceUCs", () => UCsPage(), 5],
+    ["utilization certificates", "getFinanceUCs", () => UCsPage(), 6],
   ];
 
   for (const [name, loader, page, dashes] of cases) {

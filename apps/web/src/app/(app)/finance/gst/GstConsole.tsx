@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ComponentProps } from "react";
 import { DataTable, Tabs, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import type { SummaryRow, LedgerRow, ItcRow } from "./types";
@@ -17,10 +17,46 @@ interface GstConsoleProps {
   errors?: { summary?: boolean; ledger?: boolean; itc?: boolean };
 }
 
+/** Ledger columns; HSN, Rate and Status are the low-priority ones (GAP-FINANCE-GST-05). */
+type LedgerColumn = ComponentProps<typeof DataTable<LedgerRow>>["columns"][number];
+
+export function ledgerColumns(all: boolean): LedgerColumn[] {
+  const cols: LedgerColumn[] = [
+    { key: "invoice_no", label: "Invoice No." },
+    { key: "invoice_date", label: "Invoice Date" },
+    { key: "party_gstin", label: "Party GSTIN" },
+    { key: "party_name", label: "Party Name" },
+    { key: "direction", label: "Direction", cellType: "status" },
+    { key: "gst_type", label: "GST Type" },
+    { key: "hsn_code", label: "HSN" },
+    { key: "rate_pct", label: "Rate %", align: "right" },
+    { key: "taxable_minor", label: "Taxable Value", align: "right", cellType: "amount" },
+    { key: "tax_minor", label: "Tax", align: "right", cellType: "amount" },
+    { key: "status", label: "Status", cellType: "status" },
+  ];
+  return all ? cols : cols.filter((c) => !["hsn_code", "rate_pct", "status"].includes(String(c.key)));
+}
+
+/**
+ * GAP-FINANCE-GST-05: the CSV export lists party GSTINs, so each export is
+ * recorded server-side (finance-service POST /v1/finance/gst/ledger/export-audit).
+ * Fire-and-forget: audit recording never blocks the user's own download.
+ */
+export async function recordGstLedgerExport(period: string, info: { rowCount: number; filter: string }): Promise<void> {
+  await fetch("/api/proxy/v1/finance/gst/ledger/export-audit", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ period, rowCount: info.rowCount, filtered: info.filter.trim().length > 0 }),
+  });
+}
+
 const TAB_ERROR_KEY = { Summary: "summary", "GST Ledger": "ledger", "ITC Reconciliation": "itc" } as const;
 
 export function GstConsole({ period, summary, ledger, itc, errors = {} }: GstConsoleProps) {
   const [active, setActive] = useState<Tab>("Summary");
+  // GAP-FINANCE-GST-05: 11 columns is too wide to scan, so the low-priority
+  // ones (HSN, Rate, Status) sit behind a "Show all columns" toggle.
+  const [allColumns, setAllColumns] = useState(false);
   // Tabs identify by their label string, so a warning cue on a failed tab is
   // added to the label and mapped back to the tab id on change.
   const labelOf = (t: Tab) => (errors[TAB_ERROR_KEY[t]] ? `${t} ⚠` : t);
@@ -67,26 +103,28 @@ export function GstConsole({ period, summary, ledger, itc, errors = {} }: GstCon
             message="No invoices with GST were recorded for the selected period."
           />
         ) : (
-          <DataTable<LedgerRow>
-            columns={[
-              { key: "invoice_no", label: "Invoice No." },
-              { key: "invoice_date", label: "Invoice Date" },
-              { key: "party_gstin", label: "Party GSTIN" },
-              { key: "party_name", label: "Party Name" },
-              { key: "direction", label: "Direction", cellType: "status" },
-              { key: "gst_type", label: "GST Type" },
-              { key: "hsn_code", label: "HSN" },
-              { key: "rate_pct", label: "Rate %", align: "right" },
-              { key: "taxable_minor", label: "Taxable Value", align: "right", cellType: "amount" },
-              { key: "tax_minor", label: "Tax", align: "right", cellType: "amount" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={ledger}
-            sortable
-            filterable
-            filterPlaceholder="Filter by invoice no., GSTIN, or party…"
-            pageSize={15}
-          />
+          <>
+            <label style={{ display: "inline-flex", gap: 6, alignItems: "center", fontSize: 13, margin: "0 0 8px" }}>
+              <input type="checkbox" checked={allColumns} onChange={(e) => setAllColumns(e.target.checked)} />
+              Show all columns (HSN, rate, status)
+            </label>
+            <DataTable<LedgerRow>
+              columns={ledgerColumns(allColumns)}
+              rows={ledger}
+              sortable
+              filterable
+              filterPlaceholder="Filter by invoice no., GSTIN, or party…"
+              exportable
+              exportFilename={`gst-ledger-${period}`}
+              exportConfirm={{
+                title: "Export GST ledger?",
+                description: `The file lists party GSTINs, invoice numbers and tax values for ${period}. Each export is recorded in the audit trail.`,
+                confirmLabel: "Export CSV",
+              }}
+              onExport={(info) => { void recordGstLedgerExport(period, info).catch(() => undefined); }}
+              pageSize={15}
+            />
+          </>
         )
       )}
 

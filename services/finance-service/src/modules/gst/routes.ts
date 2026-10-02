@@ -1,12 +1,18 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
-import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
+import * as commands from "./commands.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
 export async function gstRoutes(app: FastifyInstance): Promise<void> {
+  // A bad query/body is a 400, not an unhandled ZodError 500 (same handler as the other finance modules).
+  app.setErrorHandler(financeErrorHandler);
+
   // GET /v1/finance/gst/ledger — GST transactions
   app.get("/v1/finance/gst/ledger", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -81,5 +87,20 @@ export async function gstRoutes(app: FastifyInstance): Promise<void> {
     `));
 
     return reply.send({ period: q.period, reconciliation: rows });
+  });
+
+  // POST /v1/finance/gst/ledger/export-audit — GAP-FINANCE-GST-05. The web CSV
+  // export of the GST ledger lists party GSTINs, so each export is reported
+  // here and lands on the audit trail. Routes never write the DB: this only
+  // publishes a command; the consumer enqueues the audit event.
+  app.post("/v1/finance/gst/ledger/export-audit", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const body = z.object({
+      period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/),
+      rowCount: z.number().int().min(0).max(1_000_000),
+      filtered: z.boolean().default(false),
+    }).parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.recordLedgerExport(ctx, body));
   });
 }

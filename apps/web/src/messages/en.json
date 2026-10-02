@@ -2372,7 +2372,11 @@
     "errorDeclaration": "Tick the declaration to submit.",
     "confirmTitle": "Submit this utilization certificate?",
     "confirmDescription": "This certifies that {amount} was utilised for the sanctioned purpose under UC {ucNo}. It is a statutory certificate and is recorded against your name.",
-    "confirmLabel": "Submit certificate"
+    "confirmLabel": "Submit certificate",
+    "errorSchemeRequired": "Select the scheme this certificate is for.",
+    "errorSchemesUnavailable": "The list of schemes could not be loaded. Refresh the page to try again.",
+    "schemePlaceholder": "— select a scheme —",
+    "noSchemes": "No schemes are set up yet, so this field is not required."
   },
   "expenditureUtilizationCertificates": {
     "title": "Utilization Certificates",
@@ -2381,7 +2385,8 @@
     "statTotal": "Total UCs",
     "statSubmittedVerified": "Submitted / Verified",
     "statPendingSubmission": "Pending Submission",
-    "statCoveredAmount": "Covered Amount",
+    "statCoveredAmount": "Covered Amount (submitted / verified)",
+    "statPendingAmount": "Pending Amount",
     "cardTitle": "Utilization certificates",
     "routeErrorBackLabel": "Back to Finance",
     "routeErrorArea": "Finance page",
@@ -2453,6 +2458,7 @@
   },
   "finance": {
     "title": "Finance",
+    "subtitle": "Ledgers, budgets, expenditure, treasury, revenue, and statutory reporting.",
     "budget": "Budget",
     "expenditure": "Expenditure",
     "challan": "Challan",

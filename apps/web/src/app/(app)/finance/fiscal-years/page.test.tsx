@@ -41,12 +41,26 @@ describe("FiscalYearsPage", () => {
     expect(screen.getByText("No fiscal years yet")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when the loader falls back on error", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+  // GAP-FINANCE-FISCAL-YEARS-03
+  it("a failed load shows the retry state: no Total 0, no create prompt, no create form", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error", status: 502 });
 
     const ui = await FiscalYearsPage();
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again|retry|refresh/i })).toBeInTheDocument();
+    expect(screen.queryByText("Total Fiscal Years")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Create the first fiscal year/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Create Fiscal Year")).not.toBeInTheDocument();
+  });
+
+  it("a genuine empty tenant (source api, 0 rows) still gets the create prompt and form", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+
+    const ui = await FiscalYearsPage();
+    render(ui);
+
+    expect(screen.getByText("Total Fiscal Years")).toBeInTheDocument();
+    expect(screen.getAllByText("Create Fiscal Year").length).toBeGreaterThan(0);
   });
 });

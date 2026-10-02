@@ -4,10 +4,9 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { findFiscalYearConflicts } from "@/lib/fiscalYear";
+import { currentFinancialYear, findFiscalYearConflicts, standardFiscalYear, validateFiscalYear } from "@/lib/fiscalYear";
+import { formatIndianDate } from "@/lib/formatters";
 import type { FiscalYearRow } from "./FiscalYearsTable";
-
-const CODE_PATTERN = /^\d{4}-\d{2}$/;
 
 type FieldErrors = {
   code?: string;
@@ -26,6 +25,25 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
   const [label, setLabel] = useState("");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  // GAP-FINANCE-FISCAL-YEARS-05: picking a start year prefills code, label and
+  // the standard 1 Apr - 31 Mar dates; the dates are only editable behind the
+  // "Non-standard year" override (short first year, other year-end).
+  const [startYear, setStartYear] = useState("");
+  const [nonStandard, setNonStandard] = useState(false);
+  const currentStart = Number(currentFinancialYear().slice(0, 4));
+  const startYearOptions = [currentStart - 2, currentStart - 1, currentStart, currentStart + 1, currentStart + 2];
+
+  function chooseStartYear(value: string) {
+    setStartYear(value);
+    if (!value) return;
+    const std = standardFiscalYear(Number(value));
+    setCode(std.code);
+    setLabel(std.label);
+    setStartDate(std.startDate);
+    setEndDate(std.endDate);
+    setNonStandard(false);
+    setErrors({});
+  }
 
   const [errors, setErrors] = useState<FieldErrors>({});
   const [busy, setBusy] = useState(false);
@@ -33,6 +51,8 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
 
+  const yearId = useId();
+  const nonStdId = useId();
   const codeId = useId();
   const labelId = useId();
   const startId = useId();
@@ -48,12 +68,7 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
   const endRef = useRef<HTMLInputElement>(null);
 
   function validate(): boolean {
-    const next: FieldErrors = {};
-    if (!CODE_PATTERN.test(code.trim())) next.code = "Code must be in YYYY-YY format, e.g. 2026-27.";
-    if (!label.trim()) next.label = "Label is required.";
-    if (!startDate) next.startDate = "Start date is required.";
-    if (!endDate) next.endDate = "End date is required.";
-    if (startDate && endDate && endDate <= startDate) next.endDate = "End date must be after the start date.";
+    const next: FieldErrors = validateFiscalYear({ code, label, startDate, endDate }, { nonStandard });
     // GAP-FINANCE-FISCAL-YEARS-01: a duplicate or overlapping year is
     // rejected before the confirm dialog opens (the server rejects it too).
     if (!next.code && !next.startDate && !next.endDate) {
@@ -101,6 +116,8 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
       setLabel("");
       setStartDate("");
       setEndDate("");
+      setStartYear("");
+      setNonStandard(false);
       setErrors({});
       router.refresh();
     } catch (err) {
@@ -115,6 +132,21 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
       <Card title="Create Fiscal Year" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={yearId} style={{ fontSize: 13, fontWeight: 600 }}>Start year</label>
+              <select
+                id={yearId}
+                value={startYear}
+                onChange={(e) => chooseStartYear(e.target.value)}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              >
+                <option value="">— pick to prefill —</option>
+                {startYearOptions.map((y) => (
+                  <option key={y} value={y}>{y}-{String((y + 1) % 100).padStart(2, "0")}</option>
+                ))}
+              </select>
+            </div>
+
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={codeId} style={{ fontSize: 13, fontWeight: 600 }}>
                 Code <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
@@ -162,6 +194,7 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                readOnly={!nonStandard && !!startYear}
                 aria-required="true"
                 aria-invalid={!!errors.startDate || undefined}
                 aria-describedby={errors.startDate ? startErrId : undefined}
@@ -180,6 +213,7 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                readOnly={!nonStandard && !!startYear}
                 aria-required="true"
                 aria-invalid={!!errors.endDate || undefined}
                 aria-describedby={errors.endDate ? endErrId : undefined}
@@ -188,6 +222,11 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
               {errors.endDate && <p id={endErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.endDate}</p>}
             </div>
           </div>
+
+          <label htmlFor={nonStdId} style={{ display: "flex", gap: 8, alignItems: "center", fontSize: 13 }}>
+            <input id={nonStdId} type="checkbox" checked={nonStandard} onChange={(e) => setNonStandard(e.target.checked)} />
+            Non-standard year (dates other than 1 April to 31 March)
+          </label>
 
           <div>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
@@ -216,8 +255,8 @@ export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
         errorMessage={dialogError}
         description={
           <>
-            Create fiscal year <strong>{code}</strong> (<strong>{label}</strong>) running from {startDate} to{" "}
-            {endDate}. It becomes the <strong>active posting year immediately</strong>
+            Create fiscal year <strong>{code}</strong> (<strong>{label}</strong>) running from{" "}
+            <strong>{formatIndianDate(startDate)}</strong> to <strong>{formatIndianDate(endDate)}</strong>. It becomes the <strong>active posting year immediately</strong>
             {activeYear ? (
               <>
                 {" "}and fiscal year <strong>{activeYear.code}</strong> ({activeYear.label}) <strong>will be closed</strong>
