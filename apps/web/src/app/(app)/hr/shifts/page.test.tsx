@@ -32,7 +32,10 @@ describe("ShiftsPage", () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_SHIFTS, source: "api" });
     render(await ShiftsPage());
     expect(screen.getByText("Total Shifts")).toBeInTheDocument();
-    expect(screen.getByText("Active")).toBeInTheDocument();
+    // "Active" also appears as each row's StatusPill, so pin the stat-card
+    // label specifically (class "lab") rather than any "Active" text.
+    const statLabels = screen.getAllByText("Active").filter((el) => el.classList.contains("lab"));
+    expect(statLabels).toHaveLength(1);
   });
 
   // COMP-004 fix-up (round 3): the page used to silently substitute a

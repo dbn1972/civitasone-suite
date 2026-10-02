@@ -93,10 +93,15 @@ describe("CivitasMap", () => {
     expect(region?.classList.contains("custom-map")).toBe(true);
   });
 
-  it("iframe is keyboard focusable (tabIndex=0)", () => {
+  it("iframe is natively keyboard focusable (no explicit tabindex, never removed from tab order)", () => {
+    // #1400 (jsx-a11y no-noninteractive-tabindex) deliberately dropped the
+    // redundant tabIndex={0}: an <iframe> is natively in the tab order. Assert
+    // that contract directly: no tabindex attribute that could take it out of
+    // the order (e.g. -1), and the DOM-reported tabIndex is >= 0.
     render(<CivitasMap />);
-    const iframe = screen.getByTitle("Interactive map showing locations");
-    expect(iframe.getAttribute("tabindex")).toBe("0");
+    const iframe = screen.getByTitle("Interactive map showing locations") as HTMLIFrameElement;
+    expect(iframe.hasAttribute("tabindex")).toBe(false);
+    expect(iframe.tabIndex).toBeGreaterThanOrEqual(0);
   });
 
   it("iframe sandboxed with allow-scripts only", () => {

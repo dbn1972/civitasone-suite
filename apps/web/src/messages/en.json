@@ -2047,6 +2047,7 @@
     "add": "Add Employee",
     "import": "Import",
     "search": "Search employees",
+    "clearSearch": "Clear",
     "name": "Name",
     "department": "Department",
     "designation": "Designation",

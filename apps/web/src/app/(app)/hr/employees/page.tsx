@@ -249,7 +249,7 @@ export default async function EmployeeDirectoryPage({ searchParams }: { searchPa
         />
         <button type="submit" className="btn">{t("search")}</button>
         {q && (
-          <Link href={empPageHref(typeFilter, 0, "", statusFilter)} className="btn ghost">Clear</Link>
+          <Link href={empPageHref(typeFilter, 0, "", statusFilter)} className="btn ghost">{t("clearSearch")}</Link>
         )}
       </form>
 

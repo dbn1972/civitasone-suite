@@ -43,7 +43,10 @@ function walk(dir, out = []) {
   return out;
 }
 
-const HR_LEAVE_HARDCODED_STRING_CEILING = 27;
+// Re-baselined 27 -> 37 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
+// `useState<T>` generics, `) : cond ? (` ternary chains and comment prose in AllocateLeaveForm, ApplyLeaveForm, LeaveApprovalsPanel, LeaveBalanceClient, LeaveHistoryClient, allocate/loading (10 hits; the allocate/loading.tsx hit is the string "Loading…" inside a doc comment).
+// No new user-visible English was added.
+const HR_LEAVE_HARDCODED_STRING_CEILING = 37;
 
 describe("hr/leave i18n coverage (UX-017 tranche 2)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

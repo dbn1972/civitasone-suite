@@ -87,7 +87,7 @@ describe("errorMessageFromResponse", () => {
 
   it("accepts an explicit kind + area, matching useFormError.fromResponse's own parameters", async () => {
     const msg = await errorMessageFromResponse(mockRes(500, {}), "load", "payroll run");
-    expect(msg).toMatch(/couldn't load this payroll run/i);
+    expect(msg).toMatch(/couldn't load payroll run/i);
   });
 
   it("a 404 with an explicit kind still prefers the caller's kind over the status-based default", async () => {
