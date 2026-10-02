@@ -1,9 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
 const GOV_BLUE = "#154089";
+/** Minimum gap between code sends from this form. The server TTL/attempt limits are unchanged. */
+export const RESEND_COOLDOWN_SECONDS = 30;
+const DEFAULT_EXPIRES_IN_SECONDS = 600;
+
+export function formatCountdown(totalSeconds: number): string {
+  const s = Math.max(0, Math.ceil(totalSeconds));
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
 
 export function LoginForm() {
   const router = useRouter();
@@ -15,9 +23,22 @@ export function LoginForm() {
   const [otp, setOtp] = useState("");
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState("");
+  const [expiresAt, setExpiresAt] = useState(0);
+  const [resendAt, setResendAt] = useState(0);
+  const [locked, setLocked] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
 
-  async function requestOtp(e: React.FormEvent) {
-    e.preventDefault();
+  useEffect(() => {
+    if (phase !== "otp") return;
+    setNow(Date.now());
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [phase]);
+
+  const expired = phase === "otp" && now >= expiresAt;
+  const resendWait = Math.max(0, Math.ceil((resendAt - now) / 1000));
+
+  async function sendCode() {
     if (!email.trim()) return;
     setStatus("loading");
     setError("");
@@ -31,14 +52,24 @@ export function LoginForm() {
         const d = await res.json().catch(() => ({}));
         throw new Error((d as { message?: string }).message ?? "Could not send OTP");
       }
-      const data = await res.json() as { devCode?: string };
-      if (data.devCode) setOtp(data.devCode);
+      const data = await res.json() as { devCode?: string; expiresIn?: number };
+      const sentAt = Date.now();
+      setOtp(data.devCode ?? "");
+      setNow(sentAt);
+      setExpiresAt(sentAt + (typeof data.expiresIn === "number" ? data.expiresIn : DEFAULT_EXPIRES_IN_SECONDS) * 1000);
+      setResendAt(sentAt + RESEND_COOLDOWN_SECONDS * 1000);
+      setLocked(false);
       setPhase("otp");
       setStatus("idle");
     } catch (err) {
       setStatus("error");
       setError(err instanceof Error ? err.message : "Something went wrong");
     }
+  }
+
+  function requestOtp(e: React.FormEvent) {
+    e.preventDefault();
+    void sendCode();
   }
 
   async function verifyOtp(e: React.FormEvent) {
@@ -53,8 +84,12 @@ export function LoginForm() {
         body: JSON.stringify({ email: email.trim(), code: otp }),
       });
       if (!res.ok) {
-        const d = await res.json().catch(() => ({}));
-        throw new Error((d as { message?: string }).message ?? "Invalid code");
+        const d = await res.json().catch(() => ({})) as { code?: string; message?: string };
+        if (res.status === 429 || d.code === "MAX_ATTEMPTS") {
+          setLocked(true);
+          throw new Error("Too many attempts. Request a new code.");
+        }
+        throw new Error(d.message ?? "Invalid code");
       }
       router.push(ref ? `/careers/portal?ref=${encodeURIComponent(ref)}` : "/careers/portal");
     } catch (err) {
@@ -121,9 +156,16 @@ export function LoginForm() {
             />
           </div>
           {status === "error" && <p style={{ margin: 0, padding: "10px 14px", borderRadius: 8, background: "#fef2f2", color: "#b91c1c", fontSize: 13 }}>{error}</p>}
-          <button type="submit" disabled={status === "loading" || otp.length !== 6}
-            style={{ padding: "13px 24px", fontSize: 15, fontWeight: 700, color: "#fff", background: otp.length !== 6 || status === "loading" ? "#94a3b8" : GOV_BLUE, border: "none", borderRadius: 10, cursor: otp.length !== 6 ? "default" : "pointer", minHeight: 48 }}>
+          <p data-testid="otp-expiry" role={expired ? "alert" : undefined} style={{ margin: 0, fontSize: 12, color: expired ? "#b91c1c" : "#64748b", textAlign: "center" }}>
+            {expired ? "Code expired. Request a new code." : `Code expires in ${formatCountdown((expiresAt - now) / 1000)}`}
+          </p>
+          <button type="submit" disabled={status === "loading" || otp.length !== 6 || expired || locked}
+            style={{ padding: "13px 24px", fontSize: 15, fontWeight: 700, color: "#fff", background: otp.length !== 6 || status === "loading" || expired || locked ? "#94a3b8" : GOV_BLUE, border: "none", borderRadius: 10, cursor: otp.length !== 6 || expired || locked ? "default" : "pointer", minHeight: 48 }}>
             {status === "loading" ? "Verifying…" : "Verify & sign in →"}
+          </button>
+          <button type="button" onClick={() => void sendCode()} disabled={status === "loading" || resendWait > 0}
+            style={{ background: "none", border: "1px solid #cbd5e1", borderRadius: 8, padding: "9px 14px", color: resendWait > 0 ? "#94a3b8" : GOV_BLUE, fontSize: 13, fontWeight: 600, cursor: resendWait > 0 ? "default" : "pointer" }}>
+            {resendWait > 0 ? `Resend code in ${resendWait}s` : "Resend code"}
           </button>
           <button type="button" onClick={() => { setPhase("email"); setOtp(""); setStatus("idle"); setError(""); }}
             style={{ background: "none", border: "none", color: "#64748b", fontSize: 13, cursor: "pointer", textDecoration: "underline" }}>

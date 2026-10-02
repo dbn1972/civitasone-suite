@@ -21,6 +21,8 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
   const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [message, setMessage] = useState("");
   const [applicationId, setApplicationId] = useState("");
+  // Real, server-assigned reference (hrms_applications.application_no). Never derived client-side.
+  const [applicationNo, setApplicationNo] = useState<string | null>(null);
   // HIGH fix: this form used to read the raw error envelope's `.message`
   // directly (JSON.parse(text)?.message), so a failed Zod validation showed
   // the backend's generic "invalid request" instead of anything actionable —
@@ -70,14 +72,23 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (res.status === 409) {
+        const dup = await res.clone().json().catch(() => null) as { code?: string; applicationNo?: string | null } | null;
+        if (dup?.code === "DUPLICATE_APPLICATION") {
+          setStatus("error");
+          setMessage(dup.applicationNo ? `You already applied for this vacancy: ${dup.applicationNo}` : "You already applied for this vacancy.");
+          return;
+        }
+      }
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
         setStatus("error");
         setMessage(resolved.message);
         return;
       }
-      const data = await res.json() as { id?: string };
+      const data = await res.json() as { id?: string; applicationNo?: string | null };
       setApplicationId(data.id ?? "");
+      setApplicationNo(data.applicationNo ?? null);
       setStatus("success");
       setMessage("Your application has been received! We'll be in touch at the email you provided.");
     } catch {
@@ -87,8 +98,7 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
   }
 
   if (status === "success") {
-    const trackRef = applicationId ? applicationId.slice(-6).toUpperCase() : "";
-    const loginHref = `/careers/portal/login${trackRef ? `?ref=APP-${new Date().getFullYear()}-${trackRef}` : ""}`;
+    const loginHref = `/careers/portal/login${applicationNo ? `?ref=${encodeURIComponent(applicationNo)}` : ""}`;
     return (
       <div style={{ borderRadius: 12, border: "1px solid #bbf7d0", overflow: "hidden" }}>
         <div style={{ padding: "24px", background: "#f0fdf4", textAlign: "center" }}>
@@ -100,7 +110,7 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
           <div style={{ padding: "14px 24px", background: "#fff", borderTop: "1px solid #bbf7d0", textAlign: "center" }}>
             <p style={{ margin: "0 0 4px", fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>Your reference</p>
             <p style={{ margin: "0 0 14px", fontSize: 18, fontWeight: 900, fontFamily: "monospace", color: "#154089", letterSpacing: "0.1em" }}>
-              APP-{new Date().getFullYear()}-{applicationId.slice(-6).toUpperCase()}
+              {applicationNo ?? "Reference will be emailed"}
             </p>
             <a href={loginHref} style={{ display: "inline-block", padding: "11px 20px", background: "#154089", color: "#fff", borderRadius: 9, fontWeight: 700, fontSize: 14, textDecoration: "none" }}>
               Track my application →

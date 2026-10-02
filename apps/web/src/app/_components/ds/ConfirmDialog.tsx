@@ -62,6 +62,10 @@ export interface ConfirmDialogProps {
   maxReasonLength?: number;
   /** Disable the confirm button & show a busy state. */
   busy?: boolean;
+  /** Extra form controls rendered between the description and the reason field (e.g. a required reason-code select). */
+  children?: ReactNode;
+  /** Additional gate on the confirm button, on top of busy / requireReason. */
+  confirmDisabled?: boolean;
   /** Error message shown via aria-live after a failed attempt. */
   errorMessage?: string;
   /** Called with the (optional) reason when confirmed. */
@@ -82,6 +86,8 @@ export function ConfirmDialog({
   minReasonLength = 1,
   maxReasonLength,
   busy = false,
+  children,
+  confirmDisabled: extraDisabled = false,
   errorMessage,
   onConfirm,
   onCancel,
@@ -103,7 +109,7 @@ export function ConfirmDialog({
   const reasonTooShort = requireReason && trimmedLen > 0 && trimmedLen < minReasonLength;
   const reasonTooLong = maxReasonLength !== undefined && trimmedLen > maxReasonLength;
   const confirmDisabled =
-    busy || (requireReason && (trimmedLen < minReasonLength || reasonTooLong));
+    busy || extraDisabled || (requireReason && (trimmedLen < minReasonLength || reasonTooLong));
 
   return (
     <Modal
@@ -127,6 +133,8 @@ export function ConfirmDialog({
           {description}
         </div>
       )}
+
+      {children}
 
       {(requireReason || optionalReason) && (
         <div className="cd-field">

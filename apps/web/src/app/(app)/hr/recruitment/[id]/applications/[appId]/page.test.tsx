@@ -53,8 +53,22 @@ describe("ApplicationDetailPage", () => {
 
     expect(await screen.findByRole("heading", { name: "Rahul Singh" })).toBeInTheDocument();
     expect(screen.getByText("Screening decision")).toBeInTheDocument();
-    expect(screen.getByText("eligible")).toBeInTheDocument();
+    expect(screen.getByText("Eligible")).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith("/api/proxy/v1/hrms/job-openings/job-1/applications");
+  });
+
+  // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-02: no raw UUID / enum tokens / ISO timestamps.
+  it("shows the application number, translated enums and an IST date instead of the UUID, raw tokens and ISO timestamp", async () => {
+    const list = { data: [{ id: "app-2", applicationNo: "REC/2026/0042", applicantName: "Rahul Singh", stage: "offered", screeningDecision: "pending", source: "public_portal", appliedAt: "2026-03-01T10:00:00Z" }] };
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true, status: 200, json: async () => list } as Response)));
+    renderPage();
+    await screen.findByRole("heading", { name: "Rahul Singh" });
+    expect(screen.getByText("REC/2026/0042")).toBeInTheDocument();
+    expect(screen.queryByText("app-2")).not.toBeInTheDocument();
+    expect(screen.getByText("Public careers portal")).toBeInTheDocument();
+    expect(screen.getByText("Offered")).toBeInTheDocument();
+    expect(screen.getByText(/1 Mar 2026/)).toBeInTheDocument();
+    expect(screen.queryByText(/2026-03-01T10:00:00Z/)).not.toBeInTheDocument();
   });
 
   it("shows a clean not-found state when the id isn't in the pipeline, with a working way back", async () => {
@@ -199,5 +213,54 @@ describe("ApplicationDetailPage", () => {
       await waitFor(() => expect(screen.getByText("आवेदन नहीं मिला।")).toBeInTheDocument());
       expect(screen.queryByText("Application not found.")).not.toBeInTheDocument();
     });
+  });
+
+  // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-01: Basic Pay is typed in rupees; the API gets paise.
+  it("converts the rupee Basic Pay input to paise and shows a live preview", async () => {
+    let hireBody: Record<string, unknown> | undefined;
+    const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") return { ok: true, status: 200, json: async () => LIST_RESPONSE } as Response;
+      if (url === "/api/proxy/v1/hrms/departments?limit=200") return { ok: true, status: 200, json: async () => DEPARTMENTS_RESPONSE } as Response;
+      if (url === "/api/proxy/v1/hrms/designations?limit=200") return { ok: true, status: 200, json: async () => DESIGNATIONS_RESPONSE } as Response;
+      if (url === "/api/proxy/v1/hrms/applications/app-2/hire" && init?.method === "POST") {
+        hireBody = JSON.parse(String(init.body));
+        return { ok: true, status: 202, text: async () => "{}" } as Response;
+      }
+      throw new Error(`unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
+    await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-2026-001" } });
+    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
+    fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "56100" } });
+    expect(screen.getByText(/5610000 paise/)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
+    fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
+    fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
+    await waitFor(() => expect(hireBody).toBeTruthy());
+    expect(hireBody?.basicMinor).toBe(5610000);
+  });
+
+  it("rejects a Basic Pay with more than 2 decimals without calling the hire endpoint", async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      if (url === "/api/proxy/v1/hrms/job-openings/job-1/applications") return { ok: true, status: 200, json: async () => LIST_RESPONSE } as Response;
+      if (url.includes("/departments")) return { ok: true, status: 200, json: async () => DEPARTMENTS_RESPONSE } as Response;
+      if (url.includes("/designations")) return { ok: true, status: 200, json: async () => DESIGNATIONS_RESPONSE } as Response;
+      throw new Error(`unexpected fetch to ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    renderPage();
+    fireEvent.click(await screen.findByRole("button", { name: "Hire" }));
+    await waitFor(() => expect(screen.getByRole("option", { name: /it department/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/employee no/i), { target: { value: "EMP-1" } });
+    fireEvent.change(screen.getByLabelText(/date of joining/i), { target: { value: "2026-09-01" } });
+    fireEvent.change(screen.getByLabelText(/basic pay/i), { target: { value: "1.234" } });
+    fireEvent.change(screen.getByLabelText(/department id/i), { target: { value: "dept-1" } });
+    fireEvent.change(screen.getByLabelText(/designation id/i), { target: { value: "desig-1" } });
+    fireEvent.click(screen.getByRole("button", { name: /confirm hire/i }));
+    expect(await screen.findByText(/at most 2 decimals/i)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalledWith(expect.stringContaining("/hire"), expect.anything());
   });
 });

@@ -137,4 +137,18 @@ describe("NewJobOpeningForm", () => {
     expect(alert.textContent).not.toMatch(/duplicate refNo/);
     expect(alert.textContent).not.toMatch(/\b409\b/);
   });
+
+  // GAP-RECRUITMENT-NEW-01: vacancyType used to have state but no input.
+  it("lets the officer pick a vacancy type and submits it in the POST body", async () => {
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, status: 202, text: async () => "{}" });
+    renderForm();
+    fillRequiredFields();
+    const select = screen.getByLabelText(/vacancy type/i) as HTMLSelectElement;
+    expect(select.value).toBe("regular");
+    fireEvent.change(select, { target: { value: "internship" } });
+    fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/submitted/i));
+    const call = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find((c) => c[0] === "/api/proxy/v1/hrms/job-openings" && (c[1] as RequestInit | undefined)?.method === "POST");
+    expect(JSON.parse(String((call![1] as RequestInit).body)).vacancyType).toBe("internship");
+  });
 });

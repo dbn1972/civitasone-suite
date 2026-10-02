@@ -7,6 +7,8 @@ import { useParams, useRouter } from "next/navigation";
 import { PageHeader, Card, Button } from "../../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
 import { useFormError } from "@/lib/useFormError";
+import { rupeesToMinorString } from "@/lib/money";
+import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
@@ -15,6 +17,8 @@ const inputStyle: CSSProperties = {
 
 type Application = {
   id: string;
+  /** Human-readable reference (hrms_applications.application_no); null for legacy rows. */
+  applicationNo?: string | null;
   applicantName: string;
   email?: string;
   mobile?: string;
@@ -49,7 +53,9 @@ export default function ApplicationDetailPage() {
   // required for a real hire" per PR #1550). Default to empty so a user who
   // never touches the field gets a clear client-side validation message
   // instead of a raw 400 from the server.
-  const [basicMinor, setBasicMinor] = useState<number | "">("");
+  // Entered in RUPEES (decimal string) and converted to paise only at submit via
+  // rupeesToMinorString (string-based, no float) -- GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-01.
+  const [basicRupees, setBasicRupees] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [designationId, setDesignationId] = useState("");
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -184,7 +190,9 @@ export default function ApplicationDetailPage() {
     // recruitment/validators.ts) rather than guessed -- must be a positive
     // integer, so empty/0/negative/fractional all fail here instead of
     // surfacing only as a server 400 after a round trip.
-    if (basicMinor === "" || !Number.isInteger(basicMinor) || basicMinor <= 0) {
+    const basicMinorStr = rupeesToMinorString(basicRupees);
+    const basicMinor = basicMinorStr === null ? NaN : Number(basicMinorStr);
+    if (!Number.isSafeInteger(basicMinor) || basicMinor <= 0) {
       setHireStatus("error");
       setHireMessage(t("basicPayRequired"));
       return;
@@ -233,6 +241,9 @@ export default function ApplicationDetailPage() {
     );
   }
 
+  const basicPayPreviewMinor = rupeesToMinorString(basicRupees);
+  // Known enum values get a translated label; anything else falls back to a humanised form, never the raw token.
+  const enumLabel = (prefix: string, value: string) => (t.has(`${prefix}_${value}`) ? t(`${prefix}_${value}`) : humanizeStatus(value));
   const canHire = application.stage === "selected" || application.stage === "offered";
 
   return (
@@ -259,14 +270,14 @@ export default function ApplicationDetailPage() {
 
       <Card title={t("summaryTitle")}>
         <div style={{ padding: "16px 20px", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", fontSize: 14 }}>
-          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("applicationId")}</span><code style={{ fontSize: 12 }}>{application.id}</code></div>
-          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("stage")}</span><span style={{ textTransform: "capitalize" }}>{application.stage}</span></div>
-          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("screeningDecision")}</span><span style={{ textTransform: "capitalize" }}>{application.screeningDecision}</span></div>
-          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("source")}</span>{application.source}</div>
+          {application.applicationNo && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("applicationNo")}</span><code style={{ fontSize: 12 }}>{application.applicationNo}</code></div>}
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("stage")}</span><span>{enumLabel("stage", application.stage)}</span></div>
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("screeningDecision")}</span><span>{enumLabel("decision", application.screeningDecision)}</span></div>
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("source")}</span>{enumLabel("source", application.source)}</div>
           {application.email && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("email")}</span>{application.email}</div>}
           {application.qualification && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("qualification")}</span>{application.qualification}</div>}
           {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("experience")}</span>{t("experienceYears", { count: application.experienceYears })}</div>}
-          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("applied")}</span>{application.appliedAt}</div>
+          <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("applied")}</span>{formatIndianDate(application.appliedAt)}</div>
         </div>
       </Card>
 
@@ -296,18 +307,19 @@ export default function ApplicationDetailPage() {
                   <label htmlFor={basicId} style={{ fontSize: 13, fontWeight: 500 }}>{t("basicPay")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
                   <input
                     id={basicId}
-                    type="number"
-                    min={1}
-                    step={1}
-                    value={basicMinor}
-                    onChange={(e) => setBasicMinor(e.target.value === "" ? "" : Number(e.target.value))}
+                    type="text"
+                    inputMode="decimal"
+                    value={basicRupees}
+                    onChange={(e) => setBasicRupees(e.target.value)}
                     placeholder={t("basicPayPlaceholder")}
                     style={inputStyle}
                     required
                     aria-required="true"
                     aria-describedby={`${basicId}-hint`}
                   />
-                  <p id={`${basicId}-hint`} style={{ fontSize: 11, color: "var(--mut)", marginTop: 4 }}>{t("basicPayRequired")}</p>
+                  <p id={`${basicId}-hint`} style={{ fontSize: 11, color: "var(--mut)", marginTop: 4 }}>
+                    {basicPayPreviewMinor ? t("basicPayPreview", { amount: formatMoney(basicPayPreviewMinor), minor: basicPayPreviewMinor }) : t("basicPayHint")}
+                  </p>
                 </div>
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>

@@ -140,7 +140,23 @@ describe("OTP lockout — public careers-portal route (candidate-public-auth-rou
     const req1 = await app.inject({ method: "POST", url: "/v1/careers/auth/otp-request", payload: { email, tenantId } });
     await drainF3();
     expect(req1.statusCode).toBe(202);
-    const { devCode: codeA } = req1.json() as { devCode: string };
+    const { devCode: codeA, candidateId: candidateIdA } = req1.json() as { devCode: string; candidateId: string };
+
+    // An immediate re-request is inside the server-side 30s cooldown: 429 OTP_COOLDOWN,
+    // and no second challenge is created.
+    const tooSoon = await app.inject({ method: "POST", url: "/v1/careers/auth/otp-request", payload: { email, tenantId } });
+    expect(tooSoon.statusCode).toBe(429);
+    expect(tooSoon.json().code).toBe("OTP_COOLDOWN");
+    expect(Number(tooSoon.headers["retry-after"])).toBeGreaterThan(0);
+
+    // Backdate challenge A past the cooldown so the genuine "resend" below is allowed.
+    await runWithTenant(tenantId, () =>
+      db.transaction(async (tx) => {
+        await tx.update(hrmsCandidateOtpChallenges)
+          .set({ createdAt: new Date(Date.now() - 60_000) })
+          .where(eq(hrmsCandidateOtpChallenges.candidateId, candidateIdA));
+      })
+    );
 
     // "Resend": second OTP request for the SAME candidate/channel — the old
     // challenge is NOT invalidated, it just gains a newer sibling row.

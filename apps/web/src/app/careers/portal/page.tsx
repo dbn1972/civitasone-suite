@@ -75,7 +75,9 @@ export default async function PortalPage() {
         <span style={{ color: "#93c5fd" }}>|</span>
         <span style={{ color: "#fff", fontWeight: 700, fontSize: 15 }}>My Applications</span>
         <span style={{ flex: 1 }} />
-        <Link href="/api/careers/auth/logout" style={{ color: "#93c5fd", fontSize: 13 }}>Sign out</Link>
+        <form method="POST" action="/api/careers/auth/logout" style={{ margin: 0 }}>
+          <button type="submit" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#93c5fd", fontSize: 13 }}>Sign out</button>
+        </form>
       </div>
 
       <div style={{ maxWidth: 680, margin: "0 auto", padding: "24px 16px" }}>

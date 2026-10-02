@@ -5,11 +5,12 @@ import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { ApplicationPipeline } from "../_components/ApplicationPipeline";
-import { GOIReservationCard, GOI_RESERVATION_QUOTA_PCT, type GoiReservationCategory } from "../_components/GOIReservationCard";
+import { GOIReservationCard, ROSTER_CATEGORIES, categoryOfApplication, type RosterCategory } from "../_components/GOIReservationCard";
 import { InterviewCard } from "../_components/InterviewCard";
 import { ConfirmDialog, ErrorState, useConfirmAction, Button } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
+import { REJECTION_REASON_CODES, isVacancyType, type RejectionReasonCode } from "@/lib/recruitment";
 
 /** Shared Tailwind classes for the two new custom dialogs below (Schedule
  *  Interview / Send Offer), matching this page's own input styling
@@ -78,7 +79,11 @@ type ConfirmConfig = {
   description: string;
   confirmLabel?: string;
   requireReason?: boolean;
+  /** Collect a structured REJECTION_REASON_CODES value (required) plus optional remarks. */
+  rejectReasonCode?: boolean;
 };
+
+type RejectPayload = { reasonCode: RejectionReasonCode; remarks?: string };
 
 type ActionDef = {
   label: string;
@@ -373,12 +378,15 @@ function ContextMenu({
   const [open, setOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<ActionDef | null>(null);
   const [activeDialog, setActiveDialog] = useState<"interview" | "offer" | null>(null);
+  const [rejectCode, setRejectCode] = useState<RejectionReasonCode | "">("");
+  const rejectCodeSelectId = useId();
   const ref = useRef<HTMLDivElement>(null);
 
   const REJECT_CONFIRM: ConfirmConfig = {
     title: t("rejectConfirmTitle"),
     description: t("rejectConfirmDescription"),
     confirmLabel: t("rejectConfirmLabel"),
+    rejectReasonCode: true,
   };
 
   const WITHDRAW_CONFIRM: ConfirmConfig = {
@@ -436,9 +444,15 @@ function ContextMenu({
   } = useConfirmAction({
     onConfirm: async (reason) => {
       if (!pendingAction) return;
+      if (pendingAction.confirm?.rejectReasonCode) {
+        if (!rejectCode) return;
+        const payload: RejectPayload = { reasonCode: rejectCode, ...(reason ? { remarks: reason } : {}) };
+        await onAction(app.id, pendingAction.key, payload);
+        return;
+      }
       await onAction(app.id, pendingAction.key, reason);
     },
-    onSuccess: () => setPendingAction(null),
+    onSuccess: () => { setPendingAction(null); setRejectCode(""); },
   });
 
   // Close on outside click
@@ -539,15 +553,37 @@ function ContextMenu({
           confirmLabel={pendingAction.confirm.confirmLabel}
           danger
           requireReason={pendingAction.confirm.requireReason}
-          reasonLabel={t("reasonLabel")}
+          optionalReason={pendingAction.confirm.rejectReasonCode === true}
+          maxReasonLength={pendingAction.confirm.rejectReasonCode ? 2000 : undefined}
+          reasonLabel={pendingAction.confirm.rejectReasonCode ? t("rejectRemarksLabel") : t("reasonLabel")}
+          confirmDisabled={pendingAction.confirm.rejectReasonCode === true && rejectCode === ""}
           busy={confirmBusy}
           errorMessage={confirmError}
           onConfirm={confirmAction}
           onCancel={() => {
             cancelConfirm();
             setPendingAction(null);
+            setRejectCode("");
           }}
-        />
+        >
+          {pendingAction.confirm.rejectReasonCode && (
+            <div className="cd-field">
+              <label htmlFor={rejectCodeSelectId}>{t("rejectReasonLabel")}</label>
+              <select
+                id={rejectCodeSelectId}
+                value={rejectCode}
+                onChange={(e) => setRejectCode(e.target.value as RejectionReasonCode | "")}
+                aria-required="true"
+                className={dialogInputClass}
+              >
+                <option value="">{t("rejectReasonPlaceholder")}</option>
+                {REJECTION_REASON_CODES.map((c) => (
+                  <option key={c} value={c}>{t(`rejectReason_${c}`)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+        </ConfirmDialog>
       )}
 
       {activeDialog === "interview" && (
@@ -603,17 +639,13 @@ export default function JobOpeningDetailPage() {
   const reservation = useMemo(() => {
     const totalVacancies = opening?.vacancies ?? 0;
     const categoryDataAvailable = !appsLoadError && (applications.length === 0 || applications.some((a) => !!a.category?.trim())); // ux-001-ok: appsLoadError IS the loader's error signal (set by loadApplications on failure below) -- already gated, just not textually "source === \"error\"" for the guard's regex to see
-    const fill: Partial<Record<GoiReservationCategory, number>> = {};
+    const hiredByCategory: Partial<Record<RosterCategory, number>> = {};
     if (categoryDataAvailable) {
-      for (const key of Object.keys(GOI_RESERVATION_QUOTA_PCT) as GoiReservationCategory[]) {
-        const posts = Math.max(1, Math.round((GOI_RESERVATION_QUOTA_PCT[key] / 100) * totalVacancies));
-        const hiredInCategory = applications.filter(
-          (a) => (a.category ?? "").trim().toLowerCase() === key && a.stage === "hired"
-        ).length;
-        fill[key] = Math.min(100, (hiredInCategory / posts) * 100);
+      for (const key of ROSTER_CATEGORIES) {
+        hiredByCategory[key] = applications.filter((a) => categoryOfApplication(a.category) === key && a.stage === "hired").length;
       }
     }
-    return { fill, categoryDataAvailable };
+    return { hiredByCategory, categoryDataAvailable, totalVacancies };
   }, [applications, opening?.vacancies, appsLoadError]);
   const [decisionStates, setDecisionStates] = useState<DecisionState>({});
   const [search, setSearch] = useState("");
@@ -691,13 +723,14 @@ export default function JobOpeningDetailPage() {
           setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, screeningDecision: "shortlisted", stage: "shortlisted" } : a));
         }
       } else if (actionKey === "reject") {
-        // reasonCode must be one of REJECTION_REASON_CODES (hrms-service
-        // modules/recruitment/screening.ts) — "eligibility" is the closest
-        // structured fit for an HR-initiated reject from the pipeline view.
+        // reasonCode is the officer's own pick from REJECTION_REASON_CODES
+        // (hrms-service modules/recruitment/screening.ts); the dialog blocks
+        // confirm until one is chosen, so the audit trail records the real reason.
+        const rp = payload as RejectPayload;
         res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/screening-decision`, {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify({ decision: "ineligible", reasonCode: "eligibility" }),
+          body: JSON.stringify({ decision: "ineligible", reasonCode: rp.reasonCode, ...(rp.remarks ? { remarks: rp.remarks } : {}) }),
         });
         if (res.ok) {
           setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, screeningDecision: "ineligible", stage: "rejected" } : a));
@@ -861,7 +894,7 @@ export default function JobOpeningDetailPage() {
           <h1 id="page-heading" className="text-2xl font-bold text-slate-800 dark:text-slate-100">
             {opening.jobTitle}
           </h1>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{opening.refNo} · {opening.department ?? "—"}</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{opening.refNo ? `${opening.refNo} · ` : ""}{opening.department ?? "—"}</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-2">
@@ -895,7 +928,7 @@ export default function JobOpeningDetailPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         {[
           { label: t("metaPosts"),        value: opening.vacancies },
-          { label: t("metaType"),         value: opening.vacancyType ?? t("vacancyTypeRegular") },
+          { label: t("metaType"),         value: isVacancyType(opening.vacancyType) ? t(`vacancyType_${opening.vacancyType}`) : "—" },
           { label: t("metaApplications"), value: loadingApps ? "—" : applications.length },
           { label: t("metaDeadline"),     value: opening.applicationDeadline ? new Date(opening.applicationDeadline).toLocaleDateString("en-IN") : t("deadlineOpen") },
         ].map(({ label, value }) => (
@@ -908,8 +941,9 @@ export default function JobOpeningDetailPage() {
 
       {/* ── GOI Reservation Status (GFR 2017) ── */}
       <GOIReservationCard
+        jobOpeningId={opening.id}
         totalVacancies={opening.vacancies}
-        fill={reservation.fill}
+        hiredByCategory={reservation.hiredByCategory}
         categoryDataAvailable={reservation.categoryDataAvailable}
       />
 

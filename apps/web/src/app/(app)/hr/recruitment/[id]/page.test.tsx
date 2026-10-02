@@ -100,6 +100,34 @@ async function openActionsMenu(rowName: RegExp) {
 describe("JobOpeningDetailPage — applications pipeline", () => {
   afterEach(() => vi.unstubAllGlobals());
 
+  it("shows refNo in the header and the real vacancy type (GAP-RECRUITMENT-DETAIL-01)", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("job-openings?limit=")) {
+        return new Response(JSON.stringify({ data: [{ ...OPENING, refNo: "HUD/2026/014", vacancyType: "internship", department: "Housing & Urban Development" }] }), { status: 200 });
+      }
+      if (url.match(/job-openings\/[^/]+\/applications$/)) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPage();
+    expect(await screen.findByText("HUD/2026/014 · Housing & Urban Development")).toBeInTheDocument();
+    expect(screen.getByText("Internship")).toBeInTheDocument();
+    expect(screen.queryByText("Regular")).not.toBeInTheDocument();
+  });
+
+  it("does not print a dangling separator or default the type to Regular when the fields are absent", async () => {
+    const { refNo: _drop, ...noRef } = OPENING as typeof OPENING & { refNo?: string };
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [noRef] }), { status: 200 });
+      if (url.match(/job-openings\/[^/]+\/applications$/)) return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      return new Response(JSON.stringify({}), { status: 404 });
+    }));
+    renderPage();
+    await screen.findByText("Junior Engineer");
+    expect(screen.queryByText(/^\s*·/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Regular")).not.toBeInTheDocument();
+  });
+
   it("links the applicant's name to the application detail page (the only route the Hire flow is reachable from)", async () => {
     mockFetchSequence([SELECTED_APP]);
     renderPage();
@@ -126,12 +154,20 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
     await screen.findByText("Asha Verma");
     const row = await openActionsMenu(/Asha Verma/);
     fireEvent.click(within(row).getByRole("menuitem", { name: "Reject" }));
-    fireEvent.click(await screen.findByRole("button", { name: /reject application/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    // GAP-RECRUITMENT-DETAIL-04: confirm stays disabled until a reason code is picked.
+    const confirmBtn = within(dialog).getByRole("button", { name: /reject application/i });
+    expect(confirmBtn).toBeDisabled();
+    fireEvent.change(within(dialog).getByLabelText(/reason for rejection/i), { target: { value: "incomplete_documents" } });
+    fireEvent.change(within(dialog).getByLabelText(/remarks/i), { target: { value: "No degree certificate attached" } });
+    expect(confirmBtn).not.toBeDisabled();
+    fireEvent.click(confirmBtn);
 
     await waitFor(() => expect((fetchMock as FetchMock).lastScreeningBody).toBeTruthy());
     const body = (fetchMock as FetchMock).lastScreeningBody;
     const VALID_REASON_CODES = ["eligibility", "skill", "experience", "qualification", "incomplete_documents", "duplicate", "position_hold", "other"];
     expect(VALID_REASON_CODES).toContain(body?.reasonCode);
+    expect(body).toMatchObject({ decision: "ineligible", reasonCode: "incomplete_documents", remarks: "No degree certificate attached" });
   });
 
   it("withdraw calls the real /withdraw endpoint with a required reason, not the nonexistent /stage endpoint", async () => {
@@ -214,6 +250,7 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
       const row = await openActionsMenu(/Asha Verma/);
       fireEvent.click(within(row).getByRole("menuitem", { name: "Reject" }));
       const dialog = await screen.findByRole("alertdialog");
+      fireEvent.change(within(dialog).getByLabelText(/reason for rejection/i), { target: { value: "skill" } });
       fireEvent.click(within(dialog).getByRole("button", { name: /reject application/i }));
 
       await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));

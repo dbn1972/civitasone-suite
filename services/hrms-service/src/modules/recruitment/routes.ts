@@ -92,7 +92,8 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
         id: r.id,
         applicantName: r.applicantName,
         email: r.email,
-        mobile: r.mobile,
+        // GAP-RECRUITMENT-TALENT-POOL-02: mobile is deliberately NOT returned here -- the
+        // talent-pool page does not use it and it is PII for every past applicant tenant-wide.
         qualification: r.qualification,
         experienceYears: r.experienceYears,
         skills: r.skills,
@@ -113,6 +114,8 @@ export async function recruitmentRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({
       data: rows.map((r) => ({
         id: r.id,
+        // GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-02: human-readable reference for the HR UI.
+        applicationNo: r.applicationNo ?? null,
         applicantName: r.applicantName,
         email: r.email,
         mobile: r.mobile,
