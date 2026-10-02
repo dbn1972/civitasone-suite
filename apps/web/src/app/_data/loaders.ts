@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
+import { pathSeg } from "@/lib/pathSegment";
 import { HR_AUDIT_SERVICES } from "@/app/(app)/hr/audit-log/auditResource";
 import type {
   AccountSummary,
@@ -5234,7 +5235,7 @@ export async function getWebhooks(): Promise<LoaderResult<WebhookSummary[]>> {
 }
 
 export async function getWebhookDeliveries(webhookId: string): Promise<LoaderResult<WebhookDelivery[]>> {
-  return fetchJson<unknown, WebhookDelivery[]>(`/api/v1/admin/webhooks/${webhookId}/deliveries`, [], {
+  return fetchJson<unknown, WebhookDelivery[]>(`/api/v1/admin/webhooks/${pathSeg(webhookId)}/deliveries`, [], {
     revalidateSeconds: 30,
     telemetryKey: "admin.webhooks.deliveries",
     mapResponse: (p) => getArrayPayload(p) as WebhookDelivery[] | null,
@@ -5256,13 +5257,14 @@ export type AdminTenantDetail = {
 export type AdminTenantModuleUsage = {
   module: string;
   enabled: string;
-  users: number;
+  /** null when the backend sends no per-module count (shown as a dash, never a fake 0). */
+  users: number | null;
   lastActivity: string;
   usage: string;
 };
 
 export async function getAdminTenantDetail(id: string): Promise<LoaderResult<AdminTenantDetail | null>> {
-  return fetchJson<unknown, AdminTenantDetail | null>(`/api/v1/admin/tenants/${id}`, null, {
+  return fetchJson<unknown, AdminTenantDetail | null>(`/api/v1/admin/tenants/${pathSeg(id)}`, null, {
     revalidateSeconds: 60,
     telemetryKey: "admin.tenant.detail",
     mapResponse: (p) => (isRecord(p) ? (p as AdminTenantDetail) : null),
@@ -5270,7 +5272,7 @@ export async function getAdminTenantDetail(id: string): Promise<LoaderResult<Adm
 }
 
 export async function getAdminTenantModules(id: string): Promise<LoaderResult<AdminTenantModuleUsage[]>> {
-  return fetchJson<unknown, AdminTenantModuleUsage[]>(`/api/v1/admin/tenants/${id}/config`, [], {
+  return fetchJson<unknown, AdminTenantModuleUsage[]>(`/api/v1/admin/tenants/${pathSeg(id)}/config`, [], {
     revalidateSeconds: 120,
     telemetryKey: "admin.tenant.modules",
     mapResponse: (p) => {
@@ -5280,7 +5282,7 @@ export async function getAdminTenantModules(id: string): Promise<LoaderResult<Ad
       return modules.filter(isRecord).map((m) => ({
         module: String(m.module ?? m.name ?? "Unknown"),
         enabled: m.enabled === true || m.enabled === "Yes" ? "Yes" : "No",
-        users: typeof m.users === "number" ? m.users : 0,
+        users: typeof m.users === "number" ? m.users : null,
         lastActivity: typeof m.lastActivity === "string" ? m.lastActivity : "—",
         usage: typeof m.usage === "string" ? m.usage : "—",
       }));

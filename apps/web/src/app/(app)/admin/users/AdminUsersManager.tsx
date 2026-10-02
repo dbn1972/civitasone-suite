@@ -1,9 +1,11 @@
 "use client";
-import { useEffect, useMemo, useState } from "react";
-import { Button, ConfirmDialog, DataTable } from "@/app/_components/ds";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Button, ConfirmDialog, DataTable, StatCard, Tabs } from "@/app/_components/ds";
 import type { AdminUserSummary, AdminRoleSummary } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
+import { toCsv } from "@/lib/csv";
+import { summarizeUsers } from "./usersSummary";
 
 type Row = AdminUserSummary & Record<string, unknown>;
 
@@ -52,6 +54,20 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
   }
 }
 
+async function callExportAudit(info: { rowCount: number; filter: string }): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    const res = await fetch("/api/proxy/v1/admin/user-exports/audit", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ rowCount: info.rowCount, filter: info.filter }),
+    });
+    if (!res.ok) return { ok: false, message: "Couldn't record this export in the audit trail, so no file was created. Try again." };
+    return { ok: true };
+  } catch {
+    return { ok: false, message: "Couldn't record this export in the audit trail, so no file was created. Try again." };
+  }
+}
+
 function EditRolesSheet({
   user,
   roles,
@@ -64,6 +80,10 @@ function EditRolesSheet({
   onClose: () => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const confirmRef = useRef(false);
+  confirmRef.current = confirmOpen;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   const [loading, setLoading] = useState(true);
   const [current, setCurrent] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -72,6 +92,31 @@ function EditRolesSheet({
   const formError = useFormError("user roles");
 
   const userId = user?.id;
+  const panelRef = useRef<HTMLDivElement>(null);
+  // GAP-ADMIN-USERS-07: Esc closes (unless the confirm dialog is on top, which
+  // handles its own Esc), Tab stays inside the sheet, focus moves in on open and
+  // returns to the control that opened it.
+  useEffect(() => {
+    if (!userId) return;
+    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const panel = panelRef.current;
+    const focusables = () => Array.from(panel?.querySelectorAll<HTMLElement>("button:not([disabled]), input:not([disabled]), [href], [tabindex]:not([tabindex='-1'])") ?? []);
+    (focusables()[0] ?? panel)?.focus();
+    function onKey(e: KeyboardEvent) {
+      if (confirmRef.current) return;
+      if (e.key === "Escape") { e.preventDefault(); onCloseRef.current(); return; }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) { e.preventDefault(); return; }
+      const first = items[0]!;
+      const last = items[items.length - 1]!;
+      const active = document.activeElement;
+      if (e.shiftKey && (active === first || !panel?.contains(active))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && (active === last || !panel?.contains(active))) { e.preventDefault(); first.focus(); }
+    }
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); opener?.focus(); };
+  }, [userId]);
 
   // Fetch this user's REAL effective roles when the sheet opens — the
   // directory list intentionally does not carry a roles column (identity-
@@ -143,7 +188,7 @@ function EditRolesSheet({
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="sheet-title" style={{ position: "fixed", inset: 0, display: "flex", zIndex: 50 }}>
       <div style={{ flex: 1, background: "rgba(0,0,0,0.35)" }} onClick={onClose} aria-hidden="true" />
-      <div style={{ width: 380, background: "var(--panel)", height: "100%", padding: 28, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
+      <div ref={panelRef} tabIndex={-1} style={{ width: "min(380px, 100vw)", background: "var(--panel)", height: "100%", padding: 28, overflowY: "auto", display: "flex", flexDirection: "column", gap: 20, boxShadow: "-4px 0 24px rgba(0,0,0,0.15)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
             <h2 id="sheet-title" style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700 }}>Edit Roles</h2>
@@ -232,6 +277,13 @@ export function AdminUsersManager({
   const [editUser, setEditUser] = useState<AdminUserSummary | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | undefined>(undefined);
+
+  // GAP-ADMIN-USERS-05: tiles derive from the live `users` state, so a
+  // suspend/activate moves the counts immediately.
+  const summary = useMemo(() => summarizeUsers(users), [users]);
 
   const filtered = useMemo<Row[]>(() => {
     const base = filter === "All" ? users : users.filter((u) => u.status === filter.toLowerCase());
@@ -265,10 +317,23 @@ export function AdminUsersManager({
     setConfirm(null);
   }
 
-  function downloadCsv() {
-    const header = "Name,Email,Employee Code,Status,MFA Enabled";
-    const rows = filtered.map((u) => [u.name, u.email, u.empCode ?? "", u.status, u.mfaEnabled ? "yes" : "no"].join(","));
-    const csv = [header, ...rows].join("\n");
+  // GAP-ADMIN-USERS-06: the file carries unmasked personal data (name, email,
+  // employee code), so the export is confirmed, recorded in the audit trail
+  // BEFORE the file is built (fail-closed: no audit record, no file), and the
+  // CSV is quoted + formula-neutralised via toCsv.
+  async function confirmExport() {
+    setExportBusy(true);
+    setExportError(undefined);
+    const audit = await callExportAudit({ rowCount: filtered.length, filter });
+    setExportBusy(false);
+    if (!audit.ok) {
+      setExportError(audit.message);
+      return;
+    }
+    const csv = toCsv([
+      ["Name", "Email", "Employee Code", "Status", "MFA Enabled"],
+      ...filtered.map((u) => [u.name, u.email, u.empCode ?? "", u.status, u.mfaEnabled ? "yes" : "no"]),
+    ]);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -276,6 +341,7 @@ export function AdminUsersManager({
     a.download = "users-export.csv";
     a.click();
     URL.revokeObjectURL(url);
+    setExportOpen(false);
   }
 
   return (
@@ -290,26 +356,18 @@ export function AdminUsersManager({
           Showing the first {truncatedAt} users only. There may be more people in this office than are listed here, so a missing user is not proof they do not exist.
         </div>
       )}
+      <div className="grid g-4" style={{ marginBottom: 18 }}>
+        <StatCard icon="👥" iconBg="#f1f5f9" label="Total users" value={truncatedAt !== null ? `${summary.total}+` : summary.total} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={summary.active} />
+        <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={summary.suspended} />
+        <StatCard icon="🔒" iconBg="#fffbeb" label="Locked / deactivated" value={summary.other} />
+      </div>
       <div className="card">
         <div className="card-h">
           <h3>User directory</h3>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <div className="tabs" role="tablist" aria-label="Filter users by status">
-              {STATUS_FILTERS.map((f) => (
-                <span
-                  key={f}
-                  className={filter === f ? "on" : undefined}
-                  role="tab"
-                  aria-selected={filter === f}
-                  tabIndex={0}
-                  onClick={() => setFilter(f)}
-                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setFilter(f); } }}
-                >
-                  {f}
-                </span>
-              ))}
-            </div>
-            <Button type="button" variant="ghost" size="sm" onClick={downloadCsv}>Export CSV</Button>
+            <Tabs tabs={[...STATUS_FILTERS]} active={filter} onChange={(t) => setFilter(t as StatusFilter)} />
+            <Button type="button" variant="ghost" size="sm" onClick={() => { setExportError(undefined); setExportOpen(true); }}>Export CSV</Button>
           </div>
         </div>
         <DataTable<Row>
@@ -356,17 +414,9 @@ export function AdminUsersManager({
                   >
                     {busyId === u.id ? "…" : u.status === "active" ? "Suspend" : "Activate"}
                   </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    disabled
-                    title="Password reset is managed via Keycloak — use the Keycloak Admin console"
-                    aria-disabled="true"
-                    style={{ fontSize: 11.5, opacity: 0.45, cursor: "not-allowed" }}
-                  >
-                    Reset Password
-                  </Button>
+                  <span style={{ fontSize: 11.5, color: "var(--mut)", alignSelf: "center", whiteSpace: "normal", maxWidth: 190 }}>
+                    Password reset is managed in the Keycloak Admin console.
+                  </span>
                 </div>
               ),
             },
@@ -381,6 +431,16 @@ export function AdminUsersManager({
           emptyMessage={source === "error" ? "The user directory couldn't be reached — showing nothing." : "Try a different filter or clear the search."}
         />
       </div>
+      <ConfirmDialog
+        open={exportOpen}
+        title="Export user list?"
+        description="The file contains personal data (names, emails, employee codes) for the users currently shown. Handle it under your data-protection policy. This export is recorded in the audit trail."
+        confirmLabel="Export CSV"
+        busy={exportBusy}
+        errorMessage={exportError}
+        onConfirm={() => void confirmExport()}
+        onCancel={() => { if (!exportBusy) setExportOpen(false); }}
+      />
       <EditRolesSheet user={editUser} roles={roles} canAssignPlatformRoles={canAssignPlatformRoles} onClose={() => setEditUser(null)} />
       <ConfirmDialog
         open={confirm !== null}

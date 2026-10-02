@@ -3,6 +3,7 @@ import { useMemo, useState, type ReactNode, type KeyboardEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button } from "./Button";
+import { csvFormulaSafe } from "@/lib/csv";
 import { ConfirmDialog } from "./ConfirmDialog";
 import { EmptyState } from "./EmptyState";
 import { StatusPill } from "./StatusPill";
@@ -446,10 +447,7 @@ export function DataTable<T extends Record<string, unknown>>({
    * money ("-1,500", "-₹1,500.00") are left alone so exports stay numeric.
    */
   function csvSafe(val: string): string {
-    if (!/^[=+\-@\t\r]/.test(val)) return val;
-    if (val === "-") return val; // the empty-value dash, not a formula
-    if (/^[-+]?[₹$]?\s?[\d,]+(\.\d+)?%?$/.test(val)) return val;
-    return `'${val}`;
+    return csvFormulaSafe(val);
   }
 
   function downloadCsv() {
