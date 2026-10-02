@@ -16,6 +16,7 @@ import { computeSlip, computePension, assertRunStatusTransition, DomainError, hr
 import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
+import { clearRunRegister, rebuildRunRegister, resolveRegisterDepartments } from "./register.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
 const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
@@ -671,6 +672,10 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       const reason = (err instanceof Error ? err.message : String(err)).slice(0, 2000);
       await db.transaction(async (tx) => {
         await repo.updateRun(tx, p.id, { status: "failed", lastError: reason, updatedBy: msg.actorId });
+        // GAP-PAYROLL-REGISTER-WRITER: a failed run never counts in the
+        // register/comparison. This pass's rows already rolled back with its
+        // slips; this removes any left by an earlier, committed pass.
+        await clearRunRegister(tx as unknown as typeof db, p.tenantId, p.id);
       });
       throw err;
     }
@@ -1399,6 +1404,10 @@ async function processPayrollRun(
   // belt-and-suspenders guard.
   const existingSlips = await repo.listSlipsByRun(p.id, p.tenantId);
   const alreadyComputed = new Set(existingSlips.map((s) => s.employeeId));
+  // GAP-PAYROLL-REGISTER-WRITER: slips carry no department, so map every
+  // employee in this run's HRMS feed (including ones a prior pass already
+  // computed) to its department before the write transaction opens.
+  const registerDepartments = await resolveRegisterDepartments(p.tenantId, input.employees, { runId: p.id });
 
   await db.transaction(async (tx) => {
     // PERF-021 (Site A): compute the run's actual employee set ONCE (the
@@ -1685,6 +1694,12 @@ async function processPayrollRun(
       status: "processing",
       updatedBy: msg.actorId,
     });
+
+    // GAP-PAYROLL-REGISTER-WRITER: department-wise register rows, aggregated
+    // from the same authoritative slip set as the run totals above and
+    // written in the same transaction (rebuilt whole on every pass).
+    await rebuildRunRegister(tx as unknown as typeof db, { tenantId: p.tenantId, runId: p.id, period: p.month }, registerDepartments);
+    await audit(tx, msg, "rebuild", "payroll_register", p.id);
   });
 }
 

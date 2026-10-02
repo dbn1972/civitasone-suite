@@ -262,8 +262,25 @@ export async function listSalaryRevisions(tenantId: string, employeeId: string |
 
 // ─── Payroll Register ─────────────────────────────────────────────────────────
 
+/**
+ * GAP-PAYROLL-REGISTER-WRITER: rows are written when a run is computed, so a
+ * run awaiting approval has rows too. With an explicit runId every status is
+ * returned (the pre-approval variance check); a period/all view shows
+ * finalised runs only -- status IN ('approved','disbursed'), the same set the
+ * YTD-TDS true-up (consumer.ts resolveTdsYtdMinorsTx) and the costing report
+ * use. payroll_runs_status_check_extended (0027/0047) also permits 'paid',
+ * 'computed' and 'cancelled', but no code ever writes them.
+ */
 export async function listRegister(tenantId: string, period: string | null, runId: string | null) {
-  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND (${period}::text IS NULL OR period=${period}) AND (${runId}::uuid IS NULL OR run_id=${runId}::uuid) ORDER BY department_name`));
+  if (runId) {
+    return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND (${period}::text IS NULL OR period=${period}) AND run_id=${runId}::uuid ORDER BY department_name`));
+  }
+  return scopedRead((tx) => tx.execute(sql`
+    SELECT g.* FROM payroll.payroll_register g
+      JOIN payroll.payroll_runs r ON r.id = g.run_id AND r.tenant_id = g.tenant_id
+     WHERE g.tenant_id=${tenantId}::uuid AND (${period}::text IS NULL OR g.period=${period})
+       AND r.status IN ('approved', 'disbursed')
+     ORDER BY g.department_name`));
 }
 
 // ─── CTC Config ───────────────────────────────────────────────────────────────
@@ -282,6 +299,23 @@ export async function listCtcConfig(tenantId: string) {
 export type PeriodSummary = { gross: bigint; net: bigint; headcount: number; hasData: boolean };
 
 export async function getRegisterSummary(tenantId: string, period: string): Promise<PeriodSummary> {
-  const rows = await scopedRead((tx) => tx.execute(sql`SELECT COALESCE(SUM(total_gross_minor),0)::bigint as gross,COALESCE(SUM(total_net_minor),0)::bigint as net,COALESCE(SUM(employee_count),0)::int as headcount,(COUNT(*) > 0) as "hasData" FROM payroll.payroll_register WHERE tenant_id=${tenantId}::uuid AND period=${period}`));
+  // GAP-PAYROLL-REGISTER-WRITER: finalised runs only (see listRegister).
+  // gross/net add up across every finalised run of the month (regular +
+  // supplementary + arrears is the month's real cost), but headcount is the
+  // DISTINCT employees paid in those runs -- summing employee_count would
+  // count someone in both a regular and a supplementary run twice.
+  const rows = await scopedRead((tx) => tx.execute(sql`
+    WITH runs AS (
+      SELECT DISTINCT g.run_id FROM payroll.payroll_register g
+        JOIN payroll.payroll_runs r ON r.id = g.run_id AND r.tenant_id = g.tenant_id
+       WHERE g.tenant_id=${tenantId}::uuid AND g.period=${period} AND r.status IN ('approved', 'disbursed')
+    )
+    SELECT COALESCE(SUM(g.total_gross_minor),0)::bigint AS gross,
+           COALESCE(SUM(g.total_net_minor),0)::bigint AS net,
+           (SELECT COUNT(DISTINCT s.employee_id) FROM payroll.payroll_slips s
+             WHERE s.tenant_id=${tenantId}::uuid AND s.run_id IN (SELECT run_id FROM runs))::int AS headcount,
+           (COUNT(*) > 0) AS "hasData"
+      FROM payroll.payroll_register g
+     WHERE g.tenant_id=${tenantId}::uuid AND g.run_id IN (SELECT run_id FROM runs)`));
   return (rows as unknown[])[0] as PeriodSummary;
 }

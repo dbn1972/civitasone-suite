@@ -77,10 +77,19 @@ describe("GET /v1/payroll/costing/report -- only the requested period's slips ar
 
 describe("GET /v1/payroll/comparison -- hasData distinguishes a missing period from ₹0", () => {
   it("flags the period with no register rows", async () => {
-    await inTenant((tx) => tx.execute(sql`
-      INSERT INTO payroll.payroll_register (tenant_id, run_id, department_name, employee_count, total_gross_minor, total_net_minor, period)
-      VALUES (${TENANT}::uuid, ${randomUUID()}::uuid, 'Revenue', 3, 300000, 270000, '2026-05')
-    `));
+    // GAP-PAYROLL-REGISTER-WRITER: the summary only counts finalised runs,
+    // and headcount is distinct employees on that run's slips.
+    const runId = randomUUID();
+    await inTenant(async (tx) => {
+      await tx.execute(sql`INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, structure_id, status, created_by, updated_by) VALUES (${runId}::uuid, ${TENANT}::uuid, 'R-2026-05-cmp', '2026-05', ${randomUUID()}::uuid, 'approved', ${ACTOR}::uuid, ${ACTOR}::uuid)`);
+      for (const no of ["C1", "C2", "C3"]) {
+        await tx.execute(sql`INSERT INTO payroll.payroll_slips (tenant_id, run_id, employee_id, employee_no, gross_minor, created_by, updated_by) VALUES (${TENANT}::uuid, ${runId}::uuid, ${randomUUID()}::uuid, ${no}, 100000, ${ACTOR}::uuid, ${ACTOR}::uuid)`);
+      }
+      await tx.execute(sql`
+        INSERT INTO payroll.payroll_register (tenant_id, run_id, department_name, employee_count, total_gross_minor, total_net_minor, period)
+        VALUES (${TENANT}::uuid, ${runId}::uuid, 'Revenue', 3, 300000, 270000, '2026-05')
+      `);
+    });
     const app = await buildApp();
     const res = await app.inject({ method: "GET", url: "/v1/payroll/comparison?period1=2026-05&period2=2026-06", headers: { authorization: `Bearer ${token()}` } });
     await app.close();
