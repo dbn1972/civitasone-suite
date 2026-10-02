@@ -94,6 +94,22 @@ function categoryPanelId(title: string, index: number): string {
   return `cat-${slugifyCategoryTitle(title)}-${index}`;
 }
 
+/**
+ * GAP-HR-HOME-03: tile contents -- an icon chip (the tile's own `icon`, else
+ * its category's icon) above the title/description. Purely presentational;
+ * the surrounding Link keeps its href/onClick.
+ */
+function TileBody({ tile, icon, children }: { tile: NavTile; icon: string | undefined; children?: React.ReactNode }) {
+  return (
+    <>
+      {icon && <div className="ic" aria-hidden="true">{icon}</div>}
+      <h3 className="v">{tile.title}</h3>
+      {tile.description && <div className="l">{tile.description}</div>}
+      {children}
+    </>
+  );
+}
+
 export function HRHubNavigation({ categories }: { categories: Category[] }) {
   const t = useTranslations("hr");
   const router = useRouter();
@@ -128,6 +144,13 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
   const allTiles = useMemo(() => {
     const seen = new Set<string>();
     return categories.flatMap((c) => c.tiles).filter((tile) => (seen.has(tile.href) ? false : (seen.add(tile.href), true)));
+  }, [categories]);
+
+  // First category wins, same as the search-results de-duplication below.
+  const iconByHref = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const cat of categories) for (const tile of cat.tiles) if (!m.has(tile.href)) m.set(tile.href, tile.icon ?? cat.icon);
+    return m;
   }, [categories]);
 
   const tileByHref = useMemo(() => new Map(allTiles.map((tile) => [tile.href, tile])), [allTiles]);
@@ -254,11 +277,10 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
                 key={tile.href}
                 href={tile.href}
                 onClick={() => recordVisit(tile.href)}
-                className="mtile"
+                className="mtile nav"
                 style={{ textDecoration: "none", color: "inherit", display: "block" }}
               >
-                <h3 className="v">{tile.title}</h3>
-                {tile.description && <div className="l">{tile.description}</div>}
+                <TileBody tile={tile} icon={iconByHref.get(tile.href)} />
               </Link>
             ))}
           </div>
@@ -277,12 +299,12 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
                 key={tile.href}
                 href={tile.href}
                 onClick={() => recordVisit(tile.href)}
-                className="mtile"
+                className="mtile nav"
                 style={{ textDecoration: "none", color: "inherit", display: "block" }}
               >
-                <h3 className="v">{tile.title}</h3>
-                {tile.description && <div className="l">{tile.description}</div>}
-                <div className="l" style={{ fontSize: "0.6875rem", color: "var(--mut)", marginTop: 2 }}>{categoryTitle}</div>
+                <TileBody tile={tile} icon={iconByHref.get(tile.href)}>
+                  <div className="l" style={{ fontSize: "0.6875rem", color: "var(--mut)", marginTop: 2 }}>{categoryTitle}</div>
+                </TileBody>
               </Link>
             ))}
           </div>
@@ -345,11 +367,10 @@ export function HRHubNavigation({ categories }: { categories: Category[] }) {
                         key={`${cat.title}-${tile.href}`}
                         href={tile.href}
                         onClick={() => recordVisit(tile.href)}
-                        className="mtile"
+                        className="mtile nav"
                         style={{ textDecoration: "none", color: "inherit", display: "block" }}
                       >
-                        <h3 className="v">{tile.title}</h3>
-                        {tile.description && <div className="l">{tile.description}</div>}
+                        <TileBody tile={tile} icon={tile.icon ?? cat.icon} />
                       </Link>
                     ))}
                   </div>

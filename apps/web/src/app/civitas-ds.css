@@ -245,6 +245,9 @@ tr.clickable:hover{background:var(--primary-soft)!important}
 .mtile .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:18px;margin-bottom:10px;line-height:1;font-family:"Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif}
 .mtile .v{font-size:21px;font-weight:780;letter-spacing:-.4px}
 .mtile .l{font-size:12px;color:var(--ink2);font-weight:550;margin-top:1px}
+/* Navigation tile (HR hub): a destination label, not a metric -- smaller title and a compact icon chip (GAP-HR-HOME-03). */
+.mtile.nav .v{font-size:15px;font-weight:650;letter-spacing:-.1px}
+.mtile.nav .ic{width:32px;height:32px;border-radius:9px;font-size:16px;margin-bottom:8px;background:var(--line2,#f1f5f9)}
 .mqa{display:flex;gap:10px;overflow:auto;padding:2px 0 4px}
 .mqa a{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:7px;width:70px}
 .mqa .b{width:54px;height:54px;border-radius:16px;display:grid;place-items:center;font-size:22px;color:#fff;box-shadow:var(--sh-md)}

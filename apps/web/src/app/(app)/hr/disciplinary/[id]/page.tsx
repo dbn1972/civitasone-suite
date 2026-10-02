@@ -4,7 +4,9 @@ import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadError
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { getDisciplinaryCaseById, getDisciplinaryCaseEvents, getEmployeeById } from "@/app/_data/loaders";
 import { RaiseEOfficeNote } from "@/app/_components/RaiseEOfficeNote";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
+import { CaseActions } from "./_components/CaseActions";
+import { isCaseOwner } from "./_components/caseActions";
 import { PermissionDenied } from "@/app/_components/PermissionDenied";
 import { humanizeStatus } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
@@ -219,6 +221,17 @@ export default async function DisciplinaryCaseDetailPage({ params }: { params: {
           <LifecycleTimeline events={timelineEvents} />
         )}
       </Card>
+
+      {/* GAP-HR-DISCIPLINARY-DETAIL-06: state-machine actions. Ownership
+          (creator / assigned inquiry officer) mirrors the backend's
+          assertCaseOwner, compared in the same actor-id space (JWT sub). */}
+      <CaseActions
+        caseId={params.id}
+        status={status_}
+        proceedingType={proceedingType}
+        roles={roles}
+        isOwner={isCaseOwner(getSessionUserId(), { createdBy: dcase.createdBy, inquiryOfficerId: dcase.inquiryOfficerId })}
+      />
 
       <RaiseEOfficeNote
         refType="hr_disciplinary"

@@ -58,9 +58,11 @@ async function getHearings(id: string): Promise<Hearing[]> {
   return data;
 }
 
-async function resolveNames(ids: string[]): Promise<Map<string, string>> {
-  const uniqueIds = [...new Set(ids)];
-  if (uniqueIds.length === 0) return new Map();
+// A complaint always has a complainant, so the id list is never empty -- no
+// "nothing to look up" branch is needed (and none is dressed up as an empty
+// state).
+async function resolveNames(complainantId: string, respondentId: string | null): Promise<Map<string, string>> {
+  const uniqueIds = [...new Set([complainantId, ...(respondentId ? [respondentId] : [])])];
   const { data } = await fetchJson<unknown, EmployeeName[]>(`/api/v1/hrms/employees?ids=${uniqueIds.map(encodeURIComponent).join(",")}`, [], {
     telemetryKey: "hr.icc_identity_names",
     mapResponse: (p) => {
@@ -110,7 +112,7 @@ export default async function IccDetailPage({ params }: { params: { id: string }
 
   const [hearings, names] = await Promise.all([
     getHearings(detail.id),
-    resolveNames([detail.complainantId, ...(detail.respondentId ? [detail.respondentId] : [])]),
+    resolveNames(detail.complainantId, detail.respondentId),
   ]);
 
   const remaining = daysRemaining(detail.filedAt);

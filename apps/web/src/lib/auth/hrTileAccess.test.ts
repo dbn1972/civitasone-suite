@@ -3,7 +3,7 @@ import { HR_TILE_ROLE_OVERRIDES, hasHrTileAccess } from "./hrTileAccess";
 
 /**
  * The complete set of tile hrefs on the HR hub (hr/page.tsx's hrCategories),
- * copied verbatim (87 slots across 13 categories, 85 unique hrefs -- leave
+ * copied verbatim (88 slots across 13 categories, 86 unique hrefs -- leave
  * policies and holidays each appear once under their own category and once
  * again under Setup). Kept as a flat literal here, independent of
  * hrCategories itself, because hr/page.tsx cannot export that array (Next.js
@@ -52,7 +52,7 @@ const ALL_HR_HUB_HREFS = [
   // catCommunication
   "/hr/social-feed",
   // catSetup (leave-policies, holidays repeat from above)
-  "/hr/departments", "/hr/designations", "/hr/locations", "/hr/leave-policies",
+  "/hr/departments", "/hr/designations", "/hr/locations", "/hr/office-locations", "/hr/leave-policies",
   "/hr/holidays", "/hr/employee-types", "/hr/audit-log",
 ];
 
@@ -65,6 +65,8 @@ const HIDDEN_FROM_EMPLOYEE = [
   "/hr/icc",
   "/hr/employee-types",
   "/hr/id-cards",
+  "/hr/interns",
+  "/hr/office-locations",
   "/hr/leave-policies",
   "/hr/onboarding",
   "/hr/rti",
@@ -79,12 +81,12 @@ const HIDDEN_FROM_EMPLOYEE = [
 ];
 
 describe("hasHrTileAccess", () => {
-  it("has exactly 87 tile slots / 85 unique hrefs today (update ALL_HR_HUB_HREFS if hr/page.tsx's hrCategories changes)", () => {
-    expect(ALL_HR_HUB_HREFS.length).toBe(87);
-    expect(UNIQUE_HR_HUB_HREFS.length).toBe(85);
+  it("has exactly 88 tile slots / 86 unique hrefs today (update ALL_HR_HUB_HREFS if hr/page.tsx's hrCategories changes)", () => {
+    expect(ALL_HR_HUB_HREFS.length).toBe(88);
+    expect(UNIQUE_HR_HUB_HREFS.length).toBe(86);
   });
 
-  it("GAP-HR-HOME-01 acceptance: hr_admin still sees all 85 tiles", () => {
+  it("GAP-HR-HOME-01 acceptance: hr_admin still sees all 86 tiles", () => {
     for (const href of UNIQUE_HR_HUB_HREFS) {
       expect(hasHrTileAccess(href, ["hr_admin"])).toBe(true);
     }
@@ -102,6 +104,17 @@ describe("hasHrTileAccess", () => {
       const expected = !HIDDEN_FROM_EMPLOYEE.includes(href);
       expect(hasHrTileAccess(href, ["employee"])).toBe(expected);
     }
+  });
+
+  it("GAP-HR-INTERNS-04: interns register is HR staff + manager only", () => {
+    expect(hasHrTileAccess("/hr/interns", ["employee"])).toBe(false);
+    expect(hasHrTileAccess("/hr/interns", ["manager"])).toBe(true);
+    expect(hasHrTileAccess("/hr/interns", ["hr_officer"])).toBe(true);
+  });
+
+  it("GAP-HR-LOCATIONS-NEW-02: office geofences are offered only to the roles that may create them", () => {
+    expect(hasHrTileAccess("/hr/office-locations", ["hr_officer"])).toBe(false);
+    expect(hasHrTileAccess("/hr/office-locations", ["hr_admin"])).toBe(true);
   });
 
   it("apar stays visible to employee (APAR_ROLES admits self-service employee/manager)", () => {

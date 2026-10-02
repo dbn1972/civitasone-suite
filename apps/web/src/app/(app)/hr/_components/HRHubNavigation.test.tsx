@@ -11,7 +11,7 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/",
 }));
 
-type TestCat = { title: string; icon: string; tiles: { title: string; href: string; description?: string }[] };
+type TestCat = { title: string; icon: string; tiles: { title: string; href: string; description?: string; icon?: string }[] };
 const cats: TestCat[] = [
   { title: "Core", icon: "👥", tiles: [
     { title: "Dashboard", href: "/hr/dashboard", description: "d" },
@@ -32,6 +32,30 @@ function renderHub(categories: TestCat[] = cats, messages: object = en, locale =
 
 beforeEach(() => { window.localStorage.clear(); push.mockClear(); });
 afterEach(() => vi.restoreAllMocks());
+
+describe("HRHubNavigation tile icons (GAP-HR-HOME-03)", () => {
+  it("renders each tile with its category icon, in categories, Quick Access and search results", () => {
+    renderHub();
+    const payroll = document.querySelectorAll('a[href="/hr/payroll"]');
+    expect(payroll.length).toBeGreaterThan(0);
+    payroll.forEach((a) => expect(a.querySelector(".ic")?.textContent).toBe("💰"));
+    expect(document.querySelector('a[href="/hr/holidays"] .ic')?.textContent).toBe("📅");
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "payroll" } });
+    expect(document.querySelector('a[href="/hr/payroll"] .ic')?.textContent).toBe("💰");
+  });
+
+  it("prefers a tile's own icon override and marks the chip decorative", () => {
+    renderHub([{ title: "Core", icon: "👥", tiles: [{ title: "Dashboard", href: "/hr/dashboard", icon: "📊" }] }] as TestCat[]);
+    const ic = document.querySelector('a[href="/hr/dashboard"] .ic')!;
+    expect(ic.textContent).toBe("📊");
+    expect(ic).toHaveAttribute("aria-hidden", "true");
+  });
+
+  it("uses the compact navigation-tile style, not the metric-size title", () => {
+    renderHub();
+    expect(document.querySelector("a.mtile")).toHaveClass("nav");
+  });
+});
 
 describe("HRHubNavigation (GAP-HR-HOME-02/04/05/06)", () => {
   it("persists the collapsed set across a remount (HOME-02)", () => {
