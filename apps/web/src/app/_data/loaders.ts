@@ -4166,8 +4166,19 @@ export async function getStockDashboard(): Promise<LoaderResult<StockDashboard>>
   });
 }
 
-export async function getStockItems(): Promise<LoaderResult<StockItemSummary[]>> {
-  return fetchJson<unknown, StockItemSummary[]>("/api/v1/stock/items", [], {
+/**
+ * Stock items. With no argument this is the service default page (50 items).
+ * Callers that must resolve many ids pass `limit` (service max 200) and
+ * `offset` to page through the list.
+ */
+export async function getStockItems(
+  opts: { limit?: number; offset?: number } = {},
+): Promise<LoaderResult<StockItemSummary[]>> {
+  const qs = new URLSearchParams();
+  if (opts.limit) qs.set("limit", String(opts.limit));
+  if (opts.offset) qs.set("offset", String(opts.offset));
+  const query = qs.toString();
+  return fetchJson<unknown, StockItemSummary[]>(`/api/v1/stock/items${query ? `?${query}` : ""}`, [], {
     revalidateSeconds: 60,
     telemetryKey: "stock.items",
     mapResponse: mapStockItemSummaries,
@@ -4182,8 +4193,15 @@ export async function getStockItemById(id: string): Promise<LoaderResult<StockIt
   });
 }
 
-export async function getStockLedger(): Promise<LoaderResult<StockLedgerEntry[]>> {
-  return fetchJson<unknown, StockLedgerEntry[]>("/api/v1/stock/ledger", [], {
+export async function getStockLedger(
+  opts: { limit?: number; from?: string; to?: string } = {},
+): Promise<LoaderResult<StockLedgerEntry[]>> {
+  const qs = new URLSearchParams();
+  if (opts.limit) qs.set("limit", String(opts.limit));
+  if (opts.from) qs.set("from", opts.from);
+  if (opts.to) qs.set("to", opts.to);
+  const query = qs.toString();
+  return fetchJson<unknown, StockLedgerEntry[]>(`/api/v1/stock/ledger${query ? `?${query}` : ""}`, [], {
     revalidateSeconds: 60,
     telemetryKey: "stock.ledger",
     mapResponse: mapStockLedgerEntries,

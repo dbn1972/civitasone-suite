@@ -10,7 +10,10 @@ import { Button } from "@/app/_components/ds";
 
 type GfrBand = { id: string; name: string; notes: string; requiresTender: boolean };
 
-export function CreateIndentForm() {
+export function CreateIndentForm({
+  initialItem = null,
+  prefillTruncated = false,
+}: { initialItem?: LineItem | null; prefillTruncated?: boolean } = {}) {
   const router = useRouter();
 
   const [indentNo] = useState("IND-" + Date.now().toString(36).toUpperCase());
@@ -19,12 +22,16 @@ export function CreateIndentForm() {
   const [requiredBy, setRequiredBy] = useState("");
   const [estimatedValue, setEstimatedValue] = useState("");
   const [purpose, setPurpose] = useState("");
-  const [items, setItems] = useState<LineItem[]>([emptyLineItem()]);
+  const [items, setItems] = useState<LineItem[]>([initialItem ?? emptyLineItem()]);
   const [modeBand, setModeBand] = useState<GfrBand | null>(null);
   const [status, setStatus] = useState<"idle" | "submitting" | "accepted" | "error">("idle");
   /** Client-authored copy for pre-submit validation and success — never server text. */
   const [message, setMessage] = useState("");
   const formError = useFormError("indent");
+  // Lines with no unit price feed the estimated value and the procurement-mode band, so the
+  // first submit asks for confirmation (never blocks); editing any line resets it.
+  const [zeroPriceAck, setZeroPriceAck] = useState(false);
+  useEffect(() => { setZeroPriceAck(false); }, [items]);
 
   // Dynamic GFR mode-band lookup when estimatedValue changes
   useEffect(() => {
@@ -50,6 +57,16 @@ export function CreateIndentForm() {
     if (!department.trim() || purpose.trim().length < 3 || validItems.length === 0) {
       setStatus("error");
       setMessage("Department, a purpose of at least 3 characters, and at least one complete line item are required.");
+      return;
+    }
+    const unpriced = validItems.filter((it) => !(it.unitPrice > 0)).length;
+    if (unpriced > 0 && !zeroPriceAck) {
+      setZeroPriceAck(true);
+      setStatus("error");
+      setMessage(
+        `${unpriced} line item${unpriced === 1 ? " has" : "s have"} no unit price, so the estimated value and procurement mode may be wrong. ` +
+        "Enter a price, or press Submit for approval again to continue without it.",
+      );
       return;
     }
     setStatus("submitting"); setMessage(""); formError.clear();
@@ -143,6 +160,11 @@ export function CreateIndentForm() {
         </div>
       </div>
 
+      {prefillTruncated ? (
+        <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "0 0 8px" }}>
+          The item description was too long and has been shortened. Check it before submitting.
+        </p>
+      ) : null}
       <LineItemsEditor items={items} onChange={setItems} />
 
       <div role="status" aria-live="polite">

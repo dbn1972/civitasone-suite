@@ -52,6 +52,8 @@ export type InventoryLowStockRow = {
   onHandQty: number;
   reorderLevel: number;
   suggestedReorderQty: number;
+  /** Resolved server-side from the store list (GAP-INVENTORY-LOW-STOCK-03). */
+  storeName?: string | null;
 };
 
 export type InventoryBinRow = {
@@ -77,7 +79,7 @@ export type InventoryReservationRow = {
   status: string;
   expiresAt: string | null;
   createdAt: string;
-};
+} & WithItemName & { storeName?: string | null };
 
 export type InventoryGoodsReturnRow = {
   id: string;
@@ -99,6 +101,11 @@ export type InventorySubstituteRow = {
   priority: number;
   conversionFactor: string;
   createdAt: string;
+  /** Names resolved from the item master the loader already fetched (GAP-INVENTORY-SUBSTITUTES-03). */
+  itemName?: string | null;
+  itemSku?: string | null;
+  substituteName?: string | null;
+  substituteSku?: string | null;
 };
 
 export type InventoryCycleCountRow = {
@@ -225,11 +232,15 @@ export function getInventoryNamedList(
   });
 }
 
-export function getInventoryLowStock(): Promise<LoaderResult<InventoryLowStockRow[]>> {
-  return fetchJson<Envelope<InventoryLowStockRow>, InventoryLowStockRow[]>("/api/v1/inventory/low-stock", [], {
+export async function getInventoryLowStock(): Promise<LoaderResult<InventoryLowStockRow[]>> {
+  const res = await fetchJson<Envelope<InventoryLowStockRow>, InventoryLowStockRow[]>("/api/v1/inventory/low-stock", [], {
     revalidateSeconds: 30,
     telemetryKey: "inventory.lowStock",
     mapResponse: listOf,
+  });
+  return withNames(res, async (rows) => {
+    const stores = await getStoreNames();
+    return rows.map((r) => ({ ...r, storeName: stores.get(r.storeId) ?? null }));
   });
 }
 
@@ -249,8 +260,8 @@ export async function getInventoryBins(): Promise<LoaderResult<InventoryBinRow[]
   });
 }
 
-export function getInventoryReservations(): Promise<LoaderResult<InventoryReservationRow[]>> {
-  return fetchJson<Envelope<InventoryReservationRow>, InventoryReservationRow[]>(
+export async function getInventoryReservations(): Promise<LoaderResult<InventoryReservationRow[]>> {
+  const res = await fetchJson<Envelope<InventoryReservationRow>, InventoryReservationRow[]>(
     "/api/v1/inventory/reservations?limit=200",
     [],
     {
@@ -259,6 +270,16 @@ export function getInventoryReservations(): Promise<LoaderResult<InventoryReserv
       mapResponse: listOf,
     },
   );
+  // GAP-INVENTORY-RESERVATIONS-03: item and store names, best-effort.
+  return withNames(res, async (rows) => {
+    const [items, stores] = await Promise.all([getItemNames(rows.map((r) => r.itemId)), getStoreNames()]);
+    return rows.map((r) => ({
+      ...r,
+      itemName: items.get(r.itemId)?.name ?? null,
+      itemSku: items.get(r.itemId)?.sku ?? null,
+      storeName: stores.get(r.storeId) ?? null,
+    }));
+  });
 }
 
 export async function getInventoryGoodsReturns(
@@ -382,7 +403,17 @@ export async function getInventorySubstitutes(): Promise<InventorySubstitutesRes
     ),
   );
 
-  const rows = results.flatMap((r) => r.data);
+  // GAP-INVENTORY-SUBSTITUTES-03: name both ends from the item master already
+  // in hand. A substitute outside the fetched page keeps a null name (the UI
+  // falls back to a short id).
+  const byId = new Map(items.map((i) => [i.id, i] as const));
+  const rows = results.flatMap((r) => r.data).map((r) => ({
+    ...r,
+    itemName: byId.get(r.itemId)?.name ?? null,
+    itemSku: byId.get(r.itemId)?.sku ?? null,
+    substituteName: byId.get(r.substituteId)?.name ?? null,
+    substituteSku: byId.get(r.substituteId)?.sku ?? null,
+  }));
   const failedCount = results.filter((r) => r.source === "error").length;
   // GAP-INVENTORY-SUBSTITUTES-02: "error" only when EVERY request failed; a
   // partial failure or the item cap is reported via failedCount/truncated so

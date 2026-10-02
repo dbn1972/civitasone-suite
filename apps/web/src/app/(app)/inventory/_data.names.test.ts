@@ -71,3 +71,25 @@ describe("GAP-INVENTORY-ISSUES-02 / ITEMS-04: requests", () => {
     expect(String(fetchJsonMock.mock.calls[0][0])).toContain("limit=200");
   });
 });
+
+describe("low-stock and reservations carry names (GAP-INVENTORY-LOW-STOCK-03 / RESERVATIONS-03)", () => {
+  it("low-stock rows carry the store name, null when unresolved", async () => {
+    fetchJsonMock.mockResolvedValue({ source: "api", data: [{ itemId: "i1", storeId: "s1" }, { itemId: "i1", storeId: "zz" }] });
+    const res = await data.getInventoryLowStock();
+    expect(res.data.map((r) => r.storeName)).toEqual(["Main Store", null]);
+  });
+
+  it("a failed low-stock fetch passes through untouched", async () => {
+    fetchJsonMock.mockResolvedValue({ source: "error", data: [] });
+    expect((await data.getInventoryLowStock()).source).toBe("error");
+    expect(lookups.getStoreNames).not.toHaveBeenCalled();
+  });
+
+  it("reservations carry item, sku and store names", async () => {
+    fetchJsonMock.mockResolvedValue({ source: "api", data: [{ id: "r", itemId: "i1", storeId: "s1" }, { id: "r2", itemId: "zz", storeId: "s1" }] });
+    const res = await data.getInventoryReservations();
+    expect(res.data[0]).toMatchObject({ itemName: "Toner", itemSku: "T-1", storeName: "Main Store" });
+    expect(res.data[1]).toMatchObject({ itemName: null, itemSku: null });
+  });
+});
+

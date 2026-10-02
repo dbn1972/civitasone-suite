@@ -46,3 +46,15 @@ describe("mapCycleCountDetail createdBy", () => {
     expect(m?.createdBy).toBe("u-1");
   });
 });
+
+describe("mapStockLedgerEntries keeps the item id (GAP-INVENTORY-RECONCILE-03)", () => {
+  it("carries itemId so a page can join the item master", () => {
+    const [e] = mapStockLedgerEntries({ data: [{ id: "l1", itemId: "11111111-2222-3333-4444-555555555555", voucherType: "receipt", qtyIn: 1 }] })!;
+    expect(e.itemId).toBe("11111111-2222-3333-4444-555555555555");
+  });
+  it("omits itemId when the row has none", () => {
+    const [e] = mapStockLedgerEntries({ data: [{ id: "l2", voucherType: "receipt", qtyIn: 1 }] })!;
+    expect("itemId" in e).toBe(false);
+  });
+});
+

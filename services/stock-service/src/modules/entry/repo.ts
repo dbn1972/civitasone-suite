@@ -1,4 +1,4 @@
-import { eq, and, gte, lte, SQL } from "drizzle-orm";
+import { eq, and, gte, lte, desc, SQL } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
 import { stockEntries, stockEntryItems, type EntryInsert, type EntryItemInsert, type EntryRow } from "./schema.js";
@@ -98,14 +98,22 @@ export async function markEntryPosted(tx: Writer, id: string, actorId: string): 
     .where(eq(stockEntries.id, id));
 }
 
-export async function findLedger(tenantId: string, itemId: string | null, opts?: { from?: string; to?: string; limit?: number; offset?: number }) {
+export async function findLedger(
+  tenantId: string,
+  itemId: string | null,
+  opts?: { from?: string; to?: string; warehouseId?: string; limit?: number; offset?: number },
+) {
   return runWithTenant(tenantId, () => scopedRead(async (tx) => {
     const conditions: SQL[] = [eq(stockLedger.tenantId, tenantId)];
     if (itemId) conditions.push(eq(stockLedger.itemId, itemId));
+    if (opts?.warehouseId) conditions.push(eq(stockLedger.warehouseId, opts.warehouseId));
     if (opts?.from) conditions.push(gte(stockLedger.postingDate, opts.from));
     if (opts?.to)   conditions.push(lte(stockLedger.postingDate, opts.to));
     return tx.select().from(stockLedger)
       .where(and(...conditions))
+      // Newest first with a total tiebreak, so limit/offset pages are stable and
+      // a full page is the latest N movements rather than an arbitrary subset.
+      .orderBy(desc(stockLedger.postingDate), desc(stockLedger.createdAt), stockLedger.id)
       .limit(opts?.limit ?? 100)
       .offset(opts?.offset ?? 0);
   }));

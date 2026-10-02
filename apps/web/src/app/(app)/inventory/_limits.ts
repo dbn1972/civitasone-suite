@@ -8,6 +8,8 @@
  */
 export const INVENTORY_LIST_LIMIT = 200;
 export const INVENTORY_LEDGER_LIMIT = 500;
+/** stock-service ledger page ceiling (its ledgerQueryParams max); its default is only 100 (GAP-INVENTORY-RECONCILE-05). */
+export const STOCK_LEDGER_LIMIT = 500;
 
 /** Plain-language note for a register whose page is full, or null when it is not. */
 export function capNote(count: number, limit: number, noun: string): string | null {

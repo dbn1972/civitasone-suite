@@ -250,6 +250,8 @@ export async function listLowStock(tenantId: string, limit: number, offset: numb
       gte(items.reorderLevel, 1),
       lte(stockBalances.onHandQty, items.reorderLevel),
     ))
+    // limit/offset needs a total order or pages overlap and skip rows.
+    .orderBy(items.name, stockBalances.id)
     .limit(limit).offset(offset));
   return rows;
 }

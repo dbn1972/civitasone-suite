@@ -16,7 +16,7 @@ export default async function InventoryReceiptsPage() {
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
-      <PageHeader title="Goods Receipts" subtitle="Stock received into stores (GRN-in), valued at weighted-average cost." />
+      <PageHeader title="Goods Receipts" subtitle="Stock received into stores, valued at weighted-average cost." />
       <MovementsTable entries={data} kind="receipt" source={source} />
     </>
   );
