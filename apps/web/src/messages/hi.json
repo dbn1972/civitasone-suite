@@ -5016,7 +5016,8 @@
     "statPendingSignature": "हस्ताक्षर लंबित",
     "statTotalBatchValue": "कुल बैच मूल्य",
     "routeErrorBackLabel": "वित्त पर वापस जाएं",
-    "routeErrorArea": "PFMS संचालन कंसोल"
+    "routeErrorArea": "PFMS संचालन कंसोल",
+    "unreadableAmounts": "{count} बैच की राशि पढ़ने योग्य नहीं है, इसलिए कुल बैच मूल्य नहीं दिखाया गया है।"
   },
   "pfmsAdviceStatusLookup": {
     "title": "भुगतान सलाह स्थिति जांचें",
@@ -5085,7 +5086,14 @@
     "confirmTitle": "यह भुगतान सलाह जनरेट करें?",
     "confirmLabel": "सलाह जनरेट करें",
     "confirmDescription": "<b>{payeeName}</b> ({amount}) के लिए ट्रेजरी भुगतान सलाह जनरेट करें। यह ट्रेजरी वर्कफ़्लो में सबमिट होता है और इसे पूर्ववत नहीं किया जा सकता।",
-    "amountAboveFallback": "ऊपर दी गई राशि"
+    "amountAboveFallback": "ऊपर दी गई राशि",
+    "billSelectLabel": "बिल",
+    "billSelectPlaceholder": "बिल चुनें…",
+    "billSelectRequired": "एक बिल चुनें।",
+    "payeeAccountNoConfirmLabel": "खाता संख्या पुनः दर्ज करें",
+    "payeeAccountNoMismatch": "खाता संख्याएँ मेल नहीं खातीं।",
+    "billSearchLabel": "बिल खोजें",
+    "billSearchPlaceholder": "बिल संख्या या विक्रेता से खोजें…"
   },
   "pfmsPaymentStatusLookup": {
     "title": "भुगतान स्थिति जांचें",
@@ -5103,7 +5111,21 @@
   },
   "pfmsPaymentsPanel": {
     "sandboxModeTitle": "सैंडबॉक्स मोड",
-    "sandboxModeMessage": "PFMS क्रेडेंशियल कॉन्फ़िगर नहीं हैं। सबमिशन का अनुकरण किया जाएगा और वे सरकारी भुगतान गेटवे तक नहीं पहुंचेंगे।"
+    "sandboxModeMessage": "PFMS क्रेडेंशियल कॉन्फ़िगर नहीं हैं। सबमिशन का अनुकरण किया जाएगा और वे सरकारी भुगतान गेटवे तक नहीं पहुंचेंगे।",
+    "tabSubmit": "भुगतान जमा करें",
+    "tabStatus": "भुगतान की स्थिति",
+    "tabSalaryBill": "वेतन बिल",
+    "tabAdvice": "भुगतान सलाह",
+    "unknownModeTitle": "PFMS मोड अज्ञात",
+    "unknownModeMessage": "यह निर्धारित नहीं हो सका कि PFMS सैंडबॉक्स मोड में है या लाइव मोड में। यह न मानें कि जमा केवल सिमुलेशन है; जमा करने से पहले अपने प्रशासक से मोड की पुष्टि करें।",
+    "liveModeTitle": "लाइव मोड",
+    "liveModeMessage": "जमा सीधे सरकारी PFMS गेटवे को भेजे जाते हैं और इस कंसोल से वापस नहीं लिए जा सकते।",
+    "railLiveTitle": "PFMS भुगतान लाइव हैं",
+    "railLiveMessage": "यहाँ जमा किए गए भुगतान सरकारी PFMS/e-Kuber गेटवे को जाते हैं और इस कंसोल से वापस नहीं लिए जा सकते। इस मार्ग पर कोई सैंडबॉक्स नहीं है।",
+    "railDisabledTitle": "इस सर्वर पर PFMS भुगतान अक्षम हैं",
+    "railDisabledMessage": "यहाँ PFMS भुगतान एकीकरण कॉन्फ़िगर नहीं है, इसलिए भुगतान जमा या जाँचे नहीं जा सकते। अपने प्रशासक से इसे सक्षम करने को कहें।",
+    "railUnknownTitle": "PFMS भुगतान स्थिति अज्ञात",
+    "railUnknownMessage": "यह निर्धारित नहीं हो सका कि इस सर्वर पर PFMS भुगतान सक्षम हैं या नहीं। यह न मानें कि जमा हानिरहित है: यदि PFMS सक्षम है तो यह वास्तविक भुगतान है।"
   },
   "pfmsSalaryBillForm": {
     "monthRequired": "महीना YYYY-MM प्रारूप में होना चाहिए।",
@@ -5160,7 +5182,8 @@
     "networkErrorFallback": "नेटवर्क त्रुटि। कृपया पुनः प्रयास करें।",
     "confirmTitle": "यह भुगतान PFMS को सबमिट करें?",
     "confirmLabel": "भुगतान सबमिट करें",
-    "confirmDescription": "लाभार्थी <b>{beneficiaryCode}</b> के लिए <b>{amount}</b> का भुगतान <b>{referenceId}</b> PFMS/e-Kuber को जमा करें। यह वास्तविक भुगतान प्रस्तुति आरंभ करता है और इस कंसोल से वापस नहीं लिया जा सकता।"
+    "confirmDescription": "लाभार्थी <b>{beneficiaryCode}</b> के लिए <b>{amount}</b> का भुगतान <b>{referenceId}</b> PFMS/e-Kuber को जमा करें। यह वास्तविक भुगतान प्रस्तुति आरंभ करता है और इस कंसोल से वापस नहीं लिया जा सकता।",
+    "confirmDescriptionUnknown": "लाभार्थी <b>{beneficiaryCode}</b> के लिए <b>{amount}</b> का भुगतान <b>{referenceId}</b> PFMS/e-Kuber को जमा करें। सर्वर ने नहीं बताया कि PFMS भुगतान सक्षम हैं या नहीं; यदि हैं तो यह वास्तविक भुगतान है और इस कंसोल से वापस नहीं लिया जा सकता।"
   },
   "procurement": {
     "title": "खरीद",

@@ -9,6 +9,40 @@ import { COMMANDS } from "../../topics.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 
+/**
+ * Voucher types a template may carry (GAP-FINANCE-RECURRING-ENTRIES-04): the
+ * natures allowed by the cashbook voucher_type CHECK (migration 0009). "transfer"
+ * is deliberately absent -- the CHECK rejects it.
+ */
+export const RECURRING_VOUCHER_TYPES = ["journal", "payment", "receipt", "contra", "debit_note", "credit_note"] as const;
+
+/** Today's calendar date in Asia/Kolkata as YYYY-MM-DD (the date a clerk means by "today"). */
+export function todayIstDate(now: number = Date.now()): string {
+  return new Date(now + 5.5 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+/** POST body for a new template; a back-dated first run is rejected (GAP-FINANCE-RECURRING-ENTRIES-06). */
+export const createRecurringBody = z
+  .object({
+    name: z.string().max(256),
+    voucherType: z.enum(RECURRING_VOUCHER_TYPES).default("journal"),
+    frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).default("monthly"),
+    debitAccountId: z.string().uuid(),
+    creditAccountId: z.string().uuid(),
+    amountMinor: z.number().int().positive(),
+    narration: z.string().optional(),
+    nextRunDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (v.nextRunDate < todayIstDate()) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["nextRunDate"], message: "nextRunDate cannot be in the past" });
+    }
+    if (v.endDate && v.endDate < v.nextRunDate) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ["endDate"], message: "endDate cannot be before nextRunDate" });
+    }
+  });
+
 export async function recurringRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/recurring-entries", async (req, reply) => {
     const ctx = resolveContext(req);
@@ -38,17 +72,7 @@ export async function recurringRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
 
-    const body = z.object({
-      name: z.string().max(256),
-      voucherType: z.string().max(20).default("journal"),
-      frequency: z.enum(["daily", "weekly", "monthly", "quarterly", "yearly"]).default("monthly"),
-      debitAccountId: z.string().uuid(),
-      creditAccountId: z.string().uuid(),
-      amountMinor: z.number().int().positive(),
-      narration: z.string().optional(),
-      nextRunDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-      endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-    }).parse(req.body);
+    const body = createRecurringBody.parse(req.body);
 
     const id = randomUUID();
     await queue.publish(COMMANDS.recurringEntryCreate, {

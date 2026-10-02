@@ -26,10 +26,25 @@ const runBody = z.object({
   params: z.record(z.unknown()).optional(),
 });
 
-const actionBody = z.object({
-  action: z.enum(["investigate", "resolve", "write_off", "reopen"]),
-  note: z.string().max(1000).optional(),
-});
+/** Resolve / write-off close a break, so they must carry a justification (GAP-FINANCE-RECONCILIATION-01). */
+export const NOTE_MIN = 10;
+export const NOTE_MAX = 1000;
+
+export const actionBody = z
+  .object({
+    action: z.enum(["investigate", "resolve", "write_off", "reopen"]),
+    // Trimmed before the length checks so whitespace cannot satisfy the minimum.
+    note: z.string().trim().max(NOTE_MAX).optional(),
+  })
+  .superRefine((v, ctx) => {
+    if ((v.action === "resolve" || v.action === "write_off") && (v.note ?? "").length < NOTE_MIN) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["note"],
+        message: `a note of at least ${NOTE_MIN} characters is required to ${v.action === "resolve" ? "resolve" : "write off"} an exception`,
+      });
+    }
+  });
 
 export async function reconRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/finance/recon/providers", async (req, reply) => {

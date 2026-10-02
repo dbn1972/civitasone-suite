@@ -5,7 +5,7 @@ import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
-import type { PfmsMode } from "./types";
+import type { PfmsBill, PfmsMode } from "./types";
 
 type AdviceResult = {
   adviceId: string;
@@ -28,9 +28,23 @@ type AdviceStatusResult = {
   mode?: PfmsMode;
 };
 
-type FieldKey = "billId" | "payeeName" | "payeeAccountNo" | "payeeIfsc" | "amountMinor" | "purposeCode";
+type FieldKey = "billId" | "payeeName" | "payeeAccountNo" | "payeeAccountNoConfirm" | "payeeIfsc" | "amountMinor" | "purposeCode";
+
+/** Bill statuses a payment advice can be raised against (passed for payment; "approved" is the legacy spelling). */
+const PAYABLE_BILL_STATUSES = new Set(["passed", "approved"]);
+
+/** The bills API falls back to a placeholder "Vendor (1234)" when it has no real name; never show or use that as a name. */
+function realVendor(vendor: string): string {
+  return /^Vendor \(.{1,8}\)$/.test(vendor) || !vendor ? "" : vendor;
+}
 
 interface PaymentAdviceFormProps {
+  /**
+   * Bills to pick from (GAP-FINANCE-PFMS-07). When empty (none payable, or the
+   * bills endpoint was unavailable) the form falls back to the manual Bill ID
+   * field so it never becomes unusable.
+   */
+  bills?: PfmsBill[];
   /** Reports the `mode` field of a successful response, once the backend adapter rollout starts sending it. */
   onModeObserved?: (mode: PfmsMode) => void;
 }
@@ -43,11 +57,12 @@ interface PaymentAdviceFormProps {
  * comment. Payee account number is a POST body field only, never placed in a
  * URL/query string.
  */
-export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
+export function PaymentAdviceForm({ bills = [], onModeObserved }: PaymentAdviceFormProps) {
   const t = useTranslations("pfmsPaymentAdviceForm");
   const [billId, setBillId] = useState("");
   const [payeeName, setPayeeName] = useState("");
   const [payeeAccountNo, setPayeeAccountNo] = useState("");
+  const [payeeAccountNoConfirm, setPayeeAccountNoConfirm] = useState("");
   const [payeeIfsc, setPayeeIfsc] = useState("");
   const [amountMinor, setAmountMinor] = useState("");
   const [purposeCode, setPurposeCode] = useState("");
@@ -62,6 +77,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
   const billIdId = useId();
   const nameId = useId();
   const acctId = useId();
+  const acctConfirmId = useId();
   const ifscId = useId();
   const amountId = useId();
   const purposeId = useId();
@@ -70,23 +86,46 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
   const billRef = useRef<HTMLInputElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const acctRef = useRef<HTMLInputElement>(null);
+  const acctConfirmRef = useRef<HTMLInputElement>(null);
+  const billSelectRef = useRef<HTMLSelectElement>(null);
   const ifscRef = useRef<HTMLInputElement>(null);
   const amountRef = useRef<HTMLInputElement>(null);
   const purposeRef = useRef<HTMLInputElement>(null);
 
+  const [billSearch, setBillSearch] = useState("");
+  const payableBills = bills.filter((b) => PAYABLE_BILL_STATUSES.has(b.status));
+  const needle = billSearch.trim().toLowerCase();
+  const shownBills = needle
+    ? payableBills.filter((b) => `${b.billNo} ${realVendor(b.vendor)}`.toLowerCase().includes(needle) || b.id === billId)
+    : payableBills;
+  const hasBillPicker = payableBills.length > 0;
+
+  function selectBill(id: string) {
+    setBillId(id);
+    const bill = payableBills.find((b) => b.id === id);
+    if (!bill) return;
+    // Only the amount is prefilled (the server requires it to equal the bill's
+    // net). The payee is NOT: the bills API returns a placeholder "Vendor (xxxx)"
+    // when it has no real name, and the payee name/account must be typed and
+    // verified by the clerk. The amount stays editable; the server re-checks it.
+    if (/^\d+$/.test(bill.amountMinor)) setAmountMinor(bill.amountMinor);
+  }
+
   const FIELD_ERRORS: Record<FieldKey, string> = {
-    billId: t("billIdRequired"),
+    billId: hasBillPicker ? t("billSelectRequired") : t("billIdRequired"),
     payeeName: t("payeeNameRequired"),
     payeeAccountNo: t("payeeAccountNoRequired"),
+    payeeAccountNoConfirm: t("payeeAccountNoMismatch"),
     payeeIfsc: t("payeeIfscRequired"),
     amountMinor: t("amountRequired"),
     purposeCode: t("purposeCodeRequired"),
   };
 
-  const focusRefs: Record<FieldKey, React.RefObject<HTMLInputElement | null>> = {
-    billId: billRef,
+  const focusRefs: Record<FieldKey, React.RefObject<HTMLInputElement | HTMLSelectElement | null>> = {
+    billId: hasBillPicker ? billSelectRef : billRef,
     payeeName: nameRef,
     payeeAccountNo: acctRef,
+    payeeAccountNoConfirm: acctConfirmRef,
     payeeIfsc: ifscRef,
     amountMinor: amountRef,
     purposeCode: purposeRef,
@@ -101,6 +140,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
     if (!uuidRe.test(billId.trim())) nextErrors.billId = FIELD_ERRORS.billId;
     if (!payeeName.trim()) nextErrors.payeeName = FIELD_ERRORS.payeeName;
     if (!payeeAccountNo.trim()) nextErrors.payeeAccountNo = FIELD_ERRORS.payeeAccountNo;
+    else if (payeeAccountNo.trim() !== payeeAccountNoConfirm.trim()) nextErrors.payeeAccountNoConfirm = FIELD_ERRORS.payeeAccountNoConfirm;
     if (payeeIfsc.trim().length !== 11) nextErrors.payeeIfsc = FIELD_ERRORS.payeeIfsc;
     if (!/^\d+$/.test(amountMinor.trim()) || Number(amountMinor) < 1 || !Number.isSafeInteger(Number(amountMinor))) {
       nextErrors.amountMinor = FIELD_ERRORS.amountMinor;
@@ -139,6 +179,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
       setBillId("");
       setPayeeName("");
       setPayeeAccountNo("");
+      setPayeeAccountNoConfirm("");
       setPayeeIfsc("");
       setAmountMinor("");
       setPurposeCode("");
@@ -161,18 +202,51 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
             <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
               <div style={{ display: "grid", gap: 6 }}>
                 <label htmlFor={billIdId} style={{ fontSize: 13, fontWeight: 600 }}>
-                  {t("billIdLabel")} <span aria-hidden="true">*</span>
+                  {hasBillPicker ? t("billSelectLabel") : t("billIdLabel")} <span aria-hidden="true">*</span>
                 </label>
-                <input
-                  id={billIdId}
-                  ref={billRef}
-                  value={billId}
-                  onChange={(e) => setBillId(e.target.value)}
-                  aria-required="true"
-                  aria-invalid={!!errors.billId || undefined}
-                  aria-describedby={errors.billId ? `${billIdId}-error` : undefined}
-                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-                />
+                {hasBillPicker ? (
+                  <>
+                  <input
+                    type="search"
+                    value={billSearch}
+                    onChange={(e) => setBillSearch(e.target.value)}
+                    placeholder={t("billSearchPlaceholder")}
+                    aria-label={t("billSearchLabel")}
+                    autoComplete="off"
+                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                  />
+                  <select
+                    id={billIdId}
+                    ref={billSelectRef}
+                    value={billId}
+                    onChange={(e) => selectBill(e.target.value)}
+                    aria-required="true"
+                    aria-invalid={!!errors.billId || undefined}
+                    aria-describedby={errors.billId ? `${billIdId}-error` : undefined}
+                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                  >
+                    <option value="">{t("billSelectPlaceholder")}</option>
+                    {shownBills.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.billNo}
+                        {realVendor(b.vendor) ? ` — ${realVendor(b.vendor)}` : ""}
+                        {/^\d+$/.test(b.amountMinor) ? ` — ${formatMoney(b.amountMinor)}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                  </>
+                ) : (
+                  <input
+                    id={billIdId}
+                    ref={billRef}
+                    value={billId}
+                    onChange={(e) => setBillId(e.target.value)}
+                    aria-required="true"
+                    aria-invalid={!!errors.billId || undefined}
+                    aria-describedby={errors.billId ? `${billIdId}-error` : undefined}
+                    style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                  />
+                )}
                 {errors.billId && (
                   <p id={`${billIdId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
                     {errors.billId}
@@ -210,6 +284,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
                   value={payeeAccountNo}
                   onChange={(e) => setPayeeAccountNo(e.target.value)}
                   maxLength={32}
+                  autoComplete="off"
                   aria-required="true"
                   aria-invalid={!!errors.payeeAccountNo || undefined}
                   aria-describedby={errors.payeeAccountNo ? `${acctId}-error` : undefined}
@@ -218,6 +293,28 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
                 {errors.payeeAccountNo && (
                   <p id={`${acctId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
                     {errors.payeeAccountNo}
+                  </p>
+                )}
+              </div>
+              <div style={{ display: "grid", gap: 6 }}>
+                <label htmlFor={acctConfirmId} style={{ fontSize: 13, fontWeight: 600 }}>
+                  {t("payeeAccountNoConfirmLabel")} <span aria-hidden="true">*</span>
+                </label>
+                <input
+                  id={acctConfirmId}
+                  ref={acctConfirmRef}
+                  value={payeeAccountNoConfirm}
+                  onChange={(e) => setPayeeAccountNoConfirm(e.target.value)}
+                  maxLength={32}
+                  autoComplete="off"
+                  aria-required="true"
+                  aria-invalid={!!errors.payeeAccountNoConfirm || undefined}
+                  aria-describedby={errors.payeeAccountNoConfirm ? `${acctConfirmId}-error` : undefined}
+                  style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+                />
+                {errors.payeeAccountNoConfirm && (
+                  <p id={`${acctConfirmId}-error`} role="alert" className="pill bad" style={{ width: "fit-content" }}>
+                    {errors.payeeAccountNoConfirm}
                   </p>
                 )}
               </div>
@@ -231,6 +328,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
                   value={payeeIfsc}
                   onChange={(e) => setPayeeIfsc(e.target.value)}
                   maxLength={11}
+                  autoComplete="off"
                   aria-required="true"
                   aria-invalid={!!errors.payeeIfsc || undefined}
                   aria-describedby={errors.payeeIfsc ? `${ifscId}-error` : undefined}

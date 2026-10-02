@@ -20,7 +20,8 @@
  */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
+import { resolveContext, requireRole, financeErrorHandler, HttpError } from "../../shared/context.js";
+import { findBillByIdAndTenant } from "../payments/repo.js";
 import {
   submitPaymentAdvice,
   getPaymentStatus,
@@ -58,6 +59,20 @@ export async function pfmsTreasuryStubRoutes(app: FastifyInstance): Promise<void
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const body = paymentAdviceBody.parse(req.body);
+
+    // The advice must describe a real, payable bill of THIS tenant for exactly
+    // its net amount: otherwise any UUID and any amount went straight to the
+    // treasury gateway (GAP-FINANCE-PFMS-07).
+    const bill = await findBillByIdAndTenant(body.billId, ctx.tenantId);
+    if (!bill || bill.tenantId !== ctx.tenantId) {
+      throw new HttpError(400, "BILL_NOT_FOUND", "bill does not exist for this office");
+    }
+    if (bill.status !== "passed" && bill.status !== "approved") {
+      throw new HttpError(409, "BILL_NOT_PAYABLE", `bill is '${bill.status}'; a payment advice needs a passed bill`);
+    }
+    if (BigInt(body.amountMinor) !== BigInt(bill.netMinor)) {
+      throw new HttpError(409, "AMOUNT_MISMATCH", "amountMinor must equal the bill's net amount");
+    }
 
     const result = await submitPaymentAdvice(body);
     return reply.code(201).send({ data: result });

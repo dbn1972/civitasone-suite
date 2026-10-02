@@ -521,3 +521,36 @@ export function formatPayPeriod(payPeriod: string | null | undefined): string {
   const name = PAY_PERIOD_MONTH_NAMES[Number(month) - 1];
   return name ? `${name} ${year}` : payPeriod;
 }
+
+/**
+ * GAP-FINANCE-PFMS-04: sum a list of minor-unit (paise) values defensively.
+ * `BigInt("12.50")` / `BigInt("abc")` throw, and one bad row used to take the
+ * whole server page into its error boundary. Valid entries are summed with
+ * BigInt (no float math); anything that is not a plain integer string is
+ * counted in `invalid` instead of throwing. null/undefined/"" count as zero
+ * (an absent amount, not a corrupt one).
+ *
+ *   sumMinor(["100", "abc", "250"]) -> { total: 350n, invalid: 1 }
+ *   sumMinor(["100", null, ""])     -> { total: 100n, invalid: 0 }
+ */
+export function sumMinor(values: readonly (string | number | bigint | null | undefined)[]): {
+  total: bigint;
+  invalid: number;
+} {
+  let total = 0n;
+  let invalid = 0;
+  for (const v of values) {
+    if (v === null || v === undefined || v === "") continue;
+    if (typeof v === "bigint") {
+      total += v;
+      continue;
+    }
+    const text = typeof v === "number" ? (Number.isSafeInteger(v) ? String(v) : "") : v.trim();
+    if (!/^-?\d+$/.test(text)) {
+      invalid += 1;
+      continue;
+    }
+    total += BigInt(text);
+  }
+  return { total, invalid };
+}

@@ -68,7 +68,9 @@ function mapAccountOptions(payload: unknown): AccountOption[] | null {
     if (typeof id !== "string" || typeof code !== "string" || typeof name !== "string") continue;
     mapped.push({ id, code, name });
   }
-  return mapped.length > 0 ? mapped : null;
+  // An empty chart of accounts is a valid answer, not an invalid payload: returning
+  // null here made fetchJson report a false "error" for it (GAP-FINANCE-RECURRING-ENTRIES-03).
+  return mapped;
 }
 
 async function getRecurringEntries(): Promise<LoaderResult<RecurringEntryRow[]>> {
@@ -86,7 +88,7 @@ async function getAccountOptions(): Promise<LoaderResult<AccountOption[]>> {
 }
 
 export default async function RecurringEntriesPage() {
-  const [{ data: entries, source }, { data: accounts }] = await Promise.all([
+  const [{ data: entries, source }, { data: accounts, source: accountsSource }] = await Promise.all([
     getRecurringEntries(),
     getAccountOptions(),
   ]);
@@ -107,7 +109,7 @@ export default async function RecurringEntriesPage() {
         <StatCard icon="✅" iconBg="#e6f7f0" label="Active" value={active} />
       </StatGrid>
 
-      <RecurringEntryForm accounts={accounts} />
+      <RecurringEntryForm accounts={accounts} accountsError={accountsSource === "error"} />
 
       <RecurringEntriesTable entries={entries} canWrite={canWrite(getSessionRoles(), RECURRING_WRITE_ROLES)} />
     </div>
