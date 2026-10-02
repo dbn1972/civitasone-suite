@@ -13,7 +13,7 @@ import InsuranceClaimsPage from "./page";
 
 const policiesPage = {
   data: [
-    { id: "p1", policyNo: "POL-2026-001", insurer: "National Insurance Co", assetId: "a1", coverageMinor: "50000000", status: "active" },
+    { id: "p1", policyNo: "POL-2026-001", insurer: "National Insurance Co", assetId: "a1", coverageMinor: "50000000", startDate: "2026-04-01", endDate: "2099-03-31", status: "active" },
   ],
   source: "api" as const,
 };
@@ -55,15 +55,51 @@ describe("InsuranceClaimsPage", () => {
     expect(screen.getByText("No claims filed")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge (no fabricated zero counts) when the claims loader errors", async () => {
+  // GAP-ASSETS-INSURANCE-CLAIMS-05
+  it("shows ONE error panel with Retry when the claims loader errors, and no zero stats", async () => {
     fetchJsonMock
       .mockResolvedValueOnce(policiesPage)
-      .mockResolvedValueOnce({ data: [], source: "error" });
+      .mockResolvedValueOnce({ data: [], source: "error", status: 500 });
 
-    const ui = await InsuranceClaimsPage({});
-    render(ui);
+    render(await InsuranceClaimsPage({}));
 
-    expect(screen.getAllByText("Couldn't load — showing nothing").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /retry|try again/i })).toHaveLength(1);
     expect(screen.queryByText("Total Claims")).not.toBeInTheDocument();
+    expect(screen.queryByText("Claims", { selector: "h3" })).not.toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-INSURANCE-CLAIMS-04
+  it("never shows a raw policy UUID for a claim whose policy is outside the fetched list", async () => {
+    const uuid = "7c2f0a11-0000-4000-8000-00000000ffff";
+    fetchJsonMock
+      .mockResolvedValueOnce(policiesPage)
+      .mockResolvedValueOnce({ data: [{ ...claimRow, policyId: uuid }], source: "api" });
+
+    render(await InsuranceClaimsPage({}));
+
+    expect(screen.queryByText(uuid)).not.toBeInTheDocument();
+    expect(screen.getByText("Policy unavailable")).toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-INSURANCE-CLAIMS-03
+  it("counts Settled and Closed separately and links each row to its claim", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce(policiesPage)
+      .mockResolvedValueOnce({
+        data: [
+          { ...claimRow, id: "c1", status: "settled" },
+          { ...claimRow, id: "c2", status: "closed" },
+          { ...claimRow, id: "c3", status: "closed" },
+        ],
+        source: "api",
+      });
+
+    render(await InsuranceClaimsPage({}));
+
+    const tile = (label: string) => screen.getAllByText(label)[0]!.closest("div")!.parentElement!.textContent ?? "";
+    expect(tile("Settled")).toContain("1");
+    expect(tile("Closed")).toContain("2");
+    expect(screen.getAllByRole("link").some((l) => l.getAttribute("href") === "/assets/insurance/claims/c1")).toBe(true);
   });
 });
