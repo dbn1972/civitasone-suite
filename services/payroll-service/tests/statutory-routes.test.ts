@@ -27,6 +27,8 @@ const H = vi.hoisted(() => ({
   listNpsMock: vi.fn(),
   fetchEmployeeSummariesMock: vi.fn(),
   fetchNpsPranLast4Mock: vi.fn(),
+  summarisePfMock: vi.fn(),
+  summariseEsiMock: vi.fn(),
 }));
 
 vi.mock("../src/modules/statutory/repo.js", () => ({
@@ -36,6 +38,8 @@ vi.mock("../src/modules/statutory/repo.js", () => ({
   listGratuityByTenant: (...a: unknown[]) => H.listGratuityMock(...a),
   listGpfByTenant: (...a: unknown[]) => H.listGpfMock(...a),
   listNpsByTenant: (...a: unknown[]) => H.listNpsMock(...a),
+  summarisePfPeriod: (...a: unknown[]) => H.summarisePfMock(...a),
+  summariseEsiPeriod: (...a: unknown[]) => H.summariseEsiMock(...a),
 }));
 
 // UX-021: listGpfReport/listNpsReport now enrich with employeeName via
@@ -163,7 +167,7 @@ describe("GET /v1/payroll/statutory/pf", () => {
     await app.close();
 
     expect(res.statusCode).toBe(200);
-    expect(H.listPfMock).toHaveBeenCalledWith(TENANT, 5);
+    expect(H.listPfMock).toHaveBeenCalledWith(TENANT, 5, undefined);
   });
 
   it("200 — hr_admin role can access", async () => {
@@ -462,5 +466,121 @@ describe("GET /v1/payroll/statutory/nps", () => {
     await app.close();
 
     expect(res.statusCode).toBe(403);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GAP-PAYROLL-STATUTORY-PF-04 / ESI-02: PF and ESI reports carry
+// employeeName (same best-effort HRMS enrichment as GPF/NPS/gratuity)
+// ═══════════════════════════════════════════════════════════════════
+
+describe("PF/ESI report employeeName enrichment (GAP-PAYROLL-STATUTORY-PF-04, ESI-02)", () => {
+  for (const path of ["pf", "esi"] as const) {
+    it(`${path}: returns the HRMS full name when known, null when not`, async () => {
+      H.fetchEmployeeSummariesMock.mockResolvedValue(new Map([["emp-1", { fullName: "Asha Rao" }]]));
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payroll/statutory/${path}`,
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      await app.close();
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()[0]).toMatchObject({ employeeId: "emp-1", employeeName: "Asha Rao" });
+      expect(H.fetchEmployeeSummariesMock).toHaveBeenCalledWith(TENANT);
+    });
+
+    it(`${path}: an unreachable HRMS (empty map) still returns the row, with employeeName null`, async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payroll/statutory/${path}`,
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      await app.close();
+
+      expect(res.statusCode).toBe(200);
+      expect(res.json()[0]).toMatchObject({ employeeId: "emp-1", employeeName: null });
+    });
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════
+// GAP-PAYROLL-STATUTORY-PF-03 / ESI-03: ?period= filter + per-period summary
+// ═══════════════════════════════════════════════════════════════════
+
+describe("PF/ESI ?period= filter and /summary (GAP-PAYROLL-STATUTORY-PF-03, ESI-03)", () => {
+  for (const path of ["pf", "esi"] as const) {
+    const listMock = () => (path === "pf" ? H.listPfMock : H.listEsiMock);
+    const summaryMock = () => (path === "pf" ? H.summarisePfMock : H.summariseEsiMock);
+
+    it(`${path}: forwards a valid ?period= to the repo`, async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payroll/statutory/${path}?period=2026-08&limit=500`,
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(200);
+      expect(listMock()).toHaveBeenCalledWith(TENANT, 500, "2026-08");
+    });
+
+    it(`${path}: without ?period= the repo gets no period (unchanged behaviour)`, async () => {
+      const app = await buildApp();
+      await app.inject({ method: "GET", url: `/v1/payroll/statutory/${path}`, headers: { authorization: `Bearer ${adminToken()}` } });
+      await app.close();
+      expect(listMock()).toHaveBeenCalledWith(TENANT, 50, undefined);
+    });
+
+    it(`${path}: rejects a malformed ?period= with 400`, async () => {
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payroll/statutory/${path}?period=2026-13`,
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(400);
+      expect(listMock()).not.toHaveBeenCalled();
+    });
+
+    it(`${path}/summary: returns bigint paise totals as strings`, async () => {
+      summaryMock().mockResolvedValue({
+        periods: ["2026-08", "2026-07"], period: "2026-08", recordCount: 60,
+        empContribMinor: 36_000_000n, erContribMinor: 36_000_000n,
+      });
+      const app = await buildApp();
+      const res = await app.inject({
+        method: "GET",
+        url: `/v1/payroll/statutory/${path}/summary?period=2026-08`,
+        headers: { authorization: `Bearer ${adminToken()}` },
+      });
+      await app.close();
+      expect(res.statusCode).toBe(200);
+      expect(summaryMock()).toHaveBeenCalledWith(TENANT, "2026-08");
+      expect(res.json()).toEqual({
+        periods: ["2026-08", "2026-07"], period: "2026-08", recordCount: 60,
+        empContribMinor: "36000000", erContribMinor: "36000000", totalContribMinor: "72000000",
+      });
+    });
+
+    it(`${path}/summary: 403 for a role outside READER_ROLES`, async () => {
+      const token = signToken({ sub: USER_ID, tid: TENANT, roles: ["employee"], sid: "s1" }, SECRET);
+      const app = await buildApp();
+      const res = await app.inject({ method: "GET", url: `/v1/payroll/statutory/${path}/summary`, headers: { authorization: `Bearer ${token}` } });
+      await app.close();
+      expect(res.statusCode).toBe(403);
+      expect(summaryMock()).not.toHaveBeenCalled();
+    });
+  }
+
+  it("gpf: contribPct (Drizzle numeric -> string) is sent as a number", async () => {
+    H.listGpfMock.mockResolvedValue([{ ...gpfRow, contribPct: "10.00" }]);
+    const app = await buildApp();
+    const res = await app.inject({ method: "GET", url: "/v1/payroll/statutory/gpf", headers: { authorization: `Bearer ${adminToken()}` } });
+    await app.close();
+    expect(res.json()[0].contribPct).toBe(10);
   });
 });

@@ -52,6 +52,32 @@ describe("LwfConfigForm", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 
+  it("warns before overwriting an already-configured state (GAP-PAYROLL-STATUTORY-LWF-05)", async () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LwfConfigForm existingConfigs={[{ state_code: "KA" }]} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "ka" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save LWF Configuration" }));
+
+    await waitFor(() => expect(screen.getByText("Save this LWF configuration?")).toBeInTheDocument());
+    expect(screen.getByText(/KA already has an LWF configuration/)).toBeInTheDocument();
+  });
+
+  it("does not warn for a state that is not configured yet (GAP-PAYROLL-STATUTORY-LWF-05)", async () => {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <LwfConfigForm existingConfigs={[{ state_code: "KA" }]} />
+      </NextIntlClientProvider>,
+    );
+    fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: "MH" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save LWF Configuration" }));
+
+    await waitFor(() => expect(screen.getByText("Save this LWF configuration?")).toBeInTheDocument());
+    expect(screen.queryByText(/already has an LWF configuration/)).not.toBeInTheDocument();
+  });
+
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/status (error path) (UX-020)", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(null, { status: 500 }));
 

@@ -1,4 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn((): string[] => ["payroll_admin"]) }));
+vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
+  getSessionRoles: getSessionRolesMock,
+}));
 import { render, screen } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
@@ -19,6 +24,33 @@ function expectSomeLinkTo(name: RegExp, href: string) {
 }
 
 describe("StatutoryHubPage", () => {
+  beforeEach(() => {
+    getSessionRolesMock.mockReturnValue(["payroll_admin"]);
+  });
+
+  it("shows PermissionDenied to employee/manager instead of the hub (GAP-PAYROLL-STATUTORY-04)", async () => {
+    getSessionRolesMock.mockReturnValue(["employee", "manager"]);
+    const ui = await StatutoryHubPage();
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {ui}
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /PF & ECR/ })).not.toBeInTheDocument();
+  });
+
+  it("admits a read-only statutory role (finance_officer) (GAP-PAYROLL-STATUTORY-04)", async () => {
+    getSessionRolesMock.mockReturnValue(["finance_officer"]);
+    const ui = await StatutoryHubPage();
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {ui}
+      </NextIntlClientProvider>,
+    );
+    expectSomeLinkTo(/PF & ECR/, "/hr/payroll/statutory/pf");
+  });
+
   it("renders links to every statutory console", async () => {
     // UX-017: StatutoryHubPage now reads its copy through
     // getTranslations("statutory") and is an async Server Component --

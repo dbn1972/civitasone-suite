@@ -1,6 +1,7 @@
 "use client";
 
 import React from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
 
 export interface StatutoryComplianceCardProps {
@@ -8,7 +9,15 @@ export interface StatutoryComplianceCardProps {
   icon: string;
   empPct: number;
   erPct: number;
-  wageCeilingMonthly?: number; // in paise (minor units)
+  /**
+   * Minor units (paise) for a flat monthly wage ceiling (PF/ESI); the literal
+   * string "state" for a scheme whose ceiling genuinely varies by state
+   * (PT/LWF — see GAP-PAYROLL-STATUTORY-03); "none" for a scheme that has no
+   * wage ceiling at all (NPS/GPF). Leaving this `undefined` used to render
+   * the same "No ceiling" text as a genuine "none" scheme, which is wrong
+   * for PT/LWF (state-specific, not absent).
+   */
+  wageCeilingMonthly?: number | "state" | "none";
   challanDueDay: number; // day of month (usually 15)
   href: string;
 }
@@ -24,14 +33,16 @@ export function StatutoryComplianceCard({
 }: StatutoryComplianceCardProps) {
   const t = useTranslations("statutoryComplianceCard");
 
-  function formatMinor(minor?: number): string {
-    if (minor == null) return t("noCeiling");
-    return `₹${(minor / 100).toLocaleString("en-IN")} /mo`;
+  function formatCeiling(value?: number | "state" | "none"): string {
+    if (value === "state") return t("ceilingStateSpecific");
+    if (value == null || value === "none") return t("noCeiling");
+    return `₹${(value / 100).toLocaleString("en-IN")} /mo`;
   }
 
   return (
-    <a
+    <Link
       href={href}
+      className="statutory-card"
       style={{
         display: "block",
         background: "var(--panel)",
@@ -40,13 +51,6 @@ export function StatutoryComplianceCard({
         padding: "18px 20px",
         textDecoration: "none",
         color: "inherit",
-        transition: "box-shadow 0.15s",
-      }}
-      onMouseEnter={(e) => {
-        (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 4px 16px rgba(0,0,0,0.08)";
-      }}
-      onMouseLeave={(e) => {
-        (e.currentTarget as HTMLAnchorElement).style.boxShadow = "none";
       }}
     >
       {/* Title row */}
@@ -69,16 +73,11 @@ export function StatutoryComplianceCard({
             behind it (see the old STATUTORY_CARDS complianceStatus literals
             in page.tsx) -- a compliance dashboard confidently displaying a
             fabricated status is worse than showing none, so it has been
-            removed. Real filing status lives in Challans & Reconciliation. */}
-        <span
-          style={{
-            fontSize: 11,
-            fontWeight: 600,
-            color: "var(--accent, #2563eb)",
-          }}
-        >
-          {t("seeChallansForFilingStatus")}
-        </span>
+            removed. Real filing status lives in Challans & Reconciliation.
+            GAP-PAYROLL-STATUTORY-04: the "See Challans & Reconciliation for
+            filing status" pointer used to repeat here as non-link text on
+            all six cards; it is now one real link on the hub page itself
+            (see statutory/page.tsx), not duplicated per-card. */}
       </div>
 
       {/* Rate grid */}
@@ -149,7 +148,7 @@ export function StatutoryComplianceCard({
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <span>{t("wageCeiling")}</span>
           <span style={{ fontWeight: 600, color: "var(--ink)" }}>
-            {formatMinor(wageCeilingMonthly)}
+            {formatCeiling(wageCeilingMonthly)}
           </span>
         </div>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -159,6 +158,6 @@ export function StatutoryComplianceCard({
           </span>
         </div>
       </div>
-    </a>
+    </Link>
   );
 }

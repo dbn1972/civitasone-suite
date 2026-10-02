@@ -88,4 +88,54 @@ describe("PtSlabForm", () => {
       expect(screen.getByText(/This range overlaps another slab for this state/)).toBeInTheDocument();
     });
   });
+
+  // GAP-PAYROLL-STATUTORY-PT-04: the client pre-check must agree EXACTLY with
+  // payroll-service's findPtSlabOverlap / ptSlab refine (state-rules.ts):
+  // inclusive ranges, From == To allowed, same-From slab = upsert target.
+  describe("client pre-check mirrors the server PT slab rule (GAP-PAYROLL-STATUTORY-PT-04)", () => {
+    const existing = [{ state_code: "KA", slab_from_minor: 0, slab_to_minor: 1500000 }];
+    function fill(state: string, from: string, to: string) {
+      render(
+        <NextIntlClientProvider locale="en" messages={enMessages}>
+          <PtSlabForm existingSlabs={existing} />
+        </NextIntlClientProvider>,
+      );
+      fireEvent.change(screen.getByLabelText(/State Code/), { target: { value: state } });
+      fireEvent.change(screen.getByLabelText(/Slab From/), { target: { value: from } });
+      fireEvent.change(screen.getByLabelText(/Slab To/), { target: { value: to } });
+      fireEvent.change(screen.getByLabelText(/PT Amount/), { target: { value: "200" } });
+      fireEvent.click(screen.getByRole("button", { name: "Save PT Slab" }));
+    }
+
+    it("rejects a slab that only touches an existing slab's upper bound (ranges are inclusive)", () => {
+      fill("ka", "15000", "20000");
+      expect(screen.getByText("This slab overlaps an existing slab for this state.")).toBeInTheDocument();
+      expect(screen.queryByText("Save this professional tax slab?")).not.toBeInTheDocument();
+    });
+
+    it("accepts the next slab starting one paisa above the existing upper bound", async () => {
+      fill("KA", "15000.01", "20000");
+      await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+    });
+
+    it("treats an existing slab with the same From as the upsert target, not an overlap", async () => {
+      fill("KA", "0", "10000");
+      await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+    });
+
+    it("ignores slabs of other states", async () => {
+      fill("MH", "100", "20000");
+      await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+    });
+
+    it("allows a single-amount slab where From == To (server: toMinor >= fromMinor)", async () => {
+      fill("MH", "500", "500");
+      await waitFor(() => expect(screen.getByText("Save this professional tax slab?")).toBeInTheDocument());
+    });
+
+    it("rejects To below From", () => {
+      fill("MH", "600", "500");
+      expect(screen.getByText("Slab 'To' cannot be less than slab 'From'.")).toBeInTheDocument();
+    });
+  });
 });

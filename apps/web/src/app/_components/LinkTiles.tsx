@@ -51,6 +51,7 @@ const TILE_ICONS: Record<string, string> = {
 const TILE_BG = ["#eef2ff", "#ecfdf3", "#fffaeb", "#fce7ee", "#e7edfd", "#f1f5f9"];
 
 function tileIcon(tile: NavTile): string {
+  if (tile.icon) return tile.icon;
   if (TILE_ICONS[tile.title]) return TILE_ICONS[tile.title]!;
   if (tile.href.includes("dashboard")) return "📊";
   if (tile.href.includes("employees")) return "👥";

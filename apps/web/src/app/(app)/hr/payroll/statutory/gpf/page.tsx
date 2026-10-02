@@ -4,6 +4,7 @@ import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { employeeLabel } from "../_lib/employeeLabel";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
@@ -11,6 +12,11 @@ import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 type GpfRow = {
   id: string;
   employeeId: string;
+  employeeName?: string | null;
+  /** Real HR employee number (listGpfReport), when HRMS has one. */
+  employeeCode?: string | null;
+  /** Display-only: see employeeLabel() -- never the full UUID. */
+  employee?: string;
   period: string;
   basicMinor: number;
   contribPct: number;
@@ -37,18 +43,32 @@ export default async function GpfStatutoryPage() {
   if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
     return <PermissionDenied module="GPF ledger" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("backToStatutoryLabel")} />;
   }
-  const { data: rows, source } = await getData();
+  const { data: rawRows, source } = await getData();
+  const rows = rawRows.map((r) => ({ ...r, employee: employeeLabel(r.employeeId, r.employeeName, r.employeeCode) }));
   const errored = source === "error";
 
   const totalContribMinor = rows.reduce((s, r) => s + Number(r.empContribMinor ?? 0), 0);
   const uniqueEmployees = new Set(rows.map((r) => r.employeeId)).size;
   const uniquePeriods = new Set(rows.map((r) => r.period)).size;
 
-  const columns: { key: keyof GpfRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "employeeId", label: t("colEmployee") },
+  const columns: {
+    key: keyof GpfRow & string;
+    label: string;
+    align?: "left" | "right";
+    cellType?: "amount" | "percent";
+  }[] = [
+    // GAP-PAYROLL-STATUTORY-GPF-05: the backend already enriches this report
+    // with employeeName (statutory/queries.ts#listGpfReport) -- this page
+    // just was not reading it, so the raw UUID showed instead.
+    { key: "employee", label: t("colEmployee") },
     { key: "period", label: t("colPeriod") },
     { key: "basicMinor", label: t("colBasicPay"), align: "right", cellType: "amount" },
-    { key: "contribPct", label: t("colRatePercent"), align: "right" },
+    // GAP-PAYROLL-STATUTORY-GPF-04: "Rate (%)" column had no cellType, so a
+    // row value of 10 printed as the bare number "10" even though the header
+    // already states the unit is percent -- new DataTable "percent" cellType
+    // formats it as "10%" (and the stale "(%)" is dropped from the header
+    // since the unit is now carried by the cell itself).
+    { key: "contribPct", label: t("colRatePercent"), align: "right", cellType: "percent" },
     { key: "empContribMinor", label: t("colGpfContribution"), align: "right", cellType: "amount" },
   ];
 
@@ -63,13 +83,17 @@ export default async function GpfStatutoryPage() {
       <StatGrid>
         <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statGpfRecords")} value={errored ? null : rows.length} />
         <StatCard icon="💰" iconBg="var(--goodbg)" label={t("statTotalGpfSubscription")} value={errored ? null : formatMoney(totalContribMinor)} />
-        <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statUniqueEmployees")} value={errored ? null : uniqueEmployees} />
-        <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statPeriodsCovered")} value={errored ? null : uniquePeriods} />
+        {/* GAP-PAYROLL-STATUTORY-GPF-05: these two counts are over the whole
+            ledger history, not a period -- labelled "(all time)" rather than
+            silently implying "this period" (no period filter was added here;
+            see the PR description). */}
+        <StatCard icon="👥" iconBg="var(--warnbg)" label={t("statUniqueEmployeesAllTime")} value={errored ? null : uniqueEmployees} />
+        <StatCard icon="📅" iconBg="var(--goodbg)" label={t("statPeriodsCoveredAllTime")} value={errored ? null : uniquePeriods} />
       </StatGrid>
       <Card title={t("historyCardTitle")}>
         {errored ? (
           <div className="pad">
-            <RefreshErrorState error={toHumanError("load", { area: "gpf" })} backHref="/hr/payroll/statutory" />
+            <RefreshErrorState error={toHumanError("load", { area: t("loadErrorArea") })} backHref="/hr/payroll/statutory" />
           </div>
         ) : (
           <DataTable<GpfRow>

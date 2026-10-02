@@ -33,8 +33,20 @@ describe("EcrGeneratorForm", () => {
 
   it("requires a month before opening the confirm dialog", () => {
     renderForm();
+    // GAP-PAYROLL-STATUTORY-PF-05: the field now defaults to the previous
+    // calendar month (see the dedicated default test below), so exercising
+    // the required-field validation needs an explicit clear first.
+    fireEvent.change(screen.getByLabelText(/^Period/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: "Generate ECR" }));
     expect(screen.getByText("Month is required in YYYY-MM format.")).toBeInTheDocument();
+  });
+
+  it("defaults the period to the previous calendar month (GAP-PAYROLL-STATUTORY-PF-05)", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 5, 15)); // 15 Jun 2026 (local) -> previous month is 2026-05
+    renderForm();
+    expect(screen.getByLabelText(/^Period/)).toHaveValue("2026-05");
+    vi.useRealTimers();
   });
 
   it("generates the ECR file on confirm (happy path)", async () => {

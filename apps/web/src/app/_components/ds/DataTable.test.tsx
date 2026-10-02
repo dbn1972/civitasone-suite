@@ -438,4 +438,18 @@ describe("DataTable", () => {
       errorSpy.mockRestore();
     });
   });
+
+  // GAP-PAYROLL-STATUTORY-GPF-04: Postgres numeric columns arrive as strings.
+  it("formats the percent cellType from numbers and numeric strings, and '—' for junk", () => {
+    render(
+      <DataTable
+        columns={[{ key: "pct", label: "Rate", cellType: "percent" }]}
+        rows={[{ pct: 10 }, { pct: "12.50" }, { pct: "abc" }, { pct: null }]}
+      />,
+    );
+    expect(screen.getByText("10.0%")).toBeInTheDocument();
+    expect(screen.getByText("12.5%")).toBeInTheDocument();
+    expect(screen.getAllByText("—")).toHaveLength(2);
+  });
 });
+

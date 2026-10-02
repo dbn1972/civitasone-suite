@@ -7,9 +7,27 @@ import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient"
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
+/**
+ * GAP-PAYROLL-STATUTORY-PF-05: ECR is filed after a month closes, so an
+ * empty default forced every user to type the (almost always) same
+ * previous-month value by hand. previousMonthYYYYMM()/currentMonthYYYYMM()
+ * give the default and the input's `max` respectively (the current month's
+ * payroll is not finalised yet, so generating its ECR is never valid).
+ */
+function currentMonthYYYYMM(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function previousMonthYYYYMM(): string {
+  const now = new Date();
+  const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return `${prev.getFullYear()}-${String(prev.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function EcrGeneratorForm() {
   const t = useTranslations("ecrGeneratorForm");
-  const [month, setMonth] = useState("");
+  const [month, setMonth] = useState(previousMonthYYYYMM);
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -72,6 +90,7 @@ export function EcrGeneratorForm() {
               ref={monthRef}
               type="month"
               value={month}
+              max={currentMonthYYYYMM()}
               onChange={(e) => setMonth(e.target.value)}
               aria-required="true"
               aria-invalid={monthInvalid || undefined}

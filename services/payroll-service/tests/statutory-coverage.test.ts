@@ -415,7 +415,7 @@ describe("Statutory routes — limit parameter handling", () => {
       headers: { authorization: `Bearer ${token()}` },
     });
     await app.close();
-    expect(H.listPfMock).toHaveBeenCalledWith(TENANT, 1);
+    expect(H.listPfMock).toHaveBeenCalledWith(TENANT, 1, undefined);
   });
 
   it("passes limit=200 to repo for ESI", async () => {
@@ -426,7 +426,7 @@ describe("Statutory routes — limit parameter handling", () => {
       headers: { authorization: `Bearer ${token()}` },
     });
     await app.close();
-    expect(H.listEsiMock).toHaveBeenCalledWith(TENANT, 200);
+    expect(H.listEsiMock).toHaveBeenCalledWith(TENANT, 200, undefined);
   });
 
   it("passes limit=50 to repo for TDS", async () => {
