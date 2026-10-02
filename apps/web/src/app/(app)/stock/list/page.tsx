@@ -10,8 +10,8 @@ import { StockListClient } from "./StockListClient";
 export default async function StockListPage() {
   const { data: items, source } = await getStockItems();
   const errored = source === "error";
-  const lowStockCount = errored ? null : items.filter((i) => i.isLowStock).length;
-  const totalValue = errored ? null : items.reduce((sum, i) => sum + i.totalValue, 0);
+  const lowStockCount = errored ? null : items.filter((i) => i.isLowStock === true).length;
+  const totalValue = errored ? null : items.reduce((sum, i) => sum + (i.totalValue ?? 0), 0);
   const categories = errored ? null : new Set(items.map((i) => i.category)).size;
 
   return (

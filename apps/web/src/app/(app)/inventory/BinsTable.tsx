@@ -6,6 +6,8 @@ import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, statValue } from "./RegisterFrame";
 import type { InventoryBinRow } from "./_data";
+import { INVENTORY_LIST_LIMIT, capNote } from "./_limits";
+import { nameOrDash } from "./_labels";
 
 type Col = {
   key: keyof InventoryBinRow & string;
@@ -16,7 +18,9 @@ type Col = {
 
 const columns: Col[] = [
   { key: "code", label: "Bin Code" },
-  { key: "storeId", label: "Store", render: (r) => <code>{r.storeId.slice(0, 8)}</code> },
+  // GAP-INVENTORY-BINS-02: the store's name, never an id fragment; the full id
+  // stays available as a tooltip and a bin whose store could not be named shows "—".
+  { key: "storeId", label: "Store", render: (r) => <span title={r.storeId}>{nameOrDash(r.storeName)}</span> },
   { key: "aisle", label: "Aisle", render: (r) => r.aisle ?? "—" },
   { key: "rack", label: "Rack", render: (r) => r.rack ?? "—" },
   { key: "shelf", label: "Shelf", render: (r) => r.shelf ?? "—" },
@@ -48,7 +52,7 @@ export function BinsTable({ bins, source = "api" }: { bins: InventoryBinRow[]; s
           <StatCard icon="📐" iconBg="#fef3c7" label="Capacity Tracked" value={statValue(provenance, withCapacity)} />
       </StatGrid>
       <Card title="Bins">
-        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="bins and racks">
+        <RegisterFrame provenance={provenance} cachedAt={cachedAt} offline={offline} area="bins and racks" capNote={capNote(rows.length, INVENTORY_LIST_LIMIT, "bins")}>
           <DataTable<InventoryBinRow>
             columns={columns}
             rows={rows}

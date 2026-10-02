@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 // MovementsTable so they all read ONE useSeededResource call -- this page no longer
 // derives zero-filled stats from a failed fetch.
 export default async function InventoryReceiptsPage() {
-  const { data, source } = await getInventoryLedger();
+  const { data, source } = await getInventoryLedger({ movementType: "receipt" });
 
   return (
     <>

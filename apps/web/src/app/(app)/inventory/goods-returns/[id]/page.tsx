@@ -1,7 +1,10 @@
 import { PageHeader, Card, StatusPill, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getGoodsReturnById } from "@/app/_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
+import { getItemNames, getStoreNames } from "../../_lookups";
+import { itemLabel, nameOrDash, userRefLabel } from "../../_labels";
 import { QcInspectionForm } from "./QcInspectionForm";
+import { dispositionLabel } from "./qcMatrix";
 
 export default async function GoodsReturnDetailPage({ params }: { params: { id: string } }) {
   const result = await getGoodsReturnById(params.id);
@@ -33,6 +36,15 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
 
   const isPending = goodsReturn.qcStatus === "pending";
 
+  // GAP-INVENTORY-GOODS-RETURNS-02 / DETAIL-05: show names, not UUIDs. Both
+  // lookups are best-effort; an unresolved item falls back to its short id and
+  // an unresolved store to "—" (the full ids stay in the tooltips). The item is
+  // deliberately not linked: /inventory/[id] reads the stock-service master,
+  // whose ids differ from this inventory-service item id.
+  const [itemNames, storeNames] = await Promise.all([getItemNames([goodsReturn.itemId]), getStoreNames()]);
+  const itemRef = itemNames.get(goodsReturn.itemId);
+  const itemText = itemLabel({ itemId: goodsReturn.itemId, itemName: itemRef?.name, itemSku: itemRef?.sku });
+
   return (
     <>
       <PageHeader
@@ -45,16 +57,18 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
       <Card title="Return details" padding>
         <div className="fields">
           <div className="field">
-            <span className="label">Original issue (GRN reference)</span>
-            <span className="mono">{goodsReturn.originalIssueId}</span>
+            <span className="label">Original stock issue</span>
+            <span className="mono" title="Stock issue id; the service does not return a document number">
+              {goodsReturn.originalIssueId}
+            </span>
           </div>
           <div className="field">
             <span className="label">Item</span>
-            <span className="mono">{goodsReturn.itemId}</span>
+            <span title={goodsReturn.itemId}>{itemText}</span>
           </div>
           <div className="field">
             <span className="label">Store</span>
-            <span className="mono">{goodsReturn.storeId}</span>
+            <span title={goodsReturn.storeId}>{nameOrDash(storeNames.get(goodsReturn.storeId))}</span>
           </div>
           <div className="field">
             <span className="label">Quantity</span>
@@ -76,8 +90,14 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
               </div>
               <div className="field">
                 <span className="label">Disposition</span>
-                <StatusPill status={goodsReturn.disposition} />
+                <StatusPill status={goodsReturn.disposition} label={dispositionLabel(goodsReturn.disposition)} />
               </div>
+              {goodsReturn.qcInspectedBy ? (
+                <div className="field">
+                  <span className="label">Inspected by</span>
+                  <span title={goodsReturn.qcInspectedBy}>{userRefLabel(goodsReturn.qcInspectedBy)}</span>
+                </div>
+              ) : null}
               {goodsReturn.qcInspectedAt ? (
                 <div className="field">
                   <span className="label">Inspected on</span>
@@ -98,7 +118,7 @@ export default async function GoodsReturnDetailPage({ params }: { params: { id: 
       {isPending ? (
         <>
           <h2 style={{ margin: "24px 0 8px", fontSize: "1.1rem" }}>Record QC verdict</h2>
-          <QcInspectionForm goodsReturnId={goodsReturn.id} />
+          <QcInspectionForm goodsReturnId={goodsReturn.id} qty={goodsReturn.qty} itemName={itemText} />
         </>
       ) : null}
     </>

@@ -124,6 +124,11 @@ export interface NavTile {
   /** Optional explicit icon override, checked before LinkTiles' own
    * title/href-based inference (see LinkTiles.tsx's tileIcon()). */
   icon?: string;
+  /**
+   * Optional live count/status chip shown on the tile (e.g. "12 low"). `text`
+   * is rendered as-is -- use "—" for a count that failed to load, never 0.
+   */
+  badge?: { text: string; tone?: 'warn' | 'info' };
 }
 
 export interface MetricCard {
@@ -1767,13 +1772,17 @@ export type StockItemSummary = {
   name: string;
   category: string;
   unit: string;
-  currentStock: number;
+  /** null = the service did not report a level (never a fabricated 0). */
+  currentStock: number | null;
   minStockLevel: number;
   maxStockLevel?: number;
-  unitCost: number;
-  totalValue: number;
+  /** Paise; null = not reported. */
+  unitCost: number | null;
+  /** Paise; null = not reported. */
+  totalValue: number | null;
   warehouseLocation?: string;
-  isLowStock: boolean;
+  /** null = unknown because currentStock is unknown (not "low", not "OK"). */
+  isLowStock: boolean | null;
   lastReceivedDate?: string;
   lastIssuedDate?: string;
 };
@@ -1843,6 +1852,8 @@ export type CycleCountDetail = {
   rejectionReason?: string;
   /** User id (JWT sub) that recorded the count; the maker, who may not approve it. */
   createdBy?: string;
+  /** Id of the stock-adjustment movement this count posted (approved/auto_posted only). */
+  adjustmentId?: string;
   countedAt: string;
   createdAt: string;
   version: number;

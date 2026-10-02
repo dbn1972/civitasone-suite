@@ -13,6 +13,7 @@ import {
 } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import type { LedgerOpts } from "./repo.js";
 
 const STORE_ROLES  = ["inventory_user", "inventory_manager", "store_keeper", "inventory_admin", "super_admin"];
 const ADJUST_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
@@ -76,9 +77,10 @@ export async function movementRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const q = ledgerQueryParams.parse(req.query);
-    const opts: { itemId?: string; storeId?: string; from?: string; to?: string; limit: number; offset: number } = { limit: q.limit, offset: q.offset };
+    const opts: LedgerOpts = { limit: q.limit, offset: q.offset };
     if (q.itemId !== undefined) opts.itemId = q.itemId;
     if (q.storeId !== undefined) opts.storeId = q.storeId;
+    if (q.movementType !== undefined) opts.movementType = q.movementType;
     if (q.from !== undefined) opts.from = q.from;
     if (q.to !== undefined) opts.to = q.to;
     return reply.send(await queries.listLedger(ctx.tenantId, opts));

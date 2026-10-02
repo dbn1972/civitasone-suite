@@ -479,6 +479,7 @@ export function mapCycleCountDetail(payload: unknown): CycleCountDetail | null {
     rejectedAt: toText(payload.rejectedAt) ?? undefined,
     rejectionReason: toText(payload.rejectionReason) ?? undefined,
     createdBy: toText(payload.createdBy) ?? undefined,
+    adjustmentId: toText(payload.adjustmentId) ?? undefined,
     countedAt: toText(payload.countedAt) ?? "—",
     createdAt: toText(payload.createdAt) ?? "—",
     version: typeof payload.version === "number" ? payload.version : 1,
@@ -1017,7 +1018,9 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
     const name = toText(row.name);
     const itemCode = toText(row.itemCode) ?? toText(row.code) ?? id;
     if (!id || !name || !itemCode) continue;
-    const currentStock = typeof row.currentStock === "number" ? row.currentStock : 0;
+    // A level the service did not report stays null: defaulting it to 0 made every
+    // item read "Low Stock" with a Rs 0 value (stock-service returns no levels).
+    const currentStock = parseMinor(row.currentStock);
     const minStockLevel = typeof row.minStockLevel === "number" ? row.minStockLevel : (parseMinor(row.reorderLevel) ?? 0);
     mapped.push({
       id,
@@ -1027,9 +1030,9 @@ export function mapStockItemSummaries(payload: unknown): StockItemSummary[] | nu
       unit: toText(row.unit) ?? toText(row.uomId)?.slice(0, 4) ?? "EA",
       currentStock,
       minStockLevel,
-      unitCost: parseMinor(row.unitCost) ?? 0,
-      totalValue: parseMinor(row.totalValue) ?? 0,
-      isLowStock: currentStock <= minStockLevel,
+      unitCost: parseMinor(row.unitCost),
+      totalValue: parseMinor(row.totalValue),
+      isLowStock: currentStock === null ? null : currentStock <= minStockLevel,
     });
   }
   return mapped;

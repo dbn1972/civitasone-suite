@@ -101,3 +101,11 @@ export const PAYROLL_REPORT_ROLES = [...PAYROLL_ADMIN_ROLES, "hr_admin"];
  * the server remains the authority (it also enforces maker != checker).
  */
 export const INVENTORY_CYCLE_COUNT_APPROVE_ROLES = ["inventory_manager", "inventory_admin", "super_admin"];
+
+/**
+ * Roles permitted to create inventory master data (bins, items). Mirrors
+ * inventory-service's WRITE_ROLES in modules/items/routes.ts
+ * (GAP-INVENTORY-BINS-03 / GAP-INVENTORY-ITEMS-03); the service stays the
+ * authority, this only stops offering a control that is guaranteed to 403.
+ */
+export const INVENTORY_WRITE_ROLES = ["inventory_user", "inventory_manager", "inventory_admin", "store_keeper", "super_admin"];

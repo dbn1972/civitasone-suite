@@ -1,8 +1,9 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "@/app/_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { formatMoney } from "@/lib/formatters";
 import { getStockItems } from "../../../_data/loaders";
 import { getInventoryCycleCounts, type InventoryCycleCountRow } from "../_data";
+import { itemLabel, nameOrDash } from "../_labels";
+import { stockListStats } from "./listStats";
 import { InventoryStockListClient } from "./InventoryStockListClient";
 import { ArrowLeft } from "lucide-react";
 
@@ -15,10 +16,14 @@ export const dynamic = "force-dynamic";
 // `cellType: "date"` is server-safe: it formats via the shared
 // formatIndianDate() helper, the exact function this file's own (now
 // removed) render closure called directly.
+// GAP-INVENTORY-LIST-03: item and warehouse are shown by name (resolved in the
+// loader); the ids stay only in the row link.
+type PendingCountRow = InventoryCycleCountRow & { itemText: string; warehouseText: string };
+
 const CYCLE_COUNT_COLUMNS = [
   { key: "countedAt" as const, label: "Counted", cellType: "date" as const },
-  { key: "itemId" as const, label: "Item" },
-  { key: "warehouseId" as const, label: "Warehouse" },
+  { key: "itemText" as const, label: "Item" },
+  { key: "warehouseText" as const, label: "Warehouse" },
   { key: "systemQty" as const, label: "System qty", align: "right" as const },
   { key: "physicalQty" as const, label: "Physical qty", align: "right" as const },
   { key: "variance" as const, label: "Variance", align: "right" as const },
@@ -27,7 +32,7 @@ const CYCLE_COUNT_COLUMNS = [
 ];
 
 export default async function InventoryListPage() {
-  const [{ data: items, source }, { data: pendingCycleCounts }] = await Promise.all([
+  const [{ data: items, source }, pendingRes] = await Promise.all([
     getStockItems(),
     getInventoryCycleCounts("pending_approval"),
   ]);
@@ -36,8 +41,16 @@ export default async function InventoryListPage() {
   // an unstocked store (zero SKUs, Rs 0 value, "Add stock items"). Stats read
   // "—" and the register is replaced by a retry state.
   const failed = source === "error";
-  const lowStockCount = items.filter((i) => i.isLowStock).length;
-  const totalValue = items.reduce((sum, i) => sum + i.totalValue, 0);
+  // GAP-INVENTORY-LIST-03: a failed cycle-count fetch must not silently hide the
+  // approvals waiting on a supervisor -- it gets its own retry notice.
+  const pendingFailed = pendingRes.source === "error";
+  const pendingRows: PendingCountRow[] = pendingRes.data.map((c) => ({
+    ...c,
+    itemText: itemLabel(c),
+    warehouseText: nameOrDash(c.warehouseName),
+  }));
+  // Unknown levels/values are excluded rather than shown as 0 (see listStats.ts).
+  const stats = stockListStats(items, failed);
 
   return (
     <>
@@ -46,20 +59,24 @@ export default async function InventoryListPage() {
       </nav>
       <PageHeader
         title="Stock Items"
-        subtitle="All SKUs shared with the inventory module and their current stock levels."
+        subtitle="Stock levels per item from the stock service. The catalogued item master, with categories and reorder policy, is under Item Master."
       />
       <div aria-label="Inventory stock items">
         <StatGrid>
-          <StatCard icon="📦" iconBg="#f1f5f9" label="Total SKUs" value={failed ? null : items.length} />
-          <StatCard icon="⚠️" iconBg="#fee2e2" label="Low Stock" value={failed ? null : lowStockCount} />
-          <StatCard icon="💰" iconBg="#eff6ff" label="Stock Value" value={failed ? null : formatMoney(totalValue)} />
+          <StatCard icon="📦" iconBg="#f1f5f9" label="Total SKUs" value={stats.total} />
+          <StatCard icon="⚠️" iconBg="#fee2e2" label="Low Stock" value={stats.lowStock} />
+          <StatCard icon="💰" iconBg="#eff6ff" label={stats.valueLabel} value={stats.valueText} />
         </StatGrid>
 
-        {pendingCycleCounts.length > 0 ? (
+        {pendingFailed ? (
           <Card title="Cycle counts pending approval">
-            <DataTable<InventoryCycleCountRow>
+            <RefreshErrorState error={toHumanError("load", { area: "pending cycle-count approvals" })} />
+          </Card>
+        ) : pendingRows.length > 0 ? (
+          <Card title="Cycle counts pending approval">
+            <DataTable<PendingCountRow>
               columns={CYCLE_COUNT_COLUMNS}
-              rows={pendingCycleCounts}
+              rows={pendingRows}
               rowLinkPrefix="/inventory/cycle-counts/"
               rowLinkKey="id"
               pageSize={15}

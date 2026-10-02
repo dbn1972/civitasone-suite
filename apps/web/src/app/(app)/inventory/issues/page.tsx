@@ -9,14 +9,14 @@ export const dynamic = "force-dynamic";
 // MovementsTable so they all read ONE useSeededResource call -- this page no longer
 // derives zero-filled stats from a failed fetch.
 export default async function InventoryIssuesPage() {
-  const { data, source } = await getInventoryLedger();
+  const { data, source } = await getInventoryLedger({ movementType: "issue" });
 
   return (
     <>
       <nav aria-label="Breadcrumb" className="back">
         <ArrowLeft aria-hidden="true" size={14} /> <a href="/inventory">Inventory</a>
       </nav>
-      <PageHeader title="Stock Issues" subtitle="Stock issued/consumed from stores against indents." />
+      <PageHeader title="Stock Issues" subtitle="Stock issued or consumed from stores (latest movements first)." />
       <MovementsTable entries={data} kind="issue" source={source} />
     </>
   );

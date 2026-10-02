@@ -196,17 +196,24 @@ export async function sumOpenLayerValues(tenantId: string, itemIds: string[]): P
 
 // ── Stock ledger ─────────────────────────────────────────────────────────
 
+export interface LedgerOpts {
+  itemId?: string; storeId?: string; movementType?: string; from?: string; to?: string; limit: number; offset: number;
+}
+
 export async function listLedger(
-  tenantId: string, opts: { itemId?: string; storeId?: string; from?: string; to?: string; limit: number; offset: number },
+  tenantId: string, opts: LedgerOpts,
 ): Promise<LedgerRow[]> {
   const conds: SQL[] = [eq(stockLedger.tenantId, tenantId)];
   if (opts.itemId) conds.push(eq(stockLedger.itemId, opts.itemId));
   if (opts.storeId) conds.push(eq(stockLedger.storeId, opts.storeId));
+  if (opts.movementType) conds.push(eq(stockLedger.movementType, opts.movementType));
   if (opts.from) conds.push(gte(stockLedger.postingDate, opts.from));
   if (opts.to) conds.push(lte(stockLedger.postingDate, opts.to));
   return scopedRead((tx) => tx.select().from(stockLedger)
     .where(and(...conds))
-    .orderBy(desc(stockLedger.createdAt))
+    // id tiebreak: rows posted in one transaction share createdAt, and an
+    // unstable order would duplicate/skip rows across offset pages.
+    .orderBy(desc(stockLedger.createdAt), desc(stockLedger.id))
     .limit(opts.limit).offset(opts.offset));
 }
 

@@ -1,15 +1,23 @@
+import { SkeletonBar, SkeletonCard } from "@/app/_components/ds";
+
+/**
+ * Segment-level fallback for every /inventory route. GAP-INVENTORY-HOME-04: it
+ * used to draw four stat cards the hub does not have, so it is now a neutral
+ * shape every inventory page fits -- header, a content card, and a tile grid.
+ * Routes whose layout differs add their own loading.tsx (see [id]/loading.tsx).
+ */
 export default function InventoryLoading() {
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-64 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
-        </div>
-        <div className="h-72 rounded-xl bg-slate-200" />
+    <div className="page-main" aria-busy="true" aria-label="Loading inventory">
+      <SkeletonBar w={160} h={14} />
+      <SkeletonBar w={260} h={30} style={{ margin: "10px 0 20px" }} />
+      <SkeletonCard />
+      <div
+        style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, marginTop: 20 }}
+      >
+        {Array.from({ length: 6 }).map((_, i) => (
+          <SkeletonBar key={i} w="100%" h={96} />
+        ))}
       </div>
     </div>
   );

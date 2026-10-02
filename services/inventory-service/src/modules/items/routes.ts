@@ -185,6 +185,14 @@ export async function itemRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, QC_ROLES);
     const { id } = idParam.parse(req.params);
     const body = qcInspectionBody.parse(req.body);
+    // Synchronous pre-checks (same pattern as cycle-count approve): without them a
+    // missing or already-inspected return got a 202 the consumer then silently
+    // dropped. The consumer still enforces pending-only atomically (race safety).
+    const record = await queries.getGoodsReturn(ctx.tenantId, id);
+    if (!record) throw new HttpError(404, "NOT_FOUND", "goods return not found");
+    if (record.qcStatus !== "pending") {
+      throw new HttpError(409, "NOT_PENDING", `goods return is already ${record.qcStatus}`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.inspectGoodsReturn(ctx, id, body));
   });
 

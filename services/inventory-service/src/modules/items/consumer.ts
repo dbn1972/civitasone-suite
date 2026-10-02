@@ -19,7 +19,7 @@ import * as repo from "./repo.js";
 import {
   createItemPayload, updateItemPayload, createCategoryPayload, createUomPayload,
   createSubstitutePayload, createBinPayload, createReservationPayload,
-  releaseReservationPayload, createGoodsReturnPayload, qcInspectionPayload,
+  releaseReservationPayload, createGoodsReturnPayload, qcInspectionPayload, qcMatrixViolation,
 } from "./validators.js";
 
 export function registerItemConsumers(rawQueue: Queue): void {
@@ -183,6 +183,10 @@ export function registerItemConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.goodsReturnInspect, async (msg) => {
     const p = qcInspectionPayload.parse(msg.payload);
+    // Defence in depth: the route already refuses these, but a message published by
+    // anything else must not put failed stock back on hand either. Not retryable.
+    const violation = qcMatrixViolation(p);
+    if (violation) throw new NonRetryableError(`[QC_MATRIX_VIOLATION] ${violation}`);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // State transition: only a 'pending' goods return may be inspected.

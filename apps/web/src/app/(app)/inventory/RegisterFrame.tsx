@@ -36,6 +36,7 @@ export function RegisterFrame({
   cachedAt,
   offline,
   area,
+  capNote,
   children,
 }: {
   provenance: DataProvenance | undefined;
@@ -43,6 +44,8 @@ export function RegisterFrame({
   offline: boolean;
   /** Plain noun for the retry copy, e.g. "bins and racks". */
   area: string;
+  /** Shown above the table when the fetched page is full (see _limits.ts capNote). */
+  capNote?: string | null;
   children: ReactNode;
 }) {
   if (isNoData(provenance)) {
@@ -51,6 +54,11 @@ export function RegisterFrame({
   return (
     <>
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+      {capNote ? (
+        <p role="note" style={{ fontSize: 13, color: "#92400e", margin: "0 0 8px" }}>
+          {capNote}
+        </p>
+      ) : null}
       {children}
     </>
   );

@@ -2,6 +2,8 @@ import { PageHeader, Card, StatusPill, EmptyState, LoadErrorState } from "../../
 import { getCycleCountById } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
 import { getSessionRoles, getSessionUserId, INVENTORY_CYCLE_COUNT_APPROVE_ROLES } from "@/lib/auth/roleGuard";
+import { getItemNames, getWarehouseNames } from "../../_lookups";
+import { itemLabel, nameOrDash, userRefLabel } from "../../_labels";
 import { CycleCountActions } from "./CycleCountActions";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -47,6 +49,16 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
   const isMaker = Boolean(cycleCount.createdBy) && cycleCount.createdBy === getSessionUserId();
   const canDecide = cycleCount.status === "pending_approval" && isApprover && !isMaker;
 
+  // GAP-INVENTORY-CYCLE-COUNTS-DETAIL-03: item and warehouse by name (ids only as
+  // tooltips). People are shown as "User <id prefix>": there is no directory
+  // lookup an inventory role may call, so the name cannot be resolved here.
+  const [itemNames, warehouseNames] = await Promise.all([getItemNames([cycleCount.itemId]), getWarehouseNames()]);
+  const itemRef = itemNames.get(cycleCount.itemId);
+  const itemText = itemLabel({ itemId: cycleCount.itemId, itemName: itemRef?.name, itemSku: itemRef?.sku });
+  const warehouseText = nameOrDash(warehouseNames.get(cycleCount.warehouseId));
+  const showsAdjustment =
+    (cycleCount.status === "approved" || cycleCount.status === "auto_posted") && Boolean(cycleCount.adjustmentId);
+
   const varianceLabel = cycleCount.variance > 0 ? `+${cycleCount.variance}` : String(cycleCount.variance);
   const varianceColor = cycleCount.variance === 0 ? "#475569" : cycleCount.variance > 0 ? "#16a34a" : "#b91c1c";
 
@@ -54,7 +66,7 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
     <>
       <PageHeader
         title="Cycle Count"
-        subtitle={`Item ${cycleCount.itemId}`}
+        subtitle={itemText}
         back="/inventory/list"
         actions={
           <>
@@ -76,11 +88,11 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
         <div className="fields">
           <div className="field">
             <span className="label">Item</span>
-            <span className="mono">{cycleCount.itemId}</span>
+            <span title={cycleCount.itemId}>{itemText}</span>
           </div>
           <div className="field">
             <span className="label">Warehouse</span>
-            <span className="mono">{cycleCount.warehouseId}</span>
+            <span title={cycleCount.warehouseId}>{warehouseText}</span>
           </div>
           <div className="field">
             <span className="label">System qty</span>
@@ -110,11 +122,19 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
             <span className="label">Counted at</span>
             <span>{formatIndianDate(cycleCount.countedAt)}</span>
           </div>
+          {showsAdjustment ? (
+            <div className="field">
+              {/* GAP-INVENTORY-CYCLE-COUNTS-DETAIL-05: the posted adjustment's reference. There is no
+                  per-movement screen to link to yet, so it is shown as a reference, not a dead link. */}
+              <span className="label">Stock adjustment reference</span>
+              <span className="mono" title={cycleCount.adjustmentId}>{cycleCount.adjustmentId}</span>
+            </div>
+          ) : null}
           {cycleCount.status === "approved" ? (
             <div className="field">
               <span className="label">Approved</span>
               <span>
-                {cycleCount.approvedBy ?? "—"}
+                <span title={cycleCount.approvedBy}>{userRefLabel(cycleCount.approvedBy)}</span>
                 {cycleCount.approvedAt ? ` · ${formatIndianDate(cycleCount.approvedAt)}` : ""}
               </span>
             </div>
@@ -124,7 +144,7 @@ export default async function CycleCountDetailPage({ params }: { params: { id: s
               <div className="field">
                 <span className="label">Rejected</span>
                 <span>
-                  {cycleCount.rejectedBy ?? "—"}
+                  <span title={cycleCount.rejectedBy}>{userRefLabel(cycleCount.rejectedBy)}</span>
                   {cycleCount.rejectedAt ? ` · ${formatIndianDate(cycleCount.rejectedAt)}` : ""}
                 </span>
               </div>
