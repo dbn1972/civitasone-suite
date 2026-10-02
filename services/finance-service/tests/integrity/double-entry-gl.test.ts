@@ -6,9 +6,9 @@
  *   (a) Behaviourally, through the real POST /v1/finance/journals path:
  *       a balanced journal is accepted (202); an UNBALANCED journal is rejected
  *       (400) by the route's Zod `.refine()` balance guard.
- *   (b) As a DB-wide audit over all existing gl.finance_journals rows (read as
- *       admin to bypass RLS and see every tenant), asserting each voucher's
- *       lines sum to a zero net (debit == credit).
+ *   (b) As an audit of the gl.finance_journals rows this file itself posted
+ *       (read under its own tenant's GUC), asserting each voucher's lines sum
+ *       to a zero net (debit == credit) and that at least one was inspected.
  *
  * NOTE (observation, not a Check-#1 violation): the `lines` JSONB column is
  * stored double-encoded — a JSONB *string* containing the JSON array, rather
@@ -16,10 +16,10 @@
  * existing vouchers balance once unwrapped.
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
-import { createSqlClient } from "@civitasone/db";
 import type { MemoryQueue } from "@civitasone/queue";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { buildApp } from "../../src/app.js";
 import { sqlClient } from "../../src/shared/db.js";
 import { queue } from "../../src/shared/infra.js";
@@ -29,7 +29,12 @@ import { scoped } from "../_tenant.js";
 import type { FastifyInstance } from "fastify";
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
-const TENANT = "aaaaaaaa-0000-4000-8000-000000000001";
+// This file's own tenant. It used to share aaaaaaaa-...-000000000001 with
+// finance.test.ts, routes.test.ts, rls-isolation.test.ts and
+// recon-invariants.test.ts, so what the audit below saw depended on which of
+// those had run first. GL rows are append-only (0014_gl_immutability_reversal),
+// so a fresh tenant per run is also what keeps reruns independent.
+const TENANT = randomUUID();
 const ACTOR = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa";
 // The journal's two lines post against these head codes (see the "accepts a
 // BALANCED journal" test below). journalPost's consumer resolves accountCode
@@ -39,23 +44,8 @@ const ACTOR = "aaaaaaaa-0000-4000-8000-aaaaaaaaaaaa";
 // in the DLQ, so the DB-wide audit saw zero journals. This tenant has no
 // pre-seeded chart of accounts (unlike finance-core.test.ts's SEED_TENANT),
 // so seed the two heads the test actually posts against.
-const HEAD_1200 = "aaaaaaaa-0000-4000-8000-0000000001c1";
-const HEAD_2100 = "aaaaaaaa-0000-4000-8000-0000000002c1";
-
-// CI bootstrap sets civitas_admin from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
-// (civitas_test). Local compose defaults to civitas_dev_pw. Hardcoding the
-// local password here fails auth in CI, same as
-// services/inventory-service/tests/data-quality.test.ts (see turbo.json
-// test.passThroughEnv).
-const ADMIN_PW =
-  process.env.POSTGRES_ADMIN_PASSWORD ??
-  process.env.PGPASSWORD ??
-  (process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
-    ? "civitas_test"
-    : "civitas_dev_pw");
-const ADMIN_DSN =
-  process.env.ADMIN_DATABASE_URL ??
-  `postgres://civitas_admin:${ADMIN_PW}@localhost:5435/civitas_finance`;
+const HEAD_1200 = randomUUID();
+const HEAD_2100 = randomUUID();
 
 function token(): string {
   return signToken(
@@ -66,7 +56,6 @@ function token(): string {
 }
 
 let app: FastifyInstance;
-const admin = createSqlClient(ADMIN_DSN, { max: 2, prepare: false });
 
 async function drain() {
   await (queue as MemoryQueue).drain();
@@ -96,7 +85,6 @@ afterAll(async () => {
   await app.close();
   await scoped(TENANT, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD_1200))).catch(() => {});
   await scoped(TENANT, (tx) => tx.delete(financeHeads).where(eq(financeHeads.id, HEAD_2100))).catch(() => {});
-  await admin.end().catch(() => {});
   await sqlClient.end();
 });
 
@@ -144,77 +132,89 @@ describe("Check #1 — Double-entry GL: real POST balance guard", () => {
   });
 });
 
-// FLAGGED (see PR description): this describe block's premise — "read as
-// admin to bypass RLS and audit ALL tenants' vouchers" — does not hold in
-// this codebase. `civitas_admin` (the role behind ADMIN_DATABASE_URL / the
-// `admin` client below) is deliberately created NOBYPASSRLS — see
-// infra/db/bootstrap/bootstrap_admin_role.sql: "It is deliberately NOT a
-// superuser and NOT BYPASSRLS — the L3 lane asserts no `%_svc` role holds
-// BYPASSRLS, and civitas_admin must not become a hole in that." A plain
-// `admin.unsafe(...)` query (no transaction, no app.tenant_id GUC) against
-// gl.finance_journals — a FORCE RLS table — therefore always returns ZERO
-// rows, for every tenant, regardless of how much data actually exists.
-//
-// This was NOT the bug the registerGlConsumers()/drain() gap this file was
-// fixed for: that fix is real and correct — verified independently (a
-// temporary in-transaction COUNT(*) immediately after postJournal's insert,
-// using the transaction's own connection, showed the row present and
-// committed). The "at least one voucher inspected" guard test below is
-// therefore doing exactly its documented job — catching that the audit query
-// is blind — just for a different underlying reason (RLS-blocked read
-// privilege, not "no journals exist"). The FIRST test in this block
-// ("every persisted voucher balances") is a false-positive pass for the same
-// reason: an always-empty result set trivially satisfies `dr <> cr` having
-// no rows.
-//
-// The only role in this codebase with BYPASSRLS is finance_scanner
-// (migrations/0052_finance_scanner_role.sql), but it is granted SELECT only
-// on _outbox.messages / _inbox.processed, not gl.finance_journals — so it
-// cannot be swapped in as-is either. A real fix needs a deliberate choice
-// (grant civitas_admin a narrow BYPASSRLS-equivalent for read-only audit
-// tooling, provision a new dedicated audit role, or restructure this check to
-// loop per known tenant with the GUC set) — left as a follow-up rather than
-// guessed at here, per this task's standing instruction to flag rather than
-// silently build anything requiring a real design/security decision.
-describe("Check #1 — Double-entry GL: DB-wide audit of existing vouchers", () => {
-  it("every persisted gl.finance_journals voucher balances (debit == credit)", async () => {
-    // Read as admin to bypass RLS and audit ALL tenants' vouchers.
+// The audit reads under this file's own tenant GUC. It used to read
+// gl.finance_journals DB-wide through civitas_admin, but that role is
+// deliberately NOBYPASSRLS (infra/db/bootstrap/bootstrap_admin_role.sql) and
+// the table is FORCE RLS, so the DB-wide read always returned zero rows: the
+// "every voucher balances" test passed vacuously and the "inspected at least
+// one" guard failed on every run, whatever other files had written. Auditing
+// every tenant at once needs a deliberate audit-role decision (left open);
+// what this file can prove on its own is that the vouchers it posted through
+// the real route + consumer balance in the persisted rows.
+const UNBALANCED_SQL = sql`
+  WITH norm AS (
+    SELECT id, voucher_no,
+      CASE WHEN jsonb_typeof(lines) = 'string'
+           THEN (lines #>> '{}')::jsonb ELSE lines END AS arr
+    FROM gl.finance_journals
+    WHERE tenant_id = ${TENANT}::uuid
+  ), j AS (
+    SELECT id, voucher_no,
+      (SELECT COALESCE(SUM((l->>'debitMinor')::numeric), 0)
+         FROM jsonb_array_elements(arr) l) AS dr,
+      (SELECT COALESCE(SUM((l->>'creditMinor')::numeric), 0)
+         FROM jsonb_array_elements(arr) l) AS cr
+    FROM norm
+    WHERE jsonb_typeof(arr) = 'array' AND jsonb_array_length(arr) > 0
+  )
+  SELECT id, voucher_no, dr::text AS dr, cr::text AS cr
+  FROM j WHERE dr <> cr
+`;
+
+type UnbalancedRow = { id: string; voucher_no: string; dr: string; cr: string };
+
+describe("Check #1 — Double-entry GL: audit of persisted vouchers", () => {
+  it("every gl.finance_journals voucher this file posted balances (debit == credit)", async () => {
     // Unwrap string-encoded `lines` (see file header) before summing.
-    const rows = await admin.unsafe(`
-      WITH norm AS (
-        SELECT id, voucher_no,
-          CASE WHEN jsonb_typeof(lines) = 'string'
-               THEN (lines #>> '{}')::jsonb ELSE lines END AS arr
-        FROM gl.finance_journals
-      ), j AS (
-        SELECT id, voucher_no,
-          (SELECT COALESCE(SUM((l->>'debitMinor')::numeric), 0)
-             FROM jsonb_array_elements(arr) l) AS dr,
-          (SELECT COALESCE(SUM((l->>'creditMinor')::numeric), 0)
-             FROM jsonb_array_elements(arr) l) AS cr
-        FROM norm
-        WHERE jsonb_typeof(arr) = 'array' AND jsonb_array_length(arr) > 0
-      )
-      SELECT id, voucher_no, dr::text, cr::text
-      FROM j WHERE dr <> cr
-    `);
+    const rows = (await scoped(TENANT, (tx) => tx.execute(UNBALANCED_SQL))) as unknown as UnbalancedRow[];
     if (rows.length > 0) {
       // FINDING: unbalanced voucher(s) persisted — double-entry broken.
       // eslint-disable-next-line no-console
       console.error(
         "[GL] UNBALANCED vouchers:",
-        rows.map((r: any) => `${r.voucher_no}(dr=${r.dr},cr=${r.cr})`),
+        rows.map((r) => `${r.voucher_no}(dr=${r.dr},cr=${r.cr})`),
       );
     }
-    expect(rows.map((r: any) => r.voucher_no)).toEqual([]);
+    expect(rows.map((r) => r.voucher_no)).toEqual([]);
   });
 
-  it("audit actually inspected at least one existing voucher (guard against empty pass)", async () => {
-    const [{ n }] = (await admin.unsafe(
-      `SELECT count(*)::int AS n FROM gl.finance_journals`,
+  it("negative control: a deliberately unbalanced voucher IS flagged by the audit (inserted, then rolled back)", async () => {
+    // Proves the audit query can fail. The route refuses unbalanced journals
+    // (see the 400 test above), so the bad voucher is written directly, inside
+    // a transaction that is always rolled back: gl.finance_journals is
+    // append-only, and nothing may persist.
+    class RollbackControl extends Error {}
+    const voucherNo = `NEG-CTRL-${randomUUID().slice(0, 8)}`;
+    let flagged: UnbalancedRow[] = [];
+    try {
+      await scoped(TENANT, async (tx) => {
+        await tx.execute(sql`
+          INSERT INTO gl.finance_journals (tenant_id, voucher_no, type, posting_date, lines, created_by, updated_by)
+          VALUES (${TENANT}::uuid, ${voucherNo}, 'journal', '2024-04-01',
+                  ${JSON.stringify([
+                    { accountCode: "1200", debitMinor: 250000, creditMinor: 0 },
+                    { accountCode: "2100", debitMinor: 0, creditMinor: 249999 },
+                  ])}::jsonb,
+                  ${ACTOR}::uuid, ${ACTOR}::uuid)
+        `);
+        flagged = (await tx.execute(UNBALANCED_SQL)) as unknown as UnbalancedRow[];
+        throw new RollbackControl();
+      });
+    } catch (err) {
+      if (!(err instanceof RollbackControl)) throw err;
+    }
+    expect(flagged.map((r) => r.voucher_no)).toEqual([voucherNo]);
+    expect(flagged[0]!.dr).toBe("250000");
+    expect(flagged[0]!.cr).toBe("249999");
+  });
+
+  it("audit actually inspected the voucher this file posted (guard against empty pass)", async () => {
+    const counted = (await scoped(TENANT, (tx) =>
+      tx.execute(sql`SELECT count(*)::int AS n FROM gl.finance_journals WHERE tenant_id = ${TENANT}::uuid`),
     )) as unknown as Array<{ n: number }>;
-    // eslint-disable-next-line no-console
-    console.log(`[GL] audited ${n} existing journals`);
-    expect(n).toBeGreaterThan(0);
+    const n = counted[0]?.n;
+    // Exactly the one balanced journal posted above; the unbalanced one was
+    // rejected at the route (400) and must never have been persisted.
+    expect(n).toBe(1);
   });
 });

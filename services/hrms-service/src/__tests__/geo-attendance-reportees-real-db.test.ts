@@ -90,6 +90,8 @@ function asTenant<T>(fn: (tx: typeof sqlClient) => Promise<T>): Promise<T> {
 }
 
 async function cleanup(): Promise<void> {
+  // This file's audit rows too, so a rerun against the same DB starts from none.
+  await asTenant((tx) => tx`DELETE FROM _outbox.messages WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'`);
   await asTenant((tx) => tx`DELETE FROM attendance.hrms_geo_attendance WHERE tenant_id = ${TENANT}`);
   await asTenant((tx) => tx`DELETE FROM employee.hrms_employees WHERE tenant_id = ${TENANT}`);
   await asTenant((tx) => tx`DELETE FROM employee.hrms_designations WHERE tenant_id = ${TENANT}`);
@@ -227,21 +229,30 @@ describe("GET /v1/hrms/attendance/reportees — GAP-HR-ATTENDANCE-REPORTEES-01: 
 });
 
 describe("GET /v1/hrms/attendance/reportees — GAP-HR-ATTENDANCE-REPORTEES-01: DPDP audit trail", () => {
-  async function latestReporteesAuditRow(): Promise<{ payload: Record<string, unknown> } | undefined> {
-    const [row] = await asTenant((tx) => tx`
-      SELECT payload FROM _outbox.messages
+  // The audit write is fire-and-forget (queue -> consumer -> outbox), and the
+  // scope tests above call the route as hr_admin without draining. Their
+  // "tenant_list" audit rows could therefore commit AFTER this block's own
+  // call, and "ORDER BY created_at DESC LIMIT 1" then picked one of them
+  // (CI run 36972943965: expected 'tenant_list' to be the officer id). Each
+  // test now drains first, so earlier tests' audits have landed, and then
+  // inspects only the rows its own call created.
+  async function reporteesAuditRows(): Promise<Array<{ id: string; payload: Record<string, unknown> }>> {
+    return (await asTenant((tx) => tx`
+      SELECT id, payload FROM _outbox.messages
       WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'
         AND payload->>'resourceType' = 'geo_attendance_reportees' AND payload->>'action' = 'list'
-      ORDER BY created_at DESC LIMIT 1
-    `);
-    return row as { payload: Record<string, unknown> } | undefined;
+    `)) as unknown as Array<{ id: string; payload: Record<string, unknown> }>;
   }
 
   it("a reporting officer's real-reports read emits a DPDP audit.event.record row scoped to them", async () => {
+    await drainQueue();
+    const before = new Set((await reporteesAuditRows()).map((row) => row.id));
     const r = await callReportees(officerToken);
     expect(r.statusCode).toBe(200);
     await drainQueue();
-    const auditRow = await latestReporteesAuditRow();
+    const created = (await reporteesAuditRows()).filter((row) => !before.has(row.id));
+    expect(created).toHaveLength(1); // exactly this call's audit row
+    const auditRow = created[0];
     if (!auditRow) throw new Error("expected an audit.event.record row after an officer reportees read");
     expect(auditRow.payload.action).toBe("list");
     expect(auditRow.payload.resourceType).toBe("geo_attendance_reportees");
@@ -250,6 +261,7 @@ describe("GET /v1/hrms/attendance/reportees — GAP-HR-ATTENDANCE-REPORTEES-01: 
   });
 
   it("hr_admin's tenant-wide read also emits a DPDP audit event (any privileged bulk read of others' location data is audited)", async () => {
+    await drainQueue();
     const [before] = await asTenant((tx) => tx`
       SELECT count(*)::int AS n FROM _outbox.messages
       WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'
@@ -267,6 +279,7 @@ describe("GET /v1/hrms/attendance/reportees — GAP-HR-ATTENDANCE-REPORTEES-01: 
   });
 
   it("the fail-closed empty-list case does NOT emit an audit event (nothing was actually disclosed)", async () => {
+    await drainQueue();
     const [before] = await asTenant((tx) => tx`
       SELECT count(*)::int AS n FROM _outbox.messages
       WHERE tenant_id = ${TENANT} AND topic = 'audit.event.record'

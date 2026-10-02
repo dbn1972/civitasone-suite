@@ -56,6 +56,7 @@
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { randomUUID } from "node:crypto";
 import postgres from "postgres";
 
 // CI bootstrap sets civitas_admin from PGPASSWORD/POSTGRES_ADMIN_PASSWORD
@@ -390,35 +391,103 @@ describe("DQ — payroll-service", () => {
     expect(dups, `duplicate payroll slips: ${JSON.stringify(dups)}`).toHaveLength(0);
   });
 
-  it("DQ-PAY-04 gross − total_deductions == net_pay (payroll math invariant)", async () => {
-    const bad = await sql`
-      SELECT id, employee_no, gross_minor, total_deductions_minor, net_pay_minor,
-             (gross_minor - total_deductions_minor - net_pay_minor) AS discrepancy
-      FROM payroll.payroll_slips
-      WHERE (gross_minor - total_deductions_minor) != net_pay_minor
+  // DQ-PAY-04 and DQ-PAY-05 used to run DB-wide, so in CI they audited the
+  // fixtures other payroll-service test files leave behind: F16COVTEST01 /
+  // F16BULKTEST01 slips (gross 50,000 / deductions 0 / net 45,000) and runs
+  // inserted with total_gross_minor = 0 next to real slips. Whether they
+  // failed depended only on whether payroll's suite had run first. They now
+  // seed their own tenant through payroll_svc inside a transaction that is
+  // always rolled back: one consistent row and one deliberately broken row.
+  // The authored query must flag exactly the broken one, which proves it
+  // catches the regression without reading any other package's data.
+  const PAYROLL_DSN =
+    process.env.PAYROLL_DATABASE_URL ??
+    `postgres://payroll_svc:payroll_dev_pw@${HOST}:${PORT}/civitas_payroll`;
+
+  class RollbackFixture extends Error {}
+
+  /** Run fn as payroll_svc under a fresh tenant's GUC, then always roll back. */
+  async function withPayrollFixtureTenant(
+    fn: (tx: postgres.TransactionSql, tenantId: string) => Promise<void>,
+  ): Promise<void> {
+    const writer = postgres(PAYROLL_DSN, { max: 1, idle_timeout: 5 });
+    const tenantId = randomUUID();
+    try {
+      await writer.begin(async (tx) => {
+        await tx`SELECT set_config('app.tenant_id', ${tenantId}, true)`;
+        await fn(tx, tenantId);
+        throw new RollbackFixture();
+      });
+      throw new Error("withPayrollFixtureTenant: fixture transaction was not rolled back");
+    } catch (err) {
+      if (!(err instanceof RollbackFixture)) throw err;
+    } finally {
+      await writer.end();
+    }
+  }
+
+  // One regular run per (tenant, month) is enforced by ux_payroll_runs_tenant_month_ddo_regular.
+  async function seedRun(tx: postgres.TransactionSql, tenantId: string, month: string, totalGrossMinor: bigint): Promise<string> {
+    const id = randomUUID();
+    const actor = randomUUID();
+    await tx`
+      INSERT INTO payroll.payroll_runs (id, tenant_id, run_no, month, structure_id, total_gross_minor, created_by, updated_by)
+      VALUES (${id}, ${tenantId}, ${`DQ-${id.slice(0, 8)}`}, ${month}, ${randomUUID()}, ${totalGrossMinor.toString()}, ${actor}, ${actor})
     `;
-    console.info(`DQ-PAY-04 gross-deductions!=net: ${bad.length} slips → ${JSON.stringify(bad.map(r => ({ emp: r.employee_no, disc: r.discrepancy })))}`);
-    expect(bad, `payroll math broken: ${JSON.stringify(bad)}`).toHaveLength(0);
+    return id;
+  }
+
+  async function seedSlip(
+    tx: postgres.TransactionSql, tenantId: string, runId: string, employeeNo: string,
+    m: { gross: bigint; deductions: bigint; net: bigint },
+  ): Promise<void> {
+    const actor = randomUUID();
+    await tx`
+      INSERT INTO payroll.payroll_slips (tenant_id, run_id, employee_id, employee_no, gross_minor, total_deductions_minor, net_pay_minor, created_by, updated_by)
+      VALUES (${tenantId}, ${runId}, ${randomUUID()}, ${employeeNo}, ${m.gross.toString()}, ${m.deductions.toString()}, ${m.net.toString()}, ${actor}, ${actor})
+    `;
+  }
+
+  it("DQ-PAY-04 query flags a slip whose gross − total_deductions != net_pay (self-seeded fixture, not a real-data audit)", async () => {
+    await withPayrollFixtureTenant(async (tx, tenantId) => {
+      const runId = await seedRun(tx, tenantId, "2026-04", 10_000_000n);
+      await seedSlip(tx, tenantId, runId, "DQ-PAY04-OK", { gross: 5_000_000n, deductions: 500_000n, net: 4_500_000n });
+      await seedSlip(tx, tenantId, runId, "DQ-PAY04-BAD", { gross: 5_000_000n, deductions: 0n, net: 4_500_000n });
+
+      const bad = await tx`
+        SELECT id, employee_no, gross_minor, total_deductions_minor, net_pay_minor,
+               (gross_minor - total_deductions_minor - net_pay_minor) AS discrepancy
+        FROM payroll.payroll_slips
+        WHERE tenant_id = ${tenantId}
+          AND (gross_minor - total_deductions_minor) != net_pay_minor
+      `;
+      expect(bad.map((r) => r.employee_no)).toEqual(["DQ-PAY04-BAD"]);
+      expect(String(bad[0]!.discrepancy)).toBe("500000");
+    });
   });
 
-  // Was it.fails() pending a Kiro data-cleanup ticket (erp-assessment/TICKETS-FOR-KIRO.md)
-  // that assumed a shared, ad-hoc dev database with a known run/slip total drift.
-  // Verified against a fresh full-schema bootstrap: the check returns 0 rows — CI never
-  // seeds that drift, so it.fails() was unconditionally failing every CI run.
-  // Flipped to it() per the original comment's own instruction, now that it's verified clean.
-  it("DQ-PAY-05 payroll_run.total_gross matches SUM of its slips", async () => {
-    const mismatches = await sql`
-      SELECT r.id, r.month,
-             r.total_gross_minor AS run_total,
-             SUM(s.gross_minor) AS slip_sum,
-             (r.total_gross_minor - SUM(s.gross_minor)) AS discrepancy
-      FROM payroll.payroll_runs r
-      JOIN payroll.payroll_slips s ON s.run_id = r.id
-      GROUP BY r.id, r.month, r.total_gross_minor
-      HAVING r.total_gross_minor != SUM(s.gross_minor)
-    `;
-    console.info(`DQ-PAY-05 run/slip total mismatch: ${mismatches.length} → ${JSON.stringify(mismatches.map(r => ({ month: r.month, disc: r.discrepancy })))}`);
-    expect(mismatches, `run total != slip sum: ${JSON.stringify(mismatches)}`).toHaveLength(0);
+  it("DQ-PAY-05 query flags a run whose total_gross != SUM of its slips (self-seeded fixture, not a real-data audit)", async () => {
+    await withPayrollFixtureTenant(async (tx, tenantId) => {
+      const okRun = await seedRun(tx, tenantId, "2026-04", 8_000_000n);
+      await seedSlip(tx, tenantId, okRun, "DQ-PAY05-OK-1", { gross: 5_000_000n, deductions: 0n, net: 5_000_000n });
+      await seedSlip(tx, tenantId, okRun, "DQ-PAY05-OK-2", { gross: 3_000_000n, deductions: 0n, net: 3_000_000n });
+      const badRun = await seedRun(tx, tenantId, "2026-05", 0n);
+      await seedSlip(tx, tenantId, badRun, "DQ-PAY05-BAD", { gross: 5_000_000n, deductions: 0n, net: 5_000_000n });
+
+      const mismatches = await tx`
+        SELECT r.id, r.month,
+               r.total_gross_minor AS run_total,
+               SUM(s.gross_minor) AS slip_sum,
+               (r.total_gross_minor - SUM(s.gross_minor)) AS discrepancy
+        FROM payroll.payroll_runs r
+        JOIN payroll.payroll_slips s ON s.run_id = r.id
+        WHERE r.tenant_id = ${tenantId}
+        GROUP BY r.id, r.month, r.total_gross_minor
+        HAVING r.total_gross_minor != SUM(s.gross_minor)
+      `;
+      expect(mismatches.map((r) => r.id)).toEqual([badRun]);
+      expect(String(mismatches[0]!.discrepancy)).toBe("-5000000");
+    });
   });
 });
 

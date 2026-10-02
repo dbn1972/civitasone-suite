@@ -29,6 +29,7 @@ import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { outboxMessages } from "../src/shared/outbox.js";
 import { queue } from "../src/shared/infra.js";
+import type { MemoryQueue } from "@civitasone/queue";
 import { COMMANDS } from "../src/topics.js";
 import { didMappings } from "../src/modules/did/schema.js";
 import { ivrHits } from "../src/modules/ivr/schema.js";
@@ -176,6 +177,78 @@ describe("inbound DID resolution", () => {
     const id = await createMapping(TENANT_A, nextDid());
     expect(await didRepo.findById(id, TENANT_A)).not.toBeNull();
     expect(await didRepo.findById(id, TENANT_B)).toBeNull();
+  });
+});
+
+// ── One active owner per DID number, across tenants ──────────────
+
+describe("a DID number already assigned to one tenant cannot be taken by another", () => {
+  it("POST by tenant B for tenant A's number is rejected 409 without naming the owner, and A keeps the calls", async () => {
+    const did = nextDid();
+    await createMapping(TENANT_A, did);
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/telephony/did-mappings",
+      headers: { authorization: `Bearer ${adminToken(TENANT_B)}`, "content-type": "application/json" },
+      payload: { didNumber: did, label: "hijack attempt", active: true },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("DID_NUMBER_ASSIGNED");
+    expect(res.body).not.toContain(TENANT_A);
+
+    // The same number formatted differently is the same number.
+    const formatted = `${did.slice(0, 3)} ${did.slice(3, 8)}-${did.slice(8)}`;
+    const res2 = await app.inject({
+      method: "POST",
+      url: "/v1/telephony/did-mappings",
+      headers: { authorization: `Bearer ${adminToken(TENANT_B)}`, "content-type": "application/json" },
+      payload: { didNumber: formatted, active: true },
+    });
+    expect(res2.statusCode).toBe(409);
+
+    await drainQueue();
+    expect(await didQueries.resolveTenantForNumber(did)).toBe(TENANT_A);
+  });
+
+  it("a create command that races past the route check is dead-lettered (unique index), never inserted, and A keeps the calls", async () => {
+    const did = nextDid();
+    await createMapping(TENANT_A, did);
+    const dlqBefore = (queue as MemoryQueue).dlq.length;
+
+    // Published straight onto the bus, as a command accepted just before A's
+    // mapping committed would be.
+    const id = randomUUID();
+    await queue.publish(COMMANDS.createDidMapping, {
+      messageId: id,
+      type: COMMANDS.createDidMapping,
+      tenantId: TENANT_B,
+      actorId: ACTOR,
+      correlationId: `corr-${id}`,
+      schemaVersion: "1.0",
+      payload: { id, tenantId: TENANT_B, didNumber: did, label: "race loser", active: true },
+    });
+    await drainQueue();
+
+    const dead = (queue as MemoryQueue).dlq.slice(dlqBefore);
+    expect(dead).toHaveLength(1);
+    expect(dead[0]!.error).toContain("DID_NUMBER_ASSIGNED");
+    expect(await didRepo.findById(id, TENANT_B)).toBeNull();
+    expect(await didQueries.resolveTenantForNumber(did)).toBe(TENANT_A);
+  });
+
+  it("an INACTIVE mapping of an assigned number is allowed and does not affect routing", async () => {
+    const did = nextDid();
+    await createMapping(TENANT_A, did);
+    const res = await app.inject({
+      method: "POST",
+      url: "/v1/telephony/did-mappings",
+      headers: { authorization: `Bearer ${adminToken(TENANT_B)}`, "content-type": "application/json" },
+      payload: { didNumber: did, active: false },
+    });
+    expect(res.statusCode).toBe(202);
+    await drainQueue();
+    expect(await didQueries.resolveTenantForNumber(did)).toBe(TENANT_A);
   });
 });
 

@@ -30,13 +30,16 @@ const TENANT_B = "bbbbbbbb-0000-4000-8000-0000000ac702";
 const ACTOR = "00000000-aaaa-4000-8000-0000000ac799";
 const ALL_TENANTS = [TENANT_A, TENANT_B];
 
-function wireTenantAwareQueue(q: Queue): Queue {
+function wireTenantAwareQueue<Q extends Queue>(q: Q): Q {
   const rawSubscribe = q.subscribe.bind(q);
   q.subscribe = ((topic: string, handler: Handler) =>
     rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
   return q;
 }
 
+// Tests wait with q.drain() (MemoryQueue resolves it once every in-flight
+// delivery has settled) instead of the fixed 100-200 ms sleeps they used,
+// which the consumers outlasted when the runner was busy (null rows).
 function wired() {
   const q = wireTenantAwareQueue(new MemoryQueue());
   registerTicketConsumers(q);
@@ -116,7 +119,7 @@ describe("TKT-04 — addNote consumer persists a note", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: noteId, tenantId: TENANT_A, ticketId, content: "customer called back", visibility: "public", createdBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await q.drain();
 
     const rows = await notesFor(ticketId, TENANT_A);
     expect(rows.length).toBe(1);
@@ -137,9 +140,9 @@ describe("TKT-04 — addNote consumer persists a note", () => {
       payload: { id: noteId, tenantId: TENANT_A, ticketId, content: "dup me", visibility: "internal" as const, createdBy: ACTOR },
     };
     await q.publish(COMMANDS.addNote, msg);
-    await new Promise((r) => setTimeout(r, 100));
+    await q.drain();
     await q.publish(COMMANDS.addNote, msg);
-    await new Promise((r) => setTimeout(r, 100));
+    await q.drain();
 
     const rows = await notesFor(ticketId, TENANT_A);
     expect(rows.length).toBe(1);
@@ -154,7 +157,7 @@ describe("TKT-04 — addNote consumer persists a note", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: noteId, tenantId: TENANT_A, ticketId, content: "tenant A only", visibility: "public", createdBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await q.drain();
 
     const asA = await notesFor(ticketId, TENANT_A);
     const asB = await notesFor(ticketId, TENANT_B);
@@ -173,7 +176,7 @@ describe("TKT-07 — transferTicket consumer persists a transfer audit row", () 
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: transferId, tenantId: TENANT_A, ticketId, toDepartment: "Engineering", reason: "Technical issue", transferredBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await q.drain();
 
     const rows = await transfersFor(ticketId, TENANT_A);
     expect(rows.length).toBe(1);
@@ -192,13 +195,13 @@ describe("TKT-07 — transferTicket consumer persists a transfer audit row", () 
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: randomUUID(), tenantId: TENANT_A, ticketId, toDepartment: "Engineering", reason: "first hop", transferredBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 120));
+    await q.drain();
     await q.publish(COMMANDS.transferTicket, {
       messageId: randomUUID(), type: COMMANDS.transferTicket, tenantId: TENANT_A, actorId: ACTOR,
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: randomUUID(), tenantId: TENANT_A, ticketId, toDepartment: "Finance", reason: "second hop", transferredBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 120));
+    await q.drain();
 
     const rows = await transfersFor(ticketId, TENANT_A);
     expect(rows.length).toBe(2);
@@ -218,7 +221,7 @@ describe("TKT-08 — linkTickets consumer persists a link", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: linkId, tenantId: TENANT_A, sourceTicketId: a, targetTicketId: b, linkType: "parent", createdBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await q.drain();
 
     const rows = await linksFor(a, TENANT_A);
     expect(rows.length).toBe(1);
@@ -240,9 +243,9 @@ describe("TKT-08 — linkTickets consumer persists a link", () => {
       payload: { id: linkId, tenantId: TENANT_A, sourceTicketId: a, targetTicketId: b, linkType: "related" as const, createdBy: ACTOR },
     };
     await q.publish(COMMANDS.linkTickets, msg);
-    await new Promise((r) => setTimeout(r, 100));
+    await q.drain();
     await q.publish(COMMANDS.linkTickets, msg);
-    await new Promise((r) => setTimeout(r, 100));
+    await q.drain();
 
     const rows = await linksFor(a, TENANT_A);
     expect(rows.length).toBe(1);
@@ -257,14 +260,14 @@ describe("TKT-08 — linkTickets consumer persists a link", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: randomUUID(), tenantId: TENANT_A, sourceTicketId: a, targetTicketId: b, linkType: "parent", createdBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 120));
+    await q.drain();
     // B "child" of A describes the SAME relationship as A "parent" of B.
     await q.publish(COMMANDS.linkTickets, {
       messageId: randomUUID(), type: COMMANDS.linkTickets, tenantId: TENANT_A, actorId: ACTOR,
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: randomUUID(), tenantId: TENANT_A, sourceTicketId: b, targetTicketId: a, linkType: "child", createdBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 120));
+    await q.drain();
 
     const rows = await linksFor(a, TENANT_A);
     expect(rows.length).toBe(1);
@@ -279,7 +282,7 @@ describe("TKT-08 — linkTickets consumer persists a link", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: randomUUID(), tenantId: TENANT_A, sourceTicketId: a, targetTicketId: b, linkType: "duplicate", createdBy: ACTOR },
     });
-    await new Promise((r) => setTimeout(r, 120));
+    await q.drain();
 
     const asA = await linksFor(a, TENANT_A);
     const asB = await linksFor(a, TENANT_B);
@@ -301,7 +304,7 @@ describe("TKT-09 — bulkAction consumer applies actions per ticket", () => {
         payload: { batchId, ticketId, action: "assign", payload: { assigneeId: agent } },
       }),
     ));
-    await new Promise((r) => setTimeout(r, 200));
+    await q.drain();
 
     for (const id of ids) {
       const row = await findRow(id, TENANT_A);
@@ -321,7 +324,7 @@ describe("TKT-09 — bulkAction consumer applies actions per ticket", () => {
         payload: { batchId, ticketId, action: "close", payload: {} },
       }),
     ));
-    await new Promise((r) => setTimeout(r, 200));
+    await q.drain();
 
     for (const id of ids) {
       const row = await findRow(id, TENANT_A);
@@ -337,7 +340,7 @@ describe("TKT-09 — bulkAction consumer applies actions per ticket", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { batchId: randomUUID(), ticketId: id, action: "set_priority", payload: { priority: "Critical" } },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await q.drain();
 
     const row = await findRow(id, TENANT_A);
     expect(row!.priority).toBe("Critical");
@@ -352,9 +355,9 @@ describe("TKT-09 — bulkAction consumer applies actions per ticket", () => {
       payload: { batchId: randomUUID(), ticketId: id, action: "set_priority" as const, payload: { priority: "High" } },
     };
     await q.publish(COMMANDS.bulkAction, msg);
-    await new Promise((r) => setTimeout(r, 100));
+    await q.drain();
     await q.publish(COMMANDS.bulkAction, msg);
-    await new Promise((r) => setTimeout(r, 100));
+    await q.drain();
 
     const row = await findRow(id, TENANT_A);
     expect(row!.priority).toBe("High");
@@ -373,7 +376,7 @@ describe("TKT-09 — bulkAction consumer applies actions per ticket", () => {
         payload: { batchId, ticketId, action: "close", payload: {} },
       }),
     ));
-    await new Promise((r) => setTimeout(r, 200));
+    await q.drain();
 
     const row = await findRow(good, TENANT_A);
     expect(row!.status).toBe("closed");
@@ -390,7 +393,7 @@ describe("TKT-14 — reopenTicket consumer transitions closed/resolved -> open",
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: reopenId, tenantId: TENANT_A, ticketId, reason: "issue persists" },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await q.drain();
 
     const row = await findRow(ticketId, TENANT_A);
     expect(row!.status).toBe("open");
@@ -408,7 +411,7 @@ describe("TKT-14 — reopenTicket consumer transitions closed/resolved -> open",
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id: reopenId, tenantId: TENANT_A, ticketId, reason: "already open" },
     });
-    await new Promise((r) => setTimeout(r, 150));
+    await q.drain();
 
     const row = await findRow(ticketId, TENANT_A);
     expect(row!.status).toBe("open");

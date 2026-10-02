@@ -112,13 +112,14 @@ async function publishPassage(tenant: string, seed: Seed, passageCount: number):
       direction: "out", passageCount, eventTimestamp: new Date().toISOString(), offlineRecorded: false,
     },
   });
-  // Fix 5 added one extra sequential DB round trip to every passageRecord
-  // message (the gate-binding lookup, before the main transaction) — under
-  // full-suite load (many tests sharing the same Postgres instance) the
-  // original 25ms margin was occasionally too tight. Widened for headroom,
-  // matching the "give it real headroom" precedent already established in
-  // identity-verify-ownership.integration.test.ts for a real DB round trip.
-  await new Promise((r) => setTimeout(r, 150));
+  // Wait for the consumer to finish (MemoryQueue.drain() resolves once every
+  // in-flight delivery has settled). The fixed 25 ms, then 150 ms, sleep this
+  // replaces still lost the race under CI load: the outbox read came back
+  // empty, or the consumer inserted its passage_events row after afterAll had
+  // deleted the children, and the digital_passes DELETE then failed on
+  // passage_events_pass_id_fkey.
+  await queue.drain();
+  expect(queue.dlq, "the passageRecord consumer dead-lettered").toEqual([]);
   return passageId;
 }
 
@@ -146,6 +147,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  await queue.drain();
   for (const [t, s] of [[TENANT_A, seedA], [TENANT_B, seedB]] as const) {
     await scannerDb.delete(outboxMessages).where(eq(outboxMessages.tenantId, t));
     await runWithTenant(t, () =>

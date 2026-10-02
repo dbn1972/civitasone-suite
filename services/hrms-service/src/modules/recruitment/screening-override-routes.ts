@@ -112,6 +112,19 @@ export async function screeningOverrideRoutes(app: FastifyInstance): Promise<voi
     // reached just as often under real racing as the atomic path below, so it
     // must leave the identical trace.
     if (a.screeningDecision !== r.fromDecision || a.version !== r.applicationVersion) {
+      // The application can have moved on BECAUSE a competing checker decided
+      // this very request between the mustReq() read above and the
+      // findApplication() read (approving it rewrites the application). That
+      // is a lost race on a request that is no longer pending, not a stale
+      // override: answering STALE_OVERRIDE ("re-raise it") would tell the
+      // checker to re-raise an override that was already applied. Re-read the
+      // request so the loser gets the same NOT_PENDING answer as every other
+      // lost race (the isActionable check above and the atomic path below).
+      const current = await repo.findRequest(ctx.tenantId, reqId);
+      if (current && !isActionable(current.status)) {
+        await recordOverrideDecisionDenied(ctx, r, "approve", "NOT_PENDING");
+        throw new HttpError(409, "NOT_PENDING", `override request is '${current.status}', not pending`);
+      }
       await recordOverrideDecisionDenied(ctx, r, "approve", "STALE_OVERRIDE");
       throw new HttpError(409, "STALE_OVERRIDE", `the application changed since the override was raised (now '${a.screeningDecision}' v${a.version}, raised against '${r.fromDecision}' v${r.applicationVersion}); re-raise it`);
     }

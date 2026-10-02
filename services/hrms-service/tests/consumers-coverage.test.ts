@@ -25,8 +25,15 @@ vi.mock("../src/shared/outbox.js", () => ({
   }),
   markProcessed: vi.fn(async () => markProcessedResult),
 }));
+// The consumers now call cache.invalidateResource() after writing. The mock
+// lacked it, so every handler threw a TypeError after its enqueue(), the queue
+// retried, and each retry enqueued the domain event again (3 instead of 1).
 vi.mock("../src/shared/infra.js", () => ({
-  cache: { invalidate: vi.fn(async () => undefined), makeKey: (...parts: string[]) => parts.join(":") },
+  cache: {
+    invalidate: vi.fn(async () => undefined),
+    invalidateResource: vi.fn(async () => undefined),
+    makeKey: (...parts: string[]) => parts.join(":"),
+  },
 }));
 
 import { registerSocialConsumers } from "../src/modules/social/consumer.js";
@@ -47,7 +54,12 @@ function makeMsg(type: string, payload: Record<string, unknown>) {
     correlationId: randomUUID(), schemaVersion: "1.0", payload,
   };
 }
-const settle = () => new Promise<void>((r) => setTimeout(r, 100));
+/**
+ * Wait until every delivery on `q` has fully settled (retries included). The
+ * fixed 100 ms sleep this replaces could be read before the handler ran on a
+ * busy runner, and mid-retry when a handler failed.
+ */
+const settle = (q: MemoryQueue) => q.drain();
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -78,7 +90,7 @@ describe("Social consumers — registration and processing", () => {
       giverId: randomUUID(), receiverId: randomUUID(),
       badge: "star", message: "Great work!",
     }));
-    await settle();
+    await settle(q);
 
     const auditEvents = enqueuedMessages.filter((m) => m.topic === AUDIT_TOPIC);
     expect(auditEvents.length).toBeGreaterThanOrEqual(1);
@@ -103,7 +115,7 @@ describe("Social consumers — registration and processing", () => {
       giverId: randomUUID(), receiverId: randomUUID(),
       badge: "star", message: "Dup",
     }));
-    await settle();
+    await settle(q);
 
     // Nothing enqueued because markProcessed returned false
     expect(enqueuedMessages).toHaveLength(0);
@@ -119,7 +131,7 @@ describe("Social consumers — registration and processing", () => {
       id: randomUUID(), tenantId: TENANT,
       employeeId: randomUUID(), category: "travel", amount: 15000,
     }));
-    await settle();
+    await settle(q);
 
     const domainEvents = enqueuedMessages.filter((m) => m.topic === "hrms.social.expense_created");
     expect(domainEvents).toHaveLength(1);
@@ -141,7 +153,7 @@ describe("Visiting-card consumers — registration and processing", () => {
       employeeId: randomUUID(), tenantId: TENANT,
       fields: { designation: "Director", phone: "9876543210" },
     }));
-    await settle();
+    await settle(q);
 
     const auditEvents = enqueuedMessages.filter((m) => m.topic === AUDIT_TOPIC);
     expect(auditEvents.length).toBeGreaterThanOrEqual(1);
@@ -161,7 +173,7 @@ describe("Visiting-card consumers — registration and processing", () => {
     await q.publish("hrms.visiting_card.share", makeMsg("hrms.visiting_card.share", {
       employeeId: randomUUID(), tenantId: TENANT, method: "qr",
     }));
-    await settle();
+    await settle(q);
 
     const domainEvents = enqueuedMessages.filter((m) => m.topic === "hrms.visiting_card.shared");
     expect(domainEvents).toHaveLength(1);
@@ -179,7 +191,7 @@ describe("Visiting-card consumers — registration and processing", () => {
     await q.publish("hrms.visiting_card.update", makeMsg("hrms.visiting_card.update", {
       employeeId: randomUUID(), tenantId: TENANT, fields: { title: "CTO" },
     }));
-    await settle();
+    await settle(q);
 
     expect(enqueuedMessages).toHaveLength(0);
     await q.stop();
@@ -197,7 +209,7 @@ describe("Dashboard consumer — registration and processing", () => {
     await q.publish("hrms.dashboard.refresh", makeMsg("hrms.dashboard.refresh", {
       tenantId: TENANT,
     }));
-    await settle();
+    await settle(q);
 
     const auditEvents = enqueuedMessages.filter((m) => m.topic === AUDIT_TOPIC);
     expect(auditEvents.length).toBeGreaterThanOrEqual(1);
@@ -215,7 +227,7 @@ describe("Dashboard consumer — registration and processing", () => {
     await q.publish("hrms.dashboard.refresh", makeMsg("hrms.dashboard.refresh", {
       tenantId: TENANT,
     }));
-    await settle();
+    await settle(q);
 
     expect(enqueuedMessages).toHaveLength(0);
     await q.stop();
@@ -233,7 +245,7 @@ describe("Reports consumer — registration and processing", () => {
     await q.publish("hrms.report.generate", makeMsg("hrms.report.generate", {
       tenantId: TENANT, reportType: "monthly_attendance", params: { month: "2024-09" },
     }));
-    await settle();
+    await settle(q);
 
     const domainEvents = enqueuedMessages.filter((m) => m.topic === "hrms.report.generated");
     expect(domainEvents).toHaveLength(1);
@@ -251,7 +263,7 @@ describe("Reports consumer — registration and processing", () => {
     await q.publish("hrms.report.generate", makeMsg("hrms.report.generate", {
       tenantId: TENANT, reportType: "payslip", params: {},
     }));
-    await settle();
+    await settle(q);
 
     expect(enqueuedMessages).toHaveLength(0);
     await q.stop();
@@ -271,7 +283,7 @@ describe("RTI consumer — registration and processing", () => {
       applicantName: "Citizen A", subject: "Service records",
       requestText: "Provide service records", receivedDate: "2024-09-01",
     }));
-    await settle();
+    await settle(q);
 
     const auditEvents = enqueuedMessages.filter((m) => m.topic === AUDIT_TOPIC);
     expect(auditEvents.length).toBeGreaterThanOrEqual(1);
@@ -294,7 +306,7 @@ describe("RTI consumer — registration and processing", () => {
       applicantName: "X", subject: "Duplicate",
       requestText: "Dup", receivedDate: "2024-09-01",
     }));
-    await settle();
+    await settle(q);
 
     expect(enqueuedMessages).toHaveLength(0);
     await q.stop();
@@ -313,7 +325,7 @@ describe("Self-service consumer — registration and processing", () => {
       employeeId: randomUUID(), tenantId: TENANT,
       fields: { phone: "9988776655" },
     }));
-    await settle();
+    await settle(q);
 
     const auditEvents = enqueuedMessages.filter((m) => m.topic === AUDIT_TOPIC);
     expect(auditEvents.length).toBeGreaterThanOrEqual(1);
@@ -329,7 +341,7 @@ describe("Self-service consumer — registration and processing", () => {
     await q.publish("hrms.self_service.profile_update", makeMsg("hrms.self_service.profile_update", {
       employeeId: randomUUID(), tenantId: TENANT, fields: { phone: "0000" },
     }));
-    await settle();
+    await settle(q);
 
     expect(enqueuedMessages).toHaveLength(0);
     await q.stop();
@@ -347,7 +359,7 @@ describe("Orgchart consumer — registration and processing", () => {
     await q.publish("hrms.orgchart.refresh", makeMsg("hrms.orgchart.refresh", {
       tenantId: TENANT,
     }));
-    await settle();
+    await settle(q);
 
     const auditEvents = enqueuedMessages.filter((m) => m.topic === AUDIT_TOPIC);
     expect(auditEvents.length).toBeGreaterThanOrEqual(1);
@@ -365,7 +377,7 @@ describe("Orgchart consumer — registration and processing", () => {
     await q.publish("hrms.orgchart.refresh", makeMsg("hrms.orgchart.refresh", {
       tenantId: TENANT,
     }));
-    await settle();
+    await settle(q);
 
     expect(enqueuedMessages).toHaveLength(0);
     await q.stop();

@@ -26,7 +26,7 @@ const TENANT_B = "bbbbbbbb-0000-4000-8000-00000000eb01";
 const ACTOR = "00000000-aaaa-4000-8000-0000000000e9";
 const ALL_TENANTS = [TENANT_A, TENANT_B];
 
-function wireTenantAwareQueue(q: Queue): Queue {
+function wireTenantAwareQueue<Q extends Queue>(q: Q): Q {
   const rawSubscribe = q.subscribe.bind(q);
   q.subscribe = ((topic: string, handler: Handler) =>
     rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
@@ -74,6 +74,9 @@ beforeEach(cleanup);
 afterAll(async () => { await cleanup(); await sqlClient.end(); });
 
 describe("LOOP 1 — escalate-to-ticket consumer (helpdesk.ticket.create → ticket)", () => {
+  // Tests wait with q.drain() (resolves once every in-flight delivery has
+  // settled) instead of fixed 200-250 ms sleeps, which the two-tenant case
+  // outlasted when the runner was busy (null row for the second tenant).
   function wired() {
     const q = wireTenantAwareQueue(new MemoryQueue());
     registerTicketConsumers(q);
@@ -84,7 +87,7 @@ describe("LOOP 1 — escalate-to-ticket consumer (helpdesk.ticket.create → tic
     const q = wired();
     const ref = randomUUID();
     await q.publish(COMMANDS.createTicket, escalateMsg(TENANT_A, ref));
-    await new Promise((r) => setTimeout(r, 200));
+    await q.drain();
 
     const row = await findBySourceAsTenant(TENANT_A, SOURCE.assistant, ref);
     expect(row).not.toBeNull();
@@ -104,9 +107,9 @@ describe("LOOP 1 — escalate-to-ticket consumer (helpdesk.ticket.create → tic
     const ref = randomUUID();
     // two distinct deliveries (different messageId) of the same escalation
     await q.publish(COMMANDS.createTicket, escalateMsg(TENANT_A, ref));
-    await new Promise((r) => setTimeout(r, 200));
+    await q.drain();
     await q.publish(COMMANDS.createTicket, escalateMsg(TENANT_A, ref));
-    await new Promise((r) => setTimeout(r, 200));
+    await q.drain();
 
     const rows = await runWithTenant(TENANT_A, () =>
       db.transaction((tx) =>
@@ -126,7 +129,7 @@ describe("LOOP 1 — escalate-to-ticket consumer (helpdesk.ticket.create → tic
     const ref = randomUUID();
     await q.publish(COMMANDS.createTicket, escalateMsg(TENANT_A, ref));
     await q.publish(COMMANDS.createTicket, escalateMsg(TENANT_B, ref));
-    await new Promise((r) => setTimeout(r, 250));
+    await q.drain();
     const a = await findBySourceAsTenant(TENANT_A, SOURCE.assistant, ref);
     const b = await findBySourceAsTenant(TENANT_B, SOURCE.assistant, ref);
     expect(a).not.toBeNull();

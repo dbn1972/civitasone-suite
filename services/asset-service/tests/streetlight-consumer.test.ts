@@ -44,6 +44,16 @@ function asTenant<T>(tenantId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
 
 let app: FastifyInstance;
 
+/**
+ * Await every in-flight delivery on the app's queue (MemoryQueue.drain(), a
+ * test aid on the queue-service bus) instead of racing a fixed sleep against
+ * the async consumer. The 300 ms sleeps this replaces were too short under CI
+ * contention, so rows were read before the consumer had committed them.
+ */
+async function drainAppQueue(): Promise<void> {
+  await (appQueue as unknown as { drain(): Promise<void> }).drain();
+}
+
 beforeAll(async () => {
   // The app's own routes publish to the shared `queue` singleton
   // (shared/infra.ts) — register the consumer on that SAME instance so a
@@ -82,7 +92,7 @@ describe("Streetlight consumer — CQRS wiring (integration)", () => {
     expect(streetlightId).toBeTruthy();
 
     // give the (in-memory, fire-and-forget) async consumer a beat to process
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAppQueue();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetStreetlights).where(eq(assetStreetlights.id, streetlightId)));
     expect(rows).toHaveLength(1);
@@ -128,9 +138,9 @@ describe("Streetlight consumer — CQRS wiring (integration)", () => {
       payload: { id, tenantId: TENANT_A, poleId: `SL-IDEM-${id.slice(0, 8)}`, lampType: "solar", wattage: 40 },
     });
     await publish();
-    await new Promise((r) => setTimeout(r, 300));
+    await q.drain();
     await publish(); // replay
-    await new Promise((r) => setTimeout(r, 300));
+    await q.drain();
     await q.stop();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetStreetlights).where(eq(assetStreetlights.id, id)));
@@ -149,7 +159,7 @@ describe("Streetlight consumer — CQRS wiring (integration)", () => {
       payload: { status: "faulty" },
     });
     expect(res.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAppQueue();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetStreetlights).where(eq(assetStreetlights.id, streetlightId)));
     expect(rows[0]?.status).toBe("faulty");
@@ -163,7 +173,7 @@ describe("Streetlight consumer — CQRS wiring (integration)", () => {
     });
     expect(res.statusCode).toBe(202);
     const faultId = res.json().data.id;
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAppQueue();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetStreetlightFaults).where(eq(assetStreetlightFaults.id, faultId)));
     expect(rows).toHaveLength(1);
@@ -183,7 +193,7 @@ describe("Streetlight consumer — CQRS wiring (integration)", () => {
       payload: { assignedTo: ACTOR_B },
     });
     expect(assignRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAppQueue();
     let faultRows = await asTenant(TENANT_A, (tx) => tx.select().from(assetStreetlightFaults).where(eq(assetStreetlightFaults.id, faultId)));
     expect(faultRows[0]?.status).toBe("assigned");
     expect(faultRows[0]?.assignedTo).toBe(ACTOR_B);
@@ -194,7 +204,7 @@ describe("Streetlight consumer — CQRS wiring (integration)", () => {
       payload: { resolution: "replaced bulb" },
     });
     expect(resolveRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAppQueue();
     faultRows = await asTenant(TENANT_A, (tx) => tx.select().from(assetStreetlightFaults).where(eq(assetStreetlightFaults.id, faultId)));
     expect(faultRows[0]?.status).toBe("resolved");
     expect(faultRows[0]?.resolvedAt).toBeTruthy();
@@ -208,7 +218,7 @@ describe("Streetlight consumer — CQRS wiring (integration)", () => {
     });
     expect(res.statusCode).toBe(202);
     const requestId = res.json().data.id;
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAppQueue();
 
     const listRes = await app.inject({
       method: "GET", url: "/v1/assets/streetlight-requests",
@@ -223,14 +233,14 @@ describe("Streetlight consumer — CQRS wiring (integration)", () => {
       payload: { surveyReport: { feasible: true, poles_needed: 2 } },
     });
     expect(surveyRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAppQueue();
 
     const approveRes = await app.inject({
       method: "POST", url: `/v1/assets/streetlight-requests/${requestId}/approve`,
       headers: { authorization: `Bearer ${token(TENANT_A, ACTOR_A)}` },
     });
     expect(approveRes.statusCode).toBe(202);
-    await new Promise((r) => setTimeout(r, 300));
+    await drainAppQueue();
 
     const rows = await asTenant(TENANT_A, (tx) => tx.select().from(assetStreetlightRequests).where(eq(assetStreetlightRequests.id, requestId)));
     expect(rows[0]?.status).toBe("approved");
@@ -251,7 +261,7 @@ describe("Streetlight — cross-tenant RLS isolation", () => {
       tenantId: TENANT_A, actorId: ACTOR_A, correlationId: "corr-rls-sl-1", schemaVersion: "1.0",
       payload: { id: streetlightIdA, tenantId: TENANT_A, poleId: `SL-RLS-${streetlightIdA.slice(0, 8)}`, lampType: "led", wattage: 60 },
     });
-    await new Promise((r) => setTimeout(r, 300));
+    await q.drain();
     await q.stop();
   });
   afterAll(async () => {

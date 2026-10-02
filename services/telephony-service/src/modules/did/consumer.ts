@@ -1,5 +1,6 @@
 /** did consumer — only writer for the DID mapping aggregate. */
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
+import { NonRetryableError } from "@civitasone/queue";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
@@ -16,25 +17,43 @@ async function invalidateNumber(didNumber: string): Promise<void> {
   await cache.invalidate(`${DID_NUMBER_CACHE_PREFIX}${normalizeNumber(didNumber)}`);
 }
 
+function isUniqueViolation(err: unknown): boolean {
+  for (let e: unknown = err, depth = 0; e && depth < 5; e = (e as { cause?: unknown }).cause, depth++) {
+    if ((e as { code?: string }).code === "23505") return true;
+  }
+  return false;
+}
+
 export function registerDidConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.createDidMapping, async (msg) => {
     const parsed = createDidMappingPayload.safeParse(msg.payload);
     if (!parsed.success) throw new Error(`invalid createDidMapping payload: ${parsed.error.message}`);
     const p = parsed.data;
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.insert(tx, {
-        id: p.id,
-        tenantId: p.tenantId,
-        didNumber: p.didNumber,
-        label: p.label,
-        active: p.active,
-        createdBy: msg.actorId,
-        updatedBy: msg.actorId,
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.insert(tx, {
+          id: p.id,
+          tenantId: p.tenantId,
+          didNumber: p.didNumber,
+          label: p.label,
+          active: p.active,
+          createdBy: msg.actorId,
+          updatedBy: msg.actorId,
+        });
+        await emit(tx, msg, EVENTS.didMappingCreated, { didMappingId: p.id, didNumber: p.didNumber }, "create_did_mapping", p.id);
       });
-      await emit(tx, msg, EVENTS.didMappingCreated, { didMappingId: p.id, didNumber: p.didNumber }, "create_did_mapping", p.id);
-    });
+    } catch (err) {
+      // ux_did_mappings_active_number (0020): another tenant (or this one)
+      // already holds this number actively. Retrying can never succeed, so
+      // dead-letter it instead of burning the retry budget. The transaction
+      // rolled back, so markProcessed did not stick either.
+      if (isUniqueViolation(err)) {
+        throw new NonRetryableError("[DID_NUMBER_ASSIGNED] number already assigned", err);
+      }
+      throw err;
+    }
     await invalidateNumber(p.didNumber);
     await cache.invalidateResource(msg.tenantId, DID_RESOURCE);
   });
