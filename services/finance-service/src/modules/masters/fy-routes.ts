@@ -6,12 +6,13 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { zMoneyMinor } from "@civitasone/schemas/money";
+import { financeHeads } from "../budget/schema.js";
 import { assertOpeningBalancesBalanced, assertFiscalYearRangeValid, DomainError } from "./domain.js";
 import { pgSchema, uuid, varchar, integer, timestamp, bigint, text, date } from "drizzle-orm/pg-core";
 
@@ -188,6 +189,26 @@ export async function fyRoutes(app: FastifyInstance): Promise<void> {
     } catch (err) {
       if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
       throw err;
+    }
+
+    // GAP-FINANCE-OPENING-BALANCES-06: a closed fiscal year takes no opening balances
+    // (a year with no row yet is left to the existing flow). Real statuses: active|closed|draft.
+    const [fy] = await scopedRead((tx) => tx.select({ status: fiscalYears.status }).from(fiscalYears)
+      .where(and(eq(fiscalYears.tenantId, ctx.tenantId), eq(fiscalYears.code, body.fyCode))).limit(1));
+    if (fy?.status === "closed") {
+      throw new HttpError(409, "FISCAL_YEAR_CLOSED", `fiscal year ${body.fyCode} is closed; opening balances cannot be entered`);
+    }
+
+    // GAP-FINANCE-OPENING-BALANCES-03: every account code must exist in this tenant's chart of
+    // accounts (budget.finance_heads; GET /v1/finance/accounts reports every head as active, so
+    // existence is the activity test). The client's datalist check is advisory only.
+    const wantedCodes = [...new Set(body.entries.map((e) => e.accountCode))];
+    const knownRows = await scopedRead((tx) => tx.select({ code: financeHeads.code }).from(financeHeads)
+      .where(and(eq(financeHeads.tenantId, ctx.tenantId), inArray(financeHeads.code, wantedCodes))));
+    const known = new Set(knownRows.map((r) => r.code));
+    const unknownCodes = wantedCodes.filter((c) => !known.has(c));
+    if (unknownCodes.length > 0) {
+      throw new HttpError(400, "ACCOUNT_NOT_FOUND", `account code(s) not in the chart of accounts: ${unknownCodes.join(", ")}`);
     }
 
     // Synchronous duplicate pre-check: an opening balance is entered once per

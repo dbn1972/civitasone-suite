@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDateTime } from "@/lib/formatters";
+import { formatClosedBy } from "./periodHelpers";
 import { toHumanError } from "@/lib/messages";
 
 import type { PeriodRow } from "./periodsLoader";
@@ -152,8 +153,11 @@ export function PeriodsTable({
     { key: "period" as const, label: "Period", render: (row: DisplayRow) => <span className="mono">{row.period}</span> },
     { key: "fiscalYear" as const, label: "Fiscal Year", render: (row: DisplayRow) => row.fiscalYear || "—" },
     { key: "status" as const, label: "Status", cellType: "status" as const },
-    { key: "closedBy" as const, label: "Closed By", render: (row: DisplayRow) => row.closedBy ?? "—" },
-    { key: "closedAt" as const, label: "Closed At", render: (row: DisplayRow) => (row.closedAt ? formatIndianDate(row.closedAt) : "—") },
+    { key: "closedBy" as const, label: "Closed By", render: (row: DisplayRow) => {
+      const actor = formatClosedBy(row.closedBy);
+      return actor.title ? <span title={actor.title}>{actor.text}</span> : actor.text;
+    } },
+    { key: "closedAt" as const, label: "Closed At", render: (row: DisplayRow) => (row.closedAt ? formatIndianDateTime(row.closedAt) : "—") },
     {
       key: "actions" as const,
       label: "Actions",

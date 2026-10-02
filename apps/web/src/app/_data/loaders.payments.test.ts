@@ -25,3 +25,19 @@ describe("mapPayments (GAP-FINANCE-PAYMENTS-02)", () => {
     expect(normalisePaymentStatus(3)).toBeNull();
   });
 });
+
+// GAP-FINANCE-PAYMENTS-05
+describe("mapPayments amountMinor", () => {
+  it("keeps an exact digit-string amountMinor and drops a non-numeric one", () => {
+    const rows = mapPayments({
+      data: [
+        { id: "a", referenceId: "R1", beneficiary: "B", amountDisplay: "₹1", amountMinor: "9007199254740993", status: "released" },
+        { id: "b", referenceId: "R2", beneficiary: "B", amountDisplay: "₹1", amountMinor: "1.5e3", status: "released" },
+        { id: "c", referenceId: "R3", beneficiary: "B", amountDisplay: "₹1", status: "released" },
+      ],
+    });
+    expect(rows?.[0]?.amountMinor).toBe("9007199254740993");
+    expect(rows?.[1]).not.toHaveProperty("amountMinor");
+    expect(rows?.[2]).not.toHaveProperty("amountMinor");
+  });
+});

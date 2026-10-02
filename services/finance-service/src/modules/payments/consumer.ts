@@ -8,7 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertValidPaymentMode, assertDistinctMakerChecker, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
+import { assertThreeWayMatchPresent, assertThreeWayMatch, assertBillPassed, assertBillRejectable, assertPaymentSubmittable, PAYMENT_SUBMIT_BLOCKED_LIST, assertValidPaymentMode, assertDistinctMakerChecker, nextStage, deviationExceedsTolerance, DEFAULT_THREE_WAY_TOLERANCE_PCT, DomainError } from "./domain.js";
 import { minorString } from "@civitasone/schemas/money";
 import { assertValidDdoCode } from "../../shared/pfms.js";
 import { assertValidHoAWithMaster } from "../hoa/domain.js";
@@ -574,7 +574,21 @@ export function registerPaymentsConsumers(queue: Queue): void {
       const payment = await repo.findPaymentByIdTx(tx, p.id);
       if (!payment || payment.tenantId !== p.tenantId)
         throw new NonRetryableError(`[finance/payments] PAYMENT_NOT_FOUND: id=${p.id} tenant=${p.tenantId}`);
-      await repo.updatePayment(tx, p.id, { status: "pending_approval", updatedBy: msg.actorId });
+      // GAP-FINANCE-PAYMENTS-DETAIL-03: never overwrite a terminal / already-submitted status.
+      // The guard is the conditional UPDATE itself (race-safe: a release committing after the
+      // SELECT above is still not overwritten); the early assert only gives a clearer message.
+      try {
+        assertPaymentSubmittable(payment.status);
+      } catch (err) {
+        if (err instanceof DomainError) throw new NonRetryableError(`[finance/payments] ${err.code}: id=${p.id} status=${payment.status}`);
+        throw err;
+      }
+      const updated = await repo.updatePaymentUnlessStatusIn(tx, p.id, p.tenantId, PAYMENT_SUBMIT_BLOCKED_LIST, {
+        status: "pending_approval", updatedBy: msg.actorId,
+      });
+      if (updated === 0) {
+        throw new NonRetryableError(`[finance/payments] PAYMENT_NOT_SUBMITTABLE: id=${p.id} changed status concurrently`);
+      }
       await audit(tx, msg, "submit_for_eoffice_approval", "payment", p.id);
     });
     await cache.invalidate(cache.makeKey(msg.tenantId, "payment", p.id));

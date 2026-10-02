@@ -296,5 +296,31 @@ describe("platform admin status keys (GAP-ADMIN-ENTITLEMENTS-06 / GAP-ADMIN-GATE
   ])("%s renders the %s pill", (status, variant) => {
     const { container } = render(<StatusPill status={status} />);
     expect(container.querySelector(`.pill.${variant}`)).toBeInTheDocument();
+
+  });
+});
+// GAP-FINANCE-PAYMENTS-03 / PAYMENTS-DETAIL-07 / PERIOD-CLOSE-05
+describe("StatusPill payments + period-close statuses", () => {
+  it.each([
+    ["queued", "mut"],
+    ["Queued", "mut"],
+    ["Pending Approval", "warn"],
+    ["pending_approval", "warn"],
+    ["Failed", "bad"],
+    ["soft_close", "warn"],
+    ["soft close", "warn"],
+    ["hard_close", "bad"],
+    ["open", "good"],
+  ])("%s renders the %s tone", (status, tone) => {
+    expect(pillTone(status)).toBe(tone);
+  });
+
+  it("soft- and hard-closed are visually distinct", () => {
+    expect(pillTone("soft_close")).not.toBe(pillTone("hard_close"));
+  });
+
+  it("humanizes the label for a period status", () => {
+    const { container } = render(<StatusPill status="hard_close" />);
+    expect(container.querySelector(".pill")?.textContent).toBe("Hard Close");
   });
 });

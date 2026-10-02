@@ -51,14 +51,30 @@ describe("PeriodCloseCockpitPage", () => {
     expect(screen.getByText("No periods tracked yet")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge instead of a friendly empty state on error", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "error" });
+  // GAP-FINANCE-PERIOD-CLOSE-04
+  it("a failed read shows ONE error state with Retry -- no zero stat cards, no form, no empty copy", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "error", status: 500 });
 
     const ui = await PeriodCloseCockpitPage();
     render(ui);
 
-    const badges = screen.getAllByText("Couldn't load — showing nothing");
-    expect(badges.length).toBeGreaterThan(0);
+    expect(screen.getByText("We couldn't load accounting periods.")).toBeInTheDocument();
     expect(screen.queryByText("No periods tracked yet")).not.toBeInTheDocument();
+    expect(screen.queryByText("Soft-Close a Period")).not.toBeInTheDocument();
+    expect(screen.queryByText("Hard-Closed")).not.toBeInTheDocument();
+    expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-PERIOD-CLOSE-06
+  it("shows Closed At with a time (IST) and a shortened user id in Closed By", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [SOFT_CLOSED_PERIOD], source: "api" });
+
+    const ui = await PeriodCloseCockpitPage();
+    render(ui);
+
+    // 2026-05-02T00:00Z == 05:30 am IST
+    expect(screen.getByText(/02 May 2026, 05:30 am/i)).toBeInTheDocument();
+    expect(screen.getByText("User 11111111")).toBeInTheDocument();
+    expect(screen.queryByText("11111111-1111-1111-1111-111111111111")).not.toBeInTheDocument();
   });
 });

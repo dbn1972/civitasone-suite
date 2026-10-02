@@ -1,4 +1,4 @@
-import { and, eq, sql, inArray, desc } from "drizzle-orm";
+import { and, eq, sql, inArray, notInArray, desc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
 import { financeBills, financePayments, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
@@ -92,6 +92,23 @@ export async function findPaymentByIdAndTenant(id: string, tenantId: string): Pr
 export async function findPaymentByIdTx(tx: Writer, id: string): Promise<PaymentRow | null> {
   const rows = await (tx as typeof db).select().from(financePayments).where(eq(financePayments.id, id)).limit(1);
   return rows[0] ?? null;
+}
+
+/**
+ * Race-safe status transition for submit-approval: the status predicate is part of
+ * the UPDATE itself, so a release that commits after any earlier read can never be
+ * overwritten (READ COMMITTED re-evaluates the WHERE on the locked, latest row).
+ * Returns the number of rows updated (0 = payment missing, other tenant, or already
+ * in a blocked status).
+ */
+export async function updatePaymentUnlessStatusIn(
+  tx: Writer, id: string, tenantId: string, blocked: readonly string[], patch: Partial<PaymentInsert>,
+): Promise<number> {
+  const rows = await tx.update(financePayments)
+    .set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(financePayments.id, id), eq(financePayments.tenantId, tenantId), notInArray(financePayments.status, [...blocked])))
+    .returning({ id: financePayments.id });
+  return rows.length;
 }
 
 export async function updatePayment(tx: Writer, id: string, patch: Partial<PaymentInsert>): Promise<void> {

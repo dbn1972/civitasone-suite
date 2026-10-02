@@ -42,6 +42,8 @@ export const paymentSummarySchema = z.object({
   referenceId: z.string(),
   beneficiary: z.string(),
   amountDisplay: z.string(),
+  // GAP-FINANCE-PAYMENTS-05: exact paise string; optional for legacy payloads.
+  amountMinor: z.string().optional(),
   status: z.enum(["Queued", "Released", "Pending Approval", "Failed"]),
 });
 
@@ -2385,6 +2387,9 @@ export const FinancePaymentDetailSchema = z.object({
   id: z.string(),
   billId: z.string(),
   amountMinor: z.string(),
+  // GAP-FINANCE-PAYMENTS-DETAIL-06: same reference the register shows (optional: older payloads).
+  eftRef: z.string().nullable().optional(),
+  utr: z.string().nullable().optional(),
   mode: z.enum(["NEFT", "RTGS", "IMPS", "DBT", "PFMS", "cheque"]),
   status: z.string(),
   currency: z.string(),

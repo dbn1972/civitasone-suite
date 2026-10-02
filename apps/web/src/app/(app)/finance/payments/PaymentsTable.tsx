@@ -1,7 +1,9 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { Card, DataTable, Segmented } from "../../../_components/ds";
+import { Card, DataTable, Segmented, StatusPill } from "../../../_components/ds";
+import { formatMoney } from "@/lib/formatters";
+import { formatPaymentRef, paymentAmountMinor, paymentStatusVariant } from "./paymentUi";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
@@ -10,6 +12,8 @@ type Payment = {
   referenceId: string;
   beneficiary: string;
   amountDisplay: string;
+  /** Exact paise (base-10 string) when the API supplies it. */
+  amountMinor?: string;
   status: string;
 };
 
@@ -17,18 +21,11 @@ type Row = {
   id?: string;
   reference: string;
   beneficiary: string;
+  /** GAP-FINANCE-PAYMENTS-05: paise as bigint, so sorting is numeric (not text) and exact. */
+  amountMinor: bigint | null;
   amountDisplay: string;
   status: string;
 };
-
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-function formatReference(ref: string): string {
-  if (UUID_RE.test(ref)) {
-    return "PAY-" + ref.slice(-6).toUpperCase();
-  }
-  return ref;
-}
 
 const TABS = ["All", "Pending", "Released"] as const;
 type Tab = (typeof TABS)[number];
@@ -52,8 +49,9 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
     () =>
       filtered.map((p) => ({
         ...(p.id ? { id: p.id } : {}),
-        reference: formatReference(p.referenceId),
+        reference: formatPaymentRef(p.referenceId),
         beneficiary: p.beneficiary,
+        amountMinor: paymentAmountMinor(p),
         amountDisplay: p.amountDisplay,
         status: p.status,
       })),
@@ -81,8 +79,20 @@ export function PaymentsTable({ payments, source = "api" }: { payments: Payment[
         columns={[
           { key: "reference", label: "Reference" },
           { key: "beneficiary", label: "Beneficiary" },
-          { key: "amountDisplay", label: "Amount", align: "right" },
-          { key: "status", label: "Status", cellType: "status" },
+          {
+            key: "amountMinor",
+            label: "Amount",
+            align: "right",
+            // Sort on paise; show the formatted amount (falls back to the API's own
+            // display string only when no numeric value could be derived).
+            render: (row) => (row.amountMinor !== null ? formatMoney(row.amountMinor) : row.amountDisplay),
+          },
+          {
+            key: "status",
+            label: "Status",
+            // Released = money out (green); see paymentUi.ts for why the global map is not used.
+            render: (row) => <StatusPill status={row.status} variant={paymentStatusVariant(row.status)} />,
+          },
         ]}
         rows={tableRows}
         // Open the payment detail (UTR, submit-for-approval) — only for rows

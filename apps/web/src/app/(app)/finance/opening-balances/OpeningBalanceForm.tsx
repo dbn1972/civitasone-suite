@@ -4,10 +4,20 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
-import { rupeesToMinorString } from "@/lib/money";
+import { parseRupeesToPaise } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
+import { checkAccountCode, type CoaAccount } from "./openingBalanceAccounts";
 
-type Props = { fyCode: string };
+type Props = {
+  fyCode: string;
+  /**
+   * GAP-FINANCE-OPENING-BALANCES-03: the tenant's chart of accounts. Codes are
+   * picked from / validated against it; when it could not be loaded the form
+   * falls back to free text (server stays the validator) with a visible warning.
+   */
+  accounts?: readonly CoaAccount[];
+  accountsUnavailable?: boolean;
+};
 
 type EntryRow = {
   id: number;
@@ -24,20 +34,21 @@ function emptyRow(): EntryRow {
 
 /**
  * Exact rupees -> paise (bigint), string-based: never parseFloat * 100, which
- * mis-rounds values like 1.005 and loses precision above 2^53. A blank cell is
- * 0; anything that isn't a plain amount with at most 2 decimals is null
- * (rejected, never guessed).
+ * mis-rounds values like 1.005 and loses precision above 2^53 (and would read
+ * "48,62,400" as 48). Indian/western thousands grouping is accepted
+ * (GAP-FINANCE-OPENING-BALANCES-05); a blank cell is 0; anything else that
+ * isn't a plain amount with at most 2 decimals is null (rejected, never guessed).
  */
 function rupeesToPaise(val: string): bigint | null {
   if (!val.trim()) return 0n;
-  const minor = rupeesToMinorString(val, { allowZero: true });
+  const minor = parseRupeesToPaise(val, { allowZero: true });
   return minor === null ? null : BigInt(minor);
 }
 
 /** Minimum stated-reason length (matches finance-service's reasonField). */
 const OB_REASON_MIN = 10;
 
-export function OpeningBalanceForm({ fyCode }: Props) {
+export function OpeningBalanceForm({ fyCode, accounts, accountsUnavailable = false }: Props) {
   const router = useRouter();
 
   const [rows, setRows] = useState<EntryRow[]>([emptyRow(), emptyRow()]);
@@ -47,6 +58,7 @@ export function OpeningBalanceForm({ fyCode }: Props) {
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
 
+  const listId = useId();
   const rowRefs = useRef<Record<number, HTMLInputElement | null>>({});
   const [invalidRowId, setInvalidRowId] = useState<number | null>(null);
   const errId = useId();
@@ -85,10 +97,17 @@ export function OpeningBalanceForm({ fyCode }: Props) {
         focusRow(r.id);
         return false;
       }
+      const codeError = checkAccountCode(r.accountCode, accounts);
+      if (codeError) {
+        setRowError(codeError);
+        setInvalidRowId(r.id);
+        focusRow(r.id);
+        return false;
+      }
       const debit = rupeesToPaise(r.debit);
       const credit = rupeesToPaise(r.credit);
       if (debit === null || credit === null) {
-        setRowError(`Row for account ${r.accountCode}: enter amounts in rupees with at most 2 decimals (e.g. 1234.50).`);
+        setRowError(`Row for account ${r.accountCode}: enter a valid amount in rupees, e.g. 48,62,400.00 (at most 2 decimals).`);
         setInvalidRowId(r.id);
         focusRow(r.id);
         return false;
@@ -156,6 +175,21 @@ export function OpeningBalanceForm({ fyCode }: Props) {
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
       <Card title={`Set Opening Balances — ${fyCode}`} padding>
         <div style={{ display: "grid", gap: 12 }}>
+          {accountsUnavailable ? (
+            <p role="alert" style={{ margin: 0, fontSize: 13, color: "var(--warn, #b54708)" }}>
+              The chart of accounts could not be loaded, so account codes are not checked here. Type each code
+              exactly; the server validates it when you save.
+            </p>
+          ) : null}
+          {accounts && accounts.length > 0 ? (
+            <datalist id={listId}>
+              {accounts
+                .filter((a) => a.status !== "inactive")
+                .map((a) => (
+                  <option key={a.code} value={a.code}>{a.name}</option>
+                ))}
+            </datalist>
+          ) : null}
           <div style={{ overflowX: "auto" }}>
             <table className="tbl">
               <caption className="sr-only">Opening balance entries for fiscal year {fyCode}</caption>
@@ -179,6 +213,7 @@ export function OpeningBalanceForm({ fyCode }: Props) {
                         value={row.accountCode}
                         onChange={(e) => updateRow(row.id, { accountCode: e.target.value })}
                         maxLength={20}
+                        {...(accounts && accounts.length > 0 ? { list: listId } : {})}
                         aria-invalid={invalidRowId === row.id || undefined}
                         aria-describedby={invalidRowId === row.id ? errId : undefined}
                         style={{ padding: "8px 10px", borderRadius: 8, border: "1px solid var(--line)", minHeight: 40, width: "100%" }}

@@ -107,6 +107,17 @@ const STATUS_MAP: Record<string, PillVariant> = {
   settled: "good",
   credited: "good",
   disbursed: "good",
+  // GAP-FINANCE-PAYMENTS-03 / PAYMENTS-DETAIL-07: a payment instruction that is
+  // accepted but not yet sent. Neutral, not "info": it is a normal waiting state.
+  // ("released" is deliberately NOT keyed here: it means "money out" (good) on a
+  // payment but "guarantee returned" (neutral) on a guarantee, so the payments
+  // screens pass an explicit variant -- see finance/payments/paymentUi.ts.)
+  queued: "mut",
+  // GAP-FINANCE-PERIOD-CLOSE-05: period-close states (finance-service
+  // period-close status: open | soft_close | hard_close). Soft close is a
+  // reversible warning state; hard close is a lock -- visually distinct.
+  "soft close": "warn",
+  "hard close": "bad",
   computed: "warn",
   processing: "warn",
   // payroll.disbursement_transfers (GAP-PAYROLL-DISBURSEMENT-TRANSFERS):

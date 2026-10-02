@@ -76,6 +76,8 @@ export type PaymentSummary = {
   referenceId: string;
   beneficiary: string;
   amountDisplay: string;
+  /** GAP-FINANCE-PAYMENTS-05: exact paise as a base-10 string, so the register can sort numerically. */
+  amountMinor: string;
   status: "Queued" | "Released" | "Pending Approval" | "Failed";
 };
 
@@ -106,6 +108,7 @@ export async function listPayments(tenantId: string, limit: number, offset: numb
         referenceId: r.eftRef ?? ("PAY-" + r.id.slice(-6).toUpperCase()),
         beneficiary: billVendorMap.get(r.billId) ?? `Bill Ref ${r.billId.slice(-6)}`,
         amountDisplay: formatMinor(r.amountMinor),
+        amountMinor: toMinorBigInt(r.amountMinor).toString(),
         status: mapPaymentStatus(r.status),
       })),
       pagination: {

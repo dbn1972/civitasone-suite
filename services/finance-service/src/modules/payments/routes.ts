@@ -10,7 +10,7 @@ import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import { DomainError, assertBillRejectable } from "./domain.js";
+import { DomainError, assertBillRejectable, assertPaymentSubmittable } from "./domain.js";
 import * as mastersRepo from "../masters/repo.js";
 
 const FINANCE_ROLES  = ["finance_officer", "finance_admin", "super_admin"];
@@ -132,6 +132,10 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
       id: payment.id,
       billId: payment.billId,
       amountMinor: payment.amountMinor.toString(),
+      // GAP-FINANCE-PAYMENTS-DETAIL-06: the register shows eftRef as the payment
+      // reference, so the detail must carry it (and the bank UTR) to show the same one.
+      eftRef: payment.eftRef ?? null,
+      utr: payment.utr ?? null,
       mode: payment.mode,
       status: payment.status,
       currency: payment.currency,
@@ -147,6 +151,17 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
+    // GAP-FINANCE-PAYMENTS-DETAIL-03: refuse a terminal / already-submitted payment
+    // synchronously (409) instead of a false 202 that the consumer would then
+    // apply over a released payment.
+    const existing = await queries.getPayment(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "payment not found");
+    try {
+      assertPaymentSubmittable(existing.status);
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(409, err.code, err.message);
+      throw err;
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitPaymentForApproval(ctx, id));
   });
 

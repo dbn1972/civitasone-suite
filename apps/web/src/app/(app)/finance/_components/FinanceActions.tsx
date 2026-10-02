@@ -57,26 +57,20 @@ async function patchJson(url: string, body: unknown, area = "request"): Promise<
   }
 }
 
-/* ── Payments: PFMS sync + release (treasury) ───────────────────── */
+/* ── Payments: PFMS sync (treasury) ─────────────────────────────── */
+// GAP-FINANCE-PAYMENTS-07 (review H2): finance-service has no PFMS-sync route (the old call posted a
+// sync action to /payments/eft, whose body schema rejects it), so a live "Run sync" could only fail
+// while its copy claimed it may move funds. Shown disabled and honest until a real route exists.
 export function PaymentActions() {
-  const router = useRouter();
-  const { toast } = useToast();
   return (
-    <>
-      <ActionButton
-        label="PFMS Sync"
-        className="btn ghost"
-        confirmTitle="Sync the payment register with PFMS?"
-        confirmDescription="This reconciles released payments against the PFMS gateway. It may move funds for queued instructions and cannot be reversed from here."
-        confirmLabel="Run sync"
-        requireReason
-        reasonLabel="Reason / approving authority"
-        onConfirm={async (reason) => {
-          await postJson("/api/proxy/v1/finance/payments/eft", { action: "pfms-sync", reason }, "PFMS sync");
-        }}
-        onSuccess={() => { toast.info("PFMS sync submitted — the register updates as instructions settle."); router.refresh(); }}
-      />
-    </>
+    <button
+      type="button"
+      className="btn ghost"
+      disabled
+      title="PFMS sync is not connected to a service yet."
+    >
+      PFMS Sync — Not available yet
+    </button>
   );
 }
 

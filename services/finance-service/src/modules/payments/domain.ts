@@ -149,6 +149,30 @@ export function assertThreeWayMatch(
   }
 }
 
+/**
+ * GAP-FINANCE-PAYMENTS-DETAIL-03: statuses from which a payment may NOT be
+ * (re)submitted to eOffice for administrative approval. released/completed/
+ * failed/cancelled are terminal; pending_approval already has an eFile open, so
+ * a second submission would raise a duplicate file. Before this guard the
+ * submit-approval consumer overwrote ANY status -- including `released` -- with
+ * `pending_approval`.
+ */
+export const PAYMENT_SUBMIT_BLOCKED_STATUSES: ReadonlySet<string> = new Set([
+  "released", "completed", "failed", "cancelled", "pending_approval",
+]);
+
+/** Blocked statuses as an array, for a SQL `status NOT IN (...)` predicate. */
+export const PAYMENT_SUBMIT_BLOCKED_LIST: readonly string[] = [...PAYMENT_SUBMIT_BLOCKED_STATUSES];
+
+export function assertPaymentSubmittable(status: string): void {
+  if (PAYMENT_SUBMIT_BLOCKED_STATUSES.has(status)) {
+    throw new DomainError(
+      "PAYMENT_NOT_SUBMITTABLE",
+      `payment in status '${status}' cannot be submitted for approval`,
+    );
+  }
+}
+
 const VALID_PAYMENT_MODES = new Set(["NEFT", "RTGS", "IMPS", "DBT", "PFMS", "cheque"]);
 
 export function assertValidPaymentMode(mode: string): void {

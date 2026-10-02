@@ -560,7 +560,18 @@ export function mapPayments(payload: unknown): PaymentSummary[] | null {
     const amountDisplay = toText(row.amountDisplay) ?? toText(row.amount);
     const status = normalisePaymentStatus(row.status);
     if (!referenceId || !beneficiary || !amountDisplay || !status) continue;
-    mapped.push({ ...(id ? { id } : {}), referenceId, beneficiary, amountDisplay, status });
+    // GAP-FINANCE-PAYMENTS-05: exact paise string (when the API supplies it) so the
+    // register can sort/format numerically instead of comparing "₹…" display text.
+    const amountMinorRaw = toText(row.amountMinor);
+    const amountMinor = amountMinorRaw && /^\d+$/.test(amountMinorRaw) ? amountMinorRaw : null;
+    mapped.push({
+      ...(id ? { id } : {}),
+      referenceId,
+      beneficiary,
+      amountDisplay,
+      ...(amountMinor ? { amountMinor } : {}),
+      status,
+    });
   }
   return mapped;
 }

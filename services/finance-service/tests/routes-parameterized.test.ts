@@ -46,7 +46,6 @@ const postIdRoutes = [
   { url: `/v1/finance/deposits/${FAKE}/forfeit`, payload: { amountMinor: 1000 } },
   { url: `/v1/finance/deposits/${FAKE}/adjust`, payload: { amountMinor: 1000 } },
   { url: `/v1/finance/journals/${FAKE}/reverse`, payload: { reason: "error" } },
-  { url: `/v1/finance/payments/${FAKE}/submit-approval`, payload: {} },
 ];
 
 describe("Finance POST /:id routes — validation or not-found", () => {
@@ -89,5 +88,17 @@ describe("Finance period-close routes", () => {
     const r = await app.inject({ method: "POST", url: "/v1/finance/periods/2025-04/reopen", headers: { authorization: `Bearer ${token()}` }, payload: { reason: "Routine period transition" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
+  });
+});
+
+// GAP-FINANCE-PAYMENTS-DETAIL-03: submit-approval on an unknown payment is a 404 (it used to be a
+// false 202 that the consumer then rejected); terminal-status 409s are covered in
+// payments-submit-approval-guard.test.ts.
+describe("Finance POST /v1/finance/payments/:id/submit-approval — unknown payment", () => {
+  it("returns 404", async () => {
+    const app = await buildApp();
+    const r = await app.inject({ method: "POST", url: `/v1/finance/payments/${FAKE}/submit-approval`, headers: { authorization: `Bearer ${token()}` }, payload: {} });
+    await app.close();
+    expect(r.statusCode).toBe(404);
   });
 });
