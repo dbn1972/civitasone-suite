@@ -1,5 +1,7 @@
 import { getAdminRolesList, getAdminPermissionsList } from "@/app/_data/loaders";
 import { RolesPermissionsManager } from "./RolesPermissionsManager";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
 
 // COMP-004: this page used to render a Role Permissions Matrix built
 // entirely from an invented taxonomy — 9 hardcoded ROLES and 7 hardcoded
@@ -18,6 +20,8 @@ import { RolesPermissionsManager } from "./RolesPermissionsManager";
 // no update-role-metadata command for them (see the 501 on PATCH
 // /v1/admin/roles/:id).
 export default async function RolePermissionsPage() {
+  // GAP-ADMIN-ROLES-01: admin-service role/permission routes require tenant_admin or higher.
+  requireAnyRole(ADMIN_TENANT_ROLES);
   const [{ data: roles, source: rolesSource }, { data: permissions, source: permsSource }] = await Promise.all([
     getAdminRolesList(),
     getAdminPermissionsList(),

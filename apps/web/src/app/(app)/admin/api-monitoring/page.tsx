@@ -1,8 +1,12 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSAApiMonitoring } from "@/app/_data/loaders";
 import { ApiMonitoringTable } from "./ApiMonitoringTable";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { ADMIN_PLATFORM_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function ApiMonitoringPage() {
+  // GAP-ADMIN-API-MONITORING-01: platform-operator console.
+  requireAnyRole(ADMIN_PLATFORM_ROLES);
   const { data: endpoints, source } = await getSAApiMonitoring();
   const healthy = endpoints.filter((e) => String(e.status).toLowerCase() === "healthy").length;
   const degraded = endpoints.filter((e) => String(e.status).toLowerCase() === "degraded").length;

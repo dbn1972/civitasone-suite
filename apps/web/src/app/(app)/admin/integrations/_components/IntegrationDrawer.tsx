@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, StatusPill } from "@/app/_components/ds";
+import { Button, ErrorState, StatusPill } from "@/app/_components/ds";
 import {
   ENV_SCOPES,
   type EnvScope,
@@ -18,6 +18,7 @@ import {
   type IngestionConfigDraft,
 } from "@/lib/admin/sftpIngestion";
 import { useFormError } from "@/lib/useFormError";
+import { toHumanError } from "@/lib/messages";
 
 const EMPTY_INGESTION_DRAFT: IngestionConfigDraft = {
   inboundPath: "",
@@ -52,6 +53,9 @@ export function IntegrationDrawer({
   const [env, setEnv] = useState<EnvScope>(initialEnv);
   const [detail, setDetail] = useState<DetailResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  // GAP-ADMIN-INTEGRATIONS-02: the detail GET failed, so we do not know the live state;
+  // proposing a change now would be blind.
+  const [loadFailed, setLoadFailed] = useState(false);
   const [values, setValues] = useState<Record<string, string>>({});
   const [enabled, setEnabled] = useState(true);
   const [note, setNote] = useState("");
@@ -66,6 +70,7 @@ export function IntegrationDrawer({
 
   const load = useCallback(async (scope: EnvScope, signal?: AbortSignal) => {
     setLoading(true);
+    setLoadFailed(false);
     setError(null);
     setTestResult(null);
     try {
@@ -73,6 +78,8 @@ export function IntegrationDrawer({
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "load");
         setError(resolved.message);
+        setDetail(null);
+        setLoadFailed(true);
         return;
       }
       const body: DetailResponse = await res.json();
@@ -99,6 +106,8 @@ export function IntegrationDrawer({
       // different environment scope has already superseded this one.
       if (err instanceof Error && err.name === "AbortError") return;
       setError(formError.fromException("load").message);
+      setDetail(null);
+      setLoadFailed(true);
     } finally {
       setLoading(false);
     }
@@ -268,6 +277,8 @@ export function IntegrationDrawer({
 
           {loading ? (
             <div style={{ padding: 24, textAlign: "center", color: "var(--ink2)" }}>Loading…</div>
+          ) : loadFailed ? (
+            <ErrorState error={toHumanError("load", { area: provider.label })} onRetry={() => { void load(env); }} />
           ) : (
             <>
               {/* current status */}
@@ -395,7 +406,7 @@ export function IntegrationDrawer({
         {/* footer actions */}
         <div className="card-h" style={{ borderTop: "1px solid var(--line)", borderBottom: 0, justifyContent: "flex-end", gap: 10 }}>
           <Button variant="ghost" onClick={onClose} disabled={busy}>Close</Button>
-          <Button onClick={save} disabled={loading} loading={busy}>
+          <Button onClick={save} disabled={loading || loadFailed} loading={busy}>
             {busy ? "Saving…" : "Propose change"}
           </Button>
         </div>

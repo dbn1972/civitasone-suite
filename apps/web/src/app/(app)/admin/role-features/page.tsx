@@ -1,5 +1,7 @@
 import { getAdminRolesList, getRoleFeatureGrants } from "@/app/_data/loaders";
 import { RoleFeaturesManager } from "./RoleFeaturesManager";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { ADMIN_TENANT_ROLES } from "@/lib/auth/adminRoles";
 
 // COMP-004: this page used to hold 16 hardcoded INITIAL_GRANTS across a
 // fixed 6-role x 16-feature matrix, with handleSave() a documented no-op
@@ -20,6 +22,8 @@ import { RoleFeaturesManager } from "./RoleFeaturesManager";
 // consumer), so the matrix updates optimistically from each request's own
 // 202 response and a banner says the change is still settling.
 export default async function RoleFeaturesPage() {
+  // GAP-ADMIN-ROLE-FEATURES-01: policy-service role-features requires tenant_admin or higher.
+  requireAnyRole(ADMIN_TENANT_ROLES);
   const [{ data: roles, source: rolesSource }, { data: grants, source: grantsSource }] = await Promise.all([
     getAdminRolesList(),
     getRoleFeatureGrants(),

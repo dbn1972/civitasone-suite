@@ -19,6 +19,9 @@ export function AuditLogTable({ entries }: { entries: AdminAuditLogEntry[] }) {
     const base = outcomeFilter === "all" ? entries : entries.filter((e) => e.outcome === outcomeFilter);
     return base as Row[];
   }, [entries, outcomeFilter]);
+  // GAP-ADMIN-AUDIT-LOG-01: only claim "no events match" when a filter is
+  // actually narrowing a non-empty list; an empty source list is just "none yet".
+  const noEventsAtAll = entries.length === 0;
 
   return (
     <div className="card">
@@ -63,8 +66,8 @@ export function AuditLogTable({ entries }: { entries: AdminAuditLogEntry[] }) {
         exportable
         exportFilename="audit-log"
         emptyIcon="🔍"
-        emptyTitle="No audit events match"
-        emptyMessage="Adjust the filters above to find events."
+        emptyTitle={noEventsAtAll ? "No audit events yet" : "No audit events match"}
+        emptyMessage={noEventsAtAll ? "Events appear here as actions are recorded." : "Adjust the filters above to find events."}
       />
     </div>
   );

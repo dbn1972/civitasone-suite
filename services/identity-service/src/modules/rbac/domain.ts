@@ -44,6 +44,11 @@ export class DomainError extends Error {
  */
 const UNCONDITIONAL_AUTHORITY = ["super_admin", "platform_admin"];
 
+/** True for the role keys (super_admin / platform_admin) that only platform staff may confer. */
+export function isPlatformAuthorityKey(key: string): boolean {
+  return UNCONDITIONAL_AUTHORITY.includes(key.toLowerCase());
+}
+
 export function hasUnconditionalAuthority(callerRoles: string[]): boolean {
   return callerRoles.some((r) => UNCONDITIONAL_AUTHORITY.includes(r));
 }

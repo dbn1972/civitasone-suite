@@ -1,6 +1,8 @@
 import { PageHeader, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import { getAdminUsersList, getAdminRolesList } from "@/app/_data/loaders";
+import { getAdminUsersList, getAdminRolesList, ADMIN_USERS_LIST_LIMIT } from "@/app/_data/loaders";
+import { requireAnyRole, getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
+import { ADMIN_TENANT_ROLES, ADMIN_PLATFORM_ROLES } from "@/lib/auth/adminRoles";
 import { AdminUsersManager } from "./AdminUsersManager";
 
 // COMP-004: this page used to render 12 hardcoded MOCK_USERS with a role
@@ -18,11 +20,17 @@ import { AdminUsersManager } from "./AdminUsersManager";
 // (same honest-omission call already made for GET /v1/admin/mfa/users, see
 // gap/routes.ts).
 export default async function AdminUsersPage() {
+  // GAP-ADMIN-USERS-01/02: admin-service user + role routes require tenant_admin or higher.
+  requireAnyRole(ADMIN_TENANT_ROLES);
+  const sessionRoles = getSessionRoles();
   const [{ data: users, source }, { data: roles }] = await Promise.all([getAdminUsersList(), getAdminRolesList()]);
 
   const active = users.filter((u) => u.status === "active").length;
   const suspended = users.filter((u) => u.status === "suspended").length;
   const other = users.length - active - suspended;
+  // GAP-ADMIN-USERS-03: the loader asks for ADMIN_USERS_LIST_LIMIT rows and gets no total back;
+  // a full page means there may be more, so never present the count as exact.
+  const truncated = source === "api" && users.length >= ADMIN_USERS_LIST_LIMIT;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -33,12 +41,19 @@ export default async function AdminUsersPage() {
       />
       <DataSourceBadge source={source} message="Couldn't load the user directory — showing nothing" />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
-        <StatCard icon="👥" iconBg="#f1f5f9" label="Total users" value={users.length} />
+        <StatCard icon="👥" iconBg="#f1f5f9" label="Total users" value={truncated ? `${users.length}+` : users.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
         <StatCard icon="⛔" iconBg="#fef3f2" label="Suspended" value={suspended} />
         <StatCard icon="🔒" iconBg="#fffbeb" label="Locked / deactivated" value={other} />
       </div>
-      <AdminUsersManager initialUsers={users} roles={roles} source={source} />
+      <AdminUsersManager
+        initialUsers={users}
+        roles={roles}
+        source={source}
+        currentUserId={getSessionUserId()}
+        canAssignPlatformRoles={ADMIN_PLATFORM_ROLES.some((r) => sessionRoles.includes(r))}
+        truncatedAt={truncated ? ADMIN_USERS_LIST_LIMIT : null}
+      />
     </div>
   );
 }

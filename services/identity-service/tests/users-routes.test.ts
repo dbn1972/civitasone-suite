@@ -227,3 +227,34 @@ describe("Users routes — happy paths", () => {
     expect(res.statusCode).toBe(200);
   });
 });
+
+describe("Users routes - self status change guard (GAP-ADMIN-USERS-01)", () => {
+  it("PATCH /identity/users/:id/status -> 409 when an admin suspends their own account", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/identity/users/${ACTOR}/status`,
+      headers: headers(["tenant_admin"], TENANT, ACTOR),
+      payload: { status: "suspended", reason: "testing" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("SELF_STATUS_CHANGE");
+  });
+
+  it("PATCH status -> 409 even when the own UUID is upper-cased (case-insensitive guard)", async () => {
+    const res = await app.inject({
+      method: "PATCH", url: `/identity/users/${ACTOR.toUpperCase()}/status`,
+      headers: headers(["tenant_admin"], TENANT, ACTOR),
+      payload: { status: "suspended", reason: "testing" },
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("SELF_STATUS_CHANGE");
+  });
+
+  it("DELETE /identity/users/:id -> 409 when an admin deactivates their own account", async () => {
+    const res = await app.inject({
+      method: "DELETE", url: `/identity/users/${ACTOR}`,
+      headers: headers(["tenant_admin"], TENANT, ACTOR),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe("SELF_STATUS_CHANGE");
+  });
+});

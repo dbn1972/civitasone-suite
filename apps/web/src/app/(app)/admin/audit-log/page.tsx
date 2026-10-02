@@ -1,5 +1,5 @@
-import { PageHeader, StatCard } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatCard, LoadErrorState } from "@/app/_components/ds";
+import { AUDIT_LOG_VIEW_ROLES } from "@/lib/auth/adminRoles";
 import { getAdminAuditLogEntries } from "@/app/_data/loaders";
 import { AuditLogTable } from "./AuditLogTable";
 
@@ -17,7 +17,25 @@ import { AuditLogTable } from "./AuditLogTable";
 // restricts, not a bug in this fix (see gap/routes.ts's GET /v1/admin/audit-
 // logs comment).
 export default async function AuditLogPage() {
-  const { data: entries, source } = await getAdminAuditLogEntries();
+  const res = await getAdminAuditLogEntries();
+
+  // GAP-ADMIN-AUDIT-LOG-01: a 403 (tenant_admin is not an audit-service
+  // reader) or a failure used to render "Couldn't load audit events -- showing
+  // nothing" under four zeroed stat cards and a "No audit events match" table,
+  // so forbidden / failed / empty were indistinguishable.
+  if (res.source === "error") {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader
+          title="Audit Log"
+          subtitle="Platform-wide audit trail — real events from audit-service's append-only log."
+          back="/admin"
+        />
+        <LoadErrorState result={res} area="audit events" backHref="/admin" requiredRoles={AUDIT_LOG_VIEW_ROLES} />
+      </div>
+    );
+  }
+  const entries = res.data;
 
   const successCount = entries.filter((e) => e.outcome === "success").length;
   const failureCount = entries.filter((e) => e.outcome === "failure").length;
@@ -30,7 +48,6 @@ export default async function AuditLogPage() {
         subtitle="Platform-wide audit trail — real events from audit-service's append-only log."
         back="/admin"
       />
-      <DataSourceBadge source={source} message="Couldn't load audit events — showing nothing" />
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="📋" iconBg="#f1f5f9" label="Loaded events" value={entries.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Success" value={successCount} />

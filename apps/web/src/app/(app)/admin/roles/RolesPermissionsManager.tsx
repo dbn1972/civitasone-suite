@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { Button, PageHeader, StatCard } from "@/app/_components/ds";
+import { Button, ConfirmDialog, PageHeader, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminRoleSummary, AdminPermissionSummary } from "@/app/_data/loaders";
 import { toHumanError, type MessageKind } from "@/lib/messages";
@@ -29,7 +29,7 @@ async function fetchRolePermissions(roleId: string): Promise<{ ok: boolean; keys
   }
 }
 
-async function saveRolePermissions(roleId: string, permissionKeys: string[]): Promise<{ ok: boolean; message?: string }> {
+async function saveRolePermissions(roleId: string, permissionKeys: string[]): Promise<{ ok: boolean; partial?: boolean; message?: string }> {
   try {
     const res = await fetch(`/api/proxy/v1/admin/roles/${roleId}/permissions`, {
       method: "PATCH",
@@ -37,6 +37,13 @@ async function saveRolePermissions(roleId: string, permissionKeys: string[]): Pr
       body: JSON.stringify({ permissionKeys }),
     });
     if (!res.ok) return { ok: false, message: rolePermissionsError("save") };
+    // admin-service answers 207 + a `failed` list when only some of the
+    // grants/revokes applied. That is NOT "Saved." -- the role's real
+    // permission set now differs from what the admin ticked.
+    const body = (await res.json().catch(() => undefined)) as { status?: string; failed?: unknown[] } | undefined;
+    if (res.status === 207 || body?.status === "partial" || (Array.isArray(body?.failed) && body!.failed!.length > 0)) {
+      return { ok: false, partial: true, message: "Some permission changes could not be applied. The list below shows what is actually granted now — review it and try again." };
+    }
     return { ok: true };
   } catch {
     return { ok: false, message: rolePermissionsError("save") };
@@ -60,6 +67,8 @@ export function RolesPermissionsManager({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const [saveError, setSaveError] = useState<string | null>(null);
+  // GAP-ADMIN-ROLES-02: Save shows the exact grant/revoke diff and asks first.
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   const selectedRole = roles.find((r) => r.id === selectedRoleId) ?? null;
 
@@ -105,9 +114,19 @@ export function RolesPermissionsManager({
     setSaveState("saving");
     setSaveError(null);
     const result = await saveRolePermissions(selectedRoleId, [...selected]);
+    setConfirmOpen(false);
     if (!result.ok) {
       setSaveState("error");
       setSaveError(result.message ?? null);
+      if (result.partial) {
+        // Re-read the role so the checkboxes show the real resulting set.
+        const fresh = await fetchRolePermissions(selectedRoleId);
+        if (fresh.ok) {
+          const keys = new Set(fresh.keys ?? []);
+          setBaseline(keys);
+          setSelected(new Set(keys));
+        }
+      }
       return;
     }
     setBaseline(new Set(selected));
@@ -115,6 +134,9 @@ export function RolesPermissionsManager({
   }
 
   const totalPermissionsGranted = selected.size;
+  const grantedKeys = [...selected].filter((k) => !baseline.has(k));
+  const revokedKeys = [...baseline].filter((k) => !selected.has(k));
+  const permName = (key: string) => permissions.find((p) => p.key === key)?.name ?? key;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -127,7 +149,7 @@ export function RolesPermissionsManager({
       <div className="grid g-4" style={{ marginBottom: 18 }}>
         <StatCard icon="🔑" iconBg="#f1f5f9" label="Assignable roles" value={assignableRoles.length} />
         <StatCard icon="🛡️" iconBg="#eff6ff" label="Total permissions" value={permissions.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Granted to selected role" value={selectedRole ? totalPermissionsGranted : 0} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Granted to selected role" value={selectedRole && !loading && !loadError ? totalPermissionsGranted : null} />
         <StatCard icon="🔒" iconBg="#fffbeb" label="System roles (read-only)" value={roles.filter((r) => r.isSystem).length} />
       </div>
 
@@ -157,7 +179,7 @@ export function RolesPermissionsManager({
               type="button"
               size="sm"
               disabled={!selectedRole || selectedRole.isSystem || changedCount === 0 || loading}
-              onClick={() => void save()}
+              onClick={() => { setSaveState("idle"); setConfirmOpen(true); }}
               loading={saveState === "saving"}
             >
               {saveState === "saving" ? "Saving…" : changedCount > 0 ? `Save ${changedCount} change${changedCount === 1 ? "" : "s"}` : "Save changes"}
@@ -202,6 +224,32 @@ export function RolesPermissionsManager({
           </div>
         )}
       </div>
+      <ConfirmDialog
+        open={confirmOpen}
+        danger={revokedKeys.length > 0}
+        title={`Change permissions for ${selectedRole?.name ?? "this role"}?`}
+        description={
+          <div>
+            {grantedKeys.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <strong>Grant ({grantedKeys.length})</strong>
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{grantedKeys.map((k) => <li key={k}>{permName(k)} <code>{k}</code></li>)}</ul>
+              </div>
+            )}
+            {revokedKeys.length > 0 && (
+              <div style={{ marginBottom: 8 }}>
+                <strong>Revoke ({revokedKeys.length})</strong>
+                <ul style={{ margin: "4px 0 0", paddingLeft: 18 }}>{revokedKeys.map((k) => <li key={k}>{permName(k)} <code>{k}</code></li>)}</ul>
+              </div>
+            )}
+            <p style={{ margin: 0 }}>This changes access for everyone holding this role and is recorded in the audit trail.</p>
+          </div>
+        }
+        confirmLabel="Apply changes"
+        busy={saveState === "saving"}
+        onConfirm={() => void save()}
+        onCancel={() => { if (saveState !== "saving") setConfirmOpen(false); }}
+      />
     </div>
   );
 }

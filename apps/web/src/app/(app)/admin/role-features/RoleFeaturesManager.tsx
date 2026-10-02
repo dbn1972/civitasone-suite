@@ -128,7 +128,20 @@ export function RoleFeaturesManager({
   }
 
   const roleGrants = grants.filter((g) => g.roleName === selectedRole && g.granted);
-  const totalGrants = grants.filter((g) => g.granted).length;
+  // GAP-ADMIN-ROLE-FEATURES-02: matrix rows are the curated catalogue PLUS any
+  // feature key that actually has a grant but is not in the catalogue, so a
+  // legacy grant is visible (and revocable) instead of silently counted.
+  const catalogue = useMemo(() => new Set(FEATURE_KEYS), []);
+  const featureRows = useMemo(() => {
+    const orphanKeys = [...new Set(grants.filter((g) => g.granted && !catalogue.has(g.featureKey)).map((g) => g.featureKey))].sort();
+    return [...FEATURE_KEYS, ...orphanKeys];
+  }, [grants, catalogue]);
+  // "Active grants" counts exactly the ticks the matrix can show: granted AND
+  // for a role that has a column. Grants for roles outside the list are
+  // reported separately rather than inflating the number.
+  const roleKeys = useMemo(() => new Set(roles.map((r) => r.key)), [roles]);
+  const totalGrants = grants.filter((g) => g.granted && roleKeys.has(g.roleName)).length;
+  const grantsForUnlistedRoles = grants.filter((g) => g.granted && !roleKeys.has(g.roleName)).length;
 
   const presets = useMemo(() => {
     const byPrefix = (prefix: string) => FEATURE_KEYS.filter((f) => f.startsWith(prefix));
@@ -155,10 +168,16 @@ export function RoleFeaturesManager({
       )}
       <StatGrid>
         <StatCard icon="👥" iconBg="#eef2ff" label="Roles" value={roles.length} />
-        <StatCard icon="🔑" iconBg="#ecfdf3" label="Feature keys" value={FEATURE_KEYS.length} />
+        <StatCard icon="🔑" iconBg="#ecfdf3" label="Feature keys" value={featureRows.length} />
         <StatCard icon="✅" iconBg="#dbeafe" label="Active grants" value={totalGrants} />
         <StatCard icon="📋" iconBg="#fef3c7" label="Selected role's grants" value={roleGrants.length} />
       </StatGrid>
+
+      {grantsForUnlistedRoles > 0 && (
+        <p role="note" style={{ margin: "10px 0 0", fontSize: 12.5, color: "var(--mut)" }}>
+          {grantsForUnlistedRoles} more active grant{grantsForUnlistedRoles === 1 ? " belongs" : "s belong"} to roles that are not listed in this matrix and are not counted above.
+        </p>
+      )}
 
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
@@ -207,9 +226,12 @@ export function RoleFeaturesManager({
               </tr>
             </thead>
             <tbody>
-              {FEATURE_KEYS.map((feature) => (
+              {featureRows.map((feature) => (
                 <tr key={feature}>
-                  <td style={{ position: "sticky", insetInlineStart: 0, background: "var(--panel)", fontFamily: "monospace", fontSize: 12 }}>{feature}</td>
+                  <td style={{ position: "sticky", insetInlineStart: 0, background: "var(--panel)", fontFamily: "monospace", fontSize: 12 }}>
+                    {feature}
+                    {!catalogue.has(feature) && <span className="pill warn" style={{ marginLeft: 8, fontFamily: "inherit" }}>not in catalogue</span>}
+                  </td>
                   {roles.map((r) => {
                     const cellKey = `${r.key}:${feature}`;
                     return (

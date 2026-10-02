@@ -1,10 +1,15 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getSAOperators } from "@/app/_data/loaders";
 import { OperatorsTable } from "./OperatorsTable";
+import { summariseOperators } from "./operatorStatus";
+import { requireAnyRole } from "@/lib/auth/roleGuard";
+import { ADMIN_PLATFORM_ROLES } from "@/lib/auth/adminRoles";
 
 export default async function OperatorsPage() {
+  // GAP-ADMIN-OPERATORS-01: platform-operator console.
+  requireAnyRole(ADMIN_PLATFORM_ROLES);
   const { data: operators, source } = await getSAOperators();
-  const active = operators.filter((o) => String(o.status ?? o.twoFaStatus ?? "").toLowerCase() !== "suspended" && String(o.status ?? o.twoFaStatus ?? "").toLowerCase() !== "disabled").length;
+  const { active, suspended, unknown } = summariseOperators(operators);
   const twoFa = operators.filter((o) => String(o.twoFaStatus ?? "").toLowerCase() === "enabled").length;
 
   return (
@@ -18,7 +23,8 @@ export default async function OperatorsPage() {
         <StatCard icon="👤" iconBg="#eef2ff" label="Total Operators" value={operators.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
         <StatCard icon="🔐" iconBg="#fffaeb" label="2FA Enabled" value={twoFa} />
-        <StatCard icon="⛔" iconBg="#fce7ee" label="Suspended" value={operators.length - active} />
+        <StatCard icon="⛔" iconBg="#fce7ee" label="Suspended" value={suspended} />
+        {unknown > 0 && <StatCard icon="❔" iconBg="#f1f5f9" label="Status unknown" value={unknown} />}
       </StatGrid>
       <Card title="Operator Directory">
         <OperatorsTable operators={operators} source={source === "error" ? "error" : "api"} />

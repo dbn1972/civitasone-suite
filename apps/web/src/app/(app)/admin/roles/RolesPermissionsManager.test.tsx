@@ -61,6 +61,11 @@ describe("RolesPermissionsManager (COMP-004: real per-role permissions editor)",
     const saveButton = await screen.findByRole("button", { name: /save 2 changes/i });
     fireEvent.click(saveButton);
 
+    // GAP-ADMIN-ROLES-02: nothing is sent until the diff is confirmed.
+    const confirmBtn = await screen.findByRole("button", { name: /apply changes/i });
+    expect(fetchSpy.mock.calls.some(([input]) => String(input).endsWith("/permissions"))).toBe(false);
+    fireEvent.click(confirmBtn);
+
     await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent("Saved."));
 
     const patchCall = fetchSpy.mock.calls.find(([input]) => String(input) === "/api/proxy/v1/admin/roles/role-auditor/permissions");
@@ -109,5 +114,45 @@ describe("RolesPermissionsManager (COMP-004: real per-role permissions editor)",
     expect(alert.textContent).not.toMatch(/role not found/i);
     expect(alert.textContent).not.toMatch(/\b404\b/);
     expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+});
+
+describe("RolesPermissionsManager - diff preview and partial saves (GAP-ADMIN-ROLES-02)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it("the confirm dialog lists exactly what will be granted and revoked", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "role-auditor", permissions: ["finance.read"] }), { status: 200 }),
+    );
+    render(<RolesPermissionsManager roles={roles} permissions={permissions} source="api" />);
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /view finance/i })).toBeChecked());
+    fireEvent.click(screen.getByRole("checkbox", { name: /view finance/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /edit hr records/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /save 2 changes/i }));
+    expect(await screen.findByText(/Grant \(1\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Revoke \(1\)/)).toBeInTheDocument();
+  });
+
+  it("a 207 partial result is reported as a failure, never as 'Saved.'", async () => {
+    let reads = 0;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      if (url.endsWith("/permissions")) {
+        return new Response(JSON.stringify({ status: "partial", granted: [], revoked: [], skipped: [], failed: [{ key: "hr.write", action: "grant", status: 403, code: "FORBIDDEN", message: "x" }] }), { status: 207 });
+      }
+      reads++;
+      return new Response(JSON.stringify({ id: "role-auditor", permissions: ["finance.read"] }), { status: 200 });
+    });
+    render(<RolesPermissionsManager roles={roles} permissions={permissions} source="api" />);
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /view finance/i })).toBeChecked());
+    fireEvent.click(screen.getByRole("checkbox", { name: /edit hr records/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /save 1 change/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /apply changes/i }));
+    const alert = await screen.findByText(/could not be applied/i);
+    expect(alert).toBeInTheDocument();
+    expect(screen.queryByText("Saved.")).not.toBeInTheDocument();
+    // the role was re-read so the checkbox shows the real (unchanged) state
+    await waitFor(() => expect(reads).toBeGreaterThanOrEqual(2));
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /edit hr records/i })).not.toBeChecked());
   });
 });
