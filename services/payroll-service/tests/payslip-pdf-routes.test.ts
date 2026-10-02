@@ -18,8 +18,12 @@ const RUN_ID = "22222222-3333-4000-8000-000000000001";
 function adminToken(roles = ["payroll_admin"]) {
   return signToken({ sub: ADMIN_ID, tid: TENANT, roles, sid: "s1" }, SECRET);
 }
-function employeeToken(sub = EMPLOYEE_ID) {
-  return signToken({ sub, tid: TENANT, roles: ["employee"], sid: "s1" }, SECRET);
+// P0 id-space fix: the employee's JWT subject (login user id) is a DIFFERENT
+// id from their hrms employee id; ownership is decided on the id hrms
+// resolves (shared/employee-scope.ts), never on the raw actorId.
+const EMPLOYEE_LOGIN = "aaaaaaaa-cccc-4000-8000-0000000000f2";
+function employeeToken(_ownEmployeeId = EMPLOYEE_ID) {
+  return signToken({ sub: EMPLOYEE_LOGIN, tid: TENANT, roles: ["employee"], sid: "s1" }, SECRET);
 }
 
 const H = vi.hoisted(() => ({
@@ -52,6 +56,8 @@ vi.mock("../src/shared/hrms-client.js", async (io) => {
   return {
     ...actual,
     fetchDefaultSlipTemplate: (...args: [string]) => H.fetchDefaultSlipTemplateMock(...args),
+    resolveActorEmployeeId: vi.fn(async (_t: string, actorId: string) =>
+      actorId === "aaaaaaaa-cccc-4000-8000-0000000000f2" ? "aaaaaaaa-cccc-4000-8000-000000000002" : null),
   };
 });
 

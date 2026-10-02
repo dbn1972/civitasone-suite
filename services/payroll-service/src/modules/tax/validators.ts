@@ -7,7 +7,7 @@ const amountMinor = z.number().int().nonnegative();
  * Body schema for POST /v1/payroll/tax-declarations.
  *
  * `employeeId` is optional here because ownership/authorisation is resolved by
- * `enforceEmployeeOwnership` (self-service employees are pinned to their own id;
+ * `scopeEmployeeId` (self-service employees are pinned to their own id;
  * privileged roles must supply a target id). `fy` format is checked here and
  * further validated by `parseFy` at the route (suffix == (startYear+1) % 100).
  */

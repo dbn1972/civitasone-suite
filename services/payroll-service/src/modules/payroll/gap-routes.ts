@@ -12,7 +12,8 @@ import { z, ZodError } from "zod";
 import { sql } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopeEmployeeId } from "../../shared/employee-scope.js";
 import { scopedRead } from "../../shared/db.js";
 import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
@@ -356,7 +357,8 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     // tax-optimization advice — without this, any employee could pass a
     // co-worker's UUID as employeeId and read their 80C/80D declaration
     // usage and remaining headroom (cross-employee financial disclosure).
-    const employeeId = enforceEmployeeOwnership(ctx, q.employeeId);
+    // Staff = ALL_ROLES minus employee = READER_ROLES.
+    const employeeId = await scopeEmployeeId(ctx, q.employeeId, READER_ROLES);
 
     // Fetch current declarations
     const now = new Date();
@@ -430,7 +432,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     // comment below), so it isn't independently exploitable today — fixed
     // for consistency so it doesn't become a silent gap the moment real
     // computation is wired in here.
-    const employeeId = enforceEmployeeOwnership(ctx, q.employeeId);
+    const employeeId = await scopeEmployeeId(ctx, q.employeeId, READER_ROLES);
     // Simplified comparison — in production this calls the full tax engine
     return reply.send({
       employeeId,

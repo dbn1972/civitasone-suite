@@ -2,7 +2,8 @@ import { sendAccepted } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { FastifyInstance } from "fastify";
 import { ZodError } from "zod";
-import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { createLoanBody, disburseLoanBody, idParam, loanQueryParams } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -10,6 +11,8 @@ import * as repo from "./repo.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "employee"];
+// Excludes finance_officer: a finance_officer+employee caller is self-scoped here.
+const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 
 export async function loansRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/payroll/loans", async (req, reply) => {
@@ -34,7 +37,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     // SEC-P2-01: a self-service `employee` caller may only list their OWN
     // loans — without this, any employee could pass a co-worker's UUID as
     // empId and read their loan principal/EMI/outstanding balance (IDOR).
-    const effectiveEmpId = enforceEmployeeOwnership(ctx, empId);
+    const effectiveEmpId = await scopeEmployeeId(ctx, empId, READER_STAFF_ROLES);
     return reply.send(await queries.getLoansByEmployee(ctx.tenantId, effectiveEmpId));
   });
 
@@ -48,7 +51,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     // SEC-P2-01: a self-service `employee` caller may only view their OWN
     // loan — without this, any employee could fetch any co-worker's loan by
     // iterating loan ids (IDOR).
-    enforceEmployeeOwnership(ctx, loan.employeeId);
+    await scopeEmployeeId(ctx, loan.employeeId, READER_STAFF_ROLES);
     return reply.send(loan);
   });
 
@@ -62,7 +65,7 @@ export async function loansRoutes(app: FastifyInstance): Promise<void> {
     // SEC-P2-01: same ownership guard as the detail route above — a
     // self-service employee must not be able to read a co-worker's
     // repayment schedule by iterating loan ids (IDOR).
-    enforceEmployeeOwnership(ctx, loan.employeeId);
+    await scopeEmployeeId(ctx, loan.employeeId, READER_STAFF_ROLES);
 
     const principal = Number(loan.principalMinor);
     const emiMinor  = Number(loan.emiMinor);

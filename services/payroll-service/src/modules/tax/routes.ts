@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
-import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership, isSelfServiceEmployee } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopeEmployeeId, staffRolesOf, isRouteStaff, requireOwnEmployeeId } from "../../shared/employee-scope.js";
 import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
@@ -19,6 +20,9 @@ import * as commands from "./commands.js";
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer", "employee"];
 const WRITER_ROLES  = [...PAYROLL_ROLES, "employee", "hr_admin"];
+const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
+// Excludes finance_officer: a finance_officer+employee caller files only their own declaration.
+const WRITER_STAFF_ROLES = staffRolesOf(WRITER_ROLES);
 const CEILING_ROLES = ["payroll_admin", "super_admin"];
 
 const VALID_SECTIONS = ["10_10", "10_10AA", "10_10B", "10_10C"] as const;
@@ -111,7 +115,9 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     parseFy(fy);
     const { startYear } = parseFy(fy);
     const months = fyMonths(startYear);
-    const scopedEmployeeId = isSelfServiceEmployee(ctx) ? ctx.actorId : (reqEmployeeId ?? null);
+    // Non-staff callers see only their own row, keyed by their hrms-resolved
+    // employee id (ctx.actorId is a different id space from slip.employeeId).
+    const scopedEmployeeId = isRouteStaff(ctx, READER_STAFF_ROLES) ? (reqEmployeeId ?? null) : await requireOwnEmployeeId(ctx);
 
     const runs = await scopedRead((tx) => tx.select().from(payrollRuns)
       .where(and(eq(payrollRuns.tenantId, ctx.tenantId), inArray(payrollRuns.month, months))));
@@ -208,7 +214,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
     const { employeeId: reqEmployeeId, fy, regime } = req.query as { employeeId?: string; fy?: string; regime?: string };
     // C1: a self-service employee may only read their OWN computation.
-    const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
+    const employeeId = await scopeEmployeeId(ctx, reqEmployeeId, READER_STAFF_ROLES);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2025-26)");
     const selectedRegime = regime === "old" ? "old" : "new";
 
@@ -314,7 +320,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
     const { employeeId: reqEmployeeId, fy } = req.query as { employeeId?: string; fy?: string };
     // C1: a self-service employee may only read their OWN Form 16.
-    const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
+    const employeeId = await scopeEmployeeId(ctx, reqEmployeeId, READER_STAFF_ROLES);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2025-26)");
     // M5: reject malformed FY with 400 before reaching the builder (whose parseFy
     // throws a plain Error that would otherwise surface as 500).
@@ -347,7 +353,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     // shared schema error handler.
     const body = createTaxDeclarationBody.parse(req.body);
 
-    const employeeId = enforceEmployeeOwnership(ctx, body.employeeId);
+    const employeeId = await scopeEmployeeId(ctx, body.employeeId, WRITER_STAFF_ROLES);
     // Strict FY check (suffix == (startYear+1) % 100) beyond the regex format.
     parseFy(body.fy);
 
@@ -376,7 +382,7 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
 
     const { employeeId: reqEmployeeId, fy } = req.query as { employeeId?: string; fy?: string };
-    const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
+    const employeeId = await scopeEmployeeId(ctx, reqEmployeeId, READER_STAFF_ROLES);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required");
     parseFy(fy);
 

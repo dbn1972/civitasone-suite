@@ -14,29 +14,10 @@ import type { RequestContext } from "@civitasone/types";
 import { scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { requireOwnEmployeeId } from "../../shared/employee-scope.js";
 
-// ─── Self-service identity ──────────────────────────────────────────────────
-
-/**
- * The caller's own hrms_employees.id. actorId (JWT subject) is a DIFFERENT
- * id space from payroll's employee_id columns (see hrms-client.ts
- * resolveActorEmployeeId and the GET /v1/payroll/slips/:id self-scope in
- * routes.ts) -- comparing the two directly is never right. Fails CLOSED:
- * an unreachable HRMS is 502, an unlinked actor is 403.
- */
-export async function requireOwnEmployeeId(ctx: RequestContext): Promise<string> {
-  let own: string | null;
-  try {
-    own = await resolveActorEmployeeId(ctx.tenantId, ctx.actorId);
-  } catch (err) {
-    if (err instanceof HrmsUnavailableError) {
-      throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot resolve caller's employee record: HRMS identity source unreachable");
-    }
-    throw err;
-  }
-  if (!own) throw new HttpError(403, "FORBIDDEN", "no employee record is linked to this user");
-  return own;
-}
+// requireOwnEmployeeId lives in shared/employee-scope.ts (reused by every
+// payroll self-service ownership check).
 
 /**
  * GAP-PAYROLL-REIMBURSEMENTS-01/05: effective employeeId for a reimbursement

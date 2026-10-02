@@ -93,32 +93,6 @@ describe("shared/context — isSelfServiceEmployee additional cases", () => {
     expect(isSelfServiceEmployee(ctx)).toBe(false);
   });
 });
-
-describe("shared/context — enforceEmployeeOwnership additional cases", () => {
-  it("service_account with requestedEmployeeId passes through", async () => {
-    const { enforceEmployeeOwnership } = await import("../src/shared/context.js");
-    const ctx = {
-      actorId: "svc-1", tenantId: "t1", roles: ["employee"],
-      correlationId: "c1", actorType: "service_account" as const,
-    } as never;
-    expect(enforceEmployeeOwnership(ctx, "emp-999")).toBe("emp-999");
-  });
-
-  it("service_account with no requestedEmployeeId throws 400", async () => {
-    const { enforceEmployeeOwnership } = await import("../src/shared/context.js");
-    const ctx = {
-      actorId: "svc-1", tenantId: "t1", roles: ["employee"],
-      correlationId: "c1", actorType: "service_account" as const,
-    } as never;
-    try {
-      enforceEmployeeOwnership(ctx, undefined);
-      expect.fail("should have thrown");
-    } catch (e) {
-      expect((e as { status: number }).status).toBe(400);
-    }
-  });
-});
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // deterministic-id.ts — additional edge cases
 // ═══════════════════════════════════════════════════════════════════════════════

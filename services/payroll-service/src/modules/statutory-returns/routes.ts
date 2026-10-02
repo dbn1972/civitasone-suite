@@ -1,7 +1,8 @@
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { randomUUID } from "node:crypto";
-import { resolveContext, requireRole, HttpError, enforceEmployeeOwnership } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
+import { scopeEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import type { RequestContext } from "@civitasone/types";
 import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
@@ -19,6 +20,7 @@ import * as taxCommands from "../tax/commands.js";
 
 const STATUTORY_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer", "employee"];
+const READER_STAFF_ROLES = staffRolesOf(READER_ROLES);
 // C1: Form 24Q is a deductor-wide e-TDS return exposing every deductee's PAN/TDS.
 // It must NOT be readable by the self-service `employee` role — admins/officers only.
 const RETURN_FILER_ROLES = [...STATUTORY_ROLES, "hr_admin", "finance_officer"];
@@ -375,7 +377,7 @@ export async function statutoryReturnsRoutes(app: FastifyInstance): Promise<void
 
     const { employeeId: reqEmployeeId, fy } = req.query as { employeeId?: string; fy?: string };
     // C1: a self-service employee may only read their OWN Form 12BA.
-    const employeeId = enforceEmployeeOwnership(ctx, reqEmployeeId);
+    const employeeId = await scopeEmployeeId(ctx, reqEmployeeId, READER_STAFF_ROLES);
     if (!fy) throw new HttpError(400, "VALIDATION_FAILED", "fy is required (e.g. 2026-27)");
     const { startYear, endYear } = parseFyOr400(fy);
 
