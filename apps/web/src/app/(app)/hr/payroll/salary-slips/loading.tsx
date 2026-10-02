@@ -1,16 +1,23 @@
-export default function HRSalarySlipsLoading() {
+import { getTranslations } from "next-intl/server";
+import { SkeletonTable } from "../../../../_components/ds";
+
+// GAP-PAYROLL-SALARY-SLIPS-06: this was one of only 4 of 30 payroll
+// loading.tsx files still on Tailwind slate-50/slate-200 + min-h-screen +
+// max-w-7xl -- ignores dark mode (a hardcoded light grey flashes regardless
+// of theme) and doesn't match the DS skeleton every sibling payroll list
+// page already uses. SkeletonTable already models exactly this page's shape
+// (4 stat cards + filter bar + table), so this needs no bespoke markup.
+export default async function HRSalarySlipsLoading() {
+  const t = await getTranslations("salarySlips");
   return (
-    <div className="min-h-screen bg-slate-50 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl animate-pulse space-y-5">
-        <div className="h-4 w-40 rounded bg-slate-200" />
-        <div className="h-9 w-56 rounded bg-slate-200" />
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 rounded-xl bg-slate-200" />
-          ))}
+    <div className="page-main wrap" aria-labelledby="page-heading">
+      <div className="ph">
+        <div>
+          <h1 id="page-heading">{t("title")}</h1>
+          <div className="sub">{t("subtitle")}</div>
         </div>
-        <div className="h-80 rounded-xl bg-slate-200" />
       </div>
+      <SkeletonTable rows={8} />
     </div>
   );
 }

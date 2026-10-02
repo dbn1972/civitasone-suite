@@ -28,6 +28,11 @@
   /* Salary slip specific */
   .salary-slip-print { max-width: 100%; font-family: serif; }
   .salary-slip-print .slip-logo { font-size: 20pt; font-weight: bold; }
+  /* GAP-PAYROLL-SALARY-SLIPS-DETAIL-04: .slip-columns collapses to one
+     column below ~480px on screen (civitas-ds.css) -- always force the
+     original two-column earnings/deductions layout in print, where page
+     width is never the phone-width constraint that motivated collapsing. */
+  .slip-columns { display: grid !important; grid-template-columns: 1fr 1fr !important; }
   /* Leave balance specific */
   .leave-balance-print table th { background: #e8e8e8 !important; }
 }

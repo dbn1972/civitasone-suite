@@ -37,13 +37,30 @@ export function payrollRunStatusLabel(status: string, t: TFn): string {
     : status;
 }
 
-const SALARY_SLIP_STATUSES = ["draft", "finalized", "paid", "computed"] as const;
+// draft/finalized come from the list endpoint's narrowed status; computed,
+// approved, paid, held and exception are the raw payroll_slips.status values
+// (payroll_slips_status_check) that GET /v1/payroll/slips/:id returns.
+const SALARY_SLIP_STATUSES = ["draft", "finalized", "computed", "approved", "paid", "held", "exception"] as const;
 
-/** SalarySlipSummary.status (packages/types). */
+/** SalarySlipSummary / SalarySlipDetail status (packages/schemas web.ts). */
 export function salarySlipStatusLabel(status: string, t: TFn): string {
   return (SALARY_SLIP_STATUSES as readonly string[]).includes(status)
     ? t(`status.${status}` as Parameters<TFn>[0])
     : status;
+}
+
+/**
+ * GAP-PAYROLL-SALARY-SLIPS-05 / GAP-PAYROLL-SLIPS-DETAIL-05: a draft or
+ * computed slip has not been through finalisation and may still change --
+ * printing or downloading it before then can circulate figures that get
+ * revised later. One place for "which statuses count as final", shared by
+ * SalarySlipsTable.tsx (list print link), salary-slips/[id]/page.tsx
+ * (PrintButton) and slips/[id]/page.tsx (Download PDF / printable-slip
+ * link) so the rule can't quietly diverge between the three surfaces that
+ * each gate a control on this one backend slip.
+ */
+export function isPrintableSlipStatus(status: string): boolean {
+  return status === "finalized" || status === "paid";
 }
 
 /**

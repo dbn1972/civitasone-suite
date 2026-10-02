@@ -2,7 +2,7 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
-import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
+import { fetchEmployeeSummaries, fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 /**
  * payroll-critical fix: this used to map the DB's 'failed' status to
@@ -40,10 +40,42 @@ export async function getSlip(id: string, tenantId: string) {
   if (!row) return null;
   const empMap = await fetchEmployeeSummaries(tenantId);
   const emp = empMap.get(row.employeeId);
+
+  // GAP-PAYROLL-SALARY-SLIPS-DETAIL-06 / GAP-PAYROLL-SLIPS-DETAIL-04: unlike
+  // listSalarySlips (which joins the run for `month` via repo.listSlipsByTenant's
+  // SlipWithRun), this single-slip path never fetched the run at all, so both
+  // detail pages' payPeriod/"Paid on" rendered a field this endpoint never sent.
+  // findRunById already exists (used by GET /v1/payroll/runs/:id) -- reuse it
+  // rather than querying payrollRuns again here.
+  const run = await repo.findRunById(row.runId, tenantId);
+
+  // GAP-PAYROLL-SALARY-SLIPS-DETAIL-05: the frontend used to hold its own
+  // "XXXX-XXXX-" + last4 mask, applied to a `slip.bankAccount` this endpoint
+  // never actually populated (payroll_slips has no bank-account column; the
+  // real number lives only in HRMS). Resolving it here and returning ONLY the
+  // last 4 digits means the full number never reaches the web tier at all --
+  // masking something client-side after sending it in full is not a real
+  // control. Same fail-open contract as payslip-pdf/routes.ts's identical
+  // fetchPayrollInput call: HRMS being unreachable must not fail the slip view,
+  // it just means no bank tail this time.
+  let bankAccountLast4: string | null = null;
+  if (run?.month) {
+    try {
+      const input = await fetchPayrollInput(tenantId, run.month);
+      const acct = input.employees.find((e) => e.id === row.employeeId)?.bankAccountNo;
+      bankAccountLast4 = acct ? acct.slice(-4) : null;
+    } catch (err) {
+      if (!(err instanceof HrmsUnavailableError)) throw err;
+    }
+  }
+
   return {
     ...row,
     employeeName: emp?.fullName ?? row.employeeNo,
     department: emp?.departmentName ?? "—",
+    payPeriod: run?.month ?? null,
+    paidDate: run?.disbursedAt ? new Date(run.disbursedAt).toISOString() : null,
+    bankAccountLast4,
     // Two frontend consumers of this one endpoint expect two different
     // naming conventions for the same minor-unit values -- hr/payroll/
     // salary-slips/[id]/page.tsx reads *Minor-suffixed names, while
@@ -54,11 +86,33 @@ export async function getSlip(id: string, tenantId: string) {
     // consolidated onto one shape (see PR notes).
     netMinor: Number(row.netPayMinor),
     net: Number(row.netPayMinor),
+    // netPayMinor itself (the raw DB column name) stays in the spread above
+    // purely because nothing downstream reads it by that name -- converted
+    // here too so a stray unconverted bigint never rides along under it.
+    netPayMinor: Number(row.netPayMinor),
     grossMinor: Number(row.grossMinor),
     gross: Number(row.grossMinor),
     basicMinor: Number(row.basicMinor),
     totalDeductionsMinor: Number(row.totalDeductionsMinor),
     deductions: Number(row.totalDeductionsMinor),
+    // Pre-existing bug, found while adding this function's enrichment: these
+    // seven columns are drizzle bigint-mode (real JS `bigint`s on `row`) and
+    // were never converted like basicMinor/grossMinor/etc. above. Over HTTP
+    // they did not 500: registerOpsRoutes (@civitasone/observability) adds a
+    // preSerialization hook (jsonSafe) that stringifies every bigint, so the
+    // route sent them as JSON STRINGS ("600000") -- which the web tier's
+    // SalarySlipDetailSchema (z.number()) rejects, and which any caller doing
+    // arithmetic would concatenate. A cache hit returns strings too (the
+    // cache serializes bigint -> string), and any in-process caller that
+    // JSON.stringify()s a cold-cache result throws outright. Converting here
+    // makes the shape numeric on every path, like the fields above.
+    pfEmployeeMinor: Number(row.pfEmployeeMinor),
+    pfEmployerMinor: Number(row.pfEmployerMinor),
+    gpfMinor: Number(row.gpfMinor),
+    npsEmployeeMinor: Number(row.npsEmployeeMinor),
+    npsEmployerMinor: Number(row.npsEmployerMinor),
+    esiMinor: Number(row.esiMinor),
+    tdsMinor: Number(row.tdsMinor),
   };
 }
 

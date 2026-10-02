@@ -5,7 +5,8 @@ import { useTranslations } from "next-intl";
 import { Card, DataTable, EmptyState, StatusPill } from "../../../../_components/ds";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import type { SalarySlipSummary } from "@civitasone/types";
-import { salarySlipStatusLabel } from "@/lib/payroll/statusLabels";
+import { salarySlipStatusLabel, isPrintableSlipStatus } from "@/lib/payroll/statusLabels";
+import { formatPayPeriod } from "@/lib/formatters";
 
 type Row = SalarySlipSummary & { printHref: string } & Record<string, unknown>;
 
@@ -29,7 +30,10 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
       ),
     },
     { key: "department", label: t("colDept") },
-    { key: "payPeriod", label: t("colPayPeriod") },
+    // GAP-PAYROLL-SALARY-SLIPS-03: payPeriod printed the raw backend string
+    // ("2026-08") verbatim; formatPayPeriod gives the same "August 2026"
+    // treatment the detail pages now use.
+    { key: "payPeriod", label: t("colPayPeriod"), render: (r) => <>{formatPayPeriod(r.payPeriod)}</> },
     { key: "gross", label: t("colGross"), align: "right", cellType: "amount" },
     { key: "deductions", label: t("colDeductions"), align: "right", cellType: "amount" },
     { key: "net", label: t("colNet"), align: "right", cellType: "amount" },
@@ -44,7 +48,17 @@ export function SalarySlipsTable({ slips }: { slips: SalarySlipSummary[] }) {
       label: t("colSlip"),
       align: "center",
       sortable: false,
-      render: (r) => <PrintDocumentLink href={r.printHref} label={t("printLabel")} />,
+      // GAP-PAYROLL-SALARY-SLIPS-05: a draft/computed slip has not been
+      // through finalisation yet -- printing it before then can circulate
+      // figures that still get revised.
+      render: (r) => (
+        <PrintDocumentLink
+          href={r.printHref}
+          label={t("printLabel")}
+          disabled={!isPrintableSlipStatus(r.status)}
+          disabledReason={t("printUnavailableNotFinal")}
+        />
+      ),
     },
   ];
 

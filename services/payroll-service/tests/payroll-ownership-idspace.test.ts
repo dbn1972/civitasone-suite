@@ -84,6 +84,10 @@ const LOAN_OTHER = randomUUID();
 const RUN_ID = randomUUID();
 const SLIP_OWN = randomUUID();
 const SLIP_OTHER = randomUUID();
+// A second, not-yet-paid slip for OWN_EMP (its own run: slips are unique per
+// tenant+run+employee), for the print-gate case below.
+const UNPAID_RUN_ID = randomUUID();
+const SLIP_OWN_UNPAID = randomUUID();
 const FY = "2025-26";
 
 H.map = { [EMP_ACTOR]: OWN_EMP, [FIN_EMP_ACTOR]: OWN_EMP };
@@ -170,9 +174,24 @@ beforeAll(async () => {
       await tx.insert(payrollSlips).values({
         id, tenantId: TENANT, runId: RUN_ID, employeeId: emp, employeeNo: `IDSPACE-${no}`,
         basicMinor: 10_000_000n, grossMinor: 20_000_000n, totalDeductionsMinor: 2_000_000n,
-        netPayMinor: 18_000_000n, currency: "INR", components: [], createdBy: ADMIN_ACTOR, updatedBy: ADMIN_ACTOR,
+        netPayMinor: 18_000_000n, currency: "INR", components: [],
+        // "paid": GET /slips/:id/pdf and /download serve only a paid slip
+        // (payslip-pdf/slip-gate.ts, 409 SLIP_NOT_FINAL otherwise). These
+        // cases are about ownership, so the seeded slips are printable.
+        status: "paid", createdBy: ADMIN_ACTOR, updatedBy: ADMIN_ACTOR,
       });
     }
+    await tx.insert(payrollRuns).values({
+      id: UNPAID_RUN_ID, tenantId: TENANT, runNo: "IDSPACE-RUN-UNPAID", month: "2025-07",
+      structureId: randomUUID(), totalGrossMinor: 0n, totalNetMinor: 0n,
+      currency: "INR", status: "processing", createdBy: ADMIN_ACTOR, updatedBy: ADMIN_ACTOR,
+    });
+    await tx.insert(payrollSlips).values({
+      id: SLIP_OWN_UNPAID, tenantId: TENANT, runId: UNPAID_RUN_ID, employeeId: OWN_EMP, employeeNo: "IDSPACE-OWN",
+      basicMinor: 10_000_000n, grossMinor: 20_000_000n, totalDeductionsMinor: 2_000_000n,
+      netPayMinor: 18_000_000n, currency: "INR", components: [],
+      status: "computed", createdBy: ADMIN_ACTOR, updatedBy: ADMIN_ACTOR,
+    });
   }));
 });
 
@@ -237,6 +256,17 @@ for (const c of CASES) {
     }
   });
 }
+
+describe("slip print gate runs AFTER ownership", () => {
+  for (const route of ["pdf", "download"] as const) {
+    it(`/${route}: the owner of a non-paid slip passes ownership, then gets 409 SLIP_NOT_FINAL`, async () => {
+      const res = await call({ method: "GET", url: `/v1/payroll/slips/${SLIP_OWN_UNPAID}/${route}` }, EMPLOYEE());
+      expect(res.statusCode, res.body).toBe(409);
+      expect(res.body).toContain("SLIP_NOT_FINAL");
+      expect(resolveActorEmployeeId).toHaveBeenCalled();
+    });
+  }
+});
 
 describe("GET /v1/payroll/income-tax -- self-service listing scope", () => {
   // No declarations or HRMS identities are seeded, so each row id falls back to the employee id.

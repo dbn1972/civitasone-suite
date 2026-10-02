@@ -193,6 +193,7 @@ import {
   PayrollRunFullDetailSchema,
   paymentsListSchema,
   SalarySlipSummaryListSchema,
+  SalarySlipDetailSchema,
   PayrollStructureListSchema,
   ticketsListSchema,
   metricsListResponseSchema,
@@ -4622,11 +4623,22 @@ export async function getPayMatrix(level?: number): Promise<LoaderResult<PayMatr
   });
 }
 
-export async function getSlipById(id: string): Promise<LoaderResult<SalarySlipSummary | null>> {
-  return fetchJson<unknown, SalarySlipSummary | null>(`/api/v1/payroll/slips/${id}`, null, {
+export type SalarySlipDetail = z.infer<typeof SalarySlipDetailSchema>;
+
+// GAP-PAYROLL-SALARY-SLIPS-DETAIL-01/03, GAP-PAYROLL-SLIPS-DETAIL-03/04: this one
+// endpoint used to feed two frontend pages through two different, unvalidated private
+// casts (one assumed *Minor + components[], the other assumed a plain SalarySlipSummary
+// plus an earnings/deductionItems/statutory shape payroll-service never actually sends).
+// SalarySlipDetailSchema is the real response contract (validated, shared with the
+// backend's own schema package) -- both hr/payroll/salary-slips/[id] and
+// hr/payroll/slips/[id] should read the slip through this loader now, not their own
+// bespoke fetchers.
+export async function getSlipById(id: string): Promise<LoaderResult<SalarySlipDetail | null>> {
+  return fetchJson<unknown, SalarySlipDetail | null>(`/api/v1/payroll/slips/${id}`, null, {
     revalidateSeconds: 60,
     telemetryKey: "hr.salary-slip.detail",
-    mapResponse: (p) => (isRecord(p) ? (p as SalarySlipSummary) : null),
+    responseSchema: SalarySlipDetailSchema.nullable(),
+    mapResponse: (p) => (isRecord(p) ? (p as SalarySlipDetail) : null),
   });
 }
 

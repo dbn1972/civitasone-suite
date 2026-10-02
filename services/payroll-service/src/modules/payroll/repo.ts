@@ -1,4 +1,4 @@
-import { eq, and, sql, inArray, count, desc } from "drizzle-orm";
+import { eq, ne, and, sql, inArray, count, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
@@ -162,10 +162,16 @@ export async function listSlipsByRunTx(tx: Writer, runId: string, tenantId: stri
     .where(and(eq(payrollSlips.runId, runId), eq(payrollSlips.tenantId, tenantId)));
 }
 
+/**
+ * Marks a disbursed run's slips paid. "exception" slips (negative net) are
+ * excluded from the disbursed amount (consumer.ts runDisburse filters them out
+ * of slipNet), so they were never paid and must keep their status -- marking
+ * them "paid" recorded money that never moved and made them printable.
+ */
 export async function markSlipsPaidForRun(tx: Writer, runId: string, actorId: string): Promise<void> {
   await tx.update(payrollSlips)
     .set({ status: "paid", updatedAt: new Date(), updatedBy: actorId })
-    .where(eq(payrollSlips.runId, runId));
+    .where(and(eq(payrollSlips.runId, runId), ne(payrollSlips.status, "exception")));
 }
 
 // ── world-class-routes repo functions ─────────────────────────────────────────

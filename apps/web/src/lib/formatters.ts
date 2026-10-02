@@ -457,3 +457,28 @@ export function formatPeriod(period: string | null | undefined): string {
   if (month < 1 || month > 12) return period;
   return `${PERIOD_MONTHS[month - 1]} ${match[1]}`;
 }
+
+const PAY_PERIOD_MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+/**
+ * Format a backend pay-period string ("YYYY-MM") for display, e.g. in the
+ * salary-slips list/detail pages (GAP-PAYROLL-SALARY-SLIPS-03,
+ * GAP-PAYROLL-SALARY-SLIPS-DETAIL-06). Falls back to the raw string for
+ * anything that isn't a recognisable "YYYY-MM" so an unexpected backend
+ * value never disappears, it just isn't prettified.
+ *
+ *   formatPayPeriod("2026-08") -> "August 2026"
+ *   formatPayPeriod(null)      -> "—"
+ *   formatPayPeriod("garbage") -> "garbage"
+ */
+export function formatPayPeriod(payPeriod: string | null | undefined): string {
+  if (!payPeriod) return "—";
+  const match = /^(\d{4})-(\d{2})$/.exec(payPeriod.trim());
+  if (!match) return payPeriod;
+  const [, year, month] = match;
+  const name = PAY_PERIOD_MONTH_NAMES[Number(month) - 1];
+  return name ? `${name} ${year}` : payPeriod;
+}

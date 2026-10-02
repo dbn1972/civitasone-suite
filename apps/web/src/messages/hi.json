@@ -4512,7 +4512,9 @@
     "statGross": "कुल सकल",
     "statNet": "कुल शुद्ध",
     "statDraft": "लंबित (ड्राफ्ट)",
-    "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा"
+    "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
+    "errorBackLabel": "वेतन पर वापस जाएं",
+    "errorArea": "वेतन पर्चियां"
   },
   "salarySlipsTable": {
     "colEmployee": "कर्मचारी",
@@ -4524,6 +4526,7 @@
     "colStatus": "स्थिति",
     "colSlip": "पर्ची",
     "printLabel": "प्रिंट करें",
+    "printUnavailableNotFinal": "केवल अंतिम रूप दी गई या भुगतान की गई पर्चियां ही प्रिंट की जा सकती हैं",
     "cardTitle": "सभी वेतन पर्चियां",
     "emptyTitle": "अभी तक कोई वेतन पर्ची नहीं",
     "emptyMessage": "वेतन रन प्रोसेस होने के बाद वेतन पर्चियां यहां दिखाई देती हैं।",
@@ -4535,11 +4538,14 @@
       "draft": "मसौदा",
       "finalized": "अंतिम रूप दिया गया",
       "paid": "भुगतान किया गया",
-      "computed": "परिकलित"
+      "computed": "परिकलित",
+      "approved": "स्वीकृत",
+      "held": "रुका हुआ",
+      "exception": "अपवाद (ऋणात्मक शुद्ध वेतन)"
     }
   },
   "printButton": {
-    "printSavePdfBtn": "🖨️ प्रिंट करें / पीडीएफ़ सहेजें"
+    "printSavePdfBtn": "प्रिंट करें / पीडीएफ़ सहेजें"
   },
   "salarySlipDetail": {
     "title": "वेतन पर्ची",
@@ -4551,6 +4557,7 @@
     "designation": "पदनाम:",
     "bankAccount": "बैंक खाता:",
     "paidOn": "भुगतान तिथि:",
+    "notYetPaid": "अभी तक भुगतान नहीं हुआ",
     "earnings": "अर्जन",
     "deductions": "कटौती",
     "grossEarnings": "सकल अर्जन",
@@ -4559,16 +4566,28 @@
     "footer": "यह एक प्रणाली-जनित वेतन पर्ची है। हस्ताक्षर की आवश्यकता नहीं है।",
     "dashboardView": "डैशबोर्ड दृश्य",
     "loadErrorMessage": "लोड नहीं हो सका — कुछ नहीं दिखाया जा रहा",
+    "notFoundMessage": "वेतन पर्ची नहीं मिली। इसे हटा दिया गया हो सकता है या आपके पास पहुंच नहीं है।",
+    "printUnavailableNotFinal": "केवल अंतिम रूप दी गई या भुगतान की गई पर्चियां ही प्रिंट की जा सकती हैं",
     "brandName": "CivitasOne HRMS",
-    "printMeta": "भारत सरकार · एचआर प्रबंधन प्रणाली · वेतन पर्ची",
+    "printMeta": "एचआर प्रबंधन प्रणाली · वेतन पर्ची",
     "loadingSlipDetails": "पर्ची विवरण लोड हो रहा है…"
   },
   "salarySlipDashboard": {
     "title": "वेतन पर्ची",
     "notFoundMessage": "वेतन पर्ची नहीं मिली या लोड नहीं हो सकी।",
     "titleWithPeriod": "वेतन पर्ची — {period}",
-    "printableSlipLink": "🖨 प्रिंट करने योग्य पर्ची",
-    "downloadPdfLink": "⬇ पीडीएफ़ डाउनलोड करें",
+    "status": {
+      "draft": "मसौदा",
+      "finalized": "अंतिम रूप दिया गया",
+      "paid": "भुगतान किया गया",
+      "computed": "परिकलित",
+      "approved": "स्वीकृत",
+      "held": "रुका हुआ",
+      "exception": "अपवाद (ऋणात्मक शुद्ध वेतन)"
+    },
+    "printableSlipLink": "प्रिंट करने योग्य पर्ची",
+    "downloadPdfLink": "पीडीएफ़ डाउनलोड करें",
+    "downloadUnavailableNotFinal": "केवल अंतिम रूप दी गई या भुगतान की गई पर्चियां ही डाउनलोड की जा सकती हैं",
     "statGross": "सकल वेतन",
     "statDeductions": "कुल कटौती",
     "statNetPay": "शुद्ध वेतन",
@@ -4591,9 +4610,14 @@
     "statutoryTitle": "सांविधिक अंशदान",
     "pfEmployee": "भविष्य निधि (कर्मचारी)",
     "pfEmployer": "भविष्य निधि (नियोक्ता)",
+    "gpf": "सामान्य भविष्य निधि (जीपीएफ)",
+    "npsEmployee": "एनपीएस (कर्मचारी)",
+    "npsEmployer": "एनपीएस (नियोक्ता)",
     "esiEmployee": "ईएसआई (कर्मचारी)",
     "esiEmployer": "ईएसआई (नियोक्ता)",
+    "esi": "ईएसआई",
     "tds": "टीडीएस",
+    "employerContributionNote": "नियोक्ता अंशदान आपकी ओर से नियोक्ता द्वारा दिया जाता है और यह आपके वेतन से नहीं काटा जाता।",
     "statutoryUnavailable": "इस पर्ची के लिए सांविधिक विवरण उपलब्ध नहीं है।"
   },
   "payrollStructures": {

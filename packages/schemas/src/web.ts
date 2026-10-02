@@ -834,6 +834,58 @@ export const SalarySlipSummarySchema = z.object({
 });
 export const SalarySlipSummaryListSchema = z.array(SalarySlipSummarySchema);
 
+export const SlipComponentSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  type: z.string(),
+  amountMinor: z.number().int(),
+});
+
+/**
+ * GET /v1/payroll/slips/:id's real response shape -- GAP-PAYROLL-SALARY-SLIPS-DETAIL-01
+ * / GAP-PAYROLL-SLIPS-DETAIL-03. Two frontend pages (hr/payroll/salary-slips/[id] and
+ * hr/payroll/slips/[id]) each read this one endpoint through their own private, divergent
+ * type (one assumed *Minor + components[], the other assumed unsuffixed names + a
+ * nonexistent earnings/deductionItems/statutory shape that payroll-service never sends).
+ * This is the single source of truth both pages should validate against instead.
+ *
+ * payPeriod/paidDate/bankAccountLast4 are nullable: queries.ts's getSlip() only resolves
+ * them when the slip's run can be found (and, for the bank tail, when HRMS has a bank
+ * account on file) -- see that function's own comments for the fail-open contract.
+ */
+export const SalarySlipDetailSchema = SalarySlipSummarySchema.extend({
+  // getSlip() returns payroll_slips.status RAW (unlike listSalarySlips, which
+  // narrows it). The DB CHECK (payroll_slips_status_check) allows
+  // computed | approved | paid | held | exception -- consumer.ts inserts
+  // "exception" for any negative-net slip. Inheriting the list schema's
+  // narrower enum made every such real slip fail validation and render the
+  // retryable-error branch instead of the slip. Accept every real DB value
+  // (plus the list's draft/finalized); print gating stays on
+  // isPrintableSlipStatus, which is unaffected.
+  status: z.enum(["draft", "finalized", "paid", "computed", "approved", "held", "exception"]),
+  employeeNo: z.string(),
+  payPeriod: z.string().nullable(),
+  paidDate: z.string().nullable(),
+  basicMinor: z.number().int(),
+  grossMinor: z.number().int(),
+  totalDeductionsMinor: z.number().int(),
+  netMinor: z.number().int(),
+  bankAccountLast4: z.string().nullable(),
+  components: z.array(SlipComponentSchema).default([]),
+  // Real payroll_slips columns (queries.ts getSlip now converts these from
+  // drizzle bigint to number -- see that function's own comment on why).
+  // GAP-PAYROLL-SLIPS-DETAIL-03's "statutory" card used to read a shape
+  // (stat.pfEmployee/esiEmployee/esiEmployer/...) this endpoint never sent;
+  // these are the fields that actually exist.
+  pfEmployeeMinor: z.number().int(),
+  pfEmployerMinor: z.number().int(),
+  gpfMinor: z.number().int(),
+  npsEmployeeMinor: z.number().int(),
+  npsEmployerMinor: z.number().int(),
+  esiMinor: z.number().int(),
+  tdsMinor: z.number().int(),
+});
+
 export const JobOpeningSummarySchema = z.object({
   id: z.string(),
   jobTitle: z.string(),
