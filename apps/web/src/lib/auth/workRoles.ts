@@ -246,3 +246,16 @@ export const PAYROLL_STATUTORY_ADMIN_ROLES = [
   "hr_admin",
   "finance_officer",
 ];
+
+/**
+ * GAP-ASSETS-DETAIL-02: roles asset-service admits on its asset mutation
+ * routes (transfer, dispose, request-disposal, barcode tag, create). Mirrors
+ * the ASSET_ROLES constant in the asset-service package's lifecycle and
+ * register route modules exactly -- keep in sync if that list changes. The
+ * client gate is UX only; the service stays authoritative (403).
+ */
+export const ASSET_WRITE_ROLES = ["asset_manager", "asset_admin", "super_admin"] as const;
+
+export function canWriteAssets(roles: readonly string[]): boolean {
+  return roles.some((r) => (ASSET_WRITE_ROLES as readonly string[]).includes(r));
+}

@@ -2,24 +2,30 @@
 
 import { useState } from "react";
 import { Button, PageHeader, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { todayIST } from "@/lib/formatters";
+import { periodError } from "./period";
 
 export default function DepreciationRunPage() {
-  const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
+  const currentMonth = todayIST().slice(0, 7);
+  const [period, setPeriod] = useState(currentMonth);
   const [depBook, setDepBook] = useState<"all" | "company" | "statutory">("all");
   const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
+  const error = periodError(period, currentMonth);
 
   const run = useConfirmAction({
     onConfirm: async (reason) => {
       setMessage("");
-      setIsError(false);
       const res = await fetch("/api/proxy/v1/asset/depreciation/run", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ period, depBook, reason }),
       });
       if (!res.ok) throw new Error(await res.text());
-      setMessage(`Depreciation run accepted for ${period} — GL journals posted via finance.gl.post.`);
+      const body = (await res.json().catch(() => ({}))) as { id?: unknown };
+      const ref = typeof body.id === "string" ? ` Reference ${body.id}.` : "";
+      // GAP-ASSETS-DEPRECIATION-01: the service answers 202 Accepted and a
+      // background consumer posts the journals -- say "queued", never "posted".
+      setMessage(`Depreciation run for ${period} queued. GL journals will post shortly once it is processed.${ref}`);
     },
   });
 
@@ -41,6 +47,7 @@ export default function DepreciationRunPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
+            if (error) return;
             run.trigger();
           }}
           className="pad"
@@ -54,12 +61,28 @@ export default function DepreciationRunPage() {
             </select>
           </div>
           <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start", marginBottom: 12 }}>
-            <label className="l" htmlFor="dep-period">Period (YYYY-MM)</label>
-            <input id="dep-period" value={period} onChange={(e) => setPeriod(e.target.value)} pattern="\d{4}-\d{2}" style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }} />
+            <label className="l" htmlFor="dep-period">Period</label>
+            <input
+              id="dep-period"
+              type="month"
+              value={period}
+              max={currentMonth}
+              onChange={(e) => { setPeriod(e.target.value); setMessage(""); }}
+              aria-invalid={!!error || undefined}
+              aria-describedby={error ? "dep-period-err" : "dep-period-help"}
+              style={{ padding: 8, borderRadius: 8, border: "1px solid var(--line)" }}
+            />
+            {error ? (
+              <p id="dep-period-err" role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "4px 0 0" }}>{error}</p>
+            ) : (
+              <p id="dep-period-help" style={{ color: "var(--muted)", fontSize: 12, margin: "4px 0 0" }}>
+                Only entries not yet posted for this period are processed, so re-running a period does not post twice.
+              </p>
+            )}
           </div>
-          <Button type="submit">Run depreciation</Button>
+          <Button type="submit" disabled={!!error}>Run depreciation</Button>
           {message ? (
-            <p role="status" aria-live="polite" style={{ marginTop: 12, fontSize: 13, color: isError ? "var(--bad)" : "var(--good)" }}>{message}</p>
+            <p role="status" aria-live="polite" style={{ marginTop: 12, fontSize: 13, color: "var(--good)" }}>{message}</p>
           ) : null}
         </form>
       </div>
@@ -67,7 +90,7 @@ export default function DepreciationRunPage() {
       <ConfirmDialog
         open={run.open}
         title="Run period-end depreciation?"
-        description={<>This posts depreciation journals to the General Ledger for <b>{period}</b> across {bookLabel[depBook]}. GL postings cannot be undone once accepted. Provide a reason to proceed.</>}
+        description={<>This queues depreciation journals to the General Ledger for <b>{period}</b> across {bookLabel[depBook]}. GL postings cannot be undone once processed. Provide a reason to proceed.</>}
         confirmLabel="Run depreciation"
         requireReason
         reasonLabel="Reason / authorisation"

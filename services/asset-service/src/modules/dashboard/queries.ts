@@ -30,8 +30,9 @@ export async function getDashboard(tenantId: string) {
     .from(assetAssets)
     .where(and(
       eq(assetAssets.tenantId, tenantId),
-      eq(assetAssets.status, "active"),
-      sql`${assetAssets.bookValue} <= ${assetAssets.salvageValue} + 100`,
+      // Due for disposal: fully depreciated active assets, plus condemned
+      // assets awaiting auction (a committee has already approved disposal).
+      sql`((${assetAssets.status} = 'active' AND ${assetAssets.bookValue} <= ${assetAssets.salvageValue} + 100) OR ${assetAssets.status} = 'condemned')`,
     )));
 
   const [tagged] = await scopedRead((tx) => tx
@@ -44,6 +45,9 @@ export async function getDashboard(tenantId: string) {
       netBlock: sql<string>`COALESCE(SUM(book_value), 0)::text`,
     })
     .from(assetAssets)
+    // Condemned assets are deliberately INCLUDED: they stay on the books at
+    // book value until the auction completes and the disposal GL journal
+    // derecognises them (condemnation/consumer.ts auctionComplete).
     .where(and(eq(assetAssets.tenantId, tenantId), sql`status NOT IN ('disposed', 'written_off')`)));
 
   const recentGrn = await scopedRead((tx) => tx.select({

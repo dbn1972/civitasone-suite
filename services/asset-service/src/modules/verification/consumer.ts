@@ -1,6 +1,7 @@
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
+import { tenantScoped } from "../../shared/tenant-queue.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
@@ -18,17 +19,22 @@ function audit(
   };
 }
 
-export function registerVerificationConsumers(queue: Queue): void {
+export function registerVerificationConsumers(rawQueue: Queue): void {
+  // Run every handler inside the message tenant context so NOBYPASSRLS +
+  // FORCE RLS accepts the writes (the #146 pattern every other asset consumer
+  // already uses). Without it every verification create/item/approve was
+  // rejected by RLS in the consumer and silently never persisted.
+  const queue = tenantScoped(rawQueue);
   queue.subscribe(COMMANDS.verificationCreate, async (msg) => {
     const p = msg.payload as {
-      id: string; tenantId: string; verificationDate: string; notes?: string | null;
+      id: string; tenantId: string; verificationDate: string; notes?: string | null; location?: string | null;
     };
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await repo.insertVerification(tx, {
           id: p.id, tenantId: p.tenantId, verificationDate: p.verificationDate,
-          verifiedBy: msg.actorId, status: "draft", notes: p.notes ?? null,
+          verifiedBy: msg.actorId, status: "draft", notes: p.notes ?? null, location: p.location ?? null,
           createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await enqueue(tx, audit(msg.actorId, msg.tenantId, msg.correlationId, "verification_create", "verification", p.id));

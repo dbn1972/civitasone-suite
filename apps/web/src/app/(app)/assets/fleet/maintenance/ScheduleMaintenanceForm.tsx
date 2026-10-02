@@ -4,6 +4,8 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { FleetPicker } from "../FleetPicker";
+import type { PickerOption } from "../_data/labels";
 
 const MAINTENANCE_TYPES = ["oil_change", "tire_rotation", "brake_inspection", "full_service", "battery_check"] as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,7 +29,13 @@ function validateScheduledDate(value: string): string | undefined {
   return undefined;
 }
 
-export function ScheduleMaintenanceForm() {
+type Props = {
+  /** Registered vehicles, labelled by registration number (GAP-ASSETS-FLEET-MAINTENANCE-02). */
+  options: PickerOption[];
+  vehiclesError?: boolean;
+};
+
+export function ScheduleMaintenanceForm({ options, vehiclesError = false }: Props) {
   const router = useRouter();
 
   const [vehicleId, setVehicleId] = useState("");
@@ -49,13 +57,13 @@ export function ScheduleMaintenanceForm() {
   const scheduledDateErrId = useId();
   const odometerErrId = useId();
 
-  const vehicleIdRef = useRef<HTMLInputElement>(null);
+  const vehicleIdRef = useRef<HTMLSelectElement>(null);
   const scheduledDateRef = useRef<HTMLInputElement>(null);
   const odometerRef = useRef<HTMLInputElement>(null);
 
   function validate(): boolean {
     const next: FieldErrors = {};
-    if (!vehicleId.trim() || !UUID_RE.test(vehicleId.trim())) next.vehicleId = "Enter a valid vehicle ID (UUID).";
+    if (!vehicleId || !UUID_RE.test(vehicleId)) next.vehicleId = "Select a vehicle.";
     const dateErr = validateScheduledDate(scheduledDate);
     if (dateErr) next.scheduledDate = dateErr;
     if (odometerThresholdKm.trim()) {
@@ -70,6 +78,8 @@ export function ScheduleMaintenanceForm() {
     return Object.keys(next).length === 0;
   }
 
+  const selectedLabel = options.find((o) => o.id === vehicleId)?.label ?? "the selected vehicle";
+
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
@@ -82,7 +92,7 @@ export function ScheduleMaintenanceForm() {
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<{ data?: { id: string; status: string } }>("v1/assets/fleet/maintenance/schedule", {
+      await browserJson<{ data?: { id: string; status: string } }>("v1/assets/fleet/maintenance/schedule", {
         method: "POST",
         body: JSON.stringify({
           vehicleId: vehicleId.trim(),
@@ -92,11 +102,7 @@ export function ScheduleMaintenanceForm() {
         }),
       });
       setConfirmOpen(false);
-      setMessage(
-        res?.data?.id
-          ? `Maintenance scheduled for vehicle ${vehicleId.trim()} (id ${res.data.id}).`
-          : `Maintenance scheduled for vehicle ${vehicleId.trim()}.`,
-      );
+      setMessage(`Maintenance scheduled for ${selectedLabel}.`);
       setVehicleId("");
       setScheduledDate("");
       setOdometerThresholdKm("");
@@ -115,22 +121,19 @@ export function ScheduleMaintenanceForm() {
       <Card title="Schedule Maintenance" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={vehicleIdId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Vehicle ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={vehicleIdId}
-                ref={vehicleIdRef}
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                aria-required="true"
-                aria-invalid={!!errors.vehicleId || undefined}
-                aria-describedby={errors.vehicleId ? vehicleIdErrId : undefined}
-                style={inputStyle}
-              />
-              {errors.vehicleId && <p id={vehicleIdErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.vehicleId}</p>}
-            </div>
+            <FleetPicker
+              id={vehicleIdId}
+              label="Vehicle"
+              options={options}
+              value={vehicleId}
+              onChange={setVehicleId}
+              error={errors.vehicleId}
+              errorId={vehicleIdErrId}
+              loadFailed={vehiclesError}
+              emptyHint="No vehicles are registered yet — register one first."
+              emptyHref="/assets/fleet/vehicles"
+              selectRef={vehicleIdRef}
+            />
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={typeId} style={{ fontSize: 13, fontWeight: 600 }}>Type</label>
@@ -202,7 +205,7 @@ export function ScheduleMaintenanceForm() {
         errorMessage={dialogError}
         description={
           <>
-            Schedule a <strong>{type.replace(/_/g, " ")}</strong> job for vehicle <strong>{vehicleId}</strong> on{" "}
+            Schedule a <strong>{type.replace(/_/g, " ")}</strong> job for <strong>{selectedLabel}</strong> on{" "}
             <strong>{scheduledDate}</strong>.
           </>
         }

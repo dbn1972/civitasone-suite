@@ -37,6 +37,8 @@ export type CreateRecommendationBody = z.infer<typeof createRecommendationBody>;
 
 export const approveRecommendationBody = z.object({
   version: z.number().int().positive(),
+  // GAP-ASSETS-CONDEMNATION-03: the approver's reason, recorded on the audit event.
+  reason: z.string().trim().max(2000).optional(),
 });
 export type ApproveRecommendationBody = z.infer<typeof approveRecommendationBody>;
 

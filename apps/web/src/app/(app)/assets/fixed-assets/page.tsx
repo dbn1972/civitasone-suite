@@ -1,35 +1,21 @@
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getFixedAssets } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
-import { formatMoney } from "@/lib/formatters";
-import { toHumanError } from "@/lib/messages";
+import { PageHeader } from "../../../_components/ds";
+import { AssetsTable } from "../list/AssetsTable";
 
+// GAP-ASSETS-FIXED-ASSETS-01: same implementation as /assets/list (shared
+// AssetsTable: stats, offline cache, provenance badge), restricted to type
+// "fixed" -- no second copy of the stats/table code.
 export default async function FixedAssetsPage() {
-  const { data: allAssets, source } = await getFixedAssets();
-  const assets = allAssets.filter((a) => a.type === "fixed");
-  const totalActive = assets.filter((a) => a.status === "active" || a.status === "in_use").length;
-  const grossBlock = assets.reduce((sum, a) => sum + a.purchaseCost, 0);
-  const netBlock = assets.reduce((sum, a) => sum + a.currentValue, 0);
-  const tagged = assets.length > 0 ? Math.round((totalActive / assets.length) * 100) : 0;
-
-  const rows = assets.map((a) => ({
-    id: a.id,
-    assetCode: a.assetCode,
-    name: a.name,
-    location: a.location ?? "—",
-    currentValue: a.currentValue,
-    status: a.status.replace(/_/g, " "),
-  }));
+  const { data: assets, source } = await getFixedAssets();
 
   return (
     <>
-      {source === "error" && <DataSourceBadge source={source} />}
       <PageHeader
         title="Fixed Asset Register"
-        subtitle="Register, tag (QR) and value fixed assets."
+        subtitle="Fixed assets — capitalised from GRN or registered manually."
         actions={
           <>
-            <a href="/assets/bulk-import" className="btn ghost">Bulk tag</a>
+            <a href="/assets/bulk-import" className="btn ghost">Bulk import</a>
             <a href="/assets/register" className="btn primary">+ Register Asset</a>
           </>
         }
@@ -48,40 +34,7 @@ export default async function FixedAssetsPage() {
       >
         <span aria-hidden="true">🔗</span> <b>Auto-capitalised from Procurement GRN.</b> Accepted capital goods create asset records here; depreciation posts to Finance.
       </div>
-      <StatGrid>
-        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Fixed Assets" value={assets.length.toLocaleString("en-IN")} />
-        <StatCard icon="🔖" iconBg="#eff6ff" label="Tagged (QR)" value={`${tagged}%`} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={formatMoney(grossBlock)} />
-        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={formatMoney(netBlock)} />
-      </StatGrid>
-      <div className="card" style={{ marginTop: 18 }}>
-        <div className="card-h">
-          <h3>Fixed asset register</h3>
-        </div>
-        {source === "error" ? (
-          <RefreshErrorState error={toHumanError("load", { area: "fixed asset register" })} />
-        ) : rows.length === 0 ? (
-          <EmptyState icon="🖥️" title="No fixed assets found" message="Fixed assets will appear here once registered." />
-        ) : (
-          <DataTable
-            columns={[
-              { key: "assetCode", label: "Asset" },
-              { key: "name", label: "Item" },
-              { key: "location", label: "Location" },
-              { key: "currentValue", label: "Net value", align: "right", cellType: "amount" },
-              { key: "status", label: "Status", cellType: "status" },
-            ]}
-            rows={rows}
-            rowLinkKey="id"
-            rowLinkPrefix="/assets/"
-            identifyingColumnKey="name"
-            sortable
-            filterable
-            filterPlaceholder="Filter fixed assets…"
-            pageSize={15}
-          />
-        )}
-      </div>
+      <AssetsTable assets={assets} source={source} cacheKey="assets.fixed" typeFilter="fixed" heading="Fixed asset register" />
     </>
   );
 }

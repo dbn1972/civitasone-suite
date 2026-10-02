@@ -14,6 +14,8 @@
 import { useId, useRef, useState } from "react";
 import { Button, Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { FleetPicker } from "../FleetPicker";
+import type { PickerOption } from "../_data/labels";
 
 type FieldErrors = {
   vehicleId?: string;
@@ -25,8 +27,16 @@ const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid 
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function RecordGpsForm() {
-  const [vehicleId, setVehicleId] = useState("");
+type Props = {
+  /** Registered vehicles, labelled by registration number (GAP-ASSETS-FLEET-VEHICLES-01). */
+  options: PickerOption[];
+  vehiclesError?: boolean;
+  /** Preselected from the table's "Record GPS" row action (?vehicleId=). */
+  initialVehicleId?: string;
+};
+
+export function RecordGpsForm({ options, vehiclesError = false, initialVehicleId = "" }: Props) {
+  const [vehicleId, setVehicleId] = useState(() => (options.some((o) => o.id === initialVehicleId) ? initialVehicleId : ""));
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
 
@@ -43,14 +53,15 @@ export function RecordGpsForm() {
   const latErrId = useId();
   const lngErrId = useId();
 
-  const vehicleIdRef = useRef<HTMLInputElement>(null);
+  const vehicleIdRef = useRef<HTMLSelectElement>(null);
   const latRef = useRef<HTMLInputElement>(null);
   const lngRef = useRef<HTMLInputElement>(null);
 
   function validate(): boolean {
     const next: FieldErrors = {};
-    if (!vehicleId.trim() || !UUID_RE.test(vehicleId.trim())) {
-      next.vehicleId = "Enter a valid vehicle ID (UUID).";
+    // Defensive: the id comes from the picker, but never post a non-UUID path.
+    if (!vehicleId || !UUID_RE.test(vehicleId)) {
+      next.vehicleId = "Select a vehicle.";
     }
     const latNum = Number(lat);
     if (!lat.trim() || Number.isNaN(latNum) || latNum < -90 || latNum > 90) {
@@ -68,6 +79,8 @@ export function RecordGpsForm() {
     return Object.keys(next).length === 0;
   }
 
+  const selectedLabel = options.find((o) => o.id === vehicleId)?.label ?? "the selected vehicle";
+
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
@@ -83,7 +96,7 @@ export function RecordGpsForm() {
         },
       );
       if (res?.data) setLastPosition(res.data);
-      setMessage(`Position recorded for vehicle ${vehicleId.trim()}.`);
+      setMessage(`Position recorded for ${selectedLabel}.`);
       setLat("");
       setLng("");
     } catch (err) {
@@ -95,26 +108,23 @@ export function RecordGpsForm() {
   }
 
   return (
-    <form onSubmit={submit} style={{ marginTop: 16 }}>
+    <form id="record-gps" onSubmit={submit} style={{ marginTop: 16 }}>
       <Card title="Record GPS Position" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={vehicleIdId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Vehicle ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={vehicleIdId}
-                ref={vehicleIdRef}
-                value={vehicleId}
-                onChange={(e) => setVehicleId(e.target.value)}
-                aria-required="true"
-                aria-invalid={!!errors.vehicleId || undefined}
-                aria-describedby={errors.vehicleId ? vehicleIdErrId : undefined}
-                style={inputStyle}
-              />
-              {errors.vehicleId && <p id={vehicleIdErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.vehicleId}</p>}
-            </div>
+            <FleetPicker
+              id={vehicleIdId}
+              label="Vehicle"
+              options={options}
+              value={vehicleId}
+              onChange={setVehicleId}
+              error={errors.vehicleId}
+              errorId={vehicleIdErrId}
+              loadFailed={vehiclesError}
+              emptyHint="No vehicles are registered yet — register one above."
+              emptyHref="/assets/fleet/vehicles"
+              selectRef={vehicleIdRef}
+            />
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={latId} style={{ fontSize: 13, fontWeight: 600 }}>
@@ -167,7 +177,7 @@ export function RecordGpsForm() {
 
           {lastPosition && (
             <div role="status" style={{ fontSize: 13 }}>
-              <strong>Last recorded position</strong> — vehicle {lastPosition.id}: lat {lastPosition.lat}, lng {lastPosition.lng}, at {lastPosition.updatedAt}.
+              <strong>Last recorded position</strong> — {options.find((o) => o.id === lastPosition.id)?.label ?? "vehicle"}: lat {lastPosition.lat}, lng {lastPosition.lng}, at {lastPosition.updatedAt}.
             </div>
           )}
         </div>

@@ -7,8 +7,10 @@ import { toHumanError } from "@/lib/messages";
 export default async function InfraAssetsPage() {
   const { data: allAssets, source } = await getInfraAssets();
   const assets = allAssets.filter((a) => a.type === "infra");
-  const buildings = assets.filter((a) => a.category?.toLowerCase().includes("build")).length;
-  const needsRepair = assets.filter((a) => a.condition === "poor").length;
+  // GAP-ASSETS-INFRA-01: asset-service has no condition field (and returns
+  // only a category id, not its name), so "Needs Repair" and "Buildings" were
+  // permanent zeros. They are not shown, and the status column is labelled
+  // Status -- never status text passed off as a condition.
   const netBlock = assets.reduce((sum, a) => sum + a.currentValue, 0);
 
   const rows = assets.map((a) => ({
@@ -17,7 +19,7 @@ export default async function InfraAssetsPage() {
     name: a.name,
     category: a.category ?? "—",
     currentValue: a.currentValue,
-    condition: (a.condition ?? a.status.replace(/_/g, " ")),
+    status: a.status.replace(/_/g, " "),
   }));
 
   return (
@@ -35,9 +37,7 @@ export default async function InfraAssetsPage() {
       />
       <StatGrid>
         <StatCard icon="🏗️" iconBg="#fdf0e3" label="Infra Assets" value={assets.length.toLocaleString("en-IN")} />
-        <StatCard icon="🏢" iconBg="#eff6ff" label="Buildings" value={buildings.toLocaleString("en-IN")} />
         <StatCard icon="💰" iconBg="#ecfdf3" label="Net Block" value={formatMoney(netBlock)} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Needs Repair" value={needsRepair.toLocaleString("en-IN")} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">
@@ -54,7 +54,7 @@ export default async function InfraAssetsPage() {
               { key: "name", label: "Asset" },
               { key: "category", label: "Type" },
               { key: "currentValue", label: "Value", align: "right", cellType: "amount" },
-              { key: "condition", label: "Condition", cellType: "status" },
+              { key: "status", label: "Status", cellType: "status" },
             ]}
             rows={rows}
             rowLinkKey="id"

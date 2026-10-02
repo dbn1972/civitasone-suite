@@ -19,8 +19,21 @@ export const createAssetBody = z.object({
   barcode:         z.string().optional(),
 });
 
+// GAP-ASSETS-DETAIL-03: a barcode is printed and scanned back -- reject
+// markup / quote / control characters so a stored value can never carry HTML.
+const BARCODE_MARKUP = /[<>"'`&]/;
+export function isSafeBarcode(v: string): boolean {
+  if (BARCODE_MARKUP.test(v)) return false;
+  for (const ch of v) {
+    const c = ch.charCodeAt(0);
+    if (c < 0x20 || c === 0x7f) return false;
+  }
+  return true;
+}
 export const tagBarcodeBody = z.object({
-  barcode: z.string().min(1).max(128),
+  barcode: z.string().trim().min(1).max(128).refine(isSafeBarcode, {
+    message: "barcode may not contain markup, quote or control characters",
+  }),
 });
 export type CreateAssetBody = z.infer<typeof createAssetBody>;
 

@@ -3,31 +3,54 @@
 /**
  * Condemnation → committee recommendation (maker-checker) → auction workflow.
  *
- * The asset-service condemnation module (services/asset-service/src/modules/
- * condemnation/routes.ts) exposes ONLY command endpoints — POST/PATCH, every
- * one answered 202 "accepted" — with no GET for a survey, recommendation, or
- * auction by id and no list. There is nothing to fetch and pre-validate
- * against, so each panel below is a self-contained command form. A
- * successful create carries its returned id forward into the next panel's
- * field (editable, so a workflow started elsewhere can be resumed by pasting
- * in an id) rather than pretending to "look up" a record that this service
- * cannot return.
+ * GAP-ASSETS-CONDEMNATION-01/02/03: every step picks its record from the
+ * asset-service read models (GET condemnation-surveys / -recommendations /
+ * auctions and the asset register), loaded server-side by page.tsx. Nothing
+ * is typed as a UUID, the optimistic-lock `version` comes from the fetched
+ * record (never typed by the clerk), and a reload keeps the workflow because
+ * the state lives on the server, not in component state.
  *
- * Maker-checker on recommendation approval (approver ≠ creator) is enforced
- * server-side, asynchronously, in the queue consumer — the HTTP response is
- * only ever "accepted", never "approved". The UI must not claim otherwise.
+ * Every command is answered 202 "accepted" and applied by a queue consumer,
+ * so success copy says "submitted"; the new/updated record shows up in the
+ * pickers after a refresh. Maker-checker on recommendation approval
+ * (approver ≠ creator) is enforced by the consumer.
  */
 import { useId, useRef, useState, type ReactNode } from "react";
+import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
-import { formatMoney } from "@/lib/formatters";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
-const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const today = () => new Date().toISOString().slice(0, 10);
 
 type Accepted = { id: string; status: string; correlationId: string };
+
+export type AssetOption = { id: string; label: string };
+export type SurveyRecord = { id: string; assetId: string; status: string; condition: string; surveyDate: string; version: number };
+export type RecommendationRecord = {
+  id: string;
+  surveyId: string;
+  assetId: string;
+  decision: string;
+  status: string;
+  version: number;
+  reserveValueMinor: string | null;
+  floorValueMinor: string | null;
+};
+export type AuctionRecord = { id: string; assetId: string; recommendationId: string; status: string; version: number; reserveValueMinor: string };
+
+export type CondemnationData = {
+  assets: AssetOption[];
+  surveys: SurveyRecord[];
+  recommendations: RecommendationRecord[];
+  auctions: AuctionRecord[];
+  /** Which read models failed to load (so an empty picker is not mistaken for "none"). */
+  failed: { assets?: boolean; surveys?: boolean; recommendations?: boolean; auctions?: boolean };
+};
+
+const EMPTY: CondemnationData = { assets: [], surveys: [], recommendations: [], auctions: [], failed: {} };
 
 // ── shared field primitives ───────────────────────────────────────────────
 
@@ -80,6 +103,7 @@ function TextInput({
   required = true,
   inputRef,
   inputMode,
+  type,
 }: {
   id: string;
   value: string;
@@ -89,11 +113,13 @@ function TextInput({
   required?: boolean;
   inputRef?: React.Ref<HTMLInputElement>;
   inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  type?: string;
 }) {
   return (
     <input
       id={id}
       ref={inputRef}
+      type={type}
       value={value}
       onChange={(e) => onChange(e.target.value)}
       placeholder={placeholder}
@@ -113,6 +139,7 @@ function SelectInput({
   options,
   error,
   selectRef,
+  emptyLabel,
 }: {
   id: string;
   value: string;
@@ -120,19 +147,23 @@ function SelectInput({
   options: { value: string; label: string }[];
   error?: string;
   selectRef?: React.Ref<HTMLSelectElement>;
+  /** When set and there are no options, the select is disabled and shows this. */
+  emptyLabel?: string;
 }) {
+  const empty = emptyLabel !== undefined && options.length === 0;
   return (
     <select
       id={id}
       ref={selectRef}
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      disabled={empty}
       aria-required="true"
       aria-invalid={!!error || undefined}
       aria-describedby={error ? `${id}-err` : undefined}
       style={inputStyle}
     >
-      <option value="">Select…</option>
+      <option value="">{empty ? emptyLabel : "Select…"}</option>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}
@@ -150,17 +181,28 @@ function grid(children: ReactNode) {
   );
 }
 
+function emptyText(failed: boolean | undefined, none: string): string {
+  return failed ? "Couldn't load — refresh to retry" : none;
+}
+
+function humanise(v: string): string {
+  return v.replace(/_/g, " ");
+}
+
+/** Shared label helpers so every panel names records the same way. */
+function useLabels(data: CondemnationData) {
+  const assetLabel = (id: string) => data.assets.find((a) => a.id === id)?.label ?? "Unknown asset";
+  const surveyLabel = (s: SurveyRecord) => `${assetLabel(s.assetId)} — ${humanise(s.condition)}, surveyed ${formatIndianDate(s.surveyDate)}`;
+  const recLabel = (r: RecommendationRecord) => `${assetLabel(r.assetId)} — ${humanise(r.decision)} (${humanise(r.status)})`;
+  const auctionLabel = (a: AuctionRecord) => `${assetLabel(a.assetId)} — reserve ${formatMoney(a.reserveValueMinor)}`;
+  return { assetLabel, surveyLabel, recLabel, auctionLabel };
+}
+
 // ── Survey panel ───────────────────────────────────────────────────────────
 
-function SurveyPanel({
-  onSurveyCreated,
-  assetId,
-  setAssetId,
-}: {
-  onSurveyCreated: (id: string, assetId: string) => void;
-  assetId: string;
-  setAssetId: (v: string) => void;
-}) {
+function SurveyPanel({ data, onDone }: { data: CondemnationData; onDone: () => void }) {
+  const { assetLabel, surveyLabel } = useLabels(data);
+  const [assetId, setAssetId] = useState("");
   const [surveyDate, setSurveyDate] = useState(today());
   const [condition, setCondition] = useState("");
   const [conditionNotes, setConditionNotes] = useState("");
@@ -172,9 +214,8 @@ function SurveyPanel({
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
-  const [surveyId, setSurveyId] = useState("");
 
-  const [submitVersion, setSubmitVersion] = useState("1");
+  const [surveyId, setSurveyId] = useState("");
   const [submitRecommendation, setSubmitRecommendation] = useState("");
   const [submitErrors, setSubmitErrors] = useState<Record<string, string>>({});
   const [submitConfirmOpen, setSubmitConfirmOpen] = useState(false);
@@ -189,22 +230,23 @@ function SurveyPanel({
   const yearsField = useId();
   const repairField = useId();
   const surveyIdField = useId();
-  const versionField = useId();
   const recommendationField = useId();
 
-  const assetRef = useRef<HTMLInputElement>(null);
+  const assetRef = useRef<HTMLSelectElement>(null);
   const dateRef = useRef<HTMLInputElement>(null);
   const conditionRef = useRef<HTMLSelectElement>(null);
   const repairRef = useRef<HTMLInputElement>(null);
-  const surveyIdRef = useRef<HTMLInputElement>(null);
-  const versionRef = useRef<HTMLInputElement>(null);
+  const surveyIdRef = useRef<HTMLSelectElement>(null);
+
+  const draftSurveys = data.surveys.filter((s) => s.status === "draft");
+  const selectedSurvey = draftSurveys.find((s) => s.id === surveyId) ?? null;
 
   function validateCreate(): boolean {
     const next: Record<string, string> = {};
-    if (!UUID_PATTERN.test(assetId.trim())) next.assetId = "Enter a valid asset ID (UUID).";
+    if (!data.assets.some((a) => a.id === assetId)) next.assetId = "Select the asset being surveyed.";
     if (!DATE_PATTERN.test(surveyDate.trim())) next.surveyDate = "Survey date must be YYYY-MM-DD.";
     if (!condition) next.condition = "Select the condemnation condition.";
-    if (repairCost.trim() && rupeesToMinorString(repairCost) === null) {
+    if (repairCost.trim() && rupeesToMinorString(repairCost, { allowZero: true }) === null) {
       next.repairCost = "Enter a valid non-negative repair cost (₹) with at most 2 decimals.";
     }
     setErrors(next);
@@ -219,23 +261,16 @@ function SurveyPanel({
     setBusy(true);
     setDialogError(undefined);
     try {
-      const body: Record<string, unknown> = {
-        assetId: assetId.trim(),
-        surveyDate: surveyDate.trim(),
-        condition,
-        currency: "INR",
-      };
+      const body: Record<string, unknown> = { assetId, surveyDate: surveyDate.trim(), condition, currency: "INR" };
       if (conditionNotes.trim()) body.conditionNotes = conditionNotes.trim();
       if (yearsInUse.trim()) body.yearsInUse = Number(yearsInUse);
-      if (repairCost.trim()) body.estimatedRepairCostMinor = Number(rupeesToMinorString(repairCost));
-      const res = await browserJson<Accepted>("v1/asset/condemnation-surveys", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      if (repairCost.trim()) body.estimatedRepairCostMinor = Number(rupeesToMinorString(repairCost, { allowZero: true }));
+      await browserJson<Accepted>("v1/asset/condemnation-surveys", { method: "POST", body: JSON.stringify(body) });
       setConfirmOpen(false);
-      setSurveyId(res.id);
-      setMessage(`Survey submitted — tracking id ${res.id}. It will be recorded once the queue consumer processes it.`);
-      onSurveyCreated(res.id, assetId.trim());
+      setMessage(`Survey for ${assetLabel(assetId)} submitted. It appears under "Submit survey" once processed.`);
+      setAssetId("");
+      setCondition("");
+      onDone();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -245,25 +280,27 @@ function SurveyPanel({
 
   function validateSubmit(): boolean {
     const next: Record<string, string> = {};
-    if (!UUID_PATTERN.test(surveyId.trim())) next.surveyId = "Enter a valid survey ID (UUID) — created above or pasted in.";
-    if (!/^\d+$/.test(submitVersion.trim()) || Number(submitVersion) < 1) next.submitVersion = "Enter the survey's current version (a positive integer).";
+    if (!selectedSurvey) next.surveyId = "Select a draft survey.";
     if (!submitRecommendation) next.submitRecommendation = "Select the survey recommendation.";
     setSubmitErrors(next);
     if (next.surveyId) { surveyIdRef.current?.focus(); return false; }
-    if (next.submitVersion) { versionRef.current?.focus(); return false; }
     return Object.keys(next).length === 0;
   }
 
   async function submitSurvey() {
+    if (!selectedSurvey) return;
     setSubmitBusy(true);
     setSubmitDialogError(undefined);
     try {
-      const res = await browserJson<Accepted>(`v1/asset/condemnation-surveys/${surveyId.trim()}/submit`, {
+      await browserJson<Accepted>(`v1/asset/condemnation-surveys/${selectedSurvey.id}/submit`, {
         method: "PATCH",
-        body: JSON.stringify({ version: Number(submitVersion), recommendation: submitRecommendation }),
+        // Optimistic lock from the fetched record -- never typed by the clerk.
+        body: JSON.stringify({ version: selectedSurvey.version, recommendation: submitRecommendation }),
       });
       setSubmitConfirmOpen(false);
-      setSubmitMessage(`Survey ${res.id.slice(0, 8)}… submitted with recommendation "${submitRecommendation}".`);
+      setSubmitMessage(`Survey for ${assetLabel(selectedSurvey.assetId)} submitted with recommendation "${humanise(submitRecommendation)}".`);
+      setSurveyId("");
+      onDone();
     } catch (err) {
       setSubmitDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -278,11 +315,19 @@ function SurveyPanel({
           <h4 style={{ margin: 0 }}>Create survey</h4>
           {grid(
             <>
-              <Field id={assetIdField} label="Asset ID" error={errors.assetId}>
-                <TextInput id={assetIdField} inputRef={assetRef} value={assetId} onChange={setAssetId} placeholder="UUID from the Asset Register" error={errors.assetId} />
+              <Field id={assetIdField} label="Asset" error={errors.assetId}>
+                <SelectInput
+                  id={assetIdField}
+                  selectRef={assetRef}
+                  value={assetId}
+                  onChange={setAssetId}
+                  error={errors.assetId}
+                  options={data.assets.map((a) => ({ value: a.id, label: a.label }))}
+                  emptyLabel={emptyText(data.failed.assets, "No assets in the register")}
+                />
               </Field>
               <Field id={surveyDateField} label="Survey date" error={errors.surveyDate}>
-                <TextInput id={surveyDateField} inputRef={dateRef} value={surveyDate} onChange={setSurveyDate} placeholder="YYYY-MM-DD" error={errors.surveyDate} />
+                <TextInput id={surveyDateField} type="date" inputRef={dateRef} value={surveyDate} onChange={setSurveyDate} error={errors.surveyDate} />
               </Field>
               <Field id={conditionField} label="Condition" error={errors.condition}>
                 <SelectInput
@@ -309,13 +354,7 @@ function SurveyPanel({
             </>,
           )}
           <Field id={notesField} label="Condition notes" required={false}>
-            <textarea
-              id={notesField}
-              value={conditionNotes}
-              onChange={(e) => setConditionNotes(e.target.value)}
-              rows={2}
-              style={{ ...inputStyle, minHeight: 60 }}
-            />
+            <textarea id={notesField} value={conditionNotes} onChange={(e) => setConditionNotes(e.target.value)} rows={2} style={{ ...inputStyle, minHeight: 60 }} />
           </Field>
           <div>
             <Button
@@ -338,11 +377,16 @@ function SurveyPanel({
           <h4 style={{ margin: 0 }}>Submit survey</h4>
           {grid(
             <>
-              <Field id={surveyIdField} label="Survey ID" error={submitErrors.surveyId}>
-                <TextInput id={surveyIdField} inputRef={surveyIdRef} value={surveyId} onChange={setSurveyId} placeholder="UUID returned above" error={submitErrors.surveyId} />
-              </Field>
-              <Field id={versionField} label="Current version" error={submitErrors.submitVersion}>
-                <TextInput id={versionField} inputRef={versionRef} value={submitVersion} onChange={setSubmitVersion} inputMode="numeric" error={submitErrors.submitVersion} />
+              <Field id={surveyIdField} label="Draft survey" error={submitErrors.surveyId}>
+                <SelectInput
+                  id={surveyIdField}
+                  selectRef={surveyIdRef}
+                  value={surveyId}
+                  onChange={setSurveyId}
+                  error={submitErrors.surveyId}
+                  options={draftSurveys.map((s) => ({ value: s.id, label: surveyLabel(s) }))}
+                  emptyLabel={emptyText(data.failed.surveys, "No draft surveys")}
+                />
               </Field>
               <Field id={recommendationField} label="Recommendation" error={submitErrors.submitRecommendation}>
                 <SelectInput
@@ -386,8 +430,8 @@ function SurveyPanel({
         errorMessage={dialogError}
         description={
           <>
-            Records a condemnation survey for asset <strong className="mono">{assetId.slice(0, 8)}…</strong> with
-            condition <strong>{condition || "—"}</strong>.
+            Records a condemnation survey for <strong>{assetLabel(assetId)}</strong> with condition{" "}
+            <strong>{condition ? humanise(condition) : "—"}</strong>.
           </>
         }
         onConfirm={() => void createSurvey()}
@@ -402,8 +446,8 @@ function SurveyPanel({
         errorMessage={submitDialogError}
         description={
           <>
-            Submits survey <strong className="mono">{surveyId.slice(0, 8)}…</strong> with recommendation{" "}
-            <strong>{submitRecommendation || "—"}</strong>. This locks the survey against further edits.
+            Submits the survey for <strong>{selectedSurvey ? assetLabel(selectedSurvey.assetId) : "—"}</strong> with recommendation{" "}
+            <strong>{submitRecommendation ? humanise(submitRecommendation) : "—"}</strong>. This locks the survey against further edits.
           </>
         }
         onConfirm={() => void submitSurvey()}
@@ -418,19 +462,9 @@ function SurveyPanel({
 type CommitteeMember = { name: string; designation: string; employeeRef: string };
 const emptyMember = (): CommitteeMember => ({ name: "", designation: "", employeeRef: "" });
 
-function RecommendationPanel({
-  surveyId,
-  setSurveyId,
-  assetId,
-  setAssetId,
-  onRecommendationCreated,
-}: {
-  surveyId: string;
-  setSurveyId: (v: string) => void;
-  assetId: string;
-  setAssetId: (v: string) => void;
-  onRecommendationCreated: (id: string) => void;
-}) {
+function RecommendationPanel({ data, onDone }: { data: CondemnationData; onDone: () => void }) {
+  const { assetLabel, surveyLabel, recLabel } = useLabels(data);
+  const [surveyId, setSurveyId] = useState("");
   const [members, setMembers] = useState<CommitteeMember[]>([emptyMember(), emptyMember()]);
   const [decision, setDecision] = useState("");
   const [reason, setReason] = useState("");
@@ -442,9 +476,8 @@ function RecommendationPanel({
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
-  const [recommendationId, setRecommendationId] = useState("");
 
-  const [approveVersion, setApproveVersion] = useState("1");
+  const [recommendationId, setRecommendationId] = useState("");
   const [approveErrors, setApproveErrors] = useState<Record<string, string>>({});
   const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
   const [approveBusy, setApproveBusy] = useState(false);
@@ -452,23 +485,25 @@ function RecommendationPanel({
   const [approveMessage, setApproveMessage] = useState<string | null>(null);
 
   const surveyIdField = useId();
-  const assetIdField = useId();
   const decisionField = useId();
   const reasonField = useId();
   const reserveField = useId();
   const floorField = useId();
   const recommendationIdField = useId();
-  const approveVersionField = useId();
 
-  const surveyRef = useRef<HTMLInputElement>(null);
-  const assetRef = useRef<HTMLInputElement>(null);
+  const surveyRef = useRef<HTMLSelectElement>(null);
   const decisionRef = useRef<HTMLSelectElement>(null);
   const reasonRef = useRef<HTMLTextAreaElement>(null);
   const firstMemberRef = useRef<HTMLInputElement>(null);
   const reserveRef = useRef<HTMLInputElement>(null);
   const floorRef = useRef<HTMLInputElement>(null);
-  const recIdRef = useRef<HTMLInputElement>(null);
-  const approveVersionRef = useRef<HTMLInputElement>(null);
+  const recIdRef = useRef<HTMLSelectElement>(null);
+
+  // A recommendation follows a SUBMITTED survey; the asset comes from it.
+  const submittedSurveys = data.surveys.filter((s) => s.status === "submitted");
+  const selectedSurvey = submittedSurveys.find((s) => s.id === surveyId) ?? null;
+  const pendingRecs = data.recommendations.filter((r) => r.status === "pending");
+  const selectedRec = pendingRecs.find((r) => r.id === recommendationId) ?? null;
 
   function updateMember(i: number, patch: Partial<CommitteeMember>) {
     setMembers((prev) => prev.map((m, idx) => (idx === i ? { ...m, ...patch } : m)));
@@ -476,17 +511,15 @@ function RecommendationPanel({
 
   function validateCreate(): boolean {
     const next: Record<string, string> = {};
-    if (!UUID_PATTERN.test(surveyId.trim())) next.surveyId = "Enter a valid survey ID (UUID).";
-    if (!UUID_PATTERN.test(assetId.trim())) next.assetId = "Enter a valid asset ID (UUID).";
+    if (!selectedSurvey) next.surveyId = "Select a submitted survey.";
     if (!decision) next.decision = "Select the committee's decision.";
     if (!reason.trim()) next.reason = "Enter the committee's reason.";
     const validMembers = members.filter((m) => m.name.trim() && m.designation.trim());
     if (validMembers.length < 2) next.members = "At least 2 committee members (name + designation) are required.";
-    if (reserveValue.trim() && rupeesToMinorString(reserveValue) === null) next.reserveValue = "Enter a valid non-negative reserve value (₹).";
-    if (floorValue.trim() && rupeesToMinorString(floorValue) === null) next.floorValue = "Enter a valid non-negative floor value (₹).";
+    if (reserveValue.trim() && rupeesToMinorString(reserveValue, { allowZero: true }) === null) next.reserveValue = "Enter a valid non-negative reserve value (₹).";
+    if (floorValue.trim() && rupeesToMinorString(floorValue, { allowZero: true }) === null) next.floorValue = "Enter a valid non-negative floor value (₹).";
     setErrors(next);
     if (next.surveyId) { surveyRef.current?.focus(); return false; }
-    if (next.assetId) { assetRef.current?.focus(); return false; }
     if (next.decision) { decisionRef.current?.focus(); return false; }
     if (next.reason) { reasonRef.current?.focus(); return false; }
     if (next.members) { firstMemberRef.current?.focus(); return false; }
@@ -496,6 +529,7 @@ function RecommendationPanel({
   }
 
   async function createRecommendation() {
+    if (!selectedSurvey) return;
     setBusy(true);
     setDialogError(undefined);
     try {
@@ -507,23 +541,20 @@ function RecommendationPanel({
           ...(m.employeeRef.trim() ? { employeeRef: m.employeeRef.trim() } : {}),
         }));
       const body: Record<string, unknown> = {
-        surveyId: surveyId.trim(),
-        assetId: assetId.trim(),
+        surveyId: selectedSurvey.id,
+        assetId: selectedSurvey.assetId,
         committeeMembers,
         decision,
         reason: reason.trim(),
         currency: "INR",
       };
-      if (reserveValue.trim()) body.reserveValueMinor = Number(rupeesToMinorString(reserveValue));
-      if (floorValue.trim()) body.floorValueMinor = Number(rupeesToMinorString(floorValue));
-      const res = await browserJson<Accepted>("v1/asset/condemnation-recommendations", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      if (reserveValue.trim()) body.reserveValueMinor = Number(rupeesToMinorString(reserveValue, { allowZero: true }));
+      if (floorValue.trim()) body.floorValueMinor = Number(rupeesToMinorString(floorValue, { allowZero: true }));
+      await browserJson<Accepted>("v1/asset/condemnation-recommendations", { method: "POST", body: JSON.stringify(body) });
       setConfirmOpen(false);
-      setRecommendationId(res.id);
-      setMessage(`Recommendation submitted — tracking id ${res.id}.`);
-      onRecommendationCreated(res.id);
+      setMessage(`Recommendation for ${assetLabel(selectedSurvey.assetId)} submitted. It appears under "Approve recommendation" once processed.`);
+      setSurveyId("");
+      onDone();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -533,27 +564,27 @@ function RecommendationPanel({
 
   function validateApprove(): boolean {
     const next: Record<string, string> = {};
-    if (!UUID_PATTERN.test(recommendationId.trim())) next.recommendationId = "Enter a valid recommendation ID (UUID) — created above or pasted in.";
-    if (!/^\d+$/.test(approveVersion.trim()) || Number(approveVersion) < 1) next.approveVersion = "Enter the recommendation's current version (a positive integer).";
+    if (!selectedRec) next.recommendationId = "Select a pending recommendation.";
     setApproveErrors(next);
     if (next.recommendationId) { recIdRef.current?.focus(); return false; }
-    if (next.approveVersion) { approveVersionRef.current?.focus(); return false; }
-    return Object.keys(next).length === 0;
+    return true;
   }
 
-  async function approveRecommendation() {
+  async function approveRecommendation(approvalReason?: string) {
+    if (!selectedRec) return;
     setApproveBusy(true);
     setApproveDialogError(undefined);
     try {
-      const res = await browserJson<Accepted>(`v1/asset/condemnation-recommendations/${recommendationId.trim()}/approve`, {
+      await browserJson<Accepted>(`v1/asset/condemnation-recommendations/${selectedRec.id}/approve`, {
         method: "PATCH",
-        body: JSON.stringify({ version: Number(approveVersion) }),
+        body: JSON.stringify({ version: selectedRec.version, reason: (approvalReason ?? "").trim() }),
       });
       setApproveConfirmOpen(false);
-      // Fail-closed: the maker≠checker check runs asynchronously in the queue
-      // consumer, not in this HTTP response — a 202 means "accepted for
-      // processing", never "approved". Never claim approval happened.
-      setApproveMessage(`Approval submitted for recommendation ${res.id.slice(0, 8)}… — pending the checker's maker≠checker verification.`);
+      // Fail-closed: the maker≠checker check runs in the queue consumer, not
+      // in this HTTP response -- a 202 means "accepted", never "approved".
+      setApproveMessage(`Approval submitted for ${assetLabel(selectedRec.assetId)} — pending the maker≠checker verification.`);
+      setRecommendationId("");
+      onDone();
     } catch (err) {
       setApproveDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -568,11 +599,16 @@ function RecommendationPanel({
           <h4 style={{ margin: 0 }}>Create recommendation</h4>
           {grid(
             <>
-              <Field id={surveyIdField} label="Survey ID" error={errors.surveyId}>
-                <TextInput id={surveyIdField} inputRef={surveyRef} value={surveyId} onChange={setSurveyId} placeholder="UUID from the survey above" error={errors.surveyId} />
-              </Field>
-              <Field id={assetIdField} label="Asset ID" error={errors.assetId}>
-                <TextInput id={assetIdField} inputRef={assetRef} value={assetId} onChange={setAssetId} placeholder="UUID from the Asset Register" error={errors.assetId} />
+              <Field id={surveyIdField} label="Submitted survey" error={errors.surveyId}>
+                <SelectInput
+                  id={surveyIdField}
+                  selectRef={surveyRef}
+                  value={surveyId}
+                  onChange={setSurveyId}
+                  error={errors.surveyId}
+                  options={submittedSurveys.map((s) => ({ value: s.id, label: surveyLabel(s) }))}
+                  emptyLabel={emptyText(data.failed.surveys, "No submitted surveys")}
+                />
               </Field>
               <Field id={decisionField} label="Decision" error={errors.decision}>
                 <SelectInput
@@ -618,30 +654,13 @@ function RecommendationPanel({
             {members.map((m, i) => (
               <div key={i} style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr 1fr", alignItems: "start" }}>
                 <Field id={`member-${i}-name`} label={`Member ${i + 1} name`} required={false}>
-                  <TextInput
-                    id={`member-${i}-name`}
-                    inputRef={i === 0 ? firstMemberRef : undefined}
-                    value={m.name}
-                    onChange={(v) => updateMember(i, { name: v })}
-                    required={false}
-                  />
+                  <TextInput id={`member-${i}-name`} inputRef={i === 0 ? firstMemberRef : undefined} value={m.name} onChange={(v) => updateMember(i, { name: v })} required={false} />
                 </Field>
                 <Field id={`member-${i}-designation`} label={`Member ${i + 1} designation`} required={false}>
-                  <TextInput
-                    id={`member-${i}-designation`}
-                    value={m.designation}
-                    onChange={(v) => updateMember(i, { designation: v })}
-                    required={false}
-                  />
+                  <TextInput id={`member-${i}-designation`} value={m.designation} onChange={(v) => updateMember(i, { designation: v })} required={false} />
                 </Field>
                 <Field id={`member-${i}-employeeRef`} label={`Member ${i + 1} employee ref`} required={false}>
-                  <TextInput
-                    id={`member-${i}-employeeRef`}
-                    value={m.employeeRef}
-                    onChange={(v) => updateMember(i, { employeeRef: v })}
-                    placeholder="UUID, optional"
-                    required={false}
-                  />
+                  <TextInput id={`member-${i}-employeeRef`} value={m.employeeRef} onChange={(v) => updateMember(i, { employeeRef: v })} placeholder="Employee id, optional" required={false} />
                 </Field>
               </div>
             ))}
@@ -674,17 +693,20 @@ function RecommendationPanel({
           <h4 style={{ margin: 0 }}>Approve recommendation</h4>
           <p style={{ margin: 0, fontSize: 12, color: "var(--ink2)" }}>
             The approving officer must be different from the officer who created the recommendation — the server
-            rejects same-user maker-checker decisions asynchronously; this UI cannot pre-check that.
+            rejects same-user maker-checker decisions.
           </p>
           {grid(
-            <>
-              <Field id={recommendationIdField} label="Recommendation ID" error={approveErrors.recommendationId}>
-                <TextInput id={recommendationIdField} inputRef={recIdRef} value={recommendationId} onChange={setRecommendationId} placeholder="UUID returned above" error={approveErrors.recommendationId} />
-              </Field>
-              <Field id={approveVersionField} label="Current version" error={approveErrors.approveVersion}>
-                <TextInput id={approveVersionField} inputRef={approveVersionRef} value={approveVersion} onChange={setApproveVersion} inputMode="numeric" error={approveErrors.approveVersion} />
-              </Field>
-            </>,
+            <Field id={recommendationIdField} label="Pending recommendation" error={approveErrors.recommendationId}>
+              <SelectInput
+                id={recommendationIdField}
+                selectRef={recIdRef}
+                value={recommendationId}
+                onChange={setRecommendationId}
+                error={approveErrors.recommendationId}
+                options={pendingRecs.map((r) => ({ value: r.id, label: recLabel(r) }))}
+                emptyLabel={emptyText(data.failed.recommendations, "No pending recommendations")}
+              />
+            </Field>,
           )}
           <div>
             <Button
@@ -713,42 +735,41 @@ function RecommendationPanel({
         errorMessage={dialogError}
         description={
           <>
-            Records the committee's <strong>{decision || "—"}</strong> decision for asset{" "}
-            <strong className="mono">{assetId.slice(0, 8)}…</strong>.
+            Records the committee&apos;s <strong>{decision ? humanise(decision) : "—"}</strong> decision for{" "}
+            <strong>{selectedSurvey ? assetLabel(selectedSurvey.assetId) : "—"}</strong>.
           </>
         }
         onConfirm={() => void createRecommendation()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
 
+      {/* GAP-ASSETS-CONDEMNATION-03: every figure shown comes from the
+          recommendation being approved (fetched record), never from the
+          create form's local fields; a reason is mandatory. */}
       <ConfirmDialog
         open={approveConfirmOpen}
         title="Approve this condemnation recommendation?"
         confirmLabel="Submit approval"
         danger
+        requireReason
+        reasonLabel="Reason for approval"
         busy={approveBusy}
         errorMessage={approveDialogError}
         description={
-          <>
-            Submits your approval of recommendation <strong className="mono">{recommendationId.slice(0, 8)}…</strong>
-            {assetId.trim() ? (
-              <>
-                {" "}for asset <strong className="mono">{assetId.trim().slice(0, 8)}…</strong>
-              </>
-            ) : null}{" "}
-            for server-side maker-checker verification (approver must differ from creator).
-            {(reserveValue.trim() || floorValue.trim()) ? (
-              <>
-                {" "}Reserve value{" "}
-                <strong>{reserveValue.trim() ? formatMoney(Number(rupeesToMinorString(reserveValue) ?? "0")) : "—"}</strong>
-                {" "}· floor value{" "}
-                <strong>{floorValue.trim() ? formatMoney(Number(rupeesToMinorString(floorValue) ?? "0")) : "—"}</strong>.
-              </>
-            ) : null}{" "}
-            On approval the asset moves toward condemnation — this cannot be undone from this screen.
-          </>
+          selectedRec ? (
+            <>
+              Submits your approval of the <strong>{humanise(selectedRec.decision)}</strong> recommendation for{" "}
+              <strong>{assetLabel(selectedRec.assetId)}</strong> (approver must differ from creator). Reserve value{" "}
+              <strong>{formatMoney(selectedRec.reserveValueMinor)}</strong> · floor value{" "}
+              <strong>{formatMoney(selectedRec.floorValueMinor)}</strong>.
+              {selectedRec.decision === "condemn" ? " On approval the asset is marked condemned" : " On approval the decision is final"} — this
+              cannot be undone from this screen.
+            </>
+          ) : (
+            <>Details are not loaded; select the recommendation again.</>
+          )
         }
-        onConfirm={() => void approveRecommendation()}
+        onConfirm={(r) => void approveRecommendation(r)}
         onCancel={() => !approveBusy && setApproveConfirmOpen(false)}
       />
     </Card>
@@ -757,17 +778,9 @@ function RecommendationPanel({
 
 // ── Auction panel ──────────────────────────────────────────────────────
 
-function AuctionPanel({
-  assetId,
-  setAssetId,
-  recommendationId,
-  setRecommendationId,
-}: {
-  assetId: string;
-  setAssetId: (v: string) => void;
-  recommendationId: string;
-  setRecommendationId: (v: string) => void;
-}) {
+function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => void }) {
+  const { assetLabel, recLabel, auctionLabel } = useLabels(data);
+  const [recommendationId, setRecommendationId] = useState("");
   const [reserveValue, setReserveValue] = useState("");
   const [auctionDate, setAuctionDate] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -775,9 +788,8 @@ function AuctionPanel({
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
-  const [auctionId, setAuctionId] = useState("");
 
-  const [completeVersion, setCompleteVersion] = useState("1");
+  const [auctionId, setAuctionId] = useState("");
   const [highestBid, setHighestBid] = useState("");
   const [winnerName, setWinnerName] = useState("");
   const [winnerRef, setWinnerRef] = useState("");
@@ -788,36 +800,46 @@ function AuctionPanel({
   const [completeDialogError, setCompleteDialogError] = useState<string | undefined>();
   const [completeMessage, setCompleteMessage] = useState<string | null>(null);
 
-  const assetIdField = useId();
   const recommendationIdField = useId();
   const reserveField = useId();
   const dateField = useId();
   const auctionIdField = useId();
-  const versionField = useId();
   const bidField = useId();
   const winnerField = useId();
   const winnerRefField = useId();
   const proceedsField = useId();
 
-  const assetRef = useRef<HTMLInputElement>(null);
-  const recRef = useRef<HTMLInputElement>(null);
+  const recRef = useRef<HTMLSelectElement>(null);
   const reserveRef = useRef<HTMLInputElement>(null);
   const auctionDateRef = useRef<HTMLInputElement>(null);
-  const auctionIdRef = useRef<HTMLInputElement>(null);
-  const versionRef = useRef<HTMLInputElement>(null);
+  const auctionIdRef = useRef<HTMLSelectElement>(null);
   const bidRef = useRef<HTMLInputElement>(null);
   const winnerRef2 = useRef<HTMLInputElement>(null);
   const proceedsRef = useRef<HTMLInputElement>(null);
 
+  // Only an APPROVED "condemn" recommendation can go to auction.
+  const auctionableRecs = data.recommendations.filter((r) => r.status === "approved" && r.decision === "condemn");
+  const selectedRec = auctionableRecs.find((r) => r.id === recommendationId) ?? null;
+  const openAuctions = data.auctions.filter((a) => a.status === "pending");
+  const selectedAuction = openAuctions.find((a) => a.id === auctionId) ?? null;
+
+  function pickRecommendation(id: string) {
+    setRecommendationId(id);
+    const rec = auctionableRecs.find((r) => r.id === id);
+    // Prefill the reserve from the approved recommendation (paise → rupees).
+    if (rec?.reserveValueMinor && /^\d+$/.test(rec.reserveValueMinor)) {
+      const p = rec.reserveValueMinor.padStart(3, "0");
+      setReserveValue(`${p.slice(0, -2).replace(/^0+(?=\d)/, "")}.${p.slice(-2)}`);
+    }
+  }
+
   function validateCreate(): boolean {
     const next: Record<string, string> = {};
-    if (!UUID_PATTERN.test(assetId.trim())) next.assetId = "Enter a valid asset ID (UUID).";
-    if (!UUID_PATTERN.test(recommendationId.trim())) next.recommendationId = "Enter a valid recommendation ID (UUID).";
+    if (!selectedRec) next.recommendationId = "Select an approved condemnation recommendation.";
     const reserveMinor = rupeesToMinorString(reserveValue);
     if (!reserveValue.trim() || reserveMinor === null) next.reserveValue = "Enter a valid positive reserve value (₹).";
     if (auctionDate.trim() && !DATE_PATTERN.test(auctionDate.trim())) next.auctionDate = "Auction date must be YYYY-MM-DD.";
     setErrors(next);
-    if (next.assetId) { assetRef.current?.focus(); return false; }
     if (next.recommendationId) { recRef.current?.focus(); return false; }
     if (next.reserveValue) { reserveRef.current?.focus(); return false; }
     if (next.auctionDate) { auctionDateRef.current?.focus(); return false; }
@@ -825,23 +847,22 @@ function AuctionPanel({
   }
 
   async function createAuction() {
+    if (!selectedRec) return;
     setBusy(true);
     setDialogError(undefined);
     try {
       const body: Record<string, unknown> = {
-        assetId: assetId.trim(),
-        recommendationId: recommendationId.trim(),
+        assetId: selectedRec.assetId,
+        recommendationId: selectedRec.id,
         reserveValueMinor: Number(rupeesToMinorString(reserveValue)),
         currency: "INR",
       };
       if (auctionDate.trim()) body.auctionDate = auctionDate.trim();
-      const res = await browserJson<Accepted>("v1/asset/auctions", {
-        method: "POST",
-        body: JSON.stringify(body),
-      });
+      await browserJson<Accepted>("v1/asset/auctions", { method: "POST", body: JSON.stringify(body) });
       setConfirmOpen(false);
-      setAuctionId(res.id);
-      setMessage(`Auction created — tracking id ${res.id}.`);
+      setMessage(`Auction for ${assetLabel(selectedRec.assetId)} submitted. It appears under "Complete auction" once processed.`);
+      setRecommendationId("");
+      onDone();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -851,8 +872,7 @@ function AuctionPanel({
 
   function validateComplete(): boolean {
     const next: Record<string, string> = {};
-    if (!UUID_PATTERN.test(auctionId.trim())) next.auctionId = "Enter a valid auction ID (UUID) — created above or pasted in.";
-    if (!/^\d+$/.test(completeVersion.trim()) || Number(completeVersion) < 1) next.completeVersion = "Enter the auction's current version (a positive integer).";
+    if (!selectedAuction) next.auctionId = "Select an open auction.";
     const bidMinor = rupeesToMinorString(highestBid);
     if (!highestBid.trim() || bidMinor === null) next.highestBid = "Enter a valid positive winning bid (₹).";
     if (!winnerName.trim()) next.winnerName = "Enter the winning bidder's name.";
@@ -860,7 +880,6 @@ function AuctionPanel({
     if (!saleProceeds.trim() || proceedsMinor === null) next.saleProceeds = "Enter valid positive sale proceeds (₹).";
     setCompleteErrors(next);
     if (next.auctionId) { auctionIdRef.current?.focus(); return false; }
-    if (next.completeVersion) { versionRef.current?.focus(); return false; }
     if (next.highestBid) { bidRef.current?.focus(); return false; }
     if (next.winnerName) { winnerRef2.current?.focus(); return false; }
     if (next.saleProceeds) { proceedsRef.current?.focus(); return false; }
@@ -868,22 +887,22 @@ function AuctionPanel({
   }
 
   async function completeAuction() {
+    if (!selectedAuction) return;
     setCompleteBusy(true);
     setCompleteDialogError(undefined);
     try {
       const body: Record<string, unknown> = {
-        version: Number(completeVersion),
+        version: selectedAuction.version,
         highestBidMinor: Number(rupeesToMinorString(highestBid)),
         winnerName: winnerName.trim(),
         saleProceedsMinor: Number(rupeesToMinorString(saleProceeds)),
       };
       if (winnerRef.trim()) body.winnerRef = winnerRef.trim();
-      const res = await browserJson<Accepted>(`v1/asset/auctions/${auctionId.trim()}/complete`, {
-        method: "PATCH",
-        body: JSON.stringify(body),
-      });
+      await browserJson<Accepted>(`v1/asset/auctions/${selectedAuction.id}/complete`, { method: "PATCH", body: JSON.stringify(body) });
       setCompleteConfirmOpen(false);
-      setCompleteMessage(`Auction ${res.id.slice(0, 8)}… completion submitted — sale proceeds of ${formatMoney(Number(rupeesToMinorString(saleProceeds) ?? "0"))} recorded pending processing.`);
+      setCompleteMessage(`Auction for ${assetLabel(selectedAuction.assetId)} completion submitted — sale proceeds of ${formatMoney(rupeesToMinorString(saleProceeds))} recorded pending processing.`);
+      setAuctionId("");
+      onDone();
     } catch (err) {
       setCompleteDialogError(err instanceof Error ? err.message : "Network error. Please try again.");
     } finally {
@@ -898,17 +917,22 @@ function AuctionPanel({
           <h4 style={{ margin: 0 }}>Create auction</h4>
           {grid(
             <>
-              <Field id={assetIdField} label="Asset ID" error={errors.assetId}>
-                <TextInput id={assetIdField} inputRef={assetRef} value={assetId} onChange={setAssetId} placeholder="UUID from the Asset Register" error={errors.assetId} />
-              </Field>
-              <Field id={recommendationIdField} label="Recommendation ID" error={errors.recommendationId}>
-                <TextInput id={recommendationIdField} inputRef={recRef} value={recommendationId} onChange={setRecommendationId} placeholder="UUID from the recommendation above" error={errors.recommendationId} />
+              <Field id={recommendationIdField} label="Approved recommendation" error={errors.recommendationId}>
+                <SelectInput
+                  id={recommendationIdField}
+                  selectRef={recRef}
+                  value={recommendationId}
+                  onChange={pickRecommendation}
+                  error={errors.recommendationId}
+                  options={auctionableRecs.map((r) => ({ value: r.id, label: recLabel(r) }))}
+                  emptyLabel={emptyText(data.failed.recommendations, "No approved condemnations")}
+                />
               </Field>
               <Field id={reserveField} label="Reserve value (₹)" error={errors.reserveValue}>
                 <TextInput id={reserveField} inputRef={reserveRef} value={reserveValue} onChange={setReserveValue} inputMode="decimal" error={errors.reserveValue} />
               </Field>
               <Field id={dateField} label="Auction date" required={false} error={errors.auctionDate}>
-                <TextInput id={dateField} inputRef={auctionDateRef} value={auctionDate} onChange={setAuctionDate} placeholder="YYYY-MM-DD" required={false} error={errors.auctionDate} />
+                <TextInput id={dateField} type="date" inputRef={auctionDateRef} value={auctionDate} onChange={setAuctionDate} required={false} error={errors.auctionDate} />
               </Field>
             </>,
           )}
@@ -933,11 +957,16 @@ function AuctionPanel({
           <h4 style={{ margin: 0 }}>Complete auction</h4>
           {grid(
             <>
-              <Field id={auctionIdField} label="Auction ID" error={completeErrors.auctionId}>
-                <TextInput id={auctionIdField} inputRef={auctionIdRef} value={auctionId} onChange={setAuctionId} placeholder="UUID returned above" error={completeErrors.auctionId} />
-              </Field>
-              <Field id={versionField} label="Current version" error={completeErrors.completeVersion}>
-                <TextInput id={versionField} inputRef={versionRef} value={completeVersion} onChange={setCompleteVersion} inputMode="numeric" error={completeErrors.completeVersion} />
+              <Field id={auctionIdField} label="Open auction" error={completeErrors.auctionId}>
+                <SelectInput
+                  id={auctionIdField}
+                  selectRef={auctionIdRef}
+                  value={auctionId}
+                  onChange={setAuctionId}
+                  error={completeErrors.auctionId}
+                  options={openAuctions.map((a) => ({ value: a.id, label: auctionLabel(a) }))}
+                  emptyLabel={emptyText(data.failed.auctions, "No open auctions")}
+                />
               </Field>
               <Field id={bidField} label="Winning bid (₹)" error={completeErrors.highestBid}>
                 <TextInput id={bidField} inputRef={bidRef} value={highestBid} onChange={setHighestBid} inputMode="decimal" error={completeErrors.highestBid} />
@@ -980,8 +1009,8 @@ function AuctionPanel({
         errorMessage={dialogError}
         description={
           <>
-            Opens an auction for asset <strong className="mono">{assetId.slice(0, 8)}…</strong> with reserve value{" "}
-            <strong>{formatMoney(Number(rupeesToMinorString(reserveValue) ?? "0"))}</strong>.
+            Opens an auction for <strong>{selectedRec ? assetLabel(selectedRec.assetId) : "—"}</strong> with reserve value{" "}
+            <strong>{formatMoney(rupeesToMinorString(reserveValue))}</strong>.
           </>
         }
         onConfirm={() => void createAuction()}
@@ -997,11 +1026,11 @@ function AuctionPanel({
         errorMessage={completeDialogError}
         description={
           <>
-            Records auction <strong className="mono">{auctionId.slice(0, 8)}…</strong> as won by{" "}
-            <strong>{winnerName || "—"}</strong> for{" "}
-            <strong>{formatMoney(Number(rupeesToMinorString(highestBid) ?? "0"))}</strong>, with sale proceeds of{" "}
-            <strong>{formatMoney(Number(rupeesToMinorString(saleProceeds) ?? "0"))}</strong> posted to the register.
-            This is <strong>irreversible</strong> from this screen.
+            Records the auction for <strong>{selectedAuction ? assetLabel(selectedAuction.assetId) : "—"}</strong> (reserve{" "}
+            {formatMoney(selectedAuction?.reserveValueMinor)}) as won by <strong>{winnerName || "—"}</strong> for{" "}
+            <strong>{formatMoney(rupeesToMinorString(highestBid))}</strong>, with sale proceeds of{" "}
+            <strong>{formatMoney(rupeesToMinorString(saleProceeds))}</strong> posted to Finance. The asset is retired. This
+            is <strong>irreversible</strong> from this screen.
           </>
         }
         onConfirm={() => void completeAuction()}
@@ -1013,34 +1042,23 @@ function AuctionPanel({
 
 // ── orchestrator ───────────────────────────────────────────────────────
 
-export function CondemnationWorkflow() {
-  const [assetId, setAssetId] = useState("");
-  const [surveyId, setSurveyId] = useState("");
-  const [recommendationId, setRecommendationId] = useState("");
+export function CondemnationWorkflow({ data = EMPTY }: { data?: CondemnationData }) {
+  const router = useRouter();
+  // Re-read the server lists after each accepted command so the next step's
+  // picker shows the record once the consumer has applied it.
+  const refresh = () => router.refresh();
+  const anyFailed = Object.values(data.failed).some(Boolean);
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-      <SurveyPanel
-        assetId={assetId}
-        setAssetId={setAssetId}
-        onSurveyCreated={(id, createdAssetId) => {
-          setSurveyId(id);
-          setAssetId(createdAssetId);
-        }}
-      />
-      <RecommendationPanel
-        surveyId={surveyId}
-        setSurveyId={setSurveyId}
-        assetId={assetId}
-        setAssetId={setAssetId}
-        onRecommendationCreated={setRecommendationId}
-      />
-      <AuctionPanel
-        assetId={assetId}
-        setAssetId={setAssetId}
-        recommendationId={recommendationId}
-        setRecommendationId={setRecommendationId}
-      />
+      {anyFailed ? (
+        <p role="alert" className="pill bad" style={{ width: "fit-content", margin: 0 }}>
+          Some condemnation records couldn&apos;t be loaded, so a picker may be incomplete. Refresh to retry.
+        </p>
+      ) : null}
+      <SurveyPanel data={data} onDone={refresh} />
+      <RecommendationPanel data={data} onDone={refresh} />
+      <AuctionPanel data={data} onDone={refresh} />
     </div>
   );
 }

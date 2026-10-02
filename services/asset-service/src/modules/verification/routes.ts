@@ -16,10 +16,15 @@ export async function verificationRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/verifications", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
-    const body = z.object({ verificationDate: z.string(), notes: z.string().optional() }).parse(req.body);
+    const body = z.object({
+      verificationDate: z.string(),
+      notes: z.string().optional(),
+      location: z.string().trim().min(1).max(256).optional(),
+    }).parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createVerification(ctx, {
       verificationDate: body.verificationDate,
       ...(body.notes !== undefined ? { notes: body.notes } : {}),
+      ...(body.location !== undefined ? { location: body.location } : {}),
     }));
   });
 

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, PageHeader, DataTable, EmptyState, ErrorState } from "../../../_components/ds";
+import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
+import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
@@ -21,8 +22,7 @@ export default function LeasesPage() {
   const [rows, setRows] = useState<Lease[]>([]);
   const [form, setForm] = useState({ leaseNo: "", lessorName: "", rouCost: "", liability: "", leaseStart: "", leaseEnd: "" });
   const [message, setMessage] = useState("");
-  const [isError, setIsError] = useState(false);
-  const [busy, setBusy] = useState(false);
+  const [formError, setFormError] = useState("");
   const [loaded, setLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
@@ -53,34 +53,53 @@ export default function LeasesPage() {
     return () => controller.abort()
   }, []);
 
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setMessage("");
-    setIsError(false);
-    try {
+  // Money: rupees -> paise strings via rupeesToMinorString (never Number*100).
+  const safe = (m: string | null) => (m !== null && Number.isSafeInteger(Number(m)) ? m : null);
+  const rouMinor = safe(rupeesToMinorString(form.rouCost));
+  const liabilityMinor = safe(rupeesToMinorString(form.liability));
+
+  function validate(): string {
+    if (!form.leaseNo.trim()) return "Enter the lease number.";
+    if (!form.lessorName.trim()) return "Enter the lessor.";
+    if (rouMinor === null) return "Enter a valid ROU cost in rupees (greater than zero, up to 2 decimals).";
+    if (liabilityMinor === null) return "Enter a valid lease liability in rupees (greater than zero, up to 2 decimals).";
+    if (!form.leaseStart || !form.leaseEnd) return "Enter the lease start and end dates.";
+    if (form.leaseEnd <= form.leaseStart) return "Lease end must be after the lease start.";
+    return "";
+  }
+
+  // GAP-ASSETS-LEASES-01: registering a lease creates an ROU asset and a lease
+  // liability, so it is confirmed first; the POST happens only on Confirm.
+  const register = useConfirmAction({
+    onConfirm: async () => {
+      if (rouMinor === null || liabilityMinor === null) throw new Error("Complete the form first.");
+      setMessage("");
+      const leaseNo = form.leaseNo.trim();
       const res = await fetch("/api/proxy/v1/asset/leases", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          leaseNo: form.leaseNo,
-          lessorName: form.lessorName,
-          rouCostMinor: Math.round(Number(form.rouCost || "0") * 100),
-          liabilityMinor: Math.round(Number(form.liability || "0") * 100),
+          leaseNo,
+          lessorName: form.lessorName.trim(),
+          rouCostMinor: Number(rouMinor),
+          liabilityMinor: Number(liabilityMinor),
           leaseStart: form.leaseStart,
           leaseEnd: form.leaseEnd,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
-      setMessage("IFRS 16 lease registered with ROU asset.");
+      setMessage(`Lease ${leaseNo} submitted. Its ROU asset ROU/${leaseNo} and lease liability will appear shortly.`);
       setForm({ leaseNo: "", lessorName: "", rouCost: "", liability: "", leaseStart: "", leaseEnd: "" });
       await load();
-    } catch (e) {
-      setIsError(true);
-      setMessage(e instanceof Error ? e.message : "Register failed");
-    } finally {
-      setBusy(false);
-    }
+    },
+  });
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    const err = validate();
+    setFormError(err);
+    if (err) return;
+    register.trigger();
   }
 
   const inputStyle = { padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
@@ -135,7 +154,8 @@ export default function LeasesPage() {
               <input id="lease-end" required type="date" value={form.leaseEnd} onChange={(e) => setForm({ ...form, leaseEnd: e.target.value })} style={inputStyle} />
             </div>
           </div>
-          <Button type="submit" disabled={busy} style={{ marginTop: 12 }}>{busy ? "Registering…" : "Register lease"}</Button>
+          {formError ? <p role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "8px 0 0" }}>{formError}</p> : null}
+          <Button type="submit" disabled={register.busy} style={{ marginTop: 12 }}>{register.busy ? "Registering…" : "Register lease"}</Button>
         </form>
       </div>
       <div className="card">
@@ -158,6 +178,22 @@ export default function LeasesPage() {
           />
         )}
       </div>
+      <ConfirmDialog
+        open={register.open}
+        title="Register this IFRS 16 lease?"
+        description={
+          <>
+            Lease <b>{form.leaseNo.trim()}</b> with <b>{form.lessorName.trim()}</b>, {formatIndianDate(form.leaseStart)} to{" "}
+            {formatIndianDate(form.leaseEnd)}: creates a right-of-use asset of <b>{formatMoney(rouMinor)}</b> and a lease
+            liability of <b>{formatMoney(liabilityMinor)}</b>.
+          </>
+        }
+        confirmLabel="Register lease"
+        busy={register.busy}
+        errorMessage={register.error}
+        onConfirm={register.confirm}
+        onCancel={register.cancel}
+      />
     </>
   );
 }

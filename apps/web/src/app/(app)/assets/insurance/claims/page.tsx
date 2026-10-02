@@ -140,7 +140,7 @@ export default async function InsuranceClaimsPage({
         </StatGrid>
       )}
 
-      <ClaimForm policies={policies} preselectedPolicyId={preselectedPolicyId} />
+      <ClaimForm policies={policies} preselectedPolicyId={preselectedPolicyId} policiesError={policiesSource === "error"} />
 
       <Card title="Claims">
         {claimsSource === "error" && claims.length === 0 ? (

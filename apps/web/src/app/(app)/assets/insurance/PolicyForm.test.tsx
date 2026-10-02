@@ -41,9 +41,17 @@ describe("PolicyForm", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Create insurance policy" }));
 
+    // GAP-ASSETS-INSURANCE-01: confirm first, showing the amounts being sent.
+    await waitFor(() => expect(screen.getByText("Create this insurance policy?")).toBeInTheDocument());
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+    expect(screen.getByText("₹5,00,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹12,500.00")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Create policy" }));
+
     await waitFor(() => {
-      expect(screen.getByText(/Policy submitted/)).toBeInTheDocument();
+      expect(screen.getByText(/Policy POL-2026-001 submitted for/)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/policy-1/)).not.toBeInTheDocument();
     expect(refreshMock).toHaveBeenCalled();
 
     const call = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -81,10 +89,30 @@ describe("PolicyForm", () => {
     fireEvent.change(screen.getByLabelText(/^End Date/), { target: { value: "2027-03-31" } });
 
     fireEvent.click(screen.getByRole("button", { name: "Create insurance policy" }));
+    await waitFor(() => expect(screen.getByText("Create this insurance policy?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Create policy" }));
 
     await waitFor(() => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
+  });
+
+  it("Cancel closes the confirm dialog without posting and keeps the entered values", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<PolicyForm assets={assets} />);
+    fireEvent.change(screen.getByLabelText(/^Asset/), { target: { value: "a1" } });
+    fireEvent.change(screen.getByLabelText(/^Policy Number/), { target: { value: "POL-9" } });
+    fireEvent.change(screen.getByLabelText(/^Insurer/), { target: { value: "Insurer" } });
+    fireEvent.change(screen.getByLabelText(/^Sum Insured/), { target: { value: "1000" } });
+    fireEvent.change(screen.getByLabelText(/^Premium/), { target: { value: "10" } });
+    fireEvent.change(screen.getByLabelText(/^Start Date/), { target: { value: "2026-04-01" } });
+    fireEvent.change(screen.getByLabelText(/^End Date/), { target: { value: "2027-03-31" } });
+    fireEvent.click(screen.getByRole("button", { name: "Create insurance policy" }));
+    await waitFor(() => expect(screen.getByText("Create this insurance policy?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    await waitFor(() => expect(screen.queryByText("Create this insurance policy?")).not.toBeInTheDocument());
+    expect(fetchSpy).not.toHaveBeenCalled();
+    expect(screen.getByLabelText(/^Policy Number/)).toHaveValue("POL-9");
   });
 });
