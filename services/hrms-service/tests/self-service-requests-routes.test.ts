@@ -20,16 +20,37 @@ const HR_ADMIN = "aaaaaaaa-9999-4000-8000-000000000009";
 
 const H = vi.hoisted(() => ({
   selectFrom: vi.fn(),
+  selectEmployees: vi.fn(),
   update: vi.fn(),
   insert: vi.fn(),
   execute: vi.fn(),
 }));
 
-vi.mock("../src/shared/db.js", () => {
+// Since #1649 (GAP-HR-SF-10) the create guard (assertSelfOrHr), the
+// self-approval guard (isSelfApproval) and, since #1651/#1739, the manager
+// reporting-line guard (assertManagerOwnsReport) all resolve the caller's JWT
+// subject to their linked hrms_employees row through resolveEmployeeForActor
+// (employee/actor-link.ts). A caller with no linked row is denied by design,
+// so this fixture links every test actor to an employee row whose id equals
+// the actor id. HR_ADMIN is deliberately left unlinked: HR bypasses these
+// guards by role, not by employee link.
+const LINKED_ACTORS = vi.hoisted(() => new Set([
+  "eeeeeeee-2222-4000-8000-000000000001", // REQUESTER
+  "eeeeeeee-2222-4000-8000-000000000002", // OTHER_EMP
+]));
+vi.mock("../src/modules/employee/actor-link.js", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../src/modules/employee/actor-link.js")>()),
+  resolveEmployeeForActor: async (tenantId: string, actorId: string) =>
+    LINKED_ACTORS.has(actorId) ? { id: actorId, tenantId, userRef: actorId } : undefined,
+}));
+
+vi.mock("../src/shared/db.js", async () => {
+  const { getTableName, is, Table } = await import("drizzle-orm");
+  const isEmployeesTable = (t: unknown): boolean => is(t, Table) && getTableName(t as Table) === "hrms_employees";
   const createSelectChain = (...args: unknown[]) => ({
     from: (t: unknown) => ({
       where: (...w: unknown[]) => {
-        const result = H.selectFrom(...args, ...w);
+        const result = isEmployeesTable(t) ? H.selectEmployees(...args, ...w) : H.selectFrom(...args, ...w);
         const limitObj = {
           offset: (n: unknown) => H.selectFrom(...args, ...w),
           then: (resolve: (v: unknown) => void, reject?: (e: unknown) => void) => Promise.resolve(result).then(resolve, reject),
@@ -76,6 +97,9 @@ const auth = (sub: string, roles: string[]) =>
 beforeEach(() => {
   vi.clearAllMocks();
   H.selectFrom.mockResolvedValue([]);
+  // Reporting line: REQUESTER reports to whichever manager is asking, so
+  // OTHER_EMP-as-manager has REQUESTER in scope (self + direct reports).
+  H.selectEmployees.mockResolvedValue([{ id: REQUESTER }]);
   H.insert.mockResolvedValue(undefined);
   H.update.mockResolvedValue(undefined);
   H.execute.mockResolvedValue([]);
@@ -188,6 +212,10 @@ describe("PATCH /v1/hrms/wfh-requests/:id/approve|reject", () => {
       headers: auth(REQUESTER, ["manager"]),
     });
     expect(r.statusCode).toBe(403);
+    // Denied by the self-approval guard itself (FORBIDDEN), not incidentally
+    // by the reporting-line guard (NOT_YOUR_REPORT, "...your own direct reports").
+    expect(r.json().code).toBe("FORBIDDEN");
+    expect(r.json().message).toMatch(/cannot approve or reject your own/);
     await app.close();
   });
 
@@ -315,6 +343,10 @@ describe("PATCH /v1/hrms/shift-requests/:id/approve|reject", () => {
       headers: auth(REQUESTER, ["manager"]),
     });
     expect(r.statusCode).toBe(403);
+    // Denied by the self-approval guard itself (FORBIDDEN), not incidentally
+    // by the reporting-line guard (NOT_YOUR_REPORT, "...your own direct reports").
+    expect(r.json().code).toBe("FORBIDDEN");
+    expect(r.json().message).toMatch(/cannot approve or reject your own/);
     await app.close();
   });
 

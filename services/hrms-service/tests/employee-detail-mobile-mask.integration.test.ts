@@ -27,12 +27,21 @@ const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
 const RAW_MOBILE = "9876543210";
 
-function tokenFor(roles: string[]): string {
-  return signToken({ sub: randomUUID(), tid: TENANT, roles, sid: "s1" }, SECRET);
+function tokenFor(roles: string[], sub: string = randomUUID()): string {
+  return signToken({ sub, tid: TENANT, roles, sid: "s1" }, SECRET);
 }
 
-async function seedEmployeeWithMobile(): Promise<string> {
+/**
+ * Seeds the target employee. With `managerSub`, also seeds that actor's own
+ * employee row (linked through user_ref, the actor-link resolveEmployeeForActor
+ * uses) as the target's reporting manager. Since #1497 a manager-only caller
+ * may read GET /employees/:id only for a DIRECT REPORT (403 otherwise, and
+ * 403 when the caller has no linked employee row at all), so the manager case
+ * of this masking test needs that real reporting line.
+ */
+async function seedEmployeeWithMobile(managerSub?: string): Promise<string> {
   const employeeId = randomUUID();
+  const managerEmployeeId = managerSub ? randomUUID() : undefined;
   const deptId = randomUUID();
   const designationId = randomUUID();
   const actor = randomUUID();
@@ -46,10 +55,19 @@ async function seedEmployeeWithMobile(): Promise<string> {
         id: designationId, tenantId: TENANT, code: `MPM-DESIG-${employeeId.slice(0, 8)}`, name: "Mobile Mask Test Officer",
         level: 5, payGrade: "Grade-A", createdBy: actor, updatedBy: actor, version: 1,
       });
+      if (managerEmployeeId) {
+        await tx.insert(hrmsEmployees).values({
+          id: managerEmployeeId, tenantId: TENANT, employeeNo: `MPM-MGR-${managerEmployeeId.slice(0, 8)}`,
+          fullName: "Mobile Mask Test Manager", departmentId: deptId, designationId,
+          dateOfJoining: "2015-01-01", employeeType: "permanent", status: "confirmed",
+          userRef: managerSub, createdBy: actor, updatedBy: actor, version: 1,
+        });
+      }
       await tx.insert(hrmsEmployees).values({
         id: employeeId, tenantId: TENANT, employeeNo: `MPM-${employeeId.slice(0, 8)}`,
         fullName: "Mobile Mask Test Employee", departmentId: deptId, designationId,
         dateOfJoining: "2020-01-01", employeeType: "permanent", status: "confirmed",
+        managerId: managerEmployeeId ?? null,
         mobile: RAW_MOBILE, createdBy: actor, updatedBy: actor, version: 1,
       });
     }),
@@ -75,12 +93,14 @@ describe("GET /v1/hrms/employees/:id — mobile number masking (SECURITY)", () =
   const readerRoles = ["hr_admin", "hr_officer", "super_admin", "manager"];
 
   it.each(readerRoles)("masks the mobile number for READER role '%s' -- never returns it in full", async (role) => {
-    const employeeId = await seedEmployeeWithMobile();
+    // A manager only sees direct reports (#1497), so read as the target's manager.
+    const sub = randomUUID();
+    const employeeId = await seedEmployeeWithMobile(role === "manager" ? sub : undefined);
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
       url: `/v1/hrms/employees/${employeeId}`,
-      headers: { authorization: `Bearer ${tokenFor([role])}` },
+      headers: { authorization: `Bearer ${tokenFor([role], sub)}` },
     });
     await app.close();
 

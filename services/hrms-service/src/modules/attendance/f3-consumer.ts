@@ -8,6 +8,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests } from "./schema.js";
 import * as repo from "./repo.js";
+import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const log = pino({ name: "hrms-f3-attendance" });
 
@@ -82,6 +83,20 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
     const body = p.body ?? {};
     const params = p.params ?? {};
     const id = (p.id as string) || (params.id as string);
+    // approved_by on hrms_wfh_requests / hrms_shift_change_requests REFERENCES
+    // employee.hrms_employees(id) (migration 0107_wfh_shift_tables.sql), but
+    // msg.actorId is the approver's JWT subject (login id), a separate id
+    // space linked only via hrms_employees.user_ref (#1649). Writing the raw
+    // actorId there violated the FK whenever the two differ, which is always
+    // in a real deployment: the consumer threw, the approve was silently
+    // dropped and the request stayed 'pending' even though the route had
+    // answered 202. Resolve the approver's linked employee row the same way
+    // apar/f3-consumer.ts does. An approver with no linked row (e.g. an HR
+    // admin who is not on the employee roll) records approved_by = NULL; the
+    // actor is still captured in updated_by.
+    const approverEmployeeId = op === "attendance_routes__6" || op === "attendance_routes__9"
+      ? (await resolveEmployeeForActor(p.tenantId, msg.actorId))?.id ?? null
+      : null;
     let invalidateRegList = false;
     try {
       await db.transaction(async (tx) => {
@@ -206,7 +221,7 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
             // the regularisation cases above, not overtime's unguarded
             // update.
             const [updated] = await tx.update(hrmsWfhRequests)
-              .set({ status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
+              .set({ status: "approved", approvedBy: approverEmployeeId, approvedAt: new Date(),
                      updatedBy: msg.actorId, updatedAt: new Date() })
               .where(and(
                 eq(hrmsWfhRequests.id, reqId), eq(hrmsWfhRequests.tenantId, p.tenantId),
@@ -245,7 +260,7 @@ export function registerF3_attendance_Consumers(queue: Queue): void {
           case "attendance_routes__9": {
             const reqId = (params.id as string) || id;
             const [updated] = await tx.update(hrmsShiftChangeRequests)
-              .set({ status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
+              .set({ status: "approved", approvedBy: approverEmployeeId, approvedAt: new Date(),
                      updatedBy: msg.actorId, updatedAt: new Date() })
               .where(and(
                 eq(hrmsShiftChangeRequests.id, reqId), eq(hrmsShiftChangeRequests.tenantId, p.tenantId),

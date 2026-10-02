@@ -121,6 +121,9 @@ export const hrmsWfhRequests = attendanceSchema.table("hrms_wfh_requests", {
   toDate:          date("to_date").notNull(),
   reason:          text("reason"),
   status:          text("status").notNull().default("pending"),
+  // hrms_employees.id of the approver (FK, migration 0107), NOT the JWT sub;
+  // NULL when the approver has no linked employee row (e.g. HR admin). The
+  // acting login is in updated_by. See f3-consumer.ts approverEmployeeId.
   approvedBy:      uuid("approved_by"),
   approvedAt:      timestamp("approved_at", { withTimezone: true }),
   rejectionReason: text("rejection_reason"),
@@ -139,6 +142,9 @@ export const hrmsShiftChangeRequests = attendanceSchema.table("hrms_shift_change
   effectiveDate:   date("effective_date").notNull(),
   reason:          text("reason"),
   status:          text("status").notNull().default("pending"),
+  // hrms_employees.id of the approver (FK, migration 0107), NOT the JWT sub;
+  // NULL when the approver has no linked employee row (e.g. HR admin). The
+  // acting login is in updated_by. See f3-consumer.ts approverEmployeeId.
   approvedBy:      uuid("approved_by"),
   approvedAt:      timestamp("approved_at", { withTimezone: true }),
   rejectionReason: text("rejection_reason"),

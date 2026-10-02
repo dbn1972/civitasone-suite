@@ -56,6 +56,19 @@ function taxNew2025(taxableRupees: number): number {
 function annualTaxNewPaise(taxablePaise: bigint): bigint {
   return BigInt(taxNew2025(Number(taxablePaise) / 100)) * 100n;
 }
+// 7th CPC HRA, Dept. of Expenditure OM No. 2/5/2017-E.II(B) dated 7 Jul 2017
+// (independent copy of the RULE, not the engine): X/Y/Z cities get 24/16/8% of
+// basic, revised to 27/18/9% when DA crosses 25% and to 30/20/10% when DA
+// crosses 50%. "Crosses" is applied inclusively: DA became exactly 50% from
+// 1 Jan 2024 and HRA moved to 30/20/10% from that same date, so DA == 50% is
+// already the top slab. This oracle used to hard-code 27% at DA 50%, which is
+// the pre-#1536 50%/100% table and is wrong.
+function hraPctOracle(city: "X" | "Y" | "Z", daBps: bigint): bigint {
+  const slab = { X: [24n, 27n, 30n], Y: [16n, 18n, 20n], Z: [8n, 9n, 10n] }[city];
+  if (daBps >= 5000n) return slab[2];
+  if (daBps >= 2500n) return slab[1];
+  return slab[0];
+}
 // PF/EPS on basic+DA capped at 15,000 wage ceiling.
 function pfBlock(pensionBasePaise: bigint) {
   const cap = 1_500_000n;
@@ -99,7 +112,7 @@ function checkSlip(name: string, input: SlipInput, e: Expect) {
 describe("INDEPENDENT ORACLE vs computeSlip", () => {
   // ── Case 1: Standard employee ──
   it("Case 1 — standard employee (basic 50k, DA 50%, X, EPF, new)", () => {
-    const basic = 5_000_000n, da = 2_500_000n, hra = pctBasic(basic, 27n);
+    const basic = 5_000_000n, da = 2_500_000n, hra = pctBasic(basic, hraPctOracle("X", 5000n));
     const gross = basic + da + hra;
     const { pfEmployee, eps } = pfBlock(basic + da);
     const annualTaxable = gross * 12n - 7_500_000n; // new std ded 75k
@@ -111,7 +124,7 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
 
   // ── Case 2: Mid-month join (pro-rated basic 15/30) ──
   it("Case 2 — mid-month join (pro-rated basic 25k)", () => {
-    const basic = 2_500_000n, da = 1_250_000n, hra = pctBasic(basic, 27n);
+    const basic = 2_500_000n, da = 1_250_000n, hra = pctBasic(basic, hraPctOracle("X", 5000n));
     const gross = basic + da + hra;
     const { pfEmployee, eps } = pfBlock(basic + da);
     const annualTaxable = gross * 12n - 7_500_000n;
@@ -123,7 +136,7 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
 
   // ── Case 3: Mid-month exit (pro-rated basic 20k + LOP recovery, floor guarded) ──
   it("Case 3 — mid-month exit (pro-rated basic 20k, LOP 3k recovery, floor 0)", () => {
-    const basic = 2_000_000n, da = 1_000_000n, hra = pctBasic(basic, 27n);
+    const basic = 2_000_000n, da = 1_000_000n, hra = pctBasic(basic, hraPctOracle("X", 5000n));
     const gross = basic + da + hra;
     const { pfEmployee, eps } = pfBlock(basic + da);
     const lop = 300_000n; // recovery code
@@ -139,7 +152,7 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
 
   // ── Case 4: LOP month (full basic 50k, 5 days LOP) ──
   it("Case 4 — LOP month (basic 50k, LOP 5 days ≈ 12,500)", () => {
-    const basic = 5_000_000n, da = 2_500_000n, hra = pctBasic(basic, 27n);
+    const basic = 5_000_000n, da = 2_500_000n, hra = pctBasic(basic, hraPctOracle("X", 5000n));
     const gross = basic + da + hra;
     const { pfEmployee, eps } = pfBlock(basic + da);
     const lop = 1_250_000n;
@@ -154,7 +167,7 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
 
   // ── Case 5: Promotion-in-month (new basic 60k + promo arrear earning 5k) ──
   it("Case 5 — promotion in month (basic 60k + PROMO_ARREAR 5k)", () => {
-    const basic = 6_000_000n, da = 3_000_000n, hra = pctBasic(basic, 27n);
+    const basic = 6_000_000n, da = 3_000_000n, hra = pctBasic(basic, hraPctOracle("X", 5000n));
     const promo = 500_000n;
     const gross = basic + da + hra + promo;
     const { pfEmployee, eps } = pfBlock(basic + da);
@@ -169,7 +182,7 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
 
   // ── Case 6: Retrospective increment (arrears earning 20k, taxable) ──
   it("Case 6 — retrospective increment (basic 50k + ARREAR 20k)", () => {
-    const basic = 5_000_000n, da = 2_500_000n, hra = pctBasic(basic, 27n);
+    const basic = 5_000_000n, da = 2_500_000n, hra = pctBasic(basic, hraPctOracle("X", 5000n));
     const arrear = 2_000_000n;
     const gross = basic + da + hra + arrear;
     const { pfEmployee, eps } = pfBlock(basic + da);
@@ -184,7 +197,7 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
 
   // ── Case 7a: Negative-net guard (basic 10k, non-recovery attach 2L > gross) ──
   it("Case 7a — negative net guard (basic 10k, COURT_ATTACH 200k fixed)", () => {
-    const basic = 1_000_000n, da = 500_000n, hra = pctBasic(basic, 27n);
+    const basic = 1_000_000n, da = 500_000n, hra = pctBasic(basic, hraPctOracle("X", 5000n));
     const gross = basic + da + hra;
     const { pfEmployee, eps } = pfBlock(basic + da);
     const attach = 20_000_000n; // non-recovery fixed deduction
@@ -200,7 +213,7 @@ describe("INDEPENDENT ORACLE vs computeSlip", () => {
 
   // ── Case 7b: Protected-net floor caps LOAN_EMI recovery, carry-forward remainder ──
   it("Case 7b — protected-net floor caps recovery (basic 30k, EMI 40k, floor 25k)", () => {
-    const basic = 3_000_000n, da = 1_500_000n, hra = pctBasic(basic, 27n);
+    const basic = 3_000_000n, da = 1_500_000n, hra = pctBasic(basic, hraPctOracle("X", 5000n));
     const gross = basic + da + hra;
     const { pfEmployee, eps } = pfBlock(basic + da);
     const emi = 4_000_000n;      // recovery code LOAN_EMI
