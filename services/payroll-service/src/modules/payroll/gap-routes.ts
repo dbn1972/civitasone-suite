@@ -13,7 +13,7 @@ import { sql } from "drizzle-orm";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { scopeEmployeeId } from "../../shared/employee-scope.js";
+import { scopeEmployeeId, requireOwnEmployeeId, staffRolesOf } from "../../shared/employee-scope.js";
 import { scopedRead } from "../../shared/db.js";
 import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
@@ -24,6 +24,7 @@ import { isValidIanaTimeZone } from "./validators.js";
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 const ALL_ROLES = [...READER_ROLES, "employee"];
+const ALL_STAFF_ROLES = staffRolesOf(ALL_ROLES);
 
 const offCycleProcessBody = z.object({ reason: z.string().trim().min(10).max(512) });
 
@@ -253,9 +254,16 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     // plan's components, each within its max, total within the plan budget,
     // same FY -- previously any planId/component/amount was accepted.
     await assertElectionWithinPlan(ctx, body);
+    // An election is always the caller's OWN. Stored against their hrms
+    // employee id (resolved here, before enqueueing, so the consumer needs no
+    // HRMS) -- not ctx.actorId, a different id space -- so any future
+    // application or lookup by employee id matches it (payroll runs do not
+    // apply flex elections today). Fails closed: 502 HRMS down, 403 unlinked.
+    const employeeId = await requireOwnEmployeeId(ctx);
     const totalElectedMinor = body.elections.reduce((s, e) => s + e.electedMinor, 0);
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertFlexElection(ctx, {
       ...body,
+      employeeId,
       totalElectedMinor,
     }));
   });
@@ -281,11 +289,15 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/flex-benefits/my-elections", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ALL_ROLES);
+    // Keyed by the caller's hrms employee id, matching the write above (rows
+    // written before that fix carried the login user id; see
+    // flex-election-backfill.ts for the one-off repair).
+    const employeeId = await requireOwnEmployeeId(ctx);
     const rows = (await scopedRead((tx) => tx.execute(sql`
       SELECT e.id, e.plan_id, e.fy, e.elections, e.total_elected_minor, e.status, p.name AS plan_name
       FROM payroll.flex_benefit_elections e
       JOIN payroll.flex_benefit_plans p ON p.id = e.plan_id
-      WHERE e.tenant_id = ${ctx.tenantId}::uuid AND e.employee_id = ${ctx.actorId}::uuid
+      WHERE e.tenant_id = ${ctx.tenantId}::uuid AND e.employee_id = ${employeeId}::uuid
       ORDER BY e.fy DESC LIMIT 10
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
@@ -357,8 +369,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     // tax-optimization advice — without this, any employee could pass a
     // co-worker's UUID as employeeId and read their 80C/80D declaration
     // usage and remaining headroom (cross-employee financial disclosure).
-    // Staff = ALL_ROLES minus employee = READER_ROLES.
-    const employeeId = await scopeEmployeeId(ctx, q.employeeId, READER_ROLES);
+    const employeeId = await scopeEmployeeId(ctx, q.employeeId, ALL_STAFF_ROLES);
 
     // Fetch current declarations
     const now = new Date();
@@ -432,7 +443,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     // comment below), so it isn't independently exploitable today — fixed
     // for consistency so it doesn't become a silent gap the moment real
     // computation is wired in here.
-    const employeeId = await scopeEmployeeId(ctx, q.employeeId, READER_ROLES);
+    const employeeId = await scopeEmployeeId(ctx, q.employeeId, ALL_STAFF_ROLES);
     // Simplified comparison — in production this calls the full tax engine
     return reply.send({
       employeeId,

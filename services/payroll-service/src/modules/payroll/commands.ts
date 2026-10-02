@@ -430,6 +430,8 @@ export async function createFlexPlan(ctx: RequestContext, body: CreateFlexPlanIn
 }
 
 export type UpsertFlexElectionInput = {
+  /** The elector's hrms employee id, resolved by the route (never ctx.actorId). */
+  employeeId: string;
   planId: string; fy: string;
   elections: Array<{ component: string; electedMinor: number }>;
   totalElectedMinor: number;
@@ -438,7 +440,9 @@ export async function upsertFlexElection(ctx: RequestContext, body: UpsertFlexEl
   const id = randomUUID();
   await queue.publish(COMMANDS.flexElectionUpsert, {
     messageId: id, type: COMMANDS.flexElectionUpsert,
-    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    // 1.1: payload carries employeeId (the elector's hrms employee id). The
+    // consumer accepts a missing employeeId only from legacy 1.0 messages.
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.1",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };

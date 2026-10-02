@@ -2,11 +2,22 @@
  * World-class gap routes — route coverage tests for simulation, corrections,
  * off-cycle, pay-groups, flex benefits, costing, and tax optimization.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, vi, afterAll } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { sqlClient } from "../src/shared/db.js";
 import { randomUUID } from "node:crypto";
+
+// my-elections is keyed by the caller hrms employee id, resolved via hrms
+// (not running in this env): map this file ACTOR to an employee id.
+vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
+  return {
+    ...actual,
+    resolveActorEmployeeId: vi.fn(async (_t: string, actorId: string) =>
+      actorId === "00000000-0001-4000-8000-000000000001" ? "00000000-0001-4000-8000-0000000000e1" : null),
+  };
+});
 
 const SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 const TENANT = "aaaaaaaa-5555-4000-8000-000000000099";

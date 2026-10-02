@@ -212,7 +212,7 @@ describe("FP T1-03 flex-benefit election CQRS", () => {
     const { upsertFlexElection } = await import("../src/modules/payroll/commands.js");
     const { COMMANDS } = await import("../src/topics.js");
     await upsertFlexElection(baseCtx, {
-      planId: PLAN_ID, fy: "2026-27",
+      employeeId: EMPLOYEE, planId: PLAN_ID, fy: "2026-27",
       elections: [{ component: "MEAL", electedMinor: 100000 }, { component: "FUEL", electedMinor: 200000 }],
       totalElectedMinor: 300000,
     });
@@ -220,6 +220,7 @@ describe("FP T1-03 flex-benefit election CQRS", () => {
     const [topic, msg] = mockPublish.mock.calls[0];
     expect(topic).toBe(COMMANDS.flexElectionUpsert);
     expect(msg.payload.totalElectedMinor).toBe(300000);
+    expect(msg.payload.employeeId).toBe(EMPLOYEE);
   });
 });
 
