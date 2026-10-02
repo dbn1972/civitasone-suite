@@ -7,7 +7,11 @@ export type Accepted = { id: string; status: string; correlationId: string };
 
 export interface UpsertDscBody {
   storageRef: string;
-  passphrase: string;
+  /**
+   * SEALED passphrase envelope (secret.ts sealDscPassphrase). The plaintext
+   * passphrase must never be placed on the queue.
+   */
+  passphraseSealed: string;
   subjectCn: string;
   serialNumber: string;
   notBefore: string;

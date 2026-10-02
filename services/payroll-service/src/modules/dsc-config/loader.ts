@@ -14,7 +14,11 @@ import { CircuitBreaker } from "@civitasone/circuit-breaker";
 import { getObject } from "@civitasone/storage";
 import { validateDscCertificate, type CertificateInfo } from "@civitasone/render";
 import { queue } from "../../shared/infra.js";
+import { pino } from "pino";
 import * as repo from "./repo.js";
+import { isSealed, isSealedP12, openDscPassphrase, openP12 } from "./secret.js";
+
+const log = pino({ name: "payroll-dsc-loader" });
 
 const EXPIRY_WARNING_DAYS = 30;
 const DSC_EXPIRY_TOPIC = "payroll.dsc.expiry_warning";
@@ -40,9 +44,28 @@ export async function loadDsc(tenantId: string): Promise<DscMaterial | null> {
   const row = await repo.findByTenantId(tenantId);
 
   if (row) {
-    // Fetch P12 from S3 with circuit breaker
-    const p12Buffer = await s3Breaker.call(() => getObject(row.storageRef));
-    const passphrase = row.passphrase; // decrypted transparently by encryptedText
+    // Fetch (sealed) P12 from S3 with circuit breaker
+    const blob = await s3Breaker.call(() => getObject(row.storageRef));
+
+    // Rollout visibility only — never the value itself. Once the backfill
+    // reports remainingUnsealed: 0, set DSC_ALLOW_LEGACY_UNSEALED=false so a
+    // plaintext secret is refused instead of used.
+    if (!isSealed(row.passphraseSealed) || !isSealedP12(blob)) {
+      if (process.env.DSC_ALLOW_LEGACY_UNSEALED === "false") {
+        throw new Error(
+          "legacy unsealed DSC secret refused (DSC_ALLOW_LEGACY_UNSEALED=false); run scripts/backfill-dsc-secrets.mjs or re-upload the DSC",
+        );
+      }
+      log.warn(
+        { tenantId, passphraseSealed: isSealed(row.passphraseSealed), p12Sealed: isSealedP12(blob) },
+        "legacy unsealed DSC secret in use; run scripts/backfill-dsc-secrets.mjs",
+      );
+    }
+
+    // Decrypt only now, at the moment of use (signing). Throws
+    // PiiDecryptError (no secret in the message) on a missing/wrong key.
+    const p12Buffer = openP12(blob);
+    const passphrase = openDscPassphrase(row.passphraseSealed);
 
     // Validate certificate
     const certInfo = validateDscCertificate(p12Buffer, passphrase);

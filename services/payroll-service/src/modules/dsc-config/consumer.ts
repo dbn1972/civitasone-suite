@@ -5,11 +5,11 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { dscConfig } from "./schema.js";
+import { dscConfig, DSC_CACHE_RESOURCE as CACHE_RESOURCE } from "./schema.js";
+import { isSealed, sealDscPassphrase } from "./secret.js";
 
 const log = pino({ name: "payroll-dsc-config-consumer" });
 const AUDIT = "audit.event.record";
-const CACHE_RESOURCE = "dsc_config";
 
 export function registerDscConfigConsumers(queue: Queue): void {
   queue.subscribe(COMMANDS.dscConfigUpsert, async (msg) => {
@@ -17,7 +17,14 @@ export function registerDscConfigConsumers(queue: Queue): void {
       id: string;
       tenantId: string;
       storageRef: string;
-      passphrase: string;
+      /** Sealed passphrase envelope (current producers). */
+      passphraseSealed?: string;
+      /**
+       * LEGACY: plaintext passphrase from a message published by a pre-fix
+       * route instance and still in flight during rollout. Sealed below
+       * before it touches the DB; never logged.
+       */
+      passphrase?: string;
       subjectCn: string;
       serialNumber: string;
       notBefore: string;
@@ -27,12 +34,21 @@ export function registerDscConfigConsumers(queue: Queue): void {
     };
 
     try {
+      // Only ciphertext reaches the DB. A legacy in-flight plaintext message
+      // is sealed here; a message with neither field is malformed (drop to
+      // DLQ via throw — the error text never contains secret material).
+      const raw = p.passphraseSealed ?? p.passphrase;
+      if (typeof raw !== "string" || raw.length === 0) {
+        throw new Error("dscConfigUpsert payload missing passphraseSealed");
+      }
+      const passphraseSealed = isSealed(raw) ? raw : sealDscPassphrase(raw);
+
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         await tx.insert(dscConfig).values({
           tenantId: p.tenantId,
           storageRef: p.storageRef,
-          passphrase: p.passphrase,
+          passphraseSealed,
           subjectCn: p.subjectCn,
           serialNumber: p.serialNumber,
           notBefore: new Date(p.notBefore),
@@ -46,7 +62,7 @@ export function registerDscConfigConsumers(queue: Queue): void {
           target: dscConfig.tenantId,
           set: {
             storageRef: p.storageRef,
-            passphrase: p.passphrase,
+            passphraseSealed,
             subjectCn: p.subjectCn,
             serialNumber: p.serialNumber,
             notBefore: new Date(p.notBefore),
