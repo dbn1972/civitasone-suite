@@ -1,4 +1,4 @@
-import { eq, and, SQL, sql } from "drizzle-orm";
+import { eq, and, asc, SQL, sql } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { assetCategories, assetAssets, type CategoryInsert, type CategoryRow, type AssetInsert, type AssetRow } from "./schema.js";
 
@@ -52,6 +52,9 @@ export async function findAssetsByTenant(tenantId: string, opts?: { category?: s
   // read — a bare db.select() runs with no RLS GUC set.
   return scopedRead((tx) => tx.select().from(assetAssets)
     .where(and(...conditions))
+    // GAP-ASSETS-FIXED-ASSETS-06: a stable order, otherwise limit/offset paging
+    // can repeat or skip rows between pages.
+    .orderBy(asc(assetAssets.code), asc(assetAssets.id))
     .limit(opts?.limit ?? 50)
     .offset(opts?.offset ?? 0));
 }

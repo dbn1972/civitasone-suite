@@ -303,6 +303,17 @@ export function registerF3EnterpriseConsumers(rawQ: Queue): void {
           case "bulk_import": {
             const rows = p.rows as Array<Record<string, unknown>>;
             await repo.bulkInsertAssets(tx, rows as never);
+            // GAP-ASSETS-BULK-IMPORT-04: one audit event per batch (actor,
+            // row count, reason), in the same transaction as the insert.
+            await enqueue(tx, {
+              topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "asset", action: "bulk_import", resourceType: "asset_batch",
+                resourceId: p.id as string, outcome: "success",
+                count: rows.length, reason: (p.reason as string | undefined) ?? null,
+              },
+            });
             break;
           }
         }

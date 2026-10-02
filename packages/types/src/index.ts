@@ -1707,8 +1707,9 @@ export type AssetDashboard = {
   underMaintenance: number;
   dueForDisposal: number;
   taggedAssets?: number;
-  netBlock: number;
-  recentGrnAssets?: Array<{ id: string; code: string; name: string; acquisitionDate: string; acquisitionCost: number }>;
+  /** Paise as a digit string (GAP-ASSETS-DASHBOARD-03); null when the payload value is malformed. */
+  netBlock: string | null;
+  recentGrnAssets?: Array<{ id: string; code: string; name: string; acquisitionDate: string; acquisitionCost: string | null }>;
 };
 
 export type AssetSummary = {
@@ -1723,7 +1724,9 @@ export type AssetSummary = {
   location?: string;
   assignedTo?: string;
   department?: string;
-  status: "active" | "in_use" | "maintenance" | "disposed" | "condemned";
+  status: "active" | "in_use" | "maintenance" | "disposed" | "condemned" | "written_off";
+  /** Barcode/QR tag when the asset has been tagged (GAP-ASSETS-FIXED-ASSETS-03). */
+  barcode?: string;
   condition?: "excellent" | "good" | "fair" | "poor";
 };
 

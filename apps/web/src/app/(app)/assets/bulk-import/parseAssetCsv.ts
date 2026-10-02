@@ -28,7 +28,18 @@ const rowSchema = z.object({
 
 export type AssetCsvRow = z.infer<typeof rowSchema>;
 export type AssetCsvError = { line: number; message: string };
-export type AssetCsvResult = { rows: AssetCsvRow[]; errors: AssetCsvError[] };
+/** One parsed line for the pre-import preview: what was read, and why it is (not) importable. */
+export type AssetCsvPreviewRow = {
+  line: number;
+  name: string;
+  code: string;
+  assetType: string;
+  cost: string;
+  orgUnit: string;
+  /** null = the row is valid; otherwise the reason it blocks the import. */
+  error: string | null;
+};
+export type AssetCsvResult = { rows: AssetCsvRow[]; errors: AssetCsvError[]; preview: AssetCsvPreviewRow[] };
 
 /** Split CSV text into records of fields, tracking each record's starting line (1-based). */
 export function splitCsv(text: string): Array<{ line: number; fields: string[] }> {
@@ -83,34 +94,53 @@ export function parseAssetCsv(text: string): AssetCsvResult {
   const records = splitCsv(text);
   const rows: AssetCsvRow[] = [];
   const errors: AssetCsvError[] = [];
+  const preview: AssetCsvPreviewRow[] = [];
+  // GAP-ASSETS-BULK-IMPORT-03: the register enforces unique codes (per tenant,
+  // case-insensitive here to match how a clerk reads them) -- a repeat inside
+  // the file is flagged on the later line, naming the first.
+  const firstLineByCode = new Map<string, number>();
   const first = records[0];
   const body = first && first.fields[0]?.toLowerCase() === "name" ? records.slice(1) : records;
 
+  const fail = (line: number, p: Omit<AssetCsvPreviewRow, "line" | "error">, message: string) => {
+    errors.push({ line, message });
+    preview.push({ line, ...p, error: message });
+  };
+
   for (const { line, fields } of body) {
+    const [name = "", code = "", assetType = "", cost = "", orgUnit = ""] = fields;
+    const view = { name, code, assetType: (assetType || "fixed").toLowerCase(), cost, orgUnit };
     if (fields.length > 5) {
-      errors.push({ line, message: `expected 5 columns (name,code,assetType,cost,orgUnit), found ${fields.length} — quote values that contain commas` });
+      fail(line, view, `expected 5 columns (name,code,assetType,cost,orgUnit), found ${fields.length} — quote values that contain commas`);
       continue;
     }
-    const [name = "", code = "", assetType = "", cost = "", orgUnit = ""] = fields;
     const minor = costToMinor(cost);
     if (minor === null) {
-      errors.push({ line, message: `cost "${cost}" is not a valid rupee amount` });
+      fail(line, view, `cost "${cost}" is not a valid rupee amount`);
       continue;
     }
     const parsed = rowSchema.safeParse({
       name,
       code,
-      assetType: (assetType || "fixed").toLowerCase(),
+      assetType: view.assetType,
       acquisitionCostMinor: Number(minor),
       orgUnit: orgUnit || undefined,
     });
     if (!parsed.success) {
-      errors.push({ line, message: parsed.error.issues.map((i) => i.message).join("; ") });
+      fail(line, view, parsed.error.issues.map((i) => i.message).join("; "));
       continue;
     }
+    const key = parsed.data.code.toLowerCase();
+    const seenAt = firstLineByCode.get(key);
+    if (seenAt !== undefined) {
+      fail(line, view, `code "${parsed.data.code}" is already used on line ${seenAt}`);
+      continue;
+    }
+    firstLineByCode.set(key, line);
     rows.push(parsed.data);
+    preview.push({ line, ...view, error: null });
   }
-  return { rows, errors };
+  return { rows, errors, preview };
 }
 
 /**

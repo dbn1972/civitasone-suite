@@ -71,6 +71,21 @@ export function parseMinor(value: unknown): number | null {
   return null;
 }
 
+/**
+ * GAP-ASSETS-DASHBOARD-03: a paise amount as an exact digit string, or null
+ * when the value is missing/malformed -- never a silent 0. Accepts a digit
+ * string (bigint-safe, the wire format) or a safe-integer number (older
+ * payloads); a fractional or unsafe number is rejected rather than rounded.
+ */
+export function parseMinorString(value: unknown): string | null {
+  if (typeof value === "string") {
+    const t = value.trim();
+    return /^\d+$/.test(t) ? t.replace(/^0+(?=\d)/, "") : null;
+  }
+  if (typeof value === "number") return Number.isSafeInteger(value) && value >= 0 ? String(value) : null;
+  return null;
+}
+
 export function parsePaiseFromDisplay(display: string | null): number {
   if (!display) return 0;
   const digits = display.replace(/[^\d.]/g, "");
@@ -835,10 +850,13 @@ export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {
     const rawStatus = (toText(row.status) ?? "active").toLowerCase();
     const status: AssetSummary["status"] =
       rawStatus === "in_use" ? "in_use"
-        : rawStatus === "maintenance" ? "maintenance"
+        // asset-service stores "under_maintenance"; "maintenance" is kept for older payloads.
+        : rawStatus === "maintenance" || rawStatus === "under_maintenance" ? "maintenance"
           : rawStatus === "disposed" ? "disposed"
             : rawStatus === "condemned" ? "condemned"
-              : "active";
+              // GAP-ASSETS-DETAIL-05: a written-off asset must not be folded into "active".
+              : rawStatus === "written_off" ? "written_off"
+                : "active";
     mapped.push({
       id,
       assetCode,
@@ -850,6 +868,8 @@ export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {
       currentValue,
       location: toText(row.location) ?? undefined,
       status,
+      // GAP-ASSETS-FIXED-ASSETS-03: only a real barcode counts as tagged.
+      ...(toText(row.barcode) ? { barcode: toText(row.barcode) as string } : {}),
     });
   }
   return mapped;
@@ -863,7 +883,9 @@ export function mapAssetDetail(payload: unknown): AssetDetail | null {
   return {
     ...base,
     description: toText(payload.description) ?? toText(payload.notes) ?? undefined,
-    serialNo: toText(payload.serialNo) ?? toText(payload.barcode) ?? undefined,
+    // serialNo is the manufacturer serial only; the barcode is carried separately
+    // on `barcode` (GAP-ASSETS-DETAIL-08) so "Tagged" is not inferred from a serial.
+    serialNo: toText(payload.serialNo) ?? undefined,
     warrantyExpiry: toText(payload.warrantyExpiry)?.slice(0, 10) ?? undefined,
     depreciationSchedule: [],
     maintenanceHistory: [],

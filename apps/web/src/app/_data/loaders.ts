@@ -360,6 +360,7 @@ import { formatMoney } from "@/lib/formatters";
 import {
   mapAdminUserSummaries,
   mapAssetSummaries,
+  parseMinorString,
   mapAssetDetail,
   mapDepreciationEntries,
   mapAssetMaintenanceHistory,
@@ -4100,7 +4101,7 @@ const ASSET_DASHBOARD_EMPTY: AssetDashboard = {
   underMaintenance: 0,
   dueForDisposal: 0,
   taggedAssets: 0,
-  netBlock: 0,
+  netBlock: "0",
   recentGrnAssets: [],
 };
 
@@ -4114,7 +4115,7 @@ function mapAssetDashboard(payload: unknown): AssetDashboard | null {
     underMaintenance: typeof payload.underMaintenance === "number" ? payload.underMaintenance : 0,
     dueForDisposal: typeof payload.dueForDisposal === "number" ? payload.dueForDisposal : 0,
     taggedAssets: typeof payload.taggedAssets === "number" ? payload.taggedAssets : 0,
-    netBlock: typeof payload.netBlock === "number" ? payload.netBlock : 0,
+    netBlock: parseMinorString(payload.netBlock),
     recentGrnAssets: recentRaw.flatMap((r) => {
       if (!isRecord(r)) return [];
       const id = toText(r.id);
@@ -4124,7 +4125,7 @@ function mapAssetDashboard(payload: unknown): AssetDashboard | null {
         code: toText(r.code) ?? id,
         name: toText(r.name) ?? "Asset",
         acquisitionDate: toText(r.acquisitionDate) ?? "",
-        acquisitionCost: typeof r.acquisitionCost === "number" ? r.acquisitionCost : 0,
+        acquisitionCost: parseMinorString(r.acquisitionCost),
       }];
     }),
   };
@@ -4139,12 +4140,42 @@ export async function getAssetDashboard(): Promise<LoaderResult<AssetDashboard>>
   });
 }
 
-export async function getAssets(): Promise<LoaderResult<AssetSummary[]>> {
-  return fetchJson<unknown, AssetSummary[]>("/api/v1/asset/assets", [], {
-    revalidateSeconds: 120,
-    telemetryKey: "assets.list",
-    mapResponse: mapAssetSummaries,
-  });
+/**
+ * GAP-ASSETS-FIXED-ASSETS-02/06: asset-service pages /assets (default 50, max
+ * 200, ordered by code), so a single call silently truncates a larger
+ * register. Walk the pages until a short page; any failed page fails the load
+ * (a partial register would mislead the totals).
+ */
+const ASSET_PAGE_SIZE = 200;
+const ASSET_MAX_PAGES = 25;
+export type AssetRegisterResult = LoaderResult<AssetSummary[]> & {
+  /** True when the 5,000-row cap was hit: the register shows the first N rows only. */
+  truncated?: boolean;
+};
+async function fetchAllAssets(query: string, telemetryKey: string): Promise<AssetRegisterResult> {
+  const all: AssetSummary[] = [];
+  for (let page = 0; page < ASSET_MAX_PAGES; page++) {
+    const qs = `${query ? `${query}&` : ""}limit=${ASSET_PAGE_SIZE}&offset=${page * ASSET_PAGE_SIZE}`;
+    // The mapper drops malformed rows, so "short page" must be judged on the RAW
+    // row count -- otherwise one dropped row ends the walk early.
+    let rawCount = 0;
+    const res = await fetchJson<unknown, AssetSummary[]>(`/api/v1/asset/assets?${qs}`, [], {
+      revalidateSeconds: 120,
+      telemetryKey,
+      mapResponse: (payload) => {
+        rawCount = getArrayPayload(payload)?.length ?? 0;
+        return mapAssetSummaries(payload);
+      },
+    });
+    if (res.source === "error") return { ...res, data: [] };
+    all.push(...res.data);
+    if (rawCount < ASSET_PAGE_SIZE) return { data: all, source: "api" };
+  }
+  return { data: all, source: "api", truncated: true };
+}
+
+export async function getAssets(): Promise<AssetRegisterResult> {
+  return fetchAllAssets("", "assets.list");
 }
 
 /**
@@ -4188,12 +4219,8 @@ export async function getAssetById(id: string): Promise<AssetDetailLoaderResult>
   };
 }
 
-export async function getFixedAssets(): Promise<LoaderResult<AssetSummary[]>> {
-  return fetchJson<unknown, AssetSummary[]>("/api/v1/asset/assets?type=fixed", [], {
-    revalidateSeconds: 120,
-    telemetryKey: "assets.fixed",
-    mapResponse: mapAssetSummaries,
-  });
+export async function getFixedAssets(): Promise<AssetRegisterResult> {
+  return fetchAllAssets("type=fixed", "assets.fixed");
 }
 
 export async function getInfraAssets(): Promise<LoaderResult<AssetSummary[]>> {

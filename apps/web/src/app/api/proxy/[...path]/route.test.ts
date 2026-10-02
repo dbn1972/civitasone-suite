@@ -47,3 +47,27 @@ describe("BFF proxy response passthrough", () => {
     expect(await res.json()).toEqual({ ok: true });
   });
 });
+
+// GAP-ASSETS-BULK-IMPORT-04: the proxy allow-list forwards only x-idempotency-key,
+// so that is the header the bulk importer must send for asset-service to see it.
+describe("BFF proxy idempotency header allow-list", () => {
+  const fetchMock = vi.fn();
+  beforeEach(() => {
+    fetchMock.mockReset();
+    vi.stubGlobal("fetch", fetchMock);
+    fetchMock.mockResolvedValue(new Response("{}", { status: 202, headers: { "content-type": "application/json" } }));
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("forwards x-idempotency-key upstream and drops a bare idempotency-key", async () => {
+    await POST(
+      new Request("http://localhost/api/proxy/v1/asset/bulk/import", {
+        method: "POST", body: "{}", headers: { "x-idempotency-key": "k-12345678", "idempotency-key": "dropped-1234" },
+      }),
+      { params: { path: ["v1", "asset", "bulk", "import"] } },
+    );
+    const sent = fetchMock.mock.calls[0]![1].headers as Record<string, string>;
+    expect(sent["x-idempotency-key"]).toBe("k-12345678");
+    expect(sent["idempotency-key"]).toBeUndefined();
+  });
+});

@@ -1745,6 +1745,9 @@ export const ComplianceSummarySchema = z.object({
 export const ComplianceSummaryListSchema = z.array(ComplianceSummarySchema);
 
 // Asset schemas
+// GAP-ASSETS-DASHBOARD-03: paise on the wire are a digit string (a JS number
+// loses precision above 2^53); a plain number is still accepted for older payloads.
+const AssetMinorSchema = z.union([z.string().regex(/^\d+$/), z.number()]);
 export const AssetDashboardSchema = z.object({
   totalAssets: z.number().default(0),
   fixedAssets: z.number().default(0),
@@ -1752,13 +1755,13 @@ export const AssetDashboardSchema = z.object({
   underMaintenance: z.number().default(0),
   dueForDisposal: z.number().default(0),
   taggedAssets: z.number().default(0),
-  netBlock: z.number().default(0),
+  netBlock: AssetMinorSchema.default("0"),
   recentGrnAssets: z.array(z.object({
     id: z.string(),
     code: z.string(),
     name: z.string(),
     acquisitionDate: z.string(),
-    acquisitionCost: z.number(),
+    acquisitionCost: AssetMinorSchema,
   })).default([]),
 });
 

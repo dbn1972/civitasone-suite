@@ -18,12 +18,16 @@
 import { useId, useRef, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
-import { browserJson } from "@/lib/api/browserClient";
+import { condemnationCommand } from "./commandApi";
 import { rupeesToMinorString } from "@/lib/money";
-import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { formatMoney, formatIndianDate, todayIST } from "@/lib/formatters";
+import { EntityPicker } from "@/app/_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { checkAuctionCompletion, isRealCalendarDate } from "./condemnationRules";
 
-const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-const today = () => new Date().toISOString().slice(0, 10);
+// GAP-ASSETS-CONDEMNATION-07: "today" is the IST calendar day, not UTC (which is
+// still yesterday until 05:30 IST), and a date must be a real calendar day.
+const today = () => todayIST();
 
 type Accepted = { id: string; status: string; correlationId: string };
 
@@ -244,7 +248,8 @@ function SurveyPanel({ data, onDone }: { data: CondemnationData; onDone: () => v
   function validateCreate(): boolean {
     const next: Record<string, string> = {};
     if (!data.assets.some((a) => a.id === assetId)) next.assetId = "Select the asset being surveyed.";
-    if (!DATE_PATTERN.test(surveyDate.trim())) next.surveyDate = "Survey date must be YYYY-MM-DD.";
+    if (!isRealCalendarDate(surveyDate.trim())) next.surveyDate = "Enter a valid survey date.";
+    else if (surveyDate.trim() > today()) next.surveyDate = "A survey cannot be dated in the future.";
     if (!condition) next.condition = "Select the condemnation condition.";
     if (repairCost.trim() && rupeesToMinorString(repairCost, { allowZero: true }) === null) {
       next.repairCost = "Enter a valid non-negative repair cost (₹) with at most 2 decimals.";
@@ -265,7 +270,7 @@ function SurveyPanel({ data, onDone }: { data: CondemnationData; onDone: () => v
       if (conditionNotes.trim()) body.conditionNotes = conditionNotes.trim();
       if (yearsInUse.trim()) body.yearsInUse = Number(yearsInUse);
       if (repairCost.trim()) body.estimatedRepairCostMinor = Number(rupeesToMinorString(repairCost, { allowZero: true }));
-      await browserJson<Accepted>("v1/asset/condemnation-surveys", { method: "POST", body: JSON.stringify(body) });
+      await condemnationCommand<Accepted>("v1/asset/condemnation-surveys", { method: "POST", body: JSON.stringify(body) });
       setConfirmOpen(false);
       setMessage(`Survey for ${assetLabel(assetId)} submitted. It appears under "Submit survey" once processed.`);
       setAssetId("");
@@ -292,7 +297,7 @@ function SurveyPanel({ data, onDone }: { data: CondemnationData; onDone: () => v
     setSubmitBusy(true);
     setSubmitDialogError(undefined);
     try {
-      await browserJson<Accepted>(`v1/asset/condemnation-surveys/${selectedSurvey.id}/submit`, {
+      await condemnationCommand<Accepted>(`v1/asset/condemnation-surveys/${selectedSurvey.id}/submit`, {
         method: "PATCH",
         // Optimistic lock from the fetched record -- never typed by the clerk.
         body: JSON.stringify({ version: selectedSurvey.version, recommendation: submitRecommendation }),
@@ -550,7 +555,7 @@ function RecommendationPanel({ data, onDone }: { data: CondemnationData; onDone:
       };
       if (reserveValue.trim()) body.reserveValueMinor = Number(rupeesToMinorString(reserveValue, { allowZero: true }));
       if (floorValue.trim()) body.floorValueMinor = Number(rupeesToMinorString(floorValue, { allowZero: true }));
-      await browserJson<Accepted>("v1/asset/condemnation-recommendations", { method: "POST", body: JSON.stringify(body) });
+      await condemnationCommand<Accepted>("v1/asset/condemnation-recommendations", { method: "POST", body: JSON.stringify(body) });
       setConfirmOpen(false);
       setMessage(`Recommendation for ${assetLabel(selectedSurvey.assetId)} submitted. It appears under "Approve recommendation" once processed.`);
       setSurveyId("");
@@ -575,7 +580,7 @@ function RecommendationPanel({ data, onDone }: { data: CondemnationData; onDone:
     setApproveBusy(true);
     setApproveDialogError(undefined);
     try {
-      await browserJson<Accepted>(`v1/asset/condemnation-recommendations/${selectedRec.id}/approve`, {
+      await condemnationCommand<Accepted>(`v1/asset/condemnation-recommendations/${selectedRec.id}/approve`, {
         method: "PATCH",
         body: JSON.stringify({ version: selectedRec.version, reason: (approvalReason ?? "").trim() }),
       });
@@ -652,15 +657,23 @@ function RecommendationPanel({ data, onDone }: { data: CondemnationData; onDone:
               Committee members <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span> (min. 2)
             </div>
             {members.map((m, i) => (
-              <div key={i} style={{ display: "grid", gap: 8, gridTemplateColumns: "1fr 1fr 1fr", alignItems: "start" }}>
+              <div key={i} style={{ display: "grid", gap: 8, gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", alignItems: "start" }}>
                 <Field id={`member-${i}-name`} label={`Member ${i + 1} name`} required={false}>
                   <TextInput id={`member-${i}-name`} inputRef={i === 0 ? firstMemberRef : undefined} value={m.name} onChange={(v) => updateMember(i, { name: v })} required={false} />
                 </Field>
                 <Field id={`member-${i}-designation`} label={`Member ${i + 1} designation`} required={false}>
                   <TextInput id={`member-${i}-designation`} value={m.designation} onChange={(v) => updateMember(i, { designation: v })} required={false} />
                 </Field>
-                <Field id={`member-${i}-employeeRef`} label={`Member ${i + 1} employee ref`} required={false}>
-                  <TextInput id={`member-${i}-employeeRef`} value={m.employeeRef} onChange={(v) => updateMember(i, { employeeRef: v })} placeholder="Employee id, optional" required={false} />
+                {/* GAP-ASSETS-CONDEMNATION-05: the officer is chosen by name, never a typed UUID. */}
+                <Field id={`member-${i}-employeeRef`} label={`Member ${i + 1} officer`} required={false}>
+                  <EntityPicker
+                    id={`member-${i}-employeeRef`}
+                    value={m.employeeRef || null}
+                    onChange={(v) => updateMember(i, { employeeRef: (Array.isArray(v) ? v[0] : v) ?? "" })}
+                    search={searchEmployees}
+                    resolve={resolveEmployees}
+                    placeholder="Search by name or employee number (optional)"
+                  />
                 </Field>
               </div>
             ))}
@@ -838,7 +851,7 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
     if (!selectedRec) next.recommendationId = "Select an approved condemnation recommendation.";
     const reserveMinor = rupeesToMinorString(reserveValue);
     if (!reserveValue.trim() || reserveMinor === null) next.reserveValue = "Enter a valid positive reserve value (₹).";
-    if (auctionDate.trim() && !DATE_PATTERN.test(auctionDate.trim())) next.auctionDate = "Auction date must be YYYY-MM-DD.";
+    if (auctionDate.trim() && !isRealCalendarDate(auctionDate.trim())) next.auctionDate = "Enter a valid auction date.";
     setErrors(next);
     if (next.recommendationId) { recRef.current?.focus(); return false; }
     if (next.reserveValue) { reserveRef.current?.focus(); return false; }
@@ -858,7 +871,7 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
         currency: "INR",
       };
       if (auctionDate.trim()) body.auctionDate = auctionDate.trim();
-      await browserJson<Accepted>("v1/asset/auctions", { method: "POST", body: JSON.stringify(body) });
+      await condemnationCommand<Accepted>("v1/asset/auctions", { method: "POST", body: JSON.stringify(body) });
       setConfirmOpen(false);
       setMessage(`Auction for ${assetLabel(selectedRec.assetId)} submitted. It appears under "Complete auction" once processed.`);
       setRecommendationId("");
@@ -878,6 +891,14 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
     if (!winnerName.trim()) next.winnerName = "Enter the winning bidder's name.";
     const proceedsMinor = rupeesToMinorString(saleProceeds);
     if (!saleProceeds.trim() || proceedsMinor === null) next.saleProceeds = "Enter valid positive sale proceeds (₹).";
+    // GAP-ASSETS-CONDEMNATION-04: bid vs the auction's reserve, proceeds vs the bid.
+    const rules = checkAuctionCompletion({
+      bidMinor: highestBid.trim() ? bidMinor : null,
+      proceedsMinor: saleProceeds.trim() ? proceedsMinor : null,
+      reserveMinor: selectedAuction?.reserveValueMinor ?? null,
+    });
+    if (!next.highestBid && rules.highestBid) next.highestBid = rules.highestBid;
+    if (!next.saleProceeds && rules.saleProceeds) next.saleProceeds = rules.saleProceeds;
     setCompleteErrors(next);
     if (next.auctionId) { auctionIdRef.current?.focus(); return false; }
     if (next.highestBid) { bidRef.current?.focus(); return false; }
@@ -898,7 +919,7 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
         saleProceedsMinor: Number(rupeesToMinorString(saleProceeds)),
       };
       if (winnerRef.trim()) body.winnerRef = winnerRef.trim();
-      await browserJson<Accepted>(`v1/asset/auctions/${selectedAuction.id}/complete`, { method: "PATCH", body: JSON.stringify(body) });
+      await condemnationCommand<Accepted>(`v1/asset/auctions/${selectedAuction.id}/complete`, { method: "PATCH", body: JSON.stringify(body) });
       setCompleteConfirmOpen(false);
       setCompleteMessage(`Auction for ${assetLabel(selectedAuction.assetId)} completion submitted — sale proceeds of ${formatMoney(rupeesToMinorString(saleProceeds))} recorded pending processing.`);
       setAuctionId("");
@@ -909,6 +930,11 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
       setCompleteBusy(false);
     }
   }
+
+  // GAP-ASSETS-CONDEMNATION-04: the reserve is prefilled from the approved
+  // recommendation; flag it when the clerk overrides that figure.
+  const enteredReserve = rupeesToMinorString(reserveValue);
+  const reserveDiffers = !!selectedRec?.reserveValueMinor && enteredReserve !== null && enteredReserve !== selectedRec.reserveValueMinor;
 
   return (
     <Card title="3. Auction">
@@ -930,6 +956,11 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
               </Field>
               <Field id={reserveField} label="Reserve value (₹)" error={errors.reserveValue}>
                 <TextInput id={reserveField} inputRef={reserveRef} value={reserveValue} onChange={setReserveValue} inputMode="decimal" error={errors.reserveValue} />
+                {reserveDiffers && selectedRec && (
+                  <p role="status" style={{ fontSize: 12, color: "var(--warn)", margin: 0 }}>
+                    The approved recommendation set a reserve of {formatMoney(selectedRec.reserveValueMinor)}; this auction uses a different figure.
+                  </p>
+                )}
               </Field>
               <Field id={dateField} label="Auction date" required={false} error={errors.auctionDate}>
                 <TextInput id={dateField} type="date" inputRef={auctionDateRef} value={auctionDate} onChange={setAuctionDate} required={false} error={errors.auctionDate} />
@@ -974,8 +1005,13 @@ function AuctionPanel({ data, onDone }: { data: CondemnationData; onDone: () => 
               <Field id={winnerField} label="Winner name" error={completeErrors.winnerName}>
                 <TextInput id={winnerField} inputRef={winnerRef2} value={winnerName} onChange={setWinnerName} error={completeErrors.winnerName} />
               </Field>
-              <Field id={winnerRefField} label="Winner reference" required={false}>
-                <TextInput id={winnerRefField} value={winnerRef} onChange={setWinnerRef} placeholder="PAN / contact ref (optional)" required={false} />
+              {/* GAP-ASSETS-CONDEMNATION-06 (DPDP): ask for a bidder registration /
+                  contact reference -- not a PAN. The value is write-only (never echoed). */}
+              <Field id={winnerRefField} label="Bidder registration / contact reference" required={false}>
+                <TextInput id={winnerRefField} value={winnerRef} onChange={setWinnerRef} placeholder="Auction registration no. (optional)" required={false} />
+                <p style={{ fontSize: 12, color: "var(--muted)", margin: 0 }}>
+                  Kept only as part of the auction record. Do not enter a PAN or other identity number unless the auction rules require it.
+                </p>
               </Field>
               <Field id={proceedsField} label="Sale proceeds (₹)" error={completeErrors.saleProceeds}>
                 <TextInput id={proceedsField} inputRef={proceedsRef} value={saleProceeds} onChange={setSaleProceeds} inputMode="decimal" error={completeErrors.saleProceeds} />

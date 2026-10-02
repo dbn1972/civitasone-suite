@@ -14,7 +14,8 @@ import {
 import * as commands from "./commands.js";
 import { db, scopedRead } from "../../shared/db.js";
 import { condemnationSurveys, condemnationRecommendations, assetAuctions } from "./schema.js";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
+import { preflightSubmitSurvey, preflightApproveRecommendation, preflightCompleteAuction } from "./preflight.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 const AUDIT_ROLES = [...ASSET_ROLES, "audit_officer"];
@@ -33,6 +34,9 @@ export async function condemnationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);
     const body = submitSurveyBody.parse(req.body);
+    const [survey] = await scopedRead((tx) => tx.select().from(condemnationSurveys)
+      .where(and(eq(condemnationSurveys.id, id), eq(condemnationSurveys.tenantId, ctx.tenantId))).limit(1));
+    preflightSubmitSurvey(survey, body.version);
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitSurvey(ctx, id, body));
   });
 
@@ -49,6 +53,9 @@ export async function condemnationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);
     const body = approveRecommendationBody.parse(req.body);
+    const [rec] = await scopedRead((tx) => tx.select().from(condemnationRecommendations)
+      .where(and(eq(condemnationRecommendations.id, id), eq(condemnationRecommendations.tenantId, ctx.tenantId))).limit(1));
+    preflightApproveRecommendation(rec, ctx.actorId, body.version);
     return sendAccepted(reply, acceptedResponseSchema, await commands.approveRecommendation(ctx, id, body));
   });
 
@@ -65,6 +72,9 @@ export async function condemnationRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = idParam.parse(req.params);
     const body = completeAuctionBody.parse(req.body);
+    const [auction] = await scopedRead((tx) => tx.select().from(assetAuctions)
+      .where(and(eq(assetAuctions.id, id), eq(assetAuctions.tenantId, ctx.tenantId))).limit(1));
+    preflightCompleteAuction(auction, body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.completeAuction(ctx, id, body));
   });
 

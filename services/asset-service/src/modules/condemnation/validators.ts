@@ -57,5 +57,9 @@ export const completeAuctionBody = z.object({
   winnerName:        z.string().min(1).max(200),
   winnerRef:         z.string().max(128).optional(),
   saleProceedsMinor: z.number().int().positive(),
+}).refine((b) => b.saleProceedsMinor <= b.highestBidMinor, {
+  // GAP-ASSETS-CONDEMNATION-04: the receipt posted to finance cannot exceed the winning bid.
+  message: "sale proceeds cannot exceed the winning bid",
+  path: ["saleProceedsMinor"],
 });
 export type CompleteAuctionBody = z.infer<typeof completeAuctionBody>;

@@ -37,13 +37,18 @@ export default async function AssetDashboardPage() {
           </>
         }
       />
+      {/* GAP-ASSETS-DASHBOARD-02: each count drills into the screen that lists
+          those assets. GAP-ASSETS-DASHBOARD-04: tone tokens, not hard-coded hex.
+          GAP-ASSETS-DASHBOARD-05: hints state how asset-service computes each
+          figure (dashboard/queries.ts). */}
       <StatGrid>
-        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Total Assets" value={count(data.totalAssets)} />
-        <StatCard icon="🏗️" iconBg="#eff6ff" label="Fixed Assets" value={count(data.fixedAssets)} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Net Book Value" value={failed ? null : formatMoney(data.netBlock)} />
-        <StatCard icon="🏷️" iconBg="#f5f3ff" label="Tagged" value={taggedPct === null ? null : `${taggedPct}%`} />
-        <StatCard icon="🛠️" iconBg="#fffaeb" label="Under Maintenance" value={count(data.underMaintenance)} />
-        <StatCard icon="⚠️" iconBg="#fef2f2" label="Due Disposal" value={count(data.dueForDisposal)} />
+        <StatCard icon="🖥️" tone="warn" label="Total Assets" value={count(data.totalAssets)} href="/assets/list" hint="Every asset in the register, including disposed and written-off." />
+        <StatCard icon="🏗️" tone="info" label="Fixed Assets" value={count(data.fixedAssets)} href="/assets/fixed-assets" hint="Assets of type Fixed." />
+        <StatCard icon="🏢" tone="neutral" label="Infrastructure" value={count(data.infraAssets)} href="/assets/infra" hint="Assets of type Infrastructure." />
+        <StatCard icon="💰" tone="good" label="Net Book Value" value={failed ? null : formatMoney(data.netBlock)} hint="Book value of every asset not yet disposed or written off (condemned assets stay until sold)." />
+        <StatCard icon="🏷️" tone="info" label="Tagged" value={taggedPct === null ? null : `${taggedPct}%`} hint="Share of all assets that carry a barcode / QR tag." />
+        <StatCard icon="🛠️" tone="warn" label="Under Maintenance" value={count(data.underMaintenance)} href="/assets/maintenance" hint="Assets whose status is Under maintenance." />
+        <StatCard icon="⚠️" tone="bad" label="Due Disposal" value={count(data.dueForDisposal)} href="/assets/condemnation" hint="Active assets fully depreciated to salvage value, plus condemned assets awaiting auction." />
       </StatGrid>
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
@@ -80,6 +85,7 @@ export default async function AssetDashboardPage() {
               <Link href="/assets/depreciation"><span aria-hidden="true">📉</span> Run monthly depreciation</Link>
               <Link href="/assets/verification"><span aria-hidden="true">🔍</span> Physical verification</Link>
               <Link href="/assets/maintenance"><span aria-hidden="true">🛠️</span> Maintenance queue</Link>
+              <Link href="/assets/condemnation"><span aria-hidden="true">⚠️</span> Condemnation &amp; auction</Link>
             </div>
           </div>
         </div>

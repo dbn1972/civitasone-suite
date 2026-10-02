@@ -66,13 +66,13 @@ describe("Condemnation Surveys", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("PATCH /v1/assets/condemnation-surveys/:id/submit → 202", async () => {
+  it("PATCH /v1/assets/condemnation-surveys/:id/submit → 404 for an unknown survey (GAP-ASSETS-CONDEMNATION-08)", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/assets/condemnation-surveys/${SURVEY}/submit`,
       headers: authHeader(),
       payload: { version: 1, recommendation: "condemn" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -110,13 +110,13 @@ describe("Committee Recommendations", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("PATCH /v1/assets/condemnation-recommendations/:id/approve → 202", async () => {
+  it("PATCH /v1/assets/condemnation-recommendations/:id/approve → 404 for an unknown recommendation", async () => {
     const res = await app.inject({
       method: "PATCH", url: `/v1/assets/condemnation-recommendations/${REC_ID}/approve`,
       headers: authHeader(),
       payload: { version: 1 },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 });
 
@@ -142,7 +142,7 @@ describe("Auctions", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("PATCH /v1/assets/auctions/:id/complete → 202", async () => {
+  it("PATCH /v1/assets/auctions/:id/complete → 404 for an unknown auction", async () => {
     const fakeId = "66666666-dddd-4000-8000-000000000001";
     const res = await app.inject({
       method: "PATCH", url: `/v1/assets/auctions/${fakeId}/complete`,
@@ -152,7 +152,7 @@ describe("Auctions", () => {
         winnerName: "M/s ABC Traders", saleProceedsMinor: 75000,
       },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("PATCH /v1/assets/auctions/:id/complete → 403 wrong role", async () => {

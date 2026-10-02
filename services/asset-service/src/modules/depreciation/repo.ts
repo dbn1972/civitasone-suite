@@ -47,10 +47,19 @@ export async function upsertEntry(tx: Writer, row: DepEntryInsert): Promise<void
   await tx.insert(assetDepEntries).values(row);
 }
 
-export async function markEntryPosted(tx: Writer, id: string, tenantId: string, glRef: string, actorId: string): Promise<void> {
-  await (tx as typeof db).update(assetDepEntries)
+/**
+ * GAP-ASSETS-DEPRECIATION-06: claim an entry for posting. The `posted_at IS NULL`
+ * guard makes this a compare-and-set -- when two depRun commands (a manual run
+ * and the scheduler tick, or a double submit) race for the same entry, the
+ * second UPDATE waits for the first transaction, re-evaluates the guard, matches
+ * no row and returns false, so the entry is posted to the GL exactly once.
+ */
+export async function markEntryPosted(tx: Writer, id: string, tenantId: string, glRef: string, actorId: string): Promise<boolean> {
+  const claimed = await (tx as typeof db).update(assetDepEntries)
     .set({ postedAt: new Date(), glRef, updatedAt: new Date(), updatedBy: actorId })
-    .where(and(eq(assetDepEntries.id, id), eq(assetDepEntries.tenantId, tenantId)));
+    .where(and(eq(assetDepEntries.id, id), eq(assetDepEntries.tenantId, tenantId), isNull(assetDepEntries.postedAt)))
+    .returning({ id: assetDepEntries.id });
+  return claimed.length > 0;
 }
 
 // P1-1 scheduler support: list (tenantId, period) pairs that still have unposted

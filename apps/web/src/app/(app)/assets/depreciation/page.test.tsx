@@ -39,4 +39,37 @@ describe("DepreciationRunPage", () => {
     expect(status).toHaveTextContent(/run-1/);
     expect(status.textContent).not.toMatch(/journals posted/);
   });
+
+  // GAP-ASSETS-DEPRECIATION-04
+  it("does not hard-code GL account numbers in the book labels or the dialog", async () => {
+    render(<DepreciationRunPage />);
+    expect(document.body.textContent).not.toMatch(/5100|5101/);
+    fireEvent.change(screen.getByLabelText("Depreciation book"), { target: { value: "statutory" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run depreciation" }));
+    await waitFor(() => expect(screen.getByText("Run period-end depreciation?")).toBeInTheDocument());
+    expect(document.body.textContent).toMatch(/the statutory book \(WDV\)/);
+    expect(document.body.textContent).not.toMatch(/5100|5101/);
+  });
+
+  // GAP-ASSETS-DEPRECIATION-05
+  it("shows plain copy instead of the raw response body when the run fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{"code":"INTERNAL","message":"relation asset_assets does not exist"}', { status: 500 }));
+    render(<DepreciationRunPage />);
+    fireEvent.change(screen.getByLabelText("Period"), { target: { value: "2026-01" } });
+    fireEvent.click(screen.getByRole("button", { name: "Run depreciation" }));
+    await waitFor(() => expect(screen.getByText("Run period-end depreciation?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authorisation"), { target: { value: "Month-end close" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Run depreciation" }).at(-1)!);
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/relation asset_assets/)).not.toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-DEPRECIATION-03 (default period is the IST month, validated)
+  it("defaults the period to the IST month on the first hours of a month", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-03-31T20:00:00Z")); // 1 April 01:30 IST
+    render(<DepreciationRunPage />);
+    expect((screen.getByLabelText("Period") as HTMLInputElement).value).toBe("2026-04");
+    vi.useRealTimers();
+  });
 });

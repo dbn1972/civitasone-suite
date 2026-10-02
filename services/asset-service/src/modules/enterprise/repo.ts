@@ -1,4 +1,4 @@
-import { eq, and, asc } from "drizzle-orm";
+import { eq, and, asc, inArray } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import {
   projectAuc, assetLeases, assetImpairments, functionalLocations, spareParts,
@@ -42,6 +42,21 @@ export async function findAssetByBarcode(tenantId: string, barcode: string) {
   const rows = await scopedRead((tx) => tx.select().from(assetAssets)
     .where(and(eq(assetAssets.tenantId, tenantId), eq(assetAssets.barcode, barcode))).limit(1));
   return rows[0] ?? null;
+}
+
+/** Asset codes from `codes` that already exist in the tenant's register (GAP-ASSETS-BULK-IMPORT-03). */
+export async function findExistingCodes(tenantId: string, codes: string[]): Promise<string[]> {
+  if (codes.length === 0) return [];
+  const rows = await scopedRead((tx) => tx.select({ code: assetAssets.code }).from(assetAssets)
+    .where(and(eq(assetAssets.tenantId, tenantId), inArray(assetAssets.code, codes))));
+  return rows.map((r) => r.code);
+}
+
+/** True when a bulk batch with this id has already been committed for the tenant (retry detection). */
+export async function bulkBatchExists(tenantId: string, batchId: string): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx.select({ id: assetAssets.id }).from(assetAssets)
+    .where(and(eq(assetAssets.tenantId, tenantId), eq(assetAssets.notes, `bulk:${batchId}`))).limit(1));
+  return rows.length > 0;
 }
 
 export async function listAuc(tenantId: string, limit = 500) {

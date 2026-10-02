@@ -28,6 +28,15 @@ export function assertBidMeetsFloor(bidMinor: bigint, floorMinor: bigint): void 
 }
 
 /**
+ * Sale proceeds posted to finance may not exceed the winning bid (GAP-ASSETS-CONDEMNATION-04).
+ */
+export function assertProceedsWithinBid(proceedsMinor: bigint, bidMinor: bigint): void {
+  if (proceedsMinor > bidMinor) {
+    throw new DomainError("PROCEEDS_EXCEED_BID", `sale proceeds ${proceedsMinor} exceed the winning bid ${bidMinor}`);
+  }
+}
+
+/**
  * Valid condemnation survey conditions.
  */
 export const CONDITION_VALUES = ["good", "fair", "poor", "unserviceable", "beyond_repair"] as const;

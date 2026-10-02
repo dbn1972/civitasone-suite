@@ -998,6 +998,7 @@ describe("Enterprise routes", () => {
           { name: "Bulk Asset 1", code: "BLK-001", acquisitionCostMinor: 5000 },
           { name: "Bulk Asset 2", code: "BLK-002", acquisitionCostMinor: 7500 },
         ],
+        reason: "coverage test load",
       },
     });
     expect([202, 500]).toContain(res.statusCode);

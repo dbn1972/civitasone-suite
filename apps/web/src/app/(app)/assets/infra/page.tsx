@@ -37,8 +37,8 @@ export default async function InfraAssetsPage() {
       />
       {/* GAP-ASSETS-INFRA-04: a failed load must not read as "0 assets, net block zero". */}
       <StatGrid>
-        <StatCard icon="🏗️" iconBg="#fdf0e3" label="Infra Assets" value={source === "error" ? "—" : assets.length.toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Net Block" value={source === "error" ? "—" : formatMoney(netBlock)} />
+        <StatCard icon="🏗️" tone="warn" label="Infra Assets" value={source === "error" ? "—" : assets.length.toLocaleString("en-IN")} />
+        <StatCard icon="💰" tone="good" label="Net Block" value={source === "error" ? "—" : formatMoney(netBlock)} />
       </StatGrid>
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h">

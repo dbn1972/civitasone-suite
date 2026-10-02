@@ -1,9 +1,30 @@
+import Link from "next/link";
 import { ArrowUp, ArrowDown } from "lucide-react";
 import { StatIcon } from "./StatIcon";
 
+/**
+ * GAP-ASSETS-DASHBOARD-04: icon-tile colour by meaning, from the theme tokens
+ * (--goodbg, --warnbg, ... each redefined for dark mode) instead of a
+ * hard-coded light pastel hex that stays pale in dark mode.
+ */
+export type StatTone = "neutral" | "good" | "warn" | "bad" | "info";
+export const STAT_TONE_BG: Record<StatTone, string> = {
+  neutral: "var(--bg2, #eef2ff)",
+  good: "var(--goodbg)",
+  warn: "var(--warnbg)",
+  bad: "var(--badbg)",
+  info: "var(--infobg)",
+};
+
 interface StatCardProps {
   icon: string;
+  /** @deprecated use `tone` -- a fixed hex does not follow the dark theme. */
   iconBg?: string;
+  tone?: StatTone;
+  /** Makes the whole tile a link (drill-down); keyboard focusable. */
+  href?: string;
+  /** Plain-language definition of the figure, shown as a tooltip. */
+  hint?: string;
   label: string;
   value: string | number | null | undefined;
   delta?: string;
@@ -24,12 +45,12 @@ function displayValue(value: string | number | null | undefined): string | numbe
   return value;
 }
 
-export function StatCard({ icon, iconBg, label, value, delta, up }: StatCardProps) {
-  return (
-    <div className="stat">
+export function StatCard({ icon, iconBg, tone, href, hint, label, value, delta, up }: StatCardProps) {
+  const body = (
+    <>
       <div className="top">
         <div />
-        <div className="ic" style={{ background: iconBg ?? "#eef2ff", lineHeight: 1 }} aria-hidden>
+        <div className="ic" style={{ background: tone ? STAT_TONE_BG[tone] : (iconBg ?? "#eef2ff"), lineHeight: 1 }} aria-hidden>
           <StatIcon icon={icon} />
         </div>
       </div>
@@ -55,6 +76,14 @@ export function StatCard({ icon, iconBg, label, value, delta, up }: StatCardProp
           {delta}
         </div>
       )}
-    </div>
+    </>
   );
+  if (href) {
+    return (
+      <Link href={href} className="stat" title={hint} style={{ display: "block", color: "inherit", textDecoration: "none" }}>
+        {body}
+      </Link>
+    );
+  }
+  return <div className="stat" title={hint}>{body}</div>;
 }

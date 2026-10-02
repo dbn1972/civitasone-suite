@@ -62,10 +62,17 @@ describe("BulkImportPage (GAP-ASSETS-BULK-IMPORT-01/02)", () => {
     fireEvent.click(btn);
     await waitFor(() => expect(screen.getByText("Import these assets?")).toBeInTheDocument());
     expect(screen.getByText("₹45,000.00")).toBeInTheDocument();
-    fireEvent.click(screen.getAllByRole("button", { name: "Import 1 asset" }).at(-1)!);
+    // GAP-ASSETS-BULK-IMPORT-04: a reason is mandatory before a GL-linked mass load.
+    const confirmBtn = screen.getAllByRole("button", { name: "Import 1 asset" }).at(-1)!;
+    expect(confirmBtn).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Reason / authority for this load"), { target: { value: "FY26 opening register, order 12/2026" } });
+    fireEvent.click(confirmBtn);
     await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
-    const body = JSON.parse((fetchSpy.mock.calls[0]![1] as RequestInit).body as string);
+    const init = fetchSpy.mock.calls[0]![1] as RequestInit;
+    const body = JSON.parse(init.body as string);
     expect(body.assets[0]).toMatchObject({ name: "Chair, executive", acquisitionCostMinor: 4500000 });
+    expect(body.reason).toBe("FY26 opening register, order 12/2026");
+    expect((init.headers as Record<string, string>)["x-idempotency-key"]).toMatch(/\S{8,}/);
   });
 
   it("blocks import and lists line-numbered errors when any row is invalid", () => {
@@ -73,5 +80,66 @@ describe("BulkImportPage (GAP-ASSETS-BULK-IMPORT-01/02)", () => {
     fireEvent.change(screen.getByLabelText("CSV data"), { target: { value: "Laptop,LAP/1,it,45000\nDesk,FUR/2,movable,abc" } });
     expect(screen.getByText(/Line 2: cost "abc" is not a valid rupee amount/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Import 1 asset" })).toBeDisabled();
+  });
+});
+
+describe("bulk import validation, preview and errors (ml-assets-01)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  // GAP-ASSETS-BULK-IMPORT-03
+  it("flags a repeated code on the later line and blocks the import", () => {
+    const { rows, errors, preview } = parseAssetCsv("Laptop,LAP/1,it,100\nDesk,FUR/2,movable,100\nLaptop 2,lap/1,it,100");
+    expect(rows.map((r) => r.code)).toEqual(["LAP/1", "FUR/2"]);
+    expect(errors).toEqual([{ line: 3, message: 'code "lap/1" is already used on line 1' }]);
+    expect(preview.map((p) => p.error === null)).toEqual([true, true, false]);
+    expect(isImportable({ rows, errors, preview })).toBe(false);
+  });
+
+  it("renders a per-row preview with a verdict for every line before anything is sent", () => {
+    render(<BulkImportPage />);
+    fireEvent.change(screen.getByLabelText("CSV data"), { target: { value: "Laptop,LAP/1,it,100\nDesk,FUR/2,gadget,100" } });
+    const table = screen.getByRole("table", { name: "Import preview" });
+    const rowsText = Array.from(table.querySelectorAll("tbody tr")).map((r) => r.textContent);
+    expect(rowsText[0]).toMatch(/LAP\/1.*Ready/);
+    expect(rowsText[1]).toMatch(/FUR\/2.*Error/);
+    expect(screen.getByText(/Line 2: assetType must be one of/)).toBeInTheDocument();
+  });
+
+  async function submitValid() {
+    render(<BulkImportPage />);
+    fireEvent.change(screen.getByLabelText("CSV data"), { target: { value: "Laptop,LAP/1,it,100" } });
+    fireEvent.click(screen.getByRole("button", { name: "Import 1 asset" }));
+    await waitFor(() => expect(screen.getByText("Import these assets?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for this load"), { target: { value: "order 1" } });
+    fireEvent.click(screen.getAllByRole("button", { name: "Import 1 asset" }).at(-1)!);
+  }
+
+  // GAP-ASSETS-BULK-IMPORT-05
+  it("shows plain copy, not the raw response body, when the server fails", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response('{"code":"INTERNAL","message":"ECONNRESET at pg pool 10.0.0.5"}', { status: 500 }));
+    await submitValid();
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    expect(screen.queryByText(/ECONNRESET/)).not.toBeInTheDocument();
+  });
+
+  it("names the clashing codes when the server answers 409 DUPLICATE_CODE", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response('{"code":"DUPLICATE_CODE","message":"asset code(s) already in the register: LAP/1"}', { status: 409 }),
+    );
+    await submitValid();
+    await waitFor(() => expect(screen.getByText(/Some asset codes are already in use: LAP\/1/)).toBeInTheDocument());
+  });
+
+  it("reuses one Idempotency-Key when the same CSV is retried", async () => {
+    const spy = vi.spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("{}", { status: 500 }))
+      .mockResolvedValueOnce(new Response("{}", { status: 500 }));
+    await submitValid();
+    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: "Import 1 asset" }).at(-1)!);
+    await waitFor(() => expect(spy).toHaveBeenCalledTimes(2));
+    const key = (i: number) => ((spy.mock.calls[i]![1] as RequestInit).headers as Record<string, string>)["x-idempotency-key"];
+    expect(key(0)).toMatch(/\S{8,}/);
+    expect(key(1)).toBe(key(0));
   });
 });

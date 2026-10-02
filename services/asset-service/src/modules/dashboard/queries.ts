@@ -68,13 +68,15 @@ export async function getDashboard(tenantId: string) {
     underMaintenance: maintenance?.count ?? 0,
     dueForDisposal: dueForDisposal?.count ?? 0,
     taggedAssets: tagged?.count ?? 0,
-    netBlock: Number(netBlockRow?.netBlock ?? "0"),
+    // GAP-ASSETS-DASHBOARD-03: paise as a digit string -- a JS number loses
+    // precision above 2^53 minor units.
+    netBlock: netBlockRow?.netBlock ?? "0",
     recentGrnAssets: recentGrn.map((r) => ({
       id: r.id,
       code: r.code,
       name: r.name,
       acquisitionDate: r.acquisitionDate,
-      acquisitionCost: Number(r.acquisitionCost),
+      acquisitionCost: r.acquisitionCost.toString(),
     })),
   };
 }

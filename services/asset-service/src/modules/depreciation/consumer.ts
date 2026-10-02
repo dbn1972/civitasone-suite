@@ -130,7 +130,8 @@ export function registerDepreciationConsumers(rawQueue: Queue): void {
         // messageId + entry id so redeliveries dedupe without a malformed cast.
         if (!(await markProcessed(tx, uuidV5(`${msg.messageId}:${entry.id}`)))) return;
         const glRef = `dep:${entry.depBook}:${entry.assetId}:${entry.period}`;
-        await repo.markEntryPosted(tx, entry.id, p.tenantId, glRef, msg.actorId);
+        // Already posted by a concurrent run: nothing to do (no second GL post).
+        if (!(await repo.markEntryPosted(tx, entry.id, p.tenantId, glRef, msg.actorId))) return;
         if (entry.depBook === "company") {
           const asset = await registerRepo.findAssetByIdTx(tx, entry.assetId, p.tenantId);
           if (asset) {
