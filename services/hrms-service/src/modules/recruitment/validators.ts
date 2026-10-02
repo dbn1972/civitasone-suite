@@ -1,3 +1,4 @@
+import { CAREERS_CONSENT_ACCEPTED_VERSIONS } from "@civitasone/schemas";
 import { z } from "zod";
 
 export const VACANCY_TYPES = ["regular", "internship", "apprenticeship", "volunteership", "contractual", "deputation"] as const;
@@ -61,6 +62,11 @@ export const publicApplicationBody = z.object({
   itiCertNo:                z.string().max(80).optional(),
   // Volunteership-specific
   availabilityHoursPerWeek: z.number().int().min(1).max(168).optional(),
+  // DPDP: the candidate must explicitly accept the privacy notice; the version
+  // names the notice text shown so the consent is auditable.
+  consent:        z.literal(true, { errorMap: () => ({ message: "You must accept the privacy notice to apply" }) }),
+  consentVersion: z.string().min(1, "Consent version is required").max(32)
+    .refine((v) => CAREERS_CONSENT_ACCEPTED_VERSIONS.includes(v), "Unknown privacy notice version"),
 });
 export type PublicApplicationBody = z.infer<typeof publicApplicationBody>;
 

@@ -7,3 +7,4 @@ export * from "./validate.js";
 export * from "./plugin.js";
 export * from "./module-manifest.js";
 export * from "./module-resolver.js";
+export * from "./careers-consent.js";

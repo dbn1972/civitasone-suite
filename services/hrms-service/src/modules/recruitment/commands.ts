@@ -144,6 +144,7 @@ export async function submitPublicApplication(tenantId: string, body: PublicAppl
         source: "public_portal",
         applicationNo, stage: "applied", status: "active",
         dedupKey,
+        consentGivenAt: new Date(), consentVersion: body.consentVersion,
         institutionName: body.institutionName ?? null,
         graduationYear: body.graduationYear ?? null,
         semester: body.semester ?? null,
@@ -163,7 +164,7 @@ export async function submitPublicApplication(tenantId: string, body: PublicAppl
       await enqueue(tx, {
         topic: "audit.event.record", eventType: "audit.event.record",
         tenantId, actorId: PUBLIC_ACTOR, correlationId: id,
-        payload: { service: "hrms", action: "create", resourceType: "application", resourceId: id, outcome: "success" },
+        payload: { service: "hrms", action: "create", resourceType: "application", resourceId: id, outcome: "success", consentVersion: body.consentVersion },
       });
     });
     return { id, applicationNo, status: "received", alreadyApplied: false };

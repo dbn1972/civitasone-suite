@@ -106,7 +106,7 @@ describe("Multi-vacancy-type: publicApplicationBody validator", () => {
   it("accepts internship fields (institutionName, graduationYear, semester, stipendExpectedMinor)", async () => {
     const { publicApplicationBody } = await import("../src/modules/recruitment/validators.js");
     const r = publicApplicationBody.safeParse({
-      jobOpeningId: FAKE_JO_ID, applicantName: "Rahul Kumar", email: "rahul@college.edu",
+      consent: true, consentVersion: "2026-10-v1", jobOpeningId: FAKE_JO_ID, applicantName: "Rahul Kumar", email: "rahul@college.edu",
       institutionName: "BITS Pilani", graduationYear: 2025, semester: "8th", stipendExpectedMinor: 1000000,
     });
     expect(r.success).toBe(true);
@@ -115,7 +115,7 @@ describe("Multi-vacancy-type: publicApplicationBody validator", () => {
   it("accepts apprenticeship fields (tradeCategory, itiCertNo, availabilityHoursPerWeek)", async () => {
     const { publicApplicationBody } = await import("../src/modules/recruitment/validators.js");
     const r = publicApplicationBody.safeParse({
-      jobOpeningId: FAKE_JO_ID, applicantName: "Suresh Yadav", email: "suresh@example.com",
+      consent: true, consentVersion: "2026-10-v1", jobOpeningId: FAKE_JO_ID, applicantName: "Suresh Yadav", email: "suresh@example.com",
       tradeCategory: "Electrician", itiCertNo: "ITI/2022/DEL/001234", availabilityHoursPerWeek: 40,
     });
     expect(r.success).toBe(true);
@@ -124,7 +124,7 @@ describe("Multi-vacancy-type: publicApplicationBody validator", () => {
   it("accepts volunteership fields (availabilityHoursPerWeek)", async () => {
     const { publicApplicationBody } = await import("../src/modules/recruitment/validators.js");
     const r = publicApplicationBody.safeParse({
-      jobOpeningId: FAKE_JO_ID, applicantName: "Anita Sharma", email: "anita@ngo.org",
+      consent: true, consentVersion: "2026-10-v1", jobOpeningId: FAKE_JO_ID, applicantName: "Anita Sharma", email: "anita@ngo.org",
       availabilityHoursPerWeek: 20,
     });
     expect(r.success).toBe(true);
@@ -132,13 +132,13 @@ describe("Multi-vacancy-type: publicApplicationBody validator", () => {
 
   it("rejects non-integer graduationYear", async () => {
     const { publicApplicationBody } = await import("../src/modules/recruitment/validators.js");
-    const r = publicApplicationBody.safeParse({ jobOpeningId: FAKE_JO_ID, applicantName: "T", email: "t@t.com", graduationYear: 20.5 });
+    const r = publicApplicationBody.safeParse({ consent: true, consentVersion: "2026-10-v1", jobOpeningId: FAKE_JO_ID, applicantName: "T", email: "t@t.com", graduationYear: 20.5 });
     expect(r.success).toBe(false);
   });
 
   it("rejects availabilityHoursPerWeek > 168", async () => {
     const { publicApplicationBody } = await import("../src/modules/recruitment/validators.js");
-    const r = publicApplicationBody.safeParse({ jobOpeningId: FAKE_JO_ID, applicantName: "T", email: "t@t.com", availabilityHoursPerWeek: 200 });
+    const r = publicApplicationBody.safeParse({ consent: true, consentVersion: "2026-10-v1", jobOpeningId: FAKE_JO_ID, applicantName: "T", email: "t@t.com", availabilityHoursPerWeek: 200 });
     expect(r.success).toBe(false);
   });
 });

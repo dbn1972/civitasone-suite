@@ -11,14 +11,16 @@
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-const { listJobOpeningsByTenantMock, countApplicationsByJobMock } = vi.hoisted(() => ({
+const { listJobOpeningsByTenantMock, countApplicationsByJobMock, findPublishedOpeningMock } = vi.hoisted(() => ({
   listJobOpeningsByTenantMock: vi.fn(),
+  findPublishedOpeningMock: vi.fn(),
   countApplicationsByJobMock: vi.fn(async () => new Map()),
 }));
 
 vi.mock("../src/modules/recruitment/repo.js", () => ({
   listJobOpeningsByTenant: (...a: unknown[]) => listJobOpeningsByTenantMock(...a),
   countApplicationsByJob: (...a: unknown[]) => countApplicationsByJobMock(...a),
+  findPublishedOpening: (...a: unknown[]) => findPublishedOpeningMock(...a),
 }));
 
 vi.mock("../src/shared/infra.js", () => ({
@@ -34,7 +36,7 @@ vi.mock("@civitasone/db", () => ({
     fn({ select: () => ({ from: () => ({ where: async () => [] }) }) }),
 }));
 
-import { listJobOpenings } from "../src/modules/recruitment/queries.js";
+import { listJobOpenings, getPublishedVacancy } from "../src/modules/recruitment/queries.js";
 
 const TENANT = "10000000-aaaa-4000-8000-000000000001";
 
@@ -99,5 +101,33 @@ describe("listJobOpenings — refNo / vacancyType (GAP-RECRUITMENT-DETAIL-01)", 
     const { JobOpeningSummaryListSchema } = await import("@civitasone/schemas/web");
     const parsed = JobOpeningSummaryListSchema.parse(JSON.parse(JSON.stringify(rows)));
     expect(parsed[0]).toMatchObject({ refNo: "HUD/2026/014", vacancyType: "internship" });
+  });
+});
+
+// ── GAP-RECRUITMENT-CAREERS-DETAIL-08: public vacancy payload carries the server's open/closed verdict ──
+describe("getPublishedVacancy — applicationOpen", () => {
+  const base = {
+    id: "v1", title: "Assistant", refNo: "R1", vacancyType: "regular", location: null, qualification: null,
+    payRange: null, vacancies: 2, description: null, postedAt: null, closesAt: null,
+    status: "open", isPublished: true, applicationDeadline: null,
+  };
+
+  it("is open when published, open and no deadline", async () => {
+    findPublishedOpeningMock.mockResolvedValue({ ...base });
+    const v = await getPublishedVacancy("v1", TENANT);
+    expect(v?.applicationOpen).toBe(true);
+    expect(v?.closedReason).toBeUndefined();
+  });
+
+  it("is closed with a reason once the precise applicationDeadline has passed, even if closesAt (a date) is in the future", async () => {
+    findPublishedOpeningMock.mockResolvedValue({ ...base, closesAt: "2099-01-01", applicationDeadline: new Date(Date.now() - 60_000) });
+    const v = await getPublishedVacancy("v1", TENANT);
+    expect(v?.applicationOpen).toBe(false);
+    expect(v?.closedReason).toBe("the application deadline has passed");
+  });
+
+  it("returns null for an unpublished/unknown vacancy", async () => {
+    findPublishedOpeningMock.mockResolvedValue(null);
+    expect(await getPublishedVacancy("v1", TENANT)).toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { withTenantScope } from "@civitasone/db";
 import { hrmsDepartments } from "../employee/schema.js";
 import { inArray } from "drizzle-orm";
+import { isApplicationOpen, applicationClosedReason } from "./job-publication.js";
 
 /**
  * HIGH finding: department scoping. `departmentId` is optional -- omitted,
@@ -75,6 +76,11 @@ export async function listPublishedVacancies(tenantId: string) {
 export async function getPublishedVacancy(id: string, tenantId: string) {
   const row = await repo.findPublishedOpening(id, tenantId);
   if (!row) return null;
+  // GAP-RECRUITMENT-CAREERS-DETAIL-08: the same gate POST /v1/careers/apply
+  // enforces (status + published + precise applicationDeadline), computed on the
+  // server clock so the public page does not have to guess from closesAt.
+  const nowMs = Date.now();
+  const applicationOpen = isApplicationOpen(row as never, nowMs);
   return {
     id: row.id,
     title: row.title,
@@ -87,5 +93,7 @@ export async function getPublishedVacancy(id: string, tenantId: string) {
     description: row.description,
     postedAt: row.postedAt ?? undefined,
     closesAt: row.closesAt ?? undefined,
+    applicationOpen,
+    closedReason: applicationOpen ? undefined : applicationClosedReason(row as never, nowMs),
   };
 }

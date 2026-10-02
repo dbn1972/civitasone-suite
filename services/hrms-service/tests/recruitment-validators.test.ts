@@ -131,10 +131,31 @@ describe("publicApplicationBody — public career portal", () => {
     jobOpeningId: "33000000-cccc-4000-8000-000000000001",
     applicantName: "Public Candidate",
     email: "candidate@example.test",
+    consent: true as const,
+    consentVersion: "2026-10-v1",
   };
 
   it("accepts valid public application", () => {
     expect(publicApplicationBody.safeParse(valid).success).toBe(true);
+  });
+
+  // GAP-RECRUITMENT-CAREERS-DETAIL-02 (DPDP): no consent, no application.
+  it("rejects a submission without consent", () => {
+    const { consent: _c, ...noConsent } = valid;
+    const r = publicApplicationBody.safeParse(noConsent);
+    expect(r.success).toBe(false);
+    if (!r.success) expect(r.error.issues.map((i) => i.path.join("."))).toContain("consent");
+  });
+
+  it("rejects a consent version that is not a known notice version", () => {
+    expect(publicApplicationBody.safeParse({ ...valid, consentVersion: "made-up" }).success).toBe(false);
+  });
+
+  it("rejects consent=false and a missing/empty consent version", () => {
+    expect(publicApplicationBody.safeParse({ ...valid, consent: false }).success).toBe(false);
+    const { consentVersion: _v, ...noVersion } = valid;
+    expect(publicApplicationBody.safeParse(noVersion).success).toBe(false);
+    expect(publicApplicationBody.safeParse({ ...valid, consentVersion: "" }).success).toBe(false);
   });
 
   it("requires minimum 2 chars for name", () => {

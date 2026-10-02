@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
 /**
  * Candidate self-service portal routes — require a valid cand_token Bearer token.
  *
@@ -33,6 +33,17 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
   app.get("/v1/careers/portal/applications", { config: { public: true } }, async (req, reply) => {
     const claims = resolveCandidateClaims(req as any);
     const { tenantId, email } = claims;
+    // GAP-RECRUITMENT-CAREERS-PORTAL-07: bounded pager (default/max 50 = the old cap).
+    const { limit, offset } = z.object({
+      limit: z.coerce.number().int().min(1).max(50).default(50),
+      // Bounded so a huge ?offset never reaches the query.
+      offset: z.coerce.number().int().min(0).max(10_000).default(0),
+    }).parse(req.query ?? {});
+    const ownApplications = and(eq(hrmsApplications.tenantId, tenantId), eq(hrmsApplications.email, email));
+    const totalRows = await scopedRead((tx) =>
+      tx.select({ n: sql<number>`count(*)::int` }).from(hrmsApplications).where(ownApplications)
+    );
+    const total = totalRows[0]?.n ?? 0;
 
     const rows = await scopedRead((tx) =>
       tx.select({
@@ -44,12 +55,10 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
         appliedAt: hrmsApplications.appliedAt,
       })
         .from(hrmsApplications)
-        .where(and(
-          eq(hrmsApplications.tenantId, tenantId),
-          eq(hrmsApplications.email, email),
-        ))
-        .orderBy(desc(hrmsApplications.appliedAt))
-        .limit(50)
+        .where(ownApplications)
+        .orderBy(desc(hrmsApplications.appliedAt), desc(hrmsApplications.id))
+        .limit(limit)
+        .offset(offset)
     );
 
     // Fetch job titles for each application.
@@ -58,7 +67,7 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
       ? await scopedRead((tx) =>
         tx.select({ id: hrmsJobOpenings.id, title: hrmsJobOpenings.title, location: hrmsJobOpenings.location, refNo: hrmsJobOpenings.refNo })
           .from(hrmsJobOpenings)
-          .where(eq(hrmsJobOpenings.tenantId, tenantId))
+          .where(and(eq(hrmsJobOpenings.tenantId, tenantId), inArray(hrmsJobOpenings.id, jobIds)))
         )
       : [];
 
@@ -70,7 +79,8 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
         id: r.id,
         applicationNo: r.applicationNo,
         jobOpeningId: r.jobOpeningId,
-        jobTitle: job?.title ?? "Unknown Position",
+        // null (not a fabricated label) when the opening row is gone; the UI decides the copy.
+        jobTitle: job?.title ?? null,
         jobLocation: job?.location ?? null,
         jobRefNo: job?.refNo ?? null,
         stage: r.stage,
@@ -79,7 +89,7 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
       };
     });
 
-    return reply.send({ data });
+    return reply.send({ data, total, limit, offset });
   });
 
   // GET /v1/careers/portal/applications/:id

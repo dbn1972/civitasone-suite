@@ -65,7 +65,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           {job?.title ?? "Application Detail"}
         </h1>
         <p style={{ color: "#93c5fd", fontSize: 13, margin: 0 }}>
-          {job?.refNo ? `${job.refNo} · ` : ""}{job?.location ?? "India"}
+          {[job?.refNo, job?.location].filter(Boolean).join(" · ")}
         </p>
       </div>
 
