@@ -197,7 +197,7 @@ describe("org-hierarchy — real persistence + integrity (RLS)", () => {
 
   it("HTTP: GET :id (with children), subtree, and a valid PATCH reparent", async () => {
     const q = new MemoryQueue(); registerOrgHierarchyConsumers(q); await q.start();
-    const root = uuid("00cc01"); const child = uuid("00cc02"); const loose = uuid("00cc03");
+    const root = uuid("00ee01"); const child = uuid("00ee02"); const loose = uuid("00ee03");
     await publishCreate(q, T1, root, "CcRoot", "department");
     await publishCreate(q, T1, child, "CcChild", "division", root);
     await publishCreate(q, T1, loose, "CcLoose", "department");
@@ -247,6 +247,52 @@ describe("org-hierarchy — real persistence + integrity (RLS)", () => {
     // Ancestor-walk cycle guard also terminates (bounded) instead of hanging.
     await expect(repo.wouldCreateCycle(T1, a, b)).resolves.toBeTypeOf("boolean");
   }, 20000);
+
+  // ml-admin-03: a reparent shifts the WHOLE subtree's levels, not just the moved node,
+  // and the audit event records where the unit came from and went to.
+  it("reparent shifts every descendant's level and audits old/new parent", async () => {
+    const q = new MemoryQueue(); registerOrgHierarchyConsumers(q); await q.start();
+    const root = uuid("00a501"); const other = uuid("00a502"); const mid = uuid("00a503"); const leaf = uuid("00a504"); const deep = uuid("00a505");
+    await publishCreate(q, T1, root, "Root", "department");          // level 1
+    await publishCreate(q, T1, other, "Other", "department");        // level 1
+    await publishCreate(q, T1, mid, "Mid", "division", root);        // level 2
+    await publishCreate(q, T1, leaf, "Leaf", "section", mid);        // level 3
+    await publishCreate(q, T1, deep, "Deep", "unit", leaf);          // level 4
+    // Move Mid under Other's own child chain: Other(1) -> Mid(2) is unchanged, so first make it deeper.
+    const holder = uuid("00a506");
+    await publishCreate(q, T1, holder, "Holder", "division", other); // level 2
+    await publishUpdate(q, T1, mid, { parentId: holder });           // Mid -> 3, Leaf -> 4, Deep -> 5
+    const lv = async (id: string) => (await repo.findById(T1, id))?.level;
+    expect([await lv(mid), await lv(leaf), await lv(deep)]).toEqual([3, 4, 5]);
+
+    // And back to a root: Mid -> 1, Leaf -> 2, Deep -> 3.
+    await publishUpdate(q, T1, mid, { parentId: null });
+    await q.stop();
+    expect([await lv(mid), await lv(leaf), await lv(deep)]).toEqual([1, 2, 3]);
+
+    const events = await runWithTenant(T1, () => db.transaction(async (tx) => {
+      const res = await tx.execute(sql`SELECT payload FROM _outbox.messages WHERE tenant_id = ${T1} AND payload->>'resourceId' = ${mid} AND payload->>'action' = 'update_org_unit' ORDER BY created_at`);
+      return ((res as { rows?: { payload: Record<string, unknown> }[] }).rows ?? (res as unknown as { payload: Record<string, unknown> }[])).map((r) => r.payload);
+    }));
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({ oldParentId: root, newParentId: holder, oldLevel: 2, newLevel: 3 });
+    expect(events[1]).toMatchObject({ oldParentId: holder, newParentId: null, oldLevel: 3, newLevel: 1 });
+  });
+
+  it("a rename-only update leaves descendants' levels alone and carries no parent fields in the audit", async () => {
+    const q = new MemoryQueue(); registerOrgHierarchyConsumers(q); await q.start();
+    const a = uuid("00a601"); const b = uuid("00a602");
+    await publishCreate(q, T1, a, "A", "department");
+    await publishCreate(q, T1, b, "B", "division", a);
+    await publishUpdate(q, T1, a, { name: "A2" });
+    await q.stop();
+    expect((await repo.findById(T1, b))?.level).toBe(2);
+    const n = await runWithTenant(T1, () => db.transaction(async (tx) => {
+      const res = await tx.execute(sql`SELECT count(*)::int AS n FROM _outbox.messages WHERE tenant_id = ${T1} AND payload->>'resourceId' = ${a} AND payload->>'action' = 'update_org_unit' AND payload ? 'oldParentId'`);
+      return Number(((res as { rows?: { n: number }[] }).rows ?? (res as unknown as { n: number }[]))[0]?.n ?? 0);
+    }));
+    expect(n).toBe(0);
+  });
 
   it("reparent path takes a per-tenant advisory transaction lock", async () => {
     const held = await runWithTenant(T1, () => db.transaction(async (tx) => {

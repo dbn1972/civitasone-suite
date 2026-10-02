@@ -1,28 +1,54 @@
 "use client";
-import { DataTable } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { useMemo } from "react";
+import { DataTable, StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
-type Row = Record<string, unknown>;
-export function OnboardingTable({ queue, source = "api" }: { queue: Row[]; source?: "api" | "error" }) {
-  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>("sa.onboarding", queue, source, (d) => d.length === 0);
+import { AdminRegister } from "../_components/AdminRegister";
+import { onboardingStageTone, onboardingStats, toOnboardingRows, type OnboardingRow } from "./onboardingStats";
+
+type RawRow = Record<string, unknown>;
+export function OnboardingTable({
+  queue,
+  source = "api",
+  errorStatus,
+  errorMessage,
+}: {
+  queue: RawRow[];
+  source?: "api" | "error";
+  errorStatus?: number;
+  errorMessage?: string;
+}) {
+  const { data: raw, provenance, offline, cachedAt } = useSeededResource<RawRow[]>("sa.onboarding", queue, source, (d) => d.length === 0);
+  const rows = useMemo(() => toOnboardingRows(raw), [raw]);
+  const s = onboardingStats(rows);
   return (
-    <>
-      {/* UX-012: this badge is the ONLY place that reports data provenance for
-          the rows shown below — it reads the same useSeededResource call as
-          `rows`, so it can never disagree with what the table shows
-          (UX-002's pattern; the page used to render a second, independent
-          badge from the raw `source` prop — removed). */}
-      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      <DataTable<Row>
+    // GAP-ADMIN-ONBOARDING-02/-03: one data path for cards, badge, failure state and table.
+    <AdminRegister
+      title="Onboarding Pipeline"
+      area="onboarding requests"
+      provenance={provenance ?? "live"}
+      cachedAt={cachedAt}
+      offline={offline}
+      errorStatus={errorStatus}
+      errorMessage={errorMessage}
+      stats={[
+        // GAP-ADMIN-ONBOARDING-04: In Queue excludes completed/rejected/cancelled.
+        { icon: "📥", iconBg: "#eef2ff", label: "In Queue", value: s.inQueue },
+        { icon: "🆕", iconBg: "#ecfdf3", label: "New Requests", value: s.newReqs },
+        { icon: "🔄", iconBg: "#fffaeb", label: "In Progress", value: s.inProgress },
+        { icon: "🚀", iconBg: "#fce7ee", label: "Ready for Go-Live", value: s.ready },
+        { icon: "❔", iconBg: "#f1f5f9", label: "Other stage", value: s.other, onlyWhenPositive: true },
+      ]}
+    >
+      <DataTable<OnboardingRow>
         columns={[
           { key: "org", label: "Organisation" },
           { key: "contact", label: "Contact" },
           { key: "requested", label: "Requested" },
           { key: "assigned", label: "Assigned To" },
-          { key: "stage", label: "Stage", cellType: "status" },
+          { key: "stage", label: "Stage", render: (r) => <StatusPill status={r.stage} variant={onboardingStageTone(r.stage)} /> },
         ]}
         rows={rows} sortable filterable filterPlaceholder="Search onboarding…" pageSize={15} exportable exportFilename="onboarding-queue" emptyIcon="📥" emptyTitle="No requests" emptyMessage="No tenant onboarding requests in queue."
       />
-    </>
+    </AdminRegister>
   );
 }

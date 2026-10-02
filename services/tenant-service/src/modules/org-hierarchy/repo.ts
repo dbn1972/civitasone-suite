@@ -144,6 +144,30 @@ export async function updateOrgUnit(
     .where(and(eq(orgUnits.id, id), eq(orgUnits.tenantId, tenantId)));
 }
 
+/**
+ * After a reparent the moved node's own level is recomputed by the consumer, but
+ * every descendant's level is `ancestor level + depth`, so each one shifts by the
+ * same delta. Depth-bounded like the cycle guard so pre-existing bad data cannot
+ * hang the walk. Returns the number of descendants updated.
+ */
+export async function shiftDescendantLevels(tx: Tx, tenantId: string, rootId: string, delta: number): Promise<number> {
+  if (delta === 0) return 0;
+  const res = await tx.execute(sql`
+    WITH RECURSIVE sub AS (
+      SELECT id, 1 AS depth FROM tenant.org_units
+        WHERE parent_id = ${rootId} AND tenant_id = ${tenantId}
+      UNION ALL
+      SELECT o.id, s.depth + 1 FROM tenant.org_units o
+        JOIN sub s ON o.parent_id = s.id
+        WHERE o.tenant_id = ${tenantId} AND s.depth < ${MAX_HIERARCHY_DEPTH}
+    )
+    UPDATE tenant.org_units SET level = level + ${delta}, updated_at = now()
+      WHERE tenant_id = ${tenantId} AND id IN (SELECT id FROM sub)
+    RETURNING id
+  `);
+  return extractRows(res).length;
+}
+
 function extractRows(res: unknown): Record<string, unknown>[] {
   const maybe = res as { rows?: Record<string, unknown>[] };
   return (maybe.rows ?? (res as Record<string, unknown>[])) as Record<string, unknown>[];

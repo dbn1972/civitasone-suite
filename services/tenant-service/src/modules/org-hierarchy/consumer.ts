@@ -82,7 +82,13 @@ export function registerOrgHierarchyConsumers(q: Queue): void {
         ...(p.code !== undefined ? { code: p.code } : {}),
         ...(nextLevel !== undefined ? { level: nextLevel } : {}),
       });
-      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant", action: "update_org_unit", resourceType: "org_unit", resourceId: p.id, outcome: "success" } });
+      // Descendants keep `level = ancestor level + depth`: move the whole subtree by the same delta.
+      if (nextLevel !== undefined) await repo.shiftDescendantLevels(tx, p.tenantId, p.id, nextLevel - existing.level);
+      // A reparent records where the unit came from and went to, so the move is reconstructable from audit.
+      const reparentAudit = isReparent
+        ? { oldParentId: existing.parentId, newParentId: p.parentId ?? null, oldLevel: existing.level, newLevel: nextLevel }
+        : {};
+      await enqueue(tx, { topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId, payload: { service: "tenant", action: "update_org_unit", resourceType: "org_unit", resourceId: p.id, outcome: "success", ...reparentAudit } });
     }));
   });
 }
