@@ -51,11 +51,37 @@ describe("Route Completeness Audit", () => {
         missing.push(relative);
       }
     }
-    // Allow up to 15 routes that inherit loading from the Next.js root layout
+    // Routes that deliberately have no loading.tsx anywhere in their tree.
+    // Do not add to this list -- add a loading.tsx instead (it replaced a
+    // drifted "<= 20" count limit; the exemptions are now explicit).
+    //  - /offline: static service-worker fallback, nothing to load.
+    //  - Routes whose page (or an ancestor layout) calls notFound()/redirect():
+    //    a loading.tsx makes the segment stream, so a missing record or a
+    //    redirect could be answered 200 / meta-refresh instead of a real
+    //    404 / 3xx. They must keep real status codes. A loading.tsx on a
+    //    parent segment (municipal, careers, marketing root, docs) would be
+    //    inherited by those children, so those parents are exempt as well.
+    const EXEMPT = new Set([
+      "/offline",
+      "/(app)/municipal",
+      "/(app)/municipal/[serviceKey]",
+      "/(app)/municipal/[serviceKey]/applications",
+      "/(app)/municipal/[serviceKey]/applications/[id]",
+      "/(marketing)",
+      "/(marketing)/docs",
+      "/(marketing)/docs/[slug]",
+      "/auth/dev",
+      "/auth/login",
+      "/careers",
+      "/careers/[id]",
+      "/careers/portal",
+      "/careers/portal/application/[id]",
+    ]);
+    const unexempt = missing.filter((m) => !EXEMPT.has(m));
     expect(
-      missing.length,
-      `${missing.length} routes with no loading.tsx in tree:\n${missing.slice(0, 5).join("\n")}`,
-    ).toBeLessThanOrEqual(20);
+      unexempt,
+      `routes with no loading.tsx in tree (add one, or exempt with a reason): ${unexempt.join(", ")}`,
+    ).toEqual([]);
   });
 
   it("every route with a page.tsx has an error.tsx (or inherits from parent)", () => {

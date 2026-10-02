@@ -387,6 +387,9 @@ describe("shared/outbox (transactional outbox)", () => {
         actorId: "a-1",
         correlationId: "c-1",
         payload: { employeeId: "emp-1" },
+        // PERF-008 (#1391): enqueue persists the topic's registry schema
+        // version on the row (default "1.0" for this topic).
+        schemaVersion: "1.0",
       });
     });
 

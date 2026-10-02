@@ -134,14 +134,20 @@ describe("1. Employee Management — Role Access", () => {
     expect(r.statusCode).toBe(200);
   });
 
+  it("A role outside the directory list (citizen) is still rejected (403)", async () => {
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/employees?limit=50", headers: headers({ ...EMPLOYEES.meeraPatel, roles: ["citizen"] }) });
+    expect(r.statusCode).toBe(403);
+  });
+
   it("Manager (Deepak) can list employees (reader role)", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/hrms/employees?limit=50", headers: headers(EMPLOYEES.deepakKumar) });
     expect(r.statusCode).toBe(200);
   });
 
-  it("Employee (Meera) CANNOT list all employees (403)", async () => {
+  // #1499 deliberately opened the employee directory list (no PII/salary) to all staff.
+  it("Employee (Meera) CAN list the employee directory (200, opened to all staff in #1499)", async () => {
     const r = await app.inject({ method: "GET", url: "/v1/hrms/employees?limit=50", headers: headers(EMPLOYEES.meeraPatel) });
-    expect(r.statusCode).toBe(403);
+    expect(r.statusCode).toBe(200);
   });
 });
 

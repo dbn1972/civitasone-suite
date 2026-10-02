@@ -200,9 +200,11 @@ describe("getEmployeeDetail", () => {
 describe("listEmployees — GAP-HR-SF-06 (EntityPicker) q/ids", () => {
   it("passes q through to repo.listByTenant (the browse/search path)", async () => {
     listByTenantMock.mockResolvedValueOnce([]);
-    rowsMock.mockResolvedValueOnce([]);
+    rowsMock.mockResolvedValueOnce([]); // departments
+    rowsMock.mockResolvedValueOnce([]); // designations (#1686)
     await listEmployees(TENANT, 20, 0, undefined, undefined, "Asha");
-    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Asha");
+    // #1759 added a trailing `status` filter argument to repo.listByTenant.
+    expect(listByTenantMock).toHaveBeenCalledWith(TENANT, 20, 0, undefined, undefined, "Asha", undefined);
   });
 
   it("ids takes the batch-lookup path (repo.listByIds), bypassing repo.listByTenant entirely", async () => {
@@ -211,18 +213,27 @@ describe("listEmployees — GAP-HR-SF-06 (EntityPicker) q/ids", () => {
       employeeNo: "EMP001",
       fullName: "Asha Rao",
       departmentId: "d1",
+      designationId: "g1",
       employeeType: "permanent",
       status: "active",
+      dateOfJoining: "2020-01-01",
     };
     listByIdsMock.mockResolvedValueOnce([row]);
     rowsMock.mockResolvedValueOnce([{ id: "d1", name: "Finance" }]);
+    // #1686: the ids path also resolves designation name + pay grade.
+    rowsMock.mockResolvedValueOnce([{ id: "g1", name: "Officer", payGrade: "L10" }]);
 
     const result = await listEmployees(TENANT, 20, 0, undefined, undefined, undefined, ["e1"]);
 
     expect(listByIdsMock).toHaveBeenCalledWith(TENANT, ["e1"], undefined);
     expect(listByTenantMock).not.toHaveBeenCalled();
     expect(result.data).toEqual([
-      { id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", employeeType: "permanent", status: "active" },
+      {
+        id: "e1", employeeNo: "EMP001", name: "Asha Rao", department: "Finance", employeeType: "permanent", status: "active",
+        // GAP-HR-DASHBOARD-04 (#1702): dateOfJoining is always present;
+        // GAP-HR-EMPLOYEES directory (#1686): designation/grade when resolvable.
+        dateOfJoining: "2020-01-01", designation: "Officer", grade: "L10",
+      },
     ]);
   });
 
@@ -234,7 +245,8 @@ describe("listEmployees — GAP-HR-SF-06 (EntityPicker) q/ids", () => {
 
   it("ids path forwards managerScope to repo.listByIds so a manager-only caller can only resolve their own direct reports", async () => {
     listByIdsMock.mockResolvedValueOnce([]);
-    rowsMock.mockResolvedValueOnce([]);
+    rowsMock.mockResolvedValueOnce([]); // departments
+    rowsMock.mockResolvedValueOnce([]); // designations (#1686)
     await listEmployees(TENANT, 20, 0, undefined, "manager-emp-id", undefined, ["e1"]);
     expect(listByIdsMock).toHaveBeenCalledWith(TENANT, ["e1"], "manager-emp-id");
   });

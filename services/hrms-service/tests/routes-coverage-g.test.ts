@@ -63,7 +63,7 @@ async function seedIdCard(status: "active" | "suspended", employeeId: string | n
  * ("Employee record not found") when no such row exists, instead of always
  * 500ing regardless of the row's presence like the pre-fix code did.
  */
-async function seedEmployeeForMe(): Promise<string> {
+async function seedEmployeeForMe(userRef: string = UUID): Promise<string> {
   const employeeId = randomUUID();
   await runWithTenant(TENANT, () =>
     db.transaction(async (tx) => {
@@ -80,7 +80,7 @@ async function seedEmployeeForMe(): Promise<string> {
       await tx.insert(hrmsEmployees).values({
         id: employeeId, tenantId: TENANT, employeeNo: `RCG-${employeeId.slice(0, 8)}`, fullName: "Route Coverage Fixture Employee",
         departmentId: deptId, designationId, dateOfJoining: "2020-01-01",
-        employeeType: "permanent", status: "confirmed", userRef: UUID,
+        employeeType: "permanent", status: "confirmed", userRef,
         createdBy: UUID, updatedBy: UUID, version: 1,
       });
     }),
@@ -781,12 +781,22 @@ describe("HRMS routes — ID Cards & Visiting Cards", () => {
     // in src/modules/id-cards/routes.ts. Seed a real employee (linked via
     // userRef to this file's default token subject) and an active card for
     // them, the state /me requires to answer with something other than 404.
-    const employeeId = await seedEmployeeForMe();
-    await seedIdCard("active", employeeId);
+    //
+    // The route resolves the caller with `WHERE user_ref = $1 ... LIMIT 1`
+    // (no ORDER BY). This file's fixed subject (UUID) is linked to MANY
+    // employee rows by the other seeders here (seedTransfer etc.) and by
+    // earlier runs against the persistent TENANT, so the lookup could land on
+    // an employee that has no card and answer 404 NO_CARD. Use a dedicated
+    // actor linked to exactly one employee so the lookup is deterministic.
+    const actorId = randomUUID();
+    const employeeId = await seedEmployeeForMe(actorId);
+    const cardId = await seedIdCard("active", employeeId);
     const app = await buildApp();
-    const r = await app.inject({ method: "GET", url: "/v1/hrms/id-cards/me", headers: { authorization: `Bearer ${token()}` } });
+    const meToken = signToken({ sub: actorId, tid: TENANT, roles: ["employee"], sid: "s-me" }, SECRET);
+    const r = await app.inject({ method: "GET", url: "/v1/hrms/id-cards/me", headers: { authorization: `Bearer ${meToken}` } });
     await app.close();
-    expect(r.statusCode).not.toBe(404);
+    expect(r.statusCode).toBe(200);
+    expect(r.json().data.id).toBe(cardId);
   });
 
   it("POST /v1/hrms/id-cards/verify", async () => {

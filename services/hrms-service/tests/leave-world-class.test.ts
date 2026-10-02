@@ -69,8 +69,10 @@ describe("1. Leave Policy Configuration (HR Admin)", () => {
       headers: { ...AUTH, ...CT },
       payload: { leaveTypeId: "eeeeeeee-0001-0000-0000-000000000051", employeeType: "temporary", maxDaysPerYear: 4, carryForward: false, maxAccumulation: 4, encashable: false, countMethod: "calendar", maxContinuousDays: 2, minServiceMonths: 0, requiresMedicalCert: false, requiresMedicalCertAfterDays: 3, prefixSuffixRule: false, sandwichRule: false },
     });
-    expect(r.statusCode).toBe(201);
+    // GAP-HR-LEAVE-POLICIES-03 (#1729): a queued write answers 202 accepted, not 201.
+    expect(r.statusCode).toBe(202);
     expect(r.json()).toHaveProperty("id");
+    expect(r.json().status).toBe("accepted");
   });
 
   it("1.6 PATCH updates policy max days", async () => {
@@ -83,8 +85,9 @@ describe("1. Leave Policy Configuration (HR Admin)", () => {
       headers: { ...AUTH, ...CT },
       payload: { maxDaysPerYear: 12 },
     });
-    expect(r.statusCode).toBe(200);
-    expect(r.json().status).toBe("updated");
+    // GAP-HR-LEAVE-POLICIES-03 (#1729): queued write -> 202 accepted, not 200 updated.
+    expect(r.statusCode).toBe(202);
+    expect(r.json().status).toBe("accepted");
   });
 
   it("1.7 DELETE (deactivate) a policy", async () => {
@@ -92,7 +95,8 @@ describe("1. Leave Policy Configuration (HR Admin)", () => {
     const policyId = list.json().data[0]?.id;
     if (!policyId) return;
     const r = await app.inject({ method: "DELETE", url: `/v1/hrms/admin/leave-policies/${policyId}`, headers: AUTH });
-    expect(r.statusCode).toBe(204);
+    // GAP-HR-LEAVE-POLICIES-04 (#1729): deactivation is a queued write -> 202, not 204.
+    expect(r.statusCode).toBe(202);
   });
 
   it("1.8 Rejects invalid employee type", async () => {

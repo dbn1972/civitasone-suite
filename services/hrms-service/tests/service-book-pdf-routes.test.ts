@@ -18,8 +18,16 @@ const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
 const USER   = "aaaaaaaa-1111-4000-8000-000000000001";
 const EMP_ID = "eeeeeeee-1111-4000-8000-000000000001";
 
-const { listEntriesMock } = vi.hoisted(() => ({
+const { listEntriesMock, resolveActorMock } = vi.hoisted(() => ({
   listEntriesMock: vi.fn(),
+  resolveActorMock: vi.fn(),
+}));
+
+// #1700 (GAP-HR-SERVICE-BOOK-01): non-HR callers are scoped via the actor ->
+// employee link, so the link resolver is mocked (the db mock below has no
+// .select chain for the real lookup).
+vi.mock("../src/modules/employee/actor-link.js", () => ({
+  resolveEmployeeForActor: (...a: unknown[]) => resolveActorMock(...a),
 }));
 
 vi.mock("../src/modules/service-book/repo.js", () => ({
@@ -75,6 +83,7 @@ const BASE_ENTRY = {
 beforeEach(() => {
   vi.clearAllMocks();
   listEntriesMock.mockResolvedValue([]);
+  resolveActorMock.mockResolvedValue(undefined);
 });
 
 afterAll(async () => {
@@ -155,12 +164,55 @@ describe("GET /v1/hrms/employees/:id/service-book/pdf", () => {
     await app.close();
   });
 
-  it("403 — employee role is rejected", async () => {
+  // #1700: the employee role is now admitted past requireRole but scoped to
+  // their OWN service book by assertCanReadEmployee.
+  it("403 — employee with no linked employee record (NO_EMPLOYEE_LINK)", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
       url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
       headers: auth(USER, ["employee"]),
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("NO_EMPLOYEE_LINK");
+    expect(listEntriesMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("403 — employee cannot export a colleague's service book", async () => {
+    resolveActorMock.mockResolvedValue({ id: "eeeeeeee-2222-4000-8000-000000000002", departmentId: "dddddddd-0001-4000-8000-000000000001" });
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      headers: auth(USER, ["employee"]),
+    });
+    expect(r.statusCode).toBe(403);
+    expect(r.json().code).toBe("FORBIDDEN");
+    expect(listEntriesMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("200 — employee can export their own service book", async () => {
+    resolveActorMock.mockResolvedValue({ id: EMP_ID, departmentId: "dddddddd-0001-4000-8000-000000000001" });
+    listEntriesMock.mockResolvedValue([BASE_ENTRY]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      headers: auth(USER, ["employee"]),
+    });
+    expect(r.statusCode).toBe(200);
+    expect(r.body).toContain("Promoted to Senior Engineer");
+    await app.close();
+  });
+
+  it("403 — a role outside the reader list is rejected", async () => {
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: `/v1/hrms/employees/${EMP_ID}/service-book/pdf`,
+      headers: auth(USER, ["citizen"]),
     });
     expect(r.statusCode).toBe(403);
     await app.close();

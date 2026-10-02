@@ -11,14 +11,18 @@ const TENANT = "aaaaaaaa-0001-4000-8000-000000000001";
 const USER   = "aaaaaaaa-1111-4000-8000-000000000001";
 
 // ── Hoist query mocks before any vi.mock hoisting ──────────────────────────
-const { getDashboardMock, getPendingLeaveInboxMock } = vi.hoisted(() => ({
+const { getDashboardMock, getPendingLeaveInboxMock, getRoutingFailedLeaveInboxMock } = vi.hoisted(() => ({
   getDashboardMock:         vi.fn(),
   getPendingLeaveInboxMock: vi.fn(),
+  getRoutingFailedLeaveInboxMock: vi.fn(),
 }));
 
 vi.mock("../src/modules/dashboard/queries.js", () => ({
   getDashboard:         (...a: unknown[]) => getDashboardMock(...a),
   getPendingLeaveInbox: (...a: unknown[]) => getPendingLeaveInboxMock(...a),
+  // #1563: the pending-leaves route also returns a sibling `routingFailed`
+  // array (leave applications whose workflow instance was rejected).
+  getRoutingFailedLeaveInbox: (...a: unknown[]) => getRoutingFailedLeaveInboxMock(...a),
 }));
 
 vi.mock("../src/shared/db.js", () => ({
@@ -63,6 +67,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   getDashboardMock.mockResolvedValue(DASHBOARD_PAYLOAD);
   getPendingLeaveInboxMock.mockResolvedValue([]);
+  getRoutingFailedLeaveInboxMock.mockResolvedValue([]);
 });
 
 afterAll(async () => {
@@ -148,6 +153,35 @@ describe("GET /v1/hrms/dashboard/pending-leaves", () => {
     expect(body).toHaveProperty("data");
     expect(Array.isArray(body.data)).toBe(true);
     expect(body.data).toHaveLength(0);
+    expect(body.routingFailed).toEqual([]);
+    await app.close();
+  });
+
+  it("200 — surfaces routing-failed leave applications in the sibling array (#1563)", async () => {
+    const failed = {
+      id: "cccccccc-0001-4000-8000-000000000009",
+      employeeName: "Sita Rao",
+      employeeNo: "EMP009",
+      departmentName: "Finance",
+      leaveTypeName: "Earned Leave",
+      leaveTypeCode: "EL",
+      fromDate: "2026-09-01",
+      toDate: "2026-09-03",
+      daysApplied: 3,
+      status: "routing_failed",
+    };
+    getRoutingFailedLeaveInboxMock.mockResolvedValue([failed]);
+    const app = await buildApp();
+    const r = await app.inject({
+      method: "GET",
+      url: "/v1/hrms/dashboard/pending-leaves",
+      headers: auth(),
+    });
+    expect(r.statusCode).toBe(200);
+    const body = r.json();
+    expect(body.data).toHaveLength(0);
+    expect(body.routingFailed).toHaveLength(1);
+    expect(body.routingFailed[0].employeeName).toBe("Sita Rao");
     await app.close();
   });
 

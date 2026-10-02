@@ -291,7 +291,10 @@ describe("Service-book attestation immutability", () => {
   let entryId = "";
   it("creates an entry", async () => {
     const r = await app.inject({ method: "POST", url: `/v1/hrms/employees/${empPromo}/service-book`, headers: { ...HR, ...CT },
-      payload: { entryType: "award", effectiveDate: "2024-06-01", description: "Commendation" } });
+      // GAP-HR-SERVICE-BOOK-03 (#1700): entryType is now a closed enum
+      // (SERVICE_BOOK_EVENT_TYPES) that no longer includes the free-form
+      // "award"; a commendation is recorded under "other".
+      payload: { entryType: "other", effectiveDate: "2024-06-01", description: "Commendation" } });
     expect(r.statusCode).toBe(202);
     entryId = r.json().id;
     await drainF3();

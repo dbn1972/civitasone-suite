@@ -352,11 +352,22 @@ describe("GET /v1/hrms/org-chart", () => {
     expect(res.statusCode).toBe(401);
   });
 
-  it("returns 403 for employee role", async () => {
+  // #1499 deliberately opened the org chart to all staff; citizen stays blocked.
+  it("returns 200 for employee role (open to all staff, #1499)", async () => {
     const app = await buildApp();
     const res = await app.inject({
       method: "GET", url: "/v1/hrms/org-chart",
       headers: { authorization: `Bearer ${makeToken(["employee"])}` },
+    });
+    await app.close();
+    expect(res.statusCode).toBe(200);
+  });
+
+  it("returns 403 for citizen role", async () => {
+    const app = await buildApp();
+    const res = await app.inject({
+      method: "GET", url: "/v1/hrms/org-chart",
+      headers: { authorization: `Bearer ${makeToken(["citizen"])}` },
     });
     await app.close();
     expect(res.statusCode).toBe(403);
