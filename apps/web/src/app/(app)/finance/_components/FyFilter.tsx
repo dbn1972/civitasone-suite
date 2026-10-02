@@ -5,9 +5,10 @@
  * keyboard-accessible fiscal-year picker. Selecting a year updates the `fy`
  * URL search param (a genuine navigation) and refreshes server data.
  *
- * NOTE: the finance list loaders do not yet accept an `fy` filter, so the
- * selection is currently surfaced as URL state. Once the loaders honour
- * `searchParams.fy`, the filtered data will follow automatically.
+ * Pages that render this control (dashboard, budget/formulation,
+ * budget/monitoring) read `searchParams.fy` server-side and pass the validated
+ * FY to their loaders, so the push below re-renders them with the new year.
+ * (Financial statements are cumulative and do not use it.)
  */
 import { useRouter, useSearchParams } from "next/navigation";
 import { recentFinancialYears } from "@/lib/fiscalYear";
@@ -22,7 +23,6 @@ export function FyFilter() {
     const next = new URLSearchParams(params.toString());
     next.set("fy", e.target.value);
     router.push(`?${next.toString()}`);
-    router.refresh();
   }
 
   return (

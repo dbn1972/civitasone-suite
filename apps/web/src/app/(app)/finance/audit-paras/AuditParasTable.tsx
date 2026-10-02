@@ -23,7 +23,9 @@ export function AuditParasTable({ paras, source = "api" }: { paras: Row[]; sourc
         <StatCard icon="📋" iconBg="#e7edfd" label="Total Paras" value={stats.total} />
         <StatCard icon="🔴" iconBg="#fce7ee" label="Open" value={stats.open} />
         <StatCard icon="📝" iconBg="#fffaeb" label="Responded" value={stats.responded} />
+        <StatCard icon="⬆️" iconBg="#fce7ee" label="Escalated" value={stats.escalated} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Settled" value={stats.settled} />
+        <StatCard icon="🗂️" iconBg="#f2f4f7" label="Dropped / Other" value={stats.droppedOther} />
       </StatGrid>
       <Card title="Audit Observations">
         {/* UX-012: this badge is the ONLY place that reports data provenance for

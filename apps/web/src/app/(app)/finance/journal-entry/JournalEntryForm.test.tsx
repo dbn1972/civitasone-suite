@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
-import { JournalEntryForm } from "./JournalEntryForm";
+import { JournalEntryForm, voucherNoError } from "./JournalEntryForm";
 
 const accounts: AccountSummary[] = [
   { code: "2202-cash", name: "Cash", type: "asset", currency: "INR", balanceDisplay: "0", status: "active" },
@@ -279,5 +279,24 @@ describe("JournalEntryForm", () => {
     fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "1,00,000" } });
     expect(screen.getAllByText(/remove the commas/).length).toBeGreaterThan(0);
     expect(screen.queryByText("Enter an amount with at most 2 decimals.")).not.toBeInTheDocument();
+  });
+});
+
+describe("voucherNoError (GAP-FINANCE-ACCOUNTING-VOUCHERS-NEW-05)", () => {
+  it("accepts ordinary series formats", () => {
+    expect(voucherNoError("JV-2026-001")).toBeNull();
+    expect(voucherNoError("PV/26-27/0042")).toBeNull();
+  });
+  it("rejects empty, over-long and odd-character references", () => {
+    expect(voucherNoError("  ")).toMatch(/required/);
+    expect(voucherNoError("A".repeat(65))).toMatch(/at most 64/);
+    expect(voucherNoError("-bad")).toMatch(/letters, numbers/);
+    expect(voucherNoError("JV<script>")).toMatch(/letters, numbers/);
+  });
+  it("shows the error under the field and blocks posting", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    fireEvent.change(screen.getByLabelText("Voucher Number", { selector: "input" }), { target: { value: "bad#no" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    expect(screen.getByText(/Use letters, numbers and/)).toBeInTheDocument();
   });
 });

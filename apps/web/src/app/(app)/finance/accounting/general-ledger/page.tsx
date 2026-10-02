@@ -2,6 +2,7 @@ import { PageHeader, LoadErrorState } from "../../../../_components/ds";
 import { getFinanceGLEntries } from "../../../../_data/loaders";
 import { GLTable } from "./GLTable";
 import { PrintExportButton } from "../../_components/PrintExportButton";
+import { PrintHeader } from "../../_components/PrintHeader";
 
 export default async function GeneralLedgerPage({
   searchParams,
@@ -22,11 +23,13 @@ export default async function GeneralLedgerPage({
         subtitle="Double-entry ledger — every debit has a corresponding credit."
         actions={
           <>
-            <PrintExportButton label="Export PDF" documentTitle="General Ledger" />
+            <PrintExportButton label="Print / Save as PDF" documentTitle="General Ledger" />
             <a href="/finance/accounting/vouchers/new" className="btn primary">+ New Voucher</a>
           </>
         }
       />
+
+      <PrintHeader title="General Ledger" scope="All loaded vouchers" />
 
       {/* UX-012: the data-source badge now lives inside GLTable, driven by
           the same useSeededResource call that produces its rows — not a

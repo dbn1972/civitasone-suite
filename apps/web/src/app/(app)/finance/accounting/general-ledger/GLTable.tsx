@@ -3,7 +3,8 @@
 import { useMemo, useState } from "react";
 import { DataTable, Segmented, EmptyState, RefreshErrorState, StatGrid, StatCard, Card } from "../../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
-import { computeGlStats } from "./glStats";
+import { computeGlStats, journalIdOf } from "./glStats";
+import { GL_JOURNAL_LIMIT } from "@/lib/financeLimits";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import type { GLEntrySummary } from "@civitasone/types";
@@ -59,6 +60,7 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
   // formatMoney() (which expects minor units) renders the right scale and
   // large ledgers don't drift under float addition.
   const stats = computeGlStats(rows);
+  const isFiltered = activeTab !== "All" || query.trim() !== "";
   const totalDebit = filtered.reduce((s, e) => s + BigInt((e.debit as string) || "0"), 0n);
   const totalCredit = filtered.reduce((s, e) => s + BigInt((e.credit as string) || "0"), 0n);
 
@@ -73,19 +75,26 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
     <>
       <StatGrid>
         <StatCard icon="📒" iconBg="#e7edfd" label="Vouchers" value={stats.vouchers} />
+        <StatCard icon="🧾" iconBg="#f4f3ff" label="Entry lines" value={stats.entryLines} />
         <StatCard icon="🏛️" iconBg="#eff6ff" label="Accounts Active" value={stats.accountsActive} />
-        <StatCard icon="📤" iconBg="#fef3f2" label="Total Debit" value={formatMoney(stats.totalDebit)} />
+        <StatCard icon="📤" iconBg="#fef3f2" label="Ledger Total Debit" value={formatMoney(stats.totalDebit)} />
         <StatCard
           icon="📥"
           iconBg="#ecfdf3"
-          label="Total Credit"
+          label="Ledger Total Credit"
           value={formatMoney(stats.totalCredit)}
           {...(stats.balance === null
             ? {}
             : { delta: stats.balance === "balanced" ? "Balanced" : "Unbalanced", up: stats.balance === "balanced" })}
         />
       </StatGrid>
-      <Card title="General ledger — all fiscal years">
+      {stats.vouchers >= GL_JOURNAL_LIMIT ? (
+        <p role="status" style={{ margin: "0 0 12px", fontSize: "0.85rem", color: "var(--ink2, #475569)" }}>
+          Only the first {GL_JOURNAL_LIMIT} vouchers (by posting date) are loaded; later entries are not shown here, so
+          the ledger totals above cover just these vouchers.
+        </p>
+      ) : null}
+      <Card title="General ledger">
     <div>
       {/* UX-012: this badge is the ONLY place that reports data provenance for
           the rows shown below — it reads the same useSeededResource call as
@@ -155,7 +164,7 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
               label: "Print",
               sortable: false,
               render: (e) => {
-                const journalId = (e.id as string).includes(":") ? (e.id as string).split(":")[0] : (e.id as string);
+                const journalId = journalIdOf(e.id as string);
                 return (
                   <PrintDocumentLink
                     href={`/api/proxy/v1/finance/journals/${journalId}/pdf`}
@@ -174,7 +183,7 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
       {filtered.length > 0 && (
         <div className="dt-toolbar" style={{ justifyContent: "flex-end", borderTop: "1px solid var(--line)" }}>
           <span style={{ fontSize: 13, color: "var(--ink2)" }}>
-            Total ({filtered.length} entries) — Debit: <strong>{formatMoney(totalDebit)}</strong> · Credit: <strong>{formatMoney(totalCredit)}</strong>
+            {isFiltered ? `Filtered total (${filtered.length} of ${rows.length} entries)` : `Total (${filtered.length} entries)`} — Debit: <strong>{formatMoney(totalDebit)}</strong> · Credit: <strong>{formatMoney(totalCredit)}</strong>
           </span>
         </div>
       )}

@@ -6,8 +6,10 @@
  *
  * Finance has no server-side PDF/MIS export endpoint for statements, the GL or
  * the dashboard (only per-voucher PDF exists at /v1/finance/journals/:id/pdf),
- * so "Export PDF" / "Export MIS" are wired to print-to-PDF — a genuine action
- * rather than a dead control.
+ * so "Print / Save as PDF" / "Export MIS" are wired to print-to-PDF — a genuine
+ * action rather than a dead control. The output is a browser print of the
+ * screen, not an official statement: pages add a <PrintHeader/> naming the
+ * document and generation time (GAP-FINANCE-ACCOUNTING-FINANCIAL-STATEMENTS-05).
  */
 import { Button } from "../../../_components/ds";
 

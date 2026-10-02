@@ -1,16 +1,10 @@
 "use client";
 import { DataTable } from "@/app/_components/ds";
+import { formatMoney } from "@/lib/formatters";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 
 type Row = Record<string, unknown>;
-
-function rupees(val: unknown): string {
-  const n = Number(BigInt(String(val ?? "0"))) / 100;
-  if (n >= 1e7) return `₹${(n / 1e7).toFixed(2)} Cr`;
-  if (n >= 1e5) return `₹${(n / 1e5).toFixed(2)} L`;
-  return `₹${n.toFixed(0)}`;
-}
 
 function statusBadge(status: unknown): string {
   switch (String(status)) {
@@ -36,7 +30,7 @@ export function FundReleasesTable({ releases, source = "api" }: { releases: Row[
 
   const enriched = rows.map((r) => ({
     ...r,
-    _amount:   rupees(r.amountMinor),
+    _amount:   formatMoney(String(r.amountMinor ?? "0")),
     _status:   statusBadge(r.status),
     // GAP-FINANCE-BUDGET-FUND-RELEASES-01: an 8-char uuid tail is not an
     // office name. No office directory backs from/to_office_id yet, so the

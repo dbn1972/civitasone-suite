@@ -1,6 +1,6 @@
 import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getFinanceAuditParaById } from "@/app/_data/loaders";
-import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
 import { auditParaTone } from "../auditParaTone";
 
 export default async function AuditParaDetailPage({ params }: { params: { id: string } }) {
@@ -44,7 +44,7 @@ export default async function AuditParaDetailPage({ params }: { params: { id: st
         <StatCard icon="₹" iconBg="#fce7ee" label="Amount" value={formatMoney(para.moneyValueMinor)} />
         <StatCard icon="🏛️" iconBg="#e7edfd" label="Source" value={para.source} />
         <StatCard icon="🏢" iconBg="#fffaeb" label="Department" value={para.dept} />
-        <StatCard icon="⏳" iconBg="#fce7ee" label="Status" value={para.status} />
+        <StatCard icon="⏳" iconBg="#fce7ee" label="Status" value={humanizeStatus(para.status)} />
       </StatGrid>
 
       <Card title="Register record" padding>

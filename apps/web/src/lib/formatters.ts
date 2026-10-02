@@ -384,6 +384,45 @@ export function formatMoney(minorUnits: bigint | number | string | null | undefi
 }
 
 /**
+ * GAP-FINANCE-BUDGET-ALLOCATION-05: compact "Cr / L" shorthand for stat cards
+ * and summary figures (>= 1 lakh rupees), computed in bigint -- never via
+ * Number(bigint)/100. Below 1 lakh it falls back to the exact formatMoney()
+ * (paise included), so a small amount never loses its paise. Tables and
+ * exports must keep using formatMoney() so reconciliation figures stay exact.
+ *
+ *   (1 lakh = 10,000,000 paise; 1 crore = 1,000,000,000 paise)
+ *   formatMoneyCompact(530000000n) -> "₹53.00 L"
+ *   formatMoneyCompact(1800000000n) -> "₹1.80 Cr"
+ *   formatMoneyCompact(12345000n)  -> "₹1.23 L"
+ *   formatMoneyCompact(1234500n)   -> "₹12,345.00"
+ *   formatMoneyCompact(null)       -> "—"
+ */
+export function formatMoneyCompact(minorUnits: bigint | number | string | null | undefined): string {
+  const exact = formatMoney(minorUnits);
+  if (exact === "—") return exact;
+  // Re-derive the integer minor value the same way formatMoney did.
+  let minor: bigint;
+  if (typeof minorUnits === "bigint") minor = minorUnits;
+  else if (typeof minorUnits === "number") minor = BigInt(Math.round(minorUnits));
+  else {
+    const t = String(minorUnits).trim();
+    minor = /^[+-]?\d+$/.test(t) ? BigInt(t) : BigInt(Math.round(Number(t)));
+  }
+  const negative = minor < 0n;
+  const abs = negative ? -minor : minor;
+  const LAKH = 10_000_000n; // 1 lakh rupees in paise
+  const CRORE = 1_000_000_000n; // 1 crore rupees in paise
+  if (abs < LAKH) return exact;
+  // Round half-up to 2 decimals of the unit: units of 1e5 paise (L) / 1e7 paise (Cr).
+  const scaled = (unit: bigint) => (abs * 100n + unit / 2n) / unit; // hundredths of the unit
+  const fmt = (hundredths: bigint, suffix: string) =>
+    `${negative ? "-" : ""}₹${hundredths / 100n}.${(hundredths % 100n).toString().padStart(2, "0")} ${suffix}`;
+  const crore = scaled(CRORE);
+  if (abs >= CRORE || scaled(LAKH) >= 10_000n) return fmt(crore, "Cr");
+  return fmt(scaled(LAKH), "L");
+}
+
+/**
  * UX-006 type guard: safely convert a MINOR-units (paise) field to a plain
  * rupee `number` for arithmetic/comparisons or a form-input default — WITHOUT
  * silently turning missing data into a real-looking 0. Prefer this over a bare

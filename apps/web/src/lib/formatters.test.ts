@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { formatMoney, formatIndianDate, formatIndianDateTime, todayIST, addDaysIST, minorToRupeesOrNull, formatClockTime12h } from "./formatters";
+import { formatMoneyCompact, formatMoney, formatIndianDate, formatIndianDateTime, todayIST, addDaysIST, minorToRupeesOrNull, formatClockTime12h } from "./formatters";
 
 // ---------------------------------------------------------------------------
 // formatClockTime12h -- GAP-HR-ATTENDANCE-CONFIG-02
@@ -390,5 +390,25 @@ describe("formatPeriod (GAP-PAYROLL-ARREARS-06)", () => {
     expect(formatPeriod("")).toBe("—");
     expect(formatPeriod("2026-13")).toBe("2026-13");
     expect(formatPeriod("July")).toBe("July");
+  });
+});
+
+describe("formatMoneyCompact (GAP-FINANCE-BUDGET-ALLOCATION-05)", () => {
+  it("renders Cr / L with bigint maths", () => {
+    // 1 crore rupees = 1,000,000,000 paise; 1 lakh rupees = 10,000,000 paise.
+    expect(formatMoneyCompact(1800000000n)).toBe("₹1.80 Cr");
+    expect(formatMoneyCompact(18000000000n)).toBe("₹18.00 Cr");
+    expect(formatMoneyCompact(530000000n)).toBe("₹53.00 L");
+    expect(formatMoneyCompact(12345000n)).toBe("₹1.23 L");
+    expect(formatMoneyCompact("-5300000000")).toBe("-₹5.30 Cr");
+  });
+  it("keeps exact paise below 1 lakh and shows missing as a dash", () => {
+    expect(formatMoneyCompact(1234500n)).toBe("₹12,345.00");
+    expect(formatMoneyCompact(9999999n)).toBe("₹99,999.99");
+    expect(formatMoneyCompact(null)).toBe("—");
+  });
+  it("is exact beyond 2^53 and rolls 99.995 L up to 1 Cr, not '100.00 L'", () => {
+    expect(formatMoneyCompact(9007199254740993000n)).toBe("₹9007199254.74 Cr");
+    expect(formatMoneyCompact(999950000n)).toBe("₹1.00 Cr");
   });
 });

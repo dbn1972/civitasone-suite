@@ -54,4 +54,14 @@ describe("AuditParasTable", () => {
     render(<AuditParasTable paras={[]} source="error" />);
     expect(screen.getByText("Total Paras").closest(".stat")).toHaveTextContent("2");
   });
+
+  // GAP-FINANCE-AUDIT-PARAS-03
+  it("shows Escalated and Dropped / Other cards so Total reconciles", () => {
+    seed(["open", "responded", "settled", "escalated", "dropped"].map((status, i) => PARA({ id: `p${i}`, paraNo: `${i}/2025`, status })), "live");
+    render(<AuditParasTable paras={[]} source="api" />);
+    for (const label of ["Open", "Responded", "Escalated", "Settled", "Dropped / Other"]) {
+      expect(screen.getByText(label, { selector: ".stat *" }).closest(".stat")).toHaveTextContent("1");
+    }
+    expect(screen.getByText("Total Paras").closest(".stat")).toHaveTextContent("5");
+  });
 });

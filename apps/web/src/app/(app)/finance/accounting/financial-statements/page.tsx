@@ -2,6 +2,7 @@ import { PageHeader, Card, LoadErrorState } from "../../../../_components/ds";
 import { getFinancialStatements } from "../../../../_data/loaders";
 import { StatementsTable } from "./StatementsTable";
 import { PrintExportButton } from "../../_components/PrintExportButton";
+import { PrintHeader } from "../../_components/PrintHeader";
 
 /**
  * GET /v1/finance/statements is an all-time (cumulative) trial balance per head:
@@ -18,8 +19,10 @@ export default async function FinancialStatementsPage() {
       <PageHeader
         title="Financial Statements"
         subtitle="Receipts &amp; Payments, Income &amp; Expenditure, Balance Sheet — cumulative, all periods."
-        actions={<PrintExportButton label="Export PDF" documentTitle="Financial Statements" />}
+        actions={<PrintExportButton label="Print / Save as PDF" documentTitle="Financial Statements" />}
       />
+
+      <PrintHeader title="Financial Statements" scope="Cumulative, all periods" />
 
       {source === "error" && result.status === 403 ? (
         <LoadErrorState result={result} area="financial statements" backHref="/finance" />
