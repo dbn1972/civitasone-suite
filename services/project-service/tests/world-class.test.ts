@@ -92,6 +92,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
+  // Let every in-flight consumer finish before wiping. The penalty (and EVM)
+  // tests return 202 without draining, so their consumer could insert a
+  // project_penalties row between wipe()'s child DELETEs and its parent
+  // DELETE, which then failed on project_penalties_tenant_project_fk.
+  await (queue as unknown as { drain(): Promise<void> }).drain();
   await wipe();
   await sqlClient.end();
 });

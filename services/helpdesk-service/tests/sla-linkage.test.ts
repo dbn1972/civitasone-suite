@@ -27,7 +27,7 @@ import * as repo from "../src/modules/tickets/repo.js";
  * pick up the tenant GUC. Without this wrapping, consumer writes/reads in
  * these tests run with no RLS GUC set. Mirror that decoration here.
  */
-function wireTenantAwareQueue(q: Queue): Queue {
+function wireTenantAwareQueue<Q extends Queue>(q: Q): Q {
   const rawSubscribe = q.subscribe.bind(q);
   q.subscribe = ((topic: string, handler: Handler) =>
     rawSubscribe(topic, withTenantConsumer(handler) as Handler)) as typeof q.subscribe;
@@ -169,6 +169,17 @@ describe("HD1 — SLA-breach sweeper", () => {
   });
 });
 
+/**
+ * Wait until every delivery on `q` has settled, then require that none was
+ * dead-lettered. MemoryQueue.drain() replaces the fixed 40-200 ms sleeps these
+ * tests used, which the consumers' several DB round trips outlasted on a busy
+ * runner (null rows, or a second delivery still in flight at the assertion).
+ */
+async function settled(q: MemoryQueue): Promise<void> {
+  await q.drain();
+  expect(q.dlq.map((d) => d.error)).toEqual([]);
+}
+
 describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", () => {
   function wired() {
     const q = wireTenantAwareQueue(new MemoryQueue());
@@ -187,7 +198,7 @@ describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", 
     const q = wired();
     const callId = randomUUID();
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_A, callId));
-    await new Promise((r) => setTimeout(r, 50));
+    await settled(q);
 
     const row = await findBySourceAsTenant(TENANT_A, "telephony", callId);
     expect(row).not.toBeNull();
@@ -201,9 +212,9 @@ describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", 
     const callId = randomUUID();
     // two distinct deliveries (different messageId) of the same call
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_A, callId));
-    await new Promise((r) => setTimeout(r, 40));
+    await settled(q);
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_A, callId));
-    await new Promise((r) => setTimeout(r, 40));
+    await settled(q);
 
     // Test-harness fix: bare db.select() outside db.transaction() runs with no
     // RLS GUC set — wrap in runWithTenant + db.transaction().
@@ -222,7 +233,7 @@ describe("HD2 — inbound linkage consumer (telephony.call.missed → ticket)", 
     const callId = randomUUID();
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_A, callId));
     await q.publish(CONSUMES.telephonyCallMissed, missedCallMsg(TENANT_B, callId));
-    await new Promise((r) => setTimeout(r, 60));
+    await settled(q);
     const a = await findBySourceAsTenant(TENANT_A, "telephony", callId);
     const b = await findBySourceAsTenant(TENANT_B, "telephony", callId);
     expect(a).not.toBeNull();
@@ -246,11 +257,7 @@ describe("HD2 — assignment consumer", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_A, assigneeId: agent },
     });
-    // Bumped from 50ms -> 200ms (matches the inter-publish wait the sibling
-    // idempotency tests in this file use): under full-suite load this handler
-    // occasionally hadn't landed by 50ms, producing a null-row flake that
-    // passed reliably in isolation. Pure test-timing fix, no consumer/repo change.
-    await new Promise((r) => setTimeout(r, 200));
+    await settled(q);
     const row = await findRowAsTenant(id, TENANT_A);
     expect(row!.assigneeId).toBe(agent);
     expect(row!.status).toBe("assigned");
@@ -266,7 +273,7 @@ describe("HD2 — assignment consumer", () => {
       correlationId: randomUUID(), schemaVersion: "1.0",
       payload: { id, tenantId: TENANT_B, assigneeId: agent },
     });
-    await new Promise((r) => setTimeout(r, 50));
+    await settled(q);
     const row = await findRowAsTenant(id, TENANT_A);
     expect(row!.assigneeId).toBeNull();
     expect(row!.status).toBe("open");

@@ -34,13 +34,37 @@
  * gap-report row for the transcript) — restoring the fix makes it pass again.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { randomInt, randomUUID } from "node:crypto";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { applyConfig } from "../src/runtime-config.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
-const TENANT_A = "aaaaaaaa-0000-4000-8000-000000000001";
-const TENANT_B = "bbbbbbbb-0000-4000-8000-000000000002";
+// Fresh tenants and client IPs for every test. CI sets REDIS_URL, so both
+// rate-limit tiers use the Redis store and their buckets outlive the app that
+// filled them: they are shared by every buildApp() in this file and by any
+// rerun within the 1-minute window. With fixed ids, the first test exhausted
+// TENANT_A's (and 127.0.0.1's) budget and every later test started at 429.
+// Unique keys give each test, and each sequence that must start fresh, its own
+// bucket under both the memory and the Redis store.
+let TENANT_A = "";
+let TENANT_B = "";
+let CLIENT_IP = "";
+// api-key-auth.ts caches each verified key's record (incl. its tenantId) in a
+// module-level map, so a key reused across tests would resolve to the previous
+// test's tenant. A fresh key per test keeps the fetch mock authoritative.
+let API_KEY = "";
+function freshIp(): string {
+  return `10.${randomInt(256)}.${randomInt(256)}.${1 + randomInt(254)}`;
+}
+
+const apps: Array<Awaited<ReturnType<typeof buildApp>>> = [];
+/** buildApp(), closed again in afterEach so its Redis client does not leak. */
+async function newApp() {
+  const app = await buildApp();
+  apps.push(app);
+  return app;
+}
 const MAX = 3; // small, deterministic budget for this tier in every test below
 
 function tokenFor(tenantId: string, actorId = "actor-1") {
@@ -62,6 +86,7 @@ async function hit(
     method: "GET",
     url: "/api/v1/finance/bills",
     headers,
+    remoteAddress: CLIENT_IP,
   });
   return res.statusCode;
 }
@@ -80,6 +105,10 @@ async function hitMany(
 }
 
 beforeEach(() => {
+  TENANT_A = randomUUID();
+  TENANT_B = randomUUID();
+  CLIENT_IP = freshIp();
+  API_KEY = `ak_live_test.${randomUUID()}`; // gitleaks:allow (per-test fake key)
   process.env.GATEWAY_RATE_LIMIT_MAX = "1000000"; // keep the global tier out of the way
   process.env.GATEWAY_RATE_LIMIT_TENANT_MAX = String(MAX);
   vi.stubGlobal(
@@ -92,7 +121,8 @@ beforeEach(() => {
   );
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await Promise.all(apps.splice(0).map((a) => a.close()));
   vi.unstubAllGlobals();
   delete process.env.GATEWAY_RATE_LIMIT_MAX;
   delete process.env.GATEWAY_RATE_LIMIT_TENANT_MAX;
@@ -100,7 +130,7 @@ afterEach(() => {
 
 describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not the client header", () => {
   it("a spoofed x-tenant-id header cannot SHARD a tenant's own traffic to evade its budget — every request from the same real tenant shares one bucket even with a different fake header each time", async () => {
-    const app = await buildApp();
+    const app = await newApp();
 
     // MAX requests, each with a DIFFERENT spoofed x-tenant-id, all under the
     // SAME real JWT tenant (A). If the header still influenced the key, each
@@ -115,7 +145,7 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
   });
 
   it("a spoofed x-tenant-id header cannot BURN a victim tenant's budget — requests claiming to BE tenant B are still limited under the real caller's own tenant A, and B's real budget is left untouched", async () => {
-    const app = await buildApp();
+    const app = await newApp();
 
     // Tenant A's real JWT, but every request claims (via header) to be tenant B.
     const attackCodes = await hitMany(app, MAX + 1, () => ({
@@ -135,7 +165,7 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
   });
 
   it("legitimate rate limiting still works correctly for real, distinct tenants — independent budgets, correct threshold, no cross-contamination", async () => {
-    const app = await buildApp();
+    const app = await newApp();
 
     // Tenant A, authenticating normally (matching, non-spoofed x-tenant-id
     // header — the ordinary well-behaved client shape), exhausts its own
@@ -156,7 +186,7 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
   });
 
   it("pre-authentication traffic (no JWT) falls back to IP, not the client-supplied header — a spoofed tenant id has no effect either way", async () => {
-    const app = await buildApp();
+    const app = await newApp();
     const FORM_KEY = "a".repeat(64);
 
     async function hitPublic(spoofTenantId: string) {
@@ -165,6 +195,7 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
         url: `/api/v1/crm/public/leads/${FORM_KEY}`,
         headers: { "x-tenant-id": spoofTenantId },
         payload: { name: "Prospect", consent: true },
+        remoteAddress: CLIENT_IP,
       });
       return res.statusCode;
     }
@@ -173,13 +204,17 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
     const fixedCodes: number[] = [];
     for (let i = 0; i < MAX + 1; i++) fixedCodes.push(await hitPublic("fixed-fake-tenant"));
 
-    const app2 = await buildApp();
+    const app2 = await newApp();
+    // A second client IP: with the Redis store, app2 shares app's buckets, so
+    // reusing CLIENT_IP would start this sequence on an exhausted budget.
+    const CLIENT_IP_2 = freshIp();
     async function hitPublic2(spoofTenantId: string) {
       const res = await app2.inject({
         method: "POST",
         url: `/api/v1/crm/public/leads/${FORM_KEY}`,
         headers: { "x-tenant-id": spoofTenantId },
         payload: { name: "Prospect", consent: true },
+        remoteAddress: CLIENT_IP_2,
       });
       return res.statusCode;
     }
@@ -242,7 +277,7 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
         headers: { "content-type": "application/json" },
       });
     });
-    const app = await buildApp();
+    const app = await newApp();
     const FORM_KEY = "b".repeat(64);
 
     async function hitWithApiKey(spoofTenantId: string) {
@@ -250,10 +285,11 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
         method: "POST",
         url: `/api/v1/crm/public/leads/${FORM_KEY}`,
         headers: {
-          "x-api-key": "ak_live_test.secret",
+          "x-api-key": API_KEY,
           "x-tenant-id": spoofTenantId,
         },
         payload: { name: "Prospect", consent: true },
+        remoteAddress: CLIENT_IP,
       });
       return res.statusCode;
     }
@@ -310,7 +346,7 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
         headers: { "content-type": "application/json" },
       });
     });
-    const app = await buildApp();
+    const app = await newApp();
 
     async function hitWithApiKeyOnly(spoofTenantId: string) {
       const res = await app.inject({
@@ -319,9 +355,10 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
         // No Authorization header at all — api-key-only auth, same as the
         // test above, just against a non-public route this time.
         headers: {
-          "x-api-key": "ak_live_test.secret",
+          "x-api-key": API_KEY,
           "x-tenant-id": spoofTenantId,
         },
+        remoteAddress: CLIENT_IP,
       });
       return res.statusCode;
     }
@@ -360,7 +397,7 @@ describe("SEC-008: per-tenant rate limit is keyed on the verified JWT tid, not t
     // other test in this file or process.
     applyConfig({ jwtEdgeVerify: "off" });
     try {
-      const app = await buildApp();
+      const app = await newApp();
 
       // A real, validly-signed JWT for tenant A is presented on every
       // request, but jwtEdgeVerify never runs, so it is never verified and

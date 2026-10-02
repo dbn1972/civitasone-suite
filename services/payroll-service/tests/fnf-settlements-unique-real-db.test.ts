@@ -47,7 +47,9 @@ import { db, sqlClient } from "../src/shared/db.js";
 import { registerFnfConsumers } from "../src/modules/fnf/consumer.js";
 import { COMMANDS } from "../src/topics.js";
 
-const TENANT = "50000000-eeee-4000-8000-000000000001";
+// Fresh per run, so rows from an earlier run (or another file) can never be
+// counted here, and afterAll can delete exactly what this file wrote.
+const TENANT = randomUUID();
 const ACTOR = "60000000-ffff-4000-8000-000000000001";
 
 type TxRunner = { execute: (q: unknown) => Promise<unknown> };
@@ -109,14 +111,18 @@ async function buildQueue(): Promise<MemoryQueue> {
   return q;
 }
 
-const settle = () => new Promise<void>((r) => setTimeout(r, 200));
-
-/** Mirrors worker.ts's `runWithTenant(msg.tenantId, () => handler(msg))` wrap. */
+/**
+ * Mirrors worker.ts's `runWithTenant(msg.tenantId, () => handler(msg))` wrap,
+ * then waits for the consumer to finish. q.drain() resolves only once every
+ * in-flight delivery has settled; the fixed 200 ms sleep it replaces let the
+ * row counts below be read before the consumer had committed on a busy runner.
+ */
 async function publishScoped(q: MemoryQueue, payload: Record<string, unknown>): Promise<void> {
   await runWithTenant(TENANT, async () => {
     await q.publish(COMMANDS.fnfCompute, makeMsg(payload));
-    await settle();
+    await q.drain();
   });
+  expect(q.dlq, "the fnf.compute consumer dead-lettered").toEqual([]);
 }
 
 async function settlementRows(employeeId: string): Promise<Array<Record<string, unknown>>> {
@@ -134,6 +140,10 @@ async function settlementRows(employeeId: string): Promise<Array<Record<string, 
 
 describe("payroll.fnf_settlements unique index — real Postgres (PR #1552 review, live-reproduced fix)", () => {
   afterAll(async () => {
+    await withTenantScope(db as never, TENANT, async (tx: TxRunner) => {
+      await tx.execute(sql`DELETE FROM payroll.fnf_settlements WHERE tenant_id = ${TENANT}`);
+      await tx.execute(sql`DELETE FROM _outbox.messages WHERE tenant_id = ${TENANT}`);
+    });
     await sqlClient.end();
   });
 

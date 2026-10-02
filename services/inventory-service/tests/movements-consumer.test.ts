@@ -148,18 +148,16 @@ describe("issue.create — overissue (guaranteed INSUFFICIENT_STOCK)", () => {
     expect(res.statusCode).toBe(202);
     const issueId = res.json().id as string;
 
-    const start = Date.now();
     await drain();
-    const elapsedMs = Date.now() - start;
 
     expect(mq.dlq.slice(before).some((d) => d.error.includes("INSUFFICIENT_STOCK"))).toBe(true);
     // The core regression proof: exactly one delivery attempt. Before the
     // fix this was 5 (maxAttempts) — a plain Error is retried, not rejected.
+    // The attempt counter is the direct proof that no retry backoff ran. A
+    // wall-clock bound used to sit here as a proxy for the same thing
+    // (elapsedMs < 200); it measured CI scheduler load rather than retries and
+    // failed at 237-269 ms on busy runners even with exactly one attempt.
     expect(attemptCounts.get(issueId)).toBe(1);
-    // Backoff sanity check: attempts 1-4 sleeping 2**attempt*10ms sum to
-    // >=300ms before the old code ever reached its 5th/final attempt. An
-    // immediate dead-letter finishes in a fraction of that.
-    expect(elapsedMs).toBeLessThan(200);
 
     // The whole transaction (including the header insert) rolled back —
     // nothing was ever persisted for this id.

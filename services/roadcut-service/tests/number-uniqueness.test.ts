@@ -24,7 +24,17 @@ import { registerApplicationConsumers } from "../src/modules/applications/consum
 import { registerPermitConsumers } from "../src/modules/permits/consumer.js";
 import * as appRepo from "../src/modules/applications/repo.js";
 import * as permitRepo from "../src/modules/permits/repo.js";
-import { hdr, drainQueue, waitFor, USER_ROLES, ADMIN_ROLES, TENANT_A, ACTOR_A } from "./support.js";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
+import { outboxMessages } from "../src/shared/outbox.js";
+import { roadcutApplications } from "../src/modules/applications/schema.js";
+import { roadcutPermits } from "../src/modules/permits/schema.js";
+import { hdr, drainQueue, USER_ROLES, ADMIN_ROLES, ACTOR_A } from "./support.js";
+
+// This file's own tenant. It used the shared support.ts TENANT_A, which every
+// other roadcut file also writes to; a per-file tenant keeps the 100 rows this
+// file creates out of their reads and lets afterAll remove exactly these rows.
+const TENANT_A = randomUUID();
 
 let app: FastifyInstance;
 
@@ -38,8 +48,30 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await app.close();
+  await drainQueue();
+  await runWithTenant(TENANT_A, () =>
+    db.transaction(async (tx) => {
+      await tx.delete(roadcutPermits).where(eq(roadcutPermits.tenantId, TENANT_A));
+      await tx.delete(roadcutApplications).where(eq(roadcutApplications.tenantId, TENANT_A));
+      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, TENANT_A));
+    }),
+  );
   await sqlClient.end();
 });
+
+/**
+ * POST one status transition, wait for its consumer to finish, then assert the
+ * application really reached `expected`. drainQueue() resolves only once every
+ * in-flight delivery has settled, so this replaces the old 3 s wall-clock
+ * waitFor() poll, which timed out under CI load with 50 chains polling at once.
+ */
+async function transition(id: string, action: string, roles: string[], expected: string): Promise<void> {
+  const res = await app.inject({ method: "POST", url: `/v1/roadcut/applications/${id}/${action}`, headers: hdr(ACTOR_A, TENANT_A, roles) });
+  expect(res.statusCode).toBe(202);
+  await drainQueue();
+  const get = await app.inject({ method: "GET", url: `/v1/roadcut/applications/${id}`, headers: hdr(ACTOR_A, TENANT_A, USER_ROLES) });
+  expect(get.json().data.status).toBe(expected);
+}
 
 const appBody = {
   applicantName: "Concurrency Test Applicant",
@@ -72,8 +104,6 @@ describe("application number generation — no collisions under concurrency", ()
     );
     for (const res of responses) expect(res.statusCode).toBe(202);
     await drainQueue();
-    await new Promise((r) => setTimeout(r, 200));
-    await drainQueue();
 
     const ids = responses.map((r) => (r.json() as { id: string }).id);
     const numbers = await Promise.all(ids.map((id) => appRepo.findById(id, TENANT_A).then((row) => row?.applicationNumber)));
@@ -100,8 +130,6 @@ describe("permit number generation — no collisions under concurrency", () => {
       applicationIds.push((create.json() as { id: string }).id);
     }
     await drainQueue();
-    await new Promise((r) => setTimeout(r, 200));
-    await drainQueue();
     // Each transition's route reads the application's CURRENT status before
     // publishing the next command (canTransition's pre-check) -- firing
     // submit/start-review/approve back-to-back without waiting for each
@@ -112,12 +140,9 @@ describe("permit number generation — no collisions under concurrency", () => {
     // other (Promise.all over per-application async chains).
     await Promise.all(
       applicationIds.map(async (id) => {
-        await app.inject({ method: "POST", url: `/v1/roadcut/applications/${id}/submit`, headers: hdr(ACTOR_A, TENANT_A, USER_ROLES) });
-        await waitFor(async () => (await app.inject({ method: "GET", url: `/v1/roadcut/applications/${id}`, headers: hdr(ACTOR_A, TENANT_A, USER_ROLES) })).json().data.status === "submitted");
-        await app.inject({ method: "POST", url: `/v1/roadcut/applications/${id}/start-review`, headers: hdr(ACTOR_A, TENANT_A, ADMIN_ROLES) });
-        await waitFor(async () => (await app.inject({ method: "GET", url: `/v1/roadcut/applications/${id}`, headers: hdr(ACTOR_A, TENANT_A, USER_ROLES) })).json().data.status === "under_review");
-        await app.inject({ method: "POST", url: `/v1/roadcut/applications/${id}/approve`, headers: hdr(ACTOR_A, TENANT_A, ADMIN_ROLES) });
-        await waitFor(async () => (await app.inject({ method: "GET", url: `/v1/roadcut/applications/${id}`, headers: hdr(ACTOR_A, TENANT_A, USER_ROLES) })).json().data.status === "approved");
+        await transition(id, "submit", USER_ROLES, "submitted");
+        await transition(id, "start-review", ADMIN_ROLES, "under_review");
+        await transition(id, "approve", ADMIN_ROLES, "approved");
       }),
     );
 
@@ -132,8 +157,6 @@ describe("permit number generation — no collisions under concurrency", () => {
       ),
     );
     for (const res of responses) expect(res.statusCode).toBe(202);
-    await drainQueue();
-    await new Promise((r) => setTimeout(r, 200));
     await drainQueue();
 
     const permitIds = responses.map((r) => (r.json() as { id: string }).id);

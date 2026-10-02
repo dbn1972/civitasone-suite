@@ -40,13 +40,19 @@ export function resolveTenant(
 
   const normalized = normalizeNumber(calleeNumber);
 
+  // Collect every tenant holding an ACTIVE mapping for this number. Exactly
+  // one owner resolves to that tenant. More than one is an ambiguous
+  // (conflicting) assignment: it used to resolve to whichever row came first
+  // in an unordered result, so a second tenant mapping someone else's number
+  // could receive that number's calls. Migration 0020's unique index and the
+  // command-side 409 now prevent the conflict; if one ever exists anyway, fail
+  // closed to the default tenant instead of picking an arbitrary owner.
+  const owners = new Set<string>();
   for (const mapping of mappings) {
     if (!mapping.active) continue;
-    if (normalizeNumber(mapping.didNumber) === normalized) {
-      return mapping.tenantId;
-    }
+    if (normalizeNumber(mapping.didNumber) === normalized) owners.add(mapping.tenantId);
   }
-
+  if (owners.size === 1) return owners.values().next().value as string;
   return defaultTenantId;
 }
 

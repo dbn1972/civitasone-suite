@@ -12,6 +12,7 @@ import { randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { db, type ScopedTx } from "./db.js";
+import { queue } from "./infra.js";
 
 export const JWT_SECRET = process.env.JWT_SECRET ?? "test_secret_for_civitasone_32chr";
 
@@ -19,9 +20,22 @@ export function tokenForTenant(tenantId: string, actorId: string, roles: string[
   return signToken({ sub: actorId, tid: tenantId, roles, sid: `sess-${randomUUID()}` }, JWT_SECRET, 3600);
 }
 
-/** Poll-wait for a queue-delivered command's consumer to finish its async work. */
-export function settle(ms = 150): Promise<void> {
-  return new Promise((r) => setTimeout(r, ms));
+/**
+ * Wait for every queue-delivered command's consumer to finish its async work,
+ * including retry backoffs and any commands a consumer cascades.
+ *
+ * This used to be a fixed 150 ms sleep, which raced the consumer: under CI
+ * contention the consumer had not committed yet, so the test read a null row
+ * or got a 422 from a follow-up command against a row still in its old state.
+ * MemoryQueue.drain() (a test aid on the queue-service bus) resolves only once
+ * every in-flight delivery has settled, so the wait is deterministic.
+ */
+export async function settle(): Promise<void> {
+  const q = queue as unknown as { drain?: () => Promise<void> };
+  if (typeof q.drain !== "function") {
+    throw new Error("settle(): the test queue has no drain(); run these tests with QUEUE_DRIVER=memory");
+  }
+  await q.drain();
 }
 
 class RollbackForTestCleanup extends Error {}

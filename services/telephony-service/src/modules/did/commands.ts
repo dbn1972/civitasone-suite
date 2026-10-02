@@ -4,11 +4,26 @@ import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS, DID_RESOURCE, DID_NUMBER_CACHE_PREFIX } from "../../topics.js";
 import { normalizeNumber } from "./domain.js";
+import { HttpError } from "../../shared/context.js";
+import * as repo from "./repo.js";
 import type { CreateDidMappingBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
 export async function createDidMapping(ctx: RequestContext, body: CreateDidMappingBody): Promise<Accepted> {
+  // A DID number can have at most one ACTIVE owner across ALL tenants
+  // (migration 0020's partial unique index). Reject up front with a generic
+  // 409 instead of accepting a command the consumer can only dead-letter.
+  // findMappingsForNumber goes through the cross-tenant resolver, so this
+  // also sees other tenants' rows; the message never says which tenant
+  // holds the number. The consumer's unique-violation handling covers the
+  // race between this check and the insert.
+  if (body.active) {
+    const holders = await repo.findMappingsForNumber(normalizeNumber(body.didNumber));
+    if (holders.length > 0) {
+      throw new HttpError(409, "DID_NUMBER_ASSIGNED", "number already assigned");
+    }
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.createDidMapping, {
     messageId: id,

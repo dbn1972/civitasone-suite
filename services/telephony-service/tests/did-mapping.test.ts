@@ -100,6 +100,26 @@ describe("resolveTenant", () => {
     expect(result).toBe(customFallback);
   });
 
+  it("is deterministic and fails closed when two tenants hold the same active number", () => {
+    // Prevented at write time by 0020's unique index; if it ever exists, no
+    // tenant is picked by row order: the call goes to the default tenant.
+    const conflicting: DidMapping[] = [
+      { didNumber: "+917770001111", tenantId: TENANT_A, active: true },
+      { didNumber: "+91 777-000-1111", tenantId: TENANT_B, active: true },
+    ];
+    expect(resolveTenant("+917770001111", conflicting, FALLBACK)).toBe(FALLBACK);
+    expect(resolveTenant("+917770001111", [...conflicting].reverse(), FALLBACK)).toBe(FALLBACK);
+  });
+
+  it("an inactive duplicate does not make an active owner ambiguous, in any order", () => {
+    const rows: DidMapping[] = [
+      { didNumber: "+917770002222", tenantId: TENANT_B, active: false },
+      { didNumber: "+917770002222", tenantId: TENANT_A, active: true },
+    ];
+    expect(resolveTenant("+917770002222", rows, FALLBACK)).toBe(TENANT_A);
+    expect(resolveTenant("+917770002222", [...rows].reverse(), FALLBACK)).toBe(TENANT_A);
+  });
+
   it("resolves correctly when multiple DIDs map to the same tenant", () => {
     const multiMappings: DidMapping[] = [
       { didNumber: "+911111111111", tenantId: TENANT_A, active: true },
@@ -109,13 +129,26 @@ describe("resolveTenant", () => {
     expect(resolveTenant("+912222222222", multiMappings, FALLBACK)).toBe(TENANT_A);
   });
 
-  it("matches first active mapping when duplicates exist", () => {
+  // Was "matches first active mapping when duplicates exist" (first match
+  // wins). That WAS the cross-tenant hijack: tenant B mapping tenant A's
+  // number won whenever B's row came first. Conflicting owners now fail closed
+  // (see "is deterministic and fails closed ..." above); duplicates within ONE
+  // tenant still resolve to that tenant.
+  it("duplicate active rows for the same tenant still resolve to that tenant", () => {
+    const dupes: DidMapping[] = [
+      { didNumber: "+918001112222", tenantId: TENANT_A, active: true },
+      { didNumber: "+91 800 111 2222", tenantId: TENANT_A, active: true },
+    ];
+    expect(resolveTenant("+918001112222", dupes, FALLBACK)).toBe(TENANT_A);
+  });
+
+  it("cross-tenant duplicates no longer resolve to whichever row comes first", () => {
     const dupes: DidMapping[] = [
       { didNumber: "+918001112222", tenantId: TENANT_A, active: true },
       { didNumber: "+918001112222", tenantId: TENANT_B, active: true },
     ];
-    // First match wins
-    expect(resolveTenant("+918001112222", dupes, FALLBACK)).toBe(TENANT_A);
+    expect(resolveTenant("+918001112222", dupes, FALLBACK)).toBe(FALLBACK);
+    expect(resolveTenant("+918001112222", [...dupes].reverse(), FALLBACK)).toBe(FALLBACK);
   });
 });
 

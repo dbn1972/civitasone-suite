@@ -13,7 +13,7 @@
  */
 import { describe, it, expect, afterAll, beforeEach } from "vitest";
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant } from "@civitasone/db";
 import { buildApp } from "../src/app.js";
@@ -30,7 +30,14 @@ function token(tenantId = TENANT, roles = ["helpdesk_user"]) {
 
 async function cleanup() {
   await runWithTenant(TENANT, () =>
-    db.transaction((tx) => tx.delete(tickets).where(eq(tickets.tenantId, TENANT))),
+    db.transaction(async (tx) => {
+      await tx.delete(tickets).where(eq(tickets.tenantId, TENANT));
+      // Inside the tenant-GUC transaction: helpdesk.sla_config is under RLS,
+      // so the bare sqlClient DELETE this used to be matched zero rows. The
+      // PATCH test's config row then survived into the next run and hid the
+      // seeded breach (below) — the leak this cleanup was written to stop.
+      await tx.execute(sql`DELETE FROM helpdesk.sla_config WHERE tenant_id = ${TENANT}`);
+    }),
   );
   // helpdesk.sla_config has no Drizzle schema (routes.ts queries it with raw
   // sqlClient), so it is cleaned up directly. Without this, the PATCH test
@@ -41,7 +48,6 @@ async function cleanup() {
   // from the result set (a real cross-test pollution bug, not a route bug —
   // the route reads per-tenant, so this cannot leak across tenants in
   // production, but it does leak across tests sharing one tenant id).
-  await sqlClient`DELETE FROM helpdesk.sla_config WHERE tenant_id = ${TENANT}`;
 }
 
 /** Seed a ticket old enough to be past the default SLA resolution window for its priority. */

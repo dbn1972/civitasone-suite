@@ -6,15 +6,16 @@
  * - GET /v1/payroll/tax/form16/bulk-status (returns progress)
  * - GET /v1/payroll/tax/form16/bulk-download (requires completed job)
  */
-import { describe, it, expect, beforeAll, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, afterEach, vi } from "vitest";
 import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { randomUUID } from "node:crypto";
 import { db } from "../src/shared/db.js";
 import { form16BulkJobs } from "../src/modules/form16-pdf/schema.js";
 import { payrollStructures, payrollRuns, payrollSlips } from "../src/modules/payroll/schema.js";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
+import type { MemoryQueue } from "@civitasone/queue";
 import { queue } from "../src/shared/infra.js";
 import { registerForm16BulkConsumers } from "../src/modules/form16-pdf/bulk-consumer.js";
 import { registerTaxConfig } from "../src/modules/tax/engine.js";
@@ -33,16 +34,19 @@ const MINIMAL_TAX_CONFIG = {
 };
 
 const SECRET = "test_secret_for_civitasone_32chr";
-const TENANT = "aaaaaaaa-1111-4000-8000-000000000099";
+// This file's own tenant and fixture ids, fresh per run. The tenant used to be
+// aaaaaaaa-1111-4000-8000-000000000099, shared with nine other payroll files:
+// the consumer counts every disbursed slip of the tenant, so their fixtures
+// changed totalEmployees here, and a job another file left for the same FY
+// changed the 404/409/422 outcomes.
+const TENANT = randomUUID();
 const UUID = "aaaaaaaa-bbbb-4000-8000-000000000001";
 
 // Fixture IDs for a minimal disbursed run + slip (see beforeAll below).
-// Distinct from tests/form16-pdf-coverage.test.ts's own fixture IDs (same
-// tenant, different file/module graph) to avoid cross-file collisions.
-const STRUCT_ID = "77777777-0001-4000-8000-000000000001";
-const RUN_ID = "77777777-0002-4000-8000-000000000001";
-const SLIP_ID = "77777777-0004-4000-8000-000000000001";
-const SEEDED_EMP_ID = "77777777-0003-4000-8000-000000000001";
+const STRUCT_ID = randomUUID();
+const RUN_ID = randomUUID();
+const SLIP_ID = randomUUID();
+const SEEDED_EMP_ID = randomUUID();
 
 function adminToken(roles = ["payroll_admin", "super_admin"]) {
   return signToken({ sub: UUID, tid: TENANT, roles, sid: "s1" }, SECRET);
@@ -56,34 +60,60 @@ function citizenToken() {
 
 /**
  * The form16_bulk_jobs row is only ever created by registerForm16BulkConsumers's
- * handler (src/modules/form16-pdf/bulk-consumer.ts). In production that's wired
- * up by src/worker.ts — a separate process that these HTTP-only buildApp()
- * tests never run. Give the follow-up request (status/duplicate/download check)
- * a brief moment to let the consumer land its DB write after POST /bulk-generate
- * publishes the command, instead of racing it with zero delay.
+ * handler (src/modules/form16-pdf/bulk-consumer.ts), which these tests wire
+ * onto the app's queue (see beforeAll). A job moves pending -> processing ->
+ * completed, and the 409/status/422 checks below need it to be in flight.
  *
- * With zero employees to process, the consumer's job goes pending →
- * processing → completed in under ~30ms once the DB connection pool is warm
- * (measured empirically), too narrow a window to race reliably. The
- * fetchPayrollInput mock below adds an artificial ~150ms delay per employee
- * so the seeded job stays "processing" for a comfortable, deterministic
- * window instead — this wait just needs to land inside that window.
+ * These used to sleep 80 ms and hope that landed inside a ~150 ms window kept
+ * open by a delayed HRMS mock. Under CI load the consumer had often not even
+ * created the row by then (404) or had already finished. The HRMS mock now
+ * waits on `hrmsGate` instead: a test closes the gate, POSTs, polls until the
+ * job is "processing" (blocked on the gate, so it stays there), makes its
+ * assertion, and afterEach opens the gate and drains the queue.
  */
-function waitForConsumer(ms = 80) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+const hrmsGate = vi.hoisted(() => {
+  let release: (() => void) | null = null;
+  let gate: Promise<void> = Promise.resolve();
+  return {
+    close(): void {
+      gate = new Promise<void>((r) => { release = r; });
+    },
+    open(): void {
+      release?.();
+      release = null;
+      gate = Promise.resolve();
+    },
+    wait: (): Promise<void> => gate,
+  };
+});
+
+async function drainQueue(): Promise<void> {
+  await (queue as unknown as MemoryQueue).drain();
+}
+
+/** Poll GET /bulk-status until the FY's job reports `status`. */
+async function waitForJobStatus(app: Awaited<ReturnType<typeof buildApp>>, fy: string, status: string): Promise<void> {
+  await vi.waitFor(async () => {
+    const res = await app.inject({
+      method: "GET",
+      url: `/v1/payroll/tax/form16/bulk-status?fy=${fy}`,
+      headers: { authorization: `Bearer ${adminToken()}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().data.status).toBe(status);
+  }, { timeout: 20_000, interval: 25 });
 }
 
 // Mock HRMS + PDF render/sign + storage for the bulk consumer's per-employee
 // loop (see bulk-consumer.ts): buildForm16() calls fetchPayrollInput(), which
 // would otherwise hit a real (unreachable in tests) HRMS service and fail
 // fast, giving the consumer no real work to do. Returning a valid response
-// after a short delay instead gives these tests a wide, deterministic window
-// in which the job is genuinely still "processing" (see waitForConsumer
-// above) — without this, real Playwright/S3 calls would also be needed once
-// buildForm16 succeeds, which render/storage mocks avoid.
+// once `hrmsGate` (above) is open lets a test hold the job in "processing"
+// for as long as it needs — without this, real Playwright/S3 calls would also
+// be needed once buildForm16 succeeds, which render/storage mocks avoid.
 vi.mock("../src/shared/hrms-client.js", () => ({
   fetchPayrollInput: vi.fn(async () => {
-    await new Promise((r) => setTimeout(r, 150));
+    await hrmsGate.wait();
     return { month: "2024-03", employees: [], lopDays: {} };
   }),
   HrmsUnavailableError: class HrmsUnavailableError extends Error {
@@ -176,6 +206,23 @@ beforeAll(async () => {
   await queue.start();
 });
 
+afterEach(async () => {
+  hrmsGate.open();
+  await drainQueue();
+});
+
+afterAll(async () => {
+  hrmsGate.open();
+  await drainQueue();
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(form16BulkJobs).where(eq(form16BulkJobs.tenantId, TENANT));
+    await tx.delete(payrollSlips).where(eq(payrollSlips.tenantId, TENANT));
+    await tx.delete(payrollRuns).where(eq(payrollRuns.tenantId, TENANT));
+    await tx.delete(payrollStructures).where(eq(payrollStructures.tenantId, TENANT));
+    await tx.execute(sql`DELETE FROM _outbox.messages WHERE tenant_id = ${TENANT}`);
+  }));
+});
+
 // ═══════════════════════════════════════════════════════════════════
 // POST /v1/payroll/tax/form16/bulk-generate — valid payload → 202
 // ═══════════════════════════════════════════════════════════════════
@@ -224,6 +271,7 @@ describe("POST /v1/payroll/tax/form16/bulk-generate — duplicate", () => {
   it("returns 409 when a job for same FY is already pending/processing", async () => {
     const app = await buildApp();
     const fy = "2022-23";
+    hrmsGate.close();
 
     // First request — should succeed with 202
     const res1 = await app.inject({
@@ -234,10 +282,9 @@ describe("POST /v1/payroll/tax/form16/bulk-generate — duplicate", () => {
     });
     expect(res1.statusCode).toBe(202);
 
-    // Give the consumer a moment to land the form16_bulk_jobs row (status
-    // "pending"/"processing") before the duplicate-job check runs — without
-    // this the row doesn't exist yet and the second request also gets 202.
-    await waitForConsumer();
+    // The duplicate-job check needs the first job's row to exist and still be
+    // in flight; it is held in "processing" by the closed HRMS gate.
+    await waitForJobStatus(app, fy, "processing");
 
     // Second request for same FY — should return 409
     const res2 = await app.inject({
@@ -333,6 +380,7 @@ describe("GET /v1/payroll/tax/form16/bulk-status", () => {
   it("returns job progress after creating a bulk job", async () => {
     const app = await buildApp();
     const fy = "2021-22";
+    hrmsGate.close();
 
     // Create a job first
     const createRes = await app.inject({
@@ -343,9 +391,9 @@ describe("GET /v1/payroll/tax/form16/bulk-status", () => {
     });
     expect(createRes.statusCode).toBe(202);
 
-    // Give the consumer a moment to create the form16_bulk_jobs row before
-    // querying status — without this the row doesn't exist yet (404).
-    await waitForConsumer();
+    // Wait until the consumer has created the row and picked up the seeded
+    // employee; the closed HRMS gate holds it in "processing".
+    await waitForJobStatus(app, fy, "processing");
 
     // Query status
     const statusRes = await app.inject({
@@ -359,17 +407,11 @@ describe("GET /v1/payroll/tax/form16/bulk-status", () => {
     const body = statusRes.json();
     expect(body.data.jobId).toBeDefined();
     expect(body.data.fy).toBe(fy);
-    // One employee is seeded for this tenant (see beforeAll) with a mocked
-    // ~150ms-per-employee HRMS delay, so the job should still be
-    // pending/processing at this point — but depending on exactly when this
-    // check lands it could already be "completed" too. What matters here is
-    // that the real consumer created the row at all (previously: 404,
-    // nothing ever ran) and picked up the seeded employee.
-    expect(["pending", "processing", "completed"]).toContain(body.data.status);
-    // totalEmployees is only set once the job transitions past "pending"
-    // (in the same DB write as the processing/completed transition).
-    expect(body.data.totalEmployees).toBe(body.data.status === "pending" ? 0 : 1);
-    expect(body.data.failed + body.data.generated).toBeLessThanOrEqual(1);
+    // Exactly one employee is seeded for this file's tenant (see beforeAll),
+    // and the job is held on the HRMS gate before generating anything.
+    expect(body.data.status).toBe("processing");
+    expect(body.data.totalEmployees).toBe(1);
+    expect(body.data.failed + body.data.generated).toBe(0);
   });
 
   it("returns 404 when no job exists for FY", async () => {
@@ -424,8 +466,9 @@ describe("GET /v1/payroll/tax/form16/bulk-download", () => {
   it("returns 422 when job is not yet completed", async () => {
     const app = await buildApp();
     const fy = "2020-21";
+    hrmsGate.close();
 
-    // Create job (will be in pending/processing status)
+    // Create job (held in "processing" by the closed HRMS gate)
     const createRes = await app.inject({
       method: "POST",
       url: "/v1/payroll/tax/form16/bulk-generate",
@@ -434,13 +477,7 @@ describe("GET /v1/payroll/tax/form16/bulk-download", () => {
     });
     expect(createRes.statusCode).toBe(202);
 
-    // Give the consumer just enough time to create the row (still
-    // pending/processing) but not so long that it also completes — no
-    // employees are seeded for this tenant/FY, so the consumer marks the job
-    // "completed" quickly once it starts. waitForConsumer()'s default is
-    // tuned to land inside that window (verified empirically against this
-    // service's real memory-queue + Postgres timing).
-    await waitForConsumer();
+    await waitForJobStatus(app, fy, "processing");
 
     const res = await app.inject({
       method: "GET",

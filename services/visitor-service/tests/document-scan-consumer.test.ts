@@ -124,7 +124,13 @@ function freshQueue(): MemoryQueue {
   return queue;
 }
 
-async function publishAndFlush(queue: MemoryQueue, topic: string, payload: unknown, waitMs = 50): Promise<void> {
+/**
+ * Publish, then wait until the consumer has fully run. MemoryQueue.drain()
+ * resolves once every in-flight delivery (retries included) has settled; the
+ * fixed 50 ms sleep it replaces let the spy call counts be read before the
+ * async consumer had run when the CI runner was busy.
+ */
+async function publishAndFlush(queue: MemoryQueue, topic: string, payload: unknown): Promise<void> {
   await queue.publish(topic, {
     type: topic,
     tenantId: TENANT,
@@ -133,7 +139,7 @@ async function publishAndFlush(queue: MemoryQueue, topic: string, payload: unkno
     schemaVersion: "1.0",
     payload,
   });
-  await new Promise((r) => setTimeout(r, waitMs));
+  await queue.drain();
 }
 
 beforeEach(() => {
