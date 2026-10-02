@@ -33,6 +33,32 @@ export async function listVerifications(tenantId: string, limit = 50) {
     .where(eq(physicalVerifications.tenantId, tenantId)).limit(limit));
 }
 
+/**
+ * Compare-and-set a session's status: the UPDATE only applies while the row is
+ * still in `expected`, so two racing commands cannot both win. Returns false
+ * (0 rows changed) when the session is missing or already moved on.
+ */
+export async function transitionVerification(
+  tx: Writer, id: string, tenantId: string, expected: string, patch: Partial<VerificationInsert>,
+): Promise<boolean> {
+  const rows = await tx.update(physicalVerifications).set({ ...patch, updatedAt: new Date() })
+    .where(and(eq(physicalVerifications.id, id), eq(physicalVerifications.tenantId, tenantId), eq(physicalVerifications.status, expected)))
+    .returning({ id: physicalVerifications.id });
+  return rows.length > 0;
+}
+
+/**
+ * Row-lock the session and report whether it is still a draft. Holding the
+ * lock until the item insert commits makes a concurrent submit/approve wait,
+ * so an item can never land on a session that was submitted in between.
+ */
+export async function lockDraftSession(tx: Writer, id: string, tenantId: string): Promise<boolean> {
+  const rows = await tx.select({ status: physicalVerifications.status }).from(physicalVerifications)
+    .where(and(eq(physicalVerifications.id, id), eq(physicalVerifications.tenantId, tenantId)))
+    .for("update");
+  return rows[0]?.status === "draft";
+}
+
 // P0-1: tenant-scoped update — id alone would let one tenant mutate another's verification.
 export async function updateVerification(tx: Writer, id: string, tenantId: string, patch: Partial<VerificationInsert>): Promise<void> {
   await tx.update(physicalVerifications).set({ ...patch, updatedAt: new Date() })

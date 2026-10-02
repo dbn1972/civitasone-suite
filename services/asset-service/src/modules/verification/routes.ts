@@ -5,6 +5,7 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import * as commands from "./commands.js";
 import * as repo from "./repo.js";
+import { isRealDateNotAfterToday } from "../../shared/dates.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 // P0-2: write-off approval is a committee/senior-approver action, a strict
@@ -17,7 +18,7 @@ export async function verificationRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const body = z.object({
-      verificationDate: z.string(),
+      verificationDate: z.string().refine((v) => isRealDateNotAfterToday(v), { message: "verificationDate must be a real calendar date, not after today (IST)" }),
       notes: z.string().optional(),
       location: z.string().trim().min(1).max(256).optional(),
     }).parse(req.body);
