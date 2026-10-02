@@ -1,6 +1,7 @@
 import { PageHeader, Card, DataTable, StatusPill, EmptyState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
+import Link from "next/link";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 
 export type PolicyDetail = {
@@ -96,6 +97,24 @@ async function getClaimsForPolicy(id: string): Promise<LoaderResult<ClaimRow[]>>
   });
 }
 
+/**
+ * GAP-ASSETS-INSURANCE-DETAIL-01: resolve the insured asset's "code · name"
+ * label (same /api/v1/assets prefix as the policy list's asset lookup). A
+ * failed lookup only loses the label -- the link still renders.
+ */
+function mapAssetLabel(payload: unknown): string | null {
+  if (!isRecord(payload)) return null;
+  const parts = [payload.code, payload.name].filter((v): v is string => typeof v === "string" && v.trim() !== "");
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+async function getAssetLabel(assetId: string): Promise<LoaderResult<string | null>> {
+  return fetchJson<unknown, string | null>(`/api/v1/assets/assets/${encodeURIComponent(assetId)}`, null, {
+    telemetryKey: "assets.insurance.policyAsset",
+    mapResponse: mapAssetLabel,
+  });
+}
+
 export default async function PolicyDetailPage({ params }: { params: { id: string } }) {
   const { data: policy, source: policySource } = await getPolicy(params.id);
   const { data: claims, source: claimsSource } = await getClaimsForPolicy(params.id);
@@ -122,6 +141,7 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
   }
 
   const claimRows = claims.map((c) => ({ ...c, claimDateDisplay: formatIndianDate(c.claimDate) }));
+  const { data: assetLabel } = await getAssetLabel(policy.assetId);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -142,6 +162,10 @@ export default async function PolicyDetailPage({ params }: { params: { id: strin
         <div className="fields">
           <div className="fld"><div className="l">Policy Number</div><div className="v">{policy.policyNo}</div></div>
           <div className="fld"><div className="l">Insurer</div><div className="v">{policy.insurer}</div></div>
+          <div className="fld">
+            <div className="l">Asset</div>
+            <div className="v"><Link className="lnk" href={`/assets/${encodeURIComponent(policy.assetId)}`}>{assetLabel ?? "View asset"}</Link></div>
+          </div>
           <div className="fld"><div className="l">Sum Insured</div><div className="v">{formatMoney(policy.coverageMinor)}</div></div>
           <div className="fld"><div className="l">Premium</div><div className="v">{formatMoney(policy.premiumMinor)}</div></div>
           <div className="fld"><div className="l">Start Date</div><div className="v">{formatIndianDate(policy.startDate)}</div></div>

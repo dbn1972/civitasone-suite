@@ -1,23 +1,25 @@
 "use client";
 
 import { useState } from "react";
-import { DataTable, Segmented, EmptyState } from "../../../_components/ds";
+import { DataTable, Segmented, EmptyState, StatCard, StatGrid } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { formatMoney } from "@/lib/formatters";
+import { computeAssetStats, type StatAsset } from "./assetStats";
 
-type Asset = {
+type Asset = StatAsset & {
   id: string;
   assetCode: string;
   name: string;
   location?: string | null;
-  currentValue: number;
-  status: string;
+  type?: string;
 } & Record<string, unknown>;
 
 type Row = {
   id: string;
   assetCode: string;
   name: string;
+  type: string;
   location: string;
   currentValue: number;
   status: string;
@@ -25,19 +27,41 @@ type Row = {
 
 const TABS = ["All", "Active", "In maintenance"] as const;
 
-export function AssetsTable({ assets, source = "api" }: { assets: Asset[]; source?: "api" | "error" }) {
-  const { data: rows, provenance, offline, cachedAt } = useSeededResource<Asset[]>(
-    "assets.register",
+type Props = {
+  assets: Asset[];
+  source?: "api" | "error";
+  /** Offline cache key -- one per register so cached rows never cross pages. */
+  cacheKey?: string;
+  /** Restrict to one asset type (the fixed-asset register passes "fixed"). */
+  typeFilter?: string;
+  heading?: string;
+};
+
+/**
+ * One implementation for /assets/list (all types) and /assets/fixed-assets
+ * (type "fixed") -- GAP-ASSETS-FIXED-ASSETS-01 / GAP-ASSETS-LIST-01. The stat
+ * tiles are computed from the SAME rows the table renders (live or cached),
+ * so they can never disagree with it (GAP-ASSETS-LIST-02).
+ */
+export function AssetsTable({ assets, source = "api", cacheKey = "assets.register", typeFilter, heading = "Asset register" }: Props) {
+  const { data, provenance, offline, cachedAt } = useSeededResource<Asset[]>(
+    cacheKey,
     assets,
     source,
     (d) => d.length === 0,
   );
   const [tab, setTab] = useState<string>("All");
 
+  const rows = typeFilter ? data.filter((a) => a.type === typeFilter) : data;
+  // A failed fetch with nothing cached is unknown, not zero.
+  const unknown = provenance === "error-no-data";
+  const stats = computeAssetStats(rows);
+
   const tableRows: Row[] = rows.map((a) => ({
     id: a.id,
     assetCode: a.assetCode,
     name: a.name,
+    type: a.type ?? "—",
     location: a.location ?? "—",
     currentValue: a.currentValue,
     status: a.status.replace(/_/g, " "),
@@ -51,38 +75,44 @@ export function AssetsTable({ assets, source = "api" }: { assets: Asset[]; sourc
         : tableRows;
 
   return (
-    <div className="card" style={{ marginTop: 18 }}>
-      <div className="card-h">
-        <h3>Fixed asset register</h3>
-        <Segmented options={[...TABS]} value={tab} onChange={setTab} />
+    <>
+      <StatGrid>
+        <StatCard icon="🖥️" iconBg="#fdf0e3" label={typeFilter === "fixed" ? "Fixed Assets" : "Assets"} value={unknown ? null : stats.count.toLocaleString("en-IN")} />
+        <StatCard icon="✅" iconBg="#eff6ff" label="Active / in use" value={unknown ? null : `${stats.activePct}%`} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={unknown ? null : formatMoney(stats.grossBlock)} />
+        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={unknown ? null : formatMoney(stats.netBlock)} />
+      </StatGrid>
+      <div className="card" style={{ marginTop: 18 }}>
+        <div className="card-h">
+          <h3>{heading}</h3>
+          <Segmented options={[...TABS]} value={tab} onChange={setTab} />
+        </div>
+        {/* UX-012: the only provenance badge; it reads the same useSeededResource
+            call as the rows and the stat tiles above. */}
+        <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
+        {tableRows.length === 0 ? (
+          <EmptyState icon="🖥️" title="No assets found" message="Register assets to build the asset register." />
+        ) : (
+          <DataTable
+            columns={[
+              { key: "assetCode", label: "Asset" },
+              { key: "name", label: "Item" },
+              ...(typeFilter ? [] : [{ key: "type" as const, label: "Type" }]),
+              { key: "location", label: "Location" },
+              { key: "currentValue", label: "Net value", align: "right", cellType: "amount" },
+              { key: "status", label: "Status", cellType: "status" },
+            ]}
+            rows={filtered}
+            rowLinkKey="id"
+            rowLinkPrefix="/assets/"
+            identifyingColumnKey="name"
+            sortable
+            filterable
+            filterPlaceholder="Filter assets…"
+            pageSize={15}
+          />
+        )}
       </div>
-      {/* UX-012: this badge is the ONLY place that reports data provenance for
-          the rows shown below — it reads the same useSeededResource call as
-          `rows`, so it can never disagree with what the table shows
-          (UX-002's pattern; the page used to render a second, independent
-          badge from the raw `source` prop — removed). */}
-      <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
-      {tableRows.length === 0 ? (
-        <EmptyState icon="🖥️" title="No assets found" message="Register assets to build your fixed asset register." />
-      ) : (
-        <DataTable
-          columns={[
-            { key: "assetCode", label: "Asset" },
-            { key: "name", label: "Item" },
-            { key: "location", label: "Location" },
-            { key: "currentValue", label: "Net value", align: "right", cellType: "amount" },
-            { key: "status", label: "Status", cellType: "status" },
-          ]}
-          rows={filtered}
-          rowLinkKey="id"
-          rowLinkPrefix="/assets/"
-          identifyingColumnKey="name"
-          sortable
-          filterable
-          filterPlaceholder="Filter assets…"
-          pageSize={15}
-        />
-      )}
-    </div>
+    </>
   );
 }

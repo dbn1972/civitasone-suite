@@ -52,8 +52,9 @@ describe("ClaimForm", () => {
     fireEvent.click(screen.getByText("File claim"));
 
     await waitFor(() => {
-      expect(screen.getByText(/Claim submitted/)).toBeInTheDocument();
+      expect(screen.getByText(/Claim against policy .* submitted/)).toBeInTheDocument();
     });
+    expect(screen.queryByText(/\(id /)).not.toBeInTheDocument();
     expect(refreshMock).toHaveBeenCalled();
 
     const call = (globalThis.fetch as unknown as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -81,5 +82,18 @@ describe("ClaimForm", () => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/CLAIM_EXCEEDS_COVERAGE/)).not.toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-INSURANCE-CLAIMS-01
+  it("says policies failed to load (with Retry), not 'no active policies', when the fetch errored", () => {
+    render(<ClaimForm policies={[]} policiesError />);
+    expect(screen.getByText(/Couldn.t load policies/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeInTheDocument();
+    expect(screen.queryByText(/No active policies available/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the 'no active policies' message for a genuinely empty list", () => {
+    render(<ClaimForm policies={[]} />);
+    expect(screen.getByText(/No active policies available/)).toBeInTheDocument();
   });
 });

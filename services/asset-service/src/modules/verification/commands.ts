@@ -20,12 +20,13 @@ async function pub(
 }
 
 export async function createVerification(ctx: RequestContext, body: {
-  verificationDate: string; notes?: string;
+  verificationDate: string; notes?: string; location?: string;
 }): Promise<Accepted> {
   const id = randomUUID();
   return pub(ctx, COMMANDS.verificationCreate, id, {
     verificationDate: body.verificationDate,
     notes: body.notes ?? null,
+    location: body.location ?? null,
   });
 }
 

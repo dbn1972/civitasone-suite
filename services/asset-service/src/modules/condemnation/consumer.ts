@@ -16,8 +16,8 @@ import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
-import { assertMakerChecker, assertBidMeetsFloor } from "./domain.js";
-import { eq, and, sql } from "drizzle-orm";
+import { assertMakerChecker, assertBidMeetsFloor, assertRowUpdated, assertRecommendationPending, assertAuctionable, assertAuctionOpen, assertNoActiveAuction } from "./domain.js";
+import { eq, and, sql, inArray } from "drizzle-orm";
 import { condemnationSurveys, condemnationRecommendations, assetAuctions } from "./schema.js";
 import { assetAssets } from "../register/schema.js";
 
@@ -60,9 +60,11 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
       const p = msg.payload as { id: string; tenantId: string; version: number; recommendation: string };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await tx.update(condemnationSurveys)
+        const updated = await tx.update(condemnationSurveys)
           .set({ status: "submitted", recommendation: p.recommendation, updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${condemnationSurveys.version} + 1` })
-          .where(and(eq(condemnationSurveys.id, p.id), eq(condemnationSurveys.tenantId, p.tenantId), eq(condemnationSurveys.version, p.version)));
+          .where(and(eq(condemnationSurveys.id, p.id), eq(condemnationSurveys.tenantId, p.tenantId), eq(condemnationSurveys.version, p.version), eq(condemnationSurveys.status, "draft")))
+          .returning({ id: condemnationSurveys.id });
+        assertRowUpdated(updated.length, "SURVEY_VERSION_CONFLICT");
         await audit(tx, msg, "survey_submitted", "condemnation_survey", p.id);
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "condemnationSurveySubmit failed"); }
@@ -95,7 +97,7 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
   // ── Recommendation Approve (maker-checker) ─────────────────────────────
   queue.subscribe(COMMANDS.condemnationApprove, async (msg) => {
     try {
-      const p = msg.payload as { id: string; tenantId: string; version: number };
+      const p = msg.payload as { id: string; tenantId: string; version: number; reason?: string };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
         const rows = await tx.select().from(condemnationRecommendations)
@@ -103,9 +105,16 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
         const rec = rows[0];
         if (!rec) throw new Error("RECOMMENDATION_NOT_FOUND");
         assertMakerChecker(rec.createdBy, msg.actorId);
-        await tx.update(condemnationRecommendations)
+        assertRecommendationPending(rec.status);
+        const approved = await tx.update(condemnationRecommendations)
           .set({ status: "approved", approvedBy: msg.actorId, approvedAt: new Date(), updatedBy: msg.actorId, updatedAt: new Date(), version: sql`${condemnationRecommendations.version} + 1` })
-          .where(and(eq(condemnationRecommendations.id, p.id), eq(condemnationRecommendations.version, p.version)));
+          .where(and(
+            eq(condemnationRecommendations.id, p.id), eq(condemnationRecommendations.tenantId, p.tenantId),
+            eq(condemnationRecommendations.version, p.version), eq(condemnationRecommendations.status, "pending"),
+          ))
+          .returning({ id: condemnationRecommendations.id });
+        // A stale version must not condemn the asset below.
+        assertRowUpdated(approved.length, "RECOMMENDATION_VERSION_CONFLICT");
 
         // If decision is 'condemn', update asset status
         if (rec.decision === "condemn") {
@@ -114,7 +123,7 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
             .where(and(eq(assetAssets.id, rec.assetId), eq(assetAssets.tenantId, p.tenantId)));
           await cache.invalidate(cache.makeKey(p.tenantId, "asset", rec.assetId));
         }
-        await audit(tx, msg, "recommendation_approved", "condemnation_recommendation", p.id);
+        await audit(tx, msg, "recommendation_approved", "condemnation_recommendation", p.id, p.reason ? { reason: p.reason } : undefined);
       });
     } catch (err) { log.error({ err, messageId: msg.messageId }, "condemnationApprove failed"); }
   });
@@ -128,6 +137,15 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        const recRows = await tx.select().from(condemnationRecommendations)
+          .where(and(eq(condemnationRecommendations.id, p.recommendationId), eq(condemnationRecommendations.tenantId, p.tenantId))).limit(1);
+        assertAuctionable(recRows[0], p.assetId);
+        const active = await tx.select({ id: assetAuctions.id }).from(assetAuctions)
+          .where(and(
+            eq(assetAuctions.tenantId, p.tenantId), eq(assetAuctions.recommendationId, p.recommendationId),
+            inArray(assetAuctions.status, ["pending", "completed"]),
+          ));
+        assertNoActiveAuction(active.length);
         await tx.insert(assetAuctions).values({
           id: p.id, tenantId: p.tenantId, assetId: p.assetId,
           recommendationId: p.recommendationId,
@@ -155,11 +173,14 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
         const auction = rows[0];
         if (!auction) throw new Error("AUCTION_NOT_FOUND");
 
+        assertAuctionOpen(auction.status);
+
         // Validate bid meets reserve
         assertBidMeetsFloor(BigInt(p.highestBidMinor), auction.reserveValueMinor);
 
-        // Update auction record
-        await tx.update(assetAuctions)
+        // Update auction record -- a stale version must not retire the asset
+        // or post the receipt/GL below.
+        const completed = await tx.update(assetAuctions)
           .set({
             highestBidMinor: BigInt(p.highestBidMinor),
             winnerName: p.winnerName, winnerRef: p.winnerRef ?? null,
@@ -167,12 +188,21 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
             status: "completed", updatedBy: msg.actorId, updatedAt: new Date(),
             version: sql`${assetAuctions.version} + 1`,
           })
-          .where(and(eq(assetAuctions.id, p.id), eq(assetAuctions.version, p.version)));
+          .where(and(
+            eq(assetAuctions.id, p.id), eq(assetAuctions.tenantId, p.tenantId),
+            eq(assetAuctions.version, p.version), eq(assetAuctions.status, "pending"),
+          ))
+          .returning({ id: assetAuctions.id });
+        assertRowUpdated(completed.length, "AUCTION_VERSION_CONFLICT");
 
-        // Retire the asset (status → disposed, depreciation stops)
-        await tx.update(assetAssets)
+        // Retire the asset (status → disposed, depreciation stops). Only an
+        // asset still "condemned" may be retired here: one already disposed by
+        // another path must not be disposed again with a second GL journal.
+        const retired = await tx.update(assetAssets)
           .set({ status: "disposed", updatedBy: msg.actorId, updatedAt: new Date() })
-          .where(and(eq(assetAssets.id, auction.assetId), eq(assetAssets.tenantId, p.tenantId)));
+          .where(and(eq(assetAssets.id, auction.assetId), eq(assetAssets.tenantId, p.tenantId), eq(assetAssets.status, "condemned")))
+          .returning({ id: assetAssets.id });
+        assertRowUpdated(retired.length, "ASSET_NOT_CONDEMNED");
 
         // Emit sale proceeds to finance as a receipt
         await enqueue(tx, {
@@ -222,10 +252,10 @@ export function registerCondemnationConsumers(rawQueue: Queue): void {
   });
 }
 
-async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {
+async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string, details?: Record<string, unknown>): Promise<void> {
   await enqueue(tx, {
     topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
     tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-    payload: { service: "asset", module: "condemnation", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "asset", module: "condemnation", action, resourceType, resourceId, outcome: "success", ...(details ? { details } : {}) },
   });
 }

@@ -14,6 +14,8 @@
 import { useId, useRef, useState } from "react";
 import { Button, Card } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { FleetPicker } from "../FleetPicker";
+import type { PickerOption } from "../_data/labels";
 
 type FieldErrors = {
   deviceId?: string;
@@ -27,7 +29,13 @@ type FieldErrors = {
 const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export function TelemetryForm() {
+type Props = {
+  /** Registered devices labelled "IMEI — vehicle" (GAP-ASSETS-FLEET-DEVICES-01). */
+  options: PickerOption[];
+  devicesError?: boolean;
+};
+
+export function TelemetryForm({ options, devicesError = false }: Props) {
   const [deviceId, setDeviceId] = useState("");
   const [lat, setLat] = useState("");
   const [lng, setLng] = useState("");
@@ -55,7 +63,7 @@ export function TelemetryForm() {
   const headingErrId = useId();
   const fuelLevelErrId = useId();
 
-  const deviceIdRef = useRef<HTMLInputElement>(null);
+  const deviceIdRef = useRef<HTMLSelectElement>(null);
   const latRef = useRef<HTMLInputElement>(null);
   const lngRef = useRef<HTMLInputElement>(null);
   const speedRef = useRef<HTMLInputElement>(null);
@@ -64,7 +72,7 @@ export function TelemetryForm() {
 
   function validate(): boolean {
     const next: FieldErrors = {};
-    if (!deviceId.trim() || !UUID_RE.test(deviceId.trim())) next.deviceId = "Enter a valid device ID (UUID).";
+    if (!deviceId || !UUID_RE.test(deviceId)) next.deviceId = "Select a device.";
     const latNum = Number(lat);
     if (!lat.trim() || Number.isNaN(latNum) || latNum < -90 || latNum > 90) next.lat = "Latitude must be a number between -90 and 90.";
     const lngNum = Number(lng);
@@ -107,7 +115,7 @@ export function TelemetryForm() {
           timestamp: new Date().toISOString(),
         }),
       });
-      setMessage(`Telemetry reading accepted for device ${deviceId.trim()}.`);
+      setMessage(`Telemetry reading accepted for ${options.find((o) => o.id === deviceId)?.label ?? "the selected device"}.`);
       setLat("");
       setLng("");
       setSpeed("");
@@ -126,22 +134,19 @@ export function TelemetryForm() {
       <Card title="Log Telemetry Reading" padding>
         <div style={{ display: "grid", gap: 14 }}>
           <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-            <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={deviceIdId} style={{ fontSize: 13, fontWeight: 600 }}>
-                Device ID <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
-              </label>
-              <input
-                id={deviceIdId}
-                ref={deviceIdRef}
-                value={deviceId}
-                onChange={(e) => setDeviceId(e.target.value)}
-                aria-required="true"
-                aria-invalid={!!errors.deviceId || undefined}
-                aria-describedby={errors.deviceId ? deviceIdErrId : undefined}
-                style={inputStyle}
-              />
-              {errors.deviceId && <p id={deviceIdErrId} role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{errors.deviceId}</p>}
-            </div>
+            <FleetPicker
+              id={deviceIdId}
+              label="Device"
+              options={options}
+              value={deviceId}
+              onChange={setDeviceId}
+              error={errors.deviceId}
+              errorId={deviceIdErrId}
+              loadFailed={devicesError}
+              emptyHint="No devices are registered yet — register one above."
+              emptyHref="/assets/fleet/devices"
+              selectRef={deviceIdRef}
+            />
 
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={latId} style={{ fontSize: 13, fontWeight: 600 }}>

@@ -1,17 +1,25 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { LocationPicker, type FunctionalLocation, type LocationsLoad } from "./LocationPicker";
 
-type Verification = { id: string; status: string; verificationDate?: string; location?: string };
+type Verification = { id: string; status: string; verificationDate?: string; location?: string | null };
 
 export default function AssetVerificationPage() {
   const [rows, setRows] = useState<Verification[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState("");
   const [loadError, setLoadError] = useState(false);
+  // GAP-ASSETS-VERIFICATION-01: the session's site is chosen from the
+  // functional-location master, never hard-coded.
+  const [locations, setLocations] = useState<FunctionalLocation[]>([]);
+  const [locationsLoad, setLocationsLoad] = useState<LocationsLoad>("loading");
+  const [location, setLocation] = useState("");
+  const [locationError, setLocationError] = useState("");
+  const locationRef = useRef<HTMLSelectElement>(null);
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
@@ -39,6 +47,35 @@ export default function AssetVerificationPage() {
     return () => controller.abort()
   }, [load]);
 
+  const loadLocations = useCallback(async (signal?: AbortSignal) => {
+    setLocationsLoad("loading");
+    try {
+      const res = await fetch("/api/proxy/v1/asset/locations", { signal });
+      if (!res.ok) { setLocationsLoad("error"); return; }
+      const body = await res.json() as { data?: FunctionalLocation[] };
+      setLocations((body.data ?? []).filter((l) => l && typeof l.name === "string"));
+      setLocationsLoad("ready");
+    } catch (e) {
+      if (e instanceof Error && e.name !== "AbortError") setLocationsLoad("error");
+    }
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void loadLocations(controller.signal);
+    return () => controller.abort();
+  }, [loadLocations]);
+
+  function startNew() {
+    if (!location) {
+      setLocationError("Choose the location being verified.");
+      locationRef.current?.focus();
+      return;
+    }
+    setLocationError("");
+    create.trigger();
+  }
+
   const create = useConfirmAction({
     onConfirm: async (reason) => {
       const res = await fetch("/api/proxy/v1/asset/verifications", {
@@ -46,8 +83,8 @@ export default function AssetVerificationPage() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
           verificationDate: new Date().toISOString().slice(0, 10),
-          location: "HQ Block",
-          notes: reason || "Annual physical verification",
+          location,
+          notes: (reason ?? "").trim(),
         }),
       });
       if (!res.ok) {
@@ -74,8 +111,21 @@ export default function AssetVerificationPage() {
         subtitle="Barcode-driven audit — GFR-aligned write-off before disposal."
         back="/assets/dashboard"
         backLabel="Dashboard"
-        actions={<Button type="button" onClick={create.trigger}>+ New verification</Button>}
+        actions={<Button type="button" onClick={startNew}>+ New verification</Button>}
       />
+      <div className="card" style={{ marginBottom: 16 }}>
+        <div className="pad">
+          <LocationPicker
+            locations={locations}
+            load={locationsLoad}
+            onRetry={() => void loadLocations()}
+            value={location}
+            onChange={(name) => { setLocation(name); setLocationError(""); }}
+            error={locationError}
+            selectRef={locationRef}
+          />
+        </div>
+      </div>
       {message ? (
         <div role="status" aria-live="polite" className="banner" style={{ background: "var(--panel)", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{message}</div>
       ) : null}
@@ -89,7 +139,7 @@ export default function AssetVerificationPage() {
             icon="🔍"
             title="No verification sessions"
             message="Start a physical verification to reconcile assets against the register."
-            action={<Button type="button" onClick={create.trigger}>+ New verification</Button>}
+            action={<Button type="button" onClick={startNew}>+ New verification</Button>}
           />
         ) : (
           <DataTable
@@ -108,7 +158,7 @@ export default function AssetVerificationPage() {
       <ConfirmDialog
         open={create.open}
         title="Start a new verification session?"
-        description="This opens a GFR physical-verification session for stock-take and reconciliation. Add a note describing the scope."
+        description={<>This opens a GFR physical-verification session at <b>{location || "—"}</b> for stock-take and reconciliation. Add a note describing the scope.</>}
         confirmLabel="Create session"
         requireReason
         reasonLabel="Scope / notes"

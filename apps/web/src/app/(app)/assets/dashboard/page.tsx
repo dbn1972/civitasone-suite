@@ -7,7 +7,14 @@ import { toHumanError } from "@/lib/messages";
 
 export default async function AssetDashboardPage() {
   const { data, source } = await getAssetDashboard();
-  const taggedPct = data.totalAssets > 0 ? Math.round((data.taggedAssets ?? 0) / data.totalAssets * 100) : 0;
+  // GAP-ASSETS-DASHBOARD-01: on a failed fetch the loader hands back the
+  // all-zero ASSET_DASHBOARD_EMPTY fallback. Those zeros are not real counts,
+  // so every tile gets null (StatCard renders "—") instead of 0 / ₹0.00 / 0%.
+  const failed = source === "error";
+  const count = (n: number | undefined) => (failed ? null : (n ?? 0).toLocaleString("en-IN"));
+  const taggedPct = failed
+    ? null
+    : data.totalAssets > 0 ? Math.round((data.taggedAssets ?? 0) / data.totalAssets * 100) : 0;
 
   const recent = (data.recentGrnAssets ?? []).map((a) => ({
     id: a.id,
@@ -31,12 +38,12 @@ export default async function AssetDashboardPage() {
         }
       />
       <StatGrid>
-        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Total Assets" value={data.totalAssets.toLocaleString("en-IN")} />
-        <StatCard icon="🏗️" iconBg="#eff6ff" label="Fixed Assets" value={(data.fixedAssets ?? 0).toLocaleString("en-IN")} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Net Book Value" value={formatMoney(data.netBlock)} />
-        <StatCard icon="🏷️" iconBg="#f5f3ff" label="Tagged" value={`${taggedPct}%`} />
-        <StatCard icon="🛠️" iconBg="#fffaeb" label="Under Maintenance" value={data.underMaintenance.toLocaleString("en-IN")} />
-        <StatCard icon="⚠️" iconBg="#fef2f2" label="Due Disposal" value={data.dueForDisposal.toLocaleString("en-IN")} />
+        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Total Assets" value={count(data.totalAssets)} />
+        <StatCard icon="🏗️" iconBg="#eff6ff" label="Fixed Assets" value={count(data.fixedAssets)} />
+        <StatCard icon="💰" iconBg="#ecfdf3" label="Net Book Value" value={failed ? null : formatMoney(data.netBlock)} />
+        <StatCard icon="🏷️" iconBg="#f5f3ff" label="Tagged" value={taggedPct === null ? null : `${taggedPct}%`} />
+        <StatCard icon="🛠️" iconBg="#fffaeb" label="Under Maintenance" value={count(data.underMaintenance)} />
+        <StatCard icon="⚠️" iconBg="#fef2f2" label="Due Disposal" value={count(data.dueForDisposal)} />
       </StatGrid>
       <div className="grid g-main" style={{ marginTop: 18 }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>

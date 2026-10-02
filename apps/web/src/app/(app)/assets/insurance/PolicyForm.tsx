@@ -2,7 +2,8 @@
 
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, Card } from "@/app/_components/ds";
+import { Button, Card, ConfirmDialog, useConfirmAction } from "@/app/_components/ds";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { browserJson } from "@/lib/api/browserClient";
 import { rupeesToMinorString } from "@/lib/money";
 import type { AssetOption } from "./page";
@@ -38,6 +39,7 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [pending, setPending] = useState<{ coverageMinor: string; premiumMinor: string } | null>(null);
 
   const assetSelectId = useId();
   const policyNoId = useId();
@@ -66,7 +68,10 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
     ["endDate", endDateRef],
   ];
 
-  async function submit(e: React.FormEvent) {
+  const selectedAsset = assets.find((a) => a.id === assetId);
+  const assetLabel = selectedAsset ? [selectedAsset.code, selectedAsset.name].filter(Boolean).join(" · ") || "the selected asset" : "the selected asset";
+
+  function submit(e: React.FormEvent) {
     e.preventDefault();
     setMessage(null);
 
@@ -99,9 +104,26 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
       return;
     }
 
-    setBusy(true);
-    try {
-      const res = await browserJson<AcceptedResponse>("v1/assets/insurance/policies", {
+    // GAP-ASSETS-INSURANCE-01: money-bearing create -- confirm first. The
+    // dialog shows the exact minor-unit strings that will be sent.
+    setPending({ coverageMinor: coverageMinor!, premiumMinor: premiumMinor! });
+    create.trigger();
+  }
+
+  const create = useConfirmAction({
+    onConfirm: async () => {
+      if (!pending) throw new Error("Complete the form first.");
+      setBusy(true);
+      try {
+        await createPolicy(pending);
+      } finally {
+        setBusy(false);
+      }
+    },
+  });
+
+  async function createPolicy({ coverageMinor, premiumMinor }: { coverageMinor: string; premiumMinor: string }) {
+      await browserJson<AcceptedResponse>("v1/assets/insurance/policies", {
         method: "POST",
         body: JSON.stringify({
           assetId,
@@ -115,11 +137,8 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
         }),
       });
       setTone("good");
-      setMessage(
-        res.id
-          ? `Policy submitted (id ${res.id}). It is processed asynchronously and will appear below shortly.`
-          : "Policy submitted.",
-      );
+      setMessage(`Policy ${policyNo.trim()} submitted for ${assetLabel}. It will appear in the list shortly.`);
+      setPending(null);
       setAssetId("");
       setPolicyNo("");
       setInsurer("");
@@ -129,12 +148,6 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
       setEndDate("");
       setFieldErrors({});
       router.refresh();
-    } catch (err) {
-      setTone("bad");
-      setMessage(err instanceof Error ? err.message : "Network error. Please try again.");
-    } finally {
-      setBusy(false);
-    }
   }
 
   return (
@@ -317,6 +330,24 @@ export function PolicyForm({ assets }: { assets: AssetOption[] }) {
           </p>
         )}
       </Card>
+      <ConfirmDialog
+        open={create.open}
+        title="Create this insurance policy?"
+        description={
+          pending ? (
+            <>
+              Policy <b>{policyNo.trim()}</b> with <b>{insurer.trim()}</b> for <b>{assetLabel}</b>: sum insured{" "}
+              <b>{formatMoney(pending.coverageMinor)}</b>, premium <b>{formatMoney(pending.premiumMinor)}</b>, cover{" "}
+              {formatIndianDate(startDate)} to {formatIndianDate(endDate)}.
+            </>
+          ) : null
+        }
+        confirmLabel="Create policy"
+        busy={create.busy}
+        errorMessage={create.error}
+        onConfirm={create.confirm}
+        onCancel={() => { create.cancel(); setPending(null); }}
+      />
     </form>
   );
 }

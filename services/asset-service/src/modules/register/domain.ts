@@ -5,10 +5,10 @@ export class DomainError extends Error {
   }
 }
 
-export type AssetStatus = "active" | "under_maintenance" | "transferred" | "disposed" | "written_off";
+export type AssetStatus = "active" | "under_maintenance" | "transferred" | "disposed" | "written_off" | "condemned";
 
 export function assertValidStatus(status: string): void {
-  const valid: AssetStatus[] = ["active", "under_maintenance", "transferred", "disposed", "written_off"];
+  const valid: AssetStatus[] = ["active", "under_maintenance", "transferred", "disposed", "written_off", "condemned"];
   if (!valid.includes(status as AssetStatus)) {
     throw new DomainError("INVALID_STATUS", `invalid asset status: ${status}`);
   }

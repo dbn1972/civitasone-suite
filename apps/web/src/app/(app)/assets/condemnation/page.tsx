@@ -1,22 +1,39 @@
 import { PageHeader } from "@/app/_components/ds";
-import { CondemnationWorkflow } from "./CondemnationWorkflow";
+import { CondemnationWorkflow, type CondemnationData } from "./CondemnationWorkflow";
+import { loadList, mapAssetOptions, mapAuctions, mapRecommendations, mapSurveys } from "./readModels";
 
 /**
  * Condemnation, Auction & Disposal workflow (SVC-060).
  *
- * asset-service's condemnation module exposes ONLY command endpoints
- * (POST/PATCH, all 202-accepted, fire-and-forget to the outbox) — there is no
- * GET for a survey, recommendation, or auction by id, and no list. See
- * services/asset-service/src/modules/condemnation/routes.ts. That means this
- * screen cannot pre-fetch a record to confirm it exists before acting; each
- * step below is a plain command form that carries the id returned by the
- * previous step forward in local state (or accepts a manually-entered id when
- * resuming a workflow started elsewhere). Maker-checker on recommendation
- * approval is enforced server-side, asynchronously, in the consumer
- * (assertMakerChecker) — the UI cannot know in advance whether an approval
- * will be accepted, so on success we report "submitted", never "approved".
+ * GAP-ASSETS-CONDEMNATION-01/02: asset-service exposes read models for every
+ * step (GET /v1/assets/condemnation-surveys, /condemnation-recommendations,
+ * /auctions). They are loaded here so each step picks its record (and takes
+ * its optimistic-lock version) from the server, instead of the clerk typing
+ * UUIDs and versions. Money columns arrive as decimal strings (bigint paise
+ * serialised by the service's jsonSafe hook).
  */
-export default function CondemnationPage() {
+
+export default async function CondemnationPage() {
+  const [assets, surveys, recommendations, auctions] = await Promise.all([
+    loadList("/api/v1/asset/assets?limit=200", "assets.condemnation.assets", mapAssetOptions),
+    loadList("/api/v1/asset/condemnation-surveys", "assets.condemnation.surveys", mapSurveys),
+    loadList("/api/v1/asset/condemnation-recommendations", "assets.condemnation.recommendations", mapRecommendations),
+    loadList("/api/v1/asset/auctions", "assets.condemnation.auctions", mapAuctions),
+  ]);
+
+  const data: CondemnationData = {
+    assets: assets.data,
+    surveys: surveys.data,
+    recommendations: recommendations.data,
+    auctions: auctions.data,
+    failed: {
+      assets: assets.source === "error",
+      surveys: surveys.source === "error",
+      recommendations: recommendations.source === "error",
+      auctions: auctions.source === "error",
+    },
+  };
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
@@ -25,7 +42,7 @@ export default function CondemnationPage() {
         back="/assets"
         backLabel="Assets"
       />
-      <CondemnationWorkflow />
+      <CondemnationWorkflow data={data} />
     </div>
   );
 }

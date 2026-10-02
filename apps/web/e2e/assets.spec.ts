@@ -100,9 +100,9 @@ test.describe('Assets', () => {
     // ever being reached in this test, but level: 1 is kept as a defensive
     // match against the same <h1 vs h3/h4> pattern fixed elsewhere in this file.
     await expect(page.getByRole('heading', { name: 'Infrastructure Assets', level: 1 })).toBeVisible();
-    // Column renamed from "Asset Code" to "ID"; "Condition" is unchanged.
+    // Column renamed from "Asset Code" to "ID"; "Condition" became "Status" (GAP-ASSETS-INFRA-01: no condition field exists).
     await expect(page.getByRole('columnheader', { name: 'ID' })).toBeVisible();
-    await expect(page.getByRole('columnheader', { name: 'Condition' })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Status' })).toBeVisible();
   });
 
   test('asset maintenance shows heading and seeded maintenance record', async ({ page }) => {

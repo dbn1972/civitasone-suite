@@ -26,9 +26,12 @@ function validateClaimDate(value: string): string | null {
 export function ClaimForm({
   policies,
   preselectedPolicyId,
+  policiesError = false,
 }: {
   policies: PolicyOption[];
   preselectedPolicyId?: string;
+  /** GAP-ASSETS-INSURANCE-CLAIMS-01: the policies fetch failed (not "none exist"). */
+  policiesError?: boolean;
 }) {
   const router = useRouter();
 
@@ -107,7 +110,7 @@ export function ClaimForm({
     setBusy(true);
     setDialogError(undefined);
     try {
-      const res = await browserJson<AcceptedResponse>("v1/assets/insurance/claims", {
+      await browserJson<AcceptedResponse>("v1/assets/insurance/claims", {
         method: "POST",
         body: JSON.stringify({
           policyId: selectedPolicy.id,
@@ -120,11 +123,7 @@ export function ClaimForm({
       });
       setConfirmOpen(false);
       setTone("good");
-      setMessage(
-        res.id
-          ? `Claim submitted (id ${res.id}). It is processed asynchronously and will appear below shortly.`
-          : "Claim submitted.",
-      );
+      setMessage(`Claim against policy ${selectedPolicy.policyNo} submitted. It will appear in the list shortly.`);
       setPolicyId("");
       setClaimDate("");
       setClaimAmount("");
@@ -234,11 +233,18 @@ export function ClaimForm({
           >
             File Claim
           </Button>
-          {noEligiblePolicies && (
+          {noEligiblePolicies && policiesError ? (
+            <p id={noPoliciesHelpId} role="alert" style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--bad, #c0392b)" }}>
+              Couldn&apos;t load policies, so a claim can&apos;t be filed right now.{" "}
+              <button type="button" className="lnk" onClick={() => router.refresh()} style={{ background: "none", border: 0, padding: 0, textDecoration: "underline", cursor: "pointer", color: "inherit", font: "inherit" }}>
+                Retry
+              </button>
+            </p>
+          ) : noEligiblePolicies ? (
             <p id={noPoliciesHelpId} style={{ margin: "6px 0 0", fontSize: 12.5, color: "var(--ink2)" }}>
               No active policies available to file a claim against.
             </p>
-          )}
+          ) : null}
         </div>
 
         {message && (

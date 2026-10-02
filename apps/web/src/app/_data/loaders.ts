@@ -354,7 +354,7 @@ import {
   NotificationItemListSchema,
   NotificationDeliveryListSchema,
 } from "@civitasone/schemas/web";
-import { fetchJson, type LoaderResult } from "./apiClient";
+import { fetchJson, type LoaderResult, type LoaderSource } from "./apiClient";
 import { formatMoney } from "@/lib/formatters";
 import {
   mapAdminUserSummaries,
@@ -3927,13 +3927,22 @@ export async function getAssets(): Promise<LoaderResult<AssetSummary[]>> {
   });
 }
 
-export async function getAssetById(id: string): Promise<LoaderResult<AssetDetail | null>> {
+/**
+ * GAP-ASSETS-DETAIL-01: the detail page stitches three calls together. `source`
+ * describes only the base asset call; `parts` carries each sub-fetch's own
+ * source so a failed /depreciation or /maintenance call is shown as "could not
+ * load" instead of silently reading as "no schedule" / a hidden history card.
+ */
+export type AssetDetailParts = { depreciation: LoaderSource; maintenance: LoaderSource };
+export type AssetDetailLoaderResult = LoaderResult<AssetDetail | null> & { parts: AssetDetailParts };
+
+export async function getAssetById(id: string): Promise<AssetDetailLoaderResult> {
   const base = await fetchJson<unknown, AssetDetail | null>(`/api/v1/asset/assets/${id}`, null, {
     revalidateSeconds: 60,
     telemetryKey: "assets.detail",
     mapResponse: mapAssetDetail,
   });
-  if (!base.data) return base;
+  if (!base.data) return { ...base, parts: { depreciation: base.source, maintenance: base.source } };
 
   const [dep, maint] = await Promise.all([
     fetchJson<unknown, AssetDetail["depreciationSchedule"]>(`/api/v1/asset/assets/${id}/depreciation`, [], {
@@ -3955,6 +3964,7 @@ export async function getAssetById(id: string): Promise<LoaderResult<AssetDetail
       depreciationSchedule: dep.data ?? [],
       maintenanceHistory: maint.data ?? [],
     },
+    parts: { depreciation: dep.source, maintenance: maint.source },
   };
 }
 
@@ -3971,6 +3981,44 @@ export async function getInfraAssets(): Promise<LoaderResult<AssetSummary[]>> {
     revalidateSeconds: 120,
     telemetryKey: "assets.infra",
     mapResponse: mapAssetSummaries,
+  });
+}
+
+/**
+ * GAP-ASSETS-REGISTER-02: asset categories (GET /v1/assets/categories). The
+ * category carries the depreciation method, rate and useful life the
+ * register form must apply instead of a hard-coded category id.
+ */
+export type AssetCategoryOption = {
+  id: string;
+  code: string;
+  name: string;
+  depMethod: "SLM" | "WDV";
+  depRate: number;
+  usefulLifeYears: number;
+};
+
+export function mapAssetCategories(payload: unknown): AssetCategoryOption[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  return rows.flatMap((raw): AssetCategoryOption[] => {
+    if (!isRecord(raw)) return [];
+    const id = toText(raw.id);
+    const name = toText(raw.name);
+    const method = toText(raw.depMethod);
+    const rate = Number(raw.depRate);
+    const life = Number(raw.usefulLifeYears);
+    if (!id || !name || (method !== "SLM" && method !== "WDV")) return [];
+    if (!Number.isFinite(rate) || rate <= 0 || !Number.isInteger(life) || life <= 0) return [];
+    return [{ id, code: toText(raw.code) ?? "", name, depMethod: method, depRate: rate, usefulLifeYears: life }];
+  });
+}
+
+export async function getAssetCategories(): Promise<LoaderResult<AssetCategoryOption[]>> {
+  return fetchJson<unknown, AssetCategoryOption[]>("/api/v1/asset/categories", [], {
+    revalidateSeconds: 300,
+    telemetryKey: "assets.categories",
+    mapResponse: mapAssetCategories,
   });
 }
 

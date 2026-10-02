@@ -4,12 +4,51 @@ import { useRouter } from "next/navigation";
 import { useId, useRef, useState } from "react";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import { formatMoney } from "@/lib/formatters";
+import { canWriteAssets } from "@/lib/auth/workRoles";
 
 type Props = {
   assetId: string;
   barcode?: string | null;
   status: string;
+  /**
+   * GAP-ASSETS-DETAIL-02: session roles from the server page. Only roles the
+   * asset-service admits on its mutation routes see the action card at all;
+   * the service remains authoritative (a 403 still surfaces in the dialog).
+   */
+  roles: readonly string[];
 };
+
+/**
+ * GAP-ASSETS-DETAIL-03: a barcode is printed into a popup and scanned back, so
+ * keep it to a plain code alphabet. Mirrors (more strictly) the asset-service
+ * tagBarcodeBody, which rejects HTML-special characters outright.
+ */
+export const BARCODE_RE = /^[A-Za-z0-9\-_/.]{1,128}$/;
+
+/**
+ * GAP-ASSETS-DETAIL-03: open a print window for the asset tag WITHOUT ever
+ * writing user/server text as HTML. The code is set via textContent, so a
+ * stored barcode such as `<img src=x onerror=...>` prints as literal text.
+ */
+export function printAssetTag(code: string): void {
+  const w = window.open("", "_blank", "width=400,height=300");
+  if (!w) return;
+  try { w.opener = null; } catch { /* some browsers make opener read-only */ }
+  const doc = w.document;
+  doc.title = "Asset tag";
+  const body = doc.body ?? doc.appendChild(doc.createElement("body"));
+  body.style.fontFamily = "monospace";
+  body.style.textAlign = "center";
+  body.style.padding = "40px";
+  const h2 = doc.createElement("h2");
+  h2.textContent = code;
+  const p = doc.createElement("p");
+  p.textContent = "Asset tag \u2014 scan the code for verification";
+  body.appendChild(h2);
+  body.appendChild(p);
+  w.focus();
+  w.print();
+}
 
 /**
  * Non-negative rupees → paise-string, allowing blank or any zero-valued
@@ -40,18 +79,19 @@ function proceedsToMinorString(input: string): string | null {
 
 const inputStyle: React.CSSProperties = { width: "100%", padding: 8, marginBottom: 4, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 };
 
-export function AssetDetailActions({ assetId, barcode, status }: Props) {
+export function AssetDetailActions({ assetId, barcode, status, roles }: Props) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
   const [tagCode, setTagCode] = useState(barcode ?? "");
+  const [tagError, setTagError] = useState("");
   const [toLocation, setToLocation] = useState("");
   const [proceeds, setProceeds] = useState("");
 
   // Direct dispose (lifecycle PATCH .../dispose — bypasses the eOffice
-  // write-off workflow used by "Request disposal" below; admin-only in
-  // practice, gated the same as every other mutation here by role at the
-  // gateway).
+  // write-off workflow used by "Request disposal" below). The asset-service
+  // consumer still refuses it unless an approved committee write-off exists
+  // (GFR Rule 173), and the action card is only rendered for ASSET_WRITE_ROLES.
   const [directDisposalDate, setDirectDisposalDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [directDisposalMethod, setDirectDisposalMethod] = useState("sale");
   const [directProceeds, setDirectProceeds] = useState("");
@@ -78,6 +118,11 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
 
   async function tagAsset() {
     if (!tagCode.trim()) return;
+    if (!BARCODE_RE.test(tagCode.trim())) {
+      setTagError("Use letters, digits and - _ / . only (max 128 characters).");
+      return;
+    }
+    setTagError("");
     setBusy(true);
     setMessage("");
     try {
@@ -160,9 +205,14 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
   });
 
   // Direct dispose bypasses the eOffice write-off workflow entirely — GFR-irreversible.
+  // GAP-ASSETS-DETAIL-02: the reason is mandatory and travels as the disposal
+  // record's notes (the lifecycle disposeBody has no separate reason field).
   const directDisposeAction = useConfirmAction({
-    onConfirm: async () => {
+    onConfirm: async (reason) => {
       const proceedsMinor = proceedsToMinorString(directProceeds) ?? "0";
+      const why = (reason ?? "").trim();
+      const extra = directNotes.trim();
+      const notes = extra ? `${why}\n\n${extra}` : why;
       const res = await fetch(`/api/proxy/v1/asset/assets/${assetId}/dispose`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
@@ -171,7 +221,7 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
           disposalMethod: directDisposalMethod,
           proceedsMinor: Number(proceedsMinor),
           currency: "INR",
-          ...(directNotes.trim() ? { notes: directNotes.trim() } : {}),
+          notes,
         }),
       });
       if (!res.ok) throw new Error(await res.text());
@@ -218,15 +268,12 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
     return true;
   }
 
-  function printQr() {
-    const code = tagCode || barcode || assetId.slice(0, 8);
-    const w = window.open("", "_blank", "width=400,height=300");
-    if (!w) return;
-    w.document.write(`<html><body style="font-family:monospace;text-align:center;padding:40px"><h2>${code}</h2><p>Asset tag — scan for verification</p></body></html>`);
-    w.print();
+  function printTag() {
+    printAssetTag(tagCode.trim() || barcode || assetId.slice(0, 8));
   }
 
   if (status === "disposed" || status === "written_off") return null;
+  if (!canWriteAssets(roles)) return null;
 
   const transferDisabled = busy || !toLocation.trim();
 
@@ -236,10 +283,20 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
       <div className="pad" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <label htmlFor="asset-tag-code" className="sr-only">Barcode / QR code</label>
-          <input id="asset-tag-code" value={tagCode} onChange={(e) => setTagCode(e.target.value)} placeholder="Barcode / QR code" style={{ flex: 1, minWidth: 180, padding: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }} />
+          <input
+            id="asset-tag-code"
+            value={tagCode}
+            onChange={(e) => { setTagCode(e.target.value); setTagError(""); }}
+            placeholder="Barcode / QR code"
+            maxLength={128}
+            aria-invalid={!!tagError || undefined}
+            aria-describedby={tagError ? "asset-tag-code-err" : undefined}
+            style={{ flex: 1, minWidth: 180, padding: 8, border: "1px solid var(--line)", borderRadius: 8, fontSize: 13 }}
+          />
           <Button type="button" variant="ghost" disabled={busy} onClick={() => void tagAsset()}>Tag</Button>
-          <Button type="button" variant="ghost" disabled={busy} onClick={printQr}>Print QR</Button>
+          <Button type="button" variant="ghost" disabled={busy} onClick={printTag}>Print tag</Button>
         </div>
+        {tagError ? <p id="asset-tag-code-err" role="alert" style={{ color: "var(--bad, #c0392b)", fontSize: 12, margin: 0 }}>{tagError}</p> : null}
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           <Button type="button" disabled={busy} onClick={() => void scheduleAmc()}>Schedule AMC</Button>
         </div>
@@ -408,16 +465,19 @@ export function AssetDetailActions({ assetId, barcode, status }: Props) {
         title="Directly dispose this asset?"
         description={
           <>
-            This <b>bypasses the eOffice write-off approval workflow</b> and immediately marks the asset disposed,
-            posting <b>{formatMoney(Number(proceedsToMinorString(directProceeds) ?? "0"))}</b> proceeds. This is{" "}
-            <b>GFR-irreversible</b> and cannot be undone from this screen.
+            This <b>bypasses the eOffice write-off approval workflow</b> and marks the asset disposed,
+            posting <b>{formatMoney(proceedsToMinorString(directProceeds) ?? "0")}</b> proceeds. It is only applied when
+            an approved committee write-off (GFR Rule 173) is on record. This is <b>GFR-irreversible</b> and cannot be
+            undone from this screen. Provide a reason to proceed.
           </>
         }
         confirmLabel="Dispose asset"
         danger
+        requireReason
+        reasonLabel="Reason for direct disposal"
         busy={directDisposeAction.busy}
         errorMessage={directDisposeAction.error}
-        onConfirm={() => directDisposeAction.confirm()}
+        onConfirm={directDisposeAction.confirm}
         onCancel={directDisposeAction.cancel}
       />
 

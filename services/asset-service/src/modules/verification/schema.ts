@@ -12,6 +12,7 @@ export const physicalVerifications = verificationSchema.table("physical_verifica
   approvedBy:       uuid("approved_by"),
   approvedAt:       timestamp("approved_at", { withTimezone: true }),
   notes:            text("notes"),
+  location:         text("location"),
   version:          integer("version").notNull().default(1),
   createdBy:        uuid("created_by").notNull(),
   updatedBy:        uuid("updated_by").notNull(),

@@ -1,52 +1,26 @@
 import { getAssets } from "../../../_data/loaders";
-import { PageHeader, StatCard, StatGrid } from "../../../_components/ds";
-import { formatMoney } from "@/lib/formatters";
+import { PageHeader } from "../../../_components/ds";
 import { AssetsTable } from "./AssetsTable";
 
+// GAP-ASSETS-LIST-01: this register lists ALL asset types, so it is the
+// "Asset Register" -- the fixed-only register lives at /assets/fixed-assets.
 export default async function AssetListPage() {
   const { data: assets, source } = await getAssets();
-  const totalActive = assets.filter((a) => a.status === "active" || a.status === "in_use").length;
-  const tagged = Math.round((totalActive / Math.max(assets.length, 1)) * 100);
-  const grossBlock = assets.reduce((sum, a) => sum + a.purchaseCost, 0);
-  const netBlock = assets.reduce((sum, a) => sum + a.currentValue, 0);
 
   return (
     <>
-      {/* UX-012: the data-source badge now lives inside AssetsTable, driven by
-          the same useSeededResource call that produces its rows — not a
-          second, independent read of `source` here that could disagree with
-          the table's own cache state (UX-002's pattern). */}
       <PageHeader
-        title="Fixed Asset Register"
-        subtitle="Register, tag (QR) and value fixed assets."
+        title="Asset Register"
+        subtitle="All assets with status and valuation."
         actions={
           <>
-            <a href="/assets/bulk-import" className="btn ghost">Bulk tag</a>
+            <a href="/assets/bulk-import" className="btn ghost">Bulk import</a>
             <a href="/assets/register" className="btn primary">+ Register Asset</a>
           </>
         }
       />
-      <div
-        className="banner"
-        style={{
-          background: "var(--panel)",
-          border: "1px solid var(--warn)",
-          color: "var(--warn)",
-          borderRadius: 12,
-          padding: "13px 16px",
-          marginBottom: 18,
-          fontSize: 13,
-        }}
-      >
-        <span aria-hidden="true">🔗</span> <b>Auto-capitalised from Procurement GRN.</b> Accepted capital goods create asset records here; depreciation posts to Finance.
-      </div>
-      <StatGrid>
-        <StatCard icon="🖥️" iconBg="#fdf0e3" label="Fixed Assets" value={assets.length.toLocaleString("en-IN")} />
-        <StatCard icon="🔖" iconBg="#eff6ff" label="Tagged (QR)" value={`${tagged}%`} />
-        <StatCard icon="💰" iconBg="#ecfdf3" label="Gross Block" value={formatMoney(grossBlock)} />
-        <StatCard icon="📉" iconBg="#fffaeb" label="Net Book Value" value={formatMoney(netBlock)} />
-      </StatGrid>
-      <AssetsTable assets={assets} source={source} />
+      {/* Stats, badge and table all live in AssetsTable and read the same rows. */}
+      <AssetsTable assets={assets} source={source} cacheKey="assets.register" heading="Asset register" />
     </>
   );
 }

@@ -16,6 +16,20 @@ describe("FleetVehiclesPage", () => {
     fetchJsonMock.mockReset();
   });
 
+  // GAP-ASSETS-FLEET-VEHICLES-01
+  it("offers a per-row Record GPS action that preselects the vehicle", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: [{ id: "11111111-1111-1111-1111-111111111111", registrationNo: "DL01AB1234", make: "Tata", model: "Sumo", year: 2020, fuelType: "diesel" }],
+      source: "api",
+    });
+    render(await FleetVehiclesPage({ searchParams: { vehicleId: "11111111-1111-1111-1111-111111111111" } }));
+    expect(screen.getByRole("link", { name: "Record GPS for DL01AB1234" })).toHaveAttribute(
+      "href",
+      "/assets/fleet/vehicles?vehicleId=11111111-1111-1111-1111-111111111111#record-gps",
+    );
+    expect((screen.getByLabelText(/^Vehicle/) as HTMLSelectElement).value).toBe("11111111-1111-1111-1111-111111111111");
+  });
+
   it("renders the list of vehicles", async () => {
     fetchJsonMock.mockResolvedValueOnce({
       data: [
@@ -32,7 +46,7 @@ describe("FleetVehiclesPage", () => {
       source: "api",
     });
 
-    const ui = await FleetVehiclesPage();
+    const ui = await FleetVehiclesPage({});
     render(ui);
 
     expect(screen.getByText("DL01AB1234")).toBeInTheDocument();
@@ -41,7 +55,7 @@ describe("FleetVehiclesPage", () => {
   it("renders an empty state when there are no vehicles", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "api" });
 
-    const ui = await FleetVehiclesPage();
+    const ui = await FleetVehiclesPage({});
     render(ui);
 
     expect(screen.getByText("No vehicles registered yet")).toBeInTheDocument();
@@ -50,7 +64,7 @@ describe("FleetVehiclesPage", () => {
   it("shows the data-source badge when the loader falls back on error", async () => {
     fetchJsonMock.mockResolvedValueOnce({ data: [], source: "error" });
 
-    const ui = await FleetVehiclesPage();
+    const ui = await FleetVehiclesPage({});
     render(ui);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();

@@ -6,9 +6,11 @@ import { toHumanError } from "@/lib/messages";
 import { AssetDetailActions } from "./AssetDetailActions";
 import { AssetFinancialActions } from "./AssetFinancialActions";
 import { RaiseEOfficeNote } from "../../../_components/RaiseEOfficeNote";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWriteAssets } from "@/lib/auth/workRoles";
 
 export default async function AssetDetailPage({ params }: { params: { id: string } }) {
-  const { data: asset, source } = await getAssetById(params.id);
+  const { data: asset, source, parts } = await getAssetById(params.id);
 
   if (!asset) {
     return (
@@ -28,6 +30,11 @@ export default async function AssetDetailPage({ params }: { params: { id: string
   }
 
   const ext = asset as typeof asset & { barcode?: string };
+  const roles = getSessionRoles();
+  // GAP-ASSETS-DETAIL-01: each sub-fetch reports its own source.
+  const depFailed = parts.depreciation === "error";
+  const maintFailed = parts.maintenance === "error";
+  const anyFailed = source === "error" || depFailed || maintFailed;
 
   const schedule = asset.depreciationSchedule.map((row) => ({
     period: `FY${row.year}`,
@@ -46,7 +53,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
 
   return (
     <>
-      {source === "error" && <DataSourceBadge source={source} />}
+      {anyFailed && <DataSourceBadge source="error" />}
       <PageHeader
         title={`${asset.assetCode} · ${asset.name}`}
         back="/assets/list"
@@ -55,7 +62,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
       />
       <div className="grid g-main" style={{ alignItems: "start" }}>
         <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <AssetDetailActions assetId={asset.id} barcode={ext.barcode ?? asset.serialNo} status={asset.status} />
+          <AssetDetailActions assetId={asset.id} barcode={ext.barcode ?? asset.serialNo} status={asset.status} roles={roles} />
           {asset.status !== "disposed" && asset.status !== "condemned" ? (
             <AssetFinancialActions assetId={asset.id} assetCode={asset.assetCode} bookValueMinor={asset.currentValue} />
           ) : null}
@@ -72,7 +79,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
           </div>
           <div className="card">
             <div className="card-h"><h3>Depreciation schedule (SLM)</h3></div>
-            {source === "error" ? (
+            {depFailed ? (
               <RefreshErrorState error={toHumanError("load", { area: "depreciation schedule" })} />
             ) : schedule.length === 0 ? (
               <EmptyState icon="📉" title="No depreciation schedule" message="Depreciation will appear once the asset is capitalized." />
@@ -108,7 +115,12 @@ export default async function AssetDetailPage({ params }: { params: { id: string
               </ul>
             </div>
           </div>
-          {history.length > 0 ? (
+          {maintFailed ? (
+            <div className="card">
+              <div className="card-h"><h3>Maintenance history</h3></div>
+              <RefreshErrorState error={toHumanError("load", { area: "maintenance history" })} />
+            </div>
+          ) : history.length > 0 ? (
             <div className="card">
               <div className="card-h"><h3>Maintenance history</h3></div>
               <DataTable
@@ -125,6 +137,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
         </div>
       </div>
 
+      {canWriteAssets(roles) ? (
       <RaiseEOfficeNote
         refType="asset_disposal"
         refId={asset.id}
@@ -134,6 +147,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
         defaultApprovalChain="file_noting"
         notifyPath={`/api/proxy/v1/assets/disposals/${asset.id}/submit-approval`}
       />
+      ) : null}
     </>
   );
 }

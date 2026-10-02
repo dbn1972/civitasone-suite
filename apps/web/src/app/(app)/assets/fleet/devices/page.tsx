@@ -3,6 +3,8 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { RegisterDeviceForm } from "./RegisterDeviceForm";
 import { TelemetryForm } from "./TelemetryForm";
+import { getVehicles } from "../_data/vehicles";
+import { vehicleLabel } from "../_data/labels";
 
 /**
  * GET /v1/assets/fleet/devices (asset-service, port 3015, gateway prefix
@@ -66,12 +68,20 @@ async function getDevices(): Promise<LoaderResult<DeviceRow[]>> {
   });
 }
 
-export default async function FleetDevicesPage() {
-  const { data: devices, source } = await getDevices();
+type DeviceTableRow = DeviceRow & { vehicle: string };
 
-  const columns: { key: keyof DeviceRow; label: string; cellType?: "status" }[] = [
+export default async function FleetDevicesPage() {
+  const [{ data: devices, source }, { data: vehicles }] = await Promise.all([getDevices(), getVehicles()]);
+
+  // GAP-ASSETS-FLEET-DEVICES-01: devices are chosen as "IMEI — vehicle", and
+  // the table names the vehicle by registration, not by UUID.
+  const byId = new Map(vehicles.map((v) => [v.id, vehicleLabel(v)]));
+  const rows: DeviceTableRow[] = devices.map((d) => ({ ...d, vehicle: byId.get(d.vehicleId) ?? "Unknown vehicle" }));
+  const deviceOptions = rows.map((d) => ({ id: d.id, label: `${d.deviceImei} — ${d.vehicle}` }));
+
+  const columns: { key: keyof DeviceTableRow; label: string; cellType?: "status" }[] = [
     { key: "deviceImei", label: "Device IMEI" },
-    { key: "vehicleId", label: "Vehicle ID" },
+    { key: "vehicle", label: "Vehicle" },
     { key: "protocol", label: "Protocol" },
     { key: "simIccid", label: "SIM ICCID" },
     { key: "statusLabel", label: "Status", cellType: "status" },
@@ -90,12 +100,12 @@ export default async function FleetDevicesPage() {
       <RegisterDeviceForm />
 
       <Card title="Devices">
-        <DataTable<DeviceRow>
+        <DataTable<DeviceTableRow>
           columns={columns}
-          rows={devices}
+          rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by IMEI, vehicle ID, protocol…"
+          filterPlaceholder="Filter by IMEI, vehicle, protocol…"
           pageSize={15}
           emptyIcon="📡"
           emptyTitle="No devices registered yet"
@@ -103,7 +113,7 @@ export default async function FleetDevicesPage() {
         />
       </Card>
 
-      <TelemetryForm />
+      <TelemetryForm options={deviceOptions} devicesError={source === "error"} />
     </div>
   );
 }

@@ -40,7 +40,8 @@ describe("PolicyDetailPage", () => {
   it("renders the policy details and its claims", async () => {
     fetchJsonMock
       .mockResolvedValueOnce({ data: policyDetail, source: "api" })
-      .mockResolvedValueOnce({ data: [claimRow], source: "api" });
+      .mockResolvedValueOnce({ data: [claimRow], source: "api" })
+      .mockResolvedValueOnce({ data: "AST-1 · Laptop", source: "api" });
 
     const ui = await PolicyDetailPage({ params: { id: "p1" } });
     render(ui);
@@ -52,7 +53,8 @@ describe("PolicyDetailPage", () => {
   it("renders empty state for claims when none exist", async () => {
     fetchJsonMock
       .mockResolvedValueOnce({ data: policyDetail, source: "api" })
-      .mockResolvedValueOnce({ data: [], source: "api" });
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: null, source: "api" });
 
     const ui = await PolicyDetailPage({ params: { id: "p1" } });
     render(ui);
@@ -87,5 +89,26 @@ describe("PolicyDetailPage", () => {
     expect(
       screen.queryByText("The requested policy could not be found. It may have lapsed or the link is incorrect."),
     ).not.toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-INSURANCE-DETAIL-01
+  it("links the insured asset by its code · name", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: policyDetail, source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: "AST-1 · Laptop", source: "api" });
+    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    const link = screen.getByRole("link", { name: "AST-1 · Laptop" });
+    expect(link).toHaveAttribute("href", "/assets/a1");
+  });
+
+  it("still renders the policy with a fallback asset link when the asset lookup fails", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: policyDetail, source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "api" })
+      .mockResolvedValueOnce({ data: null, source: "error", status: 500 });
+    render(await PolicyDetailPage({ params: { id: "p1" } }));
+    expect(screen.getAllByText(/POL-2026-001/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("link", { name: "View asset" })).toHaveAttribute("href", "/assets/a1");
   });
 });

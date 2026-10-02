@@ -2,6 +2,8 @@ import { PageHeader, Card, DataTable } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { ScheduleMaintenanceForm } from "./ScheduleMaintenanceForm";
+import { getVehicles } from "../_data/vehicles";
+import { vehicleLabel, vehicleOptions } from "../_data/labels";
 
 /**
  * GET /v1/assets/fleet/maintenance (asset-service, port 3015, gateway prefix
@@ -65,11 +67,17 @@ async function getMaintenance(): Promise<LoaderResult<MaintenanceRow[]>> {
   });
 }
 
-export default async function FleetMaintenancePage() {
-  const { data: jobs, source } = await getMaintenance();
+type MaintenanceTableRow = MaintenanceRow & { vehicle: string };
 
-  const columns: { key: keyof MaintenanceRow; label: string; cellType?: "status" }[] = [
-    { key: "vehicleId", label: "Vehicle ID" },
+export default async function FleetMaintenancePage() {
+  const [{ data: jobs, source }, { data: vehicles, source: vehiclesSource }] = await Promise.all([getMaintenance(), getVehicles()]);
+
+  // GAP-ASSETS-FLEET-MAINTENANCE-02: show the registration number, never the raw UUID.
+  const byId = new Map(vehicles.map((v) => [v.id, vehicleLabel(v)]));
+  const rows: MaintenanceTableRow[] = jobs.map((j) => ({ ...j, vehicle: byId.get(j.vehicleId) ?? "Unknown vehicle" }));
+
+  const columns: { key: keyof MaintenanceTableRow; label: string; cellType?: "status" }[] = [
+    { key: "vehicle", label: "Vehicle" },
     { key: "typeLabel", label: "Type" },
     { key: "scheduledDate", label: "Scheduled Date" },
     { key: "odometerThresholdKm", label: "Odometer Threshold" },
@@ -86,15 +94,15 @@ export default async function FleetMaintenancePage() {
         actions={source === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
-      <ScheduleMaintenanceForm />
+      <ScheduleMaintenanceForm options={vehicleOptions(vehicles)} vehiclesError={vehiclesSource === "error"} />
 
       <Card title="Scheduled Maintenance">
-        <DataTable<MaintenanceRow>
+        <DataTable<MaintenanceTableRow>
           columns={columns}
-          rows={jobs}
+          rows={rows}
           sortable
           filterable
-          filterPlaceholder="Filter by vehicle ID, type…"
+          filterPlaceholder="Filter by vehicle, type…"
           pageSize={15}
           emptyIcon="🛠️"
           emptyTitle="No maintenance scheduled yet"
