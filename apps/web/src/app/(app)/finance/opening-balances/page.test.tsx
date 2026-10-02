@@ -62,7 +62,8 @@ describe("OpeningBalancesPage", () => {
     expect(screen.getByText("No opening balances entered")).toBeInTheDocument();
   });
 
-  it("shows the data-source badge when a loader falls back on error", async () => {
+  // GAP-FINANCE-OPENING-BALANCES-02
+  it("a failed fiscal-years read shows a retry state instead of an empty select", async () => {
     fetchJsonMock
       .mockResolvedValueOnce({ data: [], source: "error" })
       .mockResolvedValueOnce({ data: [], source: "api" });
@@ -70,6 +71,21 @@ describe("OpeningBalancesPage", () => {
     const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
     render(ui);
 
-    expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load fiscal years.")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Fiscal Year")).not.toBeInTheDocument();
+  });
+
+  it("a failed balances read shows retry, — cards, no empty-state copy and NO entry form", async () => {
+    fetchJsonMock
+      .mockResolvedValueOnce({ data: [{ code: "2026-27", label: "FY 2026-27", status: "active" }], source: "api" })
+      .mockResolvedValueOnce({ data: [], source: "error" });
+
+    const ui = await OpeningBalancesPage({ searchParams: { fy: "2026-27" } });
+    render(ui);
+
+    expect(screen.getByText("We couldn't load opening balances.")).toBeInTheDocument();
+    expect(screen.queryByText("No opening balances entered")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Save Opening Balances/)).not.toBeInTheDocument();
+    expect(screen.getAllByText("—").length).toBe(3);
   });
 });

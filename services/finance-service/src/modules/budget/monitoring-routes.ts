@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as allocRepo from "./allocation-repo.js";
+import { findHeadLabels } from "./repo.js";
 import {
   availableMinor, burnRateBps, utilisationBps, fractionElapsedBps,
   forecastYearEndMinor, classifyException, summarisePortfolio,
@@ -20,10 +21,17 @@ function lineOf(r: BudgetAllocationRow): MonitorLine {
   return { allocatedMinor: r.allocatedMinor, committedMinor: r.committedMinor, actualMinor: r.actualMinor };
 }
 
-function serializeLine(r: BudgetAllocationRow, elapsedBps: bigint) {
+type HeadLabels = Map<string, { code: string; name: string }>;
+
+function serializeLine(r: BudgetAllocationRow, elapsedBps: bigint, labels: HeadLabels) {
   const line = lineOf(r);
+  const head = labels.get(r.headId);
   return {
-    id: r.id, headId: r.headId, fy: r.fy,
+    id: r.id, headId: r.headId,
+    // GAP-FINANCE-BUDGET-MONITORING-02: officers identify heads by code/name,
+    // not uuid. null when the head no longer resolves in this tenant.
+    headCode: head?.code ?? null, headName: head?.name ?? null,
+    fy: r.fy,
     allocatedMinor: r.allocatedMinor.toString(),
     committedMinor: r.committedMinor.toString(),
     actualMinor: r.actualMinor.toString(),
@@ -50,13 +58,14 @@ export async function budgetMonitoringRoutes(app: FastifyInstance): Promise<void
       throw err;
     }
     const rows = await allocRepo.listAllocations(ctx.tenantId, q.fy, q.limit);
+    const labels = await findHeadLabels(ctx.tenantId, rows.map((r) => r.headId));
     const totals = summarisePortfolio(rows.map(lineOf), elapsedBps);
     return reply.send({
       fy: q.fy,
       asOf: (q.asOf ?? new Date().toISOString().slice(0, 10)),
       fractionElapsedBps: elapsedBps.toString(),
       totals: serializeTotals(totals),
-      lines: rows.map((r) => serializeLine(r, elapsedBps)),
+      lines: rows.map((r) => serializeLine(r, elapsedBps, labels)),
     });
   });
 
@@ -73,7 +82,8 @@ export async function budgetMonitoringRoutes(app: FastifyInstance): Promise<void
       throw err;
     }
     const rows = await allocRepo.listAllocations(ctx.tenantId, q.fy, q.limit);
-    const lines = rows.map((r) => serializeLine(r, elapsedBps)).filter((l) => l.exception !== "on_track");
+    const labels = await findHeadLabels(ctx.tenantId, rows.map((r) => r.headId));
+    const lines = rows.map((r) => serializeLine(r, elapsedBps, labels)).filter((l) => l.exception !== "on_track");
     return reply.send({ fy: q.fy, count: lines.length, lines });
   });
 

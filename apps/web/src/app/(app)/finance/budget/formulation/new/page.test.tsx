@@ -10,6 +10,12 @@ vi.mock("next/navigation", () => ({
 import NewBudgetEstimatePage from "./page";
 
 const ACCOUNTS = [{ id: "acc-1", code: "2110", name: "Sundry Creditors" }];
+// Typed rows as GET /v1/finance/accounts returns them (`type` = accounting nature).
+const TYPED_ACCOUNTS = [
+  { id: "acc-exp", code: "3054", name: "Roads and Bridges", type: "expense" },
+  { id: "acc-liab", code: "8443", name: "Civil Deposits", type: "liability" },
+  { id: "acc-bank", code: "8670", name: "Cheques and Bills", type: "asset" },
+];
 
 describe("NewBudgetEstimatePage", () => {
   beforeEach(() => {
@@ -97,5 +103,70 @@ describe("NewBudgetEstimatePage", () => {
     expect(banner.textContent).not.toMatch(/NPE/);
     expect(banner.textContent).not.toMatch(/BudgetService/);
     expect(banner.textContent).not.toMatch(/\b500\b/);
+  });
+
+  // GAP-FINANCE-BUDGET-FORMULATION-NEW-01: exact, string-based paise.
+  async function submitAmount(value: string) {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      if (String(url).includes("/finance/accounts")) {
+        return new Response(JSON.stringify({ data: ACCOUNTS }), { status: 200 });
+      }
+      return new Response(JSON.stringify({}), { status: 202 });
+    });
+    render(<NewBudgetEstimatePage />);
+    await waitFor(() => expect(screen.getByText("2110 · Sundry Creditors")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Budget head"), { target: { value: "acc-1" } });
+    fireEvent.change(screen.getByLabelText("Budget estimate (₹)"), { target: { value } });
+    fireEvent.submit(screen.getByRole("button", { name: /submit estimate/i }).closest("form")!);
+    return fetchMock;
+  }
+  const budgetPosts = (m: { mock: { calls: unknown[][] } }) =>
+    m.mock.calls.filter(([u]) => String(u).endsWith("/finance/budgets"));
+
+  it("POSTs beMinor as the exact paise string for 1234567.89", async () => {
+    const m = await submitAmount("1234567.89");
+    await waitFor(() => expect(budgetPosts(m).length).toBe(1));
+    expect(JSON.parse(String((budgetPosts(m)[0][1] as RequestInit).body)).beMinor).toBe("123456789");
+  });
+
+  it("keeps precision above 2^53 paise (90071992547409.93 -> 9007199254740993)", async () => {
+    const m = await submitAmount("90071992547409.93");
+    await waitFor(() => expect(budgetPosts(m).length).toBe(1));
+    expect(JSON.parse(String((budgetPosts(m)[0][1] as RequestInit).body)).beMinor).toBe("9007199254740993");
+  });
+
+  for (const bad of ["1.005", "-5", "0", "abc", "1e21"]) {
+    it(`blocks ${bad} with an inline error and never calls the budgets endpoint`, async () => {
+      const m = await submitAmount(bad);
+      expect(await screen.findByText(/at most 2 decimals/)).toBeInTheDocument();
+      expect(budgetPosts(m).length).toBe(0);
+    });
+  }
+
+  // GAP-FINANCE-BUDGET-FORMULATION-NEW-02
+  it("offers only expenditure heads in the picker", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ data: TYPED_ACCOUNTS }), { status: 200 }));
+    render(<NewBudgetEstimatePage />);
+    await waitFor(() => expect(screen.getByText("3054 · Roads and Bridges")).toBeInTheDocument());
+    expect(screen.queryByText("8443 · Civil Deposits")).not.toBeInTheDocument();
+    expect(screen.queryByText("8670 · Cheques and Bills")).not.toBeInTheDocument();
+  });
+
+  it("shows the server's headId field error under the head picker", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url) => {
+      if (String(url).includes("/finance/accounts")) {
+        return new Response(JSON.stringify({ data: TYPED_ACCOUNTS }), { status: 200 });
+      }
+      return new Response(JSON.stringify({
+        code: "VALIDATION_FAILED", message: "invalid request",
+        fieldErrors: [{ field: "headId", message: "a budget estimate can only be proposed against an expenditure head" }],
+      }), { status: 400 });
+    });
+    render(<NewBudgetEstimatePage />);
+    await waitFor(() => expect(screen.getByText("3054 · Roads and Bridges")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Budget head"), { target: { value: "acc-exp" } });
+    fireEvent.change(screen.getByLabelText("Budget estimate (₹)"), { target: { value: "10" } });
+    fireEvent.submit(screen.getByRole("button", { name: /submit estimate/i }).closest("form")!);
+    expect(await screen.findByText(/only be proposed against an expenditure head/)).toBeInTheDocument();
   });
 });

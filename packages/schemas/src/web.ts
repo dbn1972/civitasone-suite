@@ -2466,6 +2466,10 @@ export const AllocationDistributionSummaryListSchema = z.array(AllocationDistrib
 export const FinanceBudgetAllocationSummarySchema = z.object({
   id: z.string(),
   headId: z.string(),
+  // GAP-FINANCE-BUDGET-ALLOCATION-01: server-joined head label (null when the
+  // head no longer resolves). Optional so an older finance-service still parses.
+  headCode: z.string().nullable().optional(),
+  headName: z.string().nullable().optional(),
   fy: z.string(),
   allocatedMinor: z.string(),
   committedMinor: z.string(),
@@ -2493,6 +2497,9 @@ export const BudgetMonitoringSummarySchema = z.object({
 export const BudgetMonitoringLineSchema = z.object({
   id: z.string(),
   headId: z.string(),
+  // GAP-FINANCE-BUDGET-MONITORING-02: server-joined head label.
+  headCode: z.string().nullable().optional(),
+  headName: z.string().nullable().optional(),
   fy: z.string(),
   allocatedMinor: z.string(),
   committedMinor: z.string(),

@@ -66,6 +66,12 @@ export interface ConfirmDialogProps {
   children?: ReactNode;
   /** Additional gate on the confirm button, on top of busy / requireReason. */
   confirmDisabled?: boolean;
+  /**
+   * Extra caller-owned gate on Confirm (e.g. a pre-check still loading, or an
+   * acknowledgement checkbox in `description` not yet ticked). Additive:
+   * defaults to false, so existing dialogs are unaffected.
+   */
+  blockConfirm?: boolean;
   /** Error message shown via aria-live after a failed attempt. */
   errorMessage?: string;
   /** Called with the (optional) reason when confirmed. */
@@ -88,6 +94,7 @@ export function ConfirmDialog({
   busy = false,
   children,
   confirmDisabled: extraDisabled = false,
+  blockConfirm = false,
   errorMessage,
   onConfirm,
   onCancel,
@@ -109,7 +116,7 @@ export function ConfirmDialog({
   const reasonTooShort = requireReason && trimmedLen > 0 && trimmedLen < minReasonLength;
   const reasonTooLong = maxReasonLength !== undefined && trimmedLen > maxReasonLength;
   const confirmDisabled =
-    busy || extraDisabled || (requireReason && (trimmedLen < minReasonLength || reasonTooLong));
+    busy || extraDisabled || blockConfirm || (requireReason && (trimmedLen < minReasonLength || reasonTooLong));
 
   return (
     <Modal

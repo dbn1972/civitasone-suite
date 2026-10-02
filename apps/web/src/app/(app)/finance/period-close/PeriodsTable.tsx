@@ -1,19 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, DataTable, ConfirmDialog } from "@/app/_components/ds";
 import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
 import { formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 
-export type PeriodRow = {
-  period: string;
-  fiscalYear: string;
-  status: string;
-  closedBy: string | null;
-  closedAt: string | null;
-} & Record<string, unknown>;
+import type { PeriodRow } from "./periodsLoader";
+export type { PeriodRow } from "./periodsLoader";
 
 type DisplayRow = PeriodRow & {
   /** Synthetic column key for the row-action cell; value unused (render overrides). */
@@ -49,12 +44,83 @@ function periodActionExceptionMessage(): string {
   return `${human.what} ${human.next}`;
 }
 
-export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRow[]; canReopen?: boolean }) {
+type Readiness = { unpostedVouchers: number; unreconciledBankLines: number; dueRecurringEntries: number };
+
+function parseReadiness(body: unknown): Readiness | null {
+  const d = (body as { data?: Record<string, unknown> } | null)?.data;
+  if (!d) return null;
+  const { unpostedVouchers, unreconciledBankLines, dueRecurringEntries } = d;
+  if (typeof unpostedVouchers !== "number" || typeof unreconciledBankLines !== "number" || typeof dueRecurringEntries !== "number") return null;
+  return { unpostedVouchers, unreconciledBankLines, dueRecurringEntries };
+}
+
+const REASON_LABEL: Record<PeriodAction, string> = {
+  close: "Reason for soft-closing",
+  "hard-close": "Reason for hard-closing",
+  reopen: "Reason for reopening",
+};
+
+export function PeriodsTable({
+  periods,
+  canClose = false,
+  canHardClose = false,
+  canReopen = false,
+}: {
+  periods: PeriodRow[];
+  /** soft-close (finance_officer and above, per finance-service). */
+  canClose?: boolean;
+  /** hard-close (finance_admin/super_admin). */
+  canHardClose?: boolean;
+  /** reopen (finance_admin/super_admin). */
+  canReopen?: boolean;
+}) {
   const router = useRouter();
   const [pending, setPending] = useState<{ row: PeriodRow; action: PeriodAction } | null>(null);
   const [busy, setBusy] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  // GAP-FINANCE-PERIOD-CLOSE-02: outstanding work in the period, fetched when
+  // a hard-close dialog opens. Confirm stays blocked while it loads, if it
+  // fails, or -- when anything is outstanding -- until the officer ticks the
+  // acknowledgement.
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [readinessState, setReadinessState] = useState<"idle" | "loading" | "error" | "ready">("idle");
+  const [acknowledged, setAcknowledged] = useState(false);
+
+  const hardClosePeriod = pending?.action === "hard-close" ? pending.row.period : null;
+  useEffect(() => {
+    setReadiness(null);
+    setAcknowledged(false);
+    if (!hardClosePeriod) {
+      setReadinessState("idle");
+      return;
+    }
+    let active = true;
+    setReadinessState("loading");
+    (async () => {
+      try {
+        const res = await browserFetch(`v1/finance/periods/${encodeURIComponent(hardClosePeriod)}/readiness`);
+        const parsed = res.ok ? parseReadiness(await res.json()) : null;
+        if (!active) return;
+        if (parsed) {
+          setReadiness(parsed);
+          setReadinessState("ready");
+        } else {
+          setReadinessState("error");
+        }
+      } catch {
+        if (active) setReadinessState("error");
+      }
+    })();
+    return () => { active = false; };
+  }, [hardClosePeriod]);
+
+  const outstanding = readiness
+    ? readiness.unpostedVouchers + readiness.unreconciledBankLines + readiness.dueRecurringEntries
+    : 0;
+  const blockHardClose =
+    pending?.action === "hard-close" &&
+    (readinessState !== "ready" || (outstanding > 0 && !acknowledged));
 
   async function runAction(reason?: string) {
     if (!pending) return;
@@ -63,7 +129,8 @@ export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRo
     try {
       const res = await browserFetch(`v1/finance/periods/${encodeURIComponent(pending.row.period)}/${pending.action}`, {
         method: "POST",
-        body: pending.action === "reopen" ? JSON.stringify({ reason }) : undefined,
+        // GAP-FINANCE-PERIOD-CLOSE-01: every transition carries the stated reason.
+        body: JSON.stringify({ reason }),
       });
       if (!res.ok) {
         setDialogError(await errorMessageFromResponse(res, "save", "period action"));
@@ -92,7 +159,8 @@ export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRo
       label: "Actions",
       sortable: false,
       render: (row: DisplayRow) => {
-        const actions = (AVAILABLE_ACTIONS[row.status] ?? []).filter((a) => a !== "reopen" || canReopen);
+        const allowed: Record<PeriodAction, boolean> = { close: canClose, "hard-close": canHardClose, reopen: canReopen };
+        const actions = (AVAILABLE_ACTIONS[row.status] ?? []).filter((a) => allowed[a]);
         if (actions.length === 0) {
           return <span style={{ color: "var(--ink2)", fontSize: 13 }}>—</span>;
         }
@@ -138,6 +206,34 @@ export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRo
           explicitly reopen the period, which is separately audit-logged. Existing unposted vouchers in this period
           are <strong>not</strong> automatically rejected by the server — reconcile, post, or cancel them first, or
           they will be left stranded in this period once it is closed.
+          <span style={{ display: "block", marginTop: 10 }} aria-live="polite">
+            {readinessState === "loading" && "Checking outstanding items for this period…"}
+            {readinessState === "error" && (
+              <span role="alert" style={{ color: "var(--bad, #c0392b)" }}>
+                Couldn&apos;t check outstanding items for this period, so hard-close is blocked. Close this dialog and try again.
+              </span>
+            )}
+            {readinessState === "ready" && readiness && (
+              outstanding === 0 ? (
+                <span>No unposted vouchers, unreconciled bank lines or due recurring entries in this period.</span>
+              ) : (
+                <>
+                  <strong>Outstanding in {row.period}:</strong>
+                  <span style={{ display: "block" }}>
+                    <a href="/finance/journal-entry?status=draft">{readiness.unpostedVouchers} unposted voucher{readiness.unpostedVouchers === 1 ? "" : "s"}</a>
+                    {" · "}
+                    <a href="/finance/reconciliation">{readiness.unreconciledBankLines} unreconciled bank line{readiness.unreconciledBankLines === 1 ? "" : "s"}</a>
+                    {" · "}
+                    <a href="/finance/recurring-entries">{readiness.dueRecurringEntries} due recurring entr{readiness.dueRecurringEntries === 1 ? "y" : "ies"}</a>
+                  </span>
+                  <label style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 6 }}>
+                    <input type="checkbox" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
+                    I have reviewed these and want to hard-close anyway
+                  </label>
+                </>
+              )
+            )}
+          </span>
         </>
       );
     }
@@ -174,8 +270,11 @@ export function PeriodsTable({ periods, canReopen = false }: { periods: PeriodRo
         title={pending ? `${ACTION_LABEL[pending.action]} period ${pending.row.period}?` : ""}
         confirmLabel={pending ? ACTION_LABEL[pending.action] : "Confirm"}
         danger={pending?.action === "hard-close" || pending?.action === "reopen"}
-        requireReason={pending?.action === "reopen"}
-        reasonLabel="Reason for reopening"
+        requireReason
+        reasonLabel={pending ? REASON_LABEL[pending.action] : "Reason"}
+        minReasonLength={10}
+        maxReasonLength={500}
+        blockConfirm={blockHardClose}
         busy={busy}
         errorMessage={dialogError}
         description={dialogCopy}

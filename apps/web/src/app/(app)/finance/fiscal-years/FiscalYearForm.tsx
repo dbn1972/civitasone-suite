@@ -4,6 +4,8 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { findFiscalYearConflicts } from "@/lib/fiscalYear";
+import type { FiscalYearRow } from "./FiscalYearsTable";
 
 const CODE_PATTERN = /^\d{4}-\d{2}$/;
 
@@ -14,7 +16,10 @@ type FieldErrors = {
   endDate?: string;
 };
 
-export function FiscalYearForm() {
+/** Minimum length of the stated reason (matches finance-service's reasonField). */
+export const FY_REASON_MIN = 10;
+
+export function FiscalYearForm({ rows = [] }: { rows?: FiscalYearRow[] }) {
   const router = useRouter();
 
   const [code, setCode] = useState("");
@@ -49,6 +54,13 @@ export function FiscalYearForm() {
     if (!startDate) next.startDate = "Start date is required.";
     if (!endDate) next.endDate = "End date is required.";
     if (startDate && endDate && endDate <= startDate) next.endDate = "End date must be after the start date.";
+    // GAP-FINANCE-FISCAL-YEARS-01: a duplicate or overlapping year is
+    // rejected before the confirm dialog opens (the server rejects it too).
+    if (!next.code && !next.startDate && !next.endDate) {
+      const c = findFiscalYearConflicts({ code: code.trim(), startDate, endDate }, rows);
+      if (c.duplicateOf) next.code = `Fiscal year ${c.duplicateOf} already exists.`;
+      else if (c.overlapsWith) next.startDate = `These dates overlap fiscal year ${c.overlapsWith}.`;
+    }
 
     setErrors(next);
     if (next.code) { codeRef.current?.focus(); return false; }
@@ -66,7 +78,10 @@ export function FiscalYearForm() {
     setConfirmOpen(true);
   }
 
-  async function createFiscalYear() {
+  const activeYear = rows.find((r) => r.status === "active") ?? null;
+  const gap = confirmOpen ? findFiscalYearConflicts({ code: code.trim(), startDate, endDate }, rows).gapAfter : undefined;
+
+  async function createFiscalYear(reason?: string) {
     setBusy(true);
     setDialogError(undefined);
     try {
@@ -77,6 +92,7 @@ export function FiscalYearForm() {
           label: label.trim(),
           startDate,
           endDate,
+          reason,
         }),
       });
       setConfirmOpen(false);
@@ -191,16 +207,32 @@ export function FiscalYearForm() {
         open={confirmOpen}
         title="Create this fiscal year?"
         confirmLabel="Create fiscal year"
+        danger
+        requireReason
+        reasonLabel="Reason for creating and activating this year"
+        minReasonLength={FY_REASON_MIN}
+        maxReasonLength={500}
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
             Create fiscal year <strong>{code}</strong> (<strong>{label}</strong>) running from {startDate} to{" "}
-            {endDate}. The server marks newly created fiscal years active immediately — use the Activate action
-            afterwards if you need to switch back to a different year.
+            {endDate}. It becomes the <strong>active posting year immediately</strong>
+            {activeYear ? (
+              <>
+                {" "}and fiscal year <strong>{activeYear.code}</strong> ({activeYear.label}) <strong>will be closed</strong>
+              </>
+            ) : null}
+            . Every new posting will land in {code}. Your reason is recorded in the audit trail.
+            {gap ? (
+              <>
+                {" "}<strong>Note:</strong> {gap.days} day{gap.days === 1 ? "" : "s"} between the end of {gap.code} and
+                this year&apos;s start are not covered by any fiscal year.
+              </>
+            ) : null}
           </>
         }
-        onConfirm={() => void createFiscalYear()}
+        onConfirm={(reason) => void createFiscalYear(reason)}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
     </form>

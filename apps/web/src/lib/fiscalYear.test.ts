@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  findFiscalYearConflicts,
   financialYearOf,
   currentFinancialYear,
   recentFinancialYears,
@@ -81,5 +82,24 @@ describe("isValidFinancialYearLabel (GAP-PAYROLL-FLEX-BENEFITS-03)", () => {
     expect(isValidFinancialYearLabel("2025-27")).toBe(false);
     expect(isValidFinancialYearLabel("2026/27")).toBe(false);
     expect(isValidFinancialYearLabel("")).toBe(false);
+  });
+});
+
+describe("findFiscalYearConflicts (GAP-FINANCE-FISCAL-YEARS-01)", () => {
+  const rows = [
+    { code: "2025-26", startDate: "2025-04-01", endDate: "2026-03-31" },
+    { code: "2026-27", startDate: "2026-04-01", endDate: "2027-03-31" },
+  ];
+  it("flags an overlapping range", () => {
+    expect(findFiscalYearConflicts({ code: "2026-28", startDate: "2027-01-01", endDate: "2027-12-31" }, rows).overlapsWith).toBe("2026-27");
+  });
+  it("flags a duplicate code", () => {
+    expect(findFiscalYearConflicts({ code: "2026-27", startDate: "2028-04-01", endDate: "2029-03-31" }, rows).duplicateOf).toBe("2026-27");
+  });
+  it("accepts the next contiguous year with no warning", () => {
+    expect(findFiscalYearConflicts({ code: "2027-28", startDate: "2027-04-01", endDate: "2028-03-31" }, rows)).toEqual({});
+  });
+  it("reports a gap after the latest earlier year", () => {
+    expect(findFiscalYearConflicts({ code: "2028-29", startDate: "2028-04-01", endDate: "2029-03-31" }, rows).gapAfter).toEqual({ code: "2026-27", days: 366 });
   });
 });

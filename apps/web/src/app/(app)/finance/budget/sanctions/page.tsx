@@ -1,11 +1,17 @@
-import { PageHeader, StatGrid, StatCard, Card } from "../../../../_components/ds";
+import Link from "next/link";
+import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../../_components/ds";
 import { getFinanceSanctions } from "../../../../_data/loaders";
 import { formatMoney } from "@/lib/formatters";
 import { SanctionsTable } from "./SanctionsTable";
-import { SanctionCreateAction } from "../../_components/FinanceActions";
 
 export default async function SanctionsPage() {
-  const { data: sanctions, source } = await getFinanceSanctions();
+  const result = await getFinanceSanctions();
+  const { data: sanctions, source } = result;
+  // GAP-FINANCE-BUDGET-SANCTIONS-02: a failed fetch used to show
+  // "Active 0 / Sanctioned ₹0.00 / Pending 0 / Approved 0" above a table that
+  // might even show cached rows. Errored -> "—" cards and a load-error state
+  // (PermissionDenied for 403, Retry otherwise) in place of the table.
+  const errored = source === "error";
 
   const approved = sanctions.filter((s) => s.status === "approved").length;
   const pending = sanctions.filter((s) => s.status === "pending").length;
@@ -19,25 +25,27 @@ export default async function SanctionsPage() {
         title="Sanction Management"
         subtitle="Administrative &amp; financial sanctions with budget check."
         actions={
-          <>
-            <SanctionCreateAction />
-          </>
+          // GAP-FINANCE-BUDGET-SANCTIONS-01: a real form, not a one-line confirm.
+          <Link href="/finance/budget/sanctions/new" className="btn primary">+ New Sanction</Link>
         }
       />
 
       <StatGrid>
-        <StatCard icon="🖊️" iconBg="#e7edfd" label="Active Sanctions" value={sanctions.length} />
-        <StatCard icon="💰" iconBg="#eff6ff" label="Sanctioned (FY)" value={formatMoney(totalAmount)} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval" value={pending} />
-        <StatCard icon="📊" iconBg="#ecfdf3" label="Approved" value={approved} delta="approved" up={true} />
+        <StatCard icon="🖊️" iconBg="#e7edfd" label="Active Sanctions" value={errored ? "—" : sanctions.length} />
+        <StatCard icon="💰" iconBg="#eff6ff" label="Sanctioned (FY)" value={errored ? "—" : formatMoney(totalAmount)} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval" value={errored ? "—" : pending} />
+        <StatCard icon="📊" iconBg="#ecfdf3" label="Approved" value={errored ? "—" : approved} delta={errored ? undefined : "approved"} up={true} />
       </StatGrid>
 
-      {/* UX-012: the data-source badge now lives inside SanctionsTable,
-          driven by the same useSeededResource call that produces its rows —
-          not a second, independent read of `source` here that could
-          disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Administrative & financial sanctions">
-        <SanctionsTable sanctions={sanctions} source={source} />
+        {errored ? (
+          <div className="pad">
+            <LoadErrorState result={result} area="sanctions" backHref="/finance" />
+          </div>
+        ) : (
+          /* UX-012: the data-source badge lives inside SanctionsTable. */
+          <SanctionsTable sanctions={sanctions} source="api" />
+        )}
       </Card>
     </>
   );

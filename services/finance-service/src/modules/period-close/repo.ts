@@ -201,3 +201,45 @@ export async function getPeriodStatusTx(tx: any, tenantId: string, period: strin
 export async function logReopen(tx: Writer, row: typeof financePeriodReopenLog.$inferInsert): Promise<void> {
   await tx.insert(financePeriodReopenLog).values(row);
 }
+
+export type PeriodReadiness = {
+  /** Journals dated in the period still in draft / pending_approval (never posted). */
+  unpostedVouchers: number;
+  /** Imported bank-statement lines dated in the period not yet matched. */
+  unreconciledBankLines: number;
+  /** Active recurring entries whose next run falls on/before the period end. */
+  dueRecurringEntries: number;
+};
+
+/**
+ * GAP-FINANCE-PERIOD-CLOSE-02: outstanding work in a YYYY-MM period. Runs in
+ * scopedRead (tenant GUC -> RLS) AND filters tenant_id explicitly.
+ */
+export async function getPeriodReadiness(tenantId: string, period: string): Promise<PeriodReadiness> {
+  const start = `${period}-01`;
+  const rows = await scopedRead((tx) => tx.execute(sql`
+    SELECT
+      (SELECT count(*)::int FROM gl.finance_journals
+         WHERE tenant_id = ${tenantId}::uuid
+           AND status IN ('draft', 'pending_approval')
+           AND posting_date >= ${start}::date
+           AND posting_date < (${start}::date + interval '1 month')) AS unposted_vouchers,
+      (SELECT count(*)::int FROM treasury.finance_bank_statement_lines
+         WHERE tenant_id = ${tenantId}::uuid
+           AND matched = false
+           AND line_date >= ${start}::date
+           AND line_date < (${start}::date + interval '1 month')) AS unreconciled_bank_lines,
+      (SELECT count(*)::int FROM gl.finance_recurring_entries
+         WHERE tenant_id = ${tenantId}::uuid
+           AND is_active = true
+           AND next_run_date < (${start}::date + interval '1 month')
+           AND (end_date IS NULL OR end_date >= next_run_date)) AS due_recurring_entries
+  `));
+  const list = (Array.isArray(rows) ? rows : (rows as { rows?: unknown[] }).rows ?? []) as Array<Record<string, unknown>>;
+  const r = list[0] ?? {};
+  return {
+    unpostedVouchers: Number(r.unposted_vouchers ?? 0),
+    unreconciledBankLines: Number(r.unreconciled_bank_lines ?? 0),
+    dueRecurringEntries: Number(r.due_recurring_entries ?? 0),
+  };
+}

@@ -3,6 +3,7 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { FiscalYearForm } from "./FiscalYearForm";
 import { FiscalYearsTable, type FiscalYearRow } from "./FiscalYearsTable";
+import { getPeriods } from "../period-close/periodsLoader";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -44,7 +45,7 @@ async function getFiscalYears(): Promise<LoaderResult<FiscalYearRow[]>> {
 }
 
 export default async function FiscalYearsPage() {
-  const { data: fiscalYears, source } = await getFiscalYears();
+  const [{ data: fiscalYears, source }, periodsResult] = await Promise.all([getFiscalYears(), getPeriods()]);
   const activeYear = fiscalYears.find((fy) => fy.status === "active");
 
   return (
@@ -61,9 +62,13 @@ export default async function FiscalYearsPage() {
         <StatCard icon="🟢" iconBg="#e6f7f0" label="Active Fiscal Year" value={activeYear?.code ?? "—"} />
       </StatGrid>
 
-      <FiscalYearForm />
+      <FiscalYearForm rows={fiscalYears} />
 
-      <FiscalYearsTable rows={fiscalYears} />
+      <FiscalYearsTable
+        rows={fiscalYears}
+        periods={periodsResult.data}
+        periodsUnavailable={periodsResult.source === "error"}
+      />
     </div>
   );
 }

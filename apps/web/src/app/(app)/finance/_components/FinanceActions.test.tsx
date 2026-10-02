@@ -7,7 +7,7 @@ vi.mock("next/navigation", () => ({
 }));
 
 import { ToastProvider } from "@/app/_components/ds";
-import { SanctionCreateAction } from "./FinanceActions";
+import { PaymentActions } from "./FinanceActions";
 
 /**
  * L3 (money truthfulness): finance maker-checker commands return 202 Accepted
@@ -22,30 +22,30 @@ describe("FinanceActions confirms an accepted (202) submission", () => {
     vi.restoreAllMocks();
   });
 
-  it("shows a 'submitted for approval' toast after a 202, and refreshes", async () => {
+  it("shows a 'submitted' toast after a 202, and refreshes", async () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValue(new Response(null, { status: 202 }));
 
     render(
       <ToastProvider>
-        <SanctionCreateAction />
+        <PaymentActions />
       </ToastProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "+ New Sanction" }));
-    await waitFor(() => expect(screen.getByText("Raise a new sanction?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "PFMS Sync" }));
+    await waitFor(() => expect(screen.getByText("Sync the payment register with PFMS?")).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText("Proposing officer & purpose"), {
+    fireEvent.change(screen.getByLabelText("Reason / approving authority"), {
       target: { value: "DDO / office contingency" },
     });
-    fireEvent.click(screen.getByText("Create draft"));
+    fireEvent.click(screen.getByText("Run sync"));
 
     await waitFor(() =>
-      expect(screen.getByText("Draft sanction submitted for approval.")).toBeInTheDocument(),
+      expect(screen.getByText("PFMS sync submitted — the register updates as instructions settle.")).toBeInTheDocument(),
     );
     expect(fetchMock).toHaveBeenCalledWith(
-      "/api/proxy/v1/finance/sanctions",
+      "/api/proxy/v1/finance/payments/eft",
       expect.objectContaining({ method: "POST" }),
     );
     expect(refreshMock).toHaveBeenCalled();
@@ -73,17 +73,17 @@ describe("FinanceActions surfaces a clerk-safe error on a failed submission", ()
 
     render(
       <ToastProvider>
-        <SanctionCreateAction />
+        <PaymentActions />
       </ToastProvider>,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "+ New Sanction" }));
-    await waitFor(() => expect(screen.getByText("Raise a new sanction?")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: "PFMS Sync" }));
+    await waitFor(() => expect(screen.getByText("Sync the payment register with PFMS?")).toBeInTheDocument());
 
-    fireEvent.change(screen.getByLabelText("Proposing officer & purpose"), {
+    fireEvent.change(screen.getByLabelText("Reason / approving authority"), {
       target: { value: "DDO / office contingency" },
     });
-    fireEvent.click(screen.getByText("Create draft"));
+    fireEvent.click(screen.getByText("Run sync"));
 
     const alert = await screen.findByRole("alert");
     await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));

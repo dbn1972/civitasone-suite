@@ -1,5 +1,4 @@
-import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../../_components/ds";
+import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadErrorState } from "../../../../../_components/ds";
 import { getFinanceSanctionById } from "../../../../../_data/loaders";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { SanctionApproveAction } from "../../../_components/FinanceActions";
@@ -7,7 +6,21 @@ import { SanctionLineItemsTable } from "./SanctionLineItemsTable";
 import { RaiseEOfficeNote } from "../../../../../_components/RaiseEOfficeNote";
 
 export default async function SanctionDetailPage({ params }: { params: { id: string } }) {
-  const { data: sanction, source } = await getFinanceSanctionById(params.id);
+  const result = await getFinanceSanctionById(params.id);
+  const { data: sanction, source, status } = result;
+
+  // GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-02: a 500/403/timeout used to be
+  // presented as "Sanction not found ... the ID is invalid". Only a real 404
+  // (or a successful empty read) is "not found"; anything else is a load
+  // error (PermissionDenied for 403, Retry otherwise).
+  if (source === "error" && status !== 404) {
+    return (
+      <>
+        <PageHeader title="Sanction Detail" back="/finance/budget/sanctions" />
+        <LoadErrorState result={result} area="sanction" backHref="/finance/budget/sanctions" backLabel="Sanctions" />
+      </>
+    );
+  }
 
   if (!sanction) {
     return (
@@ -39,7 +52,6 @@ export default async function SanctionDetailPage({ params }: { params: { id: str
           <>
             <StatusPill status={sanction.status} />
             {isPending ? <SanctionApproveAction id={params.id} /> : null}
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
           </>
         }
       />

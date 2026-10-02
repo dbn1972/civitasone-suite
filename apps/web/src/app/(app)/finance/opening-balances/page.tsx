@@ -1,5 +1,5 @@
-import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState } from "../../../_components/ds";
-import { DataSourceBadge } from "../../../_components/DataSourceBadge";
+import { Button, PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState } from "../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { OpeningBalanceForm } from "./OpeningBalanceForm";
@@ -95,8 +95,12 @@ export default async function OpeningBalancesPage({
     : ({ data: [] as OpeningBalanceRow[], source: "api" as const });
   const { data: balances, source: balancesSource } = balancesResult;
 
-  const totalDebit = balances.reduce((sum, b) => sum + Number(b.debitMinor), 0);
-  const totalCredit = balances.reduce((sum, b) => sum + Number(b.creditMinor), 0);
+  // Paise may exceed 2^53 in aggregate: sum as BigInt, never Number().
+  const toMinor = (v: string | number) => {
+    try { return BigInt(v); } catch { return 0n; }
+  };
+  const totalDebit = balances.reduce((sum, b) => sum + toMinor(b.debitMinor), 0n);
+  const totalCredit = balances.reduce((sum, b) => sum + toMinor(b.creditMinor), 0n);
 
   const columns: { key: keyof OpeningBalanceRow; label: string; cellType?: "amount" }[] = [
     { key: "accountCode", label: "Account Code" },
@@ -106,7 +110,13 @@ export default async function OpeningBalancesPage({
     { key: "enteredAtDisplay", label: "Entered On" },
   ];
 
-  const overallSource = fySource === "error" || balancesSource === "error" ? "error" : "api";
+  // GAP-FINANCE-OPENING-BALANCES-02: each fetch owns its error state. A
+  // failed balances read used to render "No opening balances entered" next to
+  // a live entry form, inviting a duplicate entry of balances that may
+  // already exist; it now shows a Retry state and NO form (the safe
+  // direction for ledger seeding) with "—" cards.
+  const fyErr = fySource === "error";
+  const balancesErr = !!selectedFy && balancesSource === "error";
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -114,10 +124,12 @@ export default async function OpeningBalancesPage({
         title="Opening Balances"
         subtitle="View and set the starting debit/credit position for a fiscal year's accounts."
         back="/finance"
-        actions={overallSource === "error" ? <DataSourceBadge source="error" /> : null}
       />
 
       <Card title="Select fiscal year" padding>
+        {fyErr ? (
+          <RefreshErrorState error={toHumanError("load", { area: "fiscal years" })} />
+        ) : (
         <form method="GET" style={{ display: "flex", gap: 12, alignItems: "flex-end", flexWrap: "wrap" }}>
           <div style={{ display: "grid", gap: 6 }}>
             <label htmlFor="fy-select" style={{ fontSize: 13, fontWeight: 600 }}>Fiscal Year</label>
@@ -137,6 +149,7 @@ export default async function OpeningBalancesPage({
           </div>
           <Button type="submit" style={{ minHeight: 44 }}>View</Button>
         </form>
+        )}
       </Card>
 
       {!selectedFy ? (
@@ -147,6 +160,19 @@ export default async function OpeningBalancesPage({
             message="Select a fiscal year above to view or set its opening balances."
           />
         </Card>
+      ) : balancesErr ? (
+        <>
+          <StatGrid>
+            <StatCard icon="🧾" iconBg="#e6f0ff" label="Entries" value="—" />
+            <StatCard icon="⬇️" iconBg="#e6f7f0" label="Total Debit" value="—" />
+            <StatCard icon="⬆️" iconBg="#fff2e6" label="Total Credit" value="—" />
+          </StatGrid>
+          <Card title={`Opening Balances — ${selectedFy}`}>
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "opening balances" })} backHref="/finance" />
+            </div>
+          </Card>
+        </>
       ) : (
         <>
           <StatGrid>

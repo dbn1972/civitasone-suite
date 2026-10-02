@@ -21,6 +21,14 @@ function statusBadge(status: unknown): string {
   }
 }
 
+export const UNKNOWN_OFFICE = "Unknown office";
+
+/** Office display name; never an id fragment (see GAP-FINANCE-BUDGET-FUND-RELEASES-01). */
+export function officeLabel(officeId: unknown, names?: ReadonlyMap<string, string>): string {
+  const id = typeof officeId === "string" ? officeId : "";
+  return (id && names?.get(id)) || UNKNOWN_OFFICE;
+}
+
 export function FundReleasesTable({ releases, source = "api" }: { releases: Row[]; source?: "api" | "error" }) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Row[]>(
     "finance.fund-releases", releases, source, (d) => d.length === 0
@@ -30,8 +38,12 @@ export function FundReleasesTable({ releases, source = "api" }: { releases: Row[
     ...r,
     _amount:   rupees(r.amountMinor),
     _status:   statusBadge(r.status),
-    _from:     String(r.fromOfficeId ?? "-").slice(-8),
-    _to:       String(r.toOfficeId ?? "-").slice(-8),
+    // GAP-FINANCE-BUDGET-FUND-RELEASES-01: an 8-char uuid tail is not an
+    // office name. No office directory backs from/to_office_id yet, so the
+    // row says so plainly (full id kept as a tooltip for support) rather
+    // than printing a fragment or guessing a name.
+    _from:     officeLabel(r.fromOfficeId),
+    _to:       officeLabel(r.toOfficeId),
     _issued:   r.issuedBy ? String(r.issuedBy).slice(-8) : "-",
     _effFrom:  String(r.effectiveFrom ?? "-").slice(0, 10),
   }));
@@ -46,10 +58,9 @@ export function FundReleasesTable({ releases, source = "api" }: { releases: Row[
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<Row>
         columns={[
-          { key: "id",        label: "ID" },
           { key: "fy",        label: "FY" },
-          { key: "_from",     label: "From Office" },
-          { key: "_to",       label: "To Office" },
+          { key: "_from",     label: "From Office", render: (r) => <span title={String(r.fromOfficeId ?? "")}>{String(r._from)}</span> },
+          { key: "_to",       label: "To Office",   render: (r) => <span title={String(r.toOfficeId ?? "")}>{String(r._to)}</span> },
           { key: "_amount",   label: "Amount",       align: "right" },
           { key: "currency",  label: "CCY" },
           { key: "_status",   label: "Status" },

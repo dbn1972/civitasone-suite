@@ -1,9 +1,15 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
 import { getFinanceFundReleases } from "@/app/_data/loaders";
+import { toResourceState } from "@/app/_data/useResource";
+import { toHumanError } from "@/lib/messages";
 import { FundReleasesTable } from "./FundReleasesTable";
 
 export default async function FundReleasesPage() {
-  const { data: releases, source } = await getFinanceFundReleases();
+  const result = await getFinanceFundReleases();
+  const { data: releases } = result;
+  // GAP-FINANCE-BUDGET-FUND-RELEASES-02: errored -> "—" cards + Retry state,
+  // never four zeros above "No allocation distributions found."
+  const errored = toResourceState(result).status === "error";
 
   const issued       = releases.filter((r) => r.status === "issued").length;
   const acknowledged = releases.filter((r) => r.status === "acknowledged").length;
@@ -18,18 +24,21 @@ export default async function FundReleasesPage() {
       />
 
       <StatGrid>
-        <StatCard icon="📦" iconBg="var(--panel)"  label="Total Releases"  value={releases.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3"        label="Issued"          value={issued} />
-        <StatCard icon="🤝" iconBg="#eff6ff"        label="Acknowledged"    value={acknowledged} />
-        <StatCard icon="⏳" iconBg="#fffaeb"        label="Pending"         value={pending} up={false} />
+        <StatCard icon="📦" iconBg="var(--panel)"  label="Total Releases"  value={errored ? "—" : releases.length} />
+        <StatCard icon="✅" iconBg="#ecfdf3"        label="Issued"          value={errored ? "—" : issued} />
+        <StatCard icon="🤝" iconBg="#eff6ff"        label="Acknowledged"    value={errored ? "—" : acknowledged} />
+        <StatCard icon="⏳" iconBg="#fffaeb"        label="Pending"         value={errored ? "—" : pending} up={false} />
       </StatGrid>
 
-      {/* UX-012: the data-source badge now lives inside FundReleasesTable,
-          driven by the same useSeededResource call that produces its rows —
-          not a second, independent read of `source` here that could
-          disagree with the table's own cache state (UX-002's pattern). */}
+      {/* UX-012: the data-source badge lives inside FundReleasesTable. */}
       <Card title="Allocation Distributions (Fund Releases)">
-        <FundReleasesTable releases={releases} source={source === "error" ? "error" : "api"} />
+        {errored ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "fund releases" })} backHref="/finance" />
+          </div>
+        ) : (
+          <FundReleasesTable releases={releases} source="api" />
+        )}
       </Card>
     </div>
   );

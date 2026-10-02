@@ -9,6 +9,17 @@ import * as commands from "./commands.js";
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const PERIOD_ADMIN_ROLES = ["finance_admin", "super_admin"];
 
+const periodParam = z.object({ period: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "period must be YYYY-MM") });
+
+// GAP-FINANCE-PERIOD-CLOSE-01: soft-close, hard-close and reopen all change
+// whether the books for a month accept postings, so every transition now
+// carries a mandatory stated reason, recorded in the audit event and the
+// finance.period.* domain event (period-close/consumer.ts). Previously only
+// reopen accepted one (and even that was optional).
+const transitionBody = z.object({
+  reason: z.string().trim().min(10, "Reason must be at least 10 characters").max(500),
+});
+
 export async function isPeriodHardClosed(tenantId: string, period: string): Promise<boolean> {
   return periodRepo.isPeriodHardClosedDb(tenantId, period);
 }
@@ -21,14 +32,15 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/periods/:period/close", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
-    const { period } = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM") }).parse(req.params);
+    const { period } = periodParam.parse(req.params);
+    const { reason } = transitionBody.parse(req.body ?? {});
 
     const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);
     if (existing?.status === "hard_close") {
       throw new HttpError(409, "ALREADY_CLOSED", "period is already hard-closed");
     }
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.closePeriod(ctx, period, "soft_close"));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closePeriod(ctx, period, "soft_close", reason));
   });
 
   // POLICY DECISION (flagged for explicit review, not assumed obviously
@@ -42,21 +54,22 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/finance/periods/:period/hard-close", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PERIOD_ADMIN_ROLES);
-    const { period } = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM") }).parse(req.params);
+    const { period } = periodParam.parse(req.params);
+    const { reason } = transitionBody.parse(req.body ?? {});
 
     const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);
     if (existing?.status === "hard_close") {
       throw new HttpError(409, "ALREADY_CLOSED", "period is already hard-closed");
     }
 
-    return sendAccepted(reply, acceptedResponseSchema, await commands.closePeriod(ctx, period, "hard_close"));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.closePeriod(ctx, period, "hard_close", reason));
   });
 
   app.post("/v1/finance/periods/:period/reopen", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PERIOD_ADMIN_ROLES);
-    const { period } = z.object({ period: z.string().regex(/^\d{4}-\d{2}$/, "period must be YYYY-MM") }).parse(req.params);
-    const body = z.object({ reason: z.string().optional() }).parse(req.body ?? {});
+    const { period } = periodParam.parse(req.params);
+    const body = transitionBody.parse(req.body ?? {});
 
     const existing = await periodRepo.findPeriodClose(ctx.tenantId, period);
     if (!existing || existing.status === "open") {
@@ -68,6 +81,18 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
       acceptedResponseSchema,
       await commands.reopenPeriod(ctx, period, body.reason),
     );
+  });
+
+  // GAP-FINANCE-PERIOD-CLOSE-02: what is still outstanding in a period
+  // before it is locked -- the hard-close dialog shows these counts (with
+  // links) instead of only warning that unposted vouchers "will be left
+  // stranded". Read-only; counts only, no amounts.
+  app.get("/v1/finance/periods/:period/readiness", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { period } = periodParam.parse(req.params);
+    const readiness = await periodRepo.getPeriodReadiness(ctx.tenantId, period);
+    return reply.send({ data: { period, ...readiness } });
   });
 
   app.get("/v1/finance/periods", async (req, reply) => {

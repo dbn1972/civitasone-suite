@@ -2,6 +2,7 @@
 import { DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
+import { budgetHeadLabel } from "../_lib/headLabel";
 
 type Row = Record<string, unknown>;
 
@@ -55,6 +56,11 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
 
   const enriched = rows.map((r) => ({
     ...r,
+    // GAP-FINANCE-BUDGET-MONITORING-02: "2202 · General Education", not a uuid.
+    _head: budgetHeadLabel({
+      headCode: typeof r.headCode === "string" ? r.headCode : null,
+      headName: typeof r.headName === "string" ? r.headName : null,
+    }),
     _allocated: rupees(r.allocatedMinor),
     _committed: rupees(r.committedMinor),
     _actual:    rupees(r.actualMinor),
@@ -72,7 +78,7 @@ export function MonitoringTable({ lines, source = "api" }: { lines: Row[]; sourc
       <DataSourceBadge provenance={provenance ?? "live"} cachedAt={cachedAt} offline={offline} />
       <DataTable<Row>
         columns={[
-          { key: "headId", label: "Head ID" },
+          { key: "_head", label: "Budget Head", render: (r) => <span title={String(r.headId ?? "")}>{String(r._head)}</span> },
           { key: "fy",     label: "FY" },
           { key: "_allocated", label: "Allocated",  align: "right" },
           { key: "_committed", label: "Committed",  align: "right" },

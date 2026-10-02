@@ -168,6 +168,27 @@ export async function findHeadsByIds(ids: string[]): Promise<HeadRow[]> {
   );
 }
 
+/**
+ * GAP-FINANCE-BUDGET-ALLOCATION-01 / MONITORING-02: resolve head ids to their
+ * human code + name for list read-models (allocations, monitoring lines),
+ * scoped to the caller's tenant. budget_allocation.head_id carries no FK, so a
+ * head that no longer resolves is simply absent from the map -- callers render
+ * it as unknown rather than guessing a label.
+ */
+export async function findHeadLabels(
+  tenantId: string,
+  ids: readonly string[],
+): Promise<Map<string, { code: string; name: string }>> {
+  const unique = [...new Set(ids)];
+  if (unique.length === 0) return new Map();
+  const rows = await scopedRead((tx) =>
+    tx.select({ id: financeHeads.id, code: financeHeads.code, name: financeHeads.name })
+      .from(financeHeads)
+      .where(and(eq(financeHeads.tenantId, tenantId), inArray(financeHeads.id, unique)))
+  );
+  return new Map(rows.map((r) => [r.id, { code: r.code, name: r.name }]));
+}
+
 export async function findHeadByIdTx(tx: Writer, id: string): Promise<HeadRow | null> {
   const rows = await (tx as typeof db).select().from(financeHeads).where(eq(financeHeads.id, id)).limit(1);
   return rows[0] ?? null;

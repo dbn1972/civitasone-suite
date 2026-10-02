@@ -74,19 +74,19 @@ describe("Finance POST /:id routes — auth rejection", () => {
 describe("Finance period-close routes", () => {
   it("POST /v1/finance/periods/2025-04/close — runs (may fail on DB but covers handler)", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/finance/periods/2025-04/close", headers: { authorization: `Bearer ${token()}` }, payload: {} });
+    const r = await app.inject({ method: "POST", url: "/v1/finance/periods/2025-04/close", headers: { authorization: `Bearer ${token()}` }, payload: { reason: "Routine period transition" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
   });
   it("POST /v1/finance/periods/2025-04/hard-close — runs", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/finance/periods/2025-04/hard-close", headers: { authorization: `Bearer ${token()}` }, payload: {} });
+    const r = await app.inject({ method: "POST", url: "/v1/finance/periods/2025-04/hard-close", headers: { authorization: `Bearer ${token()}` }, payload: { reason: "Routine period transition" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
   });
   it("POST /v1/finance/periods/2025-04/reopen — runs", async () => {
     const app = await buildApp();
-    const r = await app.inject({ method: "POST", url: "/v1/finance/periods/2025-04/reopen", headers: { authorization: `Bearer ${token()}` }, payload: {} });
+    const r = await app.inject({ method: "POST", url: "/v1/finance/periods/2025-04/reopen", headers: { authorization: `Bearer ${token()}` }, payload: { reason: "Routine period transition" } });
     await app.close();
     expect(r.statusCode).not.toBe(404);
   });

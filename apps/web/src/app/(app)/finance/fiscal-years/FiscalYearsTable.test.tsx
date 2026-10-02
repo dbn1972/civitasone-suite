@@ -44,6 +44,7 @@ describe("FiscalYearsTable", () => {
     fireEvent.click(screen.getByRole("button", { name: "Activate fiscal year 2025-26" }));
 
     await waitFor(() => expect(screen.getByText("Activate this fiscal year?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason for switching the posting year"), { target: { value: "Re-opening prior year for audit adjustments" } });
     fireEvent.click(screen.getByText("Activate fiscal year"));
 
     await waitFor(() => {
@@ -59,11 +60,46 @@ describe("FiscalYearsTable", () => {
     fireEvent.click(screen.getByRole("button", { name: "Activate fiscal year 2025-26" }));
 
     await waitFor(() => expect(screen.getByText("Activate this fiscal year?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason for switching the posting year"), { target: { value: "Re-opening prior year for audit adjustments" } });
     fireEvent.click(screen.getByText("Activate fiscal year"));
 
     await waitFor(() => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-FISCAL-YEARS-02
+  it("keeps Confirm disabled until a reason is given, and PATCHes it in the body", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ status: "accepted" }), { status: 202 }));
+    render(<FiscalYearsTable rows={rows} />);
+    fireEvent.click(screen.getByRole("button", { name: "Activate fiscal year 2025-26" }));
+    await waitFor(() => expect(screen.getByText("Activate this fiscal year?")).toBeInTheDocument());
+    const confirm = screen.getByRole("button", { name: "Activate fiscal year" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Reason for switching the posting year"), { target: { value: "Year-end rollover approved by FA" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.method).toBe("PATCH");
+    expect(JSON.parse(String(init.body))).toEqual({ reason: "Year-end rollover approved by FA" });
+  });
+
+  it("warns about not-hard-closed periods of the outgoing year, with a link", async () => {
+    const withActive = [
+      { code: "2026-27", label: "FY 2026-27", startDate: "2026-04-01", endDate: "2027-03-31", status: "active" },
+      { code: "2027-28", label: "FY 2027-28", startDate: "2027-04-01", endDate: "2028-03-31", status: "closed" },
+    ];
+    const periods = [
+      { period: "2027-03", fiscalYear: "2026-27", status: "open", closedBy: null, closedAt: null },
+      { period: "2027-02", fiscalYear: "2026-27", status: "soft_close", closedBy: null, closedAt: null },
+      { period: "2027-01", fiscalYear: "2026-27", status: "hard_close", closedBy: null, closedAt: null },
+    ];
+    render(<FiscalYearsTable rows={withActive} periods={periods} />);
+    fireEvent.click(screen.getByRole("button", { name: "Activate fiscal year 2027-28" }));
+    await waitFor(() => expect(screen.getByText("Activate this fiscal year?")).toBeInTheDocument());
+    expect(screen.getByText(/2 periods of 2026-27 not hard-closed/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Review period close" })).toHaveAttribute("href", "/finance/period-close");
+    expect(screen.getByRole("link", { name: /opening balances for 2027-28/ })).toHaveAttribute("href", "/finance/opening-balances?fy=2027-28");
   });
 });

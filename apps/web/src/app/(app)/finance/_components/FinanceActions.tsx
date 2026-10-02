@@ -161,22 +161,6 @@ export function BillPassPayActions({ id, status, threeWayMatch }: { id: string; 
 
 
 /* ── List-level create actions (maker prepares; checker approves later) ── */
-export function SanctionCreateAction() {
-  const router = useRouter();
-  const { toast } = useToast();
-  return (
-    <ActionButton
-      label="+ New Sanction"
-      className="btn primary"
-      confirmTitle="Raise a new sanction?"
-      confirmDescription="This records a draft administrative/financial sanction for budget check. A distinct approving authority must sanction it before any expenditure is committed (maker-checker)."
-      confirmLabel="Create draft"
-      requireReason
-      reasonLabel="Proposing officer & purpose"
-      onConfirm={async (reason) => {
-        await postJson("/api/proxy/v1/finance/sanctions", { reason, status: "pending" }, "sanction");
-      }}
-      onSuccess={() => { toast.success("Draft sanction submitted for approval."); router.refresh(); }}
-    />
-  );
-}
+// SanctionCreateAction removed (GAP-FINANCE-BUDGET-SANCTIONS-01): it POSTed
+// { reason, status } which never matched createSanctionBody; the list page
+// now links to the real form at /finance/budget/sanctions/new.

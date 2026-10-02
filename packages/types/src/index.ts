@@ -2429,6 +2429,8 @@ export type AllocationDistributionSummary = {
 export type FinanceBudgetAllocationSummary = {
   id: string;
   headId: string;
+  headCode?: string | null;
+  headName?: string | null;
   fy: string;
   allocatedMinor: string;
   committedMinor: string;
@@ -2455,6 +2457,8 @@ export type BudgetMonitoringSummary = {
 export type BudgetMonitoringLine = {
   id: string;
   headId: string;
+  headCode?: string | null;
+  headName?: string | null;
   fy: string;
   allocatedMinor: string;
   committedMinor: string;

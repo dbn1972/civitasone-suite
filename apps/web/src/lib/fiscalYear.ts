@@ -74,3 +74,41 @@ export function isValidFinancialYearLabel(fy: string): boolean {
   if (!match) return false;
   return Number(match[2]) === (Number(match[1]) + 1) % 100;
 }
+
+export type FiscalYearRange = { code: string; startDate: string; endDate: string };
+
+export type FiscalYearConflicts = {
+  /** An existing year with the same code. */
+  duplicateOf?: string;
+  /** An existing year whose date range overlaps the new one (inclusive). */
+  overlapsWith?: string;
+  /** Days left uncovered between the latest existing year's end and the new start (> 0 = gap). */
+  gapAfter?: { code: string; days: number };
+};
+
+const DAY_MS = 86_400_000;
+
+/**
+ * GAP-FINANCE-FISCAL-YEARS-01: overlap/gap check for a new fiscal year against
+ * the existing ones. Overlap and duplicate block creation (finance-service
+ * rejects them with 409 too); a gap after the latest year is only a warning
+ * -- it can be legitimate when a tenant onboards mid-history. ISO date
+ * strings compare chronologically.
+ */
+export function findFiscalYearConflicts(next: FiscalYearRange, rows: readonly FiscalYearRange[]): FiscalYearConflicts {
+  const out: FiscalYearConflicts = {};
+  for (const fy of rows) {
+    if (fy.code === next.code) out.duplicateOf ??= fy.code;
+    else if (fy.startDate && fy.endDate && next.startDate <= fy.endDate && fy.startDate <= next.endDate) {
+      out.overlapsWith ??= fy.code;
+    }
+  }
+  const before = rows
+    .filter((fy) => fy.endDate && fy.endDate < next.startDate)
+    .sort((a, b) => (a.endDate < b.endDate ? 1 : -1))[0];
+  if (before) {
+    const days = Math.round((Date.parse(`${next.startDate}T00:00:00Z`) - Date.parse(`${before.endDate}T00:00:00Z`)) / DAY_MS) - 1;
+    if (days > 0) out.gapAfter = { code: before.code, days };
+  }
+  return out;
+}

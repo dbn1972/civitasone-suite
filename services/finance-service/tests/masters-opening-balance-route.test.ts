@@ -32,6 +32,7 @@ describe("POST /v1/finance/opening-balances — server-side balance enforcement"
         method: "POST", url: "/v1/finance/opening-balances", headers: financeAdmin(),
         payload: {
           fyCode: "2026-27",
+          reason: "Migration opening position per audited TB",
           entries: [
             { accountCode: "1100", debitMinor: 100000, creditMinor: 0 },
             { accountCode: "3100", debitMinor: 0, creditMinor: 90000 },
@@ -50,7 +51,7 @@ describe("POST /v1/finance/opening-balances — server-side balance enforcement"
     try {
       const res = await app.inject({
         method: "POST", url: "/v1/finance/opening-balances", headers: financeAdmin(),
-        payload: { fyCode: "2026-27", entries: [{ accountCode: "1100", debitMinor: 500, creditMinor: 0 }] },
+        payload: { fyCode: "2026-27", reason: "Migration opening position per audited TB", entries: [{ accountCode: "1100", debitMinor: 500, creditMinor: 0 }] },
       });
       expect(res.statusCode).toBe(400);
       expect(res.json().code).toBe("OPENING_BALANCE_TOO_FEW_ENTRIES");
@@ -64,7 +65,7 @@ describe("POST /v1/finance/opening-balances — server-side balance enforcement"
     try {
       const res = await app.inject({
         method: "POST", url: "/v1/finance/opening-balances", headers: financeAdmin(),
-        payload: { fyCode: "2026-27", entries: [{ accountCode: "1100", debitMinor: 500, creditMinor: 500 }] },
+        payload: { fyCode: "2026-27", reason: "Migration opening position per audited TB", entries: [{ accountCode: "1100", debitMinor: 500, creditMinor: 500 }] },
       });
       expect(res.statusCode).toBe(400);
       expect(res.json().code).toBe("OPENING_BALANCE_TOO_FEW_ENTRIES");
@@ -80,6 +81,7 @@ describe("POST /v1/finance/opening-balances — server-side balance enforcement"
         method: "POST", url: "/v1/finance/opening-balances", headers: financeAdmin(),
         payload: {
           fyCode: "2026-27",
+          reason: "Migration opening position per audited TB",
           entries: [
             { accountCode: "1100", debitMinor: 250000, creditMinor: 0 },
             { accountCode: "3100", debitMinor: 0, creditMinor: 250000 },
@@ -100,7 +102,7 @@ describe("POST /v1/finance/opening-balances — server-side balance enforcement"
       const res = await app.inject({
         method: "POST", url: "/v1/finance/opening-balances",
         headers: { authorization: `Bearer ${token(["audit_officer"])}` },
-        payload: { fyCode: "2026-27", entries: [{ accountCode: "1100", debitMinor: 1, creditMinor: 1 }] },
+        payload: { fyCode: "2026-27", reason: "Migration opening position per audited TB", entries: [{ accountCode: "1100", debitMinor: 1, creditMinor: 1 }] },
       });
       expect(res.statusCode).toBe(403);
     } finally {

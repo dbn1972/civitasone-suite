@@ -4,6 +4,8 @@ import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { rupeesToMinorString } from "@/lib/money";
+import { formatMoney } from "@/lib/formatters";
 
 type Props = { fyCode: string };
 
@@ -20,10 +22,20 @@ function emptyRow(): EntryRow {
   return { id: ++_rowId, accountCode: "", debit: "", credit: "", narration: "" };
 }
 
-function rupeesToPaise(val: string): number {
-  const n = parseFloat(val);
-  return Number.isNaN(n) ? 0 : Math.round(n * 100);
+/**
+ * Exact rupees -> paise (bigint), string-based: never parseFloat * 100, which
+ * mis-rounds values like 1.005 and loses precision above 2^53. A blank cell is
+ * 0; anything that isn't a plain amount with at most 2 decimals is null
+ * (rejected, never guessed).
+ */
+function rupeesToPaise(val: string): bigint | null {
+  if (!val.trim()) return 0n;
+  const minor = rupeesToMinorString(val, { allowZero: true });
+  return minor === null ? null : BigInt(minor);
 }
+
+/** Minimum stated-reason length (matches finance-service's reasonField). */
+const OB_REASON_MIN = 10;
 
 export function OpeningBalanceForm({ fyCode }: Props) {
   const router = useRouter();
@@ -75,7 +87,13 @@ export function OpeningBalanceForm({ fyCode }: Props) {
       }
       const debit = rupeesToPaise(r.debit);
       const credit = rupeesToPaise(r.credit);
-      if (debit <= 0 && credit <= 0) {
+      if (debit === null || credit === null) {
+        setRowError(`Row for account ${r.accountCode}: enter amounts in rupees with at most 2 decimals (e.g. 1234.50).`);
+        setInvalidRowId(r.id);
+        focusRow(r.id);
+        return false;
+      }
+      if (debit <= 0n && credit <= 0n) {
         setRowError(`Row for account ${r.accountCode} needs a debit or credit amount greater than zero.`);
         setInvalidRowId(r.id);
         focusRow(r.id);
@@ -84,11 +102,11 @@ export function OpeningBalanceForm({ fyCode }: Props) {
     }
     // Balanced-entry check: opening balances seed the trial balance, so total
     // debits MUST equal total credits — an unbalanced set corrupts the GL (fail closed).
-    const totalDebit = entries.reduce((s, r) => s + rupeesToPaise(r.debit), 0);
-    const totalCredit = entries.reduce((s, r) => s + rupeesToPaise(r.credit), 0);
+    const totalDebit = entries.reduce((s, r) => s + (rupeesToPaise(r.debit) ?? 0n), 0n);
+    const totalCredit = entries.reduce((s, r) => s + (rupeesToPaise(r.credit) ?? 0n), 0n);
     if (totalDebit !== totalCredit) {
-      const fmt = (p: number) => `₹${(p / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-      setRowError(`Total debits (${fmt(totalDebit)}) must equal total credits (${fmt(totalCredit)}). Difference: ${fmt(Math.abs(totalDebit - totalCredit))}.`);
+      const diff = totalDebit > totalCredit ? totalDebit - totalCredit : totalCredit - totalDebit;
+      setRowError(`Total debits (${formatMoney(totalDebit)}) must equal total credits (${formatMoney(totalCredit)}). Difference: ${formatMoney(diff)}.`);
       focusRow(rows[0]?.id);
       return false;
     }
@@ -104,20 +122,21 @@ export function OpeningBalanceForm({ fyCode }: Props) {
     setConfirmOpen(true);
   }
 
-  async function submitEntries() {
+  async function submitEntries(reason?: string) {
     setBusy(true);
     setDialogError(undefined);
     try {
       const entries = activeEntries().map((r) => ({
         accountCode: r.accountCode.trim(),
-        debitMinor: rupeesToPaise(r.debit),
-        creditMinor: rupeesToPaise(r.credit),
+        // paise as base-10 strings (bigint-safe; validate() already rejected bad input)
+        debitMinor: (rupeesToPaise(r.debit) ?? 0n).toString(),
+        creditMinor: (rupeesToPaise(r.credit) ?? 0n).toString(),
         narration: r.narration.trim() || undefined,
       }));
 
       const res = await browserJson<{ status: string; count: number }>("v1/finance/opening-balances", {
         method: "POST",
-        body: JSON.stringify({ fyCode, entries }),
+        body: JSON.stringify({ fyCode, entries, reason }),
       });
 
       setConfirmOpen(false);
@@ -236,16 +255,22 @@ export function OpeningBalanceForm({ fyCode }: Props) {
         open={confirmOpen}
         title="Save these opening balances?"
         confirmLabel="Save opening balances"
+        danger
+        requireReason
+        reasonLabel="Reason / approving authority"
+        minReasonLength={OB_REASON_MIN}
+        maxReasonLength={500}
         busy={busy}
         errorMessage={dialogError}
         description={
           <>
             Save <strong>{entryCount}</strong> opening balance {entryCount === 1 ? "entry" : "entries"} for fiscal
-            year <strong>{fyCode}</strong>. This sets the starting position for these accounts and cannot be undone
-            from this screen.
+            year <strong>{fyCode}</strong>. They are saved immediately (there is no separate approval step) and set
+            the starting position of the ledger for these accounts; they cannot be edited or undone from this screen.
+            State the reason and the authority approving these figures — it is recorded in the audit trail.
           </>
         }
-        onConfirm={() => void submitEntries()}
+        onConfirm={(reason) => void submitEntries(reason)}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
     </form>

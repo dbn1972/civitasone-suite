@@ -9,6 +9,7 @@ export async function closePeriod(
   ctx: RequestContext,
   period: string,
   closeType: "soft_close" | "hard_close",
+  reason: string,
 ): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.periodClose, {
@@ -18,7 +19,7 @@ export async function closePeriod(
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { tenantId: ctx.tenantId, period, closeType },
+    payload: { tenantId: ctx.tenantId, period, closeType, reason },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
@@ -26,7 +27,7 @@ export async function closePeriod(
 export async function reopenPeriod(
   ctx: RequestContext,
   period: string,
-  reason?: string,
+  reason: string,
 ): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.periodReopen, {
@@ -36,7 +37,7 @@ export async function reopenPeriod(
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { tenantId: ctx.tenantId, period, ...(reason ? { reason } : {}) },
+    payload: { tenantId: ctx.tenantId, period, reason },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

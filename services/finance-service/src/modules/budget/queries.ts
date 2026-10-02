@@ -1,7 +1,7 @@
 import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import * as glRepo from "../gl/repo.js";
-import { sanctionAvailable } from "./domain.js";
+import { sanctionAvailable, effectiveHeadType } from "./domain.js";
 import type { BudgetRow, SanctionRow } from "./schema.js";
 
 const OFFICER_NAMES: Record<string, string> = {
@@ -44,12 +44,8 @@ export type AccountListItem = {
   status: "active" | "inactive";
 };
 
-function mapAccountType(classification: string | null, level: number): AccountListItem["type"] {
-  const c = (classification ?? "").toLowerCase();
-  if (c === "asset" || c === "liability" || c === "equity" || c === "income" || c === "expense") {
-    return c;
-  }
-  return level === 0 ? "asset" : "expense";
+function mapAccountType(classification: string | null, code: string): AccountListItem["type"] {
+  return effectiveHeadType(classification, code);
 }
 
 /**
@@ -104,7 +100,7 @@ export async function listAccounts(tenantId: string, limit: number): Promise<Acc
       ]);
       const balanceByHead = new Map(balanceRows.map((b) => [b.headId, b]));
       return heads.map((h) => {
-        const type = mapAccountType(h.classification, h.level);
+        const type = mapAccountType(h.classification, h.code);
         const bal = balanceByHead.get(h.id);
         const balanceMinor = computeBalanceMinor(type, bal?.totalDebit ?? 0n, bal?.totalCredit ?? 0n);
         return {

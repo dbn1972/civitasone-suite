@@ -1,4 +1,5 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, RefreshErrorState } from "@/app/_components/ds";
+import { toHumanError } from "@/lib/messages";
 import { getFinanceBudgetMonitoring, getFinanceBudgetMonitoringLines } from "@/app/_data/loaders";
 import { currentFinancialYear } from "@/lib/fiscalYear";
 import { FyFilter } from "../../_components/FyFilter";
@@ -23,10 +24,19 @@ export default async function BudgetMonitoringPage({
     typeof searchParams?.fy === "string" && searchParams.fy.length > 0
       ? searchParams.fy
       : currentFinancialYear();
-  const [{ data: summary, source }, { data: lines }] = await Promise.all([
+  const [summaryRes, linesRes] = await Promise.all([
     getFinanceBudgetMonitoring(fy),
     getFinanceBudgetMonitoringLines(fy),
   ]);
+  // GAP-FINANCE-BUDGET-MONITORING-01: the cards and the table come from two
+  // independent fetches, so each now owns its own error state. Previously
+  // only the SUMMARY's source reached the table: a failed lines fetch showed
+  // "No budget allocation lines found for this FY." with no badge, and a
+  // failed summary showed ₹0 cards above real rows.
+  const summaryErr = summaryRes.source === "error";
+  const linesErr = linesRes.source === "error";
+  const summary = summaryRes.data;
+  const lines = linesRes.data;
 
   const totals = (summary as Record<string, unknown> & { totals?: Record<string, unknown> })?.totals ?? {};
   const exceptions = (totals as Record<string, Record<string, number>>).exceptions ?? {};
@@ -50,30 +60,35 @@ export default async function BudgetMonitoringPage({
         }
       />
 
+      {summaryErr && (
+        <div role="alert" style={{ marginBottom: 12 }}>
+          <RefreshErrorState error={toHumanError("load", { area: "budget monitoring totals" })} />
+        </div>
+      )}
       <StatGrid>
         <StatCard
           icon="💰"
           iconBg="var(--panel)"
           label="Total Allocated"
-          value={rupees((totals as Record<string, unknown>).allocatedMinor)}
+          value={summaryErr ? "—" : rupees((totals as Record<string, unknown>).allocatedMinor)}
         />
         <StatCard
           icon="📤"
           iconBg="var(--panel)"
           label="Total Expended"
-          value={rupees((totals as Record<string, unknown>).actualMinor)}
+          value={summaryErr ? "—" : rupees((totals as Record<string, unknown>).actualMinor)}
         />
         <StatCard
           icon="🟢"
           iconBg="#ecfdf3"
           label="On Track"
-          value={onTrack}
+          value={summaryErr ? "—" : onTrack}
         />
         <StatCard
           icon="🔴"
           iconBg="#fef2f2"
           label="Exceptions"
-          value={overCommitted + underUtilised + projOverspend}
+          value={summaryErr ? "—" : overCommitted + underUtilised + projOverspend}
           up={false}
         />
       </StatGrid>
@@ -107,7 +122,13 @@ export default async function BudgetMonitoringPage({
           not a second, independent read of `source` here that could
           disagree with the table's own cache state (UX-002's pattern). */}
       <Card title="Head-wise Budget vs Expenditure">
-        <MonitoringTable lines={lines} source={source === "error" ? "error" : "api"} />
+        {linesErr ? (
+          <div className="pad">
+            <RefreshErrorState error={toHumanError("load", { area: "budget monitoring lines" })} backHref="/finance" />
+          </div>
+        ) : (
+          <MonitoringTable lines={lines} source="api" />
+        )}
       </Card>
     </div>
   );
