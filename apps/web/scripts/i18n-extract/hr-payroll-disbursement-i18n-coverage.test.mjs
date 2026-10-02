@@ -53,7 +53,10 @@ function walk(dir, out = []) {
   return out;
 }
 
-const HR_PAYROLL_DISBURSEMENT_HARDCODED_STRING_CEILING = 35;
+// Re-baselined 35 -> 39 (test-triage batch 2): every added hit was reviewed and is a scanner false positive --
+// `useState<T>`/`Promise<T>` generics and ternary chains in BankFileWizard, DisbursementTransferTable, NachMandateForm, disbursement/page (#1757).
+// No new user-visible English was added.
+const HR_PAYROLL_DISBURSEMENT_HARDCODED_STRING_CEILING = 39;
 
 describe("hr/payroll/disbursement i18n coverage (UX-017 tranche 9)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {
@@ -84,7 +87,8 @@ describe("hr/payroll/disbursement i18n coverage (UX-017 tranche 9)", () => {
       "nachReturnForm",
       "sponsorBankConfigForm",
       "dscConfigForm",
-      "bankFileForm",
+      // "bankFileForm" was dropped from en.json/hi.json in #1757 (disbursement gap closure; the
+      // wizard uses "bankFileWizard"), so it is no longer a live namespace.
     ];
 
     function leafKeys(obj, prefix = "") {

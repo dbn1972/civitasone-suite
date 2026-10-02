@@ -87,7 +87,8 @@ const SLICE_FILES = [...directFilesOnly(STATUTORY_ROOT), ...STATUTORY_SUBDIRS.fl
 // declaration, or this fix's own explanatory code comment immediately
 // preceding one) -- none are real UI text. See this tranche's PR description
 // for the per-file breakdown.
-const HR_PAYROLL_STATUTORY_HARDCODED_STRING_CEILING = 23;
+// Lowered 23 -> 22 (test-triage batch 2): re-measured after rebasing onto main; one finding went away.
+const HR_PAYROLL_STATUTORY_HARDCODED_STRING_CEILING = 22;
 
 describe("hr/payroll/statutory (pf/gpf/nps/esi/gratuity/lwf/pt + hub root) i18n coverage (UX-017 tranche 12)", () => {
   it("does not exceed the known false-positive baseline for hardcoded strings", () => {

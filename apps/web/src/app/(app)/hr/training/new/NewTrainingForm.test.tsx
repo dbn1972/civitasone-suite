@@ -26,8 +26,16 @@ describe("NewTrainingForm", () => {
     pushMock.mockReset();
     refreshMock.mockReset();
     vi.stubGlobal("fetch", fetchMock);
+    // The fixtures use hard-coded 2026-10-0x dates; the form warns about a
+    // From Date in the past relative to "today", so pin only Date (timers stay
+    // real so waitFor/findBy keep polling) to keep them in the future forever.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-09-15T05:00:00Z"));
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
 
   function fillRequiredFields() {
     renderForm();

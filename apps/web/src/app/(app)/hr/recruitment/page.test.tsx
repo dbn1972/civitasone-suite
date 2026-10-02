@@ -66,7 +66,9 @@ describe("RecruitmentPage (HR-A deep-verify)", () => {
     expect(screen.getByText("Junior Engineer")).toBeInTheDocument();
     expect(screen.getByText("IT")).toBeInTheDocument();
     expect(screen.getByText("5")).toBeInTheDocument();
-    expect(screen.getByText("open")).toBeInTheDocument();
+    // StatusPill humanizes the raw "open" enum (humanizeStatus -> "Open"); the
+    // table renders it as a pill, not the raw lowercase enum.
+    expect(screen.getByText("Open")).toBeInTheDocument();
   });
 
   it("shows the empty state when there are no vacancies", async () => {

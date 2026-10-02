@@ -84,7 +84,8 @@ describe("hr/workforce i18n coverage (UX-017 tranche 6)", () => {
     const HR_WORKFORCE_NAMESPACES = [
       "workforce",
       "workforceAnalytics",
-      "workforceContractual",
+      // "workforceContractual" was deliberately dropped as unreferenced in #1763 (asserted
+      // by src/app/(app)/hr/outsourced/messages.test.ts), so it is no longer a live namespace.
       "workforceInterns",
       "workforceOutsourced",
       "workforceWfh",

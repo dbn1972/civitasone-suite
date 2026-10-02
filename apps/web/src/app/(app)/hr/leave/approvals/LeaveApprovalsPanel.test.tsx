@@ -148,7 +148,7 @@ describe("LeaveApprovalsPanel — UX-016 clerk-safe errors", () => {
     // Scoped to the toHumanError "area" text (not just /couldn't load/i)
     // since this panel's own DataSourceBadge also shows a generic
     // "Couldn't load — showing nothing" pill on this same error state.
-    await waitFor(() => expect(screen.getByText(/couldn't load this leave application/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/couldn't load leave application/i)).toBeInTheDocument());
     expect(screen.queryByText(/workflow-service/)).not.toBeInTheDocument();
     expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
   });
@@ -204,7 +204,7 @@ describe("LeaveApprovalsPanel — network failure on load (UX-016)", () => {
     );
     renderPanel();
 
-    const el = await screen.findByText(/couldn't load this leave application/i, {}, { timeout: 3000 });
+    const el = await screen.findByText(/couldn't load leave application/i, {}, { timeout: 3000 });
     expect(el).toBeInTheDocument();
     expect(screen.queryByText(/Failed to fetch/i)).not.toBeInTheDocument();
   });
