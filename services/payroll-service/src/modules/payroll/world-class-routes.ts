@@ -7,6 +7,8 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { mergeSubsistenceSettings } from "./subsistence.js";
+import { resolveSubsistenceConfig } from "./subsistence-repo.js";
 import {
   createArrearBody, computeBonusBody, createReimbursementBody,
   createSalaryRevisionBody, updateSettingsBody,
@@ -272,15 +274,26 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT protected_net_floor_minor, updated_at
+      SELECT protected_net_floor_minor, updated_at,
+             subsistence_initial_pct_bps, subsistence_review_after_days,
+             subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps
       FROM payroll.payroll_settings
       WHERE tenant_id = ${ctx.tenantId}::uuid
       LIMIT 1
-    `))) as unknown as Array<{ protected_net_floor_minor: string; updated_at: string }>;
+    `))) as unknown as Array<{
+      protected_net_floor_minor: string; updated_at: string;
+      subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
+      subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
+    }>;
     const s = rows[0];
     return reply.send({
       protectedNetFloorMinor: s ? Number(s.protected_net_floor_minor) : 0,
       updatedAt: s?.updated_at ?? null,
+      // FR 53 subsistence allowance (FR 53 defaults when the tenant has no row).
+      subsistenceInitialPctBps: s ? Number(s.subsistence_initial_pct_bps) : 5000,
+      subsistenceReviewAfterDays: s ? Number(s.subsistence_review_after_days) : 90,
+      subsistenceRevisedMinPctBps: s ? Number(s.subsistence_revised_min_pct_bps) : 2500,
+      subsistenceRevisedMaxPctBps: s ? Number(s.subsistence_revised_max_pct_bps) : 7500,
     });
   });
 
@@ -291,6 +304,13 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, ["payroll_admin", "super_admin"]);
     const body = updateSettingsBody.parse(req.body);
+    // FR 53 review fix: validate the MERGED subsistence settings (this
+    // partial update applied to what is stored) before accepting, so an
+    // update that would break payroll_settings_subsistence_check is a 400
+    // here, not a 202 that fails later in the consumer.
+    const stored = await scopedRead((tx) => resolveSubsistenceConfig(tx as unknown as Parameters<typeof resolveSubsistenceConfig>[0], ctx.tenantId));
+    const merged = mergeSubsistenceSettings(stored, body);
+    if (!merged.ok) throw new HttpError(400, "VALIDATION_FAILED", merged.message);
     return sendAccepted(reply, acceptedResponseSchema, await commands.updateSettings(ctx, body));
   });
 

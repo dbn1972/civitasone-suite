@@ -173,6 +173,9 @@ export async function getRunDetail(id: string, tenantId: string) {
   // listRuns fix above for why. No extra query: runSlips is already in hand.
   const grossMinor = runSlips.reduce((sum, s) => sum + s.grossMinor, 0n);
   const netMinor = runSlips.reduce((sum, s) => sum + s.netPayMinor, 0n);
+  // FR 53: every pay-suspended employee this run touched -- paid subsistence
+  // allowance, or withheld (no slip) and flagged for HR.
+  const suspendedEmployees = await repo.listRunSuspensionsByRun(id, tenantId);
   return {
     id: run.id,
     runDate: new Date(run.createdAt as unknown as string).toISOString().slice(0, 10),
@@ -204,6 +207,7 @@ export async function getRunDetail(id: string, tenantId: string) {
       net: Number(s.netPayMinor) / 100,
       status: s.status,
     })),
+    suspendedEmployees,
   };
 }
 

@@ -95,6 +95,26 @@ export interface SlipInput {
    * resolve the effective row via resolveStatutoryConfig() first.
    */
   statutoryConfig?: StatutoryConfig;
+  /**
+   * FR 53 (suspension): pre-computed pay lines that REPLACE the regular
+   * BASIC/DA/HRA + structure-component block (see subsistence.ts's
+   * computeSubsistenceEarnings). Omitted for every non-suspended employee, in
+   * which case computeSlip runs exactly the code path it always has.
+   */
+  earningsOverride?: EarningsOverride;
+}
+
+/** FR 53 suspension pay lines + the bases computeSlip derives from them. */
+export interface EarningsOverride {
+  /** Earning and structure-deduction lines, already rounded to whole rupees. */
+  components: PayComponent[];
+  /** Total DA paid (regular-days DA + DA on subsistence allowance). */
+  daMinor: bigint;
+  hraMinor: bigint;
+  /** GPF/NPS/EPF wage base: Basic + DA actually paid for the regular (non-suspended) days only. */
+  pensionBaseMinor: bigint;
+  /** Sec 10(13A) "salary" (Basic + DA, incl. subsistence allowance + its DA) for the old-regime HRA exemption. */
+  hraSalaryMinor: bigint;
 }
 
 /** Deduction codes treated as "recovery" — subject to the protected-net floor. */
@@ -238,6 +258,21 @@ export function hraSlabPct(cityClass: CityClass, daRateBps: bigint): bigint {
   return table[cityClass][tier];
 }
 
+/**
+ * Monthly amount of one configured structure component (fixed, or % of basic).
+ * pctOfBasic takes precedence over fixedMinor when configured and > 0
+ * (REL-009: was previously divided by 100n only, inflating every
+ * percentage-based component 100x). Math.round(pctOfBasic * 100) preserves
+ * 2 decimal places of the percentage as an integer, so the divisor must be
+ * 10_000n: 100 to undo that pre-multiplication, and 100 to convert percent
+ * to a fraction. E.g. pctOfBasic=12.5 -> round(1250) -> basic*1250/10_000.
+ */
+export function rawComponentAmountMinor(basicMinor: bigint, c: RawComponent): bigint {
+  return c.pctOfBasic != null && c.pctOfBasic > 0
+    ? roundRupee((basicMinor * BigInt(Math.round(c.pctOfBasic * 100))) / 10_000n)
+    : roundRupee(c.fixedMinor ?? 0n);
+}
+
 export function computeSlip(input: SlipInput): SlipResult {
   const {
     basicMinor,
@@ -258,36 +293,42 @@ export function computeSlip(input: SlipInput): SlipResult {
     ltcExemptTotalMinor = 0n,
     statutoryConfig = DEFAULT_STATUTORY_CONFIG,
     taxTenantId = PLATFORM_DEFAULT_TENANT_ID,
+    earningsOverride,
   } = input;
 
   const earnings: PayComponent[] = [];
   const deductions: PayComponent[] = [];
 
-  // Basic is the first earning.
-  earnings.push({ code: "BASIC", name: "Basic Pay", type: "earning", amountMinor: basicMinor });
+  let daMinor: bigint;
+  let hraMinor: bigint;
+  if (earningsOverride) {
+    // FR 53 suspension: subsistence.ts already built the pay lines (regular
+    // days prorated + Subsistence Allowance + DA on it + continuing HRA/CCA).
+    // Copied so the floor-trimming below never mutates the caller's objects.
+    for (const c of earningsOverride.components) {
+      (c.type === "earning" ? earnings : deductions).push({ ...c });
+    }
+    daMinor = earningsOverride.daMinor;
+    hraMinor = earningsOverride.hraMinor;
+  } else {
+    // Basic is the first earning.
+    earnings.push({ code: "BASIC", name: "Basic Pay", type: "earning", amountMinor: basicMinor });
 
-  // Dearness Allowance = DA% of basic.
-  const daMinor = roundRupee((basicMinor * daRateBps) / 10000n);
-  if (daMinor > 0n) earnings.push({ code: "DA", name: "Dearness Allowance", type: "earning", amountMinor: daMinor });
+    // Dearness Allowance = DA% of basic.
+    daMinor = roundRupee((basicMinor * daRateBps) / 10000n);
+    if (daMinor > 0n) earnings.push({ code: "DA", name: "Dearness Allowance", type: "earning", amountMinor: daMinor });
 
-  // HRA = city-class slab % of basic (escalates with DA threshold).
-  const hraMinor = pct(basicMinor, hraSlabPct(cityClass, daRateBps));
-  if (hraMinor > 0n) earnings.push({ code: "HRA", name: "House Rent Allowance", type: "earning", amountMinor: hraMinor });
+    // HRA = city-class slab % of basic (escalates with DA threshold).
+    hraMinor = pct(basicMinor, hraSlabPct(cityClass, daRateBps));
+    if (hraMinor > 0n) earnings.push({ code: "HRA", name: "House Rent Allowance", type: "earning", amountMinor: hraMinor });
 
-  // Evaluate remaining structure components (skip BASIC/DA/HRA — handled above).
-  for (const c of rawComponents) {
-    if (["BASIC", "DA", "HRA"].includes(c.code)) continue;
-    // pctOfBasic takes precedence over fixedMinor when configured and > 0
-    // (REL-009: was previously divided by 100n only, inflating every
-    // percentage-based component 100x). Math.round(pctOfBasic * 100) preserves
-    // 2 decimal places of the percentage as an integer, so the divisor must be
-    // 10_000n: 100 to undo that pre-multiplication, and 100 to convert percent
-    // to a fraction. E.g. pctOfBasic=12.5 -> round(1250) -> basic*1250/10_000.
-    const amt = c.pctOfBasic != null && c.pctOfBasic > 0
-      ? roundRupee((basicMinor * BigInt(Math.round(c.pctOfBasic * 100))) / 10_000n)
-      : roundRupee(c.fixedMinor ?? 0n);
-    if (amt === 0n) continue;
-    (c.type === "earning" ? earnings : deductions).push({ code: c.code, name: c.name, type: c.type, amountMinor: amt });
+    // Evaluate remaining structure components (skip BASIC/DA/HRA — handled above).
+    for (const c of rawComponents) {
+      if (["BASIC", "DA", "HRA"].includes(c.code)) continue;
+      const amt = rawComponentAmountMinor(basicMinor, c);
+      if (amt === 0n) continue;
+      (c.type === "earning" ? earnings : deductions).push({ code: c.code, name: c.name, type: c.type, amountMinor: amt });
+    }
   }
 
   // Ad-hoc components (LOP, EMI, arrears, reimbursements).
@@ -297,8 +338,10 @@ export function computeSlip(input: SlipInput): SlipResult {
 
   const grossMinor = earnings.reduce((s, e) => s + e.amountMinor, 0n);
 
-  // Pension contributions are computed on Basic + DA.
-  const pensionBase = basicMinor + daMinor;
+  // Pension contributions are computed on Basic + DA. FR 53 suspension: only
+  // the regular days' Basic + DA (FR 53(2)(ii): no GPF subscription from
+  // subsistence allowance -- see subsistence.ts).
+  const pensionBase = earningsOverride ? earningsOverride.pensionBaseMinor : basicMinor + daMinor;
 
   let pfEmployeeMinor = 0n, pfEmployerMinor = 0n, epsMinor = 0n, epfEmployerMinor = 0n;
   let gpfMinor = 0n, npsEmployeeMinor = 0n, npsEmployerMinor = 0n;
@@ -354,7 +397,7 @@ export function computeSlip(input: SlipInput): SlipResult {
   // for this same pair, so this adds no new failure mode.
   const stdDeductionMinor = BigInt(stdDeduction(taxRegime, fyStartYear, taxTenantId)) * 100n;
   if (taxRegime === "old") {
-    const salaryHraAnnual   = (basicMinor + daMinor) * 12n;
+    const salaryHraAnnual   = (earningsOverride ? earningsOverride.hraSalaryMinor : basicMinor + daMinor) * 12n;
     const hraReceivedAnnual = hraMinor * 12n;
     const rentAnnual        = declaration.rentPaidAnnualMinor ?? 0n;
     const hraExempt = hraExemptionMinor(salaryHraAnnual, hraReceivedAnnual, rentAnnual, cityClass === "X");

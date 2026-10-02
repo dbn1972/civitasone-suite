@@ -153,15 +153,40 @@ export async function updateSuspension(
   }
 }
 
+/** What the payroll-input feed needs about one employee's active pay-suspension. */
+export type ActivePaySuspension = {
+  suspensionId: string;
+  fromDate: string;
+  toDate: string | null;
+  subsistencePct: string;
+  revisedSubsistencePct: string | null;
+  revisedEffectiveFrom: string | null;
+  reviewOrderRef: string | null;
+};
+
 /**
  * Returns the set of employee IDs (within a tenant) that currently have an
  * ACTIVE pay-suspension. Used by the payroll-input projection to flag
  * pay-suspended employees so payroll can apply subsistence allowance.
+ *
+ * FR 53 fix: also returns the suspension dates and any recorded review order
+ * (migration 0168), because payroll needs them to split a month into regular
+ * vs subsistence days and to switch rate after the first 90 days. And the
+ * old `.limit(500)` is gone: this feeds the WHOLE tenant's payroll run, so a
+ * cap silently paid full salary to every pay-suspended employee past the
+ * 500th. The partial unique index (migration 0023) keeps this at most one row
+ * per employee, so it is bounded by headcount like the feed itself.
  */
-export async function activePaySuspendedEmployeeIds(tenantId: string): Promise<Map<string, { subsistencePct: string }>> {
+export async function activePaySuspendedEmployeeIds(tenantId: string): Promise<Map<string, ActivePaySuspension>> {
   const rows = await scopedRead((tx) => tx.select({
+    id: hrmsSuspensions.id,
     employeeId: hrmsSuspensions.employeeId,
+    fromDate: hrmsSuspensions.fromDate,
+    toDate: hrmsSuspensions.toDate,
     subsistencePct: hrmsSuspensions.subsistencePct,
+    revisedSubsistencePct: hrmsSuspensions.revisedSubsistencePct,
+    revisedEffectiveFrom: hrmsSuspensions.revisedEffectiveFrom,
+    reviewOrderRef: hrmsSuspensions.reviewOrderRef,
   }).from(hrmsSuspensions)
     .where(and(
       eq(hrmsSuspensions.tenantId, tenantId),
@@ -170,9 +195,18 @@ export async function activePaySuspendedEmployeeIds(tenantId: string): Promise<M
     // Deterministic regardless of any (now-prevented) duplicate active rows:
     // order by employee then most-recent fromDate, then id, so the Map's
     // last-write-wins picks a stable subsistence% even as a defensive backstop.
-    .orderBy(asc(hrmsSuspensions.employeeId), asc(hrmsSuspensions.fromDate), asc(hrmsSuspensions.id))
-    .limit(500));
-  const m = new Map<string, { subsistencePct: string }>();
-  for (const r of rows) m.set(r.employeeId, { subsistencePct: r.subsistencePct });
+    .orderBy(asc(hrmsSuspensions.employeeId), asc(hrmsSuspensions.fromDate), asc(hrmsSuspensions.id)));
+  const m = new Map<string, ActivePaySuspension>();
+  for (const r of rows) {
+    m.set(r.employeeId, {
+      suspensionId: r.id,
+      fromDate: r.fromDate,
+      toDate: r.toDate ?? null,
+      subsistencePct: r.subsistencePct,
+      revisedSubsistencePct: r.revisedSubsistencePct ?? null,
+      revisedEffectiveFrom: r.revisedEffectiveFrom ?? null,
+      reviewOrderRef: r.reviewOrderRef ?? null,
+    });
+  }
   return m;
 }

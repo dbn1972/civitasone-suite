@@ -1,5 +1,6 @@
 import { eq, ne, and, sql, inArray, count, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
+import { listRunSuspensions, type RunSuspensionSummary } from "./subsistence-repo.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
   type PayrollRunRow, type PayrollRunInsert, type PayrollSlipRow,
@@ -113,6 +114,11 @@ export async function listComponentsByStructure(structureId: string, tenantId: s
 export async function listComponentsByTenant(tenantId: string, limit: number) {
   return scopedRead((tx) => tx.select().from(payrollComponents)
     .where(eq(payrollComponents.tenantId, tenantId)).limit(limit));
+}
+
+/** FR 53: the run's pay-suspended employees (payroll.payroll_run_suspensions, migration 0057). */
+export async function listRunSuspensionsByRun(runId: string, tenantId: string): Promise<RunSuspensionSummary[]> {
+  return scopedRead((tx) => listRunSuspensions(tx as unknown as typeof db, tenantId, runId));
 }
 
 export async function listSlipsByRun(runId: string, tenantId: string): Promise<PayrollSlipRow[]> {

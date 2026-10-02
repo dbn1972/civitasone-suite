@@ -5,11 +5,23 @@ import * as employeeRepo from "../employee/repo.js";
 import * as leaveRepo from "../leave/repo.js";
 import * as attendanceRepo from "../attendance/repo.js";
 import { getHolidaysInRange, countWorkingDaysExcludingHolidays } from "../leave/rules-engine.js";
-import { activePaySuspendedEmployeeIds } from "../disciplinary/repo.js";
+import { activePaySuspendedEmployeeIds, type ActivePaySuspension } from "../disciplinary/repo.js";
 import { loadTypeResolver, attendanceLopApplies } from "../employee/engagement-policy.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
+
+/** payroll-input projection of one active pay-suspension (FR 53 inputs). */
+function suspensionFeed(s: ActivePaySuspension) {
+  return {
+    suspensionId: s.suspensionId,
+    fromDate: s.fromDate,
+    toDate: s.toDate,
+    revisedSubsistencePct: s.revisedSubsistencePct == null ? null : Number(s.revisedSubsistencePct),
+    revisedEffectiveFrom: s.revisedEffectiveFrom,
+    reviewOrderRef: s.reviewOrderRef,
+  };
+}
 
 export async function internalRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/hrms/internal/payroll-input", async (req, reply) => {
@@ -51,7 +63,9 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
     // than done partially here.
     const overtimeHoursByEmployee = await attendanceRepo.findApprovedOvertimeInMonth(ctx.tenantId, q.month);
     // Pay-suspension flag from the Disciplinary module: active suspensions with
-    // pay_suspended=true. Payroll applies subsistence allowance / withholds pay.
+    // pay_suspended=true. Payroll applies subsistence allowance / withholds pay
+    // (payroll-service's subsistence.ts; FR 53 for pay-scale engagements,
+    // withhold + flag for HR otherwise).
     const paySuspended = await activePaySuspendedEmployeeIds(ctx.tenantId);
 
     // DIC engagement applicability: employees whose type's muster absence must NOT
@@ -156,12 +170,21 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
           pensionScheme: (e.pensionScheme ?? "NPS") as "GPF" | "NPS" | "EPF",
           paySuspended: paySuspended.has(e.id),
           ...(paySuspended.has(e.id) ? { subsistencePct: Number(paySuspended.get(e.id)!.subsistencePct) } : {}),
+          // FR 53 (additive): the suspension window and any recorded review
+          // order, so payroll can prorate a mid-month suspension and switch to
+          // the revised rate after the first 90 days. Present only for a
+          // pay-suspended employee; tenant-scoped by the same read as above.
+          ...(paySuspended.has(e.id) ? { suspension: suspensionFeed(paySuspended.get(e.id)!) } : {}),
           // DIC engagement policy — payroll consumes these to exclude non-salary
           // types (consultant/third-party/apprentice) and gate PF/ESI/NPS.
           engagementType: e.employeeType,
           paymentRoute: pol.paymentRoute,
           eligibleForPayroll: pol.eligibleForPayroll,
           attendanceMode: pol.attendanceMode,
+          // FR 53 (additive): "monthly" = government pay-scale model; payroll
+          // applies FR 53 subsistence only to that, and withholds + flags any
+          // other pay mode (consolidated contract / CTC) for HR.
+          payMode: pol.payMode,
           statutoryPf: pol.statutoryPf,
           statutoryEsi: pol.statutoryEsi,
           statutoryNps: pol.statutoryNps,

@@ -73,7 +73,8 @@ describe("Route: arrears/bonus/reimbursement CQRS handlers use sendAccepted (202
   });
 
   it("PUT /v1/payroll/settings calls sendAccepted(...) with commands.updateSettings", () => {
-    const m = /app\.put\("\/v1\/payroll\/settings",\s*async[\s\S]{0,400}?\}\);/.exec(src);
+    // Window widened for the FR 53 merged-settings pre-check (a read + 400, still no write).
+    const m = /app\.put\("\/v1\/payroll\/settings",\s*async[\s\S]{0,1200}?\}\);/.exec(src);
     expect(m).not.toBeNull();
     expect(m![0]).toContain("sendAccepted");
     expect(m![0]).toContain("commands.updateSettings");
@@ -429,8 +430,9 @@ describe("Settings update CQRS (F3 leftover)", () => {
       payload: { tenantId: TENANT, protectedNetFloorMinor: 1000000 },
     });
 
-    expect(executedQueries).toHaveLength(1);
-    const params = paramsOf(executedQueries[0]);
+    // FR 53: a locked read of the current row (merge + before/after audit), then the upsert.
+    expect(executedQueries).toHaveLength(2);
+    const params = paramsOf(executedQueries[1]);
     expect(params).toContain(1000000);
 
     expect(mockEnqueued.some((e) => e.topic === EVENTS.settingsUpdated)).toBe(true);

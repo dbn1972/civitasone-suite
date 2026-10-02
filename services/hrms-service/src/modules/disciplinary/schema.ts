@@ -58,6 +58,12 @@ export const hrmsSuspensions = disciplinarySchema.table("hrms_suspensions", {
   toDate:         date("to_date"),
   paySuspended:   boolean("pay_suspended").notNull().default(true),
   subsistencePct: numeric("subsistence_pct").notNull().default("50.00"),
+  // FR 53 review order (migration 0168). NULL = no review order recorded.
+  revisedSubsistencePct: numeric("revised_subsistence_pct"),
+  revisedEffectiveFrom:  date("revised_effective_from"),
+  reviewOrderRef:        text("review_order_ref"),
+  reviewedAt:            timestamp("reviewed_at", { withTimezone: true }),
+  reviewedBy:            uuid("reviewed_by"),
   status:         varchar("status", { length: 16 }).notNull().default("active"),
   revokedDate:    date("revoked_date"),
   remarks:        text("remarks"),
