@@ -77,19 +77,32 @@ describe("RolesPermissionsManager (COMP-004: real per-role permissions editor)",
   });
 
   // A system role's permissions must never be editable/save-able here --
-  // there is no real backend command for it (identity-service RBAC does not
-  // support mutating a system role's fixed grant set).
-  it("never renders editable checkboxes or a save affordance for a system role", async () => {
-    vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      new Response(JSON.stringify({ id: "role-auditor", permissions: [] }), { status: 200 }),
+  // there is no real backend command for it. GAP-ADMIN-ROLES-05: they ARE
+  // shown, read-only, so a reviewer can see what a privileged role holds.
+  it("shows a system role's permissions as disabled checkboxes with Save disabled", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ id: "role-super", permissions: ["finance.read"] }), { status: 200 }),
     );
 
     render(<RolesPermissionsManager roles={roles} permissions={permissions} source="api" />);
     fireEvent.change(screen.getByLabelText("Role:"), { target: { value: "role-super" } });
 
     expect(await screen.findByText(/is a system role/i)).toBeInTheDocument();
-    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+    const box = await screen.findByRole("checkbox", { name: /view finance/i });
+    await waitFor(() => expect(box).toBeChecked());
+    expect(box).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: /edit hr records/i })).toBeDisabled();
+    fireEvent.click(box);
+    expect(screen.queryByText(/unsaved change/i)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /save changes/i })).toBeDisabled();
+  });
+
+  it("a failed read for a system role shows the load error, not a fake empty list", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("{}", { status: 500 }));
+    render(<RolesPermissionsManager roles={roles} permissions={permissions} source="api" />);
+    fireEvent.change(screen.getByLabelText("Role:"), { target: { value: "role-super" } });
+    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't load/i);
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 
   // Sabotage check for the honest-failure path: a real upstream 404 (role
@@ -154,5 +167,119 @@ describe("RolesPermissionsManager - diff preview and partial saves (GAP-ADMIN-RO
     // the role was re-read so the checkbox shows the real (unchanged) state
     await waitFor(() => expect(reads).toBeGreaterThanOrEqual(2));
     await waitFor(() => expect(screen.getByRole("checkbox", { name: /edit hr records/i })).not.toBeChecked());
+  });
+});
+
+describe("RolesPermissionsManager - unsaved edits, counts, grouping (GAP-ADMIN-ROLES-03/04/06)", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  const threeRoles: AdminRoleSummary[] = [
+    ...roles,
+    { id: "role-clerk", key: "clerk", name: "Clerk", description: null, isSystem: false },
+  ];
+  function mockRoleGet() {
+    return vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => {
+      const url = String(input);
+      const perms = url.endsWith("role-clerk") ? ["hr.write"] : ["finance.read", "audit.read"];
+      return new Response(JSON.stringify({ permissions: perms }), { status: 200 });
+    });
+  }
+
+  it("asks before dropping unsaved toggles on a role switch; Cancel keeps role and toggle", async () => {
+    mockRoleGet();
+    render(<RolesPermissionsManager roles={threeRoles} permissions={permissions} source="api" />);
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /view finance/i })).toBeChecked());
+    fireEvent.click(screen.getByRole("checkbox", { name: /edit hr records/i }));
+    fireEvent.change(screen.getByLabelText("Role:"), { target: { value: "role-clerk" } });
+    expect(await screen.findByText(/discard 1 unsaved change/i)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /cancel/i }));
+    expect((screen.getByLabelText("Role:") as HTMLSelectElement).value).toBe("role-auditor");
+    expect(screen.getByRole("checkbox", { name: /edit hr records/i })).toBeChecked();
+  });
+
+  it("Confirm switches role and loads its permissions; no dialog when nothing changed", async () => {
+    mockRoleGet();
+    render(<RolesPermissionsManager roles={threeRoles} permissions={permissions} source="api" />);
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /view finance/i })).toBeChecked());
+    // nothing changed -> straight switch
+    fireEvent.change(screen.getByLabelText("Role:"), { target: { value: "role-clerk" } });
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /edit hr records/i })).toBeChecked());
+    expect(screen.queryByText(/unsaved change/i)).not.toBeInTheDocument();
+    // with an edit -> dialog -> confirm
+    fireEvent.click(screen.getByRole("checkbox", { name: /view audit log/i }));
+    fireEvent.change(screen.getByLabelText("Role:"), { target: { value: "role-auditor" } });
+    fireEvent.click(await screen.findByRole("button", { name: /discard and switch/i }));
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /view finance/i })).toBeChecked());
+    expect(screen.queryByText(/\+\d unsaved/i)).not.toBeInTheDocument();
+  });
+
+  it("registers a beforeunload guard only while there are unsaved changes", async () => {
+    mockRoleGet();
+    const add = vi.spyOn(window, "addEventListener");
+    render(<RolesPermissionsManager roles={threeRoles} permissions={permissions} source="api" />);
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /view finance/i })).toBeChecked());
+    expect(add.mock.calls.some(([t]) => t === "beforeunload")).toBe(false);
+    fireEvent.click(screen.getByRole("checkbox", { name: /edit hr records/i }));
+    expect(add.mock.calls.some(([t]) => t === "beforeunload")).toBe(true);
+  });
+
+  it("'Granted to selected role' stays at the saved count; unsaved toggles are shown separately", async () => {
+    mockRoleGet();
+    render(<RolesPermissionsManager roles={threeRoles} permissions={permissions} source="api" />);
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /view finance/i })).toBeChecked());
+    const card = () => screen.getByText("Granted to selected role").parentElement as HTMLElement;
+    expect(card()).toHaveTextContent("2");
+    fireEvent.click(screen.getByRole("checkbox", { name: /edit hr records/i }));
+    fireEvent.click(screen.getByRole("checkbox", { name: /view audit log/i }));
+    expect(card()).toHaveTextContent("2");
+    expect(screen.getByText(/\+2 unsaved changes/i)).toBeInTheDocument();
+  });
+
+  it("warns when a full page of permissions suggests truncation and relabels the card", async () => {
+    mockRoleGet();
+    const many: AdminPermissionSummary[] = Array.from({ length: 200 }, (_, i) => ({ id: `p${i}`, key: `mod${i % 5}.perm${i}`, name: `Perm ${i}`, description: null }));
+    render(<RolesPermissionsManager roles={threeRoles} permissions={many} source="api" />);
+    expect(await screen.findByText(/showing the first 200 permissions/i)).toBeInTheDocument();
+    expect(screen.getByText("Loaded permissions")).toBeInTheDocument();
+  });
+
+  it("groups by prefix and filters without dropping hidden checked keys from the PATCH", async () => {
+    const spy = mockRoleGet();
+    spy.mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.endsWith("/permissions")) return new Response("{}", { status: 200 });
+      void init;
+      return new Response(JSON.stringify({ permissions: ["finance.read"] }), { status: 200 });
+    });
+    render(<RolesPermissionsManager roles={threeRoles} permissions={permissions} source="api" />);
+    await waitFor(() => expect(screen.getByRole("checkbox", { name: /view finance/i })).toBeChecked());
+    expect(screen.getAllByRole("group").length).toBe(3);
+    fireEvent.change(screen.getByLabelText(/filter permissions/i), { target: { value: "hr" } });
+    expect(screen.queryByRole("checkbox", { name: /view finance/i })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("checkbox", { name: /edit hr records/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /save 1 change/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /apply changes/i }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/saved/i));
+    const patch = spy.mock.calls.find(([i]) => String(i).endsWith("/permissions"))!;
+    const body = JSON.parse((patch[1] as RequestInit).body as string) as { permissionKeys: string[] };
+    expect(new Set(body.permissionKeys)).toEqual(new Set(["finance.read", "hr.write"]));
+  });
+});
+
+describe("RolesPermissionsManager - initial selection and loading tile", () => {
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it("selects the first role when every role is a system role, so it is viewable without a manual switch", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ permissions: ["finance.read"] }), { status: 200 }));
+    render(<RolesPermissionsManager roles={[roles[1]]} permissions={permissions} source="api" />);
+    expect(await screen.findByText(/is a system role/i)).toBeInTheDocument();
+    expect(fetchSpy).toHaveBeenCalledWith("/api/proxy/v1/admin/roles/role-super");
+  });
+
+  it("'Granted to selected role' shows a dash while a role is still loading", async () => {
+    vi.spyOn(globalThis, "fetch").mockImplementation(() => new Promise(() => undefined));
+    render(<RolesPermissionsManager roles={roles} permissions={permissions} source="api" />);
+    expect((screen.getByText("Granted to selected role").parentElement as HTMLElement)).toHaveTextContent("—");
   });
 });

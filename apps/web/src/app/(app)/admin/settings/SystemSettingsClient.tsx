@@ -1,5 +1,5 @@
 "use client";
-import { useState, useId } from "react";
+import { useState, useId, useEffect, useRef, type KeyboardEvent } from "react";
 import { Button, ConfirmDialog, PageHeader, Card } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import {
@@ -43,7 +43,7 @@ type SaveState = "idle" | "saving" | "saved" | "error";
  * are never part of the request, so a save can no longer overwrite the real
  * server settings with seed values.
  */
-function useSectionState<T extends Record<string, unknown>>(initial: T, area: string) {
+function useSectionState<T extends Record<string, unknown>>(initial: T, area: string, onDirtyChange?: (dirty: boolean) => void) {
   const [values, setValues] = useState<T>(initial);
   const [changed, setChanged] = useState<ReadonlySet<keyof T>>(new Set());
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -73,6 +73,10 @@ function useSectionState<T extends Record<string, unknown>>(initial: T, area: st
   }
 
   const dirty = Object.keys(changedValues()).length > 0;
+  // GAP-ADMIN-SETTINGS-04: report unsaved edits up so the tab can show a marker and the page can warn on unload.
+  const onDirtyRef = useRef(onDirtyChange);
+  onDirtyRef.current = onDirtyChange;
+  useEffect(() => { onDirtyRef.current?.(dirty); }, [dirty]);
 
   async function save(endpoint: string, body: Record<string, unknown> = changedValues()) {
     if (Object.keys(body).length === 0) return;
@@ -173,18 +177,18 @@ function FieldRow({
 const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, fontFamily: "inherit", color: "var(--ink)", background: "var(--panel)" };
 
 // ── GENERAL TAB ──────────────────────────────────────────────────────────────
-function GeneralSection() {
+function GeneralSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const id = useId();
   const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState(
     {
       orgName: "",
-      logoUrl: "",
       timezone: "",
       currency: "",
       dateFormat: "",
       fiscalYearStart: "",
     },
     "general settings",
+    onDirtyChange,
   );
 
   return (
@@ -198,14 +202,13 @@ function GeneralSection() {
         <FieldRow label="Organisation name" htmlFor={`${id}-orgName`} error={fieldError("orgName")}>
           <input id={`${id}-orgName`} value={values.orgName} onChange={(e) => update({ orgName: e.target.value })} style={inp} />
         </FieldRow>
-        <FieldRow label="Logo" htmlFor={`${id}-logo`} error={formError.fieldError("logoUrl")}>
-          <div style={{ border: "2px dashed var(--line)", borderRadius: 10, padding: "24px 16px", textAlign: "center", cursor: "pointer", background: "var(--line2)" }}>
-            <span style={{ fontSize: 28 }}>🖼️</span>
-            <p style={{ margin: "8px 0 0", fontSize: 13, color: "var(--ink2)" }}>Drop PNG/SVG here or <span style={{ color: "var(--primary)", textDecoration: "underline", cursor: "pointer" }}>browse</span></p>
-            <p style={{ margin: "4px 0 0", fontSize: 11, color: "var(--mut)" }}>Max 2 MB — 200×200 px minimum</p>
-            <input id={`${id}-logo`} type="file" accept="image/png,image/svg+xml" aria-label="Upload organisation logo" style={{ position: "absolute", opacity: 0, width: 0, height: 0 }} onChange={(e) => { const f = e.target.files?.[0]; if (f) update({ logoUrl: f.name }); }} />
-          </div>
-        </FieldRow>
+        {/* GAP-ADMIN-SETTINGS-05: the old drop zone did nothing (no handler) and PATCHed a bare file
+            name as logoUrl. There is no logo storage/upload endpoint to send a file to, so the control is
+            replaced by an honest notice rather than a dead drop zone. */}
+        <div role="note" style={{ border: "1px dashed var(--line)", borderRadius: 10, padding: "14px 16px", background: "var(--line2)", fontSize: 13, color: "var(--ink2)" }}>
+          <strong>Logo</strong>
+          <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--mut)" }}>Logo upload is not available yet. Contact the platform team to change the organisation logo.</p>
+        </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
           <FieldRow label="Timezone" htmlFor={`${id}-tz`} error={formError.fieldError("timezone")}>
             <select id={`${id}-tz`} value={values.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inp}>
@@ -242,7 +245,7 @@ function GeneralSection() {
 }
 
 // ── EMAIL TAB ────────────────────────────────────────────────────────────────
-function EmailSection() {
+function EmailSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const id = useId();
   const [testStatus, setTestStatus] = useState<"idle" | "sending" | "ok" | "fail">("idle");
   const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState(
@@ -257,6 +260,7 @@ function EmailSection() {
       useTls: false,
     },
     "email settings",
+    onDirtyChange,
   );
 
   async function sendTest() {
@@ -306,8 +310,9 @@ function EmailSection() {
         </label>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <Button type="button" variant="ghost" size="sm" onClick={() => void sendTest()} loading={testStatus === "sending"}>
-            {testStatus === "sending" ? "Sending…" : "Send test email"}
+            {testStatus === "sending" ? "Sending…" : "Test saved settings"}
           </Button>
+          <span style={{ fontSize: 12, color: "var(--mut)" }}>Sends a test email using the settings already saved, not the values typed above.</span>
           {testStatus === "ok" && <span role="status" style={{ fontSize: 12, color: "#027a48" }}>Test email sent.</span>}
           {testStatus === "fail" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>Send failed — check credentials.</span>}
         </div>
@@ -317,7 +322,7 @@ function EmailSection() {
 }
 
 // ── SECURITY TAB ─────────────────────────────────────────────────────────────
-function SecuritySection() {
+function SecuritySection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const id = useId();
   const [mfaConfirm, setMfaConfirm] = useState(false);
   const [pendingBody, setPendingBody] = useState<Record<string, unknown> | null>(null);
@@ -331,6 +336,7 @@ function SecuritySection() {
       ipWhitelist: "",
     },
     "security settings",
+    onDirtyChange,
   );
 
   function handleMfaToggle(checked: boolean) {
@@ -417,7 +423,7 @@ function SecuritySection() {
 }
 
 // ── INTEGRATIONS TAB ─────────────────────────────────────────────────────────
-function IntegrationsSection() {
+function IntegrationsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
   const id = useId();
   const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState(
     {
@@ -427,6 +433,7 @@ function IntegrationsSection() {
       umangEnabled: false,
     },
     "integrations settings",
+    onDirtyChange,
   );
 
   return (
@@ -506,39 +513,92 @@ function TenantConfigSection({ tenant }: { tenant: TenantConfigData }) {
 
 // ── PAGE ─────────────────────────────────────────────────────────────────────
 export function SystemSettingsClient({ tenant }: { tenant: TenantConfigData }) {
+  const baseId = useId();
   const [activeTab, setActiveTab] = useState<Tab>("General");
+  // GAP-ADMIN-SETTINGS-04: every section stays mounted (hidden, not unmounted) so edits survive a
+  // tab switch; each section reports whether it holds unsaved edits.
+  const [dirtyTabs, setDirtyTabs] = useState<ReadonlySet<Tab>>(new Set());
+  const tabRefs = useRef<Array<HTMLSpanElement | null>>([]);
   // The Tenant Config tab exists only for platform staff (the server page decides).
   const TABS = ALL_TABS.filter((t) => t !== "Tenant Config" || tenant.state !== "hidden");
 
+  const setDirty = (tab: Tab) => (dirty: boolean) =>
+    setDirtyTabs((prev) => {
+      if (prev.has(tab) === dirty) return prev;
+      const next = new Set(prev);
+      if (dirty) next.add(tab); else next.delete(tab);
+      return next;
+    });
+  const dirtyGeneral = useRef(setDirty("General")).current;
+  const dirtyEmail = useRef(setDirty("Email")).current;
+  const dirtySecurity = useRef(setDirty("Security")).current;
+  const dirtyIntegrations = useRef(setDirty("Integrations")).current;
+
+  const anyDirty = dirtyTabs.size > 0;
+  useEffect(() => {
+    if (!anyDirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ""; };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [anyDirty]);
+
+  const tabId = (t: Tab) => `${baseId}-tab-${t.replace(/\s+/g, "-")}`;
+  const panelId = (t: Tab) => `${baseId}-panel-${t.replace(/\s+/g, "-")}`;
+
+  // WAI-ARIA tabs: roving tabindex + Arrow/Home/End, automatic activation.
+  function onTabKeyDown(e: KeyboardEvent<HTMLSpanElement>, index: number) {
+    if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveTab(TABS[index]); return; }
+    let next: number | null = null;
+    if (e.key === "ArrowRight") next = (index + 1) % TABS.length;
+    else if (e.key === "ArrowLeft") next = (index - 1 + TABS.length) % TABS.length;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = TABS.length - 1;
+    if (next === null) return;
+    e.preventDefault();
+    setActiveTab(TABS[next]);
+    tabRefs.current[next]?.focus();
+  }
+
+  const names = TABS.map((t) => t as string);
+  const subtitle = `Platform-wide configuration — ${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}.`;
+
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader
-        title="System Settings"
-        subtitle="Platform-wide configuration — General, Email, Security, and Integrations."
-        back="/admin"
-      />
+      <PageHeader title="System Settings" subtitle={subtitle} back="/admin" />
       <div className="tabs" role="tablist" aria-label="Settings sections" style={{ marginBottom: 20 }}>
-        {TABS.map((tab) => (
-          <span
-            key={tab}
-            className={activeTab === tab ? "on" : undefined}
-            role="tab"
-            aria-selected={activeTab === tab}
-            tabIndex={0}
-            onClick={() => setActiveTab(tab)}
-            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setActiveTab(tab); } }}
-          >
-            {tab}
-          </span>
-        ))}
+        {TABS.map((tab, index) => {
+          const selected = activeTab === tab;
+          return (
+            <span
+              key={tab}
+              id={tabId(tab)}
+              ref={(el) => { tabRefs.current[index] = el; }}
+              className={selected ? "on" : undefined}
+              role="tab"
+              aria-selected={selected}
+              aria-controls={panelId(tab)}
+              tabIndex={selected ? 0 : -1}
+              onClick={() => setActiveTab(tab)}
+              onKeyDown={(e) => onTabKeyDown(e, index)}
+            >
+              {tab}
+              {dirtyTabs.has(tab) && (
+                <>
+                  <span aria-hidden="true" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", marginInlineStart: 6 }} />
+                  <span className="sr-only"> (unsaved changes)</span>
+                </>
+              )}
+            </span>
+          );
+        })}
       </div>
-      <div role="tabpanel" aria-label={activeTab}>
-        {activeTab === "General" && <GeneralSection />}
-        {activeTab === "Email" && <EmailSection />}
-        {activeTab === "Security" && <SecuritySection />}
-        {activeTab === "Integrations" && <IntegrationsSection />}
-        {activeTab === "Tenant Config" && tenant.state !== "hidden" && <TenantConfigSection tenant={tenant} />}
-      </div>
+      <div role="tabpanel" id={panelId("General")} aria-labelledby={tabId("General")} hidden={activeTab !== "General"}><GeneralSection onDirtyChange={dirtyGeneral} /></div>
+      <div role="tabpanel" id={panelId("Email")} aria-labelledby={tabId("Email")} hidden={activeTab !== "Email"}><EmailSection onDirtyChange={dirtyEmail} /></div>
+      <div role="tabpanel" id={panelId("Security")} aria-labelledby={tabId("Security")} hidden={activeTab !== "Security"}><SecuritySection onDirtyChange={dirtySecurity} /></div>
+      <div role="tabpanel" id={panelId("Integrations")} aria-labelledby={tabId("Integrations")} hidden={activeTab !== "Integrations"}><IntegrationsSection onDirtyChange={dirtyIntegrations} /></div>
+      {tenant.state !== "hidden" && (
+        <div role="tabpanel" id={panelId("Tenant Config")} aria-labelledby={tabId("Tenant Config")} hidden={activeTab !== "Tenant Config"}><TenantConfigSection tenant={tenant} /></div>
+      )}
     </div>
   );
 }

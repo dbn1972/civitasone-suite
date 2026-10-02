@@ -1,11 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Button, ConfirmDialog, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminScheduledJob } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
+import { cronToHuman } from "@/lib/cron";
+import { parseListPayload } from "./jobsPayload";
 
 type ExecutionRecord = {
   id: string;
@@ -25,21 +27,9 @@ const CRON_PRESETS = [
   { label: "Every 15 minutes", value: "*/15 * * * *" },
 ];
 
-function cronToHuman(cron: string): string {
-  const parts = cron.split(" ");
-  if (parts.length < 5) return cron;
-  const [min, hour, dom, mon, dow] = parts;
-  if (cron === "0 * * * *") return "Every hour";
-  if (cron === "*/15 * * * *") return "Every 15 minutes";
-  if (dom === "1" && mon === "*" && dow === "*") return `1st of every month at ${hour}:${min?.padStart(2, "0")}`;
-  if (dom === "*" && mon === "*" && dow === "1") return `Every Monday at ${hour}:${min?.padStart(2, "0")}`;
-  if (dom === "*" && mon === "*" && dow === "*") return `Every day at ${hour}:${min?.padStart(2, "0")}`;
-  return cron;
-}
-
 function getStatusBadge(status: string) {
   switch (status) {
-    case "running": return <span className="pill info" style={{ animation: "pulse 2s infinite" }}>Running</span>;
+    case "running": return <span className="pill info">Running</span>;
     case "success": return <span className="pill good">Success</span>;
     case "failed": return <span className="pill bad">Failed</span>;
     case "never_run": return <span className="pill mut">Never Run</span>;
@@ -59,7 +49,7 @@ function scheduledJobError(): string {
   return `${human.what} ${human.next}`;
 }
 
-async function callApi(path: string, method: string, body?: unknown): Promise<{ ok: boolean; message?: string; json?: unknown }> {
+async function callApi(path: string, method: string, body?: unknown): Promise<{ ok: boolean; status?: number; message?: string; json?: unknown }> {
   try {
     const res = await fetch(`/api/proxy/v1/admin/scheduled-jobs${path}`, {
       method,
@@ -68,11 +58,14 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
     });
     const json = await res.json().catch(() => undefined);
     if (!res.ok) return { ok: false, message: scheduledJobError() };
-    return { ok: true, json };
+    return { ok: true, status: res.status, json };
   } catch {
     return { ok: false, message: scheduledJobError() };
   }
 }
+
+/** How long to wait before re-reading the list after the server answered 202 (queued). */
+export const QUEUED_RELOAD_DELAY_MS = 1500;
 
 type PendingAction = { kind: "run" | "delete" | "disable"; job: AdminScheduledJob };
 
@@ -82,6 +75,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
   const [historyJobId, setHistoryJobId] = useState<string | null>(null);
   const [historyRecords, setHistoryRecords] = useState<ExecutionRecord[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -90,19 +84,47 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [confirmError, setConfirmError] = useState<string | undefined>(undefined);
   const formError = useFormError("scheduled job");
+  // A 202 means the change was queued, not applied yet: refetching immediately could return the
+  // old state and overwrite what we just showed, so the reload waits and the operator is told.
+  const [notice, setNotice] = useState<string | null>(null);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (reloadTimer.current) clearTimeout(reloadTimer.current); }, []);
+
+  async function reloadAfter(status: number | undefined): Promise<void> {
+    if (status === 202) {
+      setNotice("Change queued. The list will update in a moment.");
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+      reloadTimer.current = setTimeout(() => { void refresh().then((ok) => { if (ok) setNotice(null); }); }, QUEUED_RELOAD_DELAY_MS);
+      return;
+    }
+    setNotice(null);
+    await refresh();
+  }
 
   const enabledCount = jobs.filter((j) => j.enabled).length;
   const runningCount = jobs.filter((j) => j.lastRunStatus === "running").length;
   const failedCount = jobs.filter((j) => j.lastRunStatus === "failed").length;
 
-  async function refresh() {
+  /**
+   * GAP-ADMIN-SCHEDULED-JOBS-03: resolves false (and tells the operator) when the list could
+   * not be reloaded, so a change the server already applied is never shown with the old state
+   * and no message. Callers apply the mutation locally first.
+   */
+  async function refresh(): Promise<boolean> {
+    const fail = () => {
+      const human = toHumanError("load", { area: "scheduled jobs" });
+      setError(`Your change was saved, but the list could not be reloaded. ${human.next}`);
+      return false;
+    };
     try {
       const res = await fetch("/api/proxy/v1/admin/scheduled-jobs", { cache: "no-store" });
-      if (!res.ok) return;
-      const body = (await res.json()) as { data?: AdminScheduledJob[] };
-      if (Array.isArray(body.data)) setJobs(body.data);
+      if (!res.ok) return fail();
+      const list = parseListPayload<AdminScheduledJob>(await res.json().catch(() => undefined));
+      if (!list) return fail();
+      setJobs(list);
+      return true;
     } catch {
-      // keep current state
+      return fail();
     }
   }
 
@@ -121,7 +143,10 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
     setError(null);
     const result = await callApi(`/${job.id}`, "PUT", { enabled: !job.enabled });
     if (!result.ok) setError(result.message ?? null);
-    else await refresh();
+    else {
+      setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, enabled: !job.enabled } : j)));
+      await reloadAfter(result.status);
+    }
     setBusyId(null);
     return result.ok;
   }
@@ -142,7 +167,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
     setConfirmBusy(true);
     setConfirmError(undefined);
     setBusyId(job.id);
-    let result: { ok: boolean; message?: string };
+    let result: { ok: boolean; status?: number; message?: string };
     if (kind === "disable") {
       result = await callApi(`/${job.id}`, "PUT", { enabled: false });
     } else if (kind === "run") {
@@ -157,18 +182,32 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
       return;
     }
     setPending(null);
-    await refresh();
+    if (kind === "disable") setJobs((prev) => prev.map((j) => (j.id === job.id ? { ...j, enabled: false } : j)));
+    if (kind === "delete") setJobs((prev) => prev.filter((j) => j.id !== job.id));
+    await reloadAfter(result.status);
   }
 
   async function openHistory(id: string) {
     setHistoryJobId(id);
     setHistoryLoading(true);
+    // GAP-ADMIN-SCHEDULED-JOBS-04: never show a previous job's rows, and never turn a failed
+    // read into "No execution history available".
+    setHistoryRecords([]);
+    setHistoryError(null);
+    const loadFailed = () => {
+      const human = toHumanError("load", { area: "execution history" });
+      setHistoryError(`${human.what} ${human.next}`);
+    };
     try {
       const res = await fetch(`/api/proxy/v1/admin/scheduled-jobs/${id}/history`, { cache: "no-store" });
-      const body = (await res.json().catch(() => ({}))) as { data?: ExecutionRecord[] };
-      setHistoryRecords(Array.isArray(body.data) ? body.data : []);
+      if (!res.ok) {
+        loadFailed();
+      } else {
+        const list = parseListPayload<ExecutionRecord>(await res.json().catch(() => undefined));
+        if (list) setHistoryRecords(list); else loadFailed();
+      }
     } catch {
-      setHistoryRecords([]);
+      loadFailed();
     } finally {
       setHistoryLoading(false);
     }
@@ -223,6 +262,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader title="Scheduled Jobs" subtitle="Manage recurring background tasks and monitor execution history." back="/admin" />
       <DataSourceBadge source={source} />
+      {notice && <div role="status" style={{ marginBottom: 14, fontSize: 13, color: "var(--mut)" }}>{notice}</div>}
       {error && (
         <div role="alert" style={{ background: "#fef2f2", color: "#b42318", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 14, fontSize: 13 }}>
           {error}
@@ -238,7 +278,10 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
       <div className="card" style={{ marginTop: 18 }}>
         <div className="card-h" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <h3>Job Registry</h3>
-          <Button onClick={() => setShowModal(true)}>+ Create Job</Button>
+          <div style={{ display: "flex", gap: 8 }}>
+            <Button variant="ghost" onClick={() => { setError(null); void refresh(); }}>Reload</Button>
+            <Button onClick={() => setShowModal(true)}>+ Create Job</Button>
+          </div>
         </div>
 
         <div style={{ overflowX: "auto" }}>
@@ -255,7 +298,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
             </thead>
             <tbody>
               {jobs.length === 0 && (
-                <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--mut)" }}>No scheduled jobs configured. Create one to get started.</td></tr>
+                <tr><td colSpan={6} style={{ textAlign: "center", padding: 32, color: "var(--mut)" }}>{source === "error" ? "Could not load scheduled jobs. Refresh the page to try again." : "No scheduled jobs configured. Create one to get started."}</td></tr>
               )}
               {jobs.map((job) => (
                 <tr key={job.id}>
@@ -376,16 +419,22 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
 
       {historyJobId && (
         <div className="modal-overlay" role="dialog" aria-modal="true" aria-label="Execution History">
-          <div style={{ position: "fixed", insetInlineEnd: 0, top: 0, bottom: 0, width: 480, background: "#fff", boxShadow: "-4px 0 12px rgba(0,0,0,0.1)", padding: 24, overflowY: "auto" }}>
+          <div style={{ position: "fixed", insetInlineEnd: 0, top: 0, bottom: 0, width: "min(480px, 100vw)", maxWidth: "100vw", background: "#fff", boxShadow: "-4px 0 12px rgba(0,0,0,0.1)", padding: 24, overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
               <h3>Execution History</h3>
               <Button variant="ghost" onClick={() => setHistoryJobId(null)} aria-label="Close history panel">✕</Button>
             </div>
             {historyLoading ? (
               <p style={{ color: "var(--mut)", textAlign: "center", marginTop: 48 }}>Loading…</p>
+            ) : historyError ? (
+              <div role="alert" style={{ marginTop: 32, textAlign: "center", color: "#b42318", fontSize: 13 }}>
+                <p style={{ margin: "0 0 12px" }}>{historyError}</p>
+                <Button variant="ghost" size="sm" onClick={() => void openHistory(historyJobId)}>Retry</Button>
+              </div>
             ) : historyRecords.length === 0 ? (
               <p style={{ color: "var(--mut)", textAlign: "center", marginTop: 48 }}>No execution history available.</p>
             ) : (
+              <div style={{ overflowX: "auto" }}>
               <table className="data-table" role="table" aria-label="Execution history">
                 <thead>
                   <tr><th scope="col">Timestamp</th><th scope="col">Duration</th><th scope="col">Status</th><th scope="col">Error</th></tr>
@@ -401,6 +450,7 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
                   ))}
                 </tbody>
               </table>
+              </div>
             )}
           </div>
         </div>

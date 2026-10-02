@@ -6,6 +6,7 @@ import * as queries from "./queries.js";
 import { computeProductionReadiness } from "./readiness.js";
 import { getOperationsSnapshot } from "./operations.js";
 import { getSaDashboardSnapshot } from "./sa-dashboard.js";
+import { DEFAULT_SERVICES } from "./domain.js";
 
 const serviceParam = z.object({ service: z.string().min(1) });
 
@@ -39,6 +40,22 @@ export async function healthRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireSuperAdmin(ctx);
     return reply.send(await getSaDashboardSnapshot());
+  });
+
+  // GAP-ADMIN-TECH-ADMIN-03: the Tech Admin page reads this list. Registered BEFORE
+  // /v1/admin/health/:service so "services" is not looked up as a service name.
+  app.get("/v1/admin/health/services", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireSuperAdmin(ctx);
+    const agg = await queries.getAggregateHealth();
+    if (!agg) throw new HttpError(503, "UNAVAILABLE", "health snapshot unavailable");
+    const data = agg.services.map((s) => ({
+      serviceName: s.service,
+      port: DEFAULT_SERVICES.find((d) => d.name === s.service)?.port ?? null,
+      status: s.status,
+      httpStatus: s.httpStatus,
+    }));
+    return reply.send({ data, checkedAt: agg.checkedAt });
   });
 
   app.get("/v1/admin/health/:service", async (req, reply) => {
