@@ -90,3 +90,14 @@ describe("listJobOpenings — status mapping (HR-A deep-verify)", () => {
     }
   });
 });
+
+describe("listJobOpenings — refNo / vacancyType (GAP-RECRUITMENT-DETAIL-01)", () => {
+  it("returns refNo and vacancyType, and the HTTP schema keeps them", async () => {
+    listJobOpeningsByTenantMock.mockResolvedValue([row({ id: "j9", refNo: "HUD/2026/014", vacancyType: "internship" })]);
+    const rows = await listJobOpenings(TENANT, 100);
+    expect(rows[0]).toMatchObject({ refNo: "HUD/2026/014", vacancyType: "internship" });
+    const { JobOpeningSummaryListSchema } = await import("@civitasone/schemas/web");
+    const parsed = JobOpeningSummaryListSchema.parse(JSON.parse(JSON.stringify(rows)));
+    expect(parsed[0]).toMatchObject({ refNo: "HUD/2026/014", vacancyType: "internship" });
+  });
+});

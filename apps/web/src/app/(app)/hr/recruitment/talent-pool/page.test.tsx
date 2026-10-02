@@ -39,7 +39,10 @@ describe("TalentPoolPage (HR-A deep-verify)", () => {
     render(ui);
 
     expect(screen.getByText("Ravi Kumar")).toBeInTheDocument();
-    expect(screen.getByText("ravi@example.com")).toBeInTheDocument();
+    // GAP-RECRUITMENT-TALENT-POOL-02: the full address must never be rendered or exported.
+    expect(screen.getByText("r***@e***.com")).toBeInTheDocument();
+    expect(screen.queryByText("ravi@example.com")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /export|csv/i })).not.toBeInTheDocument();
     expect(screen.getByText("Excel, Tally")).toBeInTheDocument();
     expect(screen.getByText("3 yr")).toBeInTheDocument();
   });

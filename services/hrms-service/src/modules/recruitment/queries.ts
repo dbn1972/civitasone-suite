@@ -27,6 +27,9 @@ export async function listJobOpenings(tenantId: string, limit: number, departmen
     const deptMap = new Map(deptRows.map((d) => [d.id, d.name]));
     return rows.map((r) => ({
       id: r.id,
+      // GAP-RECRUITMENT-DETAIL-01: the HR detail page reads these from this list payload.
+      refNo: r.refNo,
+      vacancyType: r.vacancyType,
       jobTitle: r.title,
       department: deptMap.get(r.departmentId) ?? r.departmentId.slice(0, 8),
       vacancies: r.vacancies,

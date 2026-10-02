@@ -888,6 +888,9 @@ export const SalarySlipDetailSchema = SalarySlipSummarySchema.extend({
 
 export const JobOpeningSummarySchema = z.object({
   id: z.string(),
+  // GAP-RECRUITMENT-DETAIL-01: optional so older cached list payloads still validate.
+  refNo: z.string().optional(),
+  vacancyType: z.enum(["regular", "internship", "apprenticeship", "volunteership", "contractual", "deputation"]).optional(),
   jobTitle: z.string(),
   department: z.string(),
   vacancies: z.number(),

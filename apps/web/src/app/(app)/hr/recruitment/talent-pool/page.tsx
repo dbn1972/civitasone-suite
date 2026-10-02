@@ -5,6 +5,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
+import { maskEmail } from "@/lib/maskPii";
 
 // Mirrors HR_ROLES in services/hrms-service/src/modules/recruitment/routes.ts
 // (GET /v1/hrms/talent-pool) -- kept local rather than shared, matching how
@@ -73,8 +74,16 @@ export default async function TalentPoolPage({
   const experienced = candidates.filter((c) => (c.experienceYears ?? 0) >= 5).length;
   const activeStage = candidates.filter((c) => !["rejected","not_selected","withdrawn"].includes(c.stage)).length;
 
+  // Explicit allowlist: only fields the table renders, so a new API field can never leak into the client bundle.
   const rows = candidates.map((c) => ({
-    ...c,
+    id: c.id,
+    applicantName: c.applicantName,
+    qualification: c.qualification,
+    source: c.source,
+    stage: c.stage,
+    // GAP-RECRUITMENT-TALENT-POOL-02 (DPDP): this server component is the only place the
+    // full address exists -- mask it here so it never reaches the client bundle or a CSV.
+    email: maskEmail(c.email),
     // Real data has both shapes for "no skills": a SQL NULL (skills == null)
     // and an empty array (skills == []). c.skills?.join(", ") only caught the
     // first -- an empty array produced "".join() === "" (a blank cell that
@@ -151,7 +160,6 @@ export default async function TalentPoolPage({
           emptyTitle={t("emptyTitleNoCandidates")}
           emptyMessage={t("emptyMessageNoCandidates")}
             pageSize={20}
-            exportable
           />
         )}
       </Card>

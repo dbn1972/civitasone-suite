@@ -2,6 +2,7 @@
 
 import { useId, useState, useEffect } from "react";
 import { useTranslations } from "next-intl";
+import { VACANCY_TYPES, isVacancyType } from "@/lib/recruitment";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
@@ -99,7 +100,7 @@ export function NewJobOpeningForm() {
           selectionProcess?: string; requiredDocuments?: string[]; eligibility?: Record<string, unknown>;
         };
         if (tmpl.name) { setTitle(tmpl.name); setTemplateName(tmpl.name); }
-        if (tmpl.vacancyType) setVacancyType(tmpl.vacancyType);
+        if (isVacancyType(tmpl.vacancyType)) setVacancyType(tmpl.vacancyType);
         if (tmpl.description) setDescription(tmpl.description);
         if (tmpl.qualification) setQualification(tmpl.qualification);
         if (tmpl.payRange) setPayRange(tmpl.payRange);
@@ -122,6 +123,7 @@ export function NewJobOpeningForm() {
   const titleId = useId();
   const deptId = useId();
   const vacanciesId = useId();
+  const vacancyTypeId = useId();
   const descId = useId();
   const closesAtId = useId();
   const statusMsgId = useId();
@@ -259,6 +261,20 @@ export function NewJobOpeningForm() {
           aria-required="true"
           aria-invalid={invalidField === "title"}
         />
+      </div>
+
+      <div>
+        <label htmlFor={vacancyTypeId} style={labelStyle}>{t("vacancyType")}</label>
+        <select
+          id={vacancyTypeId}
+          value={vacancyType}
+          onChange={(e) => setVacancyType(e.target.value)}
+          style={inputStyle}
+        >
+          {VACANCY_TYPES.map((v) => (
+            <option key={v} value={v}>{t(`vacancyType_${v}`)}</option>
+          ))}
+        </select>
       </div>
 
       <div>

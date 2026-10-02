@@ -5,15 +5,16 @@ import Link from "next/link";
 const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const TENANT_ID = process.env.DEMO_TENANT_ID ?? process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "";
 
-type Stage = { stage: string; label: string; status: "done" | "active" | "future"; note?: string };
+type Stage = { stage: string; label: string; status: "done" | "active" | "future" | "ended"; note?: string };
 type AppDetail = {
   id: string;
   applicationNo: string | null;
   stage: string;
   status: string;
   appliedAt: string;
-  screeningDecision: string;
-  screeningRemarks: string | null;
+  // Terminal outcome (not selected / withdrawn) with fixed, candidate-safe wording.
+  // Internal HR screening remarks are intentionally never sent to this page.
+  outcome?: { kind: "not_selected" | "withdrawn"; message: string } | null;
   job: { id: string; title: string; refNo: string; location: string | null; description: string | null; payRange: string | null; vacancies: number; closesAt: string | null } | null;
   timeline: Stage[];
 };
@@ -38,6 +39,7 @@ const STAGE_DOT: Record<string, { bg: string; ring?: string }> = {
   done:   { bg: "#047857" },
   active: { bg: "#e07b00", ring: "0 0 0 4px rgba(224,123,0,0.2)" },
   future: { bg: "#cbd5e1" },
+  ended:  { bg: "#b91c1c" },
 };
 
 export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
@@ -53,7 +55,12 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
     <main style={{ minHeight: "100vh", background: "#f0f4f8", paddingBottom: 64 }}>
       {/* Header */}
       <div style={{ background: "#154089", padding: "14px 24px" }}>
-        <Link href="/careers/portal" style={{ color: "#93c5fd", fontSize: 13, textDecoration: "none" }}>← My Applications</Link>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <Link href="/careers/portal" style={{ color: "#93c5fd", fontSize: 13, textDecoration: "none" }}>← My Applications</Link>
+          <form method="POST" action="/api/careers/auth/logout" style={{ margin: 0 }}>
+            <button type="submit" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#93c5fd", fontSize: 13 }}>Sign out</button>
+          </form>
+        </div>
         <h1 style={{ color: "#fff", fontSize: 17, fontWeight: 700, margin: "6px 0 2px" }}>
           {job?.title ?? "Application Detail"}
         </h1>
@@ -81,6 +88,12 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
           </div>
         </div>
 
+        {app_.outcome && (
+          <div role="status" style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 10, padding: "12px 16px", fontSize: 14, color: "#7f1d1d", fontWeight: 600 }}>
+            {app_.outcome.message}
+          </div>
+        )}
+
         {/* Stage Rail */}
         <div style={{ background: "#fff", borderRadius: 10, padding: "16px 16px 20px", border: "1px solid #e2e8f0" }}>
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 16 }}>
@@ -100,6 +113,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
                   )}
                   <div style={{ position: "absolute", insetInlineStart: -24, top: 3, width: 14, height: 14, borderRadius: "50%", background: dot.bg, boxShadow: dot.ring ?? "none", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
                     {s.status === "done" && <span style={{ fontSize: 8, color: "#fff", fontWeight: 800 }}>✓</span>}
+                    {s.status === "ended" && <span style={{ fontSize: 8, color: "#fff", fontWeight: 800 }}>✕</span>}
                   </div>
                   <div style={{ fontSize: 14, fontWeight: 600, color: s.status === "future" ? "#94a3b8" : "#0f172a" }}>
                     {s.label}
@@ -107,12 +121,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
                   {s.note && <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
                     {new Date(s.note).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
                   </div>}
-                  {s.status === "active" && app_.screeningRemarks && (
-                    <div style={{ marginTop: 6, background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#92400e" }}>
-                      {app_.screeningRemarks}
-                    </div>
-                  )}
-                  {s.status === "active" && !app_.screeningRemarks && (
+                  {s.status === "active" && (
                     <div style={{ marginTop: 6, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#64748b" }}>
                       In progress — we will notify you by email when this stage updates.
                     </div>
@@ -129,9 +138,9 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
             <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 10 }}>Vacancy Details</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {job.payRange && <InfoItem label="Pay" value={job.payRange} />}
-              {job.vacancies && <InfoItem label="Posts" value={String(job.vacancies)} />}
+              {job.vacancies > 0 && <InfoItem label="Posts" value={String(job.vacancies)} />}
               {job.location && <InfoItem label="Location" value={job.location} />}
-              {job.closesAt && <InfoItem label="Closed" value={new Date(job.closesAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} />}
+              {job.closesAt && <InfoItem label={new Date(job.closesAt) < new Date() ? "Closed on" : "Applications close"} value={new Date(job.closesAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} />}
             </div>
           </div>
         )}

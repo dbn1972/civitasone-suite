@@ -173,6 +173,9 @@ async function publishPublicF3Write(
   });
 }
 
+/** Minimum seconds between OTP requests for the same candidate. */
+export const OTP_REQUEST_COOLDOWN_SECONDS = 30;
+
 export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/careers/auth/otp-request
   // Accepts { email, tenantId }. Finds or creates the candidate, issues a 6-digit OTP.
@@ -196,6 +199,17 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     );
 
     const isNewCandidate = existing.length === 0;
+
+    // Server-side resend cooldown: the web form's 30s timer is cosmetic on its own.
+    if (!isNewCandidate) {
+      const latest = await scopedReadForTenant(tenantId, (tx) => otpRepo.findLatestChallengeTx(tx, tenantId, existing[0]!.id, "email"));
+      const ageMs = latest ? Date.now() - new Date(latest.createdAt).getTime() : Infinity;
+      if (ageMs < OTP_REQUEST_COOLDOWN_SECONDS * 1000) {
+        const retryAfter = Math.ceil((OTP_REQUEST_COOLDOWN_SECONDS * 1000 - ageMs) / 1000);
+        void reply.header("retry-after", String(retryAfter));
+        throw new HttpError(429, "OTP_COOLDOWN", `a code was sent recently; try again in ${retryAfter}s`);
+      }
+    }
     const candidateId = isNewCandidate ? randomUUID() : existing[0]!.id;
 
     const code = generateOtp(randomBytes);

@@ -15,6 +15,7 @@ import { HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsApplications, hrmsJobOpenings } from "./schema.js";
 import { verifyCandToken } from "./candidate-public-auth-routes.js";
+import { buildStageTimeline, portalOutcome } from "./candidate-portal-timeline.js";
 
 function resolveCandidateClaims(req: { headers: Record<string, string | string[] | undefined> }): { candidateId: string; tenantId: string; email: string } {
   const authHeader = req.headers["authorization"];
@@ -41,7 +42,6 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
         stage: hrmsApplications.stage,
         status: hrmsApplications.status,
         appliedAt: hrmsApplications.appliedAt,
-        screeningDecision: hrmsApplications.screeningDecision,
       })
         .from(hrmsApplications)
         .where(and(
@@ -76,7 +76,6 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
         stage: r.stage,
         status: r.status,
         appliedAt: r.appliedAt,
-        screeningDecision: r.screeningDecision,
       };
     });
 
@@ -112,7 +111,7 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
     const job = jobs[0] ?? null;
 
     // Build a human-readable stage timeline.
-    const stages = buildStageTimeline(app_);
+    const stages = buildStageTimeline({ stage: app_.stage, appliedAt: app_.appliedAt });
 
     return reply.send({
       id: app_.id,
@@ -120,8 +119,9 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
       stage: app_.stage,
       status: app_.status,
       appliedAt: app_.appliedAt,
-      screeningDecision: app_.screeningDecision,
-      screeningRemarks: app_.screeningRemarks,
+      // GAP-RECRUITMENT-CAREERS-PORTAL-APPLICATION-DETAIL-01: screeningRemarks is an
+      // internal HR note and must never reach the candidate.
+      outcome: portalOutcome(app_.stage),
       job: job ? {
         id: job.id,
         title: job.title,
@@ -137,35 +137,6 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
   });
 
   app.setErrorHandler(errHandler);
-}
-
-type AppRow = {
-  stage: string;
-  status: string;
-  appliedAt: Date | null;
-  screeningDecision: string;
-  screeningRemarks: string | null;
-};
-
-type TimelineEntry = { stage: string; label: string; status: "done" | "active" | "future"; note: string };
-
-function buildStageTimeline(a: AppRow): TimelineEntry[] {
-  const STAGES = ["applied", "screening", "shortlisted", "interview", "offered", "hired"];
-  const LABELS: Record<string, string> = {
-    applied: "Application Submitted",
-    screening: "Under Review",
-    shortlisted: "Shortlisted",
-    interview: "Interview Scheduled",
-    offered: "Offer Issued",
-    hired: "Joined",
-  };
-  const currentIdx = STAGES.indexOf(a.stage);
-  return STAGES.map((s, i) => ({
-    stage: s,
-    label: LABELS[s] ?? s,
-    status: (i < currentIdx ? "done" : i === currentIdx ? "active" : "future") as "done" | "active" | "future",
-    note: s === "applied" && a.appliedAt ? a.appliedAt.toISOString() : "",
-  }));
 }
 
 function errHandler(err: unknown, req: any, reply: any): void {
