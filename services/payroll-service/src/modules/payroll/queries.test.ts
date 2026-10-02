@@ -9,6 +9,7 @@ vi.mock("./repo.js", () => ({
   aggregateSlipsByRunIds: (...args: unknown[]) => aggregateSlipsByRunIds(...args),
   findRunById: (...args: unknown[]) => findRunById(...args),
   listSlipsByRun: (...args: unknown[]) => listSlipsByRun(...args),
+  listRunSuspensionsByRun: async () => [],
 }));
 
 vi.mock("../../shared/infra.js", () => ({

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 const HRMS_URL = process.env.HRMS_SERVICE_URL ?? "http://127.0.0.1:3012";
 
 /**
@@ -39,7 +41,66 @@ export type PayrollInputEmployee = {
   taxRegime: "old" | "new";
   departmentId: string;
   pensionScheme: "GPF" | "NPS" | "EPF";
+  /**
+   * FR 53: true when the employee has an ACTIVE pay-suspension in HRMS's
+   * Disciplinary module. The run then pays a subsistence allowance (pay-scale
+   * engagements) or withholds pay and flags HR (anything else) -- see
+   * modules/payroll/subsistence.ts. Validated by PayrollInputSchema below.
+   */
+  paySuspended?: boolean;
+  /** HRMS's creation-time subsistence % (informational; FR 53 rate comes from payroll settings). */
+  subsistencePct?: number;
+  /** Suspension window + FR 53 review order; present only when paySuspended. */
+  suspension?: PayrollInputSuspension;
+  /** HRMS engagement pay mode ("monthly" = government pay scale). */
+  payMode?: string;
+  /** HRMS employeeType code (e.g. "permanent", "contract", "pay_scale"). */
+  engagementType?: string;
 };
+
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(
+  (s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s,
+  "not a real calendar date",
+);
+const pct = z.number().finite().min(0).max(100);
+
+/**
+ * FR 53 feed boundary: the suspension fields payroll money depends on are
+ * validated strictly. Everything else on an employee row passes through
+ * unchanged (its consumers predate this schema), so adding this cannot
+ * reject a feed that was valid before -- except one whose suspension data is
+ * malformed, which must fail the run rather than be guessed at.
+ */
+export const PayrollInputSuspensionSchema = z.object({
+  suspensionId: z.string().uuid(),
+  fromDate: isoDate,
+  toDate: isoDate.nullable(),
+  revisedSubsistencePct: pct.nullable(),
+  revisedEffectiveFrom: isoDate.nullable(),
+  reviewOrderRef: z.string().max(200).nullable(),
+}).strict()
+  .refine((s) => s.toDate == null || s.toDate >= s.fromDate, { message: "toDate is before fromDate", path: ["toDate"] })
+  .refine((s) => s.revisedEffectiveFrom == null || s.revisedEffectiveFrom >= s.fromDate, {
+    message: "revisedEffectiveFrom is before fromDate", path: ["revisedEffectiveFrom"],
+  });
+export type PayrollInputSuspension = z.infer<typeof PayrollInputSuspensionSchema>;
+
+const PayrollInputEmployeeSchema = z.object({
+  id: z.string().min(1),
+  paySuspended: z.boolean().optional(),
+  subsistencePct: pct.optional(),
+  suspension: PayrollInputSuspensionSchema.optional(),
+  payMode: z.string().max(32).optional(),
+  engagementType: z.string().max(64).nullable().optional(),
+}).passthrough().refine((e) => e.suspension == null || e.paySuspended === true, {
+  message: "suspension details sent for an employee that is not paySuspended", path: ["suspension"],
+});
+
+export const PayrollInputSchema = z.object({
+  month: z.string().regex(/^\d{4}-\d{2}$/),
+  employees: z.array(PayrollInputEmployeeSchema),
+  lopDays: z.record(z.string(), z.number()),
+}).passthrough();
 
 export type HrmsPayrollInput = {
   month: string;
@@ -116,7 +177,22 @@ export async function fetchPayrollInput(tenantId: string, month: string): Promis
     (detail) => `hrms payroll-input unreachable: ${detail}`,
   );
   if (!res.ok) throw new HrmsUnavailableError(`hrms payroll-input failed: ${res.status}`);
-  return res.json() as Promise<HrmsPayrollInput>;
+  return parsePayrollInput(await res.json());
+}
+
+/**
+ * FR 53 feed boundary. A feed that fails validation fails the caller (the
+ * run is marked failed) instead of being paid on guessed suspension data.
+ * Thrown as HrmsUnavailableError so every existing fail-closed caller (24Q,
+ * Form 16, bank file) treats it the same as an unreachable HRMS.
+ */
+export function parsePayrollInput(raw: unknown): HrmsPayrollInput {
+  const parsed = PayrollInputSchema.safeParse(raw);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    throw new HrmsUnavailableError(`hrms payroll-input invalid: ${first ? `${first.path.join(".")}: ${first.message}` : "schema mismatch"}`);
+  }
+  return parsed.data as unknown as HrmsPayrollInput;
 }
 
 export async function fetchPendingPayrollRuns(tenantId: string): Promise<number> {

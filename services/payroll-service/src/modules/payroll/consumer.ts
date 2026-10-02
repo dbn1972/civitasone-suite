@@ -13,11 +13,13 @@ import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type StatutoryConfig, type StatutoryConfigRow } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow } from "./domain.js";
 import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { clearRunRegister, rebuildRunRegister, resolveRegisterDepartments } from "./register.js";
+import { computeSubsistenceEarnings, resolveSuspensionTreatment, mergeSubsistenceSettings, DEFAULT_SUBSISTENCE_CONFIG, type SubsistenceEarnings } from "./subsistence.js";
+import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
 const PLATFORM_TENANT_ID = "00000000-0000-0000-0000-000000000000";
@@ -1345,14 +1347,56 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.settingsUpdate, async (msg) => {
-    const p = msg.payload as { tenantId: string; protectedNetFloorMinor: number };
+    const p = msg.payload as {
+      tenantId: string; protectedNetFloorMinor: number;
+      subsistenceInitialPctBps?: number; subsistenceReviewAfterDays?: number;
+      subsistenceRevisedMinPctBps?: number; subsistenceRevisedMaxPctBps?: number;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // FR 53 percentages are optional on the command: an omitted one keeps
+      // the stored value (FR 53's default on the tenant's first settings row).
+      // Read the current row under a lock so the merge, the CHECK-safe
+      // validation and the before/after audit all see the same values.
+      const prevRows = (await tx.execute(sql`
+        SELECT protected_net_floor_minor::text AS floor,
+               subsistence_initial_pct_bps, subsistence_review_after_days,
+               subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps
+          FROM payroll.payroll_settings WHERE tenant_id = ${p.tenantId}::uuid
+         FOR UPDATE
+      `)) as unknown as Array<{
+        floor: string; subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
+        subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
+      }>;
+      const prev = prevRows[0];
+      const stored = prev ? {
+        initialPctBps: BigInt(prev.subsistence_initial_pct_bps),
+        reviewAfterDays: Number(prev.subsistence_review_after_days),
+        revisedMinPctBps: BigInt(prev.subsistence_revised_min_pct_bps),
+        revisedMaxPctBps: BigInt(prev.subsistence_revised_max_pct_bps),
+      } : DEFAULT_SUBSISTENCE_CONFIG;
+      const merged = mergeSubsistenceSettings(stored, p);
+      // The route already rejects this with a 400; a command that still
+      // carries an invalid merge (e.g. a concurrent update moved the other
+      // bound) is dead-lettered, never retried into the DB CHECK forever.
+      if (!merged.ok) throw new NonRetryableError(`payroll settings update rejected: ${merged.message}`);
+      const next = merged.config;
       await tx.execute(sql`
-        INSERT INTO payroll.payroll_settings (tenant_id, protected_net_floor_minor, created_at, updated_at)
-        VALUES (${p.tenantId}::uuid, ${p.protectedNetFloorMinor}, NOW(), NOW())
+        INSERT INTO payroll.payroll_settings (
+          tenant_id, protected_net_floor_minor,
+          subsistence_initial_pct_bps, subsistence_review_after_days,
+          subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
+          created_at, updated_at)
+        VALUES (${p.tenantId}::uuid, ${p.protectedNetFloorMinor},
+          ${Number(next.initialPctBps)}, ${next.reviewAfterDays},
+          ${Number(next.revisedMinPctBps)}, ${Number(next.revisedMaxPctBps)},
+          NOW(), NOW())
         ON CONFLICT (tenant_id) DO UPDATE
           SET protected_net_floor_minor = EXCLUDED.protected_net_floor_minor,
+              subsistence_initial_pct_bps = EXCLUDED.subsistence_initial_pct_bps,
+              subsistence_review_after_days = EXCLUDED.subsistence_review_after_days,
+              subsistence_revised_min_pct_bps = EXCLUDED.subsistence_revised_min_pct_bps,
+              subsistence_revised_max_pct_bps = EXCLUDED.subsistence_revised_max_pct_bps,
               updated_at = NOW()
       `);
       await enqueue(tx, {
@@ -1360,7 +1404,19 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { tenantId: p.tenantId, protectedNetFloorMinor: p.protectedNetFloorMinor },
       });
-      await audit(tx, msg, "update", "payroll_settings", p.tenantId);
+      // FR 53 review fix: the money-driving percentages must be reconstructable
+      // from the audit trail, so record before/after (null before = no row yet).
+      const snapshot = (floor: string, c: typeof next) => ({
+        protectedNetFloorMinor: floor,
+        subsistenceInitialPctBps: Number(c.initialPctBps),
+        subsistenceReviewAfterDays: c.reviewAfterDays,
+        subsistenceRevisedMinPctBps: Number(c.revisedMinPctBps),
+        subsistenceRevisedMaxPctBps: Number(c.revisedMaxPctBps),
+      });
+      await audit(tx, msg, "update", "payroll_settings", p.tenantId, {
+        before: prev ? snapshot(prev.floor, stored) : null,
+        after: snapshot(String(p.protectedNetFloorMinor), next),
+      });
     });
   });
 }
@@ -1400,6 +1456,8 @@ async function processPayrollRun(
   // treated as legitimate" shape, just a substituted default instead of an
   // outright empty result.
   const statutoryConfig = await scopedRead((tx) => resolveRunStatutoryConfig(tx, p.tenantId, p.month));
+  // FR 53: the tenant's subsistence-allowance percentages (FR 53 defaults when unset).
+  const subsistenceConfig = await scopedRead((tx) => resolveSubsistenceConfig(tx, p.tenantId));
   // Days in the run month (LOP divisor) — 7th CPC uses actual days, not flat 30.
   const daysInMonth = BigInt(new Date(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 0).getDate());
   let totalGross = 0n;
@@ -1499,6 +1557,35 @@ async function processPayrollRun(
       const revision = latestRevisionByEmployee.get(emp.id) ?? null;
       const basicMinor = revision ? revision.newBasicMinor : BigInt(emp.basicMinor);
       const daMinor = (basicMinor * daRateBps) / 10000n;
+
+      // FR 53 (URGENT money fix): a pay-suspended employee used to be paid
+      // full salary because nothing read the feed's paySuspended flag. Now:
+      // pay-scale engagement -> subsistence allowance for the suspended days
+      // (regular pay for any days before/after the suspension window);
+      // anything else -> no slip at all, recorded + flagged for HR. See
+      // subsistence.ts for the rule and its VERIFY notes. An employee who is
+      // not suspended this month takes the unchanged path below.
+      const suspension = resolveSuspensionTreatment(emp, p.month, subsistenceConfig);
+      if (suspension.kind === "withhold") {
+        const recorded = await recordRunSuspension(tx as unknown as typeof db, {
+          tenantId: p.tenantId, runId: p.id, employeeId: emp.id, employeeNo: emp.employeeNo,
+          suspensionId: emp.suspension?.suspensionId ?? null, treatment: "withheld",
+          suspensionFrom: emp.suspension?.fromDate ?? null, suspensionTo: emp.suspension?.toDate ?? null,
+          daysInMonth: Number(daysInMonth), regularDays: 0, subsistenceDays: 0,
+          initialPctBps: null, revisedPctBps: null, subsistenceMinor: 0n, subsistenceDaMinor: 0n,
+          flags: [...new Set([...(suspension.plan?.flags ?? []), ...suspension.flags])],
+          createdBy: msg.actorId,
+        });
+        if (recorded) {
+          await audit(tx, msg, "pay_withheld", "payroll_run_suspension", p.id, {
+            employeeId: emp.id, reason: suspension.flags.join(","),
+          });
+        }
+        continue;
+      }
+      const subsistence: SubsistenceEarnings | null = suspension.kind === "subsistence"
+        ? computeSubsistenceEarnings({ basicMinor, daRateBps, cityClass, rawComponents, plan: suspension.plan })
+        : null;
       // M2 (LOP double-count): one authoritative source per (employee, month).
       // The local LOP ledger (fed by leave/attendance events) takes precedence
       // when any ledger row exists for the month; otherwise we fall back to the
@@ -1529,7 +1616,12 @@ async function processPayrollRun(
         : joinedThisMonth
         ? Math.max(0, Number(doj!.slice(8, 10)) - 1)
         : 0;
-      const lopDays = Math.min(Number(daysInMonth), attendanceLopDays + joiningUnpaidDays);
+      // FR 53: LOP can only fall on days the employee was otherwise paid as
+      // normal; the suspended days already earn only the subsistence allowance.
+      const lopDays = Math.min(
+        suspension.kind === "subsistence" ? suspension.plan.regularDays : Number(daysInMonth),
+        attendanceLopDays + joiningUnpaidDays,
+      );
       // LOP daily rate on (Basic + DA) over actual days in month. Multiply
       // before dividing (LOW, payroll-calc audit): dividing first truncated
       // the per-day rate before scaling by lopDays, under-withholding LOP by
@@ -1589,7 +1681,9 @@ async function processPayrollRun(
         tenantId: p.tenantId,
         employeeId: emp.id,
         employeeNo: emp.employeeNo,
-        basicMinor,
+        // FR 53: the slip's basic is the basic actually paid (regular days).
+        basicMinor: subsistence ? subsistence.regularBasicMinor : basicMinor,
+        ...(subsistence ? { earningsOverride: subsistence, suspended: true } : {}),
         month: p.month,
         statutoryConfig,
         pensionScheme: emp.pensionScheme ?? "NPS",
@@ -1608,7 +1702,8 @@ async function processPayrollRun(
           (emp as { stateCode?: string }).stateCode
             ? (ptSlabsByState.get((emp as { stateCode?: string }).stateCode!) ?? [])
             : ptSlabsFallback,
-          basicMinor + daMinor,
+          // FR 53: PT on what is actually paid (regular Basic + DA + SA + its DA).
+          subsistence ? subsistence.hraSalaryMinor : basicMinor + daMinor,
         ),
         taxRegime: decl?.regime ?? emp.taxRegime ?? "new",
         fyStartYear: fyStart,
@@ -1689,6 +1784,28 @@ async function processPayrollRun(
         `)) as unknown as Array<{ id: string }>;
         if (updated.length !== earned.reimbIds.length) {
           throw new DomainError("REIMB_ALREADY_CONSUMED", `reimbursement double-pay race: expected ${earned.reimbIds.length} unconsumed rows, claimed ${updated.length}`);
+        }
+      }
+
+      if (suspension.kind === "subsistence" && subsistence) {
+        const recorded = await recordRunSuspension(tx as unknown as typeof db, {
+          tenantId: p.tenantId, runId: p.id, employeeId: emp.id, employeeNo: emp.employeeNo,
+          suspensionId: emp.suspension?.suspensionId ?? null, treatment: "subsistence",
+          suspensionFrom: emp.suspension?.fromDate ?? null, suspensionTo: emp.suspension?.toDate ?? null,
+          daysInMonth: suspension.plan.daysInMonth, regularDays: suspension.plan.regularDays,
+          subsistenceDays: suspension.plan.subsistenceDays,
+          initialPctBps: subsistenceConfig.initialPctBps, revisedPctBps: suspension.plan.revisedPctBps,
+          subsistenceMinor: subsistence.subsistenceMinor, subsistenceDaMinor: subsistence.subsistenceDaMinor,
+          flags: suspension.plan.flags, createdBy: msg.actorId,
+        });
+        if (recorded) {
+          await audit(tx, msg, "subsistence_applied", "payroll_run_suspension", p.id, {
+            employeeId: emp.id,
+            subsistenceMinor: subsistence.subsistenceMinor.toString(),
+            subsistenceDaMinor: subsistence.subsistenceDaMinor.toString(),
+            subsistenceDays: suspension.plan.subsistenceDays,
+            flags: suspension.plan.flags,
+          });
         }
       }
 
@@ -1906,6 +2023,10 @@ export async function computeAndInsertSlip(
     declaration?: { rentPaidAnnualMinor?: bigint; ded80cMinor?: bigint; ded80dMinor?: bigint; otherDedMinor?: bigint; prevEmployerSalaryMinor?: bigint; otherSourcesIncomeMinor?: bigint; perquisitesMinor?: bigint };
     rawComponents?: RawComponent[];
     components?: Array<{ code: string; name: string; type: "earning" | "deduction"; amountMinor: bigint }>;
+    /** FR 53 suspension pay lines (subsistence.ts); omitted for everyone else. */
+    earningsOverride?: EarningsOverride;
+    /** FR 53: this slip is a suspended employee's (skips an all-zero PF row for a GPF/NPS member). */
+    suspended?: boolean;
   },
 ): Promise<SlipResult> {
   // DOM-008: same config passed to computeSlip, reused below so the
@@ -1935,6 +2056,7 @@ export async function computeAndInsertSlip(
     ...(params.statutoryPf != null ? { statutoryPf: params.statutoryPf } : {}),
     ...(params.statutoryEsi != null ? { statutoryEsi: params.statutoryEsi } : {}),
     ...(params.statutoryNps != null ? { statutoryNps: params.statutoryNps } : {}),
+    ...(params.earningsOverride ? { earningsOverride: params.earningsOverride } : {}),
   });
   const slipId = randomUUID();
   const allComps = [...result.earnings, ...result.deductions];
@@ -1967,7 +2089,10 @@ export async function computeAndInsertSlip(
       currency: "INR", period: params.month,
       createdBy: msg.actorId, updatedBy: msg.actorId,
     });
-  } else {
+  } else if (!(params.suspended && (params.pensionScheme ?? "NPS") !== "EPF")) {
+    // FR 53: a fully-suspended GPF/NPS member contributes nothing this month
+    // (no GPF subscription from subsistence allowance); do not write them an
+    // all-zero EPF row they were never a member of.
     await statutoryRepo.insertPf(tx, {
       id: randomUUID(), tenantId: params.tenantId, slipId, employeeId: params.employeeId,
       runId: params.runId, basicMinor: params.basicMinor,

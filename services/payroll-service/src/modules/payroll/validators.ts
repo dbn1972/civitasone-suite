@@ -216,9 +216,20 @@ export const createSalaryRevisionBody = z.object({
 });
 export type CreateSalaryRevisionBody = z.infer<typeof createSalaryRevisionBody>;
 
+const bps = z.number().int().min(0).max(10000);
 export const updateSettingsBody = z.object({
   protectedNetFloorMinor: z.number().int().nonnegative(),
-});
+  // FR 53 subsistence allowance (migration 0057). Optional: omitted fields
+  // keep their current value (FR 53 defaults on a tenant's first save).
+  subsistenceInitialPctBps: bps.optional(),
+  subsistenceReviewAfterDays: z.number().int().min(1).max(366).optional(),
+  subsistenceRevisedMinPctBps: bps.optional(),
+  subsistenceRevisedMaxPctBps: bps.optional(),
+}).refine(
+  (b) => b.subsistenceRevisedMinPctBps == null || b.subsistenceRevisedMaxPctBps == null
+    || b.subsistenceRevisedMinPctBps <= b.subsistenceRevisedMaxPctBps,
+  { message: "subsistenceRevisedMinPctBps must not exceed subsistenceRevisedMaxPctBps", path: ["subsistenceRevisedMinPctBps"] },
+);
 export type UpdateSettingsBody = z.infer<typeof updateSettingsBody>;
 
 /**

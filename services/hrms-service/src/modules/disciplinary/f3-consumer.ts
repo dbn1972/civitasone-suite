@@ -66,6 +66,7 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
       "disciplinary_routes__1",
       "disciplinary_routes__2",
       "disciplinary_routes__3",
+      "disciplinary_routes__4",
     ]);
     if (!ops.has(op)) return;
     const body = p.body ?? {};
@@ -231,6 +232,40 @@ export function registerF3_disciplinary_Consumers(queue: Queue): void {
                     ...(body.remarks ? { remarks: body.remarks } : {}),
                     updatedBy: msg.actorId,
                   }, s.version);
+            break;
+          }
+          case "disciplinary_routes__4": {
+            // POST /v1/hrms/suspensions/:suspId/subsistence-review -- FR 53
+            // review order. Re-read inside the tx (state may have moved since
+            // the route's pre-check) and update under the optimistic lock.
+            const suspId = String(params.suspId ?? "");
+            const sRows = await tx.select({ id: hrmsSuspensions.id, status: hrmsSuspensions.status, paySuspended: hrmsSuspensions.paySuspended, version: hrmsSuspensions.version })
+              .from(hrmsSuspensions)
+              .where(and(eq(hrmsSuspensions.id, suspId), eq(hrmsSuspensions.tenantId, p.tenantId)))
+              .limit(1);
+            const s = sRows[0];
+            if (!s) throw new HttpError(404, "NOT_FOUND", "suspension not found");
+            if (s.status !== "active" || !s.paySuspended) {
+              throw new HttpError(409, "WRONG_STATE", "suspension is no longer an active pay-suspension");
+            }
+            await repo.updateSuspension(tx, p.tenantId, suspId, {
+              revisedSubsistencePct: Number(body.revisedPct).toFixed(2),
+              revisedEffectiveFrom: body.effectiveFrom ?? null,
+              reviewOrderRef: String(body.orderRef),
+              reviewedAt: new Date(),
+              reviewedBy: msg.actorId,
+              ...(body.remarks ? { remarks: body.remarks } : {}),
+              updatedBy: msg.actorId,
+            }, s.version);
+            await enqueue(tx, {
+              topic: "audit.event.record", eventType: "audit.event.record",
+              tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: {
+                service: "hrms", action: "subsistence_review", resourceType: "hrms_suspension", resourceId: suspId,
+                outcome: "success", revisedPct: Number(body.revisedPct), effectiveFrom: body.effectiveFrom ?? null,
+                orderRef: String(body.orderRef),
+              },
+            });
             break;
           }
           case "disciplinary_routes__3": {

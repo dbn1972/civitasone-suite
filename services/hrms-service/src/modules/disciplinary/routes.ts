@@ -22,6 +22,9 @@ import { COMMANDS } from "../../topics.js";
  *   POST /v1/hrms/employees/:id/suspensions            record a suspension (pay flag)
  *   GET  /v1/hrms/employees/:id/suspensions            list suspensions
  *   POST /v1/hrms/suspensions/:suspId/revoke           revoke a suspension
+ *   POST /v1/hrms/suspensions/:suspId/subsistence-review
+ *                                                      record the FR 53 review
+ *                                                      order (revised SA %)
  *
  * Each case transition is validated by the state machine and appended to an
  * append-only event log. A suspension with pay_suspended=true is surfaced by
@@ -419,6 +422,44 @@ export async function disciplinaryRoutes(app: FastifyInstance): Promise<void> {
     if (s.status !== "active") throw new HttpError(409, "WRONG_STATE", `suspension is '${s.status}', not active`);
     await publishF3Write(ctx, "disciplinary_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id: suspId, status: "revoked" }) as any;
+  });
+
+  /**
+   * FR 53 review order: after the first 3 months of suspension the competent
+   * authority revises the subsistence allowance (FR 53(1)(ii)(a): up to 75%
+   * or down to 25% of basic). Payroll uses the recorded percentage from
+   * `effectiveFrom` (never earlier than day 91 of the suspension); with no
+   * order recorded it stays at the initial rate and flags "review order due".
+   * HR records what the authority actually ordered (0..100); whether it falls
+   * inside FR 53's band is a payroll-side, tenant-configurable check.
+   */
+  app.post("/v1/hrms/suspensions/:suspId/subsistence-review", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { suspId } = suspParam.parse(req.params);
+    const body = z.object({
+      revisedPct: z.number().min(0).max(100).multipleOf(0.01),
+      orderRef: z.string().trim().min(1).max(200),
+      // Review fix: calendar-valid, not just shaped (2026-02-30 used to pass
+      // here, be accepted with 202, then fail the async date write).
+      effectiveFrom: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
+        .refine((s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s, "not a real calendar date")
+        .optional(),
+      remarks: z.string().max(2000).optional(),
+    }).strict().parse(req.body);
+    const s = await repo.findSuspension(ctx.tenantId, suspId);
+    if (!s) throw new HttpError(404, "NOT_FOUND", "suspension not found");
+    if (s.status !== "active") throw new HttpError(409, "WRONG_STATE", `suspension is '${s.status}', not active`);
+    if (!s.paySuspended) throw new HttpError(409, "WRONG_STATE", "suspension does not suspend pay; there is no subsistence allowance to revise");
+    if (body.effectiveFrom && body.effectiveFrom < s.fromDate) {
+      throw new HttpError(400, "VALIDATION_FAILED", "effectiveFrom cannot be before the suspension's fromDate");
+    }
+    await publishF3Write(ctx, "disciplinary_routes__4", suspId, {
+      body,
+      params: req.params as Record<string, unknown>,
+      query: req.query as Record<string, unknown>,
+    });
+    return reply.code(202).send({ id: suspId, status: "accepted", revisedPct: body.revisedPct });
   });
 
   app.setErrorHandler((err, req, reply) => {

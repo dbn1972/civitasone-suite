@@ -819,6 +819,21 @@ export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
     net: z.number(),
     status: z.string(),
   })).default([]),
+  // FR 53: pay-suspended employees in this run (subsistence allowance paid,
+  // or pay withheld and flagged for HR). Amounts in rupees like the rest.
+  suspendedEmployees: z.array(z.object({
+    employeeId: z.string(),
+    employeeNo: z.string(),
+    treatment: z.enum(["subsistence", "withheld"]),
+    suspensionFrom: z.string().nullable(),
+    suspensionTo: z.string().nullable(),
+    regularDays: z.number().int(),
+    subsistenceDays: z.number().int(),
+    subsistenceAllowance: z.number(),
+    subsistenceDa: z.number(),
+    revisedPct: z.number().nullable(),
+    flags: z.array(z.string()),
+  })).default([]),
 });
 
 export const SalarySlipSummarySchema = z.object({
