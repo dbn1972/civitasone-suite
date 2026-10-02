@@ -1812,6 +1812,8 @@ export type StockItemDetail = StockItemSummary & {
 
 export type StockLedgerEntry = {
   id: string;
+  /** Stock-service item id, when the ledger row carried one (used to join item SKU/name). */
+  itemId?: string;
   itemCode: string;
   itemName: string;
   date: string;

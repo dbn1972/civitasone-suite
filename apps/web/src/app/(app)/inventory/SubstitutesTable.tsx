@@ -1,11 +1,13 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { DataTable, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
 import { RegisterFrame, isNoData, statValue } from "./RegisterFrame";
 import type { InventorySubstituteRow } from "./_data";
+import { formatConversionFactor, itemLabel } from "./_labels";
 import { SUBSTITUTES_ITEM_CAP } from "./substitutesCoverage";
 
 type Col = {
@@ -16,10 +18,19 @@ type Col = {
 };
 
 const columns: Col[] = [
-  { key: "itemId", label: "Item", render: (r) => <code>{r.itemId.slice(0, 8)}</code> },
-  { key: "substituteId", label: "Substitute", render: (r) => <code>{r.substituteId.slice(0, 8)}</code> },
+  // GAP-INVENTORY-SUBSTITUTES-03: names + links; the full id stays in the tooltip for support.
+  { key: "itemId", label: "Item", render: (r) => <Link href={`/inventory/${r.itemId}`} title={r.itemId}>{itemLabel(r)}</Link> },
+  {
+    key: "substituteId",
+    label: "Substitute",
+    render: (r) => (
+      <Link href={`/inventory/${r.substituteId}`} title={r.substituteId}>
+        {itemLabel({ itemId: r.substituteId, itemName: r.substituteName, itemSku: r.substituteSku })}
+      </Link>
+    ),
+  },
   { key: "priority", label: "Priority", align: "right" },
-  { key: "conversionFactor", label: "Conversion", align: "right" },
+  { key: "conversionFactor", label: "Conversion", align: "right", render: (r) => formatConversionFactor(r.conversionFactor) },
   { key: "createdAt", label: "Created", render: (r) => formatIndianDate(r.createdAt) },
 ];
 

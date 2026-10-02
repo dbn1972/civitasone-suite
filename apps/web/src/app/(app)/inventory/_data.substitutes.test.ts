@@ -46,3 +46,21 @@ describe("GAP-INVENTORY-SUBSTITUTES-02: getInventorySubstitutes coverage", () =>
     expect(res.failedCount).toBe(2);
   });
 });
+
+describe("GAP-INVENTORY-SUBSTITUTES-03: names from the item master", () => {
+  it("names both the item and the substitute; a substitute outside the item page stays null", async () => {
+    fetchJsonMock.mockImplementation(async (...args: unknown[]) => {
+      const path = String(args[0]);
+      if (path.startsWith("/api/v1/inventory/items?")) {
+        return { data: [{ id: "a", name: "Gel pen", sku: "PEN-01" }, { id: "b", name: "Ball pen", sku: null }], source: "api" };
+      }
+      return path.includes("/items/a/")
+        ? { data: [{ id: "s1", itemId: "a", substituteId: "b" }, { id: "s2", itemId: "a", substituteId: "zzz" }], source: "api" }
+        : { data: [], source: "api" };
+    });
+    const res = await getInventorySubstitutes();
+    expect(res.data[0]).toMatchObject({ itemName: "Gel pen", itemSku: "PEN-01", substituteName: "Ball pen", substituteSku: null });
+    expect(res.data[1]).toMatchObject({ substituteName: null });
+  });
+});
+

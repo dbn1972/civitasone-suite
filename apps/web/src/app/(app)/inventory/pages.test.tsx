@@ -214,8 +214,8 @@ describe("GAP-INVENTORY-RECONCILE-02: Net uses signed quantities", () => {
       source: "api",
       data: [e("1", "receipt", 10, "in"), e("2", "issue", 3, "out"), e("3", "adjustment", 2, "out"), e("4", "other", 99, "in")],
     });
-    render(await InventoryReconcilePage());
-    const net = screen.getByText("Net Balance (Qty)").closest(".stat");
+    render(await InventoryReconcilePage({}));
+    const net = screen.getByText("Net Movement (Qty)").closest(".stat");
     expect(net?.textContent).toContain("104"); // 10 - 3 - 2 + 99: Net = sum of signedQuantity over ALL rows
     expect(screen.getByText("Unclassified rows").closest(".stat")?.textContent).toContain("1");
     const out = screen.getByText("Total Out (Qty)").closest(".stat");

@@ -54,7 +54,7 @@ export default async function Page() {
         { href: "/inventory/goods-returns", label: "Goods Returns", note: "Returned/rejected stock with QC gate", badge: countBadge(pendingQc, "pending QC", returnsRes.data.length >= INVENTORY_LIST_LIMIT) },
         { href: "/inventory/substitutes", label: "Substitutes", note: "Allowed replacement items and conversion factors" },
         { href: "/inventory/list", label: "Stock Items", note: "All SKUs and current stock levels, and cycle counts awaiting approval", badge: countBadge(pendingCounts, "counts to approve", countsRes.data.length >= INVENTORY_LIST_LIMIT) },
-        { href: "/inventory/reconcile", label: "Reconciliation", note: "Verify ledger vs. physical stock movements" },
+        { href: "/inventory/reconcile", label: "Stock Movements Summary", note: "Receipts, issues and adjustments from the stock ledger" },
       ]}
     >
       {lowFailed ? (

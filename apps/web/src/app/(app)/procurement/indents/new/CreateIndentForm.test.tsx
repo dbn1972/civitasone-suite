@@ -10,6 +10,7 @@ import { CreateIndentForm } from "./CreateIndentForm";
 async function fillOneLineItem() {
   fireEvent.change(await screen.findByLabelText("Item code, row 1"), { target: { value: "PEN-001" } });
   fireEvent.change(screen.getByLabelText("Description, row 1"), { target: { value: "Ball pens" } });
+  fireEvent.change(screen.getByLabelText("Unit price, row 1"), { target: { value: "10" } });
 }
 
 describe("CreateIndentForm — purpose is required and actually sent (regression)", () => {
@@ -127,3 +128,57 @@ describe("CreateIndentForm — purpose is required and actually sent (regression
     expect(alert.textContent).not.toMatch(/at Object\.<anonymous>/);
   });
 });
+
+describe("CreateIndentForm: unit price 0 asks for confirmation (GAP-INVENTORY-LOW-STOCK-03)", () => {
+  beforeEach(() => {
+    vi.restoreAllMocks();
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "11111111-1111-1111-1111-111111111111", status: "accepted" }), {
+        status: 202,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+  });
+
+  async function fillUnpriced() {
+    fireEvent.change(await screen.findByLabelText("Item code, row 1"), { target: { value: "PEN-001" } });
+    fireEvent.change(screen.getByLabelText("Description, row 1"), { target: { value: "Ball pens" } });
+    fireEvent.change(screen.getByLabelText("Purpose / justification *"), { target: { value: "Replenish stock" } });
+  }
+
+  it("warns on the first submit without calling the API, and submits on the second", async () => {
+    render(<CreateIndentForm />);
+    await fillUnpriced();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/no unit price/i));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+  });
+
+  it("editing a line after the warning asks again", async () => {
+    render(<CreateIndentForm />);
+    await fillUnpriced();
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Description, row 1"), { target: { value: "Ball pens blue" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/no unit price/i));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("a priced line submits straight away", async () => {
+    render(<CreateIndentForm />);
+    await fillUnpriced();
+    fireEvent.change(screen.getByLabelText("Unit price, row 1"), { target: { value: "12.5" } });
+    fireEvent.click(screen.getByRole("button", { name: "Submit for approval" }));
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledTimes(1));
+  });
+
+  it("shows a note when the prefill was truncated", () => {
+    render(<CreateIndentForm initialItem={{ itemCode: "A", description: "d", quantity: 1, unitPrice: 0 }} prefillTruncated />);
+    expect(screen.getByRole("note")).toHaveTextContent(/shortened/i);
+  });
+});
+

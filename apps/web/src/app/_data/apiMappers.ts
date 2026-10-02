@@ -1002,6 +1002,7 @@ export function mapStockLedgerEntries(payload: unknown): StockLedgerEntry[] | nu
     const unitCost = parseMinor(row.rateMinor) ?? 0;
     mapped.push({
       id,
+      ...(itemId ? { itemId } : {}),
       itemCode: itemId?.slice(0, 8).toUpperCase() ?? id.slice(0, 8),
       itemName: toText(row.itemName) ?? itemId?.slice(0, 8) ?? "Item",
       date: toText(row.postingDate)?.slice(0, 10) ?? toText(row.createdAt)?.slice(0, 10) ?? "—",
