@@ -89,6 +89,9 @@ describe("MapHeadOfAccountPage", () => {
     fireEvent.change(screen.getByLabelText("Head of account"), { target: { value: "acc-1" } });
     fireEvent.change(screen.getByLabelText("PFMS HoA code"), { target: { value: "123456789012345678" } });
     fireEvent.click(screen.getByRole("button", { name: /save hoa code/i }));
+    // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01: saving now goes through a confirm dialog with a reason.
+    fireEvent.change(await screen.findByLabelText("Reason for changing PFMS HoA code"), { target: { value: "Aligning with PFMS mapping" } });
+    fireEvent.click(screen.getByRole("button", { name: "Change HoA code" }));
 
     // The map flow's banner is role="status" regardless of error state
     // (pre-existing, out of scope here -- this fix is about message
@@ -96,5 +99,70 @@ describe("MapHeadOfAccountPage", () => {
     const banner = await screen.findByRole("status");
     await waitFor(() => expect(banner).toHaveTextContent(/couldn't save/i));
     expect(banner.textContent).not.toMatch(/\b500\b/);
+  });
+
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01
+  it("shows the head's current HoA code and sends the old->new change with a reason only after confirmation", async () => {
+    const OLD = "210100101010101010";
+    const NEW = "123456789012345678";
+    const calls: { url: string; method?: string; body?: string }[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (url, init) => {
+      calls.push({ url: String(url), method: init?.method, body: init?.body as string | undefined });
+      if (init?.method === "PATCH") return new Response(JSON.stringify({ status: "updated" }), { status: 200 });
+      return new Response(JSON.stringify({ data: [{ id: "acc-1", code: "2110", name: "Sundry Creditors", level: 0, hoaCode: OLD }] }), { status: 200 });
+    });
+
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2110 · Sundry Creditors").length).toBeGreaterThan(0));
+    fireEvent.change(screen.getByLabelText("Head of account"), { target: { value: "acc-1" } });
+    expect(screen.getByText(OLD)).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("PFMS HoA code"), { target: { value: NEW } });
+    fireEvent.click(screen.getByRole("button", { name: /save hoa code/i }));
+
+    // Nothing is sent until the dialog is confirmed with a reason.
+    expect(calls.some((c) => c.method === "PATCH")).toBe(false);
+    const confirm = await screen.findByRole("button", { name: "Change HoA code" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Reason for changing PFMS HoA code"), { target: { value: "Aligning with PFMS mapping" } });
+    expect(confirm).not.toBeDisabled();
+    fireEvent.click(confirm);
+
+    await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
+    const patch = calls.find((c) => c.method === "PATCH")!;
+    expect(JSON.parse(patch.body!)).toEqual({ hoaCode: NEW, reason: "Aligning with PFMS mapping" });
+  });
+
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02
+  it("requires a parent head for a minor head and sends parentId", async () => {
+    const posts: string[] = [];
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (_url, init) => {
+      if (init?.method === "POST") {
+        posts.push(init.body as string);
+        return new Response(JSON.stringify({ id: "new" }), { status: 201 });
+      }
+      return new Response(JSON.stringify({ data: [
+        { id: "maj-1", code: "2000", name: "Liabilities", level: 0 },
+        { id: "min-1", code: "2100", name: "Creditors", level: 1 },
+      ] }), { status: 200 });
+    });
+
+    render(<MapHeadOfAccountPage />);
+    await waitFor(() => expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0));
+
+    fireEvent.change(screen.getByLabelText("Code"), { target: { value: "2101" } });
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Trade Creditors" } });
+    // Major level: no parent field.
+    expect(screen.queryByLabelText("Parent head")).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("Level"), { target: { value: "1" } });
+    const parent = screen.getByLabelText("Parent head");
+    // Only heads exactly one level up are offered as a parent.
+    expect(screen.getAllByText("2000 · Liabilities").length).toBeGreaterThan(0);
+    expect(parent.querySelectorAll("option").length).toBe(2); // placeholder + the one major head
+    expect(screen.getByRole("button", { name: /create head/i })).toBeDisabled();
+
+    fireEvent.change(parent, { target: { value: "maj-1" } });
+    fireEvent.click(screen.getByRole("button", { name: /create head/i }));
+    await waitFor(() => expect(posts.length).toBe(1));
+    expect(JSON.parse(posts[0]!)).toMatchObject({ code: "2101", level: 1, parentId: "maj-1" });
   });
 });

@@ -1,19 +1,28 @@
-import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getFinanceChallanById } from "@/app/_data/loaders";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
 /**
- * Challan detail. Previously 100% hardcoded fake data with `params.id` never
- * read — now wired to the real GET /v1/finance/challans/:id loader (same one
- * the challan register list already uses for its row links). That backend
- * route does not exist yet (see FinanceChallanSummary's "no live GET route"
- * note in packages/types), so today this honestly falls into the empty state
- * below; once finance-service ships the route, real data flows through
- * automatically with no further frontend change.
+ * Challan detail, wired to GET /v1/finance/challans/:id (finance-service
+ * treasury/routes.ts -- tenant-scoped, 404 for an unknown id). Previously this
+ * page was 100% hardcoded fake data with `params.id` never read.
+ *
+ * GAP-FINANCE-REVENUE-CHALLANS-DETAIL-02: only a real 404 (or an ok response
+ * with no record) means "not found". Any other failed load is an outage the
+ * user can retry, and a 403 is a permission decision -- not "may not exist".
  */
 export default async function ChallanDetailPage({ params }: { params: { id: string } }) {
-  const { data: challan, source } = await getFinanceChallanById(params.id);
+  const result = await getFinanceChallanById(params.id);
+  const { data: challan, source, status } = result;
+
+  if (source === "error" && status !== 404) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Challan Detail" back="/finance/revenue/challans" />
+        <LoadErrorState result={result} area="challan" backHref="/finance/revenue/challans" />
+      </div>
+    );
+  }
 
   if (!challan) {
     return (
@@ -22,7 +31,7 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
         <EmptyState
           icon="🧾"
           title="Challan detail not available"
-          message="This challan may not exist, or challan detail lookup isn't available yet. Check the challan register for the current list."
+          message="This challan may not exist. Check the challan register for the current list."
         />
       </div>
     );
@@ -34,7 +43,6 @@ export default async function ChallanDetailPage({ params }: { params: { id: stri
         title={`Challan ${challan.challanNo}`}
         subtitle={challan.depositor}
         back="/finance/revenue/challans"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
         <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={formatMoney(challan.amountMinor)} />

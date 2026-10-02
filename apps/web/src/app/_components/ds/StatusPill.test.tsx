@@ -265,3 +265,24 @@ describe("GAP-HR-TRAINING-NOMINATIONS-01: training nomination status keys", () =
     expect(pillTone(status)).toBe(tone);
   });
 });
+
+// GAP-FINANCE-TREASURY-CHEQUES-01
+describe("StatusPill cheque register statuses", () => {
+  it.each([
+    ["bounced", "bad"],
+    ["stale", "bad"],
+    ["presented", "warn"],
+    ["issued", "info"],
+    ["cleared", "good"],
+  ])("%s renders the %s tone", (status, tone) => {
+    expect(pillTone(status)).toBe(tone);
+  });
+
+  it("an explicit variant overrides the global map (GAP-FINANCE-AUDIT-PARAS-01)", () => {
+    const { container } = render(<StatusPill status="open" variant="bad" />);
+    const el = container.querySelector(".pill");
+    expect(el?.classList.contains("bad")).toBe(true);
+    expect(el?.classList.contains("good")).toBe(false);
+    expect(el?.textContent).toBe("Open");
+  });
+});

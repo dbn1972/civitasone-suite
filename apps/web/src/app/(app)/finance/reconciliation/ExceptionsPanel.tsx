@@ -57,6 +57,16 @@ function exceptionActionExceptionMessage(): string {
   return `${human.what} ${human.next}`;
 }
 
+/**
+ * GAP-FINANCE-RECONCILIATION-02: one formatter for a break value, shared by
+ * the table columns and the confirm dialog so they can never disagree.
+ * Amount-typed fields are paise -> formatMoney; everything else is raw.
+ */
+export function formatBreakValue(row: Pick<ExceptionRow, "fieldType">, value: string | null): string {
+  if (value == null) return "—";
+  return row.fieldType === "amount" ? formatMoney(value) : value;
+}
+
 export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) {
   const router = useRouter();
   const [pending, setPending] = useState<{ row: ExceptionRow; action: ExceptionAction } | null>(null);
@@ -96,15 +106,13 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
       key: "sourceValue" as const,
       label: "Source Value",
       align: "right" as const,
-      render: (row: ExceptionRow) =>
-        row.fieldType === "amount" && row.sourceValue != null ? formatMoney(row.sourceValue) : row.sourceValue ?? "—",
+      render: (row: ExceptionRow) => formatBreakValue(row, row.sourceValue),
     },
     {
       key: "targetValue" as const,
       label: "Target Value",
       align: "right" as const,
-      render: (row: ExceptionRow) =>
-        row.fieldType === "amount" && row.targetValue != null ? formatMoney(row.targetValue) : row.targetValue ?? "—",
+      render: (row: ExceptionRow) => formatBreakValue(row, row.targetValue),
     },
     {
       key: "deltaMinor" as const,
@@ -188,6 +196,21 @@ export function ExceptionsPanel({ exceptions }: { exceptions: ExceptionRow[] }) 
               {ACTION_LABEL[pending.action]} exception <strong>{pending.row.breakKey}</strong> ({pending.row.breakType}
               {pending.row.field ? `, field "${pending.row.field}"` : ""}) from provider{" "}
               <strong>{pending.row.provider}</strong>.
+              <dl style={{ margin: "12px 0 0", display: "grid", gridTemplateColumns: "max-content 1fr", gap: "4px 16px" }}>
+                <dt>Source value</dt>
+                <dd style={{ margin: 0 }}>{formatBreakValue(pending.row, pending.row.sourceValue)}</dd>
+                <dt>Target value</dt>
+                <dd style={{ margin: 0 }}>{formatBreakValue(pending.row, pending.row.targetValue)}</dd>
+                <dt>Delta</dt>
+                <dd style={{ margin: 0 }}>
+                  <strong>{pending.row.deltaMinor == null ? "—" : formatMoney(pending.row.deltaMinor)}</strong>
+                </dd>
+              </dl>
+              {pending.action === "write_off" && pending.row.deltaMinor != null ? (
+                <p style={{ margin: "8px 0 0" }}>
+                  You are writing off <strong>{formatMoney(pending.row.deltaMinor)}</strong>.
+                </p>
+              ) : null}
             </>
           ) : null
         }

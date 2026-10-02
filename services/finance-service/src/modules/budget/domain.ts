@@ -7,6 +7,28 @@ export class DomainError extends Error {
   }
 }
 
+/**
+ * GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: a minor (level 1) / sub-minor (level 2)
+ * head must hang under a head exactly one level above it; a major head
+ * (level 0) has no parent. `parent` is the looked-up (tenant-scoped) head, or
+ * null when no parent was supplied / it was not found.
+ */
+export function assertValidHeadParent(
+  level: number,
+  parentSupplied: boolean,
+  parent: { level: number } | null,
+): void {
+  if (level === 0) {
+    if (parentSupplied) throw new DomainError("HEAD_PARENT_NOT_ALLOWED", "A major head cannot have a parent head");
+    return;
+  }
+  if (!parentSupplied) throw new DomainError("HEAD_PARENT_REQUIRED", "A minor or sub-minor head needs a parent head");
+  if (!parent) throw new DomainError("HEAD_PARENT_NOT_FOUND", "Parent head not found");
+  if (parent.level !== level - 1) {
+    throw new DomainError("HEAD_PARENT_LEVEL_MISMATCH", "Parent head must be exactly one level above the new head");
+  }
+}
+
 export type SanctionStatus = "draft" | "approved" | "exhausted" | "cancelled";
 
 export interface BudgetAvailability {

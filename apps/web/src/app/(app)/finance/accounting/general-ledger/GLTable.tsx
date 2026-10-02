@@ -1,7 +1,9 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { DataTable, Segmented, EmptyState } from "../../../../_components/ds";
+import { DataTable, Segmented, EmptyState, RefreshErrorState, StatGrid, StatCard, Card } from "../../../../_components/ds";
+import { toHumanError } from "@/lib/messages";
+import { computeGlStats } from "./glStats";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PrintDocumentLink } from "../../../../_components/PrintDocumentLink";
 import type { GLEntrySummary } from "@civitasone/types";
@@ -56,10 +58,34 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
   // debit/credit are minor-unit (paise) decimal strings — sum as BigInt so
   // formatMoney() (which expects minor units) renders the right scale and
   // large ledgers don't drift under float addition.
+  const stats = computeGlStats(rows);
   const totalDebit = filtered.reduce((s, e) => s + BigInt((e.debit as string) || "0"), 0n);
   const totalCredit = filtered.reduce((s, e) => s + BigInt((e.credit as string) || "0"), 0n);
 
+  // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-01: a failed load with nothing cached
+  // must NOT read as an empty (and "Balanced") ledger -- show a retry state
+  // instead of zeroed stat cards and a "No entries" table.
+  if (provenance === "error-no-data") {
+    return <RefreshErrorState error={toHumanError("load", { area: "general ledger" })} backHref="/finance" />;
+  }
+
   return (
+    <>
+      <StatGrid>
+        <StatCard icon="📒" iconBg="#e7edfd" label="Vouchers" value={stats.vouchers} />
+        <StatCard icon="🏛️" iconBg="#eff6ff" label="Accounts Active" value={stats.accountsActive} />
+        <StatCard icon="📤" iconBg="#fef3f2" label="Total Debit" value={formatMoney(stats.totalDebit)} />
+        <StatCard
+          icon="📥"
+          iconBg="#ecfdf3"
+          label="Total Credit"
+          value={formatMoney(stats.totalCredit)}
+          {...(stats.balance === null
+            ? {}
+            : { delta: stats.balance === "balanced" ? "Balanced" : "Unbalanced", up: stats.balance === "balanced" })}
+        />
+      </StatGrid>
+      <Card title="General ledger — all fiscal years">
     <div>
       {/* UX-012: this badge is the ONLY place that reports data provenance for
           the rows shown below — it reads the same useSeededResource call as
@@ -153,5 +179,7 @@ export function GLTable({ entries, source = "api" }: GLTableProps) {
         </div>
       )}
     </div>
+      </Card>
+    </>
   );
 }

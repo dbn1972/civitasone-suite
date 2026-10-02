@@ -7,9 +7,21 @@ import type { CashBookEntry } from "@civitasone/types";
 
 type Entry = CashBookEntry;
 
-export function CashBankTable({ entries, source = "api" }: { entries: Entry[]; source?: "api" | "error" }) {
+export function CashBankTable({
+  entries,
+  source = "api",
+  cacheKey = "finance.cashbook",
+  period = "cash & bank book entries",
+}: {
+  entries: Entry[];
+  source?: "api" | "error";
+  /** Per-filter cache key so one account/range never shows another's cached rows. */
+  cacheKey?: string;
+  /** Names the selected account + date range in the empty state. */
+  period?: string;
+}) {
   const { data: rows, provenance, offline, cachedAt } = useSeededResource<Entry[]>(
-    "finance.cashbook",
+    cacheKey,
     entries,
     source,
     (d) => d.length === 0,
@@ -41,7 +53,7 @@ export function CashBankTable({ entries, source = "api" }: { entries: Entry[]; s
         exportFilename="cash-bank-book"
         emptyIcon="📖"
         emptyTitle="No entries"
-        emptyMessage="No cash & bank book entries found for this period."
+        emptyMessage={`No ${period} found.`}
       />
     </>
   );

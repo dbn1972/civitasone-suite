@@ -1,51 +1,52 @@
-import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState } from "@/app/_components/ds";
-import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
+import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { getFinanceChequeById } from "@/app/_data/loaders";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import type { FinanceInstrumentSummary } from "@civitasone/types";
 
-function field(data: Record<string, unknown>, ...keys: string[]): string {
-  for (const key of keys) {
-    const v = data[key];
-    if (typeof v === "string" && v.length > 0) return v;
-    if (typeof v === "number") return String(v);
-  }
-  return "—";
-}
-
-/** Best-effort minor-unit amount from a loosely-typed record (number | numeric string | bigint). */
-function amountMinorOf(data: Record<string, unknown>, ...keys: string[]): number | undefined {
-  for (const key of keys) {
-    const v = data[key];
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "bigint") return Number(v);
-    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
-  }
-  return undefined;
-}
-
-type TimelineRow = { date: string; event: string; actor: string };
+type TimelineRow = { date: string; event: string };
 
 /** Built from the instrument's real lifecycle timestamps — issued -> presented -> cleared|bounced|cancelled. */
-function timelineOf(data: Record<string, unknown>): TimelineRow[] {
+function timelineOf(c: FinanceInstrumentSummary): TimelineRow[] {
   const rows: TimelineRow[] = [];
-  const issueDate = field(data, "issueDate");
-  if (issueDate !== "—") rows.push({ date: formatIndianDate(issueDate), event: "Instrument issued", actor: "—" });
-  const presentedAt = field(data, "presentedAt");
-  if (presentedAt !== "—") rows.push({ date: formatIndianDate(presentedAt), event: "Presented at bank", actor: "—" });
-  const clearedAt = field(data, "clearedAt");
-  if (clearedAt !== "—") rows.push({ date: formatIndianDate(clearedAt), event: "Cleared by bank", actor: "—" });
-  const bouncedAt = field(data, "bouncedAt");
-  if (bouncedAt !== "—") {
-    const reason = field(data, "bounceReason");
-    rows.push({ date: formatIndianDate(bouncedAt), event: reason !== "—" ? `Bounced — ${reason}` : "Bounced", actor: "—" });
+  if (c.issueDate) rows.push({ date: formatIndianDate(c.issueDate), event: "Instrument issued" });
+  if (c.presentedAt) rows.push({ date: formatIndianDate(c.presentedAt), event: "Presented at bank" });
+  if (c.clearedAt) rows.push({ date: formatIndianDate(c.clearedAt), event: "Cleared by bank" });
+  if (c.bouncedAt) {
+    rows.push({ date: formatIndianDate(c.bouncedAt), event: c.bounceReason ? `Bounced — ${c.bounceReason}` : "Bounced" });
   }
-  const cancelledAt = field(data, "cancelledAt");
-  if (cancelledAt !== "—") rows.push({ date: formatIndianDate(cancelledAt), event: "Cancelled", actor: "—" });
+  if (c.cancelledAt) rows.push({ date: formatIndianDate(c.cancelledAt), event: "Cancelled" });
   return rows;
 }
 
+/**
+ * Cheque / DD detail. Reads the typed FinanceInstrumentSummary contract
+ * (finance-service instruments routes) directly.
+ *
+ * GAP-FINANCE-TREASURY-CHEQUES-DETAIL-02: only a real 404 means "not found";
+ * any other failed load is an outage the user can retry, and a 403 is a
+ * permission decision.
+ *
+ * GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01: this page used to print
+ * `accountNo ?? bankAccountNumber` in clear text to every finance role. The
+ * instrument API carries no bank account NUMBER at all (only an opaque
+ * bankAccountId), so that row could only ever show "—" today -- and would have
+ * leaked the full number to audit/budget roles the day a backend added the
+ * field. The row is removed and the page reads typed fields only, so an
+ * account number can never be rendered here by accident. A role-gated, audited
+ * "reveal" needs a backend endpoint that does not exist yet.
+ */
 export default async function ChequeDetailPage({ params }: { params: { id: string } }) {
-  const { data: cheque, source } = await getFinanceChequeById(params.id);
+  const result = await getFinanceChequeById(params.id);
+  const { data: cheque, source, status } = result;
+
+  if (source === "error" && status !== 404) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title="Cheque Detail" back="/finance/treasury/cheques" />
+        <LoadErrorState result={result} area="cheque" backHref="/finance/treasury/cheques" />
+      </div>
+    );
+  }
 
   if (!cheque) {
     return (
@@ -56,45 +57,39 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
     );
   }
 
-  const chequeNo = field(cheque, "instrumentNo", "chequeNo");
-  const payee = field(cheque, "payee");
-  const status = field(cheque, "status");
-  const bankName = field(cheque, "bankName", "bank");
-  const issueDate = field(cheque, "issueDate", "date");
-  const amountMinor = amountMinorOf(cheque, "amountMinor", "amount");
   const timeline = timelineOf(cheque);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
-        title={`Cheque #${chequeNo}`}
-        subtitle={payee !== "—" ? payee : undefined}
+        title={`Cheque #${cheque.instrumentNo}`}
+        subtitle={cheque.payee || undefined}
         back="/finance/treasury/cheques"
-        actions={source === "error" ? <DataSourceBadge source={source} /> : null}
       />
       <StatGrid>
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={amountMinor !== undefined ? formatMoney(amountMinor) : "—"} />
-        <StatCard icon="🏦" iconBg="#e7edfd" label="Bank" value={bankName} />
-        <StatCard icon="📅" iconBg="#fffaeb" label="Issue Date" value={formatIndianDate(issueDate)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value={status} />
+        <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={formatMoney(cheque.amountMinor)} />
+        <StatCard icon="🏦" iconBg="#e7edfd" label="Bank" value={cheque.bankName} />
+        <StatCard icon="📅" iconBg="#fffaeb" label="Issue Date" value={formatIndianDate(cheque.issueDate)} />
+        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value={cheque.status} />
       </StatGrid>
 
       <Card title="Cheque Details" padding>
         <div className="fields">
-          <div className="field"><span className="label">Cheque No</span><span className="mono">{chequeNo}</span></div>
-          <div className="field"><span className="label">Payee</span><span>{payee}</span></div>
-          <div className="field"><span className="label">Amount</span><span>{amountMinor !== undefined ? formatMoney(amountMinor) : "—"}</span></div>
-          <div className="field"><span className="label">Bank & Branch</span><span>{bankName} — {field(cheque, "branch")}</span></div>
-          <div className="field"><span className="label">Account No</span><span className="mono">{field(cheque, "accountNo", "bankAccountNumber")}</span></div>
-          <div className="field"><span className="label">Status</span><StatusPill status={status} /></div>
-          <div className="field"><span className="label">Issued By</span><span>{field(cheque, "issuedBy")}</span></div>
-          <div className="field"><span className="label">Cleared Date</span><span>{formatIndianDate(field(cheque, "clearedAt", "clearedDate"))}</span></div>
-          <div className="field"><span className="label">Purpose</span><span>{field(cheque, "purpose", "remarks", "narration")}</span></div>
+          <div className="field"><span className="label">Cheque No</span><span className="mono">{cheque.instrumentNo}</span></div>
+          <div className="field"><span className="label">Type</span><span>{cheque.instrumentType.toUpperCase()}</span></div>
+          <div className="field"><span className="label">Payee</span><span>{cheque.payee}</span></div>
+          <div className="field"><span className="label">Amount</span><span>{formatMoney(cheque.amountMinor)}</span></div>
+          <div className="field"><span className="label">Bank</span><span>{cheque.bankName}</span></div>
+          <div className="field"><span className="label">Status</span><StatusPill status={cheque.status} /></div>
+          <div className="field"><span className="label">Cleared Date</span><span>{formatIndianDate(cheque.clearedAt)}</span></div>
+          {cheque.bounceReason ? (
+            <div className="field"><span className="label">Bounce Reason</span><span>{cheque.bounceReason}</span></div>
+          ) : null}
         </div>
       </Card>
 
       <Card title="Clearance Timeline" padding>
-        {timeline.length === 0 ? ( // ux-001-ok: `timeline` is derived purely from `cheque`, only reachable past the earlier `if (!cheque) return` guard above (source==="error" implies a null cheque per the loader contract) -- this is a genuinely history-free instrument, never a masked fetch failure
+        {timeline.length === 0 ? (
           <EmptyState icon="🕒" title="No timeline recorded" message="No lifecycle events have been recorded for this instrument." />
         ) : (
           <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Cheque clearance timeline">
@@ -102,7 +97,6 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
               <li key={i} style={{ display: "flex", gap: 12, padding: "8px 0", borderBottom: i < timeline.length - 1 ? "1px solid var(--border)" : "none" }}>
                 <span style={{ minWidth: 100, fontSize: 13, color: "var(--muted)" }}>{item.date}</span>
                 <span style={{ flex: 1 }}>{item.event}</span>
-                <span style={{ fontSize: 13, color: "var(--muted)" }}>{item.actor}</span>
               </li>
             ))}
           </ol>

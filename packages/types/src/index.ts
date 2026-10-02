@@ -551,6 +551,10 @@ export interface PayrollRunSummary {
 }
 
 export interface AccountSummary {
+  /** Head id (uuid) -- present on the live accounts feed; lets callers resolve parentId links. */
+  id?: string;
+  /** Parent head id, or null/absent for a top-level head. A head that is some other head's parent is a non-postable group head. */
+  parentId?: string | null;
   code: string;
   name: string;
   type: 'asset' | 'liability' | 'equity' | 'income' | 'expense';

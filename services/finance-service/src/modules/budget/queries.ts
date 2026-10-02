@@ -35,6 +35,9 @@ export type AccountListItem = {
   code: string;
   hoaCode: string | null;
   name: string;
+  /** 0 = major, 1 = minor, 2 = sub-minor */
+  level: number;
+  parentId: string | null;
   type: "asset" | "liability" | "equity" | "income" | "expense";
   currency: string;
   balanceDisplay: string;
@@ -109,6 +112,10 @@ export async function listAccounts(tenantId: string, limit: number): Promise<Acc
           code: h.code,
           hoaCode: h.hoaCode ?? null,
           name: h.name,
+          // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-02: hierarchy placement, so the
+          // create form can offer only heads one level up as a parent.
+          level: h.level,
+          parentId: h.parentId ?? null,
           type,
           currency: "INR",
           balanceDisplay: formatBalanceMinor(balanceMinor),

@@ -6,6 +6,7 @@ import { HttpError } from "../../shared/context.js";
 import { assertValidFY, assertReappropriationValid, assertSanctionApproverDistinct, DomainError } from "./domain.js";
 import * as repo from "./repo.js";
 import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import type { CreateBudgetBody, ReappropriateBody, CreateSanctionBody, UpdateHeadHoABody, RejectSanctionBody, SubmitReappropriationBody } from "./validators.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
@@ -69,7 +70,7 @@ export async function createSanction(ctx: RequestContext, body: CreateSanctionBo
 
 export async function updateHeadHoA(ctx: RequestContext, id: string, body: UpdateHeadHoABody): Promise<void> {
   const head = await repo.findHeadById(id);
-  if (!head || head.tenantId !== ctx.tenantId) throw new Error("head not found");
+  if (!head || head.tenantId !== ctx.tenantId) throw new HttpError(404, "NOT_FOUND", "head not found");
   // FIX: this previously wrote via the bare `db` import instead of an open
   // db.transaction(), so budget.finance_heads' FORCE ROW LEVEL SECURITY policy
   // saw current_tenant_id() as NULL (no app.tenant_id GUC set) and the UPDATE
@@ -79,6 +80,17 @@ export async function updateHeadHoA(ctx: RequestContext, id: string, body: Updat
   // same repo.updateHead(tx, ...) call in db.transaction() for this reason.
   await db.transaction(async (tx) => {
     await repo.updateHead(tx, id, { hoaCode: body.hoaCode, updatedBy: ctx.actorId });
+    // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01: audit the old -> new HoA change
+    // with the actor's stated reason (same outbox, same tx as the write).
+    await enqueue(tx, {
+      topic: "audit.event.record", eventType: "audit.event.record",
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+      payload: {
+        service: "finance", action: "head_hoa_changed", resourceType: "finance_head", resourceId: id,
+        outcome: "success",
+        details: { headCode: head.code, oldHoaCode: head.hoaCode ?? null, newHoaCode: body.hoaCode, reason: body.reason },
+      },
+    });
   });
   await cache.invalidate(cache.makeKey(ctx.tenantId, "accounts", "list:50"));
 }

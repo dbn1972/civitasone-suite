@@ -4,6 +4,9 @@ import { PFMS_HOA_REGEX } from "../../shared/pfms.js";
 
 export const updateHeadHoABody = z.object({
   hoaCode: z.string().regex(PFMS_HOA_REGEX, "HoA must be exactly 18 numeric digits (PFMS format)"),
+  // GAP-FINANCE-CHART-OF-ACCOUNTS-NEW-01: HoA codes drive PFMS payment and
+  // budget mapping, so every change carries a recorded reason (audit trail).
+  reason: z.string().trim().min(5, "A reason of at least 5 characters is required").max(500),
 });
 export type UpdateHeadHoABody = z.infer<typeof updateHeadHoABody>;
 

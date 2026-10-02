@@ -7,6 +7,7 @@ import { PrintExportButton } from "../_components/PrintExportButton";
 import { FyFilter } from "../_components/FyFilter";
 import { formatMoney, formatPercent } from "@/lib/formatters";
 import { getTranslations } from "next-intl/server";
+import { currentFinancialYear, recentFinancialYears } from "@/lib/fiscalYear";
 
 const QUICK_LINKS = [
   { label: "Budget Formulation", href: "/finance/budget/formulation", icon: "📝" },
@@ -21,9 +22,14 @@ const QUICK_LINKS = [
   { label: "Payments", href: "/finance/payments", icon: "💳" },
 ];
 
-export default async function FinanceDashboardPage() {
+export default async function FinanceDashboardPage({ searchParams }: { searchParams?: { fy?: string } }) {
   const t = await getTranslations("financeDashboard");
-  const { data, source } = await getFinanceDashboard();
+  // GAP-FINANCE-DASHBOARD-02: ?fy= is validated against the selectable list
+  // (never forwarded raw) and drives the loader, so the FyFilter really changes
+  // the figures; the applied FY is shown in the subtitle.
+  const requestedFy = searchParams?.fy;
+  const fy = requestedFy && recentFinancialYears().includes(requestedFy) ? requestedFy : currentFinancialYear();
+  const { data, source } = await getFinanceDashboard(fy);
   // UX-013: `source` was already fetched but only wired to the badge below --
   // never to the stat values themselves, so a failed load rendered "0" /
   // "₹0.00" (data's zero-valued fallback defaults), indistinguishable from a
@@ -35,7 +41,7 @@ export default async function FinanceDashboardPage() {
     <>
       <PageHeader
         title={t("title")}
-        subtitle={t("subtitle")}
+        subtitle={`${t("subtitle")} · FY ${fy}`}
         help="finance"
         actions={
           <>

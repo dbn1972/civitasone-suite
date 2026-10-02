@@ -130,3 +130,22 @@ export function nonNegativeRupeesToMinorString(input: string): string | null {
   const [, wholePart, fracPart = ""] = match;
   return BigInt(`${wholePart}${fracPart.padEnd(2, "0")}`).toString();
 }
+
+/**
+ * GAP-FINANCE-JOURNAL-ENTRY-02: parse a journal-line amount typed in rupees.
+ * Blank -> 0n (an empty side of a debit/credit line is legitimately nil);
+ * a valid plain decimal with at most 2 fractional digits -> its paise as a
+ * bigint (no float maths); anything else (3+ decimals such as "0.285",
+ * negatives, exponents, "Infinity", thousands separators) -> null so the
+ * caller can show a field error instead of silently rounding a posting amount.
+ *
+ *   parseMinorOrZero("")      -> 0n
+ *   parseMinorOrZero("10.10") -> 1010n
+ *   parseMinorOrZero("0.285") -> null
+ *   parseMinorOrZero("1e5")   -> null
+ */
+export function parseMinorOrZero(input: string): bigint | null {
+  if (input.trim() === "") return 0n;
+  const minor = nonNegativeRupeesToMinorString(input);
+  return minor === null ? null : BigInt(minor);
+}

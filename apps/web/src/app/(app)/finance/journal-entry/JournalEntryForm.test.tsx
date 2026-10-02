@@ -165,4 +165,119 @@ describe("JournalEntryForm", () => {
       expect(alert.textContent).not.toMatch(/request failed/i);
     }
   });
+
+  // GAP-FINANCE-JOURNAL-ENTRY-01 / VOUCHERS-NEW-01
+  it("renders no form and no free-text account input when there are no accounts", () => {
+    render(<JournalEntryForm accounts={[]} />);
+    expect(screen.getByText("No accounts configured")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Account code/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Post Journal Entry" })).not.toBeInTheDocument();
+    expect(document.body.innerHTML).not.toContain("1000");
+    expect(document.body.innerHTML).not.toContain("2000");
+  });
+
+  it("does not offer inactive accounts and rejects a code that is not in the list", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<JournalEntryForm accounts={[...accounts, { code: "9999-old", name: "Closed", type: "asset", currency: "INR", balanceDisplay: "0", status: "inactive" }]} />);
+    expect(screen.queryByText(/9999-old/)).not.toBeInTheDocument();
+    fillBalancedLines();
+    // tamper: force a code that is not a postable account
+    const select = screen.getByLabelText("Account code, line 1") as HTMLSelectElement;
+    const opt = document.createElement("option");
+    opt.value = "NOPE"; opt.textContent = "NOPE";
+    select.appendChild(opt);
+    fireEvent.change(select, { target: { value: "NOPE" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    expect(screen.getByText("Select an account from the list.")).toBeInTheDocument();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  // GAP-FINANCE-JOURNAL-ENTRY-02
+  it("rejects an amount with more than 2 decimals instead of rounding it", () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    render(<JournalEntryForm accounts={accounts} />);
+    fillBalancedLines();
+    fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "0.285" } });
+    expect(screen.getAllByText("Enter an amount with at most 2 decimals.").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("totals 0.1 + 0.2 exactly and shows a lakh-grouped preview under the field", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "0.1" } });
+    fireEvent.change(screen.getByLabelText("Debit amount, line 2"), { target: { value: "0.2" } });
+    fireEvent.change(screen.getByLabelText("Credit amount, line 1"), { target: { value: "0.30" } });
+    expect(screen.getAllByText(formatMoney(30n)).length).toBeGreaterThanOrEqual(2); // both totals
+    fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "1234567.89" } });
+    expect(screen.getByText("= ₹12,34,567.89")).toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-VOUCHERS-NEW-02
+  it("keeps the success message visible after a 202 and does not navigate until the user chooses", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "jrn-1" }), { status: 202 }));
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", { value: { ...window.location, assign }, writable: true });
+
+    render(<JournalEntryForm accounts={accounts} redirectTo="/finance/accounting/general-ledger" />);
+    fillBalancedLines();
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+
+    await waitFor(() => expect(screen.getByText(/accepted for processing/)).toBeInTheDocument());
+    expect(assign).not.toHaveBeenCalled();
+    const link = screen.getByRole("link", { name: "View in General Ledger" });
+    expect(link.getAttribute("href")).toBe("/finance/accounting/general-ledger?posted=JV-TEST-001&state=queued");
+    expect(screen.getByRole("button", { name: "Post another" })).toBeInTheDocument();
+  });
+
+  it("shows 'posted successfully' with a GL link after a 201", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({}), { status: 201 }));
+    render(<JournalEntryForm accounts={accounts} redirectTo="/finance/accounting/general-ledger" />);
+    fillBalancedLines();
+    fireEvent.click(screen.getByRole("button", { name: "Post Journal Entry" }));
+    await waitFor(() => expect(screen.getByText("Post this journal entry?")).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText("Reason / authority for posting (maker-checker)"), { target: { value: "Month-end" } });
+    fireEvent.click(screen.getByRole("button", { name: "Post entry" }));
+    await waitFor(() => expect(screen.getByText("Journal entry posted successfully.")).toBeInTheDocument());
+    expect(screen.getByRole("link", { name: "View in General Ledger" }).getAttribute("href")).toContain("state=posted");
+  });
+
+  // Review M3: group heads (some other head's parent) are not postable.
+  it("does not offer group heads (heads that have children) in the account dropdown", () => {
+    render(
+      <JournalEntryForm
+        accounts={[
+          { id: "g1", code: "2000", name: "Liabilities", type: "liability", currency: "INR", balanceDisplay: "0", status: "active" },
+          { id: "c1", parentId: "g1", code: "2100", name: "Creditors", type: "liability", currency: "INR", balanceDisplay: "0", status: "active" },
+        ]}
+      />,
+    );
+    const select = screen.getByLabelText("Account code, line 1") as HTMLSelectElement;
+    const values = [...select.options].map((o) => o.value);
+    expect(values).toContain("2100");
+    expect(values).not.toContain("2000");
+  });
+
+  // Review M4: default posting date is the IST calendar date, not UTC.
+  it("defaults the posting date to the IST date (00:30 IST on 1 April is still 1 April)", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date("2026-03-31T19:00:00.000Z")); // 00:30 IST, 1 April 2026
+      render(<JournalEntryForm accounts={accounts} />);
+      expect((screen.getByLabelText("Posting Date") as HTMLInputElement).value).toBe("2026-04-01");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Review L1
+  it("explains commas instead of blaming decimals", () => {
+    render(<JournalEntryForm accounts={accounts} />);
+    fireEvent.change(screen.getByLabelText("Debit amount, line 1"), { target: { value: "1,00,000" } });
+    expect(screen.getAllByText(/remove the commas/).length).toBeGreaterThan(0);
+    expect(screen.queryByText("Enter an amount with at most 2 decimals.")).not.toBeInTheDocument();
+  });
 });

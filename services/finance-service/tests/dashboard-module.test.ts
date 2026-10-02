@@ -11,7 +11,7 @@
  *   4. No secrets in dashboard response shape
  */
 import { describe, it, expect } from "vitest";
-import { computeBudgetUtilisationPct } from "../src/modules/dashboard/queries.js";
+import { computeBudgetUtilisationPct, fyDateBounds } from "../src/modules/dashboard/queries.js";
 
 const DASHBOARD_ROLES = ["finance_officer", "finance_admin", "super_admin", "budget_officer"];
 const FORBIDDEN_ROLES = ["citizen", "employee", "hr_officer", "procurement_officer"];
@@ -95,5 +95,20 @@ describe("computeBudgetUtilisationPct (Issue #7)", () => {
 
   it("treats a negative/invalid sanctioned amount the same as absent (null, not a fabricated 0)", () => {
     expect(computeBudgetUtilisationPct(500000, -1)).toBeNull();
+  });
+});
+
+// GAP-FINANCE-DASHBOARD-02: ?fy= scopes the dashboard window.
+describe("fyDateBounds", () => {
+  it("maps a fiscal-year label to its 1 April - 31 March window", () => {
+    expect(fyDateBounds("2026-27")).toEqual({ start: "2026-04-01", end: "2027-03-31" });
+    expect(fyDateBounds("2024-25")).toEqual({ start: "2024-04-01", end: "2025-03-31" });
+    expect(fyDateBounds("2099-00")).toEqual({ start: "2099-04-01", end: "2100-03-31" });
+  });
+  it("rejects anything that is not a consecutive fiscal year", () => {
+    expect(fyDateBounds("2026-28")).toBeNull();
+    expect(fyDateBounds("2026")).toBeNull();
+    expect(fyDateBounds("2026-2027")).toBeNull();
+    expect(fyDateBounds("")).toBeNull();
   });
 });
