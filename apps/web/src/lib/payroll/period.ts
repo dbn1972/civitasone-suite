@@ -40,3 +40,16 @@ export function isValidFinancialYear(value: string | null | undefined): boolean 
   const start = Number(m[1]);
   return Number(m[2]) === (start + 1) % 100;
 }
+
+/**
+ * GAP-PAYROLL-COMPARISON-05: example periods for input placeholders / empty-state
+ * copy -- the previous and the current calendar month -- instead of a hard-coded
+ * (and quickly stale) year. Pure; pass `now` in tests.
+ */
+export function examplePeriods(now: Date = new Date()): { previous: string; current: string } {
+  const y = now.getFullYear();
+  const m = now.getMonth(); // 0-based
+  const fmt = (yy: number, mm0: number) => `${yy}-${String(mm0 + 1).padStart(2, "0")}`;
+  const prev = m === 0 ? fmt(y - 1, 11) : fmt(y, m - 1);
+  return { previous: prev, current: fmt(y, m) };
+}

@@ -2,6 +2,7 @@ import { cache } from "../../shared/infra.js";
 import * as repo from "./repo.js";
 import type { PayrollRunRow, PayrollSlipRow } from "./schema.js";
 import type { SlipWithRun } from "./repo.js";
+import { EMPLOYEE_VISIBLE_SLIP_STATUSES } from "../payslip-pdf/slip-gate.js";
 import { fetchEmployeeSummaries, fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
 
 /**
@@ -219,12 +220,10 @@ function formatPayPeriod(month: string): string {
   return (names[idx] ?? m) + " " + y;
 }
 
-export async function listSalarySlips(tenantId: string, limit: number) {
-  const [rows, empMap] = await Promise.all([
-    repo.listSlipsByTenant(tenantId, limit),
-    fetchEmployeeSummaries(tenantId),
-  ]);
-  return rows.map((r) => ({
+type SlipListRow = Awaited<ReturnType<typeof repo.listSlipsByTenant>>[number];
+
+function toSlipSummary(r: SlipListRow, empMap: Awaited<ReturnType<typeof fetchEmployeeSummaries>>) {
+  return {
     id: r.id,
     employeeId: r.employeeId,
     employeeName: empMap.get(r.employeeId)?.fullName ?? r.employeeNo,
@@ -234,6 +233,32 @@ export async function listSalarySlips(tenantId: string, limit: number) {
     deductions: Number(r.totalDeductionsMinor),
     net: Number(r.netPayMinor),
     status: (r.status === "paid" ? "paid" : r.status === "finalized" ? "finalized" : "draft") as "draft" | "finalized" | "paid",
+  };
+}
+
+export async function listSalarySlips(tenantId: string, limit: number) {
+  const [rows, empMap] = await Promise.all([
+    repo.listSlipsByTenant(tenantId, limit),
+    fetchEmployeeSummaries(tenantId),
+  ]);
+  return rows.map((r) => toSlipSummary(r, empMap));
+}
+
+/**
+ * GAP-PAYROLL-SALARY-SLIPS-04: ONE employee's own slips (same summary shape as
+ * the list). `employeeId` must come from the token's verified HRMS identity.
+ * Only final slips (paid / approved) are returned -- an employee must never see
+ * the net pay of a computed, held or exception run. No HRMS roster fetch: the
+ * list is the caller's own, so the name falls back to the slip's employee
+ * number and the department is "—" (the page shows neither).
+ */
+export async function listMySlips(tenantId: string, employeeId: string, limit: number, offset: number) {
+  const rows = await repo.listSlipsByTenant(tenantId, limit, { employeeId, offset, statuses: EMPLOYEE_VISIBLE_SLIP_STATUSES });
+  const none = new Map() as Awaited<ReturnType<typeof fetchEmployeeSummaries>>;
+  return rows.map((r) => ({
+    ...toSlipSummary(r, none),
+    // approved = run approved, money not yet disbursed: show as finalized, not draft.
+    status: (r.status === "paid" ? "paid" : "finalized") as "finalized" | "paid",
   }));
 }
 

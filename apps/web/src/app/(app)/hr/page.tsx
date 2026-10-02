@@ -60,6 +60,7 @@ export default async function Page() {
 			tiles: [
 				{ title: t("payrollRuns"), href: "/hr/payroll", description: t("payrollRunsDesc") },
 				{ title: t("salarySlips"), href: "/hr/payroll/salary-slips", description: t("salarySlipsDesc") },
+				{ title: t("mySlips"), href: "/hr/payroll/my-slips", description: t("mySlipsDesc") },
 				{ title: t("payStructures"), href: "/hr/payroll/structures", description: t("payStructuresDesc") },
 				{ title: t("payMatrix"), href: "/hr/pay-matrix", description: t("payMatrixDesc") },
 				{ title: t("gpf"), href: "/hr/payroll/gpf", description: t("gpfDesc") },

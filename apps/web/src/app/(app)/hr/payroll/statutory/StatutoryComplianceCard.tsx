@@ -7,8 +7,11 @@ import { useTranslations } from "next-intl";
 export interface StatutoryComplianceCardProps {
   label: string;
   icon: string;
-  empPct: number;
-  erPct: number;
+  /** Omit for state-specific / per-employee schemes (PT, LWF, GPF) and pass `rateNote`. */
+  empPct?: number;
+  erPct?: number;
+  /** Replaces the percentage tiles when the scheme has no single rate (GAP-PAYROLL-STATUTORY-01 / LWF-04). */
+  rateNote?: string;
   /**
    * Minor units (paise) for a flat monthly wage ceiling (PF/ESI); the literal
    * string "state" for a scheme whose ceiling genuinely varies by state
@@ -18,7 +21,8 @@ export interface StatutoryComplianceCardProps {
    * for PT/LWF (state-specific, not absent).
    */
   wageCeilingMonthly?: number | "state" | "none";
-  challanDueDay: number; // day of month (usually 15)
+  /** Day of month; omit when there is no single due date (state-specific / no challan). */
+  challanDueDay?: number;
   href: string;
 }
 
@@ -27,6 +31,7 @@ export function StatutoryComplianceCard({
   icon,
   empPct,
   erPct,
+  rateNote,
   wageCeilingMonthly,
   challanDueDay,
   href,
@@ -80,7 +85,11 @@ export function StatutoryComplianceCard({
             (see statutory/page.tsx), not duplicated per-card. */}
       </div>
 
-      {/* Rate grid */}
+      {/* Rate grid -- percentages only when the scheme actually has a single rate. */}
+      {empPct == null || erPct == null ? (
+        <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--ink2)", lineHeight: 1.4 }}>{rateNote}</p>
+      ) : (
+        <>
       <div
         style={{
           display: "grid",
@@ -135,6 +144,9 @@ export function StatutoryComplianceCard({
         </div>
       </div>
 
+        </>
+      )}
+
       {/* Meta row */}
       <div
         style={{
@@ -151,12 +163,14 @@ export function StatutoryComplianceCard({
             {formatCeiling(wageCeilingMonthly)}
           </span>
         </div>
-        <div style={{ display: "flex", justifyContent: "space-between" }}>
-          <span>{t("challanDue")}</span>
-          <span style={{ fontWeight: 600, color: "var(--ink)" }}>
-            {t("challanDueLabel", { day: challanDueDay })}
-          </span>
-        </div>
+        {challanDueDay != null && (
+          <div style={{ display: "flex", justifyContent: "space-between" }}>
+            <span>{t("challanDue")}</span>
+            <span style={{ fontWeight: 600, color: "var(--ink)" }}>
+              {t("challanDueLabel", { day: challanDueDay })}
+            </span>
+          </div>
+        )}
       </div>
     </Link>
   );

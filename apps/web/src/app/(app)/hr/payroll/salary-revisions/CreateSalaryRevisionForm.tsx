@@ -43,7 +43,7 @@ import { rupeesToMinorString } from "@/lib/money";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { REVISION_TYPES, REVISION_TYPE_FORM_LABEL_KEYS, type RevisionType } from "@/lib/payroll/revisionTypes";
 
-type InvalidField = "employeeId" | "effectiveDate" | "oldBasic" | "newBasic" | "oldGross" | "newGross" | null;
+type InvalidField = "employeeId" | "orderNo" | "effectiveDate" | "oldBasic" | "newBasic" | "oldGross" | "newGross" | null;
 
 export function CreateSalaryRevisionForm() {
   const t = useTranslations("createSalaryRevisionForm");
@@ -81,6 +81,7 @@ export function CreateSalaryRevisionForm() {
   const newBasicRef = useRef<HTMLInputElement>(null);
   const oldGrossRef = useRef<HTMLInputElement>(null);
   const newGrossRef = useRef<HTMLInputElement>(null);
+  const orderRef = useRef<HTMLInputElement>(null);
 
   const REVISION_TYPE_LABELS: Record<RevisionType, string> = {
     annual_increment: t(REVISION_TYPE_FORM_LABEL_KEYS.annual_increment),
@@ -94,6 +95,7 @@ export function CreateSalaryRevisionForm() {
   const newBasicInvalid = tone === "bad" && invalidField === "newBasic";
   const oldGrossInvalid = tone === "bad" && invalidField === "oldGross";
   const newGrossInvalid = tone === "bad" && invalidField === "newGross";
+  const orderInvalid = tone === "bad" && invalidField === "orderNo";
 
   function fail(field: InvalidField, msg: string, ref?: React.RefObject<HTMLInputElement>) {
     setTone("bad");
@@ -159,6 +161,14 @@ export function CreateSalaryRevisionForm() {
       return;
     }
 
+    // GAP-PAYROLL-SALARY-REVISIONS-02: a pay revision flows straight into HRMS
+    // basic pay, so it must cite the sanctioning order (conservative default;
+    // the manual-entry vs pay-fixation / maker-checker policy stays a human call).
+    if (orderNo.trim() === "") {
+      fail("orderNo", t("orderNoRequiredError"), orderRef);
+      return;
+    }
+
     setPending({
       oldBasicMinor: Number(oldBasicMinor),
       newBasicMinor: Number(newBasicMinor),
@@ -184,7 +194,7 @@ export function CreateSalaryRevisionForm() {
           newBasicMinor: pending.newBasicMinor,
           oldGrossMinor: pending.oldGrossMinor,
           newGrossMinor: pending.newGrossMinor,
-          orderNo: orderNo.trim() || undefined,
+          orderNo: orderNo.trim(),
         }),
       });
       setConfirmOpen(false);
@@ -347,9 +357,13 @@ export function CreateSalaryRevisionForm() {
               />
             </div>
             <div style={{ display: "grid", gap: 6 }}>
-              <label htmlFor={orderId} style={{ fontSize: 13, fontWeight: 600 }}>{t("orderNoLabel")}</label>
+              <label htmlFor={orderId} style={{ fontSize: 13, fontWeight: 600 }}>{t("orderNoLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span></label>
               <input
                 id={orderId}
+                ref={orderRef}
+                aria-required="true"
+                aria-invalid={orderInvalid || undefined}
+                aria-describedby={orderInvalid ? errId : undefined}
                 value={orderNo}
                 onChange={(e) => setOrderNo(e.target.value)}
                 maxLength={64}

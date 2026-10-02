@@ -61,7 +61,7 @@ export default async function OffCyclePage() {
         <StatCard icon="🧾" iconBg="var(--infobg)" label={t("statTotalNetProcessed")} value={errored ? null : formatMoney(totalNetMinor)} />
       </StatGrid>
 
-      {canAdminister && <CreateOffCycleForm />}
+      {canAdminister && <CreateOffCycleForm existingRuns={errored ? [] : items.map((r) => ({ run_type: r.run_type, period: r.period }))} />}
 
       {/* Card view: run type, period, employees in scope, approval status, process action */}
       <Card title={t("runsCardTitle")}>

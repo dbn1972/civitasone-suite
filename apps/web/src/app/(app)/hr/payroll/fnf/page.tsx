@@ -6,7 +6,7 @@ import { ComputeFnfForm } from "./ComputeFnfForm";
 import { FnFSettlementCards, type FnFCardRow } from "./FnFSettlementCard";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, getSessionUserId } from "@/lib/auth/roleGuard";
-import { FNF_READ_ROLES, FNF_COMPUTE_ROLES } from "./fnfWorkflow";
+import { FNF_READ_ROLES, FNF_COMPUTE_ROLES, fnfStatusBucket } from "./fnfWorkflow";
 import { getTranslations } from "next-intl/server";
 
 // GAP-PAYROLL-FNF-02: mirrors payroll-service's F&F read gate (fnf/routes.ts
@@ -40,8 +40,11 @@ export default async function FnfPage() {
   const { data: settlements, source } = await getSettlements();
   const errored = source === "error";
 
-  const pending = settlements.filter((s) => ["pending", "draft", "computed", "submitted", "finance_approved", "rejected"].includes(s.status)).length;
-  const settled = settlements.filter((s) => s.status === "settled" || s.status === "paid" || s.status === "disbursed").length;
+  // GAP-PAYROLL-FNF-04: stats come from the shared status->bucket map, so
+  // pending + in-approval + settled always equals the total.
+  const pending = settlements.filter((s) => fnfStatusBucket(s.status) === "pending").length;
+  const inApproval = settlements.filter((s) => fnfStatusBucket(s.status) === "inApproval").length;
+  const settled = settlements.filter((s) => fnfStatusBucket(s.status) === "settled").length;
   const separationTypes = new Set(settlements.map((s) => s.separationType).filter(Boolean)).size;
 
   // Pass the API's own fields straight through (money stays as paise
@@ -85,6 +88,7 @@ export default async function FnfPage() {
       <StatGrid>
         <StatCard icon="🧮" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : settlements.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : pending} />
+        <StatCard icon="🔏" iconBg="var(--infobg)" label={t("statInApproval")} value={errored ? null : inApproval} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statSettled")} value={errored ? null : settled} />
         <StatCard icon="📊" iconBg="var(--panel)" label={t("statSeparationTypes")} value={errored ? null : separationTypes} />
       </StatGrid>

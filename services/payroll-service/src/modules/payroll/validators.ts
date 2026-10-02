@@ -212,7 +212,8 @@ export const createSalaryRevisionBody = z.object({
   oldGrossMinor: z.number().int().nonnegative(),
   newGrossMinor: z.number().int().positive(),
   revisionType:  z.enum(["annual_increment", "promotion", "correction", "fitment"]).default("annual_increment"),
-  orderNo:       z.string().max(64).optional(),
+  // GAP-PAYROLL-SALARY-REVISIONS-02: a revision rewrites HRMS basic pay, so it must cite its sanctioning order.
+  orderNo:       z.string().trim().min(1).max(64),
 });
 export type CreateSalaryRevisionBody = z.infer<typeof createSalaryRevisionBody>;
 

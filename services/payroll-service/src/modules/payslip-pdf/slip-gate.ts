@@ -14,6 +14,15 @@ import { queue } from "../../shared/infra.js";
  */
 export const PRINTABLE_SLIP_STATUSES: readonly string[] = ["paid"];
 
+/**
+ * GAP-PAYROLL-SALARY-SLIPS-04: statuses an employee may SEE in "My payslips".
+ * The print gate's final set (paid) plus the approved/finalized values: a
+ * computed, held or exception (negative-net) slip can still change or is never
+ * paid, so its net pay must not reach the employee. "finalized" is not a value
+ * payroll_slips can hold today; it is listed only to stay in step with the web.
+ */
+export const EMPLOYEE_VISIBLE_SLIP_STATUSES: readonly string[] = [...PRINTABLE_SLIP_STATUSES, "approved", "finalized"];
+
 export function assertSlipPrintable(status: string): void {
   if (!PRINTABLE_SLIP_STATUSES.includes(status)) {
     throw new HttpError(409, "SLIP_NOT_FINAL", `salary slip is ${status}; only a paid slip can be printed or downloaded`);

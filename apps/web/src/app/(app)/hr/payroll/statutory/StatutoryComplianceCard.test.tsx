@@ -54,4 +54,17 @@ describe("StatutoryComplianceCard", () => {
     expect(link).toHaveAttribute("href", "/hr/payroll/statutory/pf");
     expect(link).toHaveClass("statutory-card");
   });
+
+  it("GAP-PAYROLL-STATUTORY-01 / LWF-04: with a rateNote and no pct/due day it shows no percentages and no challan row", () => {
+    renderCard({ empPct: undefined, erPct: undefined, challanDueDay: undefined, rateNote: "Fixed rupee amounts that vary by state." });
+    expect(screen.getByText("Fixed rupee amounts that vary by state.")).toBeInTheDocument();
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Challan due")).not.toBeInTheDocument();
+  });
+
+  it("still shows percentages and the due day when a scheme has a single rate", () => {
+    renderCard({});
+    expect(screen.getAllByText("12%")).toHaveLength(2);
+    expect(screen.getByText("Challan due")).toBeInTheDocument();
+  });
 });

@@ -52,5 +52,19 @@ describe("GratuityCalculator", () => {
     renderCalculator();
     expect(screen.getByText(/Maximum: ₹20,00,000\.00\./)).toBeInTheDocument();
   });
-});
 
+  it("counts a fraction of a year over six months as a full year (GAP-PAYROLL-STATUTORY-GRATUITY-03)", () => {
+    renderCalculator();
+    fireEvent.change(screen.getByLabelText(/Last Drawn Monthly Salary/), { target: { value: "50000" } });
+    fireEvent.change(screen.getByLabelText(/Years of Service/), { target: { value: "9.67" } }); // 9y 8m
+    // 10 completed years, not 9
+    expect(screen.getByText("₹2,88,461.53")).toBeInTheDocument();
+  });
+
+  it("keeps exactly 9 years 6 months at 9 years (GAP-PAYROLL-STATUTORY-GRATUITY-03)", () => {
+    renderCalculator();
+    fireEvent.change(screen.getByLabelText(/Last Drawn Monthly Salary/), { target: { value: "50000" } });
+    fireEvent.change(screen.getByLabelText(/Years of Service/), { target: { value: "9.5" } });
+    expect(screen.getByText("₹2,59,615.38")).toBeInTheDocument();
+  });
+});

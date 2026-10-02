@@ -55,4 +55,10 @@ describe("PensionersPage", () => {
     expect(fetchJsonMock).not.toHaveBeenCalled();
     expect(screen.queryByText("Ramesh Sharma")).not.toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-PENSIONERS-04: shows a DPDP data-use notice under the header", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [ACTIVE], source: "api" });
+    render(await PensionersPage());
+    expect(screen.getByRole("note")).toHaveTextContent(/DPDP Act, 2023/);
+  });
 });

@@ -1,6 +1,5 @@
-import { getTranslations } from "next-intl/server";
+import { StatutoryListSkeleton } from "../_components/StatutoryListSkeleton";
 
-export default async function Loading() {
-  const t = await getTranslations("challans");
-  return <div className="page-main wrap"><div className="skeleton" aria-label={t("loadingAriaLabel")} /></div>;
+export default function Loading() {
+  return <StatutoryListSkeleton namespace="challans" />;
 }

@@ -4,7 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatMoney } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
-import { PERIOD_PATTERN, parsePeriodParam, type PeriodParam } from "@/lib/payroll/period";
+import { PERIOD_PATTERN, examplePeriods, parsePeriodParam, type PeriodParam } from "@/lib/payroll/period";
 import { formatSignedMoney, formatSignedPercent, percentChange, toMinorBigInt } from "@/lib/payroll/money";
 import { getTranslations } from "next-intl/server";
 import { mapComparisonResponse, type CompareData } from "./mapComparisonResponse";
@@ -51,8 +51,14 @@ export default async function PayrollComparisonPage({
   const err1 = fieldError(p1);
   const err2 = fieldError(p2);
 
-  const valid1 = p1.state === "valid" ? p1.period : "";
-  const valid2 = p2.state === "valid" ? p2.period : "";
+  // GAP-PAYROLL-COMPARISON-05: any two periods may be compared; they are always
+  // fetched and shown earliest-first so a positive delta means "grew over time"
+  // and the table never reads backwards. Tell the user when we reordered.
+  let valid1 = p1.state === "valid" ? p1.period : "";
+  let valid2 = p2.state === "valid" ? p2.period : "";
+  const swapped = canCompare && valid1 > valid2;
+  if (swapped) [valid1, valid2] = [valid2, valid1];
+  const example = examplePeriods();
 
   let data: CompareData | null = null;
   let source: "api" | "error" | null = null;
@@ -61,8 +67,8 @@ export default async function PayrollComparisonPage({
     data = result.data;
     source = result.source;
   }
-  const period1 = p1.state === "valid" ? p1.period : p1.state === "invalid" ? p1.raw : "";
-  const period2 = p2.state === "valid" ? p2.period : p2.state === "invalid" ? p2.raw : "";
+  const period1 = p1.state === "valid" ? valid1 : p1.state === "invalid" ? p1.raw : "";
+  const period2 = p2.state === "valid" ? valid2 : p2.state === "invalid" ? p2.raw : "";
   const both = data && data.period1 && data.period2 ? { a: data.period1, b: data.period2 } : null;
 
   const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
@@ -133,8 +139,8 @@ export default async function PayrollComparisonPage({
 
       <Card title={t("filterCardTitle")} padding>
         <form method="get" noValidate style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(180px,1fr))" }}>
-          {periodField("cmp-period1", "period1", t("labelPeriod1"), period1, err1, "2025-05")}
-          {periodField("cmp-period2", "period2", t("labelPeriod2"), period2, err2, "2025-06")}
+          {periodField("cmp-period1", "period1", t("labelPeriod1"), period1, err1, example.previous)}
+          {periodField("cmp-period2", "period2", t("labelPeriod2"), period2, err2, example.current)}
           <div style={{ display: "flex", alignItems: "flex-end" }}>
             <Button type="submit" variant="primary" style={{ minHeight: 44 }}>{t("compareButton")}</Button>
           </div>
@@ -143,8 +149,12 @@ export default async function PayrollComparisonPage({
 
       {!anyEntered && (
         <Card>
-          <EmptyState icon="📊" title={t("emptyTitle")} message={t("emptyMessage")} />
+          <EmptyState icon="📊" title={t("emptyTitle")} message={t("emptyMessage", { example1: example.previous, example2: example.current })} />
         </Card>
+      )}
+
+      {both && swapped && (
+        <p role="status" className="pill info" style={{ width: "fit-content", margin: "0 0 12px" }}>{t("orderedNotice")}</p>
       )}
 
       {both && (

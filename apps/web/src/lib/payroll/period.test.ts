@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { isValidFinancialYear, isValidPeriod, parsePeriodParam } from "./period";
+import { examplePeriods, isValidFinancialYear, isValidPeriod, parsePeriodParam } from "./period";
 
 describe("isValidPeriod (GAP-PAYROLL-COMPARISON-01)", () => {
   it.each(["2026-8", "2026-13", "2026-00", "0000-00", "2026/08", "", "2026-08-01"])("rejects %s", (v) => {
@@ -24,5 +24,12 @@ describe("isValidFinancialYear (GAP-PAYROLL-RETURNS-07)", () => {
     expect(isValidFinancialYear("2099-00")).toBe(true);
     expect(isValidFinancialYear("2025-99")).toBe(false);
     expect(isValidFinancialYear("2025/26")).toBe(false);
+  });
+});
+
+describe("examplePeriods (GAP-PAYROLL-COMPARISON-05)", () => {
+  it("returns previous and current month, rolling over January", () => {
+    expect(examplePeriods(new Date(2026, 9, 2))).toEqual({ previous: "2026-09", current: "2026-10" });
+    expect(examplePeriods(new Date(2027, 0, 15))).toEqual({ previous: "2026-12", current: "2027-01" });
   });
 });

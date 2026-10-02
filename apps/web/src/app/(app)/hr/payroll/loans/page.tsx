@@ -1,5 +1,6 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState, type EntityOption } from "../../../../_components/ds";
+import Link from "next/link";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState, type EntityOption } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
@@ -10,6 +11,7 @@ import { CreateLoanForm } from "./CreateLoanForm";
 import { LoansTable, type LoanRow } from "./LoansTable";
 import { computeLoanStats } from "./loanStats";
 import { toHumanError } from "@/lib/messages";
+import { mapLoanSchedule, pickScheduleLoan, type ScheduleInstallment } from "./loanSchedule";
 
 /**
  * GAP-PAYROLL-LOANS-02: who may open this page. Mirrors payroll-service
@@ -26,6 +28,13 @@ async function getLoans(empId: string): Promise<LoaderResult<LoanRow[]>> {
   return fetchJson<unknown, LoanRow[]>(`/api/v1/payroll/loans?empId=${encodeURIComponent(empId)}`, [], {
     telemetryKey: "payroll.loans",
     mapResponse: (p) => (Array.isArray(p) ? (p as LoanRow[]) : null),
+  });
+}
+
+async function getSchedule(loanId: string): Promise<LoaderResult<ScheduleInstallment[]>> {
+  return fetchJson<unknown, ScheduleInstallment[]>(`/api/v1/payroll/loans/${encodeURIComponent(loanId)}/schedule`, [], {
+    telemetryKey: "payroll.loans.schedule",
+    mapResponse: mapLoanSchedule,
   });
 }
 
@@ -59,7 +68,7 @@ async function getEmployeeOption(empId: string): Promise<EntityOption | null> {
 export default async function LoansPage({
   searchParams,
 }: {
-  searchParams: { empId?: string };
+  searchParams: { empId?: string; loanId?: string };
 }) {
   const t = await getTranslations("payrollLoans");
   const roles = getSessionRoles();
@@ -82,6 +91,10 @@ export default async function LoansPage({
     : [{ data: [], source: "api" } as LoaderResult<LoanRow[]>, null];
   const errored = result.source === "error";
   const loans = result.data;
+  // GAP-PAYROLL-LOANS-06: real per-installment schedule for one of THIS
+  // employee's loans (never an id taken blindly from the URL).
+  const scheduleLoan = !errored && empId ? pickScheduleLoan(loans, searchParams?.loanId?.trim()) : null;
+  const schedule = scheduleLoan ? await getSchedule(scheduleLoan.id) : null;
   const stats = computeLoanStats(loans);
 
   return (
@@ -136,13 +149,48 @@ export default async function LoansPage({
         </>)}
         </Card>
 
-      <Card title={t("recoveryCardTitle")}>
-        <EmptyState
-          icon="📅"
-          title={t("recoveryEmptyTitle")}
-          message={t("recoveryEmptyMessage")}
-        />
-      </Card>
+      {scheduleLoan && schedule && (
+        <Card title={t("recoveryCardTitleFor", { loanNo: scheduleLoan.loanNo })}>
+          {loans.length > 1 && (
+            <nav aria-label={t("recoveryPickLoanLabel")} style={{ display: "flex", gap: 8, flexWrap: "wrap", padding: "0 16px 12px" }}>
+              {loans.map((l) => (
+                <Link
+                  key={l.id}
+                  href={`/hr/payroll/loans?empId=${encodeURIComponent(empId)}&loanId=${encodeURIComponent(l.id)}`}
+                  aria-current={l.id === scheduleLoan.id ? "true" : undefined}
+                  style={{ fontWeight: l.id === scheduleLoan.id ? 700 : 400, textDecoration: l.id === scheduleLoan.id ? "none" : "underline" }}
+                >
+                  {l.loanNo}
+                </Link>
+              ))}
+            </nav>
+          )}
+          {schedule.source === "error" ? (
+            <div className="pad">
+              <RefreshErrorState error={toHumanError("load", { area: "loan schedule" })} backHref="/hr/payroll" />
+            </div>
+          ) : (
+            <>
+              <p style={{ margin: "0 16px 8px", fontSize: 12, color: "var(--ink2)" }}>{t("recoveryNote")}</p>
+              <DataTable<ScheduleInstallment>
+                columns={[
+                  { key: "installmentNo", label: t("recoveryColNo"), align: "right" },
+                  { key: "openingMinor", label: t("recoveryColOpening"), align: "right", cellType: "amount" },
+                  { key: "emiMinor", label: t("recoveryColEmi"), align: "right", cellType: "amount" },
+                  { key: "principalMinor", label: t("recoveryColPrincipal"), align: "right", cellType: "amount" },
+                  { key: "interestMinor", label: t("recoveryColInterest"), align: "right", cellType: "amount" },
+                  { key: "closingMinor", label: t("recoveryColClosing"), align: "right", cellType: "amount" },
+                ]}
+                rows={schedule.data}
+                pageSize={12}
+                emptyIcon="📅"
+                emptyTitle={t("recoveryEmptyTitle")}
+                emptyMessage={t("recoveryEmptyMessage")}
+              />
+            </>
+          )}
+        </Card>
+      )}
     </div>
   );
 }

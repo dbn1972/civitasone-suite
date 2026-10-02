@@ -71,3 +71,34 @@ export function fnfAvailability(row: FnfWorkflowFields, viewer: FnfViewer): FnfA
 export function todayIst(now: Date = new Date()): string {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
 }
+
+/**
+ * GAP-PAYROLL-FNF-04: ONE status -> stat-bucket map, so the page's stat tiles
+ * always partition the full status set (no status falls into no bucket and the
+ * buckets sum to the total). Mirrors the payroll-service workflow state machine
+ * (draft|computed -> submitted -> finance_approved -> disbursed; rejected is
+ * sent back to the payroll desk). "pending"/"settled"/"paid" are legacy values
+ * kept for rows written before the workflow existed. An unknown status lands in
+ * "pending" (needs a human look) rather than vanishing from every count.
+ */
+export type FnfStatusBucket = "pending" | "inApproval" | "settled";
+
+const BUCKET_BY_STATUS: Record<string, FnfStatusBucket> = {
+  pending: "pending",
+  draft: "pending",
+  computed: "pending",
+  rejected: "pending",
+  submitted: "inApproval",
+  finance_approved: "inApproval",
+  settled: "settled",
+  paid: "settled",
+  disbursed: "settled",
+};
+
+export function fnfStatusBucket(status: string): FnfStatusBucket {
+  return BUCKET_BY_STATUS[status] ?? "pending";
+}
+
+/** Polling window after a queued compute: refresh every 5 s for at most 1 minute. */
+export const FNF_POLL_INTERVAL_MS = 5000;
+export const FNF_POLL_MAX_TICKS = 12;

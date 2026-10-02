@@ -83,6 +83,9 @@ export default async function PensionersPage() {
         }
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
+      {/* GAP-PAYROLL-PENSIONERS-04: PPO number, full name, DDO code and pension
+          amount are personal data (DPDP Act 2023). State the purpose limit. */}
+      <p role="note" className="sub" style={{ margin: "0 0 12px", fontSize: 12, color: "var(--mut)" }}>{t("dataUseNotice")}</p>
       <StatGrid>
         <StatCard icon="👴" iconBg="var(--panel)" label={t("statTotalPensioners")} value={errored ? null : total} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statActive")} value={errored ? null : active} />

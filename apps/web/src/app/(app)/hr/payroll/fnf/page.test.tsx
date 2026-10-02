@@ -173,4 +173,18 @@ describe("FnfPage", () => {
     await renderPage();
     expect(screen.getByText("Compute F&F Settlement")).toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-FNF-04: submitted / finance_approved are counted as In Approval and the stat buckets sum to the total", async () => {
+    const row = (id: string, status: string) => ({ id, employeeId: EMP, employeeName: "A", employeeCode: null, separationType: "vrs", separationDate: "2026-07-01", netPayableMinor: "1", status });
+    fetchJsonMock.mockResolvedValue({
+      data: [row("1", "computed"), row("2", "submitted"), row("3", "finance_approved"), row("4", "disbursed"), row("5", "rejected")],
+      source: "api",
+    });
+    await renderPage();
+    const statValue = (label: string) => screen.getByText(label).parentElement?.textContent ?? "";
+    expect(statValue("In Approval")).toContain("2");
+    expect(statValue("Pending / Draft")).toContain("2"); // computed + rejected
+    expect(statValue("Settled / Disbursed")).toContain("1");
+    expect(statValue("Total Settlements")).toContain("5");
+  });
 });

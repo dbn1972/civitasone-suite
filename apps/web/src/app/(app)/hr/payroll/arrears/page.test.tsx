@@ -9,6 +9,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+const rolesMock = vi.fn((): string[] => ["payroll_admin"]);
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => rolesMock(),
+  PAYROLL_REPORT_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"],
+}));
+
 import ArrearsPage from "./page";
 
 // GAP-PAYROLL-ARREARS-01: the page now also resolves employee names through
@@ -31,6 +37,7 @@ function withDirectory(arrears: { data: unknown; source: string }, names: Array<
 describe("ArrearsPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    rolesMock.mockReturnValue(["payroll_admin"]);
   });
 
   it("maps real backend-shaped rows onto the table instead of rendering blanks", async () => {
@@ -116,7 +123,7 @@ describe("ArrearsPage", () => {
 
     // Amount (was `.amount` with no cellType; real field is `difference_minor`,
     // rendered minor-unit-safe via the table's `cellType: "amount"` -> formatMoney).
-    expect(screen.getByText("₹5,000.00")).toBeInTheDocument();
+    expect(screen.getAllByText("₹5,000.00").length).toBeGreaterThanOrEqual(1);
     expect(screen.getByText("₹8,000.00")).toBeInTheDocument();
     expect(screen.getByText("₹7,000.00")).toBeInTheDocument();
 
@@ -127,7 +134,10 @@ describe("ArrearsPage", () => {
     expect(screen.getByText("3")).toBeInTheDocument(); // Total
     expect(screen.getByText("1")).toBeInTheDocument(); // Pending (a1 only)
     expect(screen.getByText("2")).toBeInTheDocument(); // Approved/Paid (a2 + a3)
-    expect(screen.getByText("₹20,000.00")).toBeInTheDocument(); // Total Arrears Amount (500000+800000+700000 paise)
+    // GAP-PAYROLL-ARREARS-02: the money stat is OUTSTANDING (pending+approved) only --
+    // the two paid rows (8,000 + 7,000) must not be netted into it any more.
+    expect(screen.getByText("Outstanding Arrears (net of recoveries)")).toBeInTheDocument();
+    expect(screen.queryByText("₹20,000.00")).not.toBeInTheDocument();
   });
 
   it("renders an empty state when there are no arrears", async () => {
@@ -154,5 +164,39 @@ describe("ArrearsPage", () => {
     render(ui);
     const back = screen.getByRole("link", { name: /Back to Payroll/ });
     expect(back).toHaveAttribute("href", "/hr/payroll");
+  });
+
+  it("GAP-PAYROLL-ARREARS-02: outstanding total excludes rejected and paid rows and nets recoveries", async () => {
+    const base = { run_id: null, component_code: "BASIC", from_period: "2026-01", to_period: "2026-02", old_amount_minor: 0, new_amount_minor: 0, reason: null, source: "manual", created_at: "2026-03-01T00:00:00Z" };
+    withDirectory({
+      data: [
+        { ...base, id: "x1", employee_id: E1, difference_minor: 100000, status: "approved" },
+        { ...base, id: "x2", employee_id: E2, difference_minor: 50000, status: "rejected" },
+        { ...base, id: "x3", employee_id: E3, difference_minor: -20000, status: "pending" },
+        { ...base, id: "x4", employee_id: E3, difference_minor: 999900, status: "paid" },
+      ],
+      source: "api",
+    });
+    render(await ArrearsPage());
+    // 1,000.00 + (-200.00) = 800.00; rejected 500 and paid 9,999 stay out.
+    expect(screen.getByText("₹800.00")).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-ARREARS-04: employee/manager see a permission denial and no register fetch", async () => {
+    for (const role of ["employee", "manager"]) {
+      fetchJsonMock.mockReset();
+      rolesMock.mockReturnValue([role]);
+      const { unmount } = render(await ArrearsPage());
+      expect(screen.queryByText("Arrears Register")).not.toBeInTheDocument();
+      expect(fetchJsonMock).not.toHaveBeenCalled();
+      unmount();
+    }
+  });
+
+  it("GAP-PAYROLL-ARREARS-04: hr_admin still sees the register", async () => {
+    rolesMock.mockReturnValue(["hr_admin"]);
+    withDirectory({ data: [], source: "api" });
+    render(await ArrearsPage());
+    expect(screen.getByText("No arrears computed")).toBeInTheDocument();
   });
 });

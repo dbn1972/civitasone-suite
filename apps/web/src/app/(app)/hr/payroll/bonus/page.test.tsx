@@ -11,6 +11,12 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+const rolesMock = vi.fn((): string[] => ["payroll_admin"]);
+vi.mock("@/lib/auth/roleGuard", () => ({
+  getSessionRoles: () => rolesMock(),
+  PAYROLL_REPORT_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin"],
+}));
+
 import BonusPage from "./page";
 
 const E1 = "22222222-2222-4222-8222-222222222201";
@@ -24,6 +30,7 @@ function withDirectory(bonus: { data: unknown; source: string }, names: unknown[
 describe("BonusPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    rolesMock.mockReturnValue(["payroll_admin"]);
   });
 
   it("renders the list of bonus records", async () => {
@@ -58,5 +65,16 @@ describe("BonusPage", () => {
     render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
 
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-BONUS-04: employee/manager get a permission denial, no compute form, no list fetch", async () => {
+    for (const role of ["employee", "manager"]) {
+      fetchJsonMock.mockReset();
+      rolesMock.mockReturnValue([role]);
+      const { unmount } = render(<NextIntlClientProvider locale="en" messages={enMessages}>{await BonusPage()}</NextIntlClientProvider>);
+      expect(screen.queryByText("Bonus Records")).not.toBeInTheDocument();
+      expect(fetchJsonMock).not.toHaveBeenCalled();
+      unmount();
+    }
   });
 });

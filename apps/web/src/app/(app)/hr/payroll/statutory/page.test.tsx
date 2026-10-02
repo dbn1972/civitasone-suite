@@ -74,4 +74,26 @@ describe("StatutoryHubPage", () => {
     expectSomeLinkTo(/\bGPF\b/, "/hr/payroll/gpf");
     expectSomeLinkTo(/\bNPS\b/, "/hr/payroll/nps");
   });
+
+  it("GAP-PAYROLL-STATUTORY-01 / LWF-04: PT, LWF and GPF cards show no percentage or 15th due date; PF/ESI keep both", async () => {
+    const ui = await StatutoryHubPage();
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        {ui}
+      </NextIntlClientProvider>,
+    );
+    const cards = Array.from(document.querySelectorAll("a.statutory-card")) as HTMLElement[];
+    const byHref = (h: string) => cards.find((c) => c.getAttribute("href") === h) as HTMLElement;
+    for (const href of ["/hr/payroll/statutory/pt", "/hr/payroll/statutory/lwf", "/hr/payroll/gpf"]) {
+      expect(byHref(href).textContent).not.toMatch(/%/);
+      expect(byHref(href).textContent).not.toMatch(/Challan due/);
+    }
+    expect(byHref("/hr/payroll/statutory/lwf").textContent).toMatch(/vary by state/);
+    expect(byHref("/hr/payroll/statutory/pf").textContent).toMatch(/12%/);
+    expect(byHref("/hr/payroll/statutory/pf").textContent).toMatch(/Challan due/);
+    expect(byHref("/hr/payroll/statutory/esi").textContent).toMatch(/3\.25%/);
+    // NPS keeps its rates but has no challan due day.
+    expect(byHref("/hr/payroll/nps").textContent).not.toMatch(/Challan due/);
+    expect(screen.getByText(/statutory reference values \(as of Aug 2026\)/)).toBeInTheDocument();
+  });
 });

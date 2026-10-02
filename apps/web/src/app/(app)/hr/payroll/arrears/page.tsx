@@ -1,5 +1,8 @@
 import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
+import { getSessionRoles, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
+import { summarizeArrears } from "./arrearsSummary";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { resolveEmployeeNames, employeeDisplayLabel } from "@/app/_data/employeeNames";
@@ -96,6 +99,18 @@ const COMPONENT_LABEL_KEYS: Record<string, string> = {
 
 export default async function ArrearsPage() {
   const t = await getTranslations("arrears");
+  // GAP-PAYROLL-ARREARS-04: hr/layout.tsx admits employee/manager, but the
+  // tenant-wide arrears register (salary differences, DPDP-sensitive) is
+  // payroll-service ROLES-only (PAYROLL_REPORT_ROLES mirrors it). Gate the page
+  // so those roles get a clear denial rather than a failed fetch.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_REPORT_ROLES.includes(r))) {
+    return (
+      <div className="page-main wrap">
+        <PermissionDenied module="arrears" requiredRoles={PAYROLL_REPORT_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
+      </div>
+    );
+  }
   const { data: items, source } = await getData();
   const errored = source === "error";
 
@@ -134,7 +149,8 @@ export default async function ArrearsPage() {
       };
     });
 
-  const totalArrearsMinor = items.reduce((sum, i) => sum + BigInt(String(i.difference_minor ?? 0)), 0n);
+  // GAP-PAYROLL-ARREARS-02: outstanding = pending + approved only, net of recoveries.
+  const { outstandingNetMinor } = summarizeArrears(items);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -145,7 +161,7 @@ export default async function ArrearsPage() {
         <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotal")} value={errored ? null : items.length} />
         <StatCard icon="⏳" iconBg="var(--warnbg)" label={t("statPending")} value={errored ? null : items.filter((i) => i.status === "pending").length} />
         <StatCard icon="✅" iconBg="var(--goodbg)" label={t("statApprovedPaid")} value={errored ? null : items.filter((i) => i.status === "approved" || i.status === "paid").length} />
-        <StatCard icon="💰" iconBg="var(--panel)" label={t("statTotalArrearsAmount")} value={errored ? null : formatMoney(totalArrearsMinor)} />
+        <StatCard icon="💰" iconBg="var(--panel)" label={t("statTotalArrearsAmount")} value={errored ? null : formatMoney(outstandingNetMinor)} />
       </StatGrid>
       <Card title={t("registerCardTitle")}>
         {errored ? (

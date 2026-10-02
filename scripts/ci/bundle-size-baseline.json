@@ -2373,11 +2373,6 @@
       "sizeBytes": 1050,
       "firstLoadJsBytes": 147000
     },
-    "/hr/payroll/statutory/gpf": {
-      "marker": "ƒ",
-      "sizeBytes": 1050,
-      "firstLoadJsBytes": 147000
-    },
     "/hr/payroll/statutory/gratuity": {
       "marker": "ƒ",
       "sizeBytes": 1470,

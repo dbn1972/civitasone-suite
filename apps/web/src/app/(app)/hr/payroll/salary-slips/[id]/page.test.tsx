@@ -108,4 +108,35 @@ describe("SalarySlipPage (printable slip)", () => {
     renderPage(ui);
     expect(screen.getByText("Not yet paid")).toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-SALARY-SLIPS-DETAIL-03: an employer-contribution component appears in the 'Other' block and a mismatch is flagged", async () => {
+    fetchJsonMock.mockResolvedValueOnce({
+      data: baseSlip({
+        components: [
+          { code: "BASIC", name: "Basic Pay", type: "earning", amountMinor: 50000 },
+          { code: "PF", name: "Provident Fund", type: "deduction", amountMinor: 20000 },
+          { code: "ER_PF", name: "Employer PF", type: "employer_contribution", amountMinor: 6000 },
+        ],
+        grossMinor: 60000,
+      }),
+      source: "api",
+    });
+    renderPage(await SalarySlipPage({ params: { id: "s1" } }));
+    expect(screen.getByText("Employer PF")).toBeInTheDocument();
+    expect(screen.getByText("Other components (not part of net pay)")).toBeInTheDocument();
+    expect(screen.getByText(/do not add up to the Gross/)).toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-SALARY-SLIPS-DETAIL-03: a slip whose lines reconcile shows no discrepancy note and no Other block", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ grossMinor: 50000 }), source: "api" });
+    renderPage(await SalarySlipPage({ params: { id: "s1" } }));
+    expect(screen.queryByText(/do not add up to the Gross/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Other components (not part of net pay)")).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-SALARY-SLIPS-DETAIL-03 (L1): no discrepancy note when the slip has no component lines at all", async () => {
+    fetchJsonMock.mockResolvedValueOnce({ data: baseSlip({ components: [] }), source: "api" });
+    renderPage(await SalarySlipPage({ params: { id: "s1" } }));
+    expect(screen.queryByText(/do not add up to the Gross/)).not.toBeInTheDocument();
+  });
 });

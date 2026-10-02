@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -8,6 +9,7 @@ import { cache } from "../../shared/infra.js";
 import * as employeeRepo from "../employee/repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+const log = pino({ name: "hrms.integration.consumer" });
 
 /** Seed default leave types when a tenant is provisioned. */
 export function registerIntegrationConsumers(queue: Queue): void {
@@ -63,6 +65,24 @@ export function registerIntegrationConsumers(queue: Queue): void {
     const p = msg.payload as { id: string; employeeId: string; newBasicMinor: number };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-PAYROLL-SALARY-REVISIONS-02: never overwrite HRMS basic pay with a
+      // non-integer / non-positive figure (payroll-service validates too; this
+      // is defence in depth at the point of the write). Dropped, not retried (a
+      // replay can never make it valid) -- but never silently: warn + audit.
+      if (!Number.isInteger(p.newBasicMinor) || p.newBasicMinor <= 0) {
+        log.warn({ messageId: msg.messageId, salaryRevisionId: p.id, employeeId: p.employeeId, newBasicMinor: p.newBasicMinor },
+          "salary_revision.created dropped: newBasicMinor is not a positive integer");
+        await enqueue(tx as Parameters<typeof enqueue>[0], {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "hrms", action: "sync_basic_pay_from_salary_revision", resourceType: "employee",
+            resourceId: p.employeeId, outcome: "failure",
+            metadata: { salaryRevisionId: p.id, reason: "INVALID_NEW_BASIC_MINOR" },
+          },
+        });
+        return;
+      }
       const current = await employeeRepo.findVersionForUpdate(tx, p.employeeId, msg.tenantId);
       if (!current) {
         // Employee doesn't exist in HRMS under this tenant -- nothing to

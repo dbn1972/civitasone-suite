@@ -319,7 +319,7 @@
     "statTotal": "Total",
     "statPending": "Pending",
     "statApprovedPaid": "Approved/Paid",
-    "statTotalArrearsAmount": "Total Arrears Amount",
+    "statTotalArrearsAmount": "Outstanding Arrears (net of recoveries)",
     "registerCardTitle": "Arrears Register",
     "filterPlaceholder": "Filter by employee or period…",
     "emptyTitle": "No arrears computed",
@@ -1140,8 +1140,8 @@
     "filterPlaceholder": "Filter by employee or component…",
     "emptyTitle": "No salary corrections yet",
     "emptyMessage": "Record a correction using the form above.",
-    "lopCardTitle": "Loss-of-Pay (LOP) Ledger",
-    "lopDescription": "Loss-of-pay adjustments are calculated automatically from approved leave and attendance records and applied during each payroll run. The adjusted amounts appear in the payroll register after processing.",
+    "lopCardTitle": "Loss of Pay (LOP)",
+    "lopDescription": "Loss-of-pay adjustments are calculated automatically from approved leave and attendance records and applied during each payroll run; they are not entered here. The adjusted amounts appear in the payroll register after processing.",
     "colEmployee": "Employee",
     "colComponent": "Component",
     "colEffectiveFrom": "Effective From",
@@ -1230,7 +1230,8 @@
     "employeeLabel": "Employee",
     "duplicateEmployeeError": "The same employee appears more than once. Combine their amounts into one item.",
     "duplicateEmployeeRowError": "This employee is already in the run.",
-    "confirmItemsAriaLabel": "Employees in this run"
+    "confirmItemsAriaLabel": "Employees in this run",
+    "existingRunWarning": "A run of this type already exists for {period}. Check the list below before creating another so the same payment is not made twice."
   },
   "createPensionerForm": {
     "ppoNoLabel": "PPO Number",
@@ -1327,7 +1328,8 @@
     "confirmTitle": "Record this salary revision?",
     "confirmLabel": "Record revision",
     "confirmDescription": "Record a {revisionType} revision to {amount} basic for employee <strong>{employeeId}</strong>, effective {effectiveDate}.",
-    "networkError": "Network error. Please try again."
+    "networkError": "Network error. Please try again.",
+    "orderNoRequiredError": "Enter the order number that sanctions this revision."
   },
   "crm": {
     "title": "Citizen Services",
@@ -2138,7 +2140,8 @@
     "filterPlaceholder": "Filter by employee or period…",
     "emptyTitle": "No ESI records",
     "emptyMessage": "No ESI contributions have been recorded yet.",
-    "truncatedNotice": "Showing the first {shown} of {total} records for this period. The totals above cover all {total}."
+    "truncatedNotice": "Showing the first {shown} of {total} records for this period. The totals above cover all {total}.",
+    "wageCeilingNote": "ESI covers employees whose monthly gross wages are within the {ceiling} wage ceiling (statutory reference as of {asOf})."
   },
   "expenditure": {
     "routeErrorBackLabel": "Back to Finance",
@@ -2542,7 +2545,7 @@
     "errorBackLabel": "Back to Payroll",
     "errorArea": "GPF statements",
     "title": "<term>GPF</term> Statements",
-    "subtitle": "General Provident Fund contributions — interest @ 7.1% p.a. (GoI Q1 FY 2026-27).",
+    "subtitle": "General Provident Fund contributions by employee and period.",
     "statStatements": "Statements",
     "statEmployees": "Employees",
     "statTotalContributions": "Total Contributions",
@@ -2600,7 +2603,8 @@
     "cappedAtInline": "→ capped at {amount}",
     "belowEligibilityMessage": "Gratuity requires a minimum of <strong>5 years</strong> of continuous service. Current: <strong>{years, plural, one {# year} other {# years}}</strong>.",
     "resultLabel": "Estimated Gratuity",
-    "cappedNote": "Capped at statutory maximum of {amount} as per the Payment of Gratuity Act, 1972."
+    "cappedNote": "Capped at statutory maximum of {amount} as per the Payment of Gratuity Act, 1972.",
+    "roundingNote": "A fraction of a year over six months counts as a full year of service."
   },
   "grievance": {
     "title": "Grievance Redressal",
@@ -2908,7 +2912,9 @@
     "hubNoMatch": "No modules match “{query}”. Try a different term, or open one of these:",
     "hubItemsCount": "{count, plural, one {# item} other {# items}}",
     "officeLocations": "Office Locations (Geofences)",
-    "officeLocationsDesc": "Geofenced offices used for geo check-in"
+    "officeLocationsDesc": "Geofenced offices used for geo check-in",
+    "mySlips": "My Payslips",
+    "mySlipsDesc": "Your own salary slips"
   },
   "hrAuditLog": {
     "title": "HR Audit Log",
@@ -3811,7 +3817,8 @@
     "selfProcessError": "You created this run, so another payroll user must process it.",
     "notDraftError": "This run has already been processed or closed.",
     "processSubmittedMessage": "Off-cycle run for {period} submitted for processing. Tax and net payable will appear once it completes.",
-    "reasonLabel": "Reason for processing (min 10 characters)"
+    "reasonLabel": "Reason for processing (min 10 characters)",
+    "processedNextStepNote": "Processing computes tax and net payable only. It does not create a bank transfer, so arrange payment of the net amount separately."
   },
   "orgChart": {
     "title": "Organisation Chart",
@@ -3915,11 +3922,20 @@
     "searchEmptyTitle": "Search for an employee to see their loans",
     "searchEmptyMessage": "Search by employee name or code to view their active and past loans, outstanding balance, and EMI details.",
     "recoveryCardTitle": "Recovery Schedule",
-    "recoveryEmptyTitle": "Recovery schedule not yet available",
-    "recoveryEmptyMessage": "There is no per-installment repayment schedule endpoint yet. The EMI total above is computed from the loan record; individual due dates are not tracked in this view.",
+    "recoveryEmptyTitle": "No installments",
+    "recoveryEmptyMessage": "This loan has no repayment installments yet.",
     "statPendingDisbursement": "Pending disbursement",
     "loansCardTitleFor": "Loans — {employee}",
-    "loansCardTitleUnknown": "Loans — employee name unavailable"
+    "loansCardTitleUnknown": "Loans — employee name unavailable",
+    "recoveryCardTitleFor": "Recovery Schedule — {loanNo}",
+    "recoveryPickLoanLabel": "Choose a loan to show its schedule",
+    "recoveryNote": "Amortisation preview from the loan record. Actual deductions follow each payroll run.",
+    "recoveryColNo": "No.",
+    "recoveryColOpening": "Opening",
+    "recoveryColEmi": "EMI",
+    "recoveryColPrincipal": "Principal",
+    "recoveryColInterest": "Interest",
+    "recoveryColClosing": "Closing"
   },
   "payrollTaxConfig": {
     "title": "Income Tax Reference",
@@ -3987,7 +4003,8 @@
     "statActiveBasicPensionNote": "Sum of basic pension of active pensioners. Excludes DA/dearness relief, medical allowance and commutation recovery.",
     "loadErrorArea": "pensioners",
     "emptyRegisterTitle": "No pensioners registered yet",
-    "emptyRegisterMessage": "Add a pensioner to start the PPO register."
+    "emptyRegisterMessage": "Add a pensioner to start the PPO register.",
+    "dataUseNotice": "This register lists pensioners' personal data (PPO number, name, DDO code, pension amount). Use it only for pension administration; access is restricted to payroll roles under the DPDP Act, 2023."
   },
   "pensionersNew": {
     "loadingHeading": "New Pensioner",
@@ -5056,7 +5073,11 @@
     "cardPtLabel": "Professional Tax",
     "cardLwfLabel": "Labour Welfare Fund",
     "cardNpsLabel": "NPS",
-    "cardGpfLabel": "GPF"
+    "cardGpfLabel": "GPF",
+    "ratePtStateSpecific": "Slab-based and state-specific. See the Professional Tax configuration.",
+    "rateLwfStateSpecific": "Fixed rupee amounts that vary by state. See the LWF configuration.",
+    "rateGpfPerEmployee": "Subscription rate is chosen per employee. See the GPF ledger.",
+    "referenceRatesNote": "PF, ESI and NPS rates are statutory reference values (as of {asOf}) and may change with a circular; the payroll engine uses your tenant configuration. PT, LWF and GPF are state- or employee-specific."
   },
   "statutoryComplianceCard": {
     "noCeiling": "No ceiling",
@@ -6017,6 +6038,24 @@
     "statsScopedNote": "Totals above are for {period}, the latest period shown. Filter by period to see another month.",
     "tableCaption": "Payroll register lines by department with gross, deductions, and net pay"
   },
+  "mySlips": {
+    "title": "My Payslips",
+    "subtitle": "Your own salary slips, newest first.",
+    "backLabel": "Back to HR",
+    "cardTitle": "Payslips",
+    "colPeriod": "Pay period",
+    "colGross": "Gross",
+    "colDeductions": "Deductions",
+    "colNet": "Net pay",
+    "colStatus": "Status",
+    "emptyTitle": "No payslips yet",
+    "emptyMessage": "Your payslips will appear here once a payroll run that includes you is processed.",
+    "loadErrorMessage": "Couldn't load — showing nothing",
+    "loadingAriaLabel": "Loading…",
+    "pagerLabel": "Payslip pages",
+    "newer": "Newer",
+    "older": "Older"
+  },
   "salarySlips": {
     "title": "Salary Slips",
     "subtitle": "Individual employee salary statements.",
@@ -6026,7 +6065,12 @@
     "statDraft": "Pending (Draft)",
     "loadErrorMessage": "Couldn't load — showing nothing",
     "errorBackLabel": "Back to Payroll",
-    "errorArea": "Salary Slips"
+    "errorArea": "Salary Slips",
+    "periodLabel": "Pay period",
+    "allPeriods": "All periods",
+    "applyPeriod": "Show",
+    "truncatedNotice": "Showing the first {count} slips only; there may be more. Totals are hidden because they would be incomplete.",
+    "allPeriodsTotalsHidden": "Gross and net totals are shown for a single pay period only, so they are hidden for All periods."
   },
   "salarySlipsTable": {
     "colEmployee": "Employee",
@@ -6082,7 +6126,10 @@
     "printUnavailableNotFinal": "Only finalized or paid slips can be printed",
     "brandName": "CivitasOne HRMS",
     "printMeta": "HR Management System · Salary Slip",
-    "loadingSlipDetails": "Loading slip details…"
+    "loadingSlipDetails": "Loading slip details…",
+    "otherComponents": "Other components (not part of net pay)",
+    "otherComponentsNote": "Listed for information, e.g. employer contributions. They are not added to earnings or deducted from net pay.",
+    "reconcileNote": "The itemised lines above do not add up to the Gross or Total Deductions shown. Please check this slip with the payroll team."
   },
   "salarySlipDashboard": {
     "title": "Salary Slip",
@@ -6177,7 +6224,7 @@
   },
   "payrollComparison": {
     "title": "Payroll Comparison",
-    "subtitle": "Month-on-month comparison of payroll register totals.",
+    "subtitle": "Compare payroll register totals between any two periods.",
     "filterCardTitle": "Select Periods to Compare",
     "labelPeriod1": "Period 1",
     "labelPeriod2": "Period 2",
@@ -6185,7 +6232,7 @@
     "statHeadcountDelta": "Headcount Δ",
     "statNetDelta": "Net Pay Δ",
     "emptyTitle": "Choose two periods to compare",
-    "emptyMessage": "Enter both periods above in YYYY-MM format (e.g. 2025-05 and 2025-06) and select Compare.",
+    "emptyMessage": "Enter both periods above in YYYY-MM format (e.g. {example1} and {example2}) and select Compare. The earlier period is always shown first.",
     "noDataTitle": "No comparison data",
     "noDataMessage": "No payroll register totals were found for one or both of the selected periods.",
     "colMetric": "Metric",
@@ -6205,7 +6252,8 @@
     "srDecrease": "decrease of",
     "colDeltaPct": "Change %",
     "noDataBothMessage": "No payroll register totals were found for {period1} or {period2}.",
-    "noDataPeriodMessage": "No payroll register totals were found for {period}."
+    "noDataPeriodMessage": "No payroll register totals were found for {period}.",
+    "orderedNotice": "Periods were reordered so the earlier one comes first."
   },
   "payrollCosting": {
     "title": "Cost Allocation",
@@ -6263,13 +6311,13 @@
     "groupTotalWarning": "{group} will total {total} after this save (must be 100%)."
   },
   "payrollCtc": {
-    "title": "CTC Configuration",
-    "subtitle": "Cost-to-Company component rules used to break a CTC figure into pay components.",
+    "title": "CTC Component Rules",
+    "subtitle": "Read-only view of the Cost-to-Company component rules used to break a CTC figure into pay components. Rules are maintained by the payroll team outside this screen.",
     "statTotal": "Configured Components",
     "statEmployerCost": "Employer-Cost",
     "statActive": "Active Components",
     "statPctBased": "Percentage-Based",
-    "cardTitle": "CTC Component Configuration",
+    "cardTitle": "CTC Component Rules",
     "colCode": "Code",
     "colComponent": "Component",
     "colCalculation": "Calculation",
@@ -7008,7 +7056,8 @@
     "statSeparationTypes": "Separation Types",
     "cardTitle": "F&F Settlements",
     "loadingAriaLabel": "Loading…",
-    "loadErrorMessage": "Couldn't load F&F settlements — showing nothing"
+    "loadErrorMessage": "Couldn't load F&F settlements — showing nothing",
+    "statInApproval": "In Approval"
   },
   "computeFnfForm": {
     "formTitle": "Compute F&F Settlement",
@@ -7065,7 +7114,8 @@
     "hrRecordsUnavailable": "Couldn't load HR records for this employee — enter completed years and leave balance manually.",
     "systemEstimateHint": "HR estimate (basic pay only): {amount}",
     "confirmOverrideLine": "{field}: HR record {system}, entered {entered}",
-    "directoryForbidden": "Your role can't search the employee directory, so no employee can be picked here. Ask an HR admin to compute this settlement, or to grant you directory access."
+    "directoryForbidden": "Your role can't search the employee directory, so no employee can be picked here. Ask an HR admin to compute this settlement, or to grant you directory access.",
+    "refreshListBtn": "Refresh list"
   },
   "fnFSettlementCard": {
     "lastSalaryLabel": "Last Salary",

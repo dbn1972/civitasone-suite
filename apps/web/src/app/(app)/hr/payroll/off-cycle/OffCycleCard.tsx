@@ -97,6 +97,12 @@ function RunCard({ row, onProcess, canProcess }: { row: OffCycleRow; onProcess: 
       {row.status === "draft" && (
         <p style={{ margin: 0, padding: "0 18px 12px", fontSize: 12, color: "var(--ink2)" }}>{t("checkerNote")}</p>
       )}
+      {/* GAP-PAYROLL-OFF-CYCLE-05: processing an off-cycle run only computes
+          tax and net payable (offCycleProcess consumer); it creates no bank
+          transfer, so say what the next step is instead of implying payment. */}
+      {row.status !== "draft" && (
+        <p style={{ margin: 0, padding: "0 18px 12px", fontSize: 12, color: "var(--ink2)" }}>{t("processedNextStepNote")}</p>
+      )}
     </div>
   );
 }

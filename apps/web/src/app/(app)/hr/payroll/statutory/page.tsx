@@ -8,79 +8,81 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import type { NavTile } from "@civitasone/types";
 import { StatutoryComplianceCard } from "./StatutoryComplianceCard";
+import {
+  ESI_EMPLOYEE_PCT, ESI_EMPLOYER_PCT, ESI_WAGE_CEILING_MINOR, NPS_EMPLOYEE_PCT, NPS_EMPLOYER_PCT,
+  PF_EMPLOYEE_PCT, PF_EMPLOYER_PCT, PF_ESI_CHALLAN_DUE_DAY, PF_WAGE_CEILING_MINOR, STATUTORY_REFERENCE_AS_OF,
+} from "./_lib/rates";
 
-// GoI statutory rates — updated per latest FinMin / EPFO / ESIC circulars (Aug 2026)
-// Wage ceilings in paise (minor units): EPF wage ceil = ₹15,000 = 1,500,000 minor
-// UX-017: labelKey/challanDueDay/etc. are stable identifiers used only to look
-// up each card's translated label -- never compared/displayed directly.
-//
-// GAP-PAYROLL-STATUTORY-01 [HUMAN REVIEW: statutory compliance] -- whether
-// PF/ESI/NPS/GPF should keep showing these rates at all (vs. a "reference
-// value, as of <date>" label or a future config-endpoint read), and whether
-// PT/LWF/GPF should drop challanDueDay entirely, is a product/compliance
-// decision this pass deliberately leaves OPEN (see payroll.md's own
-// "Needs: decision" tag on this item and the PR description). Nothing in
-// this file resolves that decision; only the wageCeilingMonthly values below
-// changed (GAP-PAYROLL-STATUTORY-03, a narrower and unrelated fix -- a
-// "state-specific" ceiling is not the same claim as "no ceiling").
-const STATUTORY_CARD_DEFS = [
+// GAP-PAYROLL-STATUTORY-01 / -LWF-04 [HUMAN REVIEW: statutory compliance]:
+// the hub used to present PT as a flat 2.5%, LWF as 0.5%/1% and "due 15th" on
+// every card, contradicting the PT slab table and the LWF fixed-rupee config
+// pages, and giving GPF (no challan) a due date. Now:
+//  - PT / LWF carry NO percentages or due day: a "state-specific -- see
+//    configuration" note replaces them (rateNoteKey).
+//  - GPF carries no due day (not a challan-based levy) and no rate: the
+//    subscription is chosen per employee (rateNoteKey).
+//  - PF / ESI / NPS keep rates but are read from statutory/_lib/rates.ts (one
+//    source, also used by the ESI page) and the hub states they are reference
+//    values "as of <date>". Only PF and ESI show the 15th challan due day.
+// Wage ceilings in paise (minor units).
+type StatutoryCardDef = {
+  labelKey: "cardPfLabel" | "cardEsiLabel" | "cardPtLabel" | "cardLwfLabel" | "cardNpsLabel" | "cardGpfLabel";
+  icon: string;
+  empPct?: number;
+  erPct?: number;
+  rateNoteKey?: "ratePtStateSpecific" | "rateLwfStateSpecific" | "rateGpfPerEmployee";
+  wageCeilingMonthly: number | "state" | "none";
+  challanDueDay?: number;
+  href: string;
+};
+
+const STATUTORY_CARD_DEFS: StatutoryCardDef[] = [
   {
     labelKey: "cardPfLabel" as const,
     icon: "🏦",
-    empPct: 12,
-    erPct: 12,
-    wageCeilingMonthly: 1_500_000, // ₹15,000/mo (EPFO ceiling)
-    challanDueDay: 15,
+    empPct: PF_EMPLOYEE_PCT,
+    erPct: PF_EMPLOYER_PCT,
+    wageCeilingMonthly: PF_WAGE_CEILING_MINOR,
+    challanDueDay: PF_ESI_CHALLAN_DUE_DAY,
     href: "/hr/payroll/statutory/pf",
   },
   {
     labelKey: "cardEsiLabel" as const,
     icon: "🩺",
-    empPct: 0.75,
-    erPct: 3.25,
-    wageCeilingMonthly: 2_100_000, // ₹21,000/mo (ESIC ceiling)
-    challanDueDay: 15,
+    empPct: ESI_EMPLOYEE_PCT,
+    erPct: ESI_EMPLOYER_PCT,
+    wageCeilingMonthly: ESI_WAGE_CEILING_MINOR,
+    challanDueDay: PF_ESI_CHALLAN_DUE_DAY,
     href: "/hr/payroll/statutory/esi",
   },
   {
     labelKey: "cardPtLabel" as const,
     icon: "📋",
-    empPct: 2.5,
-    erPct: 0,
-    // GAP-PAYROLL-STATUTORY-03: PT is a slab table, not a flat ceiling --
-    // "state" (not undefined/"none") so the card says "State-specific"
-    // instead of the wrong "No ceiling".
+    rateNoteKey: "ratePtStateSpecific" as const,
+    // GAP-PAYROLL-STATUTORY-03: PT is a slab table, not a flat ceiling.
     wageCeilingMonthly: "state" as const,
-    challanDueDay: 15,
     href: "/hr/payroll/statutory/pt",
   },
   {
     labelKey: "cardLwfLabel" as const,
     icon: "🤝",
-    empPct: 0.5,
-    erPct: 1,
-    // GAP-PAYROLL-STATUTORY-03: LWF is fixed rupee amounts per state, same
-    // "state-specific" ceiling story as PT above.
+    rateNoteKey: "rateLwfStateSpecific" as const,
     wageCeilingMonthly: "state" as const,
-    challanDueDay: 15,
     href: "/hr/payroll/statutory/lwf",
   },
   {
     labelKey: "cardNpsLabel" as const,
     icon: "🏛️",
-    empPct: 10,
-    erPct: 14,
-    wageCeilingMonthly: "none" as const, // No ceiling
-    challanDueDay: 15,
+    empPct: NPS_EMPLOYEE_PCT,
+    erPct: NPS_EMPLOYER_PCT,
+    wageCeilingMonthly: "none" as const,
     href: "/hr/payroll/nps",
   },
   {
     labelKey: "cardGpfLabel" as const,
     icon: "📒",
-    empPct: 10,
-    erPct: 0,
-    wageCeilingMonthly: "none" as const, // No ceiling
-    challanDueDay: 15,
+    rateNoteKey: "rateGpfPerEmployee" as const,
+    wageCeilingMonthly: "none" as const,
     href: "/hr/payroll/gpf",
   },
 ];
@@ -120,7 +122,11 @@ export default async function StatutoryHubPage() {
       { title: t("tileTdsReturnsTitle"), href: "/hr/payroll/returns", description: t("tileTdsReturnsDescription"), icon: "📄" },
     ];
 
-    const statutoryCards = STATUTORY_CARD_DEFS.map((def) => ({ ...def, label: t(def.labelKey) }));
+    const statutoryCards = STATUTORY_CARD_DEFS.map(({ labelKey, rateNoteKey, ...card }) => ({
+      ...card,
+      label: t(labelKey),
+      rateNote: rateNoteKey ? t(rateNoteKey) : undefined,
+    }));
 
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
@@ -142,6 +148,9 @@ export default async function StatutoryHubPage() {
               <StatutoryComplianceCard key={card.href} {...card} />
             ))}
           </div>
+          <p style={{ marginTop: 12, fontSize: 12, color: "var(--ink2)" }}>
+            {t("referenceRatesNote", { asOf: STATUTORY_REFERENCE_AS_OF })}
+          </p>
           {/* GAP-PAYROLL-STATUTORY-04: this used to repeat as non-link text
               inside all six cards above (StatutoryComplianceCard.tsx) --
               one real, working link here instead. */}
