@@ -20,10 +20,10 @@ import { eq, and } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
-import { queue } from "../../shared/infra.js";
+import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { hrmsCandidates } from "./candidate-schema.js";
-import { generateOtp, verifyOtp, OTP_TTL_SECONDS, MAX_ATTEMPTS } from "./otp-verify.js";
+import { generateOtp, verifyOtp, OTP_TTL_SECONDS, MAX_ATTEMPTS, devOtpEchoEnabled } from "./otp-verify.js";
 import * as otpRepo from "./otp-verify-repo.js";
 
 /**
@@ -176,6 +176,12 @@ async function publishPublicF3Write(
 /** Minimum seconds between OTP requests for the same candidate. */
 export const OTP_REQUEST_COOLDOWN_SECONDS = 30;
 
+/**
+ * devCode echo gate: requires ALLOW_DEV_OTP_ECHO=true AND a non-production NODE_ENV.
+ * Exported for the unit test.
+ */
+export { devOtpEchoEnabled };
+
 export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<void> {
   // POST /v1/careers/auth/otp-request
   // Accepts { email, tenantId }. Finds or creates the candidate, issues a 6-digit OTP.
@@ -199,6 +205,23 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
     );
 
     const isNewCandidate = existing.length === 0;
+
+    // GAP-RECRUITMENT-CAREERS-PORTAL-LOGIN-03 / L6: the code is now really e-mailed, so an unknown address must not
+    // be bombable either. Single source of truth per case, same 429 either way (no account enumeration):
+    //  - known email: the latest challenge's created_at (DB, below);
+    //  - unknown email: no row exists yet (the consumer creates it asynchronously), so an atomic short-lived cache key
+    //    stands in until the row exists. Fails open if the store is down.
+    if (isNewCandidate) {
+      try {
+        const n = await cache.incr(`otp-req:${tenantId}:${email}`, OTP_REQUEST_COOLDOWN_SECONDS);
+        if (n > 1) {
+          void reply.header("retry-after", String(OTP_REQUEST_COOLDOWN_SECONDS));
+          throw new HttpError(429, "OTP_COOLDOWN", `a code was sent recently; try again in ${OTP_REQUEST_COOLDOWN_SECONDS}s`);
+        }
+      } catch (err) {
+        if (err instanceof HttpError) throw err;
+      }
+    }
 
     // Server-side resend cooldown: the web form's 30s timer is cosmetic on its own.
     if (!isNewCandidate) {
@@ -225,9 +248,11 @@ export async function candidatePublicAuthRoutes(app: FastifyInstance): Promise<v
       tenantId, candidateId, isNewCandidate, email, code, expiresAt: expiresAt.toISOString(),
     });
 
-    // NOTE: In production, publish a notification event here to email the code.
-    // For now, we echo it in non-production environments only.
-    const isDev = process.env.NODE_ENV !== "production";
+    // The code is e-mailed by the F3 consumer (notification.send, hrms.candidate.login_otp).
+    // GAP-RECRUITMENT-CAREERS-PORTAL-LOGIN-03: echoing it in the response is an explicit,
+    // opt-in local/E2E convenience -- never implied by NODE_ENV (staging/UAT are not
+    // "production" but must not hand a login code to whoever can type an email address).
+    const isDev = devOtpEchoEnabled(process.env);
     return reply.code(202).send({
       challengeId,
       candidateId,

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { devOtpEchoAllowed, stripDevCode } from "./devCode";
 
 const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const TENANT_ID = process.env.DEMO_TENANT_ID ?? process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "";
@@ -14,7 +15,7 @@ export async function POST(req: Request) {
       },
       body: JSON.stringify({ ...body, tenantId: body.tenantId ?? TENANT_ID }),
     });
-    const text = await upstream.text();
+    const text = stripDevCode(await upstream.text(), devOtpEchoAllowed());
     return new NextResponse(text, {
       status: upstream.status,
       headers: { "content-type": "application/json" },

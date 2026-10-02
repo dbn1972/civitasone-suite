@@ -7,7 +7,11 @@ import { useParams, useRouter } from "next/navigation";
 import { ApplicationPipeline } from "../_components/ApplicationPipeline";
 import { GOIReservationCard, ROSTER_CATEGORIES, categoryOfApplication, type RosterCategory } from "../_components/GOIReservationCard";
 import { InterviewCard } from "../_components/InterviewCard";
-import { ConfirmDialog, ErrorState, useConfirmAction, Button } from "../../../../_components/ds";
+import { VacancyNotificationPanel } from "../_components/VacancyNotificationPanel";
+import { ConfirmDialog, ErrorState, useConfirmAction, Button, EntityPicker, StatusPill } from "../../../../_components/ds";
+import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
+import { formatIndianDate, formatIndianDateTime, todayIST } from "@/lib/formatters";
+import { rupeesToMinorString } from "@/lib/money";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 import { REJECTION_REASON_CODES, isVacancyType, type RejectionReasonCode } from "@/lib/recruitment";
@@ -53,25 +57,24 @@ type Application = {
 
 type DecisionState = Record<string, "idle" | "submitting" | "done" | "error">;
 
-const STAGE_COLOR: Record<string, string> = {
-  applied:      "bg-slate-100 text-slate-700",
-  shortlisted:  "bg-blue-100 text-blue-700",
-  interviewing: "bg-purple-100 text-purple-700",
-  selected:     "bg-emerald-100 text-emerald-700",
-  offered:      "bg-amber-100 text-amber-700",
-  hired:        "bg-green-100 text-green-700",
-  rejected:     "bg-red-100 text-red-700",
-  withdrawn:    "bg-slate-100 text-slate-400",
+/** How long to wait before re-reading after a queued (202) write, and how often to poll a publish toggle. */
+const QUEUED_RELOAD_MS = 1200;
+const PUBLISH_POLL_MS = 1500;
+const PUBLISH_POLL_ATTEMPTS = 5;
+const BULK_SHORTLIST_CHUNK = 500;
+
+type InterviewSlot = {
+  id: string;
+  applicationId: string;
+  scheduledDate: string;
+  scheduledTime: string;
+  status: string;
 };
 
-const DECISION_COLOR: Record<string, string> = {
-  pending:       "bg-slate-100 text-slate-500",
-  shortlisted:   "bg-blue-100 text-blue-700",
-  eligible:      "bg-emerald-100 text-emerald-700",
-  ineligible:    "bg-red-100 text-red-700",
-  waitlisted:    "bg-amber-100 text-amber-700",
-  manual_review: "bg-purple-100 text-purple-700",
-};
+/** The stored date + time are UTC (interview-routes.ts derives them from an ISO instant). */
+function interviewInstant(i: InterviewSlot): string {
+  return `${i.scheduledDate}T${i.scheduledTime}:00.000Z`;
+}
 
 /** Valid next actions per application stage */
 type ConfirmConfig = {
@@ -135,7 +138,8 @@ function ScheduleInterviewDialog({
   onClose: () => void;
 }) {
   const t = useTranslations("recruitmentDetail");
-  const [interviewerIds, setInterviewerIds] = useState("");
+  const [interviewerIds, setInterviewerIds] = useState<string[]>([]);
+  const [interviewerNames, setInterviewerNames] = useState("");
   const [scheduledAt, setScheduledAt] = useState("");
   const [durationMinutes, setDurationMinutes] = useState(60);
   const [mode, setMode] = useState<typeof INTERVIEW_MODES[number]>("video");
@@ -146,18 +150,17 @@ function ScheduleInterviewDialog({
   const [message, setMessage] = useState("");
   const fieldId = useId();
 
-  const parsedInterviewerIds = interviewerIds.split(",").map((s) => s.trim()).filter(Boolean);
   const submittedPayload = useRef<ScheduleInterviewPayload | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (parsedInterviewerIds.length === 0 || !scheduledAt) { // ux-001-ok: client-side validation of locally-typed form input, no loader/fetch involved
+    if (interviewerIds.length === 0 || !scheduledAt) { // ux-001-ok: client-side validation of locally-typed form input, no loader/fetch involved
       setStatus("error");
       setMessage(t("scheduleInterviewFieldsRequired"));
       return;
     }
     const payload: ScheduleInterviewPayload = {
-      interviewerIds: parsedInterviewerIds,
+      interviewerIds,
       scheduledAt: new Date(scheduledAt).toISOString(),
       durationMinutes,
       mode,
@@ -170,6 +173,10 @@ function ScheduleInterviewDialog({
     try {
       await onSubmit(payload);
       submittedPayload.current = payload;
+      // Show names, never UUIDs, on the confirmation card (GAP-RECRUITMENT-DETAIL-06).
+      let names = "";
+      try { names = (await resolveEmployees(payload.interviewerIds)).map((o) => o.label).join(", "); } catch { names = ""; }
+      setInterviewerNames(names || t("interviewersSelected", { count: payload.interviewerIds.length }));
       setStatus("success");
     } catch (err) {
       setStatus("error");
@@ -194,7 +201,7 @@ function ScheduleInterviewDialog({
               candidateName={applicantName}
               roleApplied={jobTitle}
               slotISO={submittedPayload.current.scheduledAt}
-              interviewerName={submittedPayload.current.interviewerIds.join(", ")}
+              interviewerName={interviewerNames}
             />
             <Button onClick={onClose} style={{ alignSelf: "flex-end" }}>{t("dialogDone")}</Button>
           </div>
@@ -202,11 +209,17 @@ function ScheduleInterviewDialog({
           <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-3">
             <div>
               <label htmlFor={`${fieldId}-interviewers`} className={dialogLabelClass}>{t("interviewerIds")}</label>
-              <input
-                id={`${fieldId}-interviewers`} type="text" className={dialogInputClass}
+              <EntityPicker
+                id={`${fieldId}-interviewers`}
+                multiple
+                value={interviewerIds}
+                onChange={(v) => setInterviewerIds(Array.isArray(v) ? v : v ? [v] : [])}
+                search={searchEmployees}
+                resolve={resolveEmployees}
                 placeholder={t("interviewerIdsPlaceholder")}
-                value={interviewerIds} onChange={(e) => setInterviewerIds(e.target.value)}
-                required
+                noResultsText={t("interviewersNoMatch")}
+                searchingText={t("interviewersSearching")}
+                removeOptionAriaLabel={(label) => t("interviewersRemove", { label })}
               />
               <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">{t("interviewerIdsHelp")}</p>
             </div>
@@ -298,8 +311,10 @@ function SendOfferDialog({
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    const ctcMinor = Math.round(Number(ctcRupees) * 100);
-    if (!ctcRupees || !Number.isFinite(ctcMinor) || ctcMinor <= 0) {
+    // GAP-RECRUITMENT-DETAIL-05: exact decimal parse (no float multiply); sub-paise input is rejected.
+    const minor = rupeesToMinorString(ctcRupees);
+    const ctcMinor = minor === null ? Number.NaN : Number(minor);
+    if (!Number.isSafeInteger(ctcMinor) || ctcMinor <= 0) {
       setStatus("error");
       setMessage(t("sendOfferFieldsRequired"));
       return;
@@ -332,7 +347,7 @@ function SendOfferDialog({
             <div>
               <label htmlFor={`${fieldId}-ctc`} className={dialogLabelClass}>{t("ctc")}</label>
               <input
-                id={`${fieldId}-ctc`} type="number" min={1} step="0.01" className={dialogInputClass}
+                id={`${fieldId}-ctc`} type="text" inputMode="decimal" className={dialogInputClass}
                 placeholder={t("ctcPlaceholder")} value={ctcRupees} onChange={(e) => setCtcRupees(e.target.value)} required
               />
             </div>
@@ -414,10 +429,6 @@ function ContextMenu({
       { label: t("actionScheduleInterview"), key: "schedule_interview", variant: "primary", dialog: "interview" },
       { label: t("actionSendOffer"),         key: "send_offer",         variant: "primary", dialog: "offer" },
       { label: t("actionReject"),            key: "reject",             variant: "danger", confirm: REJECT_CONFIRM },
-    ],
-    interviewing: [
-      { label: t("actionSendOffer"), key: "send_offer", variant: "primary", disabled: true, disabledReason: t("actionSendOfferDisabledReason") },
-      { label: t("actionReject"),   key: "reject",     variant: "danger", confirm: REJECT_CONFIRM },
     ],
     selected: [
       { label: t("actionMarkJoined"), key: "mark_joined", variant: "primary", disabled: true, disabledReason: t("actionMarkJoinedDisabledReason") },
@@ -656,25 +667,40 @@ export default function JobOpeningDetailPage() {
   // first batch is still in flight (busy/disabled={busy} is this
   // codebase's standard double-submit guard, e.g. IntegrationDrawer.tsx,
   // EndConversationButton.tsx).
-  const [shortlistAllBusy, setShortlistAllBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState<{ shortlisted: number; skipped: number; requested: number } | null>(null);
   // CRITICAL fix (Bug 1): no UI control anywhere could ever flip is_published,
   // so nothing created through the app could reach the public /careers page.
-  const [publishBusy, setPublishBusy] = useState(false);
+  // The publish PATCH is queued (202); `publishPending` holds the value we are waiting to see reflected.
+  const [publishPending, setPublishPending] = useState<boolean | null>(null);
   const [publishError, setPublishError] = useState<string | null>(null);
+  const [advertOpen, setAdvertOpen] = useState(false);
+  const [interviews, setInterviews] = useState<InterviewSlot[]>([]);
+  const [interviewsLoadError, setInterviewsLoadError] = useState(false);
+  const mountedRef = useRef(true);
+  const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    };
+  }, []);
 
   const searchId = useId();
   const formError = useFormError("vacancy");
 
-  const loadOpening = useCallback(async (signal?: AbortSignal) => {
+  const loadOpening = useCallback(async (signal?: AbortSignal): Promise<JobOpening | null> => {
     try {
       const res = await fetch(`/api/proxy/v1/hrms/job-openings?limit=200`, { signal });
-      if (!res.ok) { setError((await formError.fromResponse(res, "load")).message); return; }
+      if (!res.ok) { setError((await formError.fromResponse(res, "load")).message); return null; }
       const data = await res.json() as unknown;
       const arr: JobOpening[] = Array.isArray(data) ? data : ((data as Record<string, unknown>)?.data as JobOpening[] ?? []);
       const found = arr.find((o) => o.id === id) ?? null;
       setOpening(found);
+      return found;
     } catch (e) {
       if (!(e instanceof Error && e.name === "AbortError")) setError(formError.fromException("load").message);
+      return null;
     } finally {
       setLoadingOpening(false);
     }
@@ -697,12 +723,52 @@ export default function JobOpeningDetailPage() {
     }
   }, [id]);
 
+  // GAP-RECRUITMENT-DETAIL-02: scheduling an interview does not move the application's stage, so the
+  // inbox shows the scheduled slot from the interviews list instead.
+  const loadInterviews = useCallback(async (signal?: AbortSignal) => {
+    setInterviewsLoadError(false);
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/interviews?jobOpeningId=${id}&limit=100`, { signal });
+      if (!res.ok) { setInterviewsLoadError(true); return; }
+      const data = await res.json() as { data?: InterviewSlot[] };
+      setInterviews(data.data ?? []);
+    } catch (e) {
+      if (!(e instanceof Error && e.name === "AbortError")) setInterviewsLoadError(true);
+    }
+  }, [id]);
+
   useEffect(() => {
     const controller = new AbortController();
     void loadOpening(controller.signal);
     void loadApplications(controller.signal);
+    void loadInterviews(controller.signal);
     return () => controller.abort();
-  }, [loadOpening, loadApplications]);
+  }, [loadOpening, loadApplications, loadInterviews]);
+
+  // Writes here are queued (202): re-read now and once more shortly after, instead of assuming success.
+  const reloadAfterQueuedWrite = useCallback(() => {
+    void loadApplications();
+    void loadInterviews();
+    if (reloadTimer.current) clearTimeout(reloadTimer.current);
+    reloadTimer.current = setTimeout(() => {
+      if (!mountedRef.current) return;
+      void loadApplications();
+      void loadInterviews();
+    }, QUEUED_RELOAD_MS);
+  }, [loadApplications, loadInterviews]);
+
+  // The soonest confirmed (status scheduled) slot per application, for the inbox hint.
+  const nextInterviewByApp = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const i of interviews) {
+      if (i.status !== "scheduled") continue;
+      const at = interviewInstant(i);
+      if (Number.isNaN(new Date(at).getTime())) continue;
+      const prev = m.get(i.applicationId);
+      if (!prev || at < prev) m.set(i.applicationId, at);
+    }
+    return m;
+  }, [interviews]);
 
   const handleAction = useCallback(async (appId: string, actionKey: string, payload?: unknown) => {
     // withdraw's only ever payload is an optional reason string; schedule_interview
@@ -760,6 +826,7 @@ export default function JobOpeningDetailPage() {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ jobOpeningId: id, applicationId: appId, ...p }),
         });
+        if (res.ok) reloadAfterQueuedWrite();
       } else if (actionKey === "send_offer") {
         // CRITICAL fix (Bug 2): real caller for the already-hardened PATCH
         // .../offer (PR #1542) — this is the actual missing link. Nothing in
@@ -816,7 +883,7 @@ export default function JobOpeningDetailPage() {
     // against a future caller bypassing that dialog, not because it has an
     // observable symptom today.
   // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
-  }, [t]);
+  }, [t, id, reloadAfterQueuedWrite]);
 
   // CRITICAL fix (Bug 1): the actual publish control. Calls the new PATCH
   // .../publish route (publication-routes.ts), which is async (202 Accepted,
@@ -826,28 +893,73 @@ export default function JobOpeningDetailPage() {
   // endpoint (see handleAction's shortlist/send_offer branches above).
   const handleTogglePublish = useCallback(async () => {
     if (!opening) return;
-    const nextIsPublished = !(opening.isPublished === true || opening.isPublished === "true");
-    setPublishBusy(true);
+    const target = !(opening.isPublished === true || opening.isPublished === "true");
     setPublishError(null);
-    try {
-      const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/publish`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ isPublished: nextIsPublished }),
-      });
-      if (!res.ok) {
-        setPublishError((await formError.fromResponse(res, "save")).message);
-        return;
+    const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/publish`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ isPublished: target }),
+    }).catch(() => null);
+    if (!res) throw new Error(formError.fromException("save").message);
+    if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+    // GAP-RECRUITMENT-DETAIL-10: 202 means "queued", not "done". Keep a pending state and poll until the
+    // opening actually reads back with the new value; never assume success.
+    setPublishPending(target);
+    void (async () => {
+      for (let attempt = 0; attempt < PUBLISH_POLL_ATTEMPTS; attempt++) {
+        await new Promise((r) => setTimeout(r, PUBLISH_POLL_MS));
+        if (!mountedRef.current) return;
+        const found = await loadOpening();
+        if (!mountedRef.current) return;
+        if (found && (found.isPublished === true || found.isPublished === "true") === target) {
+          setPublishPending(null);
+          return;
+        }
       }
-      setOpening((prev) => prev ? { ...prev, isPublished: nextIsPublished } : prev);
-    } catch {
-      setPublishError(formError.fromException("save").message);
-    } finally {
-      setPublishBusy(false);
-    }
+      if (!mountedRef.current) return;
+      setPublishPending(null);
+      setPublishError(t("publishStillProcessing"));
+    })();
     // formError.fromResponse/fromException are stable across renders (see useFormError).
   // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
-  }, [id, opening]);
+  }, [id, opening, loadOpening, t]);
+
+  const publishAction = useConfirmAction({ onConfirm: handleTogglePublish });
+
+  // GAP-RECRUITMENT-DETAIL-09: one confirmation, one batch call (chunked at the route's 500 cap), and a
+  // visible result -- no per-row fan-out whose failures were swallowed.
+  const pendingShortlist = useMemo(
+    () => applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied"),
+    [applications],
+  );
+  const nothingToShortlist = pendingShortlist.length === 0; // ux-001-ok: only disables a button, on data the inbox already error-gates
+  const bulkAction = useConfirmAction({
+    onConfirm: async () => {
+      const ids = pendingShortlist.map((a) => a.id);
+      if (ids.length === 0) return; // ux-001-ok: no-op guard on already-loaded, error-gated data; renders nothing
+      const total = { shortlisted: 0, skipped: 0, requested: 0 };
+      try {
+        for (let i = 0; i < ids.length; i += BULK_SHORTLIST_CHUNK) {
+          const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/shortlist`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ applicationIds: ids.slice(i, i + BULK_SHORTLIST_CHUNK) }),
+          });
+          if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+          const j = await res.json() as { shortlisted?: number; skipped?: number; requested?: number };
+          total.shortlisted += j.shortlisted ?? 0;
+          total.skipped += j.skipped ?? 0;
+          total.requested += j.requested ?? 0;
+        }
+      } catch (e) {
+        // Earlier chunks may already have applied; re-read so the list reflects the truth.
+        reloadAfterQueuedWrite();
+        throw e instanceof Error ? e : new Error(t("shortlistAllFailed"));
+      }
+      setBulkResult(total);
+      reloadAfterQueuedWrite();
+    },
+  });
 
   const filtered = applications.filter((a) => {
     const q = search.toLowerCase();
@@ -882,6 +994,13 @@ export default function JobOpeningDetailPage() {
   }
 
   const published = opening.isPublished === true || opening.isPublished === "true";
+  // Publishing exposes the vacancy on the public careers page, so only an open, in-date vacancy may be
+  // published; unpublishing is always allowed.
+  const deadlinePassed = opening.applicationDeadline ? opening.applicationDeadline.slice(0, 10) < todayIST() : false;
+  const publishBlockedReason: string | null = published ? null
+    : opening.status !== "open" ? t("publishBlockedNotOpen")
+    : deadlinePassed ? t("publishBlockedDeadlinePassed")
+    : null;
 
   return (
     <div className="page-main" aria-labelledby="page-heading">
@@ -901,13 +1020,13 @@ export default function JobOpeningDetailPage() {
             <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${published ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-500"}`}>
               {published ? t("published") : t("notPublished")}
             </span>
-            <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${STAGE_COLOR[opening.status] ?? "bg-slate-100 text-slate-700"}`}>
-              {opening.status}
-            </span>
+            <StatusPill status={opening.status} />
             <button
               type="button"
-              onClick={() => void handleTogglePublish()}
-              disabled={publishBusy}
+              onClick={() => publishAction.trigger()}
+              disabled={publishPending !== null || publishBlockedReason !== null}
+              title={publishBlockedReason ?? undefined}
+              aria-describedby={publishBlockedReason ? "publish-blocked-reason" : undefined}
               className={[
                 "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50",
                 published
@@ -915,9 +1034,15 @@ export default function JobOpeningDetailPage() {
                   : "bg-indigo-600 text-white hover:bg-indigo-500",
               ].join(" ")}
             >
-              {publishBusy ? t("publishing") : published ? t("unpublish") : t("publish")}
+              {publishPending === true ? t("publishing") : publishPending === false ? t("unpublishing") : published ? t("unpublish") : t("publish")}
             </button>
           </div>
+          {publishBlockedReason && (
+            <p id="publish-blocked-reason" className="text-xs text-slate-500 dark:text-slate-400 max-w-xs text-end">{publishBlockedReason}</p>
+          )}
+          {publishPending !== null && (
+            <p role="status" className="text-xs text-slate-500 dark:text-slate-400 max-w-xs text-end">{publishPending ? t("publishing") : t("unpublishing")}</p>
+          )}
           {publishError && (
             <p role="alert" className="text-xs text-red-600 dark:text-red-400 max-w-xs text-end">{publishError}</p>
           )}
@@ -929,8 +1054,8 @@ export default function JobOpeningDetailPage() {
         {[
           { label: t("metaPosts"),        value: opening.vacancies },
           { label: t("metaType"),         value: isVacancyType(opening.vacancyType) ? t(`vacancyType_${opening.vacancyType}`) : "—" },
-          { label: t("metaApplications"), value: loadingApps ? "—" : applications.length },
-          { label: t("metaDeadline"),     value: opening.applicationDeadline ? new Date(opening.applicationDeadline).toLocaleDateString("en-IN") : t("deadlineOpen") },
+          { label: t("metaApplications"), value: loadingApps || appsLoadError ? "—" : applications.length },
+          { label: t("metaDeadline"),     value: opening.applicationDeadline ? formatIndianDate(opening.applicationDeadline) : t("deadlineOpen") },
         ].map(({ label, value }) => (
           <div key={label} className="rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 p-4 shadow-sm text-center">
             <p className="text-2xl font-bold text-slate-800 dark:text-slate-100">{String(value)}</p>
@@ -948,7 +1073,7 @@ export default function JobOpeningDetailPage() {
       />
 
       {/* ── Application Pipeline tracker ── */}
-      {!loadingApps && (
+      {!loadingApps && !appsLoadError && (
         <ApplicationPipeline
           applications={applications}
           activeStage={stageFilter}
@@ -961,7 +1086,7 @@ export default function JobOpeningDetailPage() {
         <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-base font-semibold text-slate-800 dark:text-slate-100">
             {t("applicationsInbox")}
-            {!loadingApps && (
+            {!loadingApps && !appsLoadError && (
               <span className="ms-2 inline-flex items-center rounded-full bg-slate-100 dark:bg-slate-800 px-2 py-0.5 text-xs font-medium text-slate-600 dark:text-slate-300">
                 {filtered.length} / {applications.length}
               </span>
@@ -1049,15 +1174,16 @@ export default function JobOpeningDetailPage() {
 
                     <div className="flex flex-col items-end gap-2 shrink-0">
                       <div className="flex items-center gap-2">
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STAGE_COLOR[app.stage] ?? "bg-slate-100 text-slate-700"}`}>
-                          {app.stage}
-                        </span>
-                        <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${DECISION_COLOR[app.screeningDecision] ?? "bg-slate-100 text-slate-500"}`}>
-                          {app.screeningDecision}
-                        </span>
+                        <StatusPill status={app.stage} />
+                        <StatusPill status={app.screeningDecision} />
                       </div>
+                      {!interviewsLoadError && nextInterviewByApp.has(app.id) && !["rejected", "withdrawn", "hired"].includes(app.stage) && (
+                        <p className="text-xs font-medium text-violet-700 dark:text-violet-300">
+                          {t("interviewScheduledBadge", { when: formatIndianDateTime(nextInterviewByApp.get(app.id)) })}
+                        </p>
+                      )}
                       {app.appliedAt && (
-                        <p className="text-xs text-slate-400 dark:text-slate-500">{new Date(app.appliedAt).toLocaleDateString("en-IN")}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">{formatIndianDate(app.appliedAt)}</p>
                       )}
                       {/* Context-aware action menu */}
                       <ContextMenu
@@ -1075,35 +1201,62 @@ export default function JobOpeningDetailPage() {
         )}
       </div>
 
+      {/* ── Advertisement & corrigenda (GAP-RECRUITMENT-DETAIL-13) ── */}
+      <section className="mt-6 rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+        <button
+          type="button"
+          aria-expanded={advertOpen}
+          aria-controls="advert-panel"
+          onClick={() => setAdvertOpen((o) => !o)}
+          className="w-full px-5 py-3 flex items-center justify-between text-sm font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+        >
+          {t("advertSectionTitle")}
+          <span aria-hidden="true" className="text-slate-400">{advertOpen ? "▴" : "▾"}</span>
+        </button>
+        {advertOpen && (
+          <div id="advert-panel" className="px-5 pb-5">
+            <VacancyNotificationPanel jobOpeningId={opening.id} published={published} onChanged={() => { void loadOpening(); }} />
+          </div>
+        )}
+      </section>
+
       {/* ── Quick actions ── */}
+      {bulkResult && (
+        <div role="status" className="mt-4 flex items-start justify-between gap-3 rounded-lg border border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/20 px-4 py-2 text-sm text-emerald-800 dark:text-emerald-200">
+          <span>{t("shortlistAllResult", bulkResult)}</span>
+          <button type="button" onClick={() => setBulkResult(null)} className="text-xs underline">{t("dismiss")}</button>
+        </div>
+      )}
+      <ConfirmDialog
+        open={bulkAction.open}
+        title={t("shortlistAllConfirmTitle", { count: pendingShortlist.length })}
+        description={t("shortlistAllConfirmDescription")}
+        confirmLabel={t("shortlistAllConfirmLabel", { count: pendingShortlist.length })}
+        busy={bulkAction.busy}
+        errorMessage={bulkAction.error}
+        onConfirm={bulkAction.confirm}
+        onCancel={bulkAction.cancel}
+      />
+      <ConfirmDialog
+        open={publishAction.open}
+        title={published ? t("unpublishConfirmTitle") : t("publishConfirmTitle")}
+        description={published ? t("unpublishConfirmDescription") : t("publishConfirmDescription")}
+        confirmLabel={published ? t("unpublishConfirmLabel") : t("publishConfirmLabel")}
+        danger={published}
+        busy={publishAction.busy}
+        errorMessage={publishAction.error}
+        onConfirm={publishAction.confirm}
+        onCancel={publishAction.cancel}
+      />
       {applications.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-3">
           <button
             type="button"
-            disabled={shortlistAllBusy}
-            onClick={() => {
-              // Without this guard, a second click while the first batch is
-              // still in flight fires an overlapping Promise.all(...) of the
-              // same per-application POSTs (double-submit) -- disabled below
-              // prevents the click, and this re-checks defensively in case
-              // the handler ever fires programmatically.
-              if (shortlistAllBusy) return;
-              const pending = applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied");
-              if (pending.length === 0) return; // ux-001-ok: local no-op guard on already-loaded, already error-gated data -- renders nothing, so there's no empty-vs-error UI to confuse
-              setShortlistAllBusy(true);
-              // Per-row failures are already reflected in decisionStates (and the
-              // per-row "Action failed" hint); this just avoids an unhandled
-              // rejection when some (but not all) calls in the batch fail.
-              void Promise.all(pending.map((a) => handleAction(a.id, "shortlist")))
-                .catch(() => {})
-                .finally(() => setShortlistAllBusy(false));
-            }}
+            disabled={bulkAction.busy || nothingToShortlist}
+            onClick={() => { setBulkResult(null); bulkAction.trigger(); }}
             className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/30 px-4 py-2 text-sm font-semibold text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {/* "…" while in flight, not a new translated string -- same
-                convention ContextMenu uses for its own per-row busy state
-                just above, so no new i18n key is needed across locales. */}
-            {shortlistAllBusy ? "…" : t("shortlistAllPending", { count: applications.filter((a) => a.screeningDecision === "pending" && a.stage === "applied").length })}
+            {bulkAction.busy ? "…" : t("shortlistAllPending", { count: pendingShortlist.length })}
           </button>
           <button
             type="button"

@@ -19,7 +19,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
-import { CORRIGENDUM_ACTIONS } from "./job-publication.js";
+import { CORRIGENDUM_ACTIONS, publishBlockReason } from "./job-publication.js";
 import * as repo from "./publication-repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -45,7 +45,8 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     // change must go through /extend so it is corrigendum-logged and forward-only
     // (R-RA-0068). The initial deadline is set when the requisition is published.
     const body = z.object({
-      feesMinor: z.coerce.number().int().min(0).optional(),
+      // null clears the fee (z.coerce would turn null into 0)
+      feesMinor: z.union([z.null(), z.coerce.number().int().min(0)]).optional(),
       feeExemption: z.string().max(2000).optional(),
       requiredDocuments: z.array(z.string().max(200)).max(50).optional(),
       selectionProcess: z.string().max(4000).optional(),
@@ -56,6 +57,11 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
       minExperienceYears: z.coerce.number().int().min(0).max(60).optional(),
     }).parse(req.body ?? {});
     const v = await mustVac(ctx.tenantId, id);
+    // R-RA-0068: once published (or cancelled) the original advertisement is preserved; changes after that
+    // must be recorded as a corrigendum / extension, not edited in place.
+    if (v.status === "cancelled" || v.isPublished === true || (v.isPublished as unknown) === "true") {
+      throw new HttpError(409, "ADVERTISEMENT_LOCKED", "a published or cancelled advertisement cannot be edited; record a corrigendum instead");
+    }
     const patch: Record<string, unknown> = { updatedBy: ctx.actorId };
     if (body.feesMinor != null) patch.feesMinor = BigInt(body.feesMinor);
     for (const k of ["feeExemption", "requiredDocuments", "selectionProcess", "importantDates", "portalScope", "titleAlt", "descriptionAlt", "minExperienceYears"] as const) {
@@ -63,6 +69,27 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     }
     await publishF3Write(ctx, "recruitment_publication_routes__0", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, updated: true }) as any;
+  });
+
+  // GAP-RECRUITMENT-DETAIL-13: read side of the advertisement, so the HR detail page can show (and
+  // safely edit) what is currently advertised. fees_minor is bigint paise and is sent as a string.
+  app.get("/v1/hrms/job-openings/:id/advertisement", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "manager"]);
+    const { id } = idParam.parse(req.params);
+    const v = await mustVac(ctx.tenantId, id);
+    return reply.send(jsonSafe({
+      id,
+      // The job-openings list collapses cancelled/rejected into "closed"; the panel needs the real value.
+      status: v.status,
+      applicationDeadline: v.applicationDeadline ?? null,
+      feesMinor: v.feesMinor ?? null,
+      feeExemption: v.feeExemption ?? null,
+      requiredDocuments: Array.isArray(v.requiredDocuments) ? v.requiredDocuments : [],
+      selectionProcess: v.selectionProcess ?? null,
+      importantDates: v.importantDates && typeof v.importantDates === "object" ? v.importantDates : {},
+      portalScope: v.portalScope,
+    })) as any;
   });
 
   app.post("/v1/hrms/job-openings/:id/corrigendum", async (req, reply) => {
@@ -81,12 +108,13 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     const ctx = resolveContext(req);
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
-    const body = z.object({ newDeadline: z.string().datetime(), reason: z.string().max(2000).optional() }).parse(req.body);
+    const body = z.object({ newDeadline: z.string().datetime(), reason: z.string().trim().min(1).max(2000) }).parse(req.body);
     const v = await mustVac(ctx.tenantId, id);
     if (v.status === "cancelled") throw new HttpError(409, "CANCELLED", "a cancelled vacancy cannot be extended");
     const oldDeadline = v.applicationDeadline as Date | null;
     const newDeadline = new Date(body.newDeadline);
     if (oldDeadline && newDeadline <= oldDeadline) throw new HttpError(400, "NOT_AN_EXTENSION", "the new deadline must be later than the current one");
+    if (newDeadline.getTime() <= Date.now()) throw new HttpError(400, "DEADLINE_IN_PAST", "the new deadline must be in the future");
     const seq = await repo.nextCorrigendumSeq(ctx.tenantId, id);
     await publishF3Write(ctx, "recruitment_publication_routes__2", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send(jsonSafe({ id, status: "open", applicationDeadline: newDeadline, corrigendumSeq: seq })) as any;
@@ -117,7 +145,12 @@ export async function jobPublicationRoutes(app: FastifyInstance): Promise<void> 
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = z.object({ isPublished: z.boolean() }).parse(req.body);
-    await mustVac(ctx.tenantId, id);
+    const v = await mustVac(ctx.tenantId, id);
+    // Publishing exposes the vacancy on the public careers page: only an open, in-date vacancy. Unpublish is never blocked.
+    if (body.isPublished) {
+      const blocked = publishBlockReason(v as never, Date.now());
+      if (blocked) throw new HttpError(409, blocked.code, blocked.message);
+    }
     await publishF3Write(ctx, "recruitment_publication_routes__4", randomUUID(), { body: (req.body as Record<string, unknown>) ?? {}, params: req.params as Record<string, unknown>, query: req.query as Record<string, unknown> })
     return reply.send({ id, isPublished: body.isPublished, status: "accepted", correlationId: ctx.correlationId }) as any;
   });

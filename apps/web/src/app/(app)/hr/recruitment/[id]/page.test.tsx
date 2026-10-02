@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor, within } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, within, act } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -259,46 +259,155 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
     });
   });
 
-  // The bulk "Shortlist All Pending" quick action had no busy-state guard:
-  // nothing stopped a second click from firing a second overlapping
-  // Promise.all(...) batch of the same per-application POSTs while the
-  // first batch was still in flight.
-  it("guards the 'Shortlist All Pending' bulk action against firing a second overlapping batch while the first is still in flight", async () => {
-    const gate: { release?: () => void } = {};
-    const screeningGate = new Promise<void>((resolve) => { gate.release = resolve; });
-    const fn = vi.fn(async (url: string) => {
+  // GAP-RECRUITMENT-DETAIL-09: "Shortlist All Pending" is confirm-gated and uses ONE batch call (not n parallel
+  // per-row POSTs whose failures were swallowed).
+  describe("Shortlist All Pending (GAP-RECRUITMENT-DETAIL-09)", () => {
+    function mockBulk(bulkRes: () => Response | Promise<Response>) {
+      const fn = vi.fn(async (url: string, init?: RequestInit) => {
+        if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
+        if (url.match(/job-openings\/[^/]+\/applications$/)) return new Response(JSON.stringify({ data: [APPLIED_APP, APPLIED_APP2] }), { status: 200 });
+        if (url.match(/job-openings\/[^/]+\/shortlist$/)) {
+          (fn as unknown as { lastBulkBody?: unknown }).lastBulkBody = JSON.parse(String(init?.body ?? "{}"));
+          return bulkRes();
+        }
+        return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      });
+      vi.stubGlobal("fetch", fn);
+      return fn;
+    }
+    const bulkCalls = (fn: ReturnType<typeof vi.fn>) => fn.mock.calls.filter(([u]) => /\/shortlist$/.test(String(u)));
+
+    it("asks for confirmation first; cancelling sends nothing", async () => {
+      const fn = mockBulk(() => new Response("{}", { status: 200 }));
+      renderPage();
+      await screen.findByText("Priya Nair");
+      fireEvent.click(screen.getByRole("button", { name: /Shortlist All Pending/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      expect(dialog).toHaveTextContent(/shortlist 2 pending applicants/i);
+      fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+      await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+      expect(bulkCalls(fn)).toHaveLength(0);
+      expect(fn.mock.calls.some(([u]) => String(u).includes("/screening-decision"))).toBe(false);
+    });
+
+    it("sends exactly one POST with every pending id and reports shortlisted / skipped", async () => {
+      const fn = mockBulk(() => new Response(JSON.stringify({ shortlisted: 1, skipped: 1, requested: 2 }), { status: 200 }));
+      renderPage();
+      await screen.findByText("Priya Nair");
+      fireEvent.click(screen.getByRole("button", { name: /Shortlist All Pending/i }));
+      const dialog = await screen.findByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Shortlist 2$/ }));
+
+      expect(await screen.findByText(/Shortlisted 1, skipped 1 .* of 2 requested/i)).toBeInTheDocument();
+      expect(bulkCalls(fn)).toHaveLength(1);
+      expect(((fn as unknown as { lastBulkBody: { applicationIds: string[] } }).lastBulkBody).applicationIds.sort()).toEqual(["app-1", "app-3"]);
+      // The list is re-read from the server afterwards instead of being optimistically rewritten.
+      await waitFor(() => expect(fn.mock.calls.filter(([u]) => /job-openings\/[^/]+\/applications$/.test(String(u))).length).toBeGreaterThan(1));
+    });
+
+    it("shows a visible error and re-enables the button when the batch call fails", async () => {
+      mockBulk(() => new Response("hrms-service: boom", { status: 500 }));
+      renderPage();
+      await screen.findByText("Priya Nair");
+      const trigger = screen.getByRole("button", { name: /Shortlist All Pending/i });
+      fireEvent.click(trigger);
+      const dialog = await screen.findByRole("alertdialog");
+      fireEvent.click(within(dialog).getByRole("button", { name: /^Shortlist 2$/ }));
+      await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
+      expect(dialog.textContent).not.toMatch(/hrms-service|\b500\b/);
+      fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+      await waitFor(() => expect(trigger).not.toBeDisabled());
+    });
+  });
+
+  // GAP-RECRUITMENT-DETAIL-11: a failed applications fetch must not read as "0 received".
+  it("shows no pipeline counts or '0 / 0' when the applications fetch fails, only the error with Retry", async () => {
+    let fail = true;
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
       if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
       if (url.match(/job-openings\/[^/]+\/applications$/)) {
-        return new Response(JSON.stringify({ data: [APPLIED_APP, APPLIED_APP2] }), { status: 200 });
+        return fail ? new Response("", { status: 500 }) : new Response(JSON.stringify({ data: [APPLIED_APP, APPLIED_APP2] }), { status: 200 });
       }
-      if (url.includes("/screening-decision")) {
-        await screeningGate; // held open until the test releases it below
-        return new Response(JSON.stringify({}), { status: 200 });
-      }
-      return new Response(JSON.stringify({}), { status: 404 });
-    });
-    vi.stubGlobal("fetch", fn);
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }));
+    renderPage();
+    await screen.findByRole("button", { name: /retry|try again/i });
+    expect(screen.queryByText("Application Pipeline")).not.toBeInTheDocument();
+    expect(screen.queryByText("0 / 0")).not.toBeInTheDocument();
+    // Applications tile shows an em dash, not 0.
+    const tile = screen.getByText("Applications", { selector: "p" }).previousElementSibling as HTMLElement;
+    expect(tile.textContent).toBe("—");
 
+    fail = false;
+    fireEvent.click(screen.getByRole("button", { name: /retry|try again/i }));
+    expect(await screen.findByText("Application Pipeline")).toBeInTheDocument();
+    expect(screen.getByText("2 / 2")).toBeInTheDocument();
+  });
+
+  // GAP-RECRUITMENT-DETAIL-07 / -12: status words are humanised and dates share the IST dd Mon yyyy format.
+  it("renders humanised status pills and IST dates instead of raw enums and numeric locale dates", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("job-openings?limit=")) {
+        return new Response(JSON.stringify({ data: [{ ...OPENING, status: "on_hold", applicationDeadline: "2026-09-30" }] }), { status: 200 });
+      }
+      if (url.match(/job-openings\/[^/]+\/applications$/)) {
+        return new Response(JSON.stringify({ data: [{ ...APPLIED_APP, stage: "shortlisted", screeningDecision: "manual_review", appliedAt: "2026-09-30T18:45:00Z" }] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }));
+    const { container } = renderPage();
+    await screen.findByText("Asha Verma");
+    const pills = [...container.querySelectorAll(".pill")].map((p) => p.textContent);
+    expect(pills).toEqual(expect.arrayContaining(["On Hold", "Shortlisted", "Manual Review"]));
+    expect(container.textContent).not.toMatch(/manual_review|on_hold/);
+    // Date-only deadline is not timezone-shifted; the 18:45Z applied-at rolls over to 1 Oct in IST.
+    expect(screen.getByText(/^30 Sep(t)? 2026$/)).toBeInTheDocument();
+    expect(screen.getByText(/^0?1 Oct 2026$/)).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/\d{1,2}\/\d{1,2}\/\d{4}/);
+  });
+
+  // GAP-RECRUITMENT-DETAIL-02: no "Interview" column nothing can fill; a scheduled interview shows on the row.
+  it("has no never-populated Interview column and shows the scheduled slot on the row", async () => {
+    vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+      if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
+      if (url.match(/job-openings\/[^/]+\/applications$/)) {
+        return new Response(JSON.stringify({ data: [{ ...APPLIED_APP, stage: "shortlisted", screeningDecision: "shortlisted" }] }), { status: 200 });
+      }
+      if (url.includes("/hrms/interviews?")) {
+        return new Response(JSON.stringify({ data: [
+          { id: "i1", applicationId: "app-1", scheduledDate: "2026-10-05", scheduledTime: "09:30", status: "scheduled" },
+          { id: "i2", applicationId: "app-1", scheduledDate: "2026-10-01", scheduledTime: "09:30", status: "cancelled" },
+        ] }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    }));
     renderPage();
     await screen.findByText("Asha Verma");
-    await screen.findByText("Priya Nair");
+    expect(screen.queryByRole("button", { name: /Interview: \d+ applications/ })).not.toBeInTheDocument();
+    expect(await screen.findByText(/Interview scheduled · 0?5 Oct 2026, 03:00 pm/i)).toBeInTheDocument();
+    expect(screen.queryByText(/0?1 Oct 2026, 03:00/)).not.toBeInTheDocument();
+  });
+});
 
-    const bulkBtn = screen.getByRole("button", { name: /Shortlist All Pending/i });
-    fireEvent.click(bulkBtn);
+describe("JobOpeningDetailPage — advertisement & corrigenda (GAP-RECRUITMENT-DETAIL-13)", () => {
+  afterEach(() => vi.unstubAllGlobals());
 
-    // Still in flight (gated): the trigger must now be disabled, and two
-    // more clicks while it's held there must not queue further batches.
-    expect(bulkBtn).toBeDisabled();
-    fireEvent.click(bulkBtn);
-    fireEvent.click(bulkBtn);
-
-    gate.release?.();
-    await waitFor(() => expect(bulkBtn).not.toBeDisabled());
-
-    const screeningCalls = fn.mock.calls.filter(([u]) => String(u).includes("/screening-decision"));
-    // Exactly one call per pending application (2) -- not doubled/tripled
-    // by the extra clicks fired while the first batch was in flight.
-    expect(screeningCalls.length).toBe(2);
+  it("is collapsed by default (no extra requests) and loads the advertisement panel on expand, read-only when the vacancy is published", async () => {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
+      if (url.endsWith("/advertisement")) {
+        return new Response(JSON.stringify({ id: "job-1", status: "open", applicationDeadline: null, feesMinor: "50000", feeExemption: null, requiredDocuments: [], selectionProcess: null, importantDates: {}, portalScope: "public" }), { status: 200 });
+      }
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+    vi.stubGlobal("fetch", fn);
+    renderPage();
+    const toggle = await screen.findByRole("button", { name: /advertisement & corrigenda/i });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(fn.mock.calls.some(([u]) => String(u).endsWith("/advertisement"))).toBe(false);
+    fireEvent.click(toggle);
+    expect(await screen.findByLabelText(/Application fee/)).toHaveValue("500.00");
+    expect(screen.getByLabelText(/Application fee/)).toBeDisabled(); // OPENING is published
   });
 });
 
@@ -308,12 +417,16 @@ describe("JobOpeningDetailPage — applications pipeline", () => {
 // toggle's happy path in both directions plus its failure path -- none of
 // this had any automated coverage before this fix.
 describe("JobOpeningDetailPage — publish control (Bug 1)", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
-  function mockPublishSequence(isPublished: boolean, publishStatus = 202) {
+  /** `readBack` is what the (cached) opening list returns for isPublished on each successive GET. */
+  function mockPublishSequence(readBack: boolean[], publishStatus = 202, opening: Partial<typeof OPENING> & Record<string, unknown> = {}) {
+    let reads = 0;
     const fn = vi.fn(async (url: string, init?: RequestInit) => {
       if (url.includes("job-openings?limit=")) {
-        return new Response(JSON.stringify({ data: [{ ...OPENING, isPublished }] }), { status: 200 });
+        const isPublished = readBack[Math.min(reads, readBack.length - 1)];
+        reads += 1;
+        return new Response(JSON.stringify({ data: [{ ...OPENING, ...opening, isPublished }] }), { status: 200 });
       }
       if (url.match(/job-openings\/[^/]+\/applications$/)) {
         return new Response(JSON.stringify({ data: [] }), { status: 200 });
@@ -323,69 +436,121 @@ describe("JobOpeningDetailPage — publish control (Bug 1)", () => {
         (fn as FetchMock).lastPublishBody = body;
         return new Response(JSON.stringify({}), { status: publishStatus });
       }
-      return new Response(JSON.stringify({}), { status: 404 });
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
     });
     vi.stubGlobal("fetch", fn);
     return fn;
   }
+  const publishCalls = (fn: ReturnType<typeof vi.fn>) => fn.mock.calls.filter(([u]) => /\/publish$/.test(String(u)));
 
-  it("shows 'Not published' and a 'Publish' button for an unpublished opening, and publishing it calls PATCH .../publish with isPublished: true", async () => {
-    const fetchMock = mockPublishSequence(false);
+  it("asks for confirmation before publishing and sends nothing until confirmed (GAP-RECRUITMENT-DETAIL-10)", async () => {
+    const fn = mockPublishSequence([false]);
     renderPage();
-
     await screen.findByText("Not published");
-    const publishBtn = screen.getByRole("button", { name: "Publish" });
-    fireEvent.click(publishBtn);
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/visible to the public/i);
+    expect(publishCalls(fn)).toHaveLength(0);
+    fireEvent.click(within(dialog).getByRole("button", { name: /cancel/i }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(publishCalls(fn)).toHaveLength(0);
+  });
 
-    await waitFor(() => expect((fetchMock as FetchMock).lastPublishBody).toBeTruthy());
-    expect((fetchMock as FetchMock).lastPublishBody).toEqual({ isPublished: true });
+  it("publishing calls PATCH .../publish with isPublished: true, shows 'Publishing…' until a read-back confirms it", async () => {
+    // First read (page load) = false, next read (poll) still false (stale cache), then true.
+    const fetchMock = mockPublishSequence([false, false, true]);
+    renderPage();
+    await screen.findByText("Not published");
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish vacancy" }));
 
-    // Optimistic update: badge and button both flip once the request succeeds.
+    await waitFor(() => expect((fetchMock as FetchMock).lastPublishBody).toEqual({ isPublished: true }));
+    // 202 accepted: not yet reflected, so the badge must NOT flip optimistically.
+    expect(await screen.findByRole("status")).toHaveTextContent(/publishing/i);
+    expect(screen.getByText("Not published")).toBeInTheDocument();
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600); });
+    expect(screen.getByText("Not published")).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600); });
     await screen.findByText("Published");
     await screen.findByRole("button", { name: "Unpublish" });
   });
 
-  it("shows 'Published' and an 'Unpublish' button for a published opening, and unpublishing it calls PATCH .../publish with isPublished: false", async () => {
-    const fetchMock = mockPublishSequence(true);
+  it("tells the officer it is still processing when the change never shows up", async () => {
+    mockPublishSequence([false]);
     renderPage();
+    await screen.findByText("Not published");
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    fireEvent.click(within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Publish vacancy" }));
+    await screen.findByRole("status");
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(await screen.findByRole("alert")).toHaveTextContent(/still processing/i);
+    expect(screen.getByText("Not published")).toBeInTheDocument();
+  });
 
+  it("requires confirmation to unpublish and sends isPublished: false", async () => {
+    const fetchMock = mockPublishSequence([true, false]);
+    renderPage();
     await screen.findByText("Published");
-    const unpublishBtn = screen.getByRole("button", { name: "Unpublish" });
-    fireEvent.click(unpublishBtn);
-
-    await waitFor(() => expect((fetchMock as FetchMock).lastPublishBody).toBeTruthy());
-    expect((fetchMock as FetchMock).lastPublishBody).toEqual({ isPublished: false });
-
+    fireEvent.click(screen.getByRole("button", { name: "Unpublish" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/no longer be able to apply/i);
+    expect(publishCalls(fetchMock)).toHaveLength(0);
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Unpublish vacancy" }));
+    await waitFor(() => expect((fetchMock as FetchMock).lastPublishBody).toEqual({ isPublished: false }));
+    await act(async () => { await vi.advanceTimersByTimeAsync(1600); });
     await screen.findByText("Not published");
     await screen.findByRole("button", { name: "Publish" });
   });
 
-  it("shows a clerk-safe error and leaves the badge unchanged when the publish request fails", async () => {
+  it("shows a clerk-safe error in the dialog and leaves the badge unchanged when the publish request fails", async () => {
     const fn = vi.fn(async (url: string) => {
       if (url.includes("job-openings?limit=")) {
         return new Response(JSON.stringify({ data: [{ ...OPENING, isPublished: false }] }), { status: 200 });
       }
-      if (url.match(/job-openings\/[^/]+\/applications$/)) {
-        return new Response(JSON.stringify({ data: [] }), { status: 200 });
-      }
       if (url.match(/job-openings\/[^/]+\/publish$/)) {
         return new Response("hrms-service: publish trace", { status: 500 });
       }
-      return new Response(JSON.stringify({}), { status: 404 });
+      return new Response(JSON.stringify({ data: [] }), { status: 200 });
     });
     vi.stubGlobal("fetch", fn);
 
     renderPage();
     await screen.findByText("Not published");
     fireEvent.click(screen.getByRole("button", { name: "Publish" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: "Publish vacancy" }));
 
-    const alert = await screen.findByRole("alert");
-    expect(alert.textContent).not.toMatch(/hrms-service/);
-    expect(alert.textContent).not.toMatch(/\b500\b/);
-
-    // Still not published -- a failed request must not optimistically flip the UI.
+    await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
+    expect(dialog.textContent).not.toMatch(/hrms-service/);
+    expect(dialog.textContent).not.toMatch(/\b500\b/);
     expect(screen.getByText("Not published")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Publish" })).toBeInTheDocument();
+  });
+
+  it("disables Publish with an explanation for a closed vacancy or one past its deadline, but never blocks Unpublish", async () => {
+    mockPublishSequence([false], 202, { status: "closed" });
+    const { unmount } = renderPage();
+    await screen.findByText("Not published");
+    const btn = screen.getByRole("button", { name: "Publish" });
+    expect(btn).toBeDisabled();
+    expect(screen.getByText(/only an open vacancy can be published/i)).toBeInTheDocument();
+    unmount();
+
+    mockPublishSequence([false], 202, { applicationDeadline: "2020-01-01" });
+    const second = renderPage();
+    await screen.findByText("Not published");
+    expect(screen.getByRole("button", { name: "Publish" })).toBeDisabled();
+    expect(screen.getByText(/deadline has passed/i)).toBeInTheDocument();
+    second.unmount();
+
+    mockPublishSequence([true], 202, { status: "closed", applicationDeadline: "2020-01-01" });
+    renderPage();
+    await screen.findByText("Published");
+    expect(screen.getByRole("button", { name: "Unpublish" })).not.toBeDisabled();
   });
 });
 
@@ -412,11 +577,19 @@ describe("JobOpeningDetailPage — schedule interview (Bug 2)", () => {
       if (url.match(/job-openings\/[^/]+\/applications$/)) {
         return new Response(JSON.stringify({ data: [SHORTLISTED_APP] }), { status: 200 });
       }
-      if (url.endsWith("/v1/hrms/interviews") || url.includes("/hrms/interviews")) {
+      if (url.includes("/hrms/employees")) {
+        // EntityPicker search (?q=) and the post-submit name lookup (?ids=).
+        return new Response(JSON.stringify({ data: [
+          { id: "11111111-1111-4111-8111-111111111111", employeeNo: "E-101", name: "Sunita Rao", department: "IT" },
+          { id: "22222222-2222-4222-8222-222222222222", employeeNo: "E-102", name: "Vikram Shah", department: "HR" },
+        ] }), { status: 200 });
+      }
+      if (init?.method === "POST" && url.includes("/hrms/interviews")) {
         const body = JSON.parse(String(init?.body ?? "{}"));
         (fn as FetchMock).lastInterviewBody = body;
         return new Response(JSON.stringify({}), { status: interviewStatus });
       }
+      if (url.includes("/hrms/interviews")) return new Response(JSON.stringify({ data: [] }), { status: 200 });
       return new Response(JSON.stringify({}), { status: 404 });
     });
     vi.stubGlobal("fetch", fn);
@@ -436,7 +609,12 @@ describe("JobOpeningDetailPage — schedule interview (Bug 2)", () => {
     renderPage();
     const dialog = await openScheduleInterviewDialog();
 
-    fireEvent.change(within(dialog).getByLabelText(/interviewer id/i), { target: { value: "interviewer-1" } });
+    // GAP-RECRUITMENT-DETAIL-06: pick interviewers by name, never type UUIDs.
+    const picker = within(dialog).getByLabelText(/interviewer/i);
+    fireEvent.change(picker, { target: { value: "sunita" } });
+    fireEvent.mouseDown(await within(dialog).findByText("Sunita Rao (E-101)"));
+    fireEvent.change(picker, { target: { value: "vikram" } });
+    fireEvent.mouseDown(await within(dialog).findByText("Vikram Shah (E-102)"));
     fireEvent.change(within(dialog).getByLabelText(/date & time/i), { target: { value: "2027-01-15T10:00" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Schedule Interview" }));
 
@@ -444,10 +622,13 @@ describe("JobOpeningDetailPage — schedule interview (Bug 2)", () => {
     const body = (fetchMock as FetchMock).lastInterviewBody as Record<string, unknown>;
     expect(body.jobOpeningId).toBe("job-1");
     expect(body.applicationId).toBe("app-4");
-    expect(body.interviewerIds).toEqual(["interviewer-1"]);
+    expect(body.interviewerIds).toEqual(["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"]);
     expect(Number.isNaN(new Date(body.scheduledAt as string).getTime())).toBe(false);
 
     expect(await within(dialog).findByText("Interview scheduled.")).toBeInTheDocument();
+    // The confirmation card shows names, not UUIDs.
+    expect(dialog.textContent).toContain("Sunita Rao (E-101), Vikram Shah (E-102)");
+    expect(dialog.textContent).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-/);
   });
 
   it("does not submit, and shows a required-fields message, when no interviewer or date has been entered", async () => {
@@ -455,10 +636,8 @@ describe("JobOpeningDetailPage — schedule interview (Bug 2)", () => {
     renderPage();
     const dialog = await openScheduleInterviewDialog();
 
-    // Leave interviewer/date blank -- the browser's own `required` would
-    // normally block this, but jsdom doesn't enforce it, so the component's
-    // own guard (parsedInterviewerIds.length === 0 || !scheduledAt) is what's
-    // actually under test here.
+    // Leave interviewer/date blank: the component's own guard
+    // (no interviewer selected || !scheduledAt) is what is under test here.
     fireEvent.submit(within(dialog).getByRole("button", { name: "Schedule Interview" }).closest("form") as HTMLFormElement);
 
     expect(await within(dialog).findByText(/please provide at least one interviewer/i)).toBeInTheDocument();
@@ -546,7 +725,26 @@ describe("JobOpeningDetailPage — send offer (Bug 2)", () => {
     // (ctcMinor <= 0), same as the schedule-interview test above.
     fireEvent.submit(within(dialog).getByRole("button", { name: "Send Offer" }).closest("form") as HTMLFormElement);
 
-    expect(await within(dialog).findByText(/please enter a valid ctc/i)).toBeInTheDocument();
+    expect(await within(dialog).findByText(/enter a valid ctc/i)).toBeInTheDocument();
     expect((fetchMock as FetchMock).lastOfferBody).toBeUndefined();
   });
+
+  // GAP-RECRUITMENT-DETAIL-05: exact rupee-string parsing, no float multiply, sub-paise rejected.
+  it.each([["56100.5", 5610050], ["1,00,000", null], ["1.005", null], ["-5", null], ["abc", null]])(
+    "CTC %j converts to %j paise",
+    async (typed, expected) => {
+      const fetchMock = mockShortlistedSequence();
+      renderPage();
+      const { dialog } = await openSendOfferDialog();
+      fireEvent.change(within(dialog).getByLabelText(/ctc/i), { target: { value: typed } });
+      fireEvent.submit(within(dialog).getByRole("button", { name: "Send Offer" }).closest("form") as HTMLFormElement);
+      if (expected === null) {
+        expect(await within(dialog).findByText(/enter a valid ctc/i)).toBeInTheDocument();
+        expect((fetchMock as FetchMock).lastOfferBody).toBeUndefined();
+      } else {
+        await waitFor(() => expect((fetchMock as FetchMock).lastOfferBody).toBeTruthy());
+        expect(((fetchMock as FetchMock).lastOfferBody as Record<string, unknown>).ctcMinor).toBe(expected);
+      }
+    },
+  );
 });

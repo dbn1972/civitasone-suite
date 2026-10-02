@@ -15,7 +15,7 @@ import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { db } from "../../shared/db.js";
-import { generateOtp, verifyOtp, otpVerificationEnabled, OTP_TTL_SECONDS } from "./otp-verify.js";
+import { generateOtp, verifyOtp, otpVerificationEnabled, OTP_TTL_SECONDS, devOtpEchoEnabled } from "./otp-verify.js";
 import * as candidateRepo from "./candidate-repo.js";
 import * as repo from "./otp-verify-repo.js";
 
@@ -44,7 +44,7 @@ export async function otpVerifyRoutes(app: FastifyInstance): Promise<void> {
     // In dev/test (no delivery adapter) as any, echo the code. In production the
     // notification service sends it. The adapter seam is NOT built here —
     // delivery is honest: if we cannot send, we say so; we never claim it was sent.
-    const isDev = process.env.NODE_ENV !== "production";
+    const isDev = devOtpEchoEnabled(process.env);
     return reply.code(201).send({
       id: cid, candidateId: id, channel: body.channel, expiresIn: OTP_TTL_SECONDS,
       ...(isDev ? { devCode: code } : {}),

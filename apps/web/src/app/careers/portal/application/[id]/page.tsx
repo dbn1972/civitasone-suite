@@ -1,68 +1,60 @@
 import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
+import { fetchApplication } from "./fetchApplication";
+import { StageTimeline } from "./StageTimeline";
 
 const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const TENANT_ID = process.env.DEMO_TENANT_ID ?? process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "";
 
-type Stage = { stage: string; label: string; status: "done" | "active" | "future" | "ended"; note?: string };
-type AppDetail = {
-  id: string;
-  applicationNo: string | null;
-  stage: string;
-  status: string;
-  appliedAt: string;
-  // Terminal outcome (not selected / withdrawn) with fixed, candidate-safe wording.
-  // Internal HR screening remarks are intentionally never sent to this page.
-  outcome?: { kind: "not_selected" | "withdrawn"; message: string } | null;
-  job: { id: string; title: string; refNo: string; location: string | null; description: string | null; payRange: string | null; vacancies: number; closesAt: string | null } | null;
-  timeline: Stage[];
-};
-
-async function fetchApplication(token: string, id: string): Promise<AppDetail | null> {
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-  try {
-    const payload = JSON.parse(Buffer.from(parts[0]!, "base64url").toString()) as { tenantId?: string };
-    const tenantId = payload.tenantId ?? TENANT_ID;
-    const res = await fetch(`${GATEWAY}/api/v1/careers/portal/applications/${id}`, {
-      headers: { authorization: `Bearer ${token}`, "x-tenant-id": tenantId },
-      cache: "no-store",
-    });
-    if (res.status === 404) return null;
-    if (!res.ok) return null;
-    return await res.json() as AppDetail;
-  } catch { return null; }
-}
-
-const STAGE_DOT: Record<string, { bg: string; ring?: string }> = {
-  done:   { bg: "#047857" },
-  active: { bg: "#e07b00", ring: "0 0 0 4px rgba(224,123,0,0.2)" },
-  future: { bg: "#cbd5e1" },
-  ended:  { bg: "#b91c1c" },
-};
+/** Small label text with >= 4.5:1 contrast on white (the old #94a3b8 was ~2.6:1). */
+const MUTED = "#5b6b80";
 
 export default async function ApplicationDetailPage({ params }: { params: { id: string } }) {
+  const t = await getTranslations("careersPortalApplication");
   const token = cookies().get("cand_token")?.value;
   if (!token) redirect("/careers/portal/login");
 
-  const app_ = await fetchApplication(token, params.id);
-  if (!app_) notFound();
-
+  const result = await fetchApplication(token, params.id, { gateway: GATEWAY, fallbackTenantId: TENANT_ID });
+  // GAP-...-APPLICATION-DETAIL-03: only a real 404 is "not found". An expired/invalid session goes
+  // back to sign-in; an outage gets a retry card instead of a misleading 404.
+  if (result.kind === "notfound") notFound();
+  if (result.kind === "unauthorized") redirect("/careers/portal/login?expired=1");
+  if (result.kind === "error") {
+    return (
+      <main style={{ minHeight: "100vh", background: "#f0f4f8", padding: "48px 16px" }}>
+        <div role="alert" style={{ maxWidth: 480, margin: "0 auto", background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: 24, textAlign: "center" }}>
+          <h1 style={{ fontSize: 18, margin: "0 0 8px", color: "#0f172a" }}>{t("loadErrorTitle")}</h1>
+          <p style={{ fontSize: 14, color: "#334155", margin: "0 0 16px" }}>{t("loadErrorBody")}</p>
+          <Link href={`/careers/portal/application/${encodeURIComponent(params.id)}`} style={{ display: "inline-block", padding: "10px 20px", borderRadius: 8, background: "#154089", color: "#fff", fontWeight: 600, fontSize: 14, textDecoration: "none" }}>
+            {t("retry")}
+          </Link>
+          <div style={{ marginTop: 14 }}>
+            <Link href="/careers/portal" style={{ color: "#154089", fontSize: 14 }}>{t("backToList")}</Link>
+          </div>
+        </div>
+      </main>
+    );
+  }
+  const app_ = result.app;
   const { job, timeline, applicationNo } = app_;
+  // closesAt is a bare calendar date: the vacancy accepts applications through the end of that day (IST).
+  const closed = job?.closesAt ? job.closesAt.slice(0, 10) < todayIST() : false;
 
   return (
     <main style={{ minHeight: "100vh", background: "#f0f4f8", paddingBottom: 64 }}>
       {/* Header */}
       <div style={{ background: "#154089", padding: "14px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <Link href="/careers/portal" style={{ color: "#93c5fd", fontSize: 13, textDecoration: "none" }}>← My Applications</Link>
+          <Link href="/careers/portal" style={{ color: "#bfdbfe", fontSize: 13, textDecoration: "none" }}>{t("backToList")}</Link>
           <form method="POST" action="/api/careers/auth/logout" style={{ margin: 0 }}>
-            <button type="submit" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#93c5fd", fontSize: 13 }}>Sign out</button>
+            <button type="submit" style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "#bfdbfe", fontSize: 13 }}>{t("signOut")}</button>
           </form>
         </div>
         <h1 style={{ color: "#fff", fontSize: 17, fontWeight: 700, margin: "6px 0 2px" }}>
-          {job?.title ?? "Application Detail"}
+          {job?.title ?? t("fallbackTitle")}
         </h1>
         <p style={{ color: "#93c5fd", fontSize: 13, margin: 0 }}>
           {[job?.refNo, job?.location].filter(Boolean).join(" · ")}
@@ -74,15 +66,15 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         <div style={{ background: "#fff", borderRadius: 10, padding: "14px 16px", border: "1px solid #e2e8f0" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
-              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8" }}>Application Number</div>
+              <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: MUTED }}>{t("applicationNumber")}</div>
               <div style={{ fontSize: 17, fontWeight: 900, fontFamily: "monospace", color: "#154089", letterSpacing: "0.1em", marginTop: 2 }}>
                 {applicationNo ?? app_.id.slice(0, 8).toUpperCase()}
               </div>
             </div>
             <div style={{ textAlign: "end" }}>
-              <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>Applied on</div>
+              <div style={{ fontSize: 11, color: MUTED, fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.07em" }}>{t("appliedOn")}</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: "#334155", marginTop: 2 }}>
-                {app_.appliedAt ? new Date(app_.appliedAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}
+                {formatIndianDate(app_.appliedAt)}
               </div>
             </div>
           </div>
@@ -95,58 +87,41 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
         )}
 
         {/* Stage Rail */}
-        <div style={{ background: "#fff", borderRadius: 10, padding: "16px 16px 20px", border: "1px solid #e2e8f0" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 16 }}>
-            Application Journey
-          </div>
-          <div style={{ position: "relative", paddingInlineStart: 28 }}>
-            {/* vertical track line */}
-            <div style={{ position: "absolute", insetInlineStart: 7, top: 6, width: 2, bottom: 6, background: "#e2e8f0" }} />
-            {timeline.map((s, i) => {
-              const dot = STAGE_DOT[s.status] ?? STAGE_DOT.future!;
-              const isLast = i === timeline.length - 1;
-              return (
-                <div key={s.stage} style={{ position: "relative", marginBottom: isLast ? 0 : 20 }}>
-                  {/* green track segment for done */}
-                  {!isLast && s.status === "done" && (
-                    <div style={{ position: "absolute", insetInlineStart: -21, top: 14, width: 2, height: "calc(100% + 6px)", background: "#047857" }} />
-                  )}
-                  <div style={{ position: "absolute", insetInlineStart: -24, top: 3, width: 14, height: 14, borderRadius: "50%", background: dot.bg, boxShadow: dot.ring ?? "none", border: "2px solid #fff", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    {s.status === "done" && <span style={{ fontSize: 8, color: "#fff", fontWeight: 800 }}>✓</span>}
-                    {s.status === "ended" && <span style={{ fontSize: 8, color: "#fff", fontWeight: 800 }}>✕</span>}
-                  </div>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: s.status === "future" ? "#94a3b8" : "#0f172a" }}>
-                    {s.label}
-                  </div>
-                  {s.note && <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
-                    {new Date(s.note).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                  </div>}
-                  {s.status === "active" && (
-                    <div style={{ marginTop: 6, background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 6, padding: "8px 10px", fontSize: 12, color: "#64748b" }}>
-                      In progress — we will notify you by email when this stage updates.
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        <section aria-labelledby="journey-heading" style={{ background: "#fff", borderRadius: 10, padding: "16px 16px 20px", border: "1px solid #e2e8f0" }}>
+          <h2 id="journey-heading" style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: MUTED, margin: "0 0 16px" }}>
+            {t("journey")}
+          </h2>
+          <StageTimeline
+            timeline={timeline}
+            labels={{
+              completed: t("stateCompleted"),
+              current: t("stateCurrent"),
+              upcoming: t("stateUpcoming"),
+              ended: t("stateEnded"),
+              inProgress: t("inProgress"),
+              venue: t("interviewVenue"),
+              joinLink: t("interviewJoinLink"),
+              minutes: (n) => t("minutes", { count: n }),
+              mode: (m) => (m === "video" || m === "in_person" || m === "telephonic" || m === "phone" ? t(`mode_${m === "phone" ? "telephonic" : m}`) : m),
+            }}
+          />
+        </section>
 
         {/* Job info */}
         {job && (
           <div style={{ background: "#fff", borderRadius: 10, padding: "14px 16px", border: "1px solid #e2e8f0" }}>
-            <div style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: "#94a3b8", marginBottom: 10 }}>Vacancy Details</div>
+            <h2 style={{ fontSize: 11, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.08em", color: MUTED, margin: "0 0 10px" }}>{t("vacancyDetails")}</h2>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-              {job.payRange && <InfoItem label="Pay" value={job.payRange} />}
-              {job.vacancies > 0 && <InfoItem label="Posts" value={String(job.vacancies)} />}
-              {job.location && <InfoItem label="Location" value={job.location} />}
-              {job.closesAt && <InfoItem label={new Date(job.closesAt) < new Date() ? "Closed on" : "Applications close"} value={new Date(job.closesAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })} />}
+              {job.payRange && <InfoItem label={t("pay")} value={job.payRange} />}
+              {job.vacancies > 0 && <InfoItem label={t("posts")} value={String(job.vacancies)} />}
+              {job.location && <InfoItem label={t("location")} value={job.location} />}
+              {job.closesAt && <InfoItem label={closed ? t("closedOn") : t("applicationsClose")} value={formatIndianDate(job.closesAt)} />}
             </div>
           </div>
         )}
 
         <Link href="/careers" style={{ display: "block", textAlign: "center", color: "#154089", fontSize: 14, fontWeight: 600 }}>
-          Browse more vacancies →
+          {t("browseMore")}
         </Link>
       </div>
     </main>
@@ -156,7 +131,7 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <div style={{ fontSize: 11, color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
+      <div style={{ fontSize: 11, color: MUTED, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em" }}>{label}</div>
       <div style={{ fontSize: 14, fontWeight: 600, color: "#334155", marginTop: 2 }}>{value}</div>
     </div>
   );

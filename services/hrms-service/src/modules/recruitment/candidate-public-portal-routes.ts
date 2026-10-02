@@ -15,7 +15,8 @@ import { HttpError } from "../../shared/context.js";
 import { scopedRead } from "../../shared/db.js";
 import { hrmsApplications, hrmsJobOpenings } from "./schema.js";
 import { verifyCandToken } from "./candidate-public-auth-routes.js";
-import { buildStageTimeline, portalOutcome } from "./candidate-portal-timeline.js";
+import { buildStageTimeline, portalOutcome, type InterviewSlotInput } from "./candidate-portal-timeline.js";
+import * as repo from "./repo.js";
 
 function resolveCandidateClaims(req: { headers: Record<string, string | string[] | undefined> }): { candidateId: string; tenantId: string; email: string } {
   const authHeader = req.headers["authorization"];
@@ -121,7 +122,22 @@ export async function candidatePublicPortalRoutes(app: FastifyInstance): Promise
     const job = jobs[0] ?? null;
 
     // Build a human-readable stage timeline.
-    const stages = buildStageTimeline({ stage: app_.stage, appliedAt: app_.appliedAt });
+    // GAP-RECRUITMENT-CAREERS-PORTAL-APPLICATION-DETAIL-06: add the shortlist date and, while the
+    // application is shortlisted, the next confirmed interview slot (status scheduled only).
+    let interview: InterviewSlotInput | null = null;
+    if (app_.stage === "shortlisted") {
+      const slots = (await repo.listInterviews(tenantId, { applicationId: app_.id }, 20))
+        // The NEXT slot (at >= now): a stale "scheduled" row HR never completed must not shadow a later one.
+        .filter((i) => i.status === "scheduled" && new Date(`${i.scheduledDate}T${i.scheduledTime}:00.000Z`).getTime() >= Date.now())
+        .sort((x, y) => `${x.scheduledDate}T${x.scheduledTime}`.localeCompare(`${y.scheduledDate}T${y.scheduledTime}`));
+      interview = slots[0] ?? null;
+    }
+    const stages = buildStageTimeline({
+      stage: app_.stage,
+      appliedAt: app_.appliedAt,
+      shortlistedAt: app_.screeningDecision === "shortlisted" ? app_.screenedAt : null,
+      interview,
+    });
 
     return reply.send({
       id: app_.id,

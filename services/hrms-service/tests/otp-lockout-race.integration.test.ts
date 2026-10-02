@@ -60,6 +60,8 @@ const HR_USER = "bbbbbbbb-7777-4000-8000-0000000000ac";
 
 process.env.FEATURE_OTP_VERIFICATION_ENABLED = "true";
 process.env.NODE_ENV = "test";
+// GAP-RECRUITMENT-CAREERS-PORTAL-LOGIN-03: the otp-request response only echoes devCode behind this explicit flag.
+process.env.ALLOW_DEV_OTP_ECHO = "true";
 
 registerF3_recruitment_Consumers(queue);
 async function drainF3(): Promise<void> {

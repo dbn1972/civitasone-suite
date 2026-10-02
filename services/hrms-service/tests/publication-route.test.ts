@@ -72,6 +72,7 @@ afterAll(async () => { await sqlClient.end(); });
 
 describe("job publication routes", () => {
   it("sets advertisement details", async () => {
+    H.findMock.mockResolvedValue(vac({ isPublished: false }));
     const app = await buildApp();
     const r = await injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${VAC}/advertisement`, headers: auth,
       payload: { feesMinor: 50000, requiredDocuments: ["photo", "signature"], selectionProcess: "written+interview", applicationDeadline: "2026-09-30T18:00:00Z", portalScope: "both" } });
@@ -79,6 +80,31 @@ describe("job publication routes", () => {
     expect(H.updMock).toHaveBeenCalledOnce();
     const patch = H.updMock.mock.calls[0][3];
     expect(patch.feesMinor).toBe(50000n);
+    await app.close();
+  });
+
+  it("reads the advertisement back (GAP-RECRUITMENT-DETAIL-13): bigint fees as a string, real status, defaults for empties", async () => {
+    const app = await buildApp();
+    H.findMock.mockResolvedValue(vac({ status: "cancelled", feesMinor: 50000n, feeExemption: "SC/ST exempt", requiredDocuments: ["photo"], selectionProcess: null, importantDates: { exam: "2026-11-01" }, portalScope: "both" }));
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${VAC}/advertisement`, headers: auth });
+    expect(r.statusCode).toBe(200);
+    expect(r.json()).toMatchObject({
+      id: VAC, status: "cancelled", feesMinor: "50000", feeExemption: "SC/ST exempt", requiredDocuments: ["photo"],
+      selectionProcess: null, importantDates: { exam: "2026-11-01" }, portalScope: "both",
+    });
+    H.findMock.mockResolvedValue(vac({ requiredDocuments: undefined, importantDates: undefined, feesMinor: undefined }));
+    const bare = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${VAC}/advertisement`, headers: auth });
+    expect(bare.json()).toMatchObject({ feesMinor: null, requiredDocuments: [], importantDates: {} });
+    await app.close();
+  });
+
+  it("does not let a non-HR role read the advertisement for another tenant's vacancy (404 when absent)", async () => {
+    const app = await buildApp();
+    H.findMock.mockResolvedValue(null);
+    const r = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${VAC}/advertisement`, headers: auth });
+    expect(r.statusCode).toBe(404);
+    const anon = await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${VAC}/advertisement` });
+    expect([401, 403]).toContain(anon.statusCode);
     await app.close();
   });
 
@@ -93,14 +119,107 @@ describe("job publication routes", () => {
 
   it("extends the deadline (and reopens), rejecting an earlier date", async () => {
     const app = await buildApp();
-    const bad = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/extend`, headers: auth, payload: { newDeadline: "2026-08-01T00:00:00Z" } });
+    const bad = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/extend`, headers: auth, payload: { newDeadline: "2026-08-01T00:00:00Z", reason: "x" } });
     expect(bad.statusCode).toBe(400);
     expect(bad.json().code).toBe("NOT_AN_EXTENSION");
     H.findMock.mockResolvedValue(vac({ status: "closed" }));
-    const ok = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/extend`, headers: auth, payload: { newDeadline: "2026-09-30T00:00:00Z", reason: "low response" } });
+    const ok = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/extend`, headers: auth, payload: { newDeadline: "2099-09-30T00:00:00Z", reason: "low response" } });
     expect(ok.json().status).toBe("open");
     expect(H.updMock.mock.calls.at(-1)![3].status).toBe("open"); // reopened
     expect(H.insCorrMock.mock.calls[0][1].action).toBe("extension");
+    await app.close();
+  });
+
+  // H1: the publish rule is enforced server-side (route AND consumer), never UI-only.
+  describe("publish rule (H1)", () => {
+    const publish = async (app: Awaited<ReturnType<typeof buildApp>>, isPublished: boolean) =>
+      injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${VAC}/publish`, headers: auth, payload: { isPublished } });
+    const FUTURE = new Date("2099-01-01T00:00:00Z");
+
+    it("409s publishing a vacancy that is not open (closed or cancelled) and writes nothing", async () => {
+      const app = await buildApp();
+      for (const status of ["closed", "cancelled", "on_hold"]) {
+        H.findMock.mockResolvedValue(vac({ status, isPublished: false, applicationDeadline: FUTURE }));
+        const r = await publish(app, true);
+        expect(r.statusCode).toBe(409);
+        expect(r.json().code).toBe("VACANCY_NOT_OPEN");
+      }
+      expect(H.updMock).not.toHaveBeenCalled();
+      await app.close();
+    });
+
+    it("409s publishing once the deadline DATE (IST) is before today, but allows the deadline day itself", async () => {
+      const app = await buildApp();
+      H.findMock.mockResolvedValue(vac({ isPublished: false, applicationDeadline: new Date("2020-01-01T10:00:00Z") }));
+      const past = await publish(app, true);
+      expect(past.statusCode).toBe(409);
+      expect(past.json().code).toBe("DEADLINE_PASSED");
+      expect(H.updMock).not.toHaveBeenCalled();
+      // Deadline is earlier today (IST) -> still the same calendar date -> allowed.
+      H.findMock.mockResolvedValue(vac({ isPublished: false, applicationDeadline: new Date(Date.now() - 60_000) }));
+      const sameDay = await publish(app, true);
+      expect([200, 202]).toContain(sameDay.statusCode);
+      await app.close();
+    });
+
+    it("publishes an open, in-date vacancy and NEVER blocks unpublish (even cancelled / expired)", async () => {
+      const app = await buildApp();
+      H.findMock.mockResolvedValue(vac({ isPublished: false, applicationDeadline: FUTURE }));
+      expect((await publish(app, true)).statusCode).toBe(200);
+      expect(H.updMock.mock.calls.at(-1)![3].isPublished).toBe(true);
+      H.findMock.mockResolvedValue(vac({ status: "cancelled", isPublished: true, applicationDeadline: new Date("2020-01-01") }));
+      expect((await publish(app, false)).statusCode).toBe(200);
+      expect(H.updMock.mock.calls.at(-1)![3].isPublished).toBe(false);
+      await app.close();
+    });
+
+    it("the consumer re-checks at write time: a vacancy closed after the route accepted it is not published", async () => {
+      const app = await buildApp();
+      H.findMock.mockResolvedValueOnce(vac({ isPublished: false, applicationDeadline: FUTURE })); // route
+      H.findMock.mockResolvedValue(vac({ status: "closed", isPublished: false, applicationDeadline: FUTURE })); // consumer
+      const before = H.updMock.mock.calls.length;
+      await publish(app, true);
+      expect(H.updMock.mock.calls.length).toBe(before);
+      await app.close();
+    });
+  });
+
+  // H2 / M5
+  it("requires a reason on /extend and rejects a past deadline even when there is no current deadline", async () => {
+    const app = await buildApp();
+    const noReason = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/extend`, headers: auth, payload: { newDeadline: "2099-01-01T00:00:00Z" } });
+    expect(noReason.statusCode).toBe(400);
+    const blank = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/extend`, headers: auth, payload: { newDeadline: "2099-01-01T00:00:00Z", reason: "   " } });
+    expect(blank.statusCode).toBe(400);
+    H.findMock.mockResolvedValue(vac({ applicationDeadline: null }));
+    const past = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${VAC}/extend`, headers: auth, payload: { newDeadline: "2020-01-01T00:00:00Z", reason: "x" } });
+    expect(past.statusCode).toBe(400);
+    expect(past.json().code).toBe("DEADLINE_IN_PAST");
+    expect(H.insCorrMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it("refuses PATCH /advertisement once published or cancelled (corrigendum is the path), and lets a fee be cleared while unpublished", async () => {
+    const app = await buildApp();
+    const patch = (payload: unknown) => injectF3(app, { method: "PATCH", url: `/v1/hrms/job-openings/${VAC}/advertisement`, headers: auth, payload });
+    H.findMock.mockResolvedValue(vac({ isPublished: true }));
+    const pub = await patch({ feeExemption: "x" });
+    expect(pub.statusCode).toBe(409);
+    expect(pub.json().code).toBe("ADVERTISEMENT_LOCKED");
+    H.findMock.mockResolvedValue(vac({ status: "cancelled", isPublished: false }));
+    expect((await patch({ feeExemption: "x" })).statusCode).toBe(409);
+    expect(H.updMock).not.toHaveBeenCalled();
+    H.findMock.mockResolvedValue(vac({ isPublished: false }));
+    expect((await patch({ feesMinor: null })).statusCode).toBe(200);
+    expect(H.updMock.mock.calls.at(-1)![3].feesMinor).toBeNull();
+    await app.close();
+  });
+
+  it("GET advertisement: manager allowed, employee denied", async () => {
+    const app = await buildApp();
+    const as = (roles: string[]) => ({ authorization: `Bearer ${signToken({ sub: USER, tid: TENANT, roles, sid: "s" }, SECRET)}` });
+    expect((await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${VAC}/advertisement`, headers: as(["manager"]) })).statusCode).toBe(200);
+    expect((await injectF3(app, { method: "GET", url: `/v1/hrms/job-openings/${VAC}/advertisement`, headers: as(["employee"]) })).statusCode).toBe(403);
     await app.close();
   });
 

@@ -3,7 +3,17 @@ import { pino } from "pino";
 import type { Queue } from "@civitasone/queue";
 import { COMMANDS } from "../../topics.js";
 import { maskRecipient } from "../../adapters/mask.js";
+import { SYSTEM_TEMPLATE_IDS } from "@civitasone/events";
+import { runWithTenant } from "@civitasone/db";
+import { db } from "../../shared/db.js";
 import * as repo from "./repo.js";
+
+/**
+ * Templates that must NOT be retried. The retry command below does not carry the original `variables`, so a retried
+ * sign-in code would render a literal "{{code}}" -- and a stale one-time code is useless anyway (the candidate can
+ * simply request a new one). These deliveries are failed terminally instead of republished.
+ */
+export const NON_RETRYABLE_TEMPLATE_IDS: ReadonlySet<string> = new Set([SYSTEM_TEMPLATE_IDS.candidateLoginOtp]);
 
 const log = pino({ name: "notification:retry-sweeper" });
 
@@ -23,6 +33,16 @@ export async function sweepDueRetries(queue: Queue, now = new Date()): Promise<n
   for (const row of due) {
     const claimed = await repo.claimDueRetry(row.id, row.tenantId, row.version, now);
     if (!claimed) continue; // another sweeper instance won the race
+    if (NON_RETRYABLE_TEMPLATE_IDS.has(row.templateId)) {
+      try {
+        await runWithTenant(row.tenantId, () => db.transaction((tx) =>
+          repo.updateDeliveryStatus(tx, row.id, "failed", row.updatedBy, row.version + 2, undefined, "retry_not_supported")));
+        log.info({ deliveryId: row.id }, "non-retryable template; delivery failed instead of republished");
+      } catch (err) {
+        log.warn({ err, deliveryId: row.id }, "failed to fail non-retryable delivery");
+      }
+      continue;
+    }
     try {
       await queue.publish(COMMANDS.sendNotification, {
         messageId: randomUUID(),

@@ -129,6 +129,16 @@ const STATUS_MAP: Record<string, PillVariant> = {
   applied: "warn",
   "late filed": "warn",
 
+  // GAP-RECRUITMENT-DETAIL-07: application stage / screening decision / vacancy status words that the
+  // recruitment detail page prints as pills (previously raw snake_case in unmapped grey).
+  shortlisted: "info",
+  interviewing: "info",
+  eligible: "good",
+  ineligible: "bad",
+  withdrawn: "mut",
+  "manual review": "warn",
+  "on hold": "warn",
+
   // Recruitment pipeline / job-opening lifecycle
   scheduled: "info",
   // GAP-ASSETS-PROJECTS-06: AUC lifecycle -- WIP still accumulating is "warn", capitalized is "good".
