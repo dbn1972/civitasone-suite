@@ -88,7 +88,7 @@ export default async function CorrectionsPage() {
   }));
 
   const pendingCount = items.filter((r) => r.status === "pending").length;
-  const totalArrearsMinor = items.reduce((sum, r) => sum + Number(r.arrears_minor ?? 0), 0);
+  const totalArrearsMinor = items.reduce((sum, r) => sum + BigInt(String(r.arrears_minor ?? 0)), 0n);
   const approvedCount = items.filter((r) => r.status === "approved").length;
   const canDecide = canRecord;
 

@@ -110,4 +110,10 @@ describe("EsiStatutoryPage", () => {
     renderPage(await EsiStatutoryPage({ searchParams: { period: "2026-13" } }));
     expect(String(fetchJsonMock.mock.calls[0][0])).toBe("/api/v1/payroll/statutory/esi/summary");
   });
+
+  it("GAP-PAYROLL-STATUTORY-ESI-05: shows the ESI wage ceiling hint from the shared constant", async () => {
+    mockLedger(summary(), [row()]);
+    renderPage(await EsiStatutoryPage({ searchParams: {} }));
+    expect(screen.getByText(/within the ₹21,000\.00 wage ceiling/)).toBeInTheDocument();
+  });
 });

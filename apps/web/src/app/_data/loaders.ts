@@ -2533,6 +2533,19 @@ export async function getSalarySlips(limit = 50, offset = 0): Promise<LoaderResu
   });
 }
 
+/**
+ * GAP-PAYROLL-SALARY-SLIPS-04: the signed-in employee's OWN slips
+ * (GET /v1/payroll/slips/mine). The server resolves the employee from the
+ * session token; nothing here (or in the URL) names an employee.
+ */
+export async function getMySlips(limit = 24, offset = 0): Promise<LoaderResult<SalarySlipSummary[]>> {
+  return fetchJson<unknown, SalarySlipSummary[]>(`/api/v1/payroll/slips/mine?limit=${limit}&offset=${offset}`, [], {
+    telemetryKey: "hr.my-slips",
+    responseSchema: SalarySlipSummaryListSchema,
+    mapResponse: (p) => getArrayPayload(p) as SalarySlipSummary[] | null,
+  });
+}
+
 export async function getJobOpenings(): Promise<LoaderResult<JobOpeningSummary[]>> {
   return fetchJson<unknown, JobOpeningSummary[]>("/api/v1/hrms/job-openings", [], {
     revalidateSeconds: 120,

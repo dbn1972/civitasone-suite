@@ -132,4 +132,24 @@ describe("payroll.salary_revision.created -> hrms basicMinor sync", () => {
     expect((payload.metadata as Record<string, unknown>).salaryRevisionId).toBe(revisionId);
     await q.stop();
   });
+
+  // GAP-PAYROLL-SALARY-REVISIONS-02: never overwrite HRMS basic pay with a
+  // non-integer / non-positive figure, never retry it, and never drop it silently.
+  it.each([0, -100, Number.NaN, Number.POSITIVE_INFINITY, 0.4, 4400000.5])("drops a revision whose newBasicMinor is %s: no read, no write, but an auditable failure", async (bad) => {
+    const employeeId = randomUUID();
+    const revisionId = randomUUID();
+    const q = await buildQueue();
+    await q.publish(CONSUMED_EVENTS.salaryRevisionCreated, makeMsg({ id: revisionId, employeeId, newBasicMinor: bad }));
+    await settle();
+
+    expect(findVersionForUpdateMock).not.toHaveBeenCalled();
+    expect(updateEmployeeVersionedMock).not.toHaveBeenCalled();
+    const audit = enqueuedMessages.find((m) => m.topic === "audit.event.record");
+    expect(audit).toBeDefined();
+    const payload = audit!.payload as Record<string, unknown>;
+    expect(payload.outcome).toBe("failure");
+    expect(payload.resourceId).toBe(employeeId);
+    expect(payload.metadata).toMatchObject({ salaryRevisionId: revisionId, reason: "INVALID_NEW_BASIC_MINOR" });
+    await q.stop();
+  });
 });

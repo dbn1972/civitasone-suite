@@ -5936,17 +5936,6 @@
     },
     {
       "module": "hr",
-      "screen": "/hr/payroll/statutory/gpf",
-      "loaders": [],
-      "apiPaths": [],
-      "upstream": null,
-      "routeHandler": null,
-      "tablesPresent": null,
-      "status": "NO_LOADER",
-      "detail": "navigation hub — no data loader"
-    },
-    {
-      "module": "hr",
       "screen": "/hr/payroll/statutory/gratuity",
       "loaders": [],
       "apiPaths": [],
@@ -10486,11 +10475,11 @@
     }
   ],
   "counts": {
-    "totalPages": 813,
+    "totalPages": 812,
     "wired": 291,
     "missing": 8,
     "mismatch": 1,
-    "noLoader": 544,
+    "noLoader": 543,
     "fabricatedData": 0
   },
   "linkAudit": {

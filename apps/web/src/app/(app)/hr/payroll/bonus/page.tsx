@@ -1,4 +1,6 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../_components/ds";
+import { PermissionDenied } from "../../../../_components/PermissionDenied";
+import { getSessionRoles, PAYROLL_REPORT_ROLES } from "@/lib/auth/roleGuard";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { resolveEmployeeNames, employeeDisplayLabel } from "@/app/_data/employeeNames";
@@ -31,6 +33,18 @@ async function getData(): Promise<LoaderResult<Row[]>> {
 
 export default async function BonusPage() {
   const t = await getTranslations("payrollBonus");
+  // GAP-PAYROLL-BONUS-04: hr/layout.tsx admits employee/manager, but both the
+  // bonus list and bonus/compute are payroll-service ROLES-only
+  // (PAYROLL_REPORT_ROLES mirrors it). Deny up front instead of showing the
+  // compute form and failing with a 403 after the confirm dialog.
+  const roles = getSessionRoles();
+  if (!roles.some((r) => PAYROLL_REPORT_ROLES.includes(r))) {
+    return (
+      <div className="page-main wrap">
+        <PermissionDenied module="bonus" requiredRoles={PAYROLL_REPORT_ROLES} backHref="/hr/payroll" backLabel={t("backLabel")} />
+      </div>
+    );
+  }
   const { data: items, source } = await getData();
   const errored = source === "error";
   // GAP-PAYROLL-BONUS-01: names (one batched directory lookup), not UUIDs.
@@ -46,7 +60,7 @@ export default async function BonusPage() {
     { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
-  const totalBonusMinor = items.reduce((sum, r) => sum + Number(r.bonus_amount_minor ?? 0), 0);
+  const totalBonusMinor = items.reduce((sum, r) => sum + BigInt(String(r.bonus_amount_minor ?? 0)), 0n);
   const pendingBonus = items.filter((r) => r.status === "pending").length;
 
   return (

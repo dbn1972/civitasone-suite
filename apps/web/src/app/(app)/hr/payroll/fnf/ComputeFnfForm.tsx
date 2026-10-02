@@ -9,6 +9,7 @@ import { useFormError } from "@/lib/useFormError";
 import { nonNegativeRupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { searchEmployees } from "@/lib/entityAdapters/employee";
+import { FNF_POLL_INTERVAL_MS, FNF_POLL_MAX_TICKS } from "./fnfWorkflow";
 
 const SEPARATION_TYPES = ["retirement", "superannuation", "resignation", "retrenchment", "vrs", "death"] as const;
 const EMPLOYEE_CATEGORIES = ["govt", "non_govt_covered", "non_govt_uncovered"] as const;
@@ -114,6 +115,23 @@ export function ComputeFnfForm() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | undefined>();
   const [message, setMessage] = useState<string | null>(null);
+  // GAP-PAYROLL-FNF-04: compute is asynchronous (202 queued). After one is
+  // queued, re-fetch the list every 5 s for up to a minute so the new
+  // settlement appears without a manual reload; a Refresh button covers the rest.
+  const [pollTicks, setPollTicks] = useState(0);
+  const [polling, setPolling] = useState(false);
+  useEffect(() => {
+    if (!polling) return;
+    if (pollTicks >= FNF_POLL_MAX_TICKS) {
+      setPolling(false);
+      return;
+    }
+    const timer = setTimeout(() => {
+      router.refresh();
+      setPollTicks((n) => n + 1);
+    }, FNF_POLL_INTERVAL_MS);
+    return () => clearTimeout(timer);
+  }, [polling, pollTicks, router]);
   const [invalidFields, setInvalidFields] = useState<Set<FieldKey>>(new Set());
   const formError = useFormError("F&F settlement");
 
@@ -316,6 +334,8 @@ export function ComputeFnfForm() {
       setConfirmOpen(false);
       setMessage(res.data.message ?? t("computeQueuedMessage"));
       router.refresh();
+      setPollTicks(0);
+      setPolling(true);
     } catch {
       setError(formError.fromException("save").message);
     } finally {
@@ -520,7 +540,10 @@ export function ComputeFnfForm() {
             <p id={errId} role="alert" className="pill bad" style={{ width: "fit-content" }}>{error}</p>
           )}
           {message && (
-            <p role="status" className="pill good" style={{ width: "fit-content" }}>{message}</p>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <p role="status" className="pill good" style={{ width: "fit-content", margin: 0 }}>{message}</p>
+              <Button type="button" variant="ghost" onClick={() => router.refresh()}>{t("refreshListBtn")}</Button>
+            </div>
           )}
         </div>
       </Card>

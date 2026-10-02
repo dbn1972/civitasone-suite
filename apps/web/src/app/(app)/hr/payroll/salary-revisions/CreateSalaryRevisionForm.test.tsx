@@ -44,6 +44,7 @@ async function fillValidForm() {
   fireEvent.change(screen.getByLabelText(/^New Basic/), { target: { value: "44000" } });
   fireEvent.change(screen.getByLabelText(/^Old Gross/), { target: { value: "80000" } });
   fireEvent.change(screen.getByLabelText(/^New Gross/), { target: { value: "88000" } });
+  fireEvent.change(screen.getByLabelText(/^Order No/), { target: { value: "ORD/2026/17" } });
 }
 
 describe("CreateSalaryRevisionForm", () => {
@@ -204,5 +205,14 @@ describe("CreateSalaryRevisionForm", () => {
       expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 400/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-SALARY-REVISIONS-02: an order number is required before the confirm dialog opens", async () => {
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><CreateSalaryRevisionForm /></NextIntlClientProvider>);
+    await fillValidForm();
+    fireEvent.change(screen.getByLabelText(/^Order No/), { target: { value: "  " } });
+    fireEvent.click(screen.getByRole("button", { name: /Record Revision|Create|Submit/i }));
+    expect(await screen.findByText("Enter the order number that sanctions this revision.")).toBeInTheDocument();
+    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { NextIntlClientProvider } from "next-intl";
 import enMessages from "@/messages/en.json";
 
@@ -175,5 +175,29 @@ describe("ComputeFnfForm", () => {
     fireEvent.click(screen.getByText("Compute settlement"));
     await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-FNF-04: after a queued compute the list is re-fetched every 5 s (bounded), and Refresh re-fetches on demand", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      renderForm();
+      await pickEmployeeAndDate();
+      await waitFor(() => expect(screen.getByLabelText(/Completed Years/)).toHaveValue(25));
+      fillMoney();
+      fireEvent.click(screen.getByText("Compute Settlement"));
+      await screen.findByRole("alertdialog");
+      fireEvent.click(screen.getByText("Compute settlement"));
+      await waitFor(() => expect(screen.getByText("fnf compute queued")).toBeInTheDocument());
+      const afterCompute = refreshMock.mock.calls.length;
+      await act(async () => { await vi.advanceTimersByTimeAsync(5100); });
+      expect(refreshMock.mock.calls.length).toBe(afterCompute + 1);
+      for (let i = 0; i < 20; i += 1) await act(async () => { await vi.advanceTimersByTimeAsync(5100); });
+      // bounded: 12 poll ticks in total, never indefinite
+      expect(refreshMock.mock.calls.length).toBe(afterCompute + 12);
+      fireEvent.click(screen.getByRole("button", { name: "Refresh list" }));
+      expect(refreshMock.mock.calls.length).toBe(afterCompute + 13);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

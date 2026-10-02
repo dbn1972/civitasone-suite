@@ -9,6 +9,7 @@ import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { StatutoryPeriodPicker } from "../_components/StatutoryPeriodPicker";
 import { loadLedgerPeriod } from "../_lib/ledgerPeriod";
 import { employeeLabel } from "../_lib/employeeLabel";
+import { ESI_WAGE_CEILING_MINOR, STATUTORY_REFERENCE_AS_OF } from "../_lib/rates";
 
 type EsiRow = {
   id: string;
@@ -73,6 +74,10 @@ export default async function EsiStatutoryPage({ searchParams }: { searchParams?
         back="/hr/payroll/statutory" backLabel={t("errorBackLabel")}
       />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
+      {/* GAP-PAYROLL-STATUTORY-ESI-05: coverage hint from the same constant the hub uses. */}
+      <p style={{ margin: "0 0 12px", fontSize: 12, color: "var(--ink2)" }}>
+        {t("wageCeilingNote", { ceiling: formatMoney(ESI_WAGE_CEILING_MINOR), asOf: STATUTORY_REFERENCE_AS_OF })}
+      </p>
 
       {!errored && (
         <StatutoryPeriodPicker

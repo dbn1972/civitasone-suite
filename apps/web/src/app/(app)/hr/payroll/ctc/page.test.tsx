@@ -74,4 +74,12 @@ describe("CtcConfigPage", () => {
     expect(screen.getByText("Access restricted")).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
+
+  it("GAP-PAYROLL-CTC-02: titled and described as a read-only rules view (no 'Configuration' that implies editing)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    await renderPage();
+    expect(screen.getByRole("heading", { level: 1, name: "CTC Component Rules" })).toBeInTheDocument();
+    expect(screen.getByText(/Read-only view/)).toBeInTheDocument();
+    expect(screen.queryByText(/CTC Configuration/)).not.toBeInTheDocument();
+  });
 });

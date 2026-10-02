@@ -10,6 +10,7 @@ import { toHumanError } from "@/lib/messages";
 import { getTranslations } from "next-intl/server";
 import { SALARY_ADMIN_ROLES } from "./_salaryAdminRoles";
 import { isPrintableSlipStatus } from "@/lib/payroll/statusLabels";
+import { breakdownSlip } from "./slipComponents";
 
 export default async function SalarySlipPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("salarySlipDetail");
@@ -57,8 +58,9 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
     );
   }
 
-  const earnings = slip.components.filter((c) => c.type === "earning");
-  const deductions = slip.components.filter((c) => c.type === "deduction");
+  // GAP-PAYROLL-SALARY-SLIPS-DETAIL-03: no component type is silently dropped,
+  // and the listed lines are checked against the slip's own totals.
+  const { earnings, deductions, other, earningsMatchGross, deductionsMatchTotal } = breakdownSlip(slip.components, slip.grossMinor, slip.totalDeductionsMinor);
   const canPrint = isPrintableSlipStatus(slip.status);
 
   return (
@@ -146,6 +148,27 @@ export default async function SalarySlipPage({ params }: { params: { id: string 
             </table>
           </div>
         </div>
+
+        {other.length > 0 && (
+          <div style={{ marginTop: 20 }}>
+            <h3 style={{ fontSize: 13, fontWeight: 700, textTransform: "uppercase", color: "var(--mut)", borderBottom: "1px solid var(--line)", paddingBottom: 4, marginBottom: 8 }}>{t("otherComponents")}</h3>
+            <table style={{ width: "100%", fontSize: 13 }}>
+              <tbody>
+                {other.map((c) => (
+                  <tr key={c.code}>
+                    <td className="cmp-name" style={{ padding: "3px 0" }}>{c.name}</td>
+                    <td className="cmp-amount" style={{ padding: "3px 0", textAlign: "right", fontFamily: "monospace" }}>{formatMoney(c.amountMinor)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p style={{ margin: "6px 0 0", fontSize: 11, color: "var(--color-text-muted)" }}>{t("otherComponentsNote")}</p>
+          </div>
+        )}
+
+        {slip.components.length > 0 && (!earningsMatchGross || !deductionsMatchTotal) && (
+          <p role="note" className="no-print" style={{ margin: "16px 0 0", fontSize: 12, color: "var(--warn, #92400e)" }}>{t("reconcileNote")}</p>
+        )}
 
         {/* Net Pay */}
         <div style={{ marginTop: 24, padding: "12px 16px", background: "var(--goodbg)", borderRadius: 8, border: "1px solid var(--goodbd)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>

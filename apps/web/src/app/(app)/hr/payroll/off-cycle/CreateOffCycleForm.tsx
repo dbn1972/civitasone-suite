@@ -43,7 +43,20 @@ export function duplicateEmployeeRows(items: ReadonlyArray<{ employeeId: string 
 
 const fieldStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
-export function CreateOffCycleForm() {
+/**
+ * GAP-PAYROLL-OFF-CYCLE-05: a run of the same type for the same period already
+ * exists. Warn, never block (a second legitimate run is allowed), because
+ * paying the same bonus/incentive twice is the expensive mistake.
+ */
+export function hasSameTypeAndPeriod(
+  existing: ReadonlyArray<{ run_type: string; period: string }>,
+  runType: string,
+  period: string,
+): boolean {
+  return existing.some((r) => r.run_type === runType && r.period === period.trim());
+}
+
+export function CreateOffCycleForm({ existingRuns = [] }: { existingRuns?: ReadonlyArray<{ run_type: string; period: string }> }) {
   const t = useTranslations("createOffCycleForm");
   const router = useRouter();
   const [runType, setRunType] = useState<RunType>("bonus");
@@ -68,6 +81,7 @@ export function CreateOffCycleForm() {
   const periodInvalid = tone === "bad" && invalidField === "period";
   const itemsInvalid = tone === "bad" && (invalidField === "items" || invalidField === "duplicate");
   const dupes = duplicateEmployeeRows(items);
+  const periodHasRun = /^\d{4}-(0[1-9]|1[0-2])$/.test(period.trim()) && hasSameTypeAndPeriod(existingRuns, runType, period);
 
   function updateItem(index: number, patch: Partial<ItemDraft>) {
     setItems((prev) => prev.map((it, i) => (i === index ? { ...it, ...patch } : it)));
@@ -179,6 +193,11 @@ export function CreateOffCycleForm() {
                 aria-describedby={periodInvalid ? errId : undefined}
                 style={fieldStyle}
               />
+              {periodHasRun && (
+                <span role="status" className="pill warn" style={{ width: "fit-content", margin: 0 }}>
+                  {t("existingRunWarning", { period: formatPeriod(period.trim()) })}
+                </span>
+              )}
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={descId} style={{ fontSize: 13, fontWeight: 600 }}>{t("descriptionLabel")}</label>
@@ -296,6 +315,11 @@ export function CreateOffCycleForm() {
               amount: formatMoney(totalAmountMinor),
               strong: (chunks) => <strong>{chunks}</strong>,
             })}
+            {periodHasRun && (
+              <p role="note" style={{ margin: "10px 0 0", fontWeight: 600, color: "var(--warn, #92400e)" }}>
+                {t("existingRunWarning", { period: formatPeriod(period.trim()) })}
+              </p>
+            )}
             {/* GAP-PAYROLL-OFF-CYCLE-02: who is being paid, by name, before creating the run. */}
             <ul style={{ margin: "10px 0 0", paddingLeft: 18, maxHeight: 200, overflowY: "auto" }} aria-label={t("confirmItemsAriaLabel")}>
               {items.map((it) => (

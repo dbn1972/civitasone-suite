@@ -1,6 +1,15 @@
 import { getTranslations } from "next-intl/server";
+import { PayrollPageSkeleton } from "../_lib/PayrollPageSkeleton";
 
 export default async function Loading() {
   const t = await getTranslations("corrections");
-  return <div className="page-main wrap"><div className="skeleton" aria-label={t("loadingAriaLabel")} /></div>;
+  return (
+    <PayrollPageSkeleton
+      title={t("title")}
+      subtitle={t("subtitle")}
+      backLabel={t("backLabel")}
+      loadingLabel={t("loadingAriaLabel")}
+      statCount={4}
+    />
+  );
 }

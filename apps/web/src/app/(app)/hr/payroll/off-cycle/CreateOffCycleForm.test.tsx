@@ -16,12 +16,12 @@ vi.mock("@/lib/entityAdapters/employee", () => ({
   resolveEmployees: vi.fn(async () => []),
 }));
 
-import { CreateOffCycleForm, duplicateEmployeeRows } from "./CreateOffCycleForm";
+import { CreateOffCycleForm, duplicateEmployeeRows, hasSameTypeAndPeriod } from "./CreateOffCycleForm";
 
-function renderForm() {
+function renderForm(existingRuns: Array<{ run_type: string; period: string }> = []) {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <CreateOffCycleForm />
+      <CreateOffCycleForm existingRuns={existingRuns} />
     </NextIntlClientProvider>,
   );
 }
@@ -115,5 +115,24 @@ describe("CreateOffCycleForm", () => {
     fireEvent.click(screen.getByText("Create run"));
     await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
     expect(screen.queryByText(/API_ERROR: 422/)).not.toBeInTheDocument();
+  });
+});
+
+describe("GAP-PAYROLL-OFF-CYCLE-05: same type + period warning", () => {
+  it("hasSameTypeAndPeriod matches on type and period only", () => {
+    const runs = [{ run_type: "bonus", period: "2026-08" }];
+    expect(hasSameTypeAndPeriod(runs, "bonus", "2026-08")).toBe(true);
+    expect(hasSameTypeAndPeriod(runs, "incentive", "2026-08")).toBe(false);
+    expect(hasSameTypeAndPeriod(runs, "bonus", "2026-09")).toBe(false);
+  });
+
+  it("warns (without blocking) when a run of the same type already exists for the period", () => {
+    renderForm([{ run_type: "bonus", period: "2026-08" }]);
+    expect(screen.queryByText(/already exists for/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/^Period/), { target: { value: "2026-08" } });
+    expect(screen.getByText(/A run of this type already exists for Aug 2026/)).toBeInTheDocument();
+    // a different run type for the same period is fine
+    fireEvent.change(screen.getByLabelText(/^Run Type/), { target: { value: "incentive" } });
+    expect(screen.queryByText(/already exists for/)).not.toBeInTheDocument();
   });
 });

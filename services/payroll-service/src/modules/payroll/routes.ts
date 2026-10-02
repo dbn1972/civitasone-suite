@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import { ZodError } from "zod";
+import { z, ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { PayrollRunDetailListSchema, PayrollRunFullDetailSchema, SalarySlipSummaryListSchema } from "@civitasone/schemas/web";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
@@ -103,6 +103,33 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, PAYROLL_ROLES);
     const { id } = idParam.parse(req.params);
     return sendAccepted(reply, acceptedResponseSchema, await commands.revertRun(ctx, id));
+  });
+
+  /**
+   * GAP-PAYROLL-SALARY-SLIPS-04: "My payslips". Returns ONLY the caller's own
+   * slips. The employee is resolved from the verified token (actor -> HRMS
+   * identity); any employeeId in the query or body is ignored, and the tenant
+   * comes from the token. Paging is bounded (max 100, newest period first).
+   * Registered before /slips/:id; fastify matches the static segment first.
+   */
+  app.get("/v1/payroll/slips/mine", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, SLIP_ROLES);
+    const q = z.object({
+      limit: z.coerce.number().int().min(1).max(100).default(24),
+      offset: z.coerce.number().int().min(0).max(10_000).default(0),
+    }).parse(req.query);
+    let ownEmployeeId: string | null;
+    try {
+      ownEmployeeId = await resolveActorEmployeeId(ctx.tenantId, ctx.actorId);
+    } catch (err) {
+      if (err instanceof HrmsUnavailableError) {
+        throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot resolve your employee record: HRMS identity source unreachable");
+      }
+      throw err;
+    }
+    if (!ownEmployeeId) return sendValidated(reply, SalarySlipSummaryListSchema, []);
+    sendValidated(reply, SalarySlipSummaryListSchema, await queries.listMySlips(ctx.tenantId, ownEmployeeId, q.limit, q.offset));
   });
 
   /**

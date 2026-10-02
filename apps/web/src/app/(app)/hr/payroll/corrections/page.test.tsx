@@ -97,4 +97,14 @@ describe("CorrectionsPage", () => {
     expect(screen.getByRole("cell", { name: "BASIC" })).toBeInTheDocument();
     expect(screen.queryByText("Record Salary Correction")).not.toBeInTheDocument();
   });
+
+  it("GAP-PAYROLL-CORRECTIONS-06: the LOP card is titled for what it is (an explanation, not a 'Ledger') and the money stat is bigint-exact", async () => {
+    sessionRoles = ["payroll_admin"];
+    withDirectory({ data: [{ ...ROW, arrears_minor: "9007199254740993" }, { ...ROW, id: "c2", arrears_minor: "1" }], source: "api" });
+    await renderPage();
+    expect(screen.getByText("Loss of Pay (LOP)")).toBeInTheDocument();
+    expect(screen.queryByText(/LOP\) Ledger/)).not.toBeInTheDocument();
+    // 9007199254740993 + 1 paise = ₹9,00,71,99,25,47,409.94 -- a float sum would drift.
+    expect(screen.getByText("₹9,00,71,99,25,47,409.94")).toBeInTheDocument();
+  });
 });

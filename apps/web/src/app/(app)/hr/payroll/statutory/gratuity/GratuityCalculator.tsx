@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { useTranslations } from "next-intl";
 import { formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
+import { completedServiceYears } from "./serviceYears";
 import { GRATUITY_CEILING_PAISE, GRATUITY_DAYS, WORKING_DAYS_PER_MONTH } from "./constants";
 
 /** Upper bound on service years the estimator accepts (no real career exceeds it). */
@@ -18,7 +19,8 @@ export function GratuityCalculator() {
   // BigInt(Infinity) throws) and anything beyond a plausible career.
   const parsedYears = parseFloat(years);
   const numYears = Number.isFinite(parsedYears) && parsedYears > 0 ? Math.min(parsedYears, MAX_SERVICE_YEARS) : 0;
-  const completedYears = Math.floor(numYears);
+  // GAP-PAYROLL-STATUTORY-GRATUITY-03: a fraction over six months counts as a full year.
+  const completedYears = completedServiceYears(numYears);
 
   // GAP-PAYROLL-STATUTORY-GRATUITY-05 [HUMAN REVIEW: statutory compliance]:
   // integer-paise BigInt math via the shared rupeesToMinorString helper,
@@ -60,7 +62,7 @@ export function GratuityCalculator() {
         {t("heading")}
       </h3>
       <p style={{ margin: "0 0 10px", fontSize: 12, color: "var(--mut)" }}>
-        {t("description", { ceiling: formatMoney(GRATUITY_CEILING_PAISE) })}
+        {t("description", { ceiling: formatMoney(GRATUITY_CEILING_PAISE) })} {t("roundingNote")}
       </p>
       {/* GAP-PAYROLL-STATUTORY-GRATUITY-05: this calculator is a scratch
           estimator with no link to an actual employee record -- its figure

@@ -63,7 +63,16 @@ export async function insertSlip(tx: Writer, row: typeof payrollSlips.$inferInse
 
 export type SlipWithRun = PayrollSlipRow & { month: string; runDeptId: string | null };
 
-export async function listSlipsByTenant(tenantId: string, limit = 100): Promise<SlipWithRun[]> {
+/**
+ * `opts.employeeId` (GAP-PAYROLL-SALARY-SLIPS-04, GET /slips/mine) narrows to ONE
+ * employee, newest first, with `offset` paging. The caller must take that id
+ * from the verified token's HRMS identity, never from client input.
+ */
+export async function listSlipsByTenant(
+  tenantId: string,
+  limit = 100,
+  opts: { employeeId?: string; offset?: number; statuses?: readonly string[] } = {},
+): Promise<SlipWithRun[]> {
   const rows = await scopedRead((tx) =>
     tx.select({
       id: payrollSlips.id,
@@ -98,8 +107,16 @@ export async function listSlipsByTenant(tenantId: string, limit = 100): Promise<
     })
     .from(payrollSlips)
     .leftJoin(payrollRuns, eq(payrollSlips.runId, payrollRuns.id))
-    .where(eq(payrollSlips.tenantId, tenantId))
+    .where(opts.employeeId
+      ? and(
+          eq(payrollSlips.tenantId, tenantId),
+          eq(payrollSlips.employeeId, opts.employeeId),
+          ...(opts.statuses ? [inArray(payrollSlips.status, [...opts.statuses])] : []),
+        )
+      : eq(payrollSlips.tenantId, tenantId))
+    .orderBy(...(opts.employeeId ? [desc(payrollRuns.month), desc(payrollSlips.createdAt)] : []))
     .limit(limit)
+    .offset(opts.offset ?? 0)
   );
   return rows.map(r => ({ ...r, month: r.month ?? "", runDeptId: r.runDeptId ?? null }));
 }

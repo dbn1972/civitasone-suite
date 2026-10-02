@@ -38,10 +38,17 @@ function renderPage(ui: React.ReactElement) {
 
 type Loan = { id: string; loanNo: string; loanType: string; principalMinor: string; outstandingMinor: string; emiMinor: string; tenureMonths: number; status: string; createdBy?: string };
 
+let scheduleResult: { payload: unknown; source: "api" | "error" } | null = null;
+
 function mockApi(loans: Loan[] | "error", employees: unknown[] = [{ id: EMP_ID, name: "Asha Rao", employeeNo: "EMP-001", department: "Finance" }]) {
   fetchJsonMock.mockImplementation(async (url: string, _fallback: unknown, opts?: { mapResponse?: (p: unknown) => unknown }) => {
     if (url.startsWith("/api/v1/hrms/employees")) {
       return { data: opts?.mapResponse ? opts.mapResponse({ data: employees }) ?? [] : employees, source: "api" };
+    }
+    if (url.includes("/schedule")) {
+      return scheduleResult
+        ? { data: opts?.mapResponse ? opts.mapResponse(scheduleResult.payload) ?? [] : [], source: scheduleResult.source }
+        : { data: [], source: "api" };
     }
     if (loans === "error") return { data: [], source: "error" };
     return { data: loans, source: "api" };
@@ -56,6 +63,7 @@ const loan = (over: Partial<Loan>): Loan => ({
 describe("LoansPage", () => {
   beforeEach(() => {
     fetchJsonMock.mockReset();
+    scheduleResult = null;
     getSessionRolesMock.mockReturnValue(["payroll_officer"]);
     getSessionUserIdMock.mockReturnValue(ME);
   });
@@ -139,10 +147,42 @@ describe("LoansPage", () => {
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
 
-  it("notes the recovery schedule endpoint is not available", async () => {
+  it("GAP-PAYROLL-LOANS-06: no permanent empty 'schedule' card before an employee is searched", async () => {
     const ui = await LoansPage({ searchParams: {} });
     renderPage(ui);
+    expect(screen.queryByText(/Recovery Schedule/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Recovery schedule not yet available")).not.toBeInTheDocument();
+    expect(fetchJsonMock.mock.calls.some(([u]) => String(u).includes("/schedule"))).toBe(false);
+  });
 
-    expect(screen.getByText("Recovery schedule not yet available")).toBeInTheDocument();
+  it("GAP-PAYROLL-LOANS-06: shows the real per-installment schedule for the employee's live loan, fetched by that loan's id", async () => {
+    mockApi([loan({ id: "other", loanNo: "LN-0", status: "closed" }), loan({ id: "live", loanNo: "LN-9", status: "active" })]);
+    scheduleResult = {
+      source: "api",
+      payload: { schedule: [{ installmentNo: 1, openingMinor: 100000, emiMinor: 60000, principalMinor: 59000, interestMinor: 1000, closingMinor: 41000 }] },
+    };
+    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    renderPage(ui);
+    expect(screen.getByText("Recovery Schedule — LN-9")).toBeInTheDocument();
+    expect(screen.getByText("₹410.00")).toBeInTheDocument();
+    const scheduleCalls = fetchJsonMock.mock.calls.filter(([u]) => String(u).includes("/schedule"));
+    expect(scheduleCalls).toHaveLength(1);
+    expect(String(scheduleCalls[0][0])).toBe("/api/v1/payroll/loans/live/schedule");
+  });
+
+  it("GAP-PAYROLL-LOANS-06: a loanId that is not one of the employee's loans is ignored", async () => {
+    mockApi([loan({ id: "mine", loanNo: "LN-1", status: "active" })]);
+    scheduleResult = { source: "api", payload: { schedule: [] } };
+    await LoansPage({ searchParams: { empId: EMP_ID, loanId: "someone-elses" } });
+    const scheduleCalls = fetchJsonMock.mock.calls.filter(([u]) => String(u).includes("/schedule"));
+    expect(String(scheduleCalls[0][0])).toBe("/api/v1/payroll/loans/mine/schedule");
+  });
+
+  it("GAP-PAYROLL-LOANS-06: a failed schedule load shows a load error, not an empty schedule", async () => {
+    mockApi([loan({ id: "live", status: "active" })]);
+    scheduleResult = { source: "error", payload: null };
+    const ui = await LoansPage({ searchParams: { empId: EMP_ID } });
+    renderPage(ui);
+    expect(screen.queryByText("No installments")).not.toBeInTheDocument();
   });
 });

@@ -74,3 +74,15 @@ describe("OffCycleCards — maker-checker processing", () => {
     expect(refreshMock).toHaveBeenCalled();
   });
 });
+
+/** GAP-PAYROLL-OFF-CYCLE-05 */
+describe("OffCycleCards — processed run next step", () => {
+  it("tells the user a processed run creates no bank transfer, and shows nothing of the sort on a draft", () => {
+    renderCards([{ ...DRAFT, status: "processed", total_net_minor: 900000 }], false);
+    expect(screen.getByText(/does not create a bank transfer/)).toBeInTheDocument();
+  });
+  it("does not show the note on a draft run", () => {
+    renderCards([DRAFT], false);
+    expect(screen.queryByText(/does not create a bank transfer/)).not.toBeInTheDocument();
+  });
+});
