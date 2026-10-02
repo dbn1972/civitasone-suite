@@ -1,6 +1,5 @@
 import { getTranslations } from "next-intl/server";
-import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState } from "../../../../../_components/ds";
+import { PageHeader, Card, StatCard, StatGrid, StatusPill, EmptyState, LoadErrorState } from "../../../../../_components/ds";
 import { getFinanceBillById } from "../../../../../_data/loaders";
 import { formatIndianDate, formatMoney, formatInternalRef, humanizeStatus } from "@/lib/formatters";
 import { BillPassPayActions } from "../../../_components/FinanceActions";
@@ -8,9 +7,24 @@ import { BillLineItemsTable } from "./BillLineItemsTable";
 
 export default async function BillDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("expenditureBillDetail");
-  const { data: bill, source } = await getFinanceBillById(params.id);
+  const result = await getFinanceBillById(params.id);
+  const { data: bill } = result;
 
   if (!bill) {
+    // A failed load is not "bill not found" (GAP-FINANCE-EXPENDITURE-BILLS-DETAIL-01):
+    // only a real 404 says the bill does not exist; 403 -> permission denied,
+    // anything else -> retryable error state.
+    if (result.source === "error" && result.status !== 404) {
+      return (
+        <>
+          <nav aria-label={t("breadcrumbLabel")} className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
+            <a href="/finance/expenditure/bills">{t("breadcrumbBills")}</a>
+          </nav>
+          <PageHeader title={t("titleLoadFailed")} back="/finance/expenditure/bills" />
+          <LoadErrorState result={result} area={t("areaBill")} backHref="/finance/expenditure/bills" />
+        </>
+      );
+    }
     return (
       <>
         <nav aria-label={t("breadcrumbLabel")} className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
@@ -37,8 +51,7 @@ export default async function BillDetailPage({ params }: { params: { id: string 
         actions={
           <>
             <StatusPill status={bill.status} />
-            <BillPassPayActions id={params.id} status={bill.status} />
-            {source === "error" ? <DataSourceBadge source={source} /> : null}
+            <BillPassPayActions id={params.id} status={bill.status} threeWayMatch={bill.threeWayMatch} />
           </>
         }
       />

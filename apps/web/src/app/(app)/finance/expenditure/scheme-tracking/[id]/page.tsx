@@ -1,26 +1,29 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState } from "@/app/_components/ds";
+import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadErrorState } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { getFinanceSchemeById } from "@/app/_data/loaders";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 
 /**
- * Scheme detail. Previously 100% hardcoded fake data ("PM Gram Sadak Yojana",
- * fixed milestone/release tables) with `params.id` never read — now wired to
- * the real GET /v1/finance/schemes/:id loader (same one the scheme-tracking
- * list already uses for its row links). That backend route does not exist
- * yet (see FinanceSchemeSummary's "no live GET route" note in
- * packages/types), so today this honestly falls into the empty state below;
- * once finance-service ships the route, real data flows through
- * automatically with no further frontend change. The fabricated milestones
- * and fund-release tables are dropped rather than kept fake — the real
- * scheme record carries no such fields today.
+ * Scheme detail, wired to GET /v1/finance/schemes/:id (finance-service budget
+ * routes). The fabricated milestone / fund-release tables were dropped -- the
+ * real scheme record carries no such fields. A failed load (5xx / 403 /
+ * network) is shown as an error state, never as "not available".
  */
 export default async function SchemeDetailPage({ params }: { params: { id: string } }) {
   const t = await getTranslations("expenditureSchemeDetail");
-  const { data: scheme, source } = await getFinanceSchemeById(params.id);
+  const result = await getFinanceSchemeById(params.id);
+  const { data: scheme, source } = result;
 
   if (!scheme) {
+    if (result.source === "error" && result.status !== 404) {
+      return (
+        <div className="page-main wrap" aria-labelledby="page-heading">
+          <PageHeader title={t("titleNotFound")} back="/finance/expenditure/scheme-tracking" />
+          <LoadErrorState result={result} area="scheme" backHref="/finance/expenditure/scheme-tracking" />
+        </div>
+      );
+    }
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
         <PageHeader title={t("titleNotFound")} back="/finance/expenditure/scheme-tracking" />

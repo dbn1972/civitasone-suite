@@ -9,6 +9,15 @@ import * as commands from "./commands.js";
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES = [...FINANCE_ROLES, "audit_officer"];
 
+/**
+ * GAP-FINANCE-PFMS-03: the NEFT bank file carries beneficiary account numbers,
+ * IFSC and amounts (DPDP-sensitive). Every download must state why, and the
+ * reason is written to the audit trail with the actor, batch and request origin.
+ */
+const bankFileQuery = z.object({
+  reason: z.string().trim().min(3, "state why the bank file is being downloaded").max(500),
+});
+
 /** Format PAISE bigint as a rupees.decimals string without Number() precision loss. */
 function rupeesFromPaise(paise: bigint): string {
   const neg = paise < 0n;
@@ -91,6 +100,7 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason } = bankFileQuery.parse(req.query);
     const batch = await repo.findPfmsById(id, ctx.tenantId);
     if (!batch) throw new HttpError(404, "NOT_FOUND", "PFMS batch not found");
     // A row from the e-Kuber adapter channel (adapter-routes.ts) is a
@@ -125,6 +135,14 @@ export async function pfmsRoutes(app: FastifyInstance): Promise<void> {
     }));
     const csv = buildBankFile(rows);
     const filename = `pfms_${batch.pfmsId}.csv`;
+    // Audit the successful generation (actor, batch, stated reason, origin) in
+    // the same outbox the rest of the service uses. Written BEFORE the file is
+    // sent: if the audit write fails, the file is not released.
+    await commands.recordBankFileExport(ctx, {
+      batchId: batch.id, pfmsId: batch.pfmsId, reason, beneficiaryCount: rows.length,
+      ipAddress: req.ip,
+      userAgent: typeof req.headers["user-agent"] === "string" ? req.headers["user-agent"] : null,
+    });
     return reply
       .header("content-type", "text/csv; charset=utf-8")
       .header("content-disposition", `attachment; filename="${filename}"`)

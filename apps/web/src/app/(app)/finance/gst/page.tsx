@@ -43,7 +43,12 @@ export default async function GstConsolePage({ searchParams }: { searchParams?: 
     { data: itc, source: itcSource },
   ] = await Promise.all([getSummary(period), getLedger(period), getItcReconciliation(period)]);
 
-  const source = summarySource === "error" || ledgerSource === "error" || itcSource === "error" ? "error" : "api";
+  // Per-source failure flags: a failed fetch falls back to [] and must NOT read
+  // as a nil return (GAP-FINANCE-GST-01). `error` here means "failed", whereas
+  // an api-ok empty list is a genuine empty period.
+  const errors = { summary: summarySource === "error", ledger: ledgerSource === "error", itc: itcSource === "error" };
+  const source = errors.summary || errors.ledger || errors.itc ? "error" : "api";
+  const money = (failed: boolean, v: number) => (failed ? null : formatMoney(v));
 
   const outputTax = summary
     .filter((r) => r.direction === "output")
@@ -61,24 +66,31 @@ export default async function GstConsolePage({ searchParams }: { searchParams?: 
         subtitle="Output and input GST, the GST ledger, and input tax credit reconciliation for a filing period."
         back="/finance"
       />
-      {source === "error" && <DataSourceBadge source="error" />}
+      {source === "error" && (
+        <>
+          <DataSourceBadge source="error" />
+          <div role="alert" className="banner" style={{ background: "#fef2f2", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>
+            Data incomplete — do not file. One or more GST sources failed to load, so the figures below may be missing.
+          </div>
+        </>
+      )}
 
       <PeriodSelector period={period} />
 
       <StatGrid>
-        <StatCard icon="📤" iconBg="#fef3f2" label="Output Tax" value={formatMoney(outputTax)} />
-        <StatCard icon="📥" iconBg="#ecfdf3" label="ITC Available (Input Tax)" value={formatMoney(inputTax)} />
+        <StatCard icon="📤" iconBg="#fef3f2" label="Output Tax" value={money(errors.summary, outputTax)} />
+        <StatCard icon="📥" iconBg="#ecfdf3" label="ITC Available (Input Tax)" value={money(errors.summary, inputTax)} />
         <StatCard
-          icon={netPayable >= 0 ? "⚠️" : "✅"}
-          iconBg={netPayable >= 0 ? "#fffbe6" : "#e6f7f0"}
+          icon={errors.itc ? "⚠️" : netPayable >= 0 ? "⚠️" : "✅"}
+          iconBg={errors.itc || netPayable >= 0 ? "#fffbe6" : "#e6f7f0"}
           label="Net GST Payable"
-          value={formatMoney(netPayable)}
+          value={money(errors.itc, netPayable)}
         />
-        <StatCard icon="🧾" iconBg="#eff6ff" label="Transactions" value={transactionCount} />
+        <StatCard icon="🧾" iconBg="#eff6ff" label="Transactions" value={errors.summary ? null : transactionCount} />
       </StatGrid>
 
       <Card title={`GST / ITC — ${period}`}>
-        <GstConsole period={period} summary={summary} ledger={ledger} itc={itc} />
+        <GstConsole period={period} summary={summary} ledger={ledger} itc={itc} errors={errors} />
       </Card>
     </div>
   );

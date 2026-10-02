@@ -1,5 +1,6 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }) }));
 import { GstConsole } from "./GstConsole";
 
 describe("GstConsole", () => {
@@ -37,5 +38,28 @@ describe("GstConsole", () => {
     expect(screen.getByText("No GST summary for this period")).toBeInTheDocument();
     fireEvent.click(screen.getByText("GST Ledger"));
     expect(screen.getByText("No GST ledger entries for this period")).toBeInTheDocument();
+  });
+});
+
+// GAP-FINANCE-GST-01: a failed source is not an empty period.
+describe("GstConsole failed sources", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("an ITC load failure shows a retryable error in the ITC tab, not 'No ITC reconciliation'", () => {
+    render(<GstConsole period="2026-06" summary={[]} ledger={[]} itc={[]} errors={{ itc: true }} />);
+    fireEvent.click(screen.getByText(/ITC Reconciliation/));
+    expect(screen.queryByText("No ITC reconciliation for this period")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /try again|retry/i })).toBeInTheDocument();
+  });
+
+  it("marks only the failed tab with a warning cue", () => {
+    render(<GstConsole period="2026-06" summary={[]} ledger={[]} itc={[]} errors={{ ledger: true }} />);
+    expect(screen.getByText("GST Ledger ⚠")).toBeInTheDocument();
+    expect(screen.getByText("Summary")).toBeInTheDocument();
+  });
+
+  it("a genuinely empty period (no errors) still shows the empty states", () => {
+    render(<GstConsole period="2026-06" summary={[]} ledger={[]} itc={[]} />);
+    expect(screen.getByText("No GST summary for this period")).toBeInTheDocument();
   });
 });

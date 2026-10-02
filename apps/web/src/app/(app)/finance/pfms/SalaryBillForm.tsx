@@ -88,7 +88,7 @@ export function SalaryBillForm({ departments = [], onModeObserved }: SalaryBillF
     const nextErrors: Partial<Record<FieldKey, string>> = {};
     if (!/^\d{4}-\d{2}$/.test(month.trim())) nextErrors.month = FIELD_ERRORS.month;
     if (!departmentId.trim()) nextErrors.departmentId = FIELD_ERRORS.departmentId;
-    if (!/^\d+$/.test(totalAmountMinor.trim()) || Number(totalAmountMinor) < 1) {
+    if (!/^\d+$/.test(totalAmountMinor.trim()) || Number(totalAmountMinor) < 1 || !Number.isSafeInteger(Number(totalAmountMinor))) {
       nextErrors.totalAmountMinor = FIELD_ERRORS.totalAmountMinor;
     }
     if (!/^\d+$/.test(employeeCount.trim()) || Number(employeeCount) < 1) {

@@ -18,14 +18,19 @@ interface BankFileActionProps {
  * confirm gate below still applies before any sensitive data leaves the app.
  * Only valid for batches in "signed" or "pending" submission status (finance-service
  * returns 400 INVALID_STATE otherwise).
+ *
+ * GAP-FINANCE-PFMS-03: the file is DPDP-sensitive, so the officer must state a
+ * reason, which is sent as the `reason` query parameter; finance-service
+ * rejects a download without one and writes it (with the actor and batch) to
+ * the audit trail.
  */
 export function BankFileAction({ batchId, pfmsId, submissionStatus }: BankFileActionProps) {
   const t = useTranslations("pfmsBankFileAction");
   const eligible = submissionStatus === "signed" || submissionStatus === "pending";
 
   const { open, busy, error, trigger, cancel, confirm } = useConfirmAction({
-    onConfirm: async () => {
-      const res = await browserFetch(`v1/finance/pfms/${batchId}/bank-file`, { method: "GET" });
+    onConfirm: async (reason) => {
+      const res = await browserFetch(`v1/finance/pfms/${batchId}/bank-file?reason=${encodeURIComponent((reason ?? "").trim())}`, { method: "GET" });
       if (!res.ok) throw new Error(await errorMessageFromResponse(res));
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -56,6 +61,10 @@ export function BankFileAction({ batchId, pfmsId, submissionStatus }: BankFileAc
         title={t("confirmTitle", { pfmsId })}
         confirmLabel={t("confirmLabel")}
         danger
+        requireReason
+        reasonLabel={t("reasonLabel")}
+        minReasonLength={3}
+        maxReasonLength={500}
         busy={busy}
         errorMessage={error}
         description={
@@ -63,7 +72,7 @@ export function BankFileAction({ batchId, pfmsId, submissionStatus }: BankFileAc
             {t.rich("description", { pfmsId, b: (chunks) => <strong>{chunks}</strong> })}
           </>
         }
-        onConfirm={() => void confirm()}
+        onConfirm={(reason) => void confirm(reason)}
         onCancel={cancel}
       />
     </>

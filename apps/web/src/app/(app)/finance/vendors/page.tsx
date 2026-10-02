@@ -1,13 +1,22 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceVendors } from "@/app/_data/loaders";
+import Link from "next/link";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { VendorsTable } from "./VendorsTable";
+import { maskPan } from "@/app/_components/ds/Masked";
+import { canWrite, VENDOR_WRITE_ROLES } from "@/lib/finance/writeRoles";
 
 export default async function VendorsPage() {
   const { data: vendors, source } = await getFinanceVendors();
   const active = vendors.filter((v) => v.status.toLowerCase() === "active").length;
-  // No approval workflow exists yet (status is derived from isActive only —
-  // see FinanceVendorSummary), so this will always read 0 until one is built.
-  const pending = vendors.filter((v) => v.status.toLowerCase() === "pending").length;
+  // finance-service creates vendors already active and has no pending/approval
+  // state (status is derived from isActive only), so a "Pending Approval"
+  // count would be a permanent, fabricated 0. The card shows "—" and says so
+  // until a real approval workflow exists (GAP-FINANCE-VENDORS-01).
+  // Creating a vendor is restricted to finance_admin / super_admin server-side;
+  // an empty role list (no role claim) does not hide it -- the server decides.
+  const roles = getSessionRoles();
+  const canCreate = canWrite(roles, VENDOR_WRITE_ROLES);
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -17,15 +26,18 @@ export default async function VendorsPage() {
         title="Vendor Master"
         subtitle="Registered vendors with PAN, GSTIN, and category classification."
         back="/finance"
+        actions={canCreate ? <Link href="/finance/vendors/new" className="btn primary">New vendor</Link> : null}
       />
       <StatGrid>
         <StatCard icon="🏢" iconBg="#e7edfd" label="Total Vendors" value={vendors.length} />
         <StatCard icon="✅" iconBg="#ecfdf3" label="Active" value={active} />
-        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval" value={pending} />
+        <StatCard icon="⏳" iconBg="#fffaeb" label="Pending Approval (not tracked yet)" value={null} />
         <StatCard icon="📊" iconBg="#eff6ff" label="Categories" value={new Set(vendors.map((v) => v.category)).size} />
       </StatGrid>
       <Card title="Vendors">
-        <VendorsTable vendors={vendors} source={source === "error" ? "error" : "api"} />
+        {/* PAN is masked HERE, on the server, so the full PAN never reaches the client table
+            (or its offline cache / CSV export). */}
+        <VendorsTable vendors={vendors.map((v) => ({ ...v, pan: v.pan ? maskPan(String(v.pan)) : v.pan }))} source={source === "error" ? "error" : "api"} />
       </Card>
     </div>
   );

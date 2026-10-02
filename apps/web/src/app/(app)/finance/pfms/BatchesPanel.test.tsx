@@ -95,11 +95,37 @@ describe("BatchesPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Download bank file for PFMS batch PFMS-0001" }));
 
     const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason for download/), { target: { value: "Upload to bank SFTP" } });
     fireEvent.click(within(dialog).getByText("Download"));
 
     await waitFor(() => {
       expect(within(dialog).getByText(/couldn't save/i)).toBeInTheDocument();
     });
     expect(within(dialog).queryByText(/API_ERROR/)).not.toBeInTheDocument();
+  });
+
+  // GAP-FINANCE-PFMS-03
+  it("requires a reason before downloading the bank file: Download stays disabled and nothing is fetched", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    renderPanel({ batches: rows });
+    fireEvent.click(screen.getByRole("button", { name: "Download bank file for PFMS batch PFMS-0001" }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(within(dialog).getByText("Download").closest("button")).toBeDisabled();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("sends the stated reason to the bank-file endpoint", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("a,b", { status: 200 }));
+    // jsdom has no object-URL support
+    (URL as unknown as { createObjectURL: () => string }).createObjectURL = () => "blob:x";
+    (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => undefined;
+    renderPanel({ batches: rows });
+    fireEvent.click(screen.getByRole("button", { name: "Download bank file for PFMS batch PFMS-0001" }));
+    const dialog = await screen.findByRole("alertdialog");
+    fireEvent.change(within(dialog).getByLabelText(/Reason for download/), { target: { value: "Upload to bank SFTP" } });
+    fireEvent.click(within(dialog).getByText("Download"));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalled());
+    const url = String(fetchMock.mock.calls[0][0]);
+    expect(url).toContain("/v1/finance/pfms/b1/bank-file?reason=Upload%20to%20bank%20SFTP");
   });
 });

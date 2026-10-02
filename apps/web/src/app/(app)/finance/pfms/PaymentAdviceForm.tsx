@@ -102,7 +102,7 @@ export function PaymentAdviceForm({ onModeObserved }: PaymentAdviceFormProps) {
     if (!payeeName.trim()) nextErrors.payeeName = FIELD_ERRORS.payeeName;
     if (!payeeAccountNo.trim()) nextErrors.payeeAccountNo = FIELD_ERRORS.payeeAccountNo;
     if (payeeIfsc.trim().length !== 11) nextErrors.payeeIfsc = FIELD_ERRORS.payeeIfsc;
-    if (!/^\d+$/.test(amountMinor.trim()) || Number(amountMinor) < 1) {
+    if (!/^\d+$/.test(amountMinor.trim()) || Number(amountMinor) < 1 || !Number.isSafeInteger(Number(amountMinor))) {
       nextErrors.amountMinor = FIELD_ERRORS.amountMinor;
     }
     if (!purposeCode.trim()) nextErrors.purposeCode = FIELD_ERRORS.purposeCode;

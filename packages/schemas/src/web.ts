@@ -600,9 +600,14 @@ export const BillSummarySchema = z.object({
   amountDisplay: z.string().optional(),
   submittedDate: z.string(),
   dueDate: z.string().optional(),
-  status: z.enum(["pending", "approved", "paid", "rejected", "under_review"]),
+  // Mirrors finance-service payments/queries.ts mapBillStatus (what the API actually
+  // emits): draft maps to pending, approved to passed. The DB CHECK allows
+  // draft/pending/passed/paid/rejected/on_hold/under_review. "approved" is kept
+  // as a legacy value only so older fixtures/clients still parse.
+  status: z.enum(["pending", "passed", "approved", "paid", "rejected", "on_hold", "under_review"]),
   poRef: z.string().optional(),
-  threeWayMatch: z.enum(["matched", "partial", "unmatched", "na"]).default("na"),
+  // The list emits "na"; the detail query emits matched | pending | na.
+  threeWayMatch: z.enum(["matched", "pending", "partial", "unmatched", "na"]).default("na"),
 });
 export const BillSummaryListSchema = z.array(BillSummarySchema);
 

@@ -1,0 +1,20 @@
+/**
+ * Roles finance-service admits on the WRITE routes behind the finance buttons
+ * that were previously offered to every reader (so a reader got a button that
+ * only returned 403). Derived from the service source:
+ *  - vendors PATCH/POST: WRITER_ROLES in masters/routes.ts
+ *  - recurring-entries PATCH/POST: FINANCE_ROLES in recurring/routes.ts
+ * The server stays the authority; this only avoids offering a dead control.
+ */
+export const VENDOR_WRITE_ROLES = ["finance_admin", "super_admin"] as const;
+export const RECURRING_WRITE_ROLES = ["finance_officer", "finance_admin", "super_admin"] as const;
+
+/**
+ * True when the session may use a write control. An EMPTY role list means the
+ * session carries no role claim (the /finance layout fails open for that case),
+ * so the control is NOT hidden -- the server decides.
+ */
+export function canWrite(sessionRoles: readonly string[], allowed: readonly string[]): boolean {
+  if (sessionRoles.length === 0) return true;
+  return sessionRoles.some((r) => allowed.includes(r));
+}

@@ -66,12 +66,46 @@ describe("GstConsolePage", () => {
 
   it("shows the data-source badge when any GST endpoint errors", async () => {
     fetchJsonMock.mockImplementation((path: string) => {
-      if (path.includes("/summary")) return Promise.resolve({ data: [], source: "error" });
+      if (typeof path === "string" && path.includes("/summary")) return Promise.resolve({ data: [], source: "error" });
       return Promise.resolve({ data: [], source: "api" });
     });
 
     const ui = await GstConsolePage({ searchParams: { period: "2026-06" } });
     render(ui);
     expect(screen.getByText("Couldn't load — showing nothing")).toBeInTheDocument();
+  });
+});
+
+// GAP-FINANCE-GST-01
+describe("GstConsolePage failed sources", () => {
+  beforeEach(() => fetchJsonMock.mockReset());
+
+  it("summary failure: Output Tax / ITC / Transactions read '—' and a do-not-file banner shows", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (typeof path === "string" && path.includes("/summary")) return Promise.resolve({ data: [], source: "error", status: 500 });
+      return Promise.resolve({ data: [], source: "api" });
+    });
+    render(await GstConsolePage({ searchParams: { period: "2026-06" } }));
+    expect(screen.getByText("Output Tax").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByText("ITC Available (Input Tax)").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByText("Transactions").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByText(/do not file/i)).toBeInTheDocument();
+  });
+
+  it("ITC failure: Net GST Payable reads '—', not ₹0.00", async () => {
+    fetchJsonMock.mockImplementation((path: string) => {
+      if (typeof path === "string" && path.includes("/itc-reconciliation")) return Promise.resolve({ data: [], source: "error", status: 502 });
+      return Promise.resolve({ data: [], source: "api" });
+    });
+    render(await GstConsolePage({ searchParams: { period: "2026-06" } }));
+    expect(screen.getByText("Net GST Payable").closest(".stat")).toHaveTextContent("—");
+    expect(screen.getByText("Net GST Payable").closest(".stat")).not.toHaveTextContent("₹0.00");
+  });
+
+  it("a genuine empty period (api ok, []) keeps ₹0.00 and no banner", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
+    render(await GstConsolePage({ searchParams: { period: "2026-06" } }));
+    expect(screen.getByText("Net GST Payable").closest(".stat")).toHaveTextContent("₹0.00");
+    expect(screen.queryByText(/do not file/i)).not.toBeInTheDocument();
   });
 });

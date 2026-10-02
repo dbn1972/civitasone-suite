@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard } from "../../../_components/ds";
 import { getPayments } from "../../../_data/loaders";
 import { PaymentsTable } from "./PaymentsTable";
+import Link from "next/link";
 import { PaymentActions } from "../_components/FinanceActions";
 
 export default async function PaymentsPage() {
@@ -18,6 +19,7 @@ export default async function PaymentsPage() {
         actions={
           <>
             <PaymentActions />
+            <Link href="/finance/payments/new" className="btn primary">+ New Payment</Link>
           </>
         }
       />

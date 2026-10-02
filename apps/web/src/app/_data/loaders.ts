@@ -516,7 +516,37 @@ function mapTickets(payload: unknown): HelpdeskTicketSummary[] | null {
   return mapped;
 }
 
-function mapPayments(payload: unknown): PaymentSummary[] | null {
+/**
+ * Canonicalise a payment status string (case / underscore / hyphen
+ * insensitive) onto the four PaymentSummary statuses. Backend states that are
+ * "accepted but not yet released" (initiated, approved) read as Queued.
+ * Returns null for a genuinely unknown status.
+ */
+export function normalisePaymentStatus(raw: unknown): PaymentSummary["status"] | null {
+  if (typeof raw !== "string") return null;
+  const key = raw.trim().toLowerCase().replace(/[\s_-]+/g, " ");
+  switch (key) {
+    case "released":
+    case "completed":
+      return "Released";
+    case "pending approval":
+      return "Pending Approval";
+    case "failed":
+      return "Failed";
+    case "queued":
+    case "initiated":
+    case "approved":
+      return "Queued";
+    default:
+      return null;
+  }
+}
+
+// Exported for unit tests. GAP-FINANCE-PAYMENTS-02: a valid array -- including
+// an EMPTY one for a tenant with no payments -- is a successful load. Returning
+// null made fetchJson report source:"error" ("Couldn't load") for an ordinary
+// empty register.
+export function mapPayments(payload: unknown): PaymentSummary[] | null {
   const rows = getArrayPayload(payload);
   if (!rows) return null;
 
@@ -527,12 +557,11 @@ function mapPayments(payload: unknown): PaymentSummary[] | null {
     const referenceId = toText(row.referenceId) ?? toText(row.ref) ?? toText(row.id);
     const beneficiary = toText(row.beneficiary) ?? toText(row.payee);
     const amountDisplay = toText(row.amountDisplay) ?? toText(row.amount);
-    const status = row.status;
-    if (!referenceId || !beneficiary || !amountDisplay) continue;
-    if (status !== "Queued" && status !== "Released" && status !== "Pending Approval" && status !== "Failed") continue;
+    const status = normalisePaymentStatus(row.status);
+    if (!referenceId || !beneficiary || !amountDisplay || !status) continue;
     mapped.push({ ...(id ? { id } : {}), referenceId, beneficiary, amountDisplay, status });
   }
-  return mapped.length > 0 ? mapped : null;
+  return mapped;
 }
 
 const EMPLOYEE_STATUSES = ["probation", "confirmed", "on_leave", "suspended", "deputation", "retired", "separated", "terminated"] as const;
@@ -2258,6 +2287,51 @@ export async function getFinanceVendorById(id: string): Promise<LoaderResult<Fin
 // per-row entries whose `status` enum literally includes "filed" — matching
 // this loader's consumer, which filters rows by status==="filed" and groups
 // by row.quarter. That per-row shape is the better fit for a "returns list".
+export interface FinanceDdoOption { id: string; ddoCode: string; name: string }
+export interface FinanceHeadOption { id: string; code: string; name: string }
+
+function mapOptionRows<T>(payload: unknown, pick: (row: Record<string, unknown>) => T | null): T[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const out: T[] = [];
+  for (const row of rows) {
+    if (!isRecord(row)) continue;
+    const mapped = pick(row);
+    if (mapped) out.push(mapped);
+  }
+  return out;
+}
+
+/** DDO pick-list for the New Bill / New Payment forms (GET /v1/finance/ddo). */
+export async function getFinanceDdos(): Promise<LoaderResult<FinanceDdoOption[]>> {
+  return fetchJson<unknown, FinanceDdoOption[]>("/api/v1/finance/ddo", [], {
+    revalidateSeconds: 300,
+    telemetryKey: "finance.ddo",
+    mapResponse: (p) =>
+      mapOptionRows(p, (r) => {
+        const id = toText(r.id);
+        const ddoCode = toText(r.ddoCode);
+        const name = toText(r.name);
+        return id && ddoCode && name && r.isActive !== false ? { id, ddoCode, name } : null;
+      }),
+  });
+}
+
+/** Account-head pick-list (id is the headId createBillBody needs; the generic chart-of-accounts loader drops it). */
+export async function getFinanceBillHeads(): Promise<LoaderResult<FinanceHeadOption[]>> {
+  return fetchJson<unknown, FinanceHeadOption[]>("/api/v1/finance/accounts", [], {
+    revalidateSeconds: 60,
+    telemetryKey: "finance.bill_heads",
+    mapResponse: (p) =>
+      mapOptionRows(p, (r) => {
+        const id = toText(r.id);
+        const code = toText(r.code);
+        const name = toText(r.name);
+        return id && code && name ? { id, code, name } : null;
+      }),
+  });
+}
+
 export async function getFinanceTDSReturns(): Promise<LoaderResult<VendorTdsEntry[]>> {
   return fetchJson<unknown, VendorTdsEntry[]>("/api/v1/finance/vendor-tds", [], {
     revalidateSeconds: 300,

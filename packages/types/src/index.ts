@@ -697,9 +697,9 @@ export type BillSummary = {
   amountDisplay?: string; // pre-formatted display string e.g. "₹47,500.00"
   submittedDate: string;
   dueDate?: string;
-  status: "pending" | "approved" | "paid" | "rejected" | "under_review";
+  status: "pending" | "passed" | "approved" | "paid" | "rejected" | "on_hold" | "under_review";
   poRef?: string;
-  threeWayMatch: "matched" | "partial" | "unmatched" | "na";
+  threeWayMatch: "matched" | "pending" | "partial" | "unmatched" | "na";
 };
 
 export type BillDetail = BillSummary & {
