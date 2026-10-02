@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+const refreshMock = vi.fn();
+vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: refreshMock, replace: vi.fn() }) }));
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { ConfigForm } from "./ConfigForm";
 import type { PlatformControllable } from "./configDiff";
 
@@ -43,5 +48,35 @@ describe("ConfigForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Save Configuration" }));
     expect(await screen.findByText("Enter 5-3600")).toBeInTheDocument();
     expect(spy).not.toHaveBeenCalled();
+  });
+
+  async function saveLogLevel(value: string) {
+    fireEvent.change(screen.getByLabelText("Log level"), { target: { value } });
+    fireEvent.click(screen.getByRole("button", { name: "Save Configuration" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Apply changes" }));
+  }
+
+  // GAP-ADMIN-CONFIG-04
+  it("a 202 says the change was submitted, never 'saved'", async () => {
+    spy.mockResolvedValue(new Response("{}", { status: 202 }));
+    render(<ConfigForm initial={server} />);
+    await saveLogLevel("warn");
+    expect(await screen.findByText(/Change submitted/)).toBeInTheDocument();
+    expect(screen.queryByText(/Platform configuration saved/)).not.toBeInTheDocument();
+  });
+
+  it("a 200 re-seeds the form from the applied values the server returned", async () => {
+    const applied: PlatformControllable = { ...server, logLevel: "error" };
+    spy.mockResolvedValue(new Response(JSON.stringify({ status: "updated", controllable: applied }), { status: 200 }));
+    render(<ConfigForm initial={server} />);
+    await saveLogLevel("warn");
+    expect(await screen.findByText(/Platform configuration saved/)).toBeInTheDocument();
+    expect((screen.getByLabelText("Log level") as HTMLSelectElement).value).toBe("error");
+  });
+
+  // GAP-ADMIN-CONFIG-05
+  it("uses design tokens, not hex literals", () => {
+    const src = readFileSync(join(__dirname, "ConfigForm.tsx"), "utf8");
+    expect(src).not.toMatch(/#[0-9a-fA-F]{3,8}\b/);
   });
 });

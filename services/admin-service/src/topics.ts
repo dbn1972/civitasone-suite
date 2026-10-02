@@ -32,6 +32,8 @@ export const COMMANDS = {
   webhookDelete:      "admin.webhook.delete",
   webhookTest:        "admin.webhook.test",
   backupSchedule:     "admin.backup.schedule",
+  // GAP-ADMIN-AUDIT-LOG-03: audit-on-export for the platform audit-log CSV.
+  auditLogExportRecorded: "admin.audit_log.export_recorded",
   backupTrigger:      "admin.backup.trigger",
   breakGlassOpen:     "admin.breakglass.open",
   breakGlassClose:    "admin.breakglass.close",

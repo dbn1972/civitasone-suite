@@ -1,4 +1,4 @@
-import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
+import { PageHeader } from "@/app/_components/ds";
 import { getSAApiMonitoring } from "@/app/_data/loaders";
 import { ApiMonitoringTable } from "./ApiMonitoringTable";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
@@ -7,26 +7,20 @@ import { ADMIN_PLATFORM_ROLES } from "@/lib/auth/adminRoles";
 export default async function ApiMonitoringPage() {
   // GAP-ADMIN-API-MONITORING-01: platform-operator console.
   requireAnyRole(ADMIN_PLATFORM_ROLES);
-  const { data: endpoints, source } = await getSAApiMonitoring();
-  const healthy = endpoints.filter((e) => String(e.status).toLowerCase() === "healthy").length;
-  const degraded = endpoints.filter((e) => String(e.status).toLowerCase() === "degraded").length;
+  const res = await getSAApiMonitoring();
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      {/* UX-012: the data-source badge now lives inside ApiMonitoringTable,
-          driven by the same useSeededResource call that produces its rows —
-          not a second, independent read of `source` here that could
-          disagree with the table's own cache state (UX-002's pattern). */}
+      {/* GAP-ADMIN-API-MONITORING-02: the summary cards, the data-source badge and
+          the failure state all live in ApiMonitoringTable, driven by the same
+          useSeededResource call that produces its rows, so they cannot disagree. */}
       <PageHeader title="API Monitoring" subtitle="Service endpoint health, latency and error rates." back="/admin" />
-      <StatGrid>
-        <StatCard icon="🔌" iconBg="#eef2ff" label="Endpoints" value={endpoints.length} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Healthy" value={healthy} />
-        <StatCard icon="⚠️" iconBg="#fffaeb" label="Degraded" value={degraded} />
-        <StatCard icon="❌" iconBg="#fce7ee" label="Down" value={endpoints.length - healthy - degraded} />
-      </StatGrid>
-      <Card title="API Endpoints">
-        <ApiMonitoringTable endpoints={endpoints} source={source === "error" ? "error" : "api"} />
-      </Card>
+      <ApiMonitoringTable
+        endpoints={res.data}
+        source={res.source === "error" ? "error" : "api"}
+        status={res.status}
+        errorMessage={res.errorMessage}
+      />
     </div>
   );
 }

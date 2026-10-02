@@ -2,6 +2,7 @@
 
 import { useId, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Button, ConfirmDialog, PageHeader } from "@/app/_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import {
@@ -16,7 +17,7 @@ import {
 
 const inputStyle = { width: "100%", padding: "8px 12px", borderRadius: 6, border: "1px solid var(--line)", fontSize: 14 } as const;
 const labelStyle = { display: "block", fontSize: 13, fontWeight: 600, color: "var(--muted)", marginBottom: 4 } as const;
-const fieldErrorStyle = { display: "block", fontSize: 12, color: "#b42318", marginTop: 4 } as const;
+const fieldErrorStyle = { display: "block", fontSize: 12, color: "var(--bad)", marginTop: 4 } as const;
 
 function Field({ label, htmlFor, error, children }: { label: string; htmlFor: string; error?: string; children: React.ReactNode }) {
   return (
@@ -36,6 +37,7 @@ function Field({ label, htmlFor, error, children }: { label: string; htmlFor: st
  */
 export function ConfigForm({ initial }: { initial: PlatformControllable }) {
   const id = useId();
+  const router = useRouter();
   const baseline = useMemo(() => toFormValues(initial), [initial]);
   const [saved, setSaved] = useState<ConfigFormValues>(baseline);
   const [form, setForm] = useState<ConfigFormValues>(baseline);
@@ -80,8 +82,20 @@ export function ConfigForm({ initial }: { initial: PlatformControllable }) {
         setError(resolved.message);
         return;
       }
-      setSaved(form);
-      setSuccess("Platform configuration saved.");
+      // GAP-ADMIN-CONFIG-04: "saved" is only claimed for a synchronous 200, where the
+      // response carries the applied values and the form is re-seeded from them. A 202
+      // means the change was accepted, not yet applied, and must not read as saved.
+      if (res.status === 202) {
+        setSaved(form);
+        setSuccess("Change submitted — it may take a minute to apply.");
+        router.refresh();
+      } else {
+        const applied = await readApplied(res);
+        const next = applied ? toFormValues(applied) : form;
+        setSaved(next);
+        setForm(next);
+        setSuccess("Platform configuration saved.");
+      }
     } catch {
       setError(formError.fromException("save").message);
     } finally {
@@ -101,12 +115,12 @@ export function ConfigForm({ initial }: { initial: PlatformControllable }) {
       />
 
       {error && (
-        <div role="alert" aria-live="polite" style={{ background: "#fef2f2", color: "#b42318", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
+        <div role="alert" aria-live="polite" style={{ background: "var(--badbg)", color: "var(--bad)", border: "1px solid var(--badbd)", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
           {error}
         </div>
       )}
       {success && (
-        <div role="status" aria-live="polite" style={{ background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
+        <div role="status" aria-live="polite" style={{ background: "var(--goodbg)", color: "var(--good)", border: "1px solid var(--goodbd)", borderRadius: 8, padding: "10px 14px", marginBottom: 16, fontSize: 13 }}>
           {success} Every change is recorded in the <Link href="/admin/audit-log">audit log</Link>.
         </div>
       )}
@@ -193,6 +207,17 @@ export function ConfigForm({ initial }: { initial: PlatformControllable }) {
       />
     </div>
   );
+}
+
+/** The applied `controllable` block from a 200 response, or null when the body is empty / not that shape. */
+async function readApplied(res: Response): Promise<PlatformControllable | null> {
+  try {
+    const body = (await res.json()) as { controllable?: PlatformControllable } | null;
+    const c = body?.controllable;
+    return c && typeof c === "object" && c.rateLimits && c.notifications && c.cacheTtl ? c : null;
+  } catch {
+    return null;
+  }
 }
 
 function flatten(obj: Record<string, unknown>, prefix = ""): Record<string, unknown> {

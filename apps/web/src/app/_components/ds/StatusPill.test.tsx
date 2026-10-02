@@ -361,3 +361,20 @@ describe("recruitment status keys (GAP-RECRUITMENT-TALENT-POOL-04 / GAP-RECRUITM
     expect(el?.textContent?.toLowerCase()).toBe(label.toLowerCase());
   });
 });
+
+// GAP-ADMIN-API-MONITORING-05 / GAP-ADMIN-EDITIONS-06: monitoring + edition statuses used to
+// all fall through to the neutral "info" tone, so Healthy / Degraded / Down looked identical.
+describe("platform monitoring and edition statuses", () => {
+  it.each([
+    ["healthy", "good"],
+    ["degraded", "warn"],
+    ["down", "bad"],
+    ["unhealthy", "bad"],
+    ["unknown", "mut"],
+    ["maintenance", "mut"],
+    ["deprecated", "mut"],
+    ["trusted", "good"],
+  ])("%s -> %s", (status, tone) => {
+    expect(pillTone(status)).toBe(tone);
+  });
+});
