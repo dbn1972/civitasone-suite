@@ -184,12 +184,31 @@ describe("roundRupee — nearest rupee (round-half-up)", () => {
   it("negative values rounded symmetrically", () => expect(roundRupee(-1050n)).toBe(-1100n));
 });
 
+// 7th CPC (DoE OM No. 2/5/2017-E.II(B), 7 Jul 2017): X/Y/Z = 24/16/8% of
+// basic; 27/18/9% when DA crosses 25%; 30/20/10% when DA crosses 50%. The step
+// is inclusive (>=): DA became exactly 50% from 1 Jan 2024 and HRA moved to
+// 30/20/10% from that same date. These cases used to encode the pre-#1536
+// 50%/100% table (24% below DA 50%, 27% at DA 50%), which was wrong.
 describe("hraSlabPct — 7th CPC city class slabs", () => {
-  it("X city, DA < 50%: 24%", () => expect(hraSlabPct("X", 4999n)).toBe(24n));
-  it("X city, DA >= 50%: 27%", () => expect(hraSlabPct("X", 5000n)).toBe(27n));
-  it("X city, DA >= 100%: 30%", () => expect(hraSlabPct("X", 10000n)).toBe(30n));
-  it("Y city, DA < 50%: 16%", () => expect(hraSlabPct("Y", 0n)).toBe(16n));
-  it("Z city, DA < 50%: 8%", () => expect(hraSlabPct("Z", 0n)).toBe(8n));
+  it("X city, DA < 25%: 24%", () => expect(hraSlabPct("X", 2499n)).toBe(24n));
+  it("X city, 25% <= DA < 50%: 27%", () => expect(hraSlabPct("X", 4999n)).toBe(27n));
+  it("X city, DA >= 50%: 30%", () => expect(hraSlabPct("X", 5000n)).toBe(30n));
+  it("X city, DA >= 100%: still 30% (no further slab)", () => expect(hraSlabPct("X", 10000n)).toBe(30n));
+  it("Y city, DA < 25%: 16%", () => expect(hraSlabPct("Y", 0n)).toBe(16n));
+  it("Z city, DA < 25%: 8%", () => expect(hraSlabPct("Z", 0n)).toBe(8n));
+  // Basis-point boundaries around both steps: 24.99 / 25 / 25.01 / 49.99 / 50 / 50.01 %.
+  it.each([
+    [2499n, 24n, 16n, 8n],
+    [2500n, 27n, 18n, 9n],
+    [2501n, 27n, 18n, 9n],
+    [4999n, 27n, 18n, 9n],
+    [5000n, 30n, 20n, 10n],
+    [5001n, 30n, 20n, 10n],
+  ])("DA %s bps -> X %s%% / Y %s%% / Z %s%%", (da, x, y, z) => {
+    expect(hraSlabPct("X", da)).toBe(x);
+    expect(hraSlabPct("Y", da)).toBe(y);
+    expect(hraSlabPct("Z", da)).toBe(z);
+  });
 });
 
 describe("isPayrollEligible — engagement gate", () => {

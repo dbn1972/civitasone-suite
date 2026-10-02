@@ -3,13 +3,17 @@
  * Tests the FULL employee lifecycle: Recruit → Hire → Attend → Leave → Payroll
  * Covers: Vacancy, Interview, Onboarding, Attendance, Leave, Payroll, Org Chart, Reports
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import { buildApp } from "../src/app.js";
 import type { FastifyInstance } from "fastify";
 import { createHmac } from "node:crypto";
 import { seedHrmsCoreFixtures, type HrmsLeaveTypeIds } from "./fixtures/core-seed.js";
 import { queue } from "../src/shared/infra.js";
 import { registerF3_geo_attendance_Consumers } from "../src/modules/geo-attendance/f3-consumer.js";
+import { eq } from "drizzle-orm";
+import { runWithTenant } from "@civitasone/db";
+import { db } from "../src/shared/db.js";
+import { hrmsEmployees } from "../src/modules/employee/schema.js";
 
 // geo-check-in/geo-check-out only PUBLISH (see geo-attendance/routes.ts); the
 // hrms_geo_attendance row is written by this async F3 consumer. Register it
@@ -128,11 +132,49 @@ describe("2. Employee Onboarding", () => {
 // 3. ATTENDANCE: Geo-fenced + Holiday check + RO view
 // ═══════════════════════════════════════════════════════════
 describe("3. Attendance Management", () => {
+  // geo-check-in/out is self-only for EVERY role, HR included (#1541 SEC
+  // CRITICAL attendance-IDOR fix, geo-attendance/routes.ts
+  // resolveSelfEmployeeOrThrow): the caller's JWT subject must resolve, via
+  // hrms_employees.user_ref, to the employeeId being punched. AUTH's sub is
+  // the core-seed admin actor and was never linked to EMP1, so 3.1/3.2 got
+  // 403 NO_EMPLOYEE_RECORD (and 3.5 then had no rows to show). Link EMP1 to
+  // that sub for this section only, the same fix geo-attendance-e2e.test.ts
+  // applies, and restore the previous link afterwards so the leave/payroll
+  // sections below don't start treating the admin actor as EMP1 (which would
+  // trip self-approval guards on EMP1's seeded leave).
+  const EMP1_TENANT = "00000000-0000-0000-0000-000000000001";
+  const AUTH_SUB = "00000000-0000-0000-0000-000000000099";
+  let previousUserRef: string | null = null;
+  beforeAll(async () => {
+    await runWithTenant(EMP1_TENANT, () => db.transaction(async (tx) => {
+      const [row] = await tx.select({ userRef: hrmsEmployees.userRef }).from(hrmsEmployees).where(eq(hrmsEmployees.id, EMP1));
+      previousUserRef = row?.userRef ?? null;
+      await tx.update(hrmsEmployees).set({ userRef: AUTH_SUB }).where(eq(hrmsEmployees.id, EMP1));
+    }));
+  });
+  afterAll(async () => {
+    await runWithTenant(EMP1_TENANT, () => db.transaction(async (tx) => {
+      await tx.update(hrmsEmployees).set({ userRef: previousUserRef }).where(eq(hrmsEmployees.id, EMP1));
+    }));
+  });
+
   it("3.1 Employee checks in within geo-fence", async () => {
-    const r = await injectF3(app, { method: "POST", url: "/v1/hrms/attendance/geo-check-in", headers: { ...AUTH, ...CT },
-      payload: { employeeId: EMP1, latitude: 28.6140, longitude: 77.2091, accuracyMeters: 5, selfieFileKey: "video/vikram-checkin.mp4", deviceId: "phone-001", officeLocationId: "aaaaaaaa-0001-0000-0000-000000000001" } });
-    expect(r.statusCode).toBe(201);
-    expect(r.json().status).toBe("within_geofence");
+    // geo-check-in correctly refuses a punch on a gazetted holiday (400
+    // HOLIDAY, keyed on the server's current date). The migrations seed the
+    // national gazetted holidays, so on e.g. 2 Oct (Gandhi Jayanti) this test
+    // failed for a reason that has nothing to do with the check-in path. Pin
+    // Date only (timers stay real) to a fixed ordinary working day. It is in
+    // the past, so the token minted at load time is still unexpired.
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-07-15T06:30:00Z"));
+    try {
+      const r = await injectF3(app, { method: "POST", url: "/v1/hrms/attendance/geo-check-in", headers: { ...AUTH, ...CT },
+        payload: { employeeId: EMP1, latitude: 28.6140, longitude: 77.2091, accuracyMeters: 5, selfieFileKey: "video/vikram-checkin.mp4", deviceId: "phone-001", officeLocationId: "aaaaaaaa-0001-0000-0000-000000000001" } });
+      expect(r.statusCode).toBe(201);
+      expect(r.json().status).toBe("within_geofence");
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("3.2 Employee checks out at end of day", async () => {

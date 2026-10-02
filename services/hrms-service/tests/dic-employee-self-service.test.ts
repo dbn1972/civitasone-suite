@@ -6,9 +6,13 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
+import { runWithTenant } from "@civitasone/db";
 import type { FastifyInstance } from "fastify";
 import { buildApp } from "../src/app.js";
+import { db } from "../src/shared/db.js";
+import { hrmsEmployees } from "../src/modules/employee/schema.js";
 
 const SECRET = "test_secret_for_civitasone_32chr";
 const TENANT = randomUUID();
@@ -23,9 +27,44 @@ function h(p: { id: string; roles: string[] }) {
   return { authorization: `Bearer ${token}`, "x-tenant-id": TENANT, "content-type": "application/json" };
 }
 
+// Arjun's own hrms_employees row, linked to his login through user_ref (the
+// link employee/actor-link.ts resolveEmployeeForActor reads). Self-service
+// writes such as POST /v1/hrms/nominations only accept a non-HR caller whose
+// login resolves to an employee row (#1545, training/routes.ts
+// resolveOwnEmployeeIdIfNonHr; 403 NO_EMPLOYEE_LINK otherwise), and this
+// file's random tenant had no employee rows at all. The row reuses ARJUN.id
+// as its employee id so every existing `employeeId: ARJUN.id` payload below
+// keeps naming Arjun himself.
+const COLLEAGUE_ID = randomUUID();
+async function seedArjunEmployee(): Promise<void> {
+  const system = randomUUID();
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.insert(hrmsEmployees).values({
+      id: ARJUN.id, tenantId: TENANT, employeeNo: `ARJ-${ARJUN.id.slice(0, 8)}`,
+      fullName: "Arjun Nair", departmentId: randomUUID(), designationId: randomUUID(),
+      dateOfJoining: "2021-04-01", status: "confirmed",
+      userRef: ARJUN.id, createdBy: system, updatedBy: system,
+    });
+    // A colleague carrying PII, so B2's "no PII in the directory" check has
+    // a real row to inspect rather than passing on an empty list.
+    await tx.insert(hrmsEmployees).values({
+      id: COLLEAGUE_ID, tenantId: TENANT, employeeNo: `COL-${COLLEAGUE_ID.slice(0, 8)}`,
+      fullName: "Meera Iyer", departmentId: randomUUID(), designationId: randomUUID(),
+      dateOfJoining: "2019-06-01", status: "confirmed", managerId: ARJUN.id,
+      dateOfBirth: "1990-05-17", pan: "ABCPE1234F", mobile: "9812345670",
+      createdBy: system, updatedBy: system,
+    });
+  }));
+}
+
 let app: FastifyInstance;
-beforeAll(async () => { app = await buildApp(); await app.ready(); });
-afterAll(async () => { await app.close(); });
+beforeAll(async () => { await seedArjunEmployee(); app = await buildApp(); await app.ready(); });
+afterAll(async () => {
+  await app.close();
+  await runWithTenant(TENANT, () => db.transaction(async (tx) => {
+    await tx.delete(hrmsEmployees).where(eq(hrmsEmployees.tenantId, TENANT));
+  })).catch(() => {});
+});
 
 // ═══════════════════════════════════════════════════════════
 // SECTION A: What Employee CAN Do (Self-Service)
@@ -121,9 +160,19 @@ describe("B. Employee CANNOT — HR Admin Operations", () => {
     expect(r.statusCode).toBe(403);
   });
 
-  it("B2. Cannot list all employees", async () => {
+  it("B2. Employee directory is open to all staff, without PII (#1499)", async () => {
+    // #1499 deliberately added "employee" to the directory LIST route's
+    // DIRECTORY_ROLES (employee/routes.ts): it backs hr/directory and carries
+    // no PII or salary. The richer GET /employees/:id stays on READER_ROLES.
     const r = await app.inject({ method: "GET", url: "/v1/hrms/employees?limit=50", headers: h(ARJUN) });
-    expect(r.statusCode).toBe(403);
+    expect(r.statusCode).toBe(200);
+    const rows = (r.json().data ?? []) as Array<Record<string, unknown>>;
+    expect(rows.some((row) => row.id === COLLEAGUE_ID)).toBe(true);
+    for (const row of rows) {
+      for (const pii of ["pan", "aadhaarRef", "mobile", "phone", "bankAccountNo", "bankIfsc", "basicMinor", "dateOfBirth"]) {
+        expect(row).not.toHaveProperty(pii);
+      }
+    }
   });
 
   it("B3. Cannot create leave types", async () => {

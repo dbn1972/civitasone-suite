@@ -55,15 +55,18 @@ function wireTenantAwareQueue(q: Queue): Queue {
 // ── 1. Payroll computation (pure) ────────────────────────────────
 
 describe("Payroll domain — slip calculation (pure)", () => {
-  it("basic + DA(50%) + HRA(27%) - PF - TDS = net", () => {
+  it("basic + DA(50%) + HRA(30%) - PF - TDS = net", () => {
     // Engine auto-derives DA from daRateBps and HRA from the city-class slab.
-    // Basic 30,000; DA 50% -> 15,000; HRA 27% (DA>=50% escalation) -> 8,100.
+    // Basic 30,000; DA 50% -> 15,000; HRA 30% -> 9,000. 7th CPC (DoE OM
+    // No. 2/5/2017-E.II(B), 7 Jul 2017): X-city HRA is 24%, 27% once DA
+    // crosses 25%, 30% once DA crosses 50% (in force from 1 Jan 2024, when
+    // DA became exactly 50%, so DA == 50% is already the 30% slab).
     const basic = 3_000_000n;
     const result = computeSlip({ basicMinor: basic, daRateBps: 5000n, cityClass: "X" });
 
     expect(result.daMinor).toBe(1_500_000n);
-    expect(result.hraMinor).toBe(810_000n);
-    expect(result.grossMinor).toBe(5_310_000n); // 30000 + 15000 + 8100
+    expect(result.hraMinor).toBe(900_000n);
+    expect(result.grossMinor).toBe(5_400_000n); // 30000 + 15000 + 9000
     const pfEmployee = (1_500_000n * 12n) / 100n; // 180000 paise = 1800 INR
     expect(result.pfEmployeeMinor).toBe(pfEmployee);
     expect(result.pfEmployerMinor).toBe(pfEmployee);

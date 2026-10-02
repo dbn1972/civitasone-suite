@@ -63,14 +63,25 @@ function authHeader(sub: string, tid: string, roles: string[]): { authorization:
 
 interface SeededPair {
   tenantId: string;
-  requesterId: string; // files the request
-  managerId: string;   // a different actor who decides it
+  requesterId: string;  // hrms_employees.id of the employee who files the request
+  managerId: string;    // hrms_employees.id of a different employee who decides it
+  requesterSub: string; // requester's JWT subject (login id), linked via user_ref
+  managerSub: string;   // manager's JWT subject (login id), linked via user_ref
 }
 
 async function seedRequesterAndManager(): Promise<SeededPair> {
   const tenantId = randomUUID();
   const requesterId = randomUUID();
   const managerId = randomUUID();
+  // The JWT subject (login/account id) and hrms_employees.id are separate id
+  // spaces, linked only through hrms_employees.user_ref (employee/actor-link.ts
+  // resolveEmployeeForActor). Since #1649 (GAP-HR-SF-10) the self-service
+  // create guard and the self-approval guard resolve the caller through that
+  // link, and since #1651/#1739 a manager's scope is self + direct reports of
+  // the LINKED employee row. A caller with no linked row is correctly denied
+  // (403), so each actor gets its own distinct sub plus a user_ref link.
+  const requesterSub = randomUUID();
+  const managerSub = randomUUID();
   const systemActorId = randomUUID();
   await runWithTenant(tenantId, () => db.transaction(async (tx) => {
     await tx.insert(hrmsEmployees).values({
@@ -84,6 +95,7 @@ async function seedRequesterAndManager(): Promise<SeededPair> {
       // scoped to self + direct reports, not the whole tenant, so this link
       // must exist for that test to mean anything.
       managerId,
+      userRef: requesterSub,
       createdBy: systemActorId, updatedBy: systemActorId,
     });
     await tx.insert(hrmsEmployees).values({
@@ -92,10 +104,11 @@ async function seedRequesterAndManager(): Promise<SeededPair> {
       fullName: "Manager Employee",
       departmentId: randomUUID(), designationId: randomUUID(),
       dateOfJoining: "2018-01-01", status: "confirmed",
+      userRef: managerSub,
       createdBy: systemActorId, updatedBy: systemActorId,
     });
   }));
-  return { tenantId, requesterId, managerId };
+  return { tenantId, requesterId, managerId, requesterSub, managerSub };
 }
 
 /** hrms_employees FK is ON DELETE CASCADE on both request tables (migration
@@ -130,11 +143,11 @@ afterAll(async () => { await app.close(); });
 
 describe("WFH requests — end-to-end (real DB)", () => {
   it("202 create: employee can file their own WFH request, row lands pending", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06", reason: "Family care" },
       });
       expect(create.statusCode).toBe(202);
@@ -152,11 +165,11 @@ describe("WFH requests — end-to-end (real DB)", () => {
   });
 
   it("403: the requester cannot approve their own WFH request, even holding the manager role", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
       });
       const id = create.json().id as string;
@@ -164,7 +177,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
 
       const selfApprove = await app.inject({
         method: "PATCH", url: `/v1/hrms/wfh-requests/${id}/approve`,
-        headers: authHeader(requesterId, tenantId, ["manager"]), // same person, approver-capable role
+        headers: authHeader(requesterSub, tenantId, ["manager"]), // same person, approver-capable role
       });
       expect(selfApprove.statusCode).toBe(403);
 
@@ -176,11 +189,11 @@ describe("WFH requests — end-to-end (real DB)", () => {
   });
 
   it("202: a different manager can approve a pending WFH request", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
       });
       const id = create.json().id as string;
@@ -188,7 +201,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
 
       const approve = await app.inject({
         method: "PATCH", url: `/v1/hrms/wfh-requests/${id}/approve`,
-        headers: authHeader(managerId, tenantId, ["manager"]),
+        headers: authHeader(managerSub, tenantId, ["manager"]),
       });
       expect(approve.statusCode).toBe(202);
       await drainF3();
@@ -201,12 +214,46 @@ describe("WFH requests — end-to-end (real DB)", () => {
     }
   });
 
-  it("202: a different manager can reject a pending WFH request", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+  it("202: an hr_admin with NO linked employee row can approve; approved_by is NULL, the actor stays in updated_by", async () => {
+    // approved_by REFERENCES hrms_employees(id) (migration 0107), so the
+    // consumer stores the approver's linked EMPLOYEE id there, never the raw
+    // JWT sub. An HR approver who is not on the employee roll has no such id:
+    // the approval must still land, with approved_by NULL and the acting
+    // login preserved in updated_by.
+    const { tenantId, requesterId, managerId, requesterSub } = await seedRequesterAndManager();
+    const hrSub = randomUUID(); // deliberately NOT linked to any hrms_employees row
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
+        payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
+      });
+      expect(create.statusCode).toBe(202);
+      const id = create.json().id as string;
+      await drainF3();
+
+      const approve = await app.inject({
+        method: "PATCH", url: `/v1/hrms/wfh-requests/${id}/approve`,
+        headers: authHeader(hrSub, tenantId, ["hr_admin"]),
+      });
+      expect(approve.statusCode).toBe(202);
+      await drainF3();
+
+      const row = await getWfhRequest(tenantId, id);
+      expect(row?.status).toBe("approved");
+      expect(row?.approvedBy).toBeNull();
+      expect(row?.updatedBy).toBe(hrSub);
+    } finally {
+      await cleanup(tenantId, [requesterId, managerId]);
+    }
+  });
+
+  it("202: a different manager can reject a pending WFH request", async () => {
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
+    try {
+      const create = await app.inject({
+        method: "POST", url: "/v1/hrms/wfh-requests",
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
       });
       const id = create.json().id as string;
@@ -214,7 +261,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
 
       const reject = await app.inject({
         method: "PATCH", url: `/v1/hrms/wfh-requests/${id}/reject`,
-        headers: { ...authHeader(managerId, tenantId, ["manager"]), "content-type": "application/json" },
+        headers: { ...authHeader(managerSub, tenantId, ["manager"]), "content-type": "application/json" },
         payload: { reason: "Coverage conflict" },
       });
       expect(reject.statusCode).toBe(202);
@@ -229,11 +276,11 @@ describe("WFH requests — end-to-end (real DB)", () => {
   });
 
   it("404: an already-approved WFH request cannot later be rejected (route-level guard)", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
       });
       const id = create.json().id as string;
@@ -241,14 +288,14 @@ describe("WFH requests — end-to-end (real DB)", () => {
 
       const approve = await app.inject({
         method: "PATCH", url: `/v1/hrms/wfh-requests/${id}/approve`,
-        headers: authHeader(managerId, tenantId, ["manager"]),
+        headers: authHeader(managerSub, tenantId, ["manager"]),
       });
       expect(approve.statusCode).toBe(202);
       await drainF3();
 
       const reject = await app.inject({
         method: "PATCH", url: `/v1/hrms/wfh-requests/${id}/reject`,
-        headers: authHeader(managerId, tenantId, ["manager"]),
+        headers: authHeader(managerSub, tenantId, ["manager"]),
       });
       expect(reject.statusCode).toBe(404);
 
@@ -260,7 +307,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
   });
 
   it("consumer-level guard: a reject published directly at an already-approved row does not flip its status (bypasses the route's own pre-check entirely)", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const reqId = randomUUID();
       await runWithTenant(tenantId, () => db.transaction(async (tx) => {
@@ -290,11 +337,11 @@ describe("WFH requests — end-to-end (real DB)", () => {
   });
 
   it("GET self-scoping: an employee only sees their own WFH requests; a manager sees their direct report's, not the whole tenant (GAP-HR-SF-16)", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/wfh-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: { employeeId: requesterId, fromDate: "2026-10-05", toDate: "2026-10-06" },
       });
       expect(create.statusCode).toBe(202);
@@ -302,7 +349,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
 
       const asRequester = await app.inject({
         method: "GET", url: "/v1/hrms/wfh-requests",
-        headers: authHeader(requesterId, tenantId, ["employee"]),
+        headers: authHeader(requesterSub, tenantId, ["employee"]),
       });
       expect(asRequester.statusCode).toBe(200);
       const requesterRows = asRequester.json().data as Array<{ employeeId: string }>;
@@ -320,7 +367,7 @@ describe("WFH requests — end-to-end (real DB)", () => {
       // including an unrelated outsider who must NOT appear here).
       const asManager = await app.inject({
         method: "GET", url: "/v1/hrms/wfh-requests",
-        headers: authHeader(managerId, tenantId, ["manager"]),
+        headers: authHeader(managerSub, tenantId, ["manager"]),
       });
       expect(asManager.statusCode).toBe(200);
       const managerRows = asManager.json().data as Array<{ employeeId: string }>;
@@ -333,11 +380,11 @@ describe("WFH requests — end-to-end (real DB)", () => {
 
 describe("Shift-change requests — end-to-end (real DB)", () => {
   it("202 create: employee can file their own shift-change request, row lands pending", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/shift-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
           effectiveDate: "2026-10-05", reason: "Childcare",
@@ -358,11 +405,11 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
   });
 
   it("403: the requester cannot approve their own shift-change request, even holding the manager role", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/shift-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
           effectiveDate: "2026-10-05",
@@ -373,7 +420,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
 
       const selfApprove = await app.inject({
         method: "PATCH", url: `/v1/hrms/shift-requests/${id}/approve`,
-        headers: authHeader(requesterId, tenantId, ["manager"]),
+        headers: authHeader(requesterSub, tenantId, ["manager"]),
       });
       expect(selfApprove.statusCode).toBe(403);
 
@@ -385,11 +432,11 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
   });
 
   it("202: a different manager can approve a pending shift-change request", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/shift-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
           effectiveDate: "2026-10-05",
@@ -400,7 +447,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
 
       const approve = await app.inject({
         method: "PATCH", url: `/v1/hrms/shift-requests/${id}/approve`,
-        headers: authHeader(managerId, tenantId, ["manager"]),
+        headers: authHeader(managerSub, tenantId, ["manager"]),
       });
       expect(approve.statusCode).toBe(202);
       await drainF3();
@@ -414,11 +461,11 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
   });
 
   it("202: a different manager can reject a pending shift-change request", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/shift-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
           effectiveDate: "2026-10-05",
@@ -429,7 +476,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
 
       const reject = await app.inject({
         method: "PATCH", url: `/v1/hrms/shift-requests/${id}/reject`,
-        headers: { ...authHeader(managerId, tenantId, ["manager"]), "content-type": "application/json" },
+        headers: { ...authHeader(managerSub, tenantId, ["manager"]), "content-type": "application/json" },
         payload: { reason: "Shift already fully staffed" },
       });
       expect(reject.statusCode).toBe(202);
@@ -444,11 +491,11 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
   });
 
   it("404: an already-rejected shift-change request cannot later be approved (route-level guard)", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const create = await app.inject({
         method: "POST", url: "/v1/hrms/shift-requests",
-        headers: { ...authHeader(requesterId, tenantId, ["employee"]), "content-type": "application/json" },
+        headers: { ...authHeader(requesterSub, tenantId, ["employee"]), "content-type": "application/json" },
         payload: {
           employeeId: requesterId, currentShift: "Morning Shift", requestedShift: "Evening Shift",
           effectiveDate: "2026-10-05",
@@ -459,14 +506,14 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
 
       const reject = await app.inject({
         method: "PATCH", url: `/v1/hrms/shift-requests/${id}/reject`,
-        headers: authHeader(managerId, tenantId, ["manager"]),
+        headers: authHeader(managerSub, tenantId, ["manager"]),
       });
       expect(reject.statusCode).toBe(202);
       await drainF3();
 
       const approve = await app.inject({
         method: "PATCH", url: `/v1/hrms/shift-requests/${id}/approve`,
-        headers: authHeader(managerId, tenantId, ["manager"]),
+        headers: authHeader(managerSub, tenantId, ["manager"]),
       });
       expect(approve.statusCode).toBe(404);
 
@@ -478,7 +525,7 @@ describe("Shift-change requests — end-to-end (real DB)", () => {
   });
 
   it("consumer-level guard: an approve published directly at an already-rejected row does not flip its status (bypasses the route's own pre-check entirely)", async () => {
-    const { tenantId, requesterId, managerId } = await seedRequesterAndManager();
+    const { tenantId, requesterId, managerId, requesterSub, managerSub } = await seedRequesterAndManager();
     try {
       const reqId = randomUUID();
       await runWithTenant(tenantId, () => db.transaction(async (tx) => {
