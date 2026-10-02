@@ -1,0 +1,834 @@
+[
+  {
+    "run": [
+      {
+        "month": "2026-08",
+        "run_type": "regular",
+        "status": "processing",
+        "total_gross_minor": "81324400",
+        "total_net_minor": "64066900"
+      }
+    ]
+  },
+  {
+    "slips": [
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000001",
+        "employee_no": "SNAP-01",
+        "basic_minor": "5610000",
+        "gross_minor": "10878800",
+        "total_deductions_minor": "1719000",
+        "net_pay_minor": "9159800",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 5610000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 3085500
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 1683000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 140300
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          }
+        ],
+        "pf_employee_minor": "0",
+        "pf_employer_minor": "0",
+        "gpf_minor": "0",
+        "nps_employee_minor": "869600",
+        "nps_employer_minor": "1217400",
+        "esi_minor": "0",
+        "tds_minor": "839400",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000002",
+        "employee_no": "SNAP-02",
+        "basic_minor": "1500000",
+        "gross_minor": "3172500",
+        "total_deductions_minor": "190000",
+        "net_pay_minor": "2982500",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 1500000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 825000
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 450000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 37500
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          }
+        ],
+        "pf_employee_minor": "180000",
+        "pf_employer_minor": "180000",
+        "gpf_minor": "0",
+        "nps_employee_minor": "0",
+        "nps_employer_minor": "0",
+        "esi_minor": "0",
+        "tds_minor": "0",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000003",
+        "employee_no": "SNAP-03",
+        "basic_minor": "4490000",
+        "gross_minor": "8778300",
+        "total_deductions_minor": "706000",
+        "net_pay_minor": "8072300",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 4490000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 2469500
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 898000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 112300
+          },
+          {
+            "code": "ARREAR",
+            "name": "Arrears",
+            "type": "earning",
+            "amountMinor": 221000
+          },
+          {
+            "code": "ARREAR",
+            "name": "Arrears",
+            "type": "earning",
+            "amountMinor": 227500
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          }
+        ],
+        "pf_employee_minor": "0",
+        "pf_employer_minor": "0",
+        "gpf_minor": "696000",
+        "nps_employee_minor": "0",
+        "nps_employer_minor": "0",
+        "esi_minor": "0",
+        "tds_minor": "0",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000004",
+        "employee_no": "SNAP-04",
+        "basic_minor": "1800000",
+        "gross_minor": "3375000",
+        "total_deductions_minor": "190000",
+        "net_pay_minor": "3185000",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 1800000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 990000
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 180000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 45000
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          }
+        ],
+        "pf_employee_minor": "180000",
+        "pf_employer_minor": "180000",
+        "gpf_minor": "0",
+        "nps_employee_minor": "0",
+        "nps_employer_minor": "0",
+        "esi_minor": "0",
+        "tds_minor": "0",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000005",
+        "employee_no": "SNAP-05",
+        "basic_minor": "800000",
+        "gross_minor": "1780000",
+        "total_deductions_minor": "172200",
+        "net_pay_minor": "1607800",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 800000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 440000
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 160000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 20000
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          }
+        ],
+        "pf_employee_minor": "148800",
+        "pf_employer_minor": "148800",
+        "gpf_minor": "0",
+        "nps_employee_minor": "0",
+        "nps_employer_minor": "0",
+        "esi_minor": "13400",
+        "tds_minor": "0",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000006",
+        "employee_no": "SNAP-06",
+        "basic_minor": "6770000",
+        "gross_minor": "11699800",
+        "total_deductions_minor": "5137400",
+        "net_pay_minor": "6562400",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 6770000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 3723500
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 677000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 169300
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          },
+          {
+            "code": "LOP",
+            "name": "Loss of Pay",
+            "type": "deduction",
+            "amountMinor": 3046500
+          }
+        ],
+        "pf_employee_minor": "0",
+        "pf_employer_minor": "0",
+        "gpf_minor": "0",
+        "nps_employee_minor": "1049400",
+        "nps_employer_minor": "1469100",
+        "esi_minor": "0",
+        "tds_minor": "1031500",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000007",
+        "employee_no": "SNAP-07",
+        "basic_minor": "3500000",
+        "gross_minor": "6922500",
+        "total_deductions_minor": "1077500",
+        "net_pay_minor": "5845000",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 3500000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 1925000
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 1050000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 87500
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          },
+          {
+            "code": "LOP",
+            "name": "Loss of Pay",
+            "type": "deduction",
+            "amountMinor": 525000
+          }
+        ],
+        "pf_employee_minor": "0",
+        "pf_employer_minor": "0",
+        "gpf_minor": "0",
+        "nps_employee_minor": "542500",
+        "nps_employer_minor": "759500",
+        "esi_minor": "0",
+        "tds_minor": "0",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000008",
+        "employee_no": "SNAP-08",
+        "basic_minor": "2500000",
+        "gross_minor": "4797500",
+        "total_deductions_minor": "419400",
+        "net_pay_minor": "4378100",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 2500000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 1375000
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 500000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 62500
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          }
+        ],
+        "pf_employee_minor": "180000",
+        "pf_employer_minor": "180000",
+        "gpf_minor": "0",
+        "nps_employee_minor": "0",
+        "nps_employer_minor": "0",
+        "esi_minor": "0",
+        "tds_minor": "229400",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000010",
+        "employee_no": "SNAP-10",
+        "basic_minor": "12000000",
+        "gross_minor": "22860000",
+        "total_deductions_minor": "6816000",
+        "net_pay_minor": "16044000",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 12000000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 6600000
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 3600000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 300000
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          }
+        ],
+        "pf_employee_minor": "0",
+        "pf_employer_minor": "0",
+        "gpf_minor": "0",
+        "nps_employee_minor": "1860000",
+        "nps_employer_minor": "2604000",
+        "esi_minor": "0",
+        "tds_minor": "4946000",
+        "status": "computed",
+        "currency": "INR"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000011",
+        "employee_no": "SNAP-11",
+        "basic_minor": "4000000",
+        "gross_minor": "7060000",
+        "total_deductions_minor": "830000",
+        "net_pay_minor": "6230000",
+        "components": [
+          {
+            "code": "BASIC",
+            "name": "Basic Pay",
+            "type": "earning",
+            "amountMinor": 4000000
+          },
+          {
+            "code": "DA",
+            "name": "Dearness Allowance",
+            "type": "earning",
+            "amountMinor": 2200000
+          },
+          {
+            "code": "HRA",
+            "name": "House Rent Allowance",
+            "type": "earning",
+            "amountMinor": 400000
+          },
+          {
+            "code": "TA",
+            "name": "Transport Allowance",
+            "type": "earning",
+            "amountMinor": 360000
+          },
+          {
+            "code": "SPL",
+            "name": "Special Pay",
+            "type": "earning",
+            "amountMinor": 100000
+          },
+          {
+            "code": "WELFARE",
+            "name": "Welfare Fund",
+            "type": "deduction",
+            "amountMinor": 10000
+          },
+          {
+            "code": "LOP",
+            "name": "Loss of Pay",
+            "type": "deduction",
+            "amountMinor": 200000
+          }
+        ],
+        "pf_employee_minor": "0",
+        "pf_employer_minor": "0",
+        "gpf_minor": "620000",
+        "nps_employee_minor": "0",
+        "nps_employer_minor": "0",
+        "esi_minor": "0",
+        "tds_minor": "0",
+        "status": "computed",
+        "currency": "INR"
+      }
+    ]
+  },
+  {
+    "pf": [
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000002",
+        "basic_minor": "1500000",
+        "emp_contrib_pct": "12.00",
+        "er_contrib_pct": "12.00",
+        "emp_contrib_minor": "180000",
+        "er_contrib_minor": "180000",
+        "eps_contrib_minor": "125000",
+        "epf_er_contrib_minor": "55000",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000004",
+        "basic_minor": "1800000",
+        "emp_contrib_pct": "12.00",
+        "er_contrib_pct": "12.00",
+        "emp_contrib_minor": "180000",
+        "er_contrib_minor": "180000",
+        "eps_contrib_minor": "125000",
+        "epf_er_contrib_minor": "55000",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000005",
+        "basic_minor": "800000",
+        "emp_contrib_pct": "12.00",
+        "er_contrib_pct": "12.00",
+        "emp_contrib_minor": "148800",
+        "er_contrib_minor": "148800",
+        "eps_contrib_minor": "103300",
+        "epf_er_contrib_minor": "45500",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000008",
+        "basic_minor": "2500000",
+        "emp_contrib_pct": "12.00",
+        "er_contrib_pct": "12.00",
+        "emp_contrib_minor": "180000",
+        "er_contrib_minor": "180000",
+        "eps_contrib_minor": "125000",
+        "epf_er_contrib_minor": "55000",
+        "period": "2026-08"
+      }
+    ]
+  },
+  {
+    "gpf": [
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000003",
+        "basic_minor": "4490000",
+        "contrib_pct": "10.00",
+        "emp_contrib_minor": "696000",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000011",
+        "basic_minor": "4000000",
+        "contrib_pct": "10.00",
+        "emp_contrib_minor": "620000",
+        "period": "2026-08"
+      }
+    ]
+  },
+  {
+    "nps": [
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000001",
+        "basic_minor": "5610000",
+        "emp_contrib_minor": "869600",
+        "er_contrib_minor": "1217400",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000006",
+        "basic_minor": "6770000",
+        "emp_contrib_minor": "1049400",
+        "er_contrib_minor": "1469100",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000007",
+        "basic_minor": "3500000",
+        "emp_contrib_minor": "542500",
+        "er_contrib_minor": "759500",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000010",
+        "basic_minor": "12000000",
+        "emp_contrib_minor": "1860000",
+        "er_contrib_minor": "2604000",
+        "period": "2026-08"
+      }
+    ]
+  },
+  {
+    "esi": [
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000005",
+        "gross_minor": "1780000",
+        "emp_contrib_minor": "13400",
+        "er_contrib_minor": "57900",
+        "period": "2026-08"
+      }
+    ]
+  },
+  {
+    "tds": [
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000001",
+        "annual_basic_minor": "67320000",
+        "taxable_minor": "123045600",
+        "tds_minor": "839400",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000002",
+        "annual_basic_minor": "18000000",
+        "taxable_minor": "30570000",
+        "tds_minor": "0",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000003",
+        "annual_basic_minor": "53880000",
+        "taxable_minor": "97839600",
+        "tds_minor": "0",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000004",
+        "annual_basic_minor": "21600000",
+        "taxable_minor": "33000000",
+        "tds_minor": "0",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000005",
+        "annual_basic_minor": "9600000",
+        "taxable_minor": "13860000",
+        "tds_minor": "0",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000006",
+        "annual_basic_minor": "81240000",
+        "taxable_minor": "132897600",
+        "tds_minor": "1031500",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000007",
+        "annual_basic_minor": "42000000",
+        "taxable_minor": "75570000",
+        "tds_minor": "0",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000008",
+        "annual_basic_minor": "30000000",
+        "taxable_minor": "52570000",
+        "tds_minor": "229400",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000010",
+        "annual_basic_minor": "144000000",
+        "taxable_minor": "266820000",
+        "tds_minor": "4946000",
+        "period": "2026-08"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000011",
+        "annual_basic_minor": "48000000",
+        "taxable_minor": "77220000",
+        "tds_minor": "0",
+        "period": "2026-08"
+      }
+    ]
+  },
+  {
+    "arrears": [
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000003",
+        "component_code": "ARREAR",
+        "from_period": "2026-06",
+        "to_period": "2026-06",
+        "old_amount_minor": "4360000",
+        "new_amount_minor": "4490000",
+        "difference_minor": "221000",
+        "status": "paid",
+        "source": "revision"
+      },
+      {
+        "employee_id": "7a7a7a7a-0000-4000-8000-000000000003",
+        "component_code": "ARREAR",
+        "from_period": "2026-07",
+        "to_period": "2026-07",
+        "old_amount_minor": "4360000",
+        "new_amount_minor": "4490000",
+        "difference_minor": "227500",
+        "status": "paid",
+        "source": "revision"
+      }
+    ]
+  },
+  {
+    "register": [
+      {
+        "department_id": "7a7a7a7a-0000-4000-8000-00000000d001",
+        "employee_count": 7,
+        "total_gross_minor": "66091900",
+        "total_deductions_minor": "15818100",
+        "total_net_minor": "50273800",
+        "total_pf_minor": "328800",
+        "total_esi_minor": "13400",
+        "total_tds_minor": "6816900",
+        "total_pt_minor": "0",
+        "period": "2026-08"
+      },
+      {
+        "department_id": "7a7a7a7a-0000-4000-8000-00000000d002",
+        "employee_count": 3,
+        "total_gross_minor": "15232500",
+        "total_deductions_minor": "1439400",
+        "total_net_minor": "13793100",
+        "total_pf_minor": "360000",
+        "total_esi_minor": "0",
+        "total_tds_minor": "229400",
+        "total_pt_minor": "0",
+        "period": "2026-08"
+      }
+    ]
+  }
+]

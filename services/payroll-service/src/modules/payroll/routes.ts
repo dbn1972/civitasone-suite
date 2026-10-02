@@ -10,6 +10,7 @@ import * as queries from "./queries.js";
 import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { lockedThroughMonth } from "../pay-profiles/rules-api.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -27,14 +28,7 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/payroll/internal/locked-through", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...PAYROLL_ROLES, "hr_admin"]);
-    const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT max(month) AS locked_through
-      FROM payroll.payroll_runs
-      WHERE tenant_id = ${ctx.tenantId}::uuid
-        AND status IN ('approved', 'disbursed')
-        AND run_type <> 'pensioner'
-    `))) as unknown as Array<{ locked_through: string | null }>;
-    return reply.send({ lockedThrough: rows[0]?.locked_through ?? null });
+    return reply.send({ lockedThrough: await scopedRead((tx) => lockedThroughMonth(tx, ctx.tenantId)) });
   });
 
   app.get("/v1/payroll/runs", async (req, reply) => {

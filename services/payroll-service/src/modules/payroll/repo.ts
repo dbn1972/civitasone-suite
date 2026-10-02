@@ -90,6 +90,9 @@ export async function listSlipsByTenant(tenantId: string, limit = 100): Promise<
       createdBy: payrollSlips.createdBy,
       updatedBy: payrollSlips.updatedBy,
       version: payrollSlips.version,
+      payProfile: payrollSlips.payProfile,
+      profileSnapshot: payrollSlips.profileSnapshot,
+      pfWageMinor: payrollSlips.pfWageMinor,
       month: payrollRuns.month,
       runDeptId: payrollRuns.departmentId,
     })

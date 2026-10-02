@@ -86,6 +86,11 @@ export const payrollSlips = payrollSchema.table("payroll_slips", {
   esiMinor:              bigint("esi_minor", { mode: "bigint" }).notNull().default(0n),
   tdsMinor:              bigint("tds_minor", { mode: "bigint" }).notNull().default(0n),
   status:                varchar("status", { length: 24 }).notNull().default("computed"),
+  // PAY-PROFILES (migration 0055): computation profile + its inputs + EPF
+  // wage. NULL on slips computed before PAY-PROFILES (== govt_scale).
+  payProfile:            varchar("pay_profile", { length: 32 }),
+  profileSnapshot:       jsonb("profile_snapshot").$type<Record<string, unknown>>(),
+  pfWageMinor:           bigint("pf_wage_minor", { mode: "bigint" }),
   createdAt:             timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:             timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:             uuid("created_by").notNull(),

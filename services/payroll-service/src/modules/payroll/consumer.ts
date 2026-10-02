@@ -13,12 +13,14 @@ import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
-import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow } from "./domain.js";
+import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
+import { loadAllowanceRuleRows, resolveAllowanceRules, type AllowanceRuleRow } from "../pay-profiles/allowance-rules.js";
+import { planEmployeePay } from "../pay-profiles/plan.js";
 import { annualTaxFromTaxableMinor, stdDeduction, trueUpTdsMinor, type Regime } from "../tax/engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
 import { clearRunRegister, rebuildRunRegister, resolveRegisterDepartments } from "./register.js";
-import { computeSubsistenceEarnings, resolveSuspensionTreatment, mergeSubsistenceSettings, DEFAULT_SUBSISTENCE_CONFIG, type SubsistenceEarnings } from "./subsistence.js";
+import { computeSubsistenceEarnings, resolveProfiledSuspension, mergeSubsistenceSettings, DEFAULT_SUBSISTENCE_CONFIG, type SubsistenceEarnings } from "./subsistence.js";
 import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
@@ -383,7 +385,21 @@ export async function generateRetroArrears(
   runMonth: string,
   cityClass: CityClass,
   actorId: string,
+  /**
+   * PAY-PROFILES. Every field optional; omitted == the exact legacy formula.
+   *  - hraFloorForPeriod: HRA minimum floor in force for a period (paise);
+   *  - daRateBpsOverride: price every period at this DA rate instead of the
+   *    period's central rate (parent-State-DA deputationist: the plan's rate);
+   *  - deputationAllowanceForPeriod: Option A DEP_ALLOW for a basic in a
+   *    period (with that period's rule) -- its delta joins the arrear.
+   */
+  profileOpts?: {
+    hraFloorForPeriod?: (period: string) => bigint;
+    daRateBpsOverride?: bigint;
+    deputationAllowanceForPeriod?: (period: string, basicMinor: bigint) => bigint;
+  },
 ): Promise<void> {
+  const hraFloorForPeriod = profileOpts?.hraFloorForPeriod;
   const revs = (await tx.execute(sql`
     SELECT old_basic_minor, new_basic_minor, effective_date::text AS effective_date
     FROM payroll.payroll_salary_revisions
@@ -393,6 +409,7 @@ export async function generateRetroArrears(
   `)) as unknown as Array<{ old_basic_minor: string | number; new_basic_minor: string | number; effective_date: string }>;
   const daRateCache = new Map<string, bigint>();
   const daRateForPeriod = async (period: string): Promise<bigint> => {
+    if (profileOpts?.daRateBpsOverride != null) return profileOpts.daRateBpsOverride;
     let rate = daRateCache.get(period);
     if (rate === undefined) {
       rate = await resolveDaRateBps(tx, tenantId, period);
@@ -416,8 +433,23 @@ export async function generateRetroArrears(
       // Per-month delta = delta basic + delta DA + delta HRA on the basic
       // delta, all at THIS period's own historical rate (not the run month's).
       const daDelta  = roundRupee((basicDelta * periodDaRateBps) / 10000n);
-      const hraDelta = roundRupee((basicDelta * hraPct) / 100n);
-      const perMonth = basicDelta + daDelta + hraDelta;
+      // PAY-PROFILES: when the HRA floor binds on either side of the
+      // revision, the HRA difference is HRA(new) - HRA(old) (each floored),
+      // not slab% x delta. Otherwise -- including every period before the
+      // floor's go-live -- the legacy formula, unchanged.
+      const floor = hraFloorForPeriod ? hraFloorForPeriod(period) : 0n;
+      const floorBinds = floor > 0n
+        && (govtHraMinor(oldBasic, cityClass, periodDaRateBps, floor) !== govtHraMinor(oldBasic, cityClass, periodDaRateBps)
+          || govtHraMinor(newBasic, cityClass, periodDaRateBps, floor) !== govtHraMinor(newBasic, cityClass, periodDaRateBps));
+      const hraDelta = floorBinds
+        ? govtHraMinor(newBasic, cityClass, periodDaRateBps, floor) - govtHraMinor(oldBasic, cityClass, periodDaRateBps, floor)
+        : roundRupee((basicDelta * hraPct) / 100n);
+      // PAY-PROFILES (Option A): the deputation allowance moves with basic
+      // (min(% of basic, cap)), so its delta is part of the arrear.
+      const depDelta = profileOpts?.deputationAllowanceForPeriod
+        ? profileOpts.deputationAllowanceForPeriod(period, newBasic) - profileOpts.deputationAllowanceForPeriod(period, oldBasic)
+        : 0n;
+      const perMonth = basicDelta + daDelta + hraDelta + depDelta;
       // H1: a back-dated pay DECREASE (negative delta) is an overpayment that must
       // be RECOVERED, not paid as a negative earning. A negative EARNING bypasses
       // the protected-net floor (ARREAR is not a RECOVERY_CODE) and can silently
@@ -1458,6 +1490,12 @@ async function processPayrollRun(
   const statutoryConfig = await scopedRead((tx) => resolveRunStatutoryConfig(tx, p.tenantId, p.month));
   // FR 53: the tenant's subsistence-allowance percentages (FR 53 defaults when unset).
   const subsistenceConfig = await scopedRead((tx) => resolveSubsistenceConfig(tx, p.tenantId));
+  // PAY-PROFILES: HRA floor + deputation-allowance rules. All rule rows for
+  // the tenant are loaded once (tenant-scoped, FORCE RLS) and resolved per
+  // period: the run month here, historical months for retro arrears.
+  const allowanceRuleRows: AllowanceRuleRow[] = await scopedRead((tx) => loadAllowanceRuleRows(tx, p.tenantId));
+  const allowanceRules = resolveAllowanceRules(allowanceRuleRows, p.tenantId, p.month);
+  const hraFloorConfigured = Object.values(allowanceRules.hraFloorMinor).some((f) => f > 0n);
   // Days in the run month (LOP divisor) — 7th CPC uses actual days, not flat 30.
   const daysInMonth = BigInt(new Date(Number(p.month.slice(0, 4)), Number(p.month.slice(5, 7)), 0).getDate());
   let totalGross = 0n;
@@ -1542,30 +1580,15 @@ async function processPayrollRun(
 
     for (const emp of runEmployees) {
       const cityClass = emp.cityClass ?? "X";
-      // P2: generate retro-arrears for any back-dated salary revision BEFORE
-      // collecting earnings, so this run pays them. Only the regular run
-      // generates them (idempotent index makes re-runs a no-op anyway).
-      if ((p.runType ?? "regular") === "regular") {
-        await generateRetroArrears(tx as unknown as typeof db, p.tenantId, emp.id, p.month, cityClass, msg.actorId);
-      }
-
-      // P2: source current Basic from the latest revision effective on/before the
-      // run month; fall back to the HRMS-provided basic when no revision exists.
-      // PERF-021 (Site A): batched pre-fetch (latestRevisionByEmployee)
-      // replaces the per-employee resolveLatestRevision query; a miss means
-      // no qualifying revision, matching resolveLatestRevision's own null.
-      const revision = latestRevisionByEmployee.get(emp.id) ?? null;
-      const basicMinor = revision ? revision.newBasicMinor : BigInt(emp.basicMinor);
-      const daMinor = (basicMinor * daRateBps) / 10000n;
-
-      // FR 53 (URGENT money fix): a pay-suspended employee used to be paid
-      // full salary because nothing read the feed's paySuspended flag. Now:
-      // pay-scale engagement -> subsistence allowance for the suspended days
-      // (regular pay for any days before/after the suspension window);
-      // anything else -> no slip at all, recorded + flagged for HR. See
-      // subsistence.ts for the rule and its VERIFY notes. An employee who is
-      // not suspended this month takes the unchanged path below.
-      const suspension = resolveSuspensionTreatment(emp, p.month, subsistenceConfig);
+      // PAY-PROFILES: which computation applies to this employee (govt_scale
+      // when HRMS reports no approved profile -- exactly the pre-PAY-PROFILES
+      // inputs). Fails the run closed, naming the employee, when a profile's
+      // inputs are missing or not yet supported (ctc_contract until PR3).
+      // FR 53 x PAY-PROFILES: decide suspension FIRST, keyed on the pay
+      // profile (an assigned profile wins over the engagement-type rule), so
+      // a suspended consolidated / ctc employee is withheld and flagged
+      // rather than failing the run on an unsupported plan.
+      const suspension = resolveProfiledSuspension(emp, p.month, subsistenceConfig);
       if (suspension.kind === "withhold") {
         const recorded = await recordRunSuspension(tx as unknown as typeof db, {
           tenantId: p.tenantId, runId: p.id, employeeId: emp.id, employeeNo: emp.employeeNo,
@@ -1583,8 +1606,60 @@ async function processPayrollRun(
         }
         continue;
       }
+      const planned = planEmployeePay(emp, p.month, daRateBps, allowanceRules);
+      if (!planned.ok) throw new DomainError(planned.code, planned.message);
+      const plan = planned.plan;
+      const empDaRateBps = plan.daRateBps;
+
+      // P2: generate retro-arrears for any back-dated salary revision BEFORE
+      // collecting earnings, so this run pays them. Only the regular run
+      // generates them (idempotent index makes re-runs a no-op anyway).
+      // PAY-PROFILES: not for consolidated pay (no revision-driven basic);
+      // HRA deltas honour the floor in force for each historical period.
+      if ((p.runType ?? "regular") === "regular" && plan.applyRevisions) {
+        const slipProfile = plan.slipProfile;
+        await generateRetroArrears(
+          tx as unknown as typeof db, p.tenantId, emp.id, p.month, cityClass, msg.actorId,
+          {
+            hraFloorForPeriod: (period) => resolveAllowanceRules(allowanceRuleRows, p.tenantId, period).hraFloorMinor[cityClass],
+            ...(plan.arrearDaBasis === "plan_rate" ? { daRateBpsOverride: plan.daRateBps } : {}),
+            ...(slipProfile.kind === "deputation_parent_scale" ? {
+              deputationAllowanceForPeriod: (period: string, basic: bigint) => {
+                const station = slipProfile.allowance.stationType;
+                const rule = station ? resolveAllowanceRules(allowanceRuleRows, p.tenantId, period).deputation[station] : null;
+                return deputationAllowanceMinor(basic, { ...slipProfile.allowance, rule }).amountMinor;
+              },
+            } : {}),
+          },
+        );
+      }
+
+      // P2: source current Basic from the latest revision effective on/before the
+      // run month; fall back to the HRMS-provided basic when no revision exists.
+      // PERF-021 (Site A): batched pre-fetch (latestRevisionByEmployee)
+      // replaces the per-employee resolveLatestRevision query; a miss means
+      // no qualifying revision, matching resolveLatestRevision's own null.
+      // PAY-PROFILES: the fallback is the PROFILE's basic (parent / post basic
+      // for deputation, the consolidated amount -- never revision-driven).
+      const revision = plan.applyRevisions ? latestRevisionByEmployee.get(emp.id) ?? null : null;
+      const scaleBasicMinor = revision ? revision.newBasicMinor : plan.profileBasicMinor;
+      const daMinor = (scaleBasicMinor * empDaRateBps) / 10000n;
       const subsistence: SubsistenceEarnings | null = suspension.kind === "subsistence"
-        ? computeSubsistenceEarnings({ basicMinor, daRateBps, cityClass, rawComponents, plan: suspension.plan })
+        ? computeSubsistenceEarnings({
+          // PAY-PROFILES x FR 53: the PROFILE's basic and DA (parent/post basic
+          // and, for a parent-State-DA deputationist, the parent rate), the HRA
+          // floor, and an Option A deputation allowance pro-rated to the
+          // regular days (it stops for suspended days -- VERIFY against FR 53).
+          basicMinor: scaleBasicMinor,
+          daRateBps: empDaRateBps,
+          cityClass,
+          rawComponents: plan.applyRunStructure ? rawComponents : [],
+          plan: suspension.plan,
+          hraFloorMinor: plan.hraFloorMinor,
+          deputationAllowanceMinor: plan.slipProfile.kind === "deputation_parent_scale"
+            ? deputationAllowanceMinor(scaleBasicMinor, plan.slipProfile.allowance).amountMinor
+            : 0n,
+        })
         : null;
       // M2 (LOP double-count): one authoritative source per (employee, month).
       // The local LOP ledger (fed by leave/attendance events) takes precedence
@@ -1626,7 +1701,18 @@ async function processPayrollRun(
       // before dividing (LOW, payroll-calc audit): dividing first truncated
       // the per-day rate before scaling by lopDays, under-withholding LOP by
       // up to a few sub-rupee paise per employee per run.
-      const lopDeduction = ((basicMinor + daMinor) * BigInt(lopDays)) / daysInMonth;
+      // PAY-PROFILES: consolidated pay is instead PRO-RATED for paid days (no
+      // LOP line), so PF/ESI fall on the wages actually earned.
+      const prorate = plan.lopMode === "prorate";
+      const basicMinor = prorate
+        ? roundRupee((scaleBasicMinor * (daysInMonth - BigInt(lopDays))) / daysInMonth)
+        : scaleBasicMinor;
+      // PAY-PROFILES (Option A): LOP also reduces the deputation allowance
+      // pro rata (it is paid for days on duty), alongside Basic + DA.
+      const depAllowForLop = plan.slipProfile.kind === "deputation_parent_scale"
+        ? deputationAllowanceMinor(basicMinor, plan.slipProfile.allowance).amountMinor
+        : 0n;
+      const lopDeduction = prorate ? 0n : ((basicMinor + daMinor + depAllowForLop) * BigInt(lopDays)) / daysInMonth;
 
       // Iter2: real loan recovery — split interest/principal, cap at outstanding.
       // P3: the actual EMI withheld may be capped by the protected-net floor, so
@@ -1686,12 +1772,15 @@ async function processPayrollRun(
         ...(subsistence ? { earningsOverride: subsistence, suspended: true } : {}),
         month: p.month,
         statutoryConfig,
-        pensionScheme: emp.pensionScheme ?? "NPS",
+        pensionScheme: plan.pensionScheme,
         ...(eng.statutoryPf != null ? { statutoryPf: eng.statutoryPf } : {}),
         ...(eng.statutoryEsi != null ? { statutoryEsi: eng.statutoryEsi } : {}),
         ...(eng.statutoryNps != null ? { statutoryNps: eng.statutoryNps } : {}),
-        daRateBps,
+        daRateBps: empDaRateBps,
         cityClass,
+        payProfile: plan.slipProfile,
+        hraFloorMinor: plan.hraFloorMinor,
+        profileSnapshot: plan.snapshot,
         ptMinor: resolvePt(
           // H14 FIX: use employee's state_code for PT schedule lookup.
           // Falls back to tenant-level slabs when employee has no state.
@@ -1711,7 +1800,7 @@ async function processPayrollRun(
         monthsRemaining: 12 - monthIdxInFy,
         protectedNetFloorMinor,
         ...(decl ? { declaration: { rentPaidAnnualMinor: decl.rentPaidAnnualMinor, ded80cMinor: decl.ded80cMinor, ded80dMinor: decl.ded80dMinor, otherDedMinor: decl.otherDedMinor, prevEmployerSalaryMinor: decl.prevEmployerSalaryMinor, otherSourcesIncomeMinor: decl.otherSourcesIncomeMinor, perquisitesMinor: decl.perquisitesMinor } } : {}),
-        rawComponents,
+        rawComponents: plan.applyRunStructure ? rawComponents : [],
         components: adHoc,
       });
 
@@ -1833,6 +1922,14 @@ async function processPayrollRun(
     // from the same authoritative slip set as the run totals above and
     // written in the same transaction (rebuilt whole on every pass).
     await rebuildRunRegister(tx as unknown as typeof db, { tenantId: p.tenantId, runId: p.id, period: p.month }, registerDepartments);
+    // PAY-PROFILES: the HRA minimum floor is an explicit ops step; record on
+    // the run's audit trail when this month was paid without one.
+    if (!hraFloorConfigured) {
+      await audit(tx, msg, "warning", "payroll_run", p.id, {
+        code: "HRA_FLOOR_NOT_CONFIGURED",
+        message: `no HRA minimum floor is configured for ${p.month}; government-scale HRA was paid at the plain slab`,
+      });
+    }
     await audit(tx, msg, "rebuild", "payroll_register", p.id);
   });
 }
@@ -2027,6 +2124,12 @@ export async function computeAndInsertSlip(
     earningsOverride?: EarningsOverride;
     /** FR 53: this slip is a suspended employee's (skips an all-zero PF row for a GPF/NPS member). */
     suspended?: boolean;
+    /** PAY-PROFILES: computation profile; omitted == govt_scale. */
+    payProfile?: SlipPayProfile;
+    /** PAY-PROFILES: HRA minimum floor for the employee's city class (paise); omitted == none. */
+    hraFloorMinor?: bigint;
+    /** PAY-PROFILES: inputs the profile used, persisted on the slip for audit/F&F. */
+    profileSnapshot?: Record<string, unknown>;
   },
 ): Promise<SlipResult> {
   // DOM-008: same config passed to computeSlip, reused below so the
@@ -2057,8 +2160,16 @@ export async function computeAndInsertSlip(
     ...(params.statutoryEsi != null ? { statutoryEsi: params.statutoryEsi } : {}),
     ...(params.statutoryNps != null ? { statutoryNps: params.statutoryNps } : {}),
     ...(params.earningsOverride ? { earningsOverride: params.earningsOverride } : {}),
+    ...(params.payProfile ? { payProfile: params.payProfile } : {}),
+    ...(params.hraFloorMinor != null ? { hraFloorMinor: params.hraFloorMinor } : {}),
   });
   const slipId = randomUUID();
+  // PAY-PROFILES: the EPF wage this slip's PF was computed on (pre-ceiling):
+  // Basic + DA (consolidated pay has DA 0n). Only meaningful when PF applied.
+  const pfApplied = result.pfEmployeeMinor > 0n || result.pfEmployerMinor > 0n;
+  const pfWageMinor = pfApplied
+    ? (params.earningsOverride ? params.earningsOverride.pensionBaseMinor : params.basicMinor + result.daMinor)
+    : null;
   const allComps = [...result.earnings, ...result.deductions];
   await repo.insertSlip(tx, {
     id: slipId, tenantId: params.tenantId, runId: params.runId,
@@ -2070,6 +2181,9 @@ export async function computeAndInsertSlip(
     gpfMinor: result.gpfMinor, npsEmployeeMinor: result.npsEmployeeMinor, npsEmployerMinor: result.npsEmployerMinor,
     esiMinor: result.esiMinor, tdsMinor: result.tdsMinor,
     status: result.negativeNet ? "exception" : "computed",
+    payProfile: params.payProfile?.kind ?? "govt_scale",
+    profileSnapshot: params.profileSnapshot ?? null,
+    pfWageMinor,
     createdBy: msg.actorId, updatedBy: msg.actorId,
   });
   if (result.gpfMinor > 0n) {

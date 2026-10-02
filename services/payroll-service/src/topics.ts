@@ -34,6 +34,8 @@ export const COMMANDS = {
   reimbursementDecide:    "payroll.reimbursement.decide",
   salaryRevisionCreate:   "payroll.salary_revision.create",
   settingsUpdate:         "payroll.settings.update",
+  // PAY-PROFILES: effective-dated HRA floor / deputation-allowance rules.
+  allowanceRulesCreate:   "payroll.allowance_rules.create",
   // CQRS lift T1-03 (payroll/gap-routes.ts) — 8 mutating routes moved to
   // publish + idempotent consumer; mirrors ddo/pensioner/arrear/bonus/
   // reimbursement above.
