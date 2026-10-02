@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, varchar, bigint, date, text, timestamp, integer,
+  pgSchema, uuid, varchar, bigint, date, text, timestamp, integer, smallint, boolean,
 } from "drizzle-orm/pg-core";
 
 // Deputation lives under the lifecycle schema (alongside service-book entries).
@@ -20,7 +20,9 @@ export const hrmsDeputations = deputationSchema.table("hrms_deputations", {
 
   // Parent cadre snapshot (restored on repatriation).
   parentCadre:            varchar("parent_cadre", { length: 120 }).notNull(),
-  parentDepartmentId:     uuid("parent_department_id").notNull(),
+  // Nullable since migration 0167: a deputed-IN employee's parent is an
+  // external organisation (DB CHECK: required when direction = 'out').
+  parentDepartmentId:     uuid("parent_department_id"),
   parentManagerId:        uuid("parent_manager_id"),
 
   // Borrowing (host) assignment applied for the tenure.
@@ -30,6 +32,24 @@ export const hrmsDeputations = deputationSchema.table("hrms_deputations", {
 
   // Deputation (duty) allowance — paise/month (bigint money).
   deputationAllowanceMinor: bigint("deputation_allowance_minor", { mode: "bigint" }).notNull().default(0n),
+
+  // Pay terms of the deputation order (migration 0167, PAY-PROFILES). Only
+  // read by payroll once an APPROVED pay profile points at this row.
+  direction:              varchar("direction", { length: 4 }).notNull().default("out"), // out | in
+  payOption:              varchar("pay_option", { length: 16 }),        // parent_scale (Option A) | post_scale (Option B)
+  stationType:            varchar("station_type", { length: 8 }),       // same | other
+  parentOrganisation:     varchar("parent_organisation", { length: 200 }),
+  parentPayLevel:         smallint("parent_pay_level"),
+  parentBasicMinor:       bigint("parent_basic_minor", { mode: "bigint" }),
+  postPayLevel:           smallint("post_pay_level"),
+  postBasicMinor:         bigint("post_basic_minor", { mode: "bigint" }),
+  // auto = tenant rule (% of basic, capped) once configured in payroll, else
+  // deputationAllowanceMinor; fixed = per-employee override from the order.
+  allowanceMode:          varchar("allowance_mode", { length: 8 }).notNull().default("auto"),
+  foreignService:         boolean("foreign_service").notNull().default(false),
+  parentPensionScheme:    varchar("parent_pension_scheme", { length: 8 }), // GPF | NPS | EPF
+  daSource:               varchar("da_source", { length: 8 }).notNull().default("central"), // central | parent
+  parentDaRateBps:        integer("parent_da_rate_bps"),
 
   // Tenure.
   tenureFrom:             date("tenure_from").notNull(),

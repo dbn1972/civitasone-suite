@@ -56,7 +56,74 @@ export type PayrollInputEmployee = {
   payMode?: string;
   /** HRMS employeeType code (e.g. "permanent", "contract", "pay_scale"). */
   engagementType?: string;
+  /** PAY-PROFILES (optional; absent == govt_scale). See payProfileFeedSchema. */
+  payProfile?: PayProfileFeed;
+  engagement?: EngagementFeed;
+  advisories?: string[];
 };
+
+/**
+ * PAY-PROFILES (additive, optional): the approved pay profile HRMS resolved
+ * for the run month, the deputation pay terms it needs, engagement
+ * category/eligibility, and non-blocking advisories. Absent from an HRMS that
+ * predates PAY-PROFILES -- consumers must treat absence as govt_scale.
+ * Validated at the boundary by PayrollInputSchema below (money as digit
+ * strings, enums closed) so a malformed value fails the fetch closed instead
+ * of flowing into pay.
+ */
+export const PAY_PROFILES = [
+  "govt_scale", "deputation_parent_scale", "deputation_post_scale", "ctc_contract", "consolidated_contract",
+] as const;
+export type PayProfile = (typeof PAY_PROFILES)[number];
+
+const digits = z.string().regex(/^\d{1,15}$/);
+
+export const deputationFeedSchema = z.object({
+  id: z.string().uuid(),
+  status: z.string(),
+  direction: z.enum(["in", "out"]),
+  option: z.enum(["parent_scale", "post_scale"]).nullable(),
+  stationType: z.enum(["same", "other"]).nullable(),
+  parentCadre: z.string(),
+  parentOrganisation: z.string().nullable(),
+  parentPayLevel: z.number().int().nullable(),
+  parentBasicMinor: digits.nullable(),
+  postPayLevel: z.number().int().nullable(),
+  postBasicMinor: digits.nullable(),
+  allowanceMode: z.enum(["auto", "fixed"]),
+  fixedAllowanceMinor: digits,
+  foreignService: z.boolean(),
+  parentPensionScheme: z.enum(["GPF", "NPS", "EPF"]).nullable(),
+  daSource: z.enum(["central", "parent"]),
+  parentDaRateBps: z.number().int().min(0).nullable(),
+  tenureFrom: z.string(),
+  tenureTo: z.string(),
+  /** Set once the deputation is repatriated (YYYY-MM-DD). Optional for skew. */
+  repatriatedOn: z.string().nullable().optional(),
+});
+export type DeputationFeed = z.infer<typeof deputationFeedSchema>;
+
+export const payProfileFeedSchema = z.object({
+  profile: z.enum(PAY_PROFILES),
+  source: z.enum(["assigned", "default"]),
+  profileId: z.string().uuid().nullable(),
+  effectiveFrom: z.string().nullable(),
+  consolidatedMonthlyMinor: digits.optional(),
+  changedWithinMonth: z.boolean(),
+  deputation: deputationFeedSchema.optional(),
+});
+export type PayProfileFeed = z.infer<typeof payProfileFeedSchema>;
+
+export const engagementFeedSchema = z.object({
+  category: z.string(),
+  payMode: z.string(),
+  taxSection: z.string(),
+  eligibleForGratuity: z.boolean(),
+  eligibleForBonus: z.boolean(),
+  leaveEncashment: z.boolean().optional(),
+});
+export type EngagementFeed = z.infer<typeof engagementFeedSchema>;
+
 
 const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(
   (s) => !Number.isNaN(Date.parse(`${s}T00:00:00Z`)) && new Date(`${s}T00:00:00Z`).toISOString().slice(0, 10) === s,
@@ -92,6 +159,10 @@ const PayrollInputEmployeeSchema = z.object({
   suspension: PayrollInputSuspensionSchema.optional(),
   payMode: z.string().max(32).optional(),
   engagementType: z.string().max(64).nullable().optional(),
+  // PAY-PROFILES (optional; absent == govt_scale): validated strictly.
+  payProfile: payProfileFeedSchema.optional(),
+  engagement: engagementFeedSchema.optional(),
+  advisories: z.array(z.string()).optional(),
 }).passthrough().refine((e) => e.suspension == null || e.paySuspended === true, {
   message: "suspension details sent for an employee that is not paySuspended", path: ["suspension"],
 });

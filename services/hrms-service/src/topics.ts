@@ -63,6 +63,11 @@ export const COMMANDS = {
   deputationCreate:     "hrms.deputation.create",
   deputationExtend:     "hrms.deputation.extend",
   deputationRevert:     "hrms.deputation.revert",
+  // PAY-PROFILES: deputation-order pay terms (Option A/B, station, parent/post basic, DA source).
+  deputationPayTermsUpdate: "hrms.deputation.pay_terms.update",
+  // PAY-PROFILES: per-employee pay profile, maker (request) / checker (decide).
+  payProfileRequest:    "hrms.pay_profile.request",
+  payProfileDecide:     "hrms.pay_profile.decide",
 
   // medical
   medicalClaimCreate:    "hrms.medical_claim.create",

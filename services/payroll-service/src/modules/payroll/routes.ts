@@ -18,6 +18,25 @@ const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
 const SLIP_ROLES = [...READER_ROLES, "employee"];
 
 export async function payrollRoutes(app: FastifyInstance): Promise<void> {
+  /**
+   * PAY-PROFILES: internal, read-only. The latest YYYY-MM holding an approved
+   * or disbursed salary run (pensioner runs excluded) -- i.e. the last LOCKED
+   * pay period. hrms-service refuses a pay-profile change that would start on
+   * or before it. `null` when nothing is locked yet.
+   */
+  app.get("/v1/payroll/internal/locked-through", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...PAYROLL_ROLES, "hr_admin"]);
+    const rows = (await scopedRead((tx) => tx.execute(sql`
+      SELECT max(month) AS locked_through
+      FROM payroll.payroll_runs
+      WHERE tenant_id = ${ctx.tenantId}::uuid
+        AND status IN ('approved', 'disbursed')
+        AND run_type <> 'pensioner'
+    `))) as unknown as Array<{ locked_through: string | null }>;
+    return reply.send({ lockedThrough: rows[0]?.locked_through ?? null });
+  });
+
   app.get("/v1/payroll/runs", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);

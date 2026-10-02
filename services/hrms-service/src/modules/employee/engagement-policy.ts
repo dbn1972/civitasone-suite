@@ -191,11 +191,30 @@ export function leaveEligible(p: EngagementPolicy): boolean {
  * type (or by naming employeeType as a canonical category directly).
  */
 export function buildTypeResolver(tenantTypes: PolicyRow[], canonical: PolicyRow[]): (typeCode: string) => EngagementPolicy {
+  const resolve = buildTypeCategoryResolver(tenantTypes, canonical);
+  return (typeCode: string): EngagementPolicy => resolve(typeCode).policy;
+}
+
+/**
+ * Resolved engagement for a type code: the policy (exactly what
+ * buildTypeResolver returns) plus the engagement CATEGORY it came from.
+ * `category` is a canonical catalogue category (pay_scale, contractual, …),
+ * `"other"` for an un-categorised custom tenant type, or `"legacy"` for a code
+ * that matches neither (permissive DEFAULT_POLICY). PAY-PROFILES: payroll
+ * receives the category so pay-profile advisories / reports can reason about
+ * engagement without re-implementing this resolution.
+ */
+export interface ResolvedEngagement {
+  category: string;
+  policy: EngagementPolicy;
+}
+
+export function buildTypeCategoryResolver(tenantTypes: PolicyRow[], canonical: PolicyRow[]): (typeCode: string) => ResolvedEngagement {
   const byCode = new Map<string, PolicyRow>();
   for (const t of tenantTypes) byCode.set(String(t.code), t);
   const byCategory = new Map<string, PolicyRow>();
   for (const c of canonical) byCategory.set(String(c.category), c);
-  return (typeCode: string): EngagementPolicy => {
+  return (typeCode: string): ResolvedEngagement => {
     const t = byCode.get(typeCode);
     if (t) {
       const category = String(t.category ?? "other");
@@ -203,19 +222,27 @@ export function buildTypeResolver(tenantTypes: PolicyRow[], canonical: PolicyRow
       // canonical catalogue is authoritative for that category.
       if (category !== "other") {
         const c = byCategory.get(category);
-        if (c) return toPolicy(c);
+        if (c) return { category, policy: toPolicy(c) };
       }
       // Un-categorised CUSTOM tenant type (e.g. "Visiting Faculty") → trust the
       // admin's own flags on the row. Migration 0066 has made pre-existing
       // back-filled 'other' rows permissive, so trusting them cannot regress
       // employees that predate engagement-typing.
-      return toPolicy(t);
+      return { category: "other", policy: toPolicy(t) };
     }
     // No tenant row → treat the code itself as a canonical category, else default.
     const c = byCategory.get(typeCode);
-    if (c) return toPolicy(c);
-    return DEFAULT_POLICY;
+    if (c) return { category: typeCode, policy: toPolicy(c) };
+    return { category: "legacy", policy: DEFAULT_POLICY };
   };
+}
+
+/** Load a type→{category, policy} resolver for a tenant (same two reads as loadTypeResolver). */
+export async function loadTypeCategoryResolver(tenantId: string): Promise<(typeCode: string) => ResolvedEngagement> {
+  // SEQUENTIAL reads -- same pooled-connection constraint as loadTypeResolver below.
+  const tenantTypes = await scopedRead((tx) => tx.select().from(employeeTypeMaster).where(eq(employeeTypeMaster.tenantId, tenantId)));
+  const canonical = await scopedRead((tx) => tx.select().from(engagementCatalogue));
+  return buildTypeCategoryResolver(tenantTypes as unknown as PolicyRow[], canonical as unknown as PolicyRow[]);
 }
 
 /** Load a type→policy resolver for a tenant (tenant master + canonical catalogue). */

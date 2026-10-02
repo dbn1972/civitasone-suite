@@ -8,6 +8,14 @@ import { publishF3Write } from "../../shared/f3-publish.js";
  *  GET  /v1/hrms/deputations/:depId                 read one
  *  POST /v1/hrms/deputations/:depId/repatriate      repatriate (close, restore parent posting)
  *  POST /v1/hrms/deputations/:depId/cancel          cancel (restore parent posting)
+ *  PATCH /v1/hrms/deputations/:depId/pay-terms      deputation-order pay terms (PAY-PROFILES)
+ *
+ * PAY-PROFILES: a deputation may also be recorded as deputed-IN (direction
+ * "in": an employee of another organisation serving here). That does not
+ * switch posting -- the employee is already posted here -- and has no
+ * internal parent department. Pay terms (Option A parent scale / Option B
+ * post scale, station type, parent/post basic, DA source, foreign service)
+ * only influence pay once an APPROVED pay profile references the deputation.
  *
  * On depute-OUT the employee's effective reporting (managerId) and posting
  * (departmentId) are switched to the borrowing assignment, and the parent
@@ -24,8 +32,14 @@ import { hrmsEmployees } from "../employee/schema.js";
 import { hrmsServiceBookEntries } from "../service-book/schema.js";
 import * as repo from "./repo.js";
 import type { DeputationRow } from "./schema.js";
+import { queue } from "../../shared/infra.js";
+import { COMMANDS } from "../../topics.js";
+import { payTermsShape, payTermsSchema, payTermsPatchSchema, payTermsColumns, mergedTermsError, moneyChanges } from "./pay-terms.js";
+import { liveProfileReferencesDeputation } from "../pay-profile/repo.js";
 
 const HR_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+// Pay terms move money once a pay profile points at the deputation.
+const PAY_TERMS_ROLES = ["hr_admin", "payroll_admin", "super_admin"];
 const idParam = z.object({ id: z.string().uuid() });
 const depParam = z.object({ depId: z.string().uuid() });
 
@@ -70,11 +84,14 @@ export async function deputationRoutes(app: FastifyInstance): Promise<void> {
       tenureTo: z.string(),
       orderRef: z.string().max(120).optional(),
       remarks: z.string().max(2000).optional(),
+      ...payTermsShape,
     }).parse(req.body);
 
     if (new Date(body.tenureTo) <= new Date(body.tenureFrom)) {
       throw new HttpError(400, "INVALID_TENURE", "tenureTo must be after tenureFrom");
     }
+    const termsError = mergedTermsError(null, payTermsColumns(payTermsSchema.parse(body)));
+    if (termsError) throw new HttpError(422, termsError, `deputation pay terms incomplete: ${termsError}`);
 
     const emp = await mustEmployee(ctx.tenantId, id);
     const existing = await repo.findActiveByEmployee(ctx.tenantId, id);
@@ -139,6 +156,36 @@ export async function deputationRoutes(app: FastifyInstance): Promise<void> {
       id: depId, employeeId: dep.employeeId, status: newStatus, effectiveDate,
     })) as any;
   }
+
+  // --- PAY-PROFILES: deputation-order pay terms ------------------------------
+  app.patch("/v1/hrms/deputations/:depId/pay-terms", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, PAY_TERMS_ROLES);
+    const { depId } = depParam.parse(req.params);
+    const body = payTermsPatchSchema.parse(req.body);
+    const dep = await mustDeputation(ctx.tenantId, depId);
+    if (dep.status !== "active") {
+      throw new HttpError(409, "NOT_ACTIVE", `deputation is '${dep.status}', not active`);
+    }
+    const cols = payTermsColumns(body);
+    const termsError = mergedTermsError(dep, cols);
+    if (termsError) throw new HttpError(422, termsError, `deputation pay terms incomplete: ${termsError}`);
+    // Pay-affecting terms of a deputation that a live (active or pending) pay
+    // profile references are frozen: the profile carries its own approved
+    // copy, and a change must go through a new profile request (maker-checker).
+    const money = moneyChanges(dep, cols);
+    if (money.fields.length > 0 && await liveProfileReferencesDeputation(null, ctx.tenantId, depId)) {
+      throw new HttpError(409, "PAY_TERMS_LOCKED_BY_PROFILE",
+        `money terms (${money.fields.join(", ")}) are fixed by an active or pending pay profile; raise a new pay-profile request with the revised terms instead`);
+    }
+    const messageId = randomUUID();
+    await queue.publish(COMMANDS.deputationPayTermsUpdate, {
+      messageId, type: COMMANDS.deputationPayTermsUpdate,
+      tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+      payload: { tenantId: ctx.tenantId, deputationId: depId, expectedVersion: dep.version, terms: body },
+    });
+    return reply.code(202).send({ id: depId, status: "accepted", correlationId: ctx.correlationId });
+  });
 
   app.post("/v1/hrms/deputations/:depId/repatriate", (req, reply) => close(req, reply, "repatriated"));
   app.post("/v1/hrms/deputations/:depId/cancel", (req, reply) => close(req, reply, "cancelled"));
