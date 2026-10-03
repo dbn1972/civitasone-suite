@@ -3,6 +3,7 @@ import { DataTable } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import { maskPan } from "@/app/_components/ds/Masked";
+import { gstinCell } from "./vendorStats";
 import type { FinanceVendorSummary } from "@civitasone/types";
 
 // DataTable's generic requires an index signature; FinanceVendorSummary is a
@@ -27,7 +28,8 @@ export function VendorsTable({ vendors, source = "api" }: { vendors: FinanceVend
         ]}
         // PAN is a DPDP identifier: mask it in the cell AND in the CSV export
         // (DataTable writes the row value), GAP-FINANCE-VENDORS-02.
-        rows={rows.map((r) => ({ ...r, pan: r.pan ? maskPan(String(r.pan)) : r.pan }))}
+        // GSTIN: a blank cell reads as missing data; say "Unregistered" (also in the CSV export).
+        rows={rows.map((r) => ({ ...r, pan: r.pan ? maskPan(String(r.pan)) : r.pan, gstin: gstinCell(r.gstin as string | null | undefined) }))}
         rowLinkKey="id"
         rowLinkPrefix="/finance/vendors/"
         sortable

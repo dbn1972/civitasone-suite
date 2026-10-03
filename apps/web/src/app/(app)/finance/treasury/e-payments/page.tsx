@@ -1,5 +1,6 @@
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceEPayments } from "@/app/_data/loaders";
+import Link from "next/link";
 import { EPaymentsTable } from "./EPaymentsTable";
 
 export default async function EPaymentsPage() {
@@ -16,6 +17,7 @@ export default async function EPaymentsPage() {
         title="e-Payment Orders"
         subtitle="Electronic payment orders with status tracking."
         back="/finance"
+        actions={<Link href="/finance/payments" className="btn ghost">Open Payments register</Link>}
       />
       <StatGrid>
         <StatCard icon="💳" iconBg="#e7edfd" label="Total Orders" value={orders.length} />

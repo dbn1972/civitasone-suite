@@ -573,6 +573,10 @@ export function mapPayments(payload: unknown): PaymentSummary[] | null {
       status,
     });
   }
+  // GAP-FINANCE-TREASURY-E-PAYMENTS-04: an empty array is a successful empty
+  // register, but rows that ALL failed mapping (e.g. only unknown statuses) are
+  // a contract break and must surface as a load error, not as "No payments".
+  if (rows.length > 0 && mapped.length === 0) return null;
   return mapped;
 }
 

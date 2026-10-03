@@ -28,7 +28,7 @@ const financeSections: NavTile[] = [
 	// Treasury & Banking
 	{ title: "e-Payment Orders", section: "Treasury & Banking", description: "Electronic payment orders with status tracking.", href: "/finance/treasury/e-payments" },
 	{ title: "Cheque Register", section: "Treasury & Banking", description: "Cheque/DD register with clearance tracking.", href: "/finance/treasury/cheques" },
-	{ title: "Fixed Deposits", section: "Treasury & Banking", description: "Fixed and term deposits across treasury banks.", href: "/finance/treasury/deposits" },
+	{ title: "Deposits Register", section: "Treasury & Banking", description: "Personal deposits, EMDs, security deposits and FDRs with administrator and balance.", href: "/finance/treasury/deposits" },
 	{ title: "Cash & Bank Book", section: "Treasury & Banking", description: "Day book with receipts, payments, and balance.", href: "/finance/treasury/cash-bank" },
 
 	// Revenue & Receipts

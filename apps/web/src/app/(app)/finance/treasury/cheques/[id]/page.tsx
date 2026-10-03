@@ -2,6 +2,10 @@ import { PageHeader, StatGrid, StatCard, StatusPill, Card, EmptyState, LoadError
 import { getFinanceChequeById } from "@/app/_data/loaders";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import type { FinanceInstrumentSummary } from "@civitasone/types";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWrite } from "@/lib/finance/writeRoles";
+import { InstrumentActions } from "./InstrumentActions";
+import { INSTRUMENT_WRITE_ROLES, canCancelInstrument, chequeStatusIcon, chequeStatusLabel, clearedDateLabel } from "./chequeUi";
 
 type TimelineRow = { date: string; event: string };
 
@@ -65,12 +69,17 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
         title={`Cheque #${cheque.instrumentNo}`}
         subtitle={cheque.payee || undefined}
         back="/finance/treasury/cheques"
+        actions={
+          canCancelInstrument(cheque.status) && canWrite(getSessionRoles(), INSTRUMENT_WRITE_ROLES) ? (
+            <InstrumentActions id={cheque.id} instrumentNo={cheque.instrumentNo} />
+          ) : null
+        }
       />
       <StatGrid>
         <StatCard icon="₹" iconBg="#ecfdf3" label="Amount" value={formatMoney(cheque.amountMinor)} />
         <StatCard icon="🏦" iconBg="#e7edfd" label="Bank" value={cheque.bankName} />
         <StatCard icon="📅" iconBg="#fffaeb" label="Issue Date" value={formatIndianDate(cheque.issueDate)} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value={cheque.status} />
+        <StatCard icon={chequeStatusIcon(cheque.status)} iconBg="#ecfdf3" label="Status" value={chequeStatusLabel(cheque.status)} />
       </StatGrid>
 
       <Card title="Cheque Details" padding>
@@ -81,7 +90,7 @@ export default async function ChequeDetailPage({ params }: { params: { id: strin
           <div className="field"><span className="label">Amount</span><span>{formatMoney(cheque.amountMinor)}</span></div>
           <div className="field"><span className="label">Bank</span><span>{cheque.bankName}</span></div>
           <div className="field"><span className="label">Status</span><StatusPill status={cheque.status} /></div>
-          <div className="field"><span className="label">Cleared Date</span><span>{formatIndianDate(cheque.clearedAt)}</span></div>
+          <div className="field"><span className="label">Cleared Date</span><span>{clearedDateLabel(cheque.clearedAt, cheque.status)}</span></div>
           {cheque.bounceReason ? (
             <div className="field"><span className="label">Bounce Reason</span><span>{cheque.bounceReason}</span></div>
           ) : null}

@@ -1,5 +1,7 @@
 import type { RequestContext } from "@civitasone/types";
 import { HttpError } from "../../shared/context.js";
+import { db } from "../../shared/db.js";
+import { enqueue } from "../../shared/outbox.js";
 import type { InstrumentRow } from "../treasury/schema.js";
 import * as repo from "./repo.js";
 import type { IssueInstrumentBody, BounceInstrumentBody } from "./validators.js";
@@ -96,12 +98,39 @@ export async function bounceInstrument(ctx: RequestContext, id: string, body: Bo
   return serialize(updated);
 }
 
-/** cancel: only an un-presented (issued) instrument may be cancelled/stopped. Idempotent. */
+/**
+ * cancel: only an un-presented (issued) instrument may be cancelled/stopped. Idempotent.
+ *
+ * The guarded UPDATE and the audit event are written in ONE transaction, so a
+ * cancel is audited exactly once: only the request that actually flips
+ * issued -> cancelled (the UPDATE's WHERE pins the source status) enqueues the
+ * audit.event.record; a replay or a concurrent loser sees the already-cancelled
+ * row and writes nothing.
+ */
 export async function cancelInstrument(ctx: RequestContext, id: string): Promise<InstrumentView> {
   const current = await load(ctx, id);
   if (current.status === "cancelled") return serialize(current);
-  const updated = await repo.transition(ctx.tenantId, id, ["issued"], "cancelled", {}, "cancelledAt", ctx.actorId);
-  if (!updated) throw illegal(current.status, "cancelled");
+  const updated = await db.transaction(async (tx) => {
+    const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued"], "cancelled", {}, "cancelledAt", ctx.actorId);
+    if (row) {
+      await enqueue(tx, {
+        topic: "audit.event.record", eventType: "audit.event.record",
+        tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId,
+        payload: {
+          service: "finance", action: "cancel", resourceType: "instrument", resourceId: id,
+          outcome: "success",
+          details: { instrumentType: row.instrumentType, instrumentNo: row.instrumentNo, fromStatus: current.status, toStatus: "cancelled" },
+        },
+      });
+    }
+    return row;
+  });
+  if (!updated) {
+    // Lost a race: if the winner cancelled it, this is the idempotent replay (no second audit).
+    const latest = await load(ctx, id);
+    if (latest.status === "cancelled") return serialize(latest);
+    throw illegal(latest.status, "cancelled");
+  }
   return serialize(updated);
 }
 

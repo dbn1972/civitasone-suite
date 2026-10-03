@@ -4,6 +4,7 @@ import { useTranslations } from "next-intl";
 import { DataTable, EmptyState } from "../../../_components/ds";
 import { SignBatchAction } from "./SignBatchAction";
 import { BankFileAction } from "./BankFileAction";
+import { humanizeStatus } from "@/lib/formatters";
 import type { PfmsBatchRow } from "./types";
 
 /**
@@ -28,7 +29,7 @@ export function BatchesPanel({ batches, canDownloadBankFile = true }: { batches:
     <DataTable<PfmsBatchRow>
       columns={[
         { key: "pfmsId", label: t("colPfmsId") },
-        { key: "type", label: t("colType") },
+        { key: "type", label: t("colType"), render: (row) => humanizeStatus(row.type) },
         { key: "amountMinor", label: t("colAmount"), align: "right", cellType: "amount" },
         { key: "agencyCode", label: t("colAgency") },
         { key: "schemeCode", label: t("colScheme") },

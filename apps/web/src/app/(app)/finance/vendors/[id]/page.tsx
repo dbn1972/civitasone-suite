@@ -1,6 +1,7 @@
 import { PageHeader, StatGrid, StatCard, StatusPill, Card, DataTable, EmptyState, LoadErrorState, Masked } from "@/app/_components/ds";
 import { getFinanceVendorById } from "@/app/_data/loaders";
-import { formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
+import { bankLine, billTotals, minorOf } from "./vendorBills";
 import { VendorStatusAction } from "../VendorStatusAction";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canWrite, VENDOR_WRITE_ROLES } from "@/lib/finance/writeRoles";
@@ -20,16 +21,6 @@ function rawStr(data: Record<string, unknown>, ...keys: string[]): string | unde
   return v === "—" ? undefined : v;
 }
 
-function amountMinorOf(data: Record<string, unknown>, ...keys: string[]): number | undefined {
-  for (const key of keys) {
-    const v = data[key];
-    if (typeof v === "number" && Number.isFinite(v)) return v;
-    if (typeof v === "bigint") return Number(v);
-    if (typeof v === "string" && v.trim() !== "" && Number.isFinite(Number(v))) return Number(v);
-  }
-  return undefined;
-}
-
 function rawArray(data: Record<string, unknown>, ...keys: string[]): Record<string, unknown>[] {
   for (const key of keys) {
     const v = data[key];
@@ -38,7 +29,8 @@ function rawArray(data: Record<string, unknown>, ...keys: string[]): Record<stri
   return [];
 }
 
-type BillRow = { billNo: string; date: string; amount: string; tds: string; status: string; [k: string]: unknown };
+// amount / tds stay raw paise strings (undefined when absent) so the DataTable formats and sorts them numerically.
+type BillRow = { id?: string; billNo: string; date: string; amount?: string; tds?: string; status: string; [k: string]: unknown };
 
 export default async function VendorDetailPage({ params }: { params: { id: string } }) {
   const result = await getFinanceVendorById(params.id);
@@ -67,29 +59,32 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
   const name = field(vendor, "name", "vendorName");
   const category = field(vendor, "category", "vendorCategory", "type");
   const status = field(vendor, "status");
+  // "Registered Since" is only that when the API supplies it; otherwise the
+  // record's creation date is shown under its own honest label.
+  const registeredRaw = rawStr(vendor, "registeredSince");
+  const registeredLabel = registeredRaw ? "Registered Since" : "Created";
+  const registeredSince = formatIndianDate(registeredRaw ?? rawStr(vendor, "createdAt"));
 
   // Bill history isn't guaranteed on the vendor payload — read it defensively and
   // derive the summary stats from the same raw rows so they never drift from the table.
   const rawBills = rawArray(vendor, "bills", "billHistory");
   const bills: BillRow[] = rawBills.map((b) => {
-    const amt = amountMinorOf(b, "amountMinor", "amount");
-    const tds = amountMinorOf(b, "tdsMinor", "tds");
+    const amt = minorOf(b, "amountMinor", "amount");
+    const tds = minorOf(b, "tdsMinor", "tds");
+    const billId = field(b, "id");
     return {
+      ...(billId !== "—" ? { id: billId } : {}),
       billNo: field(b, "billNo", "billNumber", "referenceId"),
       date: field(b, "date", "billDate"),
-      amount: amt !== undefined ? formatMoney(amt) : "—",
-      tds: tds !== undefined ? formatMoney(tds) : "—",
+      ...(amt !== undefined ? { amount: amt.toString() } : {}),
+      ...(tds !== undefined ? { tds: tds.toString() } : {}),
       status: field(b, "status"),
     };
   });
-  const totalPaidMinor = rawBills.reduce<number | undefined>((sum, b) => {
-    const m = amountMinorOf(b, "amountMinor", "amount");
-    return m === undefined ? sum : (sum ?? 0) + m;
-  }, undefined);
-  const totalTdsMinor = rawBills.reduce<number | undefined>((sum, b) => {
-    const m = amountMinorOf(b, "tdsMinor", "tds");
-    return m === undefined ? sum : (sum ?? 0) + m;
-  }, undefined);
+  // GAP-FINANCE-VENDORS-DETAIL-03: "Total Paid (initiated)" / TDS count bills with status paid only (payment initiated);
+  // pending / rejected bills show up under "Total Billed".
+  const totals = billTotals(rawBills);
+  const money = (m: bigint | undefined) => (m !== undefined ? formatMoney(m) : "—");
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -110,9 +105,9 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
       />
       <StatGrid>
         <StatCard icon="📋" iconBg="#e7edfd" label="Total Bills" value={rawBills.length} />
-        <StatCard icon="₹" iconBg="#ecfdf3" label="Total Paid" value={totalPaidMinor !== undefined ? formatMoney(totalPaidMinor) : "—"} />
-        <StatCard icon="🧮" iconBg="#fffaeb" label="TDS Deducted" value={totalTdsMinor !== undefined ? formatMoney(totalTdsMinor) : "—"} />
-        <StatCard icon="✅" iconBg="#ecfdf3" label="Status" value={status} />
+        <StatCard icon="🧾" iconBg="#eff6ff" label="Total Billed" value={money(totals.billedMinor)} />
+        <StatCard icon="₹" iconBg="#ecfdf3" label="Total Paid (initiated)" value={money(totals.paidMinor)} />
+        <StatCard icon="🧮" iconBg="#fffaeb" label="TDS Deducted (initiated payments)" value={money(totals.tdsOnPaidMinor)} />
       </StatGrid>
 
       <Card title="Vendor Details" padding>
@@ -125,9 +120,9 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
           <div className="field"><span className="label">Contact Person</span><span>{field(vendor, "contactPerson", "contactName")}</span></div>
           <div className="field"><span className="label">Email</span><span>{field(vendor, "email", "contactEmail")}</span></div>
           <div className="field"><span className="label">Phone</span><span>{field(vendor, "phone", "contactPhone", "mobile")}</span></div>
-          <div className="field"><span className="label">Bank</span><span>{field(vendor, "bankName", "bank")} ({field(vendor, "ifsc", "ifscCode")})</span></div>
+          <div className="field"><span className="label">Bank</span><span>{bankLine(field(vendor, "bankName", "bank"), field(vendor, "ifsc", "ifscCode"))}</span></div>
           <div className="field"><span className="label">Account</span><Masked kind="account" value={rawStr(vendor, "bankAccount", "accountNumber", "accountNo")} fallback="—" ariaLabel="Account number (masked)" /></div>
-          <div className="field"><span className="label">Registered Since</span><span>{field(vendor, "registeredSince", "createdAt")}</span></div>
+          <div className="field"><span className="label">{registeredLabel}</span><span>{registeredSince}</span></div>
           <div className="field"><span className="label">Status</span><StatusPill status={status} /></div>
         </div>
       </Card>
@@ -136,12 +131,17 @@ export default async function VendorDetailPage({ params }: { params: { id: strin
         <DataTable<BillRow>
           columns={[
             { key: "billNo", label: "Bill No" },
-            { key: "date", label: "Date" },
-            { key: "amount", label: "Amount", align: "right" },
-            { key: "tds", label: "TDS", align: "right" },
+            { key: "date", label: "Date", cellType: "date" },
+            { key: "amount", label: "Amount", align: "right", cellType: "amount" },
+            { key: "tds", label: "TDS", align: "right", cellType: "amount" },
             { key: "status", label: "Status", cellType: "status" },
           ]}
           rows={bills}
+          // Each bill id is the finance bill id the expenditure bill detail route takes.
+          rowLinkKey="id"
+          rowLinkPrefix="/finance/expenditure/bills/"
+          sortable
+          pageSize={15}
           emptyIcon="📋"
           emptyTitle="No bills yet"
           emptyMessage="No bills have been recorded for this vendor."

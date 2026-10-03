@@ -1,9 +1,10 @@
 "use client";
 
-import { DataTable } from "@/app/_components/ds";
+import { DataTable, StatusPill } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { useSeededResource } from "@/lib/sync/resource";
 import type { PaymentSummary } from "@civitasone/types";
+import { epaymentStatusVariant } from "./epaymentUi";
 
 // DataTable's generic requires an index signature; PaymentSummary is a plain
 // named interface. The intersection satisfies the constraint without
@@ -37,9 +38,12 @@ export function EPaymentsTable({ orders, source = "api" }: { orders: PaymentSumm
           { key: "referenceId", label: "Reference" },
           { key: "beneficiary", label: "Beneficiary" },
           { key: "amountDisplay", label: "Amount", align: "right" },
-          { key: "status", label: "Status", cellType: "status" },
+          { key: "status", label: "Status", render: (row) => <StatusPill status={row.status} variant={epaymentStatusVariant(row.status)} /> },
         ]}
         rows={rows}
+        // Same register as /finance/payments: open the payment (UTR, submit for approval).
+        // Only rows that carry a real id link; id-less rows stay plain (no dead link).
+        rowHref={(row) => (row.id ? `/finance/payments/${row.id}` : "")}
         sortable
         filterable
         filterPlaceholder="Search payment orders…"
