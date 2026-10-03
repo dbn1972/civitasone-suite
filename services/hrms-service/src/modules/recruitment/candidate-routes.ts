@@ -22,6 +22,7 @@ import {
 } from "./candidate.js";
 import { otpVerificationEnabled, submissionRequiresVerification } from "./otp-verify.js";
 import * as repo from "./candidate-repo.js";
+import { maskEmail, maskMobile } from "./pii-mask.js";
 
 // Candidate PII (DOB, reservation category, disability, addresses) is HR-only —
 // manager is deliberately NOT included (matches the sibling recruitment modules,
@@ -112,7 +113,29 @@ export async function candidateRoutes(app: FastifyInstance): Promise<void> {
       fullName: c.fullName, dateOfBirth: c.dateOfBirth, email: c.email, mobile: c.mobile,
       category: c.category, educationCount: eduN, employmentCount: empN, activeResume: c.activeResumeRef,
     });
-    return reply.send(jsonSafe({ ...c, educationCount: eduN, employmentCount: empN, completeness }));
+    // DPDP (GAP-RECRUITMENT-DETAIL-08 policy): contact details are masked here; the audited reveal-contact below
+    // returns them. The normalised_* dedup keys are the same data, so they are masked too. Completeness above used
+    // the real values.
+    return reply.send(jsonSafe({
+      ...c, email: maskEmail(c.email), mobile: maskMobile(c.mobile),
+      normalizedEmail: maskEmail(c.normalizedEmail), normalizedMobile: maskMobile(c.normalizedMobile),
+      contactMasked: true, educationCount: eduN, employmentCount: empN, completeness,
+    }));
+  });
+
+  // Audited reveal of a candidate-master profile's contact details: reason required, audit command durably queued
+  // before the values are returned (see pii-reveal-routes.ts for exactly what "audited" guarantees).
+  app.post("/v1/hrms/candidates/:id/reveal-contact", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = z.object({ reason: z.string().trim().min(5).max(500) }).parse(req.body ?? {});
+    const c = await mustCand(ctx.tenantId, id);
+    await publishF3Write(ctx, "recruitment_pii_reveal__0", randomUUID(), {
+      params: { id }, query: {},
+      body: { action: "candidate_contact_revealed", scope: "candidate_profile", reason: body.reason, fields: ["email", "mobile"] },
+    });
+    return reply.send({ data: { id, email: c.email ?? null, mobile: c.mobile ?? null } });
   });
 
   app.patch("/v1/hrms/candidates/:id", async (req, reply) => {

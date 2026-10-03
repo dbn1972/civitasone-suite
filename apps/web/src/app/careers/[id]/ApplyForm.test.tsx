@@ -1,7 +1,16 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render as rtlRender, screen, fireEvent, waitFor } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { ApplyForm } from "./ApplyForm";
 import { CAREERS_CONSENT_VERSION } from "../consent";
+
+
+// The page chrome includes the language switcher (a client component), so renders need the intl provider the
+// root layout supplies in production.
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
@@ -172,5 +181,116 @@ describe("ApplyForm copy and styling", () => {
     render(<ApplyForm jobOpeningId="job-1" />);
     const btn = screen.getByRole("button", { name: /submit application/i });
     expect(btn.getAttribute("style")).toMatch(/rgb\(21, 64, 137\)|#154089/i);
+  });
+});
+
+// GAP-RECRUITMENT-CAREERS-DETAIL-03: optional self-declared category and date of birth.
+describe("ApplyForm category and date of birth", () => {
+  it("selecting SC stores category 'sc' in the request (the HR card compares lower case)", async () => {
+    const fetchMock = vi.fn(async () => OK());
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ApplyForm jobOpeningId="job-1" />);
+    fireEvent.change(screen.getByLabelText(/Reservation category/), { target: { value: "sc" } });
+    fireEvent.change(screen.getByLabelText(/Date of birth/), { target: { value: "1995-03-04" } });
+    fill();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(bodyOf(fetchMock)).toMatchObject({ category: "sc", dateOfBirth: "1995-03-04" });
+  });
+
+  it("states that the category is self-declared and checked against the certificate", () => {
+    render(<ApplyForm jobOpeningId="job-1" />);
+    const cat = screen.getByLabelText(/Reservation category/);
+    expect(document.getElementById(cat.getAttribute("aria-describedby")!)!.textContent).toMatch(/self-declared.*certificate/i);
+  });
+
+  it("a future date of birth is rejected with a field error and nothing is sent", async () => {
+    const fetchMock = vi.fn(async () => OK());
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ApplyForm jobOpeningId="job-1" />);
+    fireEvent.change(screen.getByLabelText(/Date of birth/), { target: { value: "2099-01-01" } });
+    fill();
+    await waitFor(() => expect(screen.getByLabelText(/Date of birth/).getAttribute("aria-invalid")).toBe("true"));
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("neither field is sent when left blank", async () => {
+    const fetchMock = vi.fn(async () => OK());
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ApplyForm jobOpeningId="job-1" />);
+    fill();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    const b = bodyOf(fetchMock);
+    expect(b.category).toBeUndefined();
+    expect(b.dateOfBirth).toBeUndefined();
+  });
+});
+
+// GAP-RECRUITMENT-CAREERS-DETAIL-04: resume upload + qualification as level + detail.
+describe("ApplyForm resume and qualification", () => {
+  const pdf = (size = 2048, type = "application/pdf", name = "cv.pdf") => new File([new Uint8Array(size)], name, { type });
+  function route(upload: () => Response) {
+    const fn = vi.fn(async (url: string) => (String(url) === "/api/careers/resume" ? upload() : OK()));
+    vi.stubGlobal("fetch", fn);
+    return fn;
+  }
+  const choose = (f: File) => fireEvent.change(screen.getByLabelText(/Resume/), { target: { files: [f] } });
+
+  it("uploads the resume first and sends only its key with the application", async () => {
+    const fn = route(() => new Response(JSON.stringify({ resumeKey: "careers-resumes/t/abc.pdf" }), { status: 201 }));
+    render(<ApplyForm jobOpeningId="job-1" />);
+    choose(pdf());
+    fill();
+    await waitFor(() => expect(fn).toHaveBeenCalledTimes(2));
+    const [uploadUrl, uploadInit] = fn.mock.calls[0] as unknown as [string, RequestInit];
+    expect(uploadUrl).toBe("/api/careers/resume");
+    expect((uploadInit.body as FormData).get("jobOpeningId")).toBe("job-1");
+    expect(((uploadInit.body as FormData).get("file") as File).name).toBe("cv.pdf");
+    expect(JSON.parse(String((fn.mock.calls[1] as unknown as [string, RequestInit])[1].body))).toMatchObject({ resumeKey: "careers-resumes/t/abc.pdf" });
+  });
+
+  it("a 6 MB file is refused at selection with a clear message, and a .exe too -- nothing is uploaded", async () => {
+    const fn = route(() => new Response("{}", { status: 201 }));
+    render(<ApplyForm jobOpeningId="job-1" />);
+    choose(pdf(6 * 1024 * 1024));
+    expect(await screen.findByText(/larger than 5 MB/i)).toBeInTheDocument();
+    choose(pdf(100, "application/x-msdownload", "setup.exe"));
+    expect(await screen.findByText(/Upload a PDF, DOC or DOCX/i)).toBeInTheDocument();
+    fill();
+    await waitFor(() => expect(screen.getByLabelText(/Resume/).getAttribute("aria-invalid")).toBe("true"));
+    expect(fn).not.toHaveBeenCalled();
+  });
+
+  it("a failed or infected upload stops the application (no submit without the file the candidate chose)", async () => {
+    const fn = route(() => new Response(JSON.stringify({ code: "MALWARE_DETECTED" }), { status: 422 }));
+    render(<ApplyForm jobOpeningId="job-1" />);
+    choose(pdf());
+    fill();
+    expect(await screen.findAllByText(/did not pass the virus check/i)).not.toHaveLength(0);
+    expect(fn).toHaveBeenCalledTimes(1); // the upload only; /api/careers/apply was never called
+  });
+
+  it("qualification is a level plus free text, sent as one string", async () => {
+    const fetchMock = vi.fn(async () => OK());
+    vi.stubGlobal("fetch", fetchMock);
+    render(<ApplyForm jobOpeningId="job-1" />);
+    fireEvent.change(screen.getByLabelText(/Highest qualification/), { target: { value: "Graduate" } });
+    fireEvent.change(screen.getByLabelText(/Course \/ institution/), { target: { value: "B.Com (Hons), State University" } });
+    fill();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(bodyOf(fetchMock).qualification).toBe("Graduate — B.Com (Hons), State University");
+  });
+});
+
+// GAP-RECRUITMENT-CAREERS-HOME-07: the public form is available in Hindi.
+describe("ApplyForm in Hindi", () => {
+  it("labels, hints and validation messages are translated; consent notice paragraphs stay as the versioned legal text", async () => {
+    const { default: hi } = await import("@/messages/hi.json");
+    rtlRender(<NextIntlClientProvider locale="hi" messages={hi}><ApplyForm jobOpeningId="job-1" /></NextIntlClientProvider>);
+    expect(screen.getByLabelText(/पूरा नाम/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "आवेदन जमा करें" })).toBeInTheDocument();
+    expect(screen.queryByText("Submit application")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "आवेदन जमा करें" }));
+    expect(await screen.findByText("अपना पूरा नाम दर्ज करें।")).toBeInTheDocument();
+    expect(screen.getByText(/only to assess your application/i)).toBeInTheDocument();
   });
 });

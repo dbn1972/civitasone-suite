@@ -17,6 +17,10 @@ import { leaveContextRoutes } from "./modules/leave/context-routes.js";
 import { attendanceRoutes } from "./modules/attendance/routes.js";
 import { recruitmentRoutes, publicRecruitmentRoutes } from "./modules/recruitment/routes.js";
 import { jdTemplateRoutes } from "./modules/recruitment/jd-template-routes.js";
+import { recruitmentSettingsRoutes } from "./modules/recruitment/settings-routes.js";
+import { piiRevealRoutes } from "./modules/recruitment/pii-reveal-routes.js";
+import { careersResumeRoutes } from "./modules/recruitment/careers-resume-routes.js";
+import { admitCardRoutes } from "./modules/recruitment/admit-card-routes.js";
 import { candidatePublicAuthRoutes } from "./modules/recruitment/candidate-public-auth-routes.js";
 import { candidatePublicPortalRoutes } from "./modules/recruitment/candidate-public-portal-routes.js";
 import { trainingRoutes }   from "./modules/training/routes.js";
@@ -111,11 +115,15 @@ import { consultantInvoiceRoutes } from "./modules/consultant-invoice/routes.js"
 import { contractorBillRoutes } from "./modules/contractor-bill/routes.js";
 import { apprenticeStipendRoutes } from "./modules/apprentice-stipend/routes.js";
 import { registerRateLimit } from "@civitasone/rate-limit";
+import { INTERNAL_PROXY_TRUST } from "./modules/recruitment/careers-resume.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     genReqId: (req) => (req.headers["x-correlation-id"] as string) ?? randomUUID(),
+    // Trust X-Forwarded-For only from internal peers (gateway / web tier), so req.ip is the real client and an
+    // external caller cannot forge it. Deliberately not `true`.
+    trustProxy: INTERNAL_PROXY_TRUST,
   });
 
   await app.register(cors, { origin: process.env.CORS_ORIGIN ?? false });
@@ -182,6 +190,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(recruitmentRoutes);
   await app.register(publicRecruitmentRoutes);
   await app.register(jdTemplateRoutes);
+  await app.register(recruitmentSettingsRoutes);
+  await app.register(piiRevealRoutes);
+  await app.register(careersResumeRoutes);
+  await app.register(admitCardRoutes);
   await app.register(candidatePublicAuthRoutes);
   await app.register(candidatePublicPortalRoutes);
   await app.register(trainingRoutes);

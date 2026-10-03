@@ -150,7 +150,12 @@ export async function assessmentAttemptRoutes(app: FastifyInstance): Promise<voi
     const s = await mustSchedule(ctx.tenantId, id);
     const attempts = await repo.listAttemptsBySchedule(ctx.tenantId, id, 500);
     const { paper, ...safe } = s;
-    return reply.send(jsonSafe({ ...safe, questionCount: (paper as unknown[]).length, attempts: attempts.map((a) => ({ id: a.id, candidateId: a.candidateId, status: a.status, result: a.result })) }));
+    return reply.send(jsonSafe({ ...safe, questionCount: (paper as unknown[]).length, attempts: attempts.map((a) => ({
+      id: a.id, candidateId: a.candidateId, status: a.status, result: a.result,
+      // GAP-RECRUITMENT-DETAIL-14: lets the vacancy's results page pick out its own applicants' attempts and
+      // show where each result stands (frozen / published) without one request per attempt.
+      applicationId: a.applicationId ?? null, slotLabel: a.slotLabel ?? null, frozen: a.frozen, published: a.published,
+    })) }));
   });
 
   // ---- attempt assignment (R-RA-0124 randomisation) --------------------

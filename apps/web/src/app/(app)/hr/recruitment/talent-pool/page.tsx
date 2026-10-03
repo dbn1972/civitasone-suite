@@ -1,11 +1,13 @@
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, EmptyState, RefreshErrorState, Button } from "../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState, Button } from "../../../../_components/ds";
 import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { maskEmail } from "@/lib/maskPii";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { TalentPoolTable } from "./TalentPoolTable";
 import {
   TALENT_POOL_PAGE_SIZE, TALENT_POOL_SOURCES, buildTalentPoolPath, candidateHref, hasActiveFilters,
   isEmptyPool, pageQuery, pageWindow, parsePage, parseSource, type TalentPoolParams,
@@ -15,6 +17,8 @@ import {
 // (GET /v1/hrms/talent-pool) -- kept local rather than shared, matching how
 // the backend itself already re-declares this same list per route file.
 const TALENT_POOL_ROLES = ["hr_admin", "hr_officer", "super_admin"];
+// Revealing a past applicant's contact details (audited) is limited to these (the service enforces it again).
+const TALENT_POOL_REVEAL_ROLES = ["hr_admin", "super_admin"];
 
 type Candidate = {
   id: string;
@@ -30,20 +34,21 @@ type Candidate = {
   appliedAt: string;
 } & Record<string, unknown>;
 
-type Pool = { candidates: Candidate[]; total: number };
+type Pool = { candidates: Candidate[]; total: number; purposeNote: string | null };
 
 // GAP-RECRUITMENT-TALENT-POOL-01 (product default, see PR VERIFY): this is the "available pool" -- the
 // API deliberately returns only candidates OFF the active pipeline (rejected / withdrawn / not selected).
 // The page does not request in-pipeline candidates, so there is no "Active Stages" figure to show.
 async function getCandidates(params: TalentPoolParams): Promise<LoaderResult<Pool>> {
-  const res = await fetchJson<unknown, Pool>(buildTalentPoolPath(params), { candidates: [], total: 0 }, {
+  const res = await fetchJson<unknown, Pool>(buildTalentPoolPath(params), { candidates: [], total: 0, purposeNote: null }, {
     telemetryKey: "recruitment.talent_pool",
     mapResponse: (p) => {
       const body = p as Record<string, unknown> | null;
       const d = body?.data;
       if (!Array.isArray(d)) return null;
       const total = typeof body?.total === "number" ? body.total : d.length;
-      return { candidates: d as Candidate[], total };
+      const note = body?.purposeNote;
+      return { candidates: d as Candidate[], total, purposeNote: typeof note === "string" && note.trim() ? note : null };
     },
   });
   return res;
@@ -57,7 +62,8 @@ export default async function TalentPoolPage({
   const t = await getTranslations("recruitmentTalentPool");
   const page = parsePage(searchParams.page);
   const { data: pool, source, status } = await getCandidates(searchParams);
-  const { candidates, total } = pool;
+  const { candidates, total, purposeNote } = pool;
+  const canReveal = getSessionRoles().some((r) => TALENT_POOL_REVEAL_ROLES.includes(r));
 
   // A 403 here is a real, permanent role restriction (talent-pool search
   // spans every candidate across every vacancy tenant-wide, deliberately
@@ -151,6 +157,10 @@ export default async function TalentPoolPage({
         </form>
       </Card>
 
+      {/* GAP-RECRUITMENT-TALENT-POOL-02 (DPDP): purpose and retention of this applicant data. The text is configurable
+          per office in recruitment settings; the default below is a conservative placeholder pending legal sign-off. */}
+      <p role="note" style={{ fontSize: 12, color: "var(--ink2)", margin: "12px 0" }}>{purposeNote ?? t("purposeNoteDefault")}</p>
+
       <Card title={t("candidatesTitle", { count: total })}>
         {source === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "talent pool" })} backHref="/hr/recruitment" />
@@ -165,28 +175,14 @@ export default async function TalentPoolPage({
             action={<Link href="/careers" target="_blank" className="btn ghost">{t("viewPublicCareersPage")}</Link>}
           />
         ) : (
-          <DataTable
-            columns={[
-              { key: "applicantName", label: t("colName") },
-              { key: "email", label: t("colEmail") },
-              { key: "qualification", label: t("colQualification") },
-              { key: "expDisplay", label: t("colExperience"), align: "right" },
-              { key: "skillsDisplay", label: t("colSkills") },
-              { key: "sourceDisplay", label: t("colSource") },
-              { key: "stage", label: t("colStage"), cellType: "status" },
-              { key: "appliedDate", label: t("colApplied") },
-            ]}
+          <TalentPoolTable
             rows={rows}
-            rowLinkKey="href"
-            rowLinkPrefix=""
-            identifyingColumnKey="applicantName"
-            sortable
-            filterable
-        filterPlaceholder={t("filterPlaceholder")}
-          emptyIcon="🧑‍💼"
-          emptyTitle={t("emptyTitleNoCandidates")}
-          emptyMessage={t("emptyMessageNoCandidates")}
-            pageSize={20}
+            canReveal={canReveal}
+            labels={{
+              name: t("colName"), email: t("colEmail"), qualification: t("colQualification"), experience: t("colExperience"),
+              skills: t("colSkills"), source: t("colSource"), stage: t("colStage"), applied: t("colApplied"),
+              filterPlaceholder: t("filterPlaceholder"), emptyTitle: t("emptyTitleNoCandidates"), emptyMessage: t("emptyMessageNoCandidates"),
+            }}
           />
         )}
         {source !== "error" && (total > TALENT_POOL_PAGE_SIZE || page > 1) && (

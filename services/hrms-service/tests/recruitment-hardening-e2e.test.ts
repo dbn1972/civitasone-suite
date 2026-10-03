@@ -63,11 +63,23 @@ beforeAll(async () => {
   await seedHrmsCoreFixtures();
   app = await buildApp();
   db = postgres(process.env.DATABASE_URL ?? "postgres://hrms_svc:hrms_dev_pw@localhost:5435/civitas_hrms", { max: 5 });
+  // This suite exercises the legacy single-step offer shortcut (PATCH .../offer). Since GAP-RECRUITMENT-DETAIL-05 that
+  // shortcut is refused by default (offers must go through the approval workflow), so the tenant opts out here --
+  // the policy itself is covered by its own describe block below.
+  await setOfferWorkflowRequired(false);
 });
 afterAll(async () => {
+  await asTenant((tx) => tx`delete from recruitment.hrms_recruitment_settings where tenant_id = ${TENANT}`);
   await db.end({ timeout: 5 });
   await sqlClient.end();
 });
+
+async function setOfferWorkflowRequired(on: boolean): Promise<void> {
+  await asTenant((tx) => tx`
+    insert into recruitment.hrms_recruitment_settings (tenant_id, updated_by, offer_workflow_required)
+    values (${TENANT}, ${HR}, ${on})
+    on conflict (tenant_id) do update set offer_workflow_required = excluded.offer_workflow_required`);
+}
 
 /** hrms-service tables are FORCE RLS -- every read/write needs app.tenant_id set (see core-seed.ts). */
 async function asTenant<T>(fn: (tx: postgres.TransactionSql) => Promise<T>): Promise<T> {
@@ -360,5 +372,30 @@ describe("Minor-item hardening — FK existence checks before hire", () => {
     expect((await getApplication(applied.id))?.stage).toBe("offered");
     const job = await getJobOpening(jobId);
     expect(job?.vacancies).toBe(1);
+  });
+});
+
+
+describe("GAP-RECRUITMENT-DETAIL-05 — the single-step offer shortcut is refused while the approval workflow is required", () => {
+  it("PATCH .../offer is 409 OFFER_WORKFLOW_REQUIRED by default and writes no offer or stage change; switching the policy off restores it", async () => {
+    const job = await createJobOpening(2);
+    const applied = await applyHrAssisted(job, `${uniq("wf")}@example.com`);
+    const applicationId = applied.body.id as string;
+    await shortlist(applicationId);
+
+    await setOfferWorkflowRequired(true);
+    try {
+      const refused = await offer(applicationId);
+      expect(refused.statusCode).toBe(409);
+      expect(refused.body.code).toBe("OFFER_WORKFLOW_REQUIRED");
+      const [stage] = await asTenant((tx) => tx`select stage from recruitment.hrms_applications where id = ${applicationId}`);
+      expect(stage?.stage).toBe("shortlisted");
+      const offers = await asTenant((tx) => tx`select count(*)::int as n from recruitment.hrms_offers where application_id = ${applicationId}`);
+      expect(offers[0]?.n).toBe(0);
+    } finally {
+      await setOfferWorkflowRequired(false);
+    }
+    const allowed = await offer(applicationId);
+    expect(allowed.statusCode).toBe(202);
   });
 });

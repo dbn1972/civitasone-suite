@@ -13,6 +13,14 @@ vi.mock("../src/shared/context.js", async (io) => ({
   resolveContext: () => ({ tenantId: "aaaaaaaa-0001-4000-8000-00000000a001", roles: ["hr_admin"], userId: "u1" }),
   requireRole: () => undefined,
 }));
+vi.mock("../src/modules/recruitment/settings-repo.js", async (io) => ({
+  ...(await io<Record<string, unknown>>()),
+  getSettings: async () => ({ organisationName: null, departmentName: null, emblemUrl: null, offerWorkflowRequired: true, applicantPurposeNote: "Held for 12 months." }),
+}));
+vi.mock("../src/modules/recruitment/settings-repo.js", async (io) => ({
+  ...(await io<Record<string, unknown>>()),
+  getSettings: async () => ({ organisationName: null, departmentName: null, emblemUrl: null, offerWorkflowRequired: true, applicantPurposeNote: "Held for 12 months." }),
+}));
 vi.mock("../src/modules/recruitment/repo.js", async (io) => ({
   ...(await io<Record<string, unknown>>()),
   searchApplications: (...a: unknown[]) => H.search(...a),
@@ -39,7 +47,11 @@ describe("recruitment routes (h8 batch)", () => {
     expect(res.statusCode).toBe(200);
     expect(res.body).not.toContain("9876543210");
     expect(res.json().data[0]).not.toHaveProperty("mobile");
-    expect(res.json().data[0].email).toBe("asha@example.com");
+    // GAP-RECRUITMENT-TALENT-POOL-02: the full address is not in the payload any more (audited reveal only).
+    expect(res.json().data[0].email).toBe("a***@e***.com");
+    expect(res.json().purposeNote).toBe("Held for 12 months.");
+    expect(res.json().purposeNote).toBe("Held for 12 months.");
+    expect(res.body).not.toContain("asha@example.com");
     await app.close();
   });
 

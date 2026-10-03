@@ -342,12 +342,19 @@ async function proxyHandler(
   return reply.send(nodeStream);
 }
 
+/** ~5 MB file as base64 (x4/3) plus the JSON envelope. Only the careers resume upload route may exceed the global cap. */
+export const CAREERS_RESUME_BODY_LIMIT_BYTES = 7_000_000;
+
 export async function buildApp(): Promise<FastifyInstance> {
   const app = Fastify({
     logger: { level: process.env.LOG_LEVEL ?? "info" },
     // SEC REM-10: hard cap on inbound body size. Prevents memory-exhaustion attacks
     // via large-body requests at 1000 TPS. Default 1MB; tune via GATEWAY_BODY_LIMIT env.
     bodyLimit: Number(process.env.GATEWAY_BODY_LIMIT_BYTES ?? 1_048_576), // 1 MB
+    // req.ip is forwarded upstream as X-Forwarded-For and keys rate limits. Believe an incoming X-Forwarded-For only
+    // from internal peers (the web tier): an external caller hitting the gateway directly cannot choose its own IP.
+    // Deliberately not `true`. (Same list as hrms-service's INTERNAL_PROXY_TRUST.)
+    trustProxy: "loopback,linklocal,uniquelocal",
     genReqId: (req) =>
       (req.headers["x-correlation-id"] as string) ?? randomUUID(),
   });
@@ -629,6 +636,18 @@ export async function buildApp(): Promise<FastifyInstance> {
         },
       },
     },
+    handler: proxyHandler,
+  });
+
+  // GAP-RECRUITMENT-CAREERS-DETAIL-04: the public careers resume upload carries a base64 file of up
+  // to 5 MB (~6.7 MB on the wire), above the 1 MB global cap. Lift the cap for THIS ONE exact path
+  // only; every other route keeps SEC REM-10's limit. The upstream (hrms-service) enforces the real
+  // 5 MB decoded size, type, magic-byte and malware checks and a per-IP rate limit.
+  app.route({
+    method: "POST",
+    url: "/api/v1/careers/resume",
+    bodyLimit: CAREERS_RESUME_BODY_LIMIT_BYTES,
+    config: { rateLimit: {} },
     handler: proxyHandler,
   });
 

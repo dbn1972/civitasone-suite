@@ -206,6 +206,9 @@ describe("LM-002: public lead capture is reachable without a token", () => {
     await app.inject({
       method: "POST",
       url: `/api/v1/crm/public/leads/${FORM_KEY}`,
+      // an external caller reaching the gateway directly (a public peer): the gateway only believes
+      // X-Forwarded-For from internal peers, so its forged hop must still be dropped.
+      remoteAddress: "198.51.100.23",
       headers: { "x-forwarded-for": "1.2.3.4" },
       payload: { name: "Spoofer", consent: true },
     });
@@ -266,6 +269,9 @@ describe("court public case-status lookup is reachable without a token", () => {
     await app.inject({
       method: "POST",
       url: "/api/v1/court/public/case-status/otp",
+      // an external caller reaching the gateway directly (a public peer): the gateway only believes
+      // X-Forwarded-For from internal peers, so its forged hop must still be dropped.
+      remoteAddress: "198.51.100.23",
       headers: { "x-forwarded-for": "1.2.3.4" },
       payload: { mobile: "9876543210" },
     });

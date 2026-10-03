@@ -160,7 +160,7 @@ function LoginFormInner() {
 
   return (
     <div style={{ maxWidth: 420, margin: "0 auto", padding: "0 16px" }}>
-      {/* Header. No sovereign/org claim here: the tenant is not necessarily the Government of India. */}
+      {/* Header. No sovereign/org claim here: the office name comes from the page header (tenant settings). */}
       <div style={{ background: GOV_BLUE, borderRadius: 12, padding: "24px 24px 20px", marginBottom: 20, color: "#fff", textAlign: "center" }}>
         <h1 style={{ margin: "0 0 4px", fontSize: 20, fontWeight: 800 }}>{t("title")}</h1>
         <p style={{ margin: 0, fontSize: 13, color: "#bfdbfe" }}>{t("subtitle")}</p>

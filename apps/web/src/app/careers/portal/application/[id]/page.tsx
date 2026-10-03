@@ -2,6 +2,8 @@ import { cookies } from "next/headers";
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
+import { CareersHeader, careersHeaderProps } from "../../../CareersHeader";
+import { getCareersOrg } from "../../../organisation";
 import { formatIndianDate, todayIST } from "@/lib/formatters";
 import { fetchApplication } from "./fetchApplication";
 import { StageTimeline } from "./StageTimeline";
@@ -42,9 +44,11 @@ export default async function ApplicationDetailPage({ params }: { params: { id: 
   const { job, timeline, applicationNo } = app_;
   // closesAt is a bare calendar date: the vacancy accepts applications through the end of that day (IST).
   const closed = job?.closesAt ? job.closesAt.slice(0, 10) < todayIST() : false;
+  const org = await getCareersOrg();
 
   return (
     <main style={{ minHeight: "100vh", background: "#f0f4f8", paddingBottom: 64 }}>
+      <CareersHeader {...await careersHeaderProps(org)} />
       {/* Header */}
       <div style={{ background: "#154089", padding: "14px 24px" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>

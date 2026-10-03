@@ -2574,6 +2574,9 @@ importers:
       '@civitasone/render':
         specifier: workspace:*
         version: link:../../packages/render
+      '@civitasone/scanner':
+        specifier: workspace:*
+        version: link:../../packages/scanner
       '@civitasone/schemas':
         specifier: workspace:*
         version: link:../../packages/schemas

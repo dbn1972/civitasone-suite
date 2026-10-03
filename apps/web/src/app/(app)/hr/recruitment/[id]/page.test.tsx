@@ -645,34 +645,32 @@ describe("JobOpeningDetailPage — schedule interview (Bug 2)", () => {
   });
 });
 
-// CRITICAL fix (Bug 2): the missing "Send Offer" action that left every
-// shortlisted application dead-ended -- nothing in the UI could move an
-// application past "shortlisted" toward the already-built Hire dialog.
-// Wires the already-hardened PATCH .../offer (PR #1542); no test coverage
-// of the wiring existed before this fix.
-describe("JobOpeningDetailPage — send offer (Bug 2)", () => {
+// GAP-RECRUITMENT-DETAIL-05: "Send Offer" opens the approval-workflow dialog. The old single-field PATCH
+// .../offer skipped maker-checker approval, so the page must never call it.
+describe("JobOpeningDetailPage — offer approval workflow (DETAIL-05)", () => {
   afterEach(() => vi.unstubAllGlobals());
 
   const SHORTLISTED_APP = {
     id: "app-5",
     applicantName: "Meera Iyer",
-    email: "meera@example.com",
+    email: "m***@e***.com",
+    contactMasked: true,
     stage: "shortlisted",
     screeningDecision: "shortlisted",
   };
 
-  function mockShortlistedSequence(offerStatus = 202) {
+  function mockShortlistedSequence(app: Record<string, unknown> = SHORTLISTED_APP) {
     const fn = vi.fn(async (url: string, init?: RequestInit) => {
-      if (url.includes("job-openings?limit=")) {
-        return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
-      }
-      if (url.match(/job-openings\/[^/]+\/applications$/)) {
-        return new Response(JSON.stringify({ data: [SHORTLISTED_APP] }), { status: 200 });
+      if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
+      if (url.match(/job-openings\/[^/]+\/applications$/)) return new Response(JSON.stringify({ data: [app] }), { status: 200 });
+      if (url.match(/applications\/[^/]+\/offers$/) && (init?.method ?? "GET") === "GET") return new Response(JSON.stringify({ data: [] }), { status: 200 });
+      if (url.match(/applications\/[^/]+\/offers$/) && init?.method === "POST") {
+        (fn as FetchMock).lastOfferBody = JSON.parse(String(init?.body ?? "{}"));
+        return new Response(JSON.stringify({ id: "o-1", status: "draft" }), { status: 201 });
       }
       if (url.match(/applications\/[^/]+\/offer$/)) {
-        const body = JSON.parse(String(init?.body ?? "{}"));
-        (fn as FetchMock).lastOfferBody = body;
-        return new Response(JSON.stringify({}), { status: offerStatus });
+        (fn as FetchMock).lastOfferBody = { legacyPatchCalled: true };
+        return new Response(JSON.stringify({}), { status: 202 });
       }
       return new Response(JSON.stringify({}), { status: 404 });
     });
@@ -680,71 +678,112 @@ describe("JobOpeningDetailPage — send offer (Bug 2)", () => {
     return fn;
   }
 
-  async function openSendOfferDialog() {
+  async function openOfferDialog(menuItem = "Send Offer") {
     await screen.findByText("Meera Iyer");
     const row = screen.getByText("Meera Iyer").closest("div.px-5") as HTMLElement;
     fireEvent.click(within(row).getByRole("button", { name: /application actions/i }));
-    fireEvent.click(within(row).getByRole("menuitem", { name: "Send Offer" }));
+    fireEvent.click(within(row).getByRole("menuitem", { name: menuItem }));
     return { dialog: await screen.findByRole("dialog"), row };
   }
 
-  it("PATCHes .../offer with the CTC converted to paise, shows the sent confirmation, and moves the application to 'offered' (Mark Joined becomes available)", async () => {
+  it("creates a DRAFT offer through POST .../offers with basic pay in exact paise, pay level and cell -- never the PATCH shortcut", async () => {
     const fetchMock = mockShortlistedSequence();
     renderPage();
-    const { dialog, row } = await openSendOfferDialog();
-
-    fireEvent.change(within(dialog).getByLabelText(/ctc/i), { target: { value: "600000" } });
-    fireEvent.click(within(dialog).getByRole("button", { name: "Send Offer" }));
-
+    const { dialog } = await openOfferDialog();
+    fireEvent.change(await within(dialog).findByLabelText(/pay level/i), { target: { value: "10" } });
+    fireEvent.change(within(dialog).getByLabelText(/^cell/i), { target: { value: "3" } });
+    fireEvent.change(within(dialog).getByLabelText(/basic pay/i), { target: { value: "56100.5" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Create draft offer" }));
     await waitFor(() => expect((fetchMock as FetchMock).lastOfferBody).toBeTruthy());
-    const body = (fetchMock as FetchMock).lastOfferBody as Record<string, unknown>;
-    expect(body.ctcMinor).toBe(60000000);
-    expect(body.currency).toBe("INR");
-
-    expect(await within(dialog).findByText("Offer sent.")).toBeInTheDocument();
-    fireEvent.click(within(dialog).getByRole("button", { name: "Done" }));
-
-    // Optimistic stage update: reopening the row's menu now shows the
-    // "offered" bucket's actions (Mark Joined, disabled) instead of
-    // Schedule Interview / Send Offer.
-    fireEvent.click(within(row).getByRole("button", { name: /application actions/i }));
-    expect(within(row).getByRole("menuitem", { name: "Mark Joined" })).toBeDisabled();
+    expect((fetchMock as FetchMock).lastOfferBody).toEqual({ basicMinor: 5610050, payLevel: 10, payCell: 3 });
+    expect(await within(dialog).findByText("Draft offer created.")).toBeInTheDocument();
   });
 
-  it("does not submit, and shows a required-fields message, for a zero or invalid CTC", async () => {
+  it("rejects a sub-paise basic pay and sends nothing", async () => {
     const fetchMock = mockShortlistedSequence();
     renderPage();
-    const { dialog } = await openSendOfferDialog();
-
-    fireEvent.change(within(dialog).getByLabelText(/ctc/i), { target: { value: "0" } });
-    // fireEvent.submit on the form directly, not a button click: the input
-    // carries a `min="1"` HTML5 constraint, and clicking a submit button
-    // with an out-of-range value never reaches React's onSubmit in jsdom
-    // (native constraint validation blocks it first). Submitting the form
-    // directly is what actually exercises the component's own guard
-    // (ctcMinor <= 0), same as the schedule-interview test above.
-    fireEvent.submit(within(dialog).getByRole("button", { name: "Send Offer" }).closest("form") as HTMLFormElement);
-
-    expect(await within(dialog).findByText(/enter a valid ctc/i)).toBeInTheDocument();
+    const { dialog } = await openOfferDialog();
+    fireEvent.change(await within(dialog).findByLabelText(/basic pay/i), { target: { value: "1.005" } });
+    fireEvent.submit(within(dialog).getByRole("button", { name: "Create draft offer" }).closest("form") as HTMLFormElement);
+    expect(await within(dialog).findByText(/basic pay greater than zero/i)).toBeInTheDocument();
     expect((fetchMock as FetchMock).lastOfferBody).toBeUndefined();
   });
 
-  // GAP-RECRUITMENT-DETAIL-05: exact rupee-string parsing, no float multiply, sub-paise rejected.
-  it.each([["56100.5", 5610050], ["1,00,000", null], ["1.005", null], ["-5", null], ["abc", null]])(
-    "CTC %j converts to %j paise",
-    async (typed, expected) => {
-      const fetchMock = mockShortlistedSequence();
-      renderPage();
-      const { dialog } = await openSendOfferDialog();
-      fireEvent.change(within(dialog).getByLabelText(/ctc/i), { target: { value: typed } });
-      fireEvent.submit(within(dialog).getByRole("button", { name: "Send Offer" }).closest("form") as HTMLFormElement);
-      if (expected === null) {
-        expect(await within(dialog).findByText(/enter a valid ctc/i)).toBeInTheDocument();
-        expect((fetchMock as FetchMock).lastOfferBody).toBeUndefined();
-      } else {
-        await waitFor(() => expect((fetchMock as FetchMock).lastOfferBody).toBeTruthy());
-        expect(((fetchMock as FetchMock).lastOfferBody as Record<string, unknown>).ctcMinor).toBe(expected);
+  it("an application already 'offered' offers Manage offer, not a second Send Offer", async () => {
+    mockShortlistedSequence({ ...SHORTLISTED_APP, stage: "offered" });
+    renderPage();
+    await screen.findByText("Meera Iyer");
+    const row = screen.getByText("Meera Iyer").closest("div.px-5") as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: /application actions/i }));
+    expect(within(row).getByRole("menuitem", { name: "Manage offer" })).toBeInTheDocument();
+    expect(within(row).queryByRole("menuitem", { name: "Send Offer" })).not.toBeInTheDocument();
+  });
+});
+
+describe("JobOpeningDetailPage — applicant privacy and sub-pages (DETAIL-08 / -13 / -14)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  const MASKED_APP = {
+    id: "app-7", applicationNo: "APP-2026-000007", applicantName: "Asha Verma", email: "a***@e***.com", mobile: "******3210",
+    contactMasked: true, category: "sc", hasResume: true, qualification: "B.Com", stage: "applied", screeningDecision: "pending",
+  };
+
+  function mockMasked() {
+    const fn = vi.fn(async (url: string) => {
+      if (url.includes("job-openings?limit=")) return new Response(JSON.stringify({ data: [OPENING] }), { status: 200 });
+      if (url.match(/job-openings\/[^/]+\/applications$/)) return new Response(JSON.stringify({ data: [MASKED_APP] }), { status: 200 });
+      if (url.match(/job-openings\/[^/]+\/blind-list$/)) {
+        // the service withholds name / contact / category / resume entirely
+        return new Response(JSON.stringify({ data: [{ id: "app-7", applicationNo: "APP-2026-000007", qualification: "B.Com", stage: "applied", screeningDecision: "pending" }] }), { status: 200 });
       }
-    },
-  );
+      return new Response(JSON.stringify({}), { status: 404 });
+    });
+    vi.stubGlobal("fetch", fn);
+    return fn;
+  }
+
+  it("renders the service-masked contact details with a Reveal control (the raw address is never in the page)", async () => {
+    mockMasked();
+    renderPage();
+    await screen.findByText("Asha Verma");
+    expect(screen.getByTestId("contact-app-7")).toHaveTextContent("a***@e***.com · ******3210");
+    expect(screen.getByRole("button", { name: /reveal contact details for asha verma/i })).toBeInTheDocument();
+    expect(document.body.textContent).not.toContain("asha@example.com");
+  });
+
+  it("shows the self-declared category as unverified, and a resume link", async () => {
+    mockMasked();
+    renderPage();
+    expect(await screen.findByText(/category: SC \(self-declared, not yet verified\)/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "View resume" })).toBeInTheDocument();
+  });
+
+  it("blind screening loads the redacted list: no name or contact in the payload, the application number stands in", async () => {
+    const fn = mockMasked();
+    renderPage();
+    await screen.findByText("Asha Verma");
+    fireEvent.click(screen.getByRole("switch", { name: /blind screening: off/i }));
+    expect(await screen.findByText("APP-2026-000007")).toBeInTheDocument();
+    expect(screen.queryByText("Asha Verma")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("contact-app-7")).not.toBeInTheDocument();
+    expect(fn.mock.calls.some(([u]) => String(u).endsWith("/job-openings/job-1/blind-list"))).toBe(true);
+    expect(screen.getByRole("switch", { name: /blind screening: on/i })).toHaveAttribute("aria-checked", "true");
+  });
+
+  it("searching no longer matches the (masked) email", async () => {
+    mockMasked();
+    renderPage();
+    await screen.findByText("Asha Verma");
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "a***@e***" } });
+    expect(await screen.findByText(/no applications match/i)).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "APP-2026-000007" } });
+    expect(await screen.findByText("Asha Verma")).toBeInTheDocument();
+  });
+
+  it("links to the selection lists and the results / admit cards sub-pages", async () => {
+    mockMasked();
+    renderPage();
+    expect(await screen.findByRole("link", { name: "Selection lists" })).toHaveAttribute("href", "/hr/recruitment/job-1/selection");
+    expect(screen.getByRole("link", { name: "Results and admit cards" })).toHaveAttribute("href", "/hr/recruitment/job-1/results");
+  });
 });

@@ -8,6 +8,8 @@ export const hrmsReservationRosters = recruitmentSchema.table("hrms_reservation_
   totalVacancies:    integer("total_vacancies").notNull(),
   categoryVacancies: jsonb("category_vacancies").$type<Record<string, number>>().notNull().default({}),
   locationRosters:   jsonb("location_rosters").$type<Record<string, Record<string, number>>>().notNull().default({}),
+  // Horizontal reservations (PwBD / ex-servicemen / women) sanctioned for the post (migration 0180).
+  horizontalVacancies: jsonb("horizontal_vacancies").$type<Record<string, number>>().notNull().default({}),
   status:            varchar("status", { length: 16 }).notNull().default("draft"),
   approvedBy:        uuid("approved_by"),
   approvedAt:        timestamp("approved_at", { withTimezone: true }),

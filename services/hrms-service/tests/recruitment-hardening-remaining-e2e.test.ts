@@ -468,9 +468,10 @@ describe("MEDIUM — talent pool defaults to excluding active-pipeline stages", 
 
     const r = await app.inject({ method: "GET", url: "/v1/hrms/talent-pool?limit=200", headers: auth() });
     expect(r.statusCode).toBe(200);
-    const emails = (r.json().data as Array<{ email: string }>).map((c) => c.email);
-    expect(emails).not.toContain(activeEmail);
-    expect(emails).toContain(availableEmail);
+    // GAP-RECRUITMENT-TALENT-POOL-02: emails are masked in this payload, so rows are identified by application id.
+    const ids = (r.json().data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).not.toContain(activeApp);
+    expect(ids).toContain(availableApp);
   });
 
   it("includeActive=true restores the full unfiltered (pre-fix) view", async () => {
@@ -481,8 +482,8 @@ describe("MEDIUM — talent pool defaults to excluding active-pipeline stages", 
 
     const r = await app.inject({ method: "GET", url: "/v1/hrms/talent-pool?limit=200&includeActive=true", headers: auth() });
     expect(r.statusCode).toBe(200);
-    const emails = (r.json().data as Array<{ email: string }>).map((c) => c.email);
-    expect(emails).toContain(activeEmail);
+    const ids = (r.json().data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(activeApp);
   });
 
   it("an explicit stage filter returns only that stage, overriding the default", async () => {
@@ -493,8 +494,9 @@ describe("MEDIUM — talent pool defaults to excluding active-pipeline stages", 
 
     const r = await app.inject({ method: "GET", url: "/v1/hrms/talent-pool?limit=200&stage=shortlisted", headers: auth() });
     expect(r.statusCode).toBe(200);
-    const emails = (r.json().data as Array<{ email: string }>).map((c) => c.email);
-    expect(emails).toContain(email);
+    const ids = (r.json().data as Array<{ id: string }>).map((c) => c.id);
+    expect(ids).toContain(appId);
+    expect(r.body).not.toContain(email); // the full address is not in the talent-pool payload
   });
 });
 

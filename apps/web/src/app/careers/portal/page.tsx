@@ -4,6 +4,8 @@ import Link from "next/link";
 import { CAREERS_ACTIVE, CAREERS_MUTED, CAREERS_PRIMARY, SR_ONLY } from "../theme";
 import { RAIL_STEPS, stageInfo } from "./stages";
 import { PAGE_SIZE, clampPage, pageRedirectTarget } from "./paging";
+import { CareersHeader, careersHeaderProps } from "../CareersHeader";
+import { getCareersOrg } from "../organisation";
 
 const GATEWAY = (process.env.CIVITASONE_API_BASE_URL ?? process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080").replace(/\/$/, "");
 const TENANT_ID = process.env.DEMO_TENANT_ID ?? process.env.NEXT_PUBLIC_DEMO_TENANT_ID ?? "";
@@ -76,9 +78,12 @@ export default async function PortalPage({ searchParams }: { searchParams?: { pa
   // Past the last page: go to the last page, not "No applications yet".
   const target = pageRedirectTarget(result, page);
   if (target) redirect(target);
+  // Read after the applications, so the primary request stays the first one made.
+  const org = await getCareersOrg();
 
   return (
     <main style={{ minHeight: "100vh", background: "#f0f4f8", paddingBottom: 64 }}>
+      <CareersHeader {...await careersHeaderProps(org)} />
       {/* Header */}
       <div style={{ background: CAREERS_PRIMARY, padding: "16px 24px", display: "flex", alignItems: "center", gap: 12 }}>
         <Link href="/careers" style={{ color: "#bfdbfe", fontSize: 13, textDecoration: "none" }}>← Vacancies</Link>

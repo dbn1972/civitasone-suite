@@ -8,10 +8,12 @@ import { ApplicationPipeline } from "../_components/ApplicationPipeline";
 import { GOIReservationCard, ROSTER_CATEGORIES, categoryOfApplication, type RosterCategory } from "../_components/GOIReservationCard";
 import { InterviewCard } from "../_components/InterviewCard";
 import { VacancyNotificationPanel } from "../_components/VacancyNotificationPanel";
+import { ContactReveal } from "../_components/ContactReveal";
+import { OfferWorkflowDialog } from "./_components/OfferWorkflowDialog";
+import { ApplicationFeeDialog } from "./_components/ApplicationFeeDialog";
 import { ConfirmDialog, ErrorState, useConfirmAction, Button, EntityPicker, StatusPill } from "../../../../_components/ds";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 import { formatIndianDate, formatIndianDateTime, todayIST } from "@/lib/formatters";
-import { rupeesToMinorString } from "@/lib/money";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 import { REJECTION_REASON_CODES, isVacancyType, type RejectionReasonCode } from "@/lib/recruitment";
@@ -38,7 +40,13 @@ type JobOpening = {
 
 type Application = {
   id: string;
+  /** Human-readable reference; also the only identifier shown in blind-screening mode. */
+  applicationNo?: string | null;
   applicantName: string;
+  /** True when the service sent email/mobile already masked (the default). */
+  contactMasked?: boolean;
+  /** An uploaded resume exists (GAP-RECRUITMENT-CAREERS-DETAIL-04); opened through an audited link. */
+  hasResume?: boolean;
   email?: string;
   mobile?: string;
   qualification?: string;
@@ -99,7 +107,7 @@ type ActionDef = {
   /** Present for actions that need a real multi-field form (a single reason
    *  string, which is all ConfirmDialog collects, isn't enough) — opens one
    *  of the custom dialogs below instead of calling onAction directly. */
-  dialog?: "interview" | "offer";
+  dialog?: "interview" | "offer" | "fee";
 };
 
 const INTERVIEW_MODES = ["video", "in_person", "phone"] as const;
@@ -284,115 +292,24 @@ function ScheduleInterviewDialog({
   );
 }
 
-export type SendOfferPayload = { ctcMinor: number; currency: string; joiningDate?: string };
-
-/**
- * CRITICAL fix (Bug 2): real form for "Send Offer" — the missing link that
- * previously left every shortlisted application dead-ended (no UI path ever
- * moved stage away from "shortlisted", so the Hire dialog on the application
- * detail page — already fully built — could never become reachable). Calls
- * the already-hardened PATCH /v1/hrms/applications/:id/offer (PR #1542).
- */
-function SendOfferDialog({
-  applicantName,
-  onSubmit,
-  onClose,
-}: {
-  applicantName: string;
-  onSubmit: (payload: SendOfferPayload) => Promise<void>;
-  onClose: () => void;
-}) {
-  const t = useTranslations("recruitmentDetail");
-  const [ctcRupees, setCtcRupees] = useState("");
-  const [joiningDate, setJoiningDate] = useState("");
-  const [status, setStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
-  const [message, setMessage] = useState("");
-  const fieldId = useId();
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    // GAP-RECRUITMENT-DETAIL-05: exact decimal parse (no float multiply); sub-paise input is rejected.
-    const minor = rupeesToMinorString(ctcRupees);
-    const ctcMinor = minor === null ? Number.NaN : Number(minor);
-    if (!Number.isSafeInteger(ctcMinor) || ctcMinor <= 0) {
-      setStatus("error");
-      setMessage(t("sendOfferFieldsRequired"));
-      return;
-    }
-    setStatus("submitting");
-    setMessage("");
-    try {
-      await onSubmit({ ctcMinor, currency: "INR", joiningDate: joiningDate || undefined });
-      setStatus("success");
-    } catch (err) {
-      setStatus("error");
-      setMessage(err instanceof Error ? err.message : t("actionFailed"));
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" role="dialog" aria-modal="true" aria-labelledby={`${fieldId}-title`}>
-      <div className="w-full max-w-sm mx-4 rounded-xl bg-white dark:bg-gray-900 p-6 shadow-2xl">
-        <h2 id={`${fieldId}-title`} className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">
-          {t("sendOfferDialogTitle", { name: applicantName })}
-        </h2>
-
-        {status === "success" ? (
-          <div className="mt-3 flex flex-col gap-3">
-            <p className="text-sm text-emerald-600 dark:text-emerald-400">{t("offerSentMessage")}</p>
-            <Button onClick={onClose} style={{ alignSelf: "flex-end" }}>{t("dialogDone")}</Button>
-          </div>
-        ) : (
-          <form onSubmit={handleSubmit} className="mt-3 flex flex-col gap-3">
-            <div>
-              <label htmlFor={`${fieldId}-ctc`} className={dialogLabelClass}>{t("ctc")}</label>
-              <input
-                id={`${fieldId}-ctc`} type="text" inputMode="decimal" className={dialogInputClass}
-                placeholder={t("ctcPlaceholder")} value={ctcRupees} onChange={(e) => setCtcRupees(e.target.value)} required
-              />
-            </div>
-            <div>
-              <label htmlFor={`${fieldId}-joining`} className={dialogLabelClass}>{t("joiningDateOptional")}</label>
-              <input
-                id={`${fieldId}-joining`} type="date" className={dialogInputClass}
-                value={joiningDate} onChange={(e) => setJoiningDate(e.target.value)}
-              />
-            </div>
-
-            {status === "error" && message && (
-              <p role="alert" className="text-xs text-red-600 dark:text-red-400">{message}</p>
-            )}
-
-            <div className="flex justify-end gap-2 mt-1">
-              <button type="button" onClick={onClose} className="rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 px-4 py-2 text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
-                {t("dialogCancel")}
-              </button>
-              <button type="submit" disabled={status === "submitting"} className="rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white hover:bg-indigo-500 disabled:opacity-50">
-                {status === "submitting" ? t("sendingOffer") : t("actionSendOffer")}
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
-    </div>
-  );
-}
-
 function ContextMenu({
   app,
   jobTitle,
   onAction,
+  onOfferChanged,
   actionState,
 }: {
   app: Application;
   jobTitle: string;
   onAction: (appId: string, key: string, payload?: unknown) => Promise<void>;
+  /** An offer moved through the approval workflow: re-read the inbox (a release moves the stage to "offered"). */
+  onOfferChanged: () => void;
   actionState: "idle" | "submitting" | "done" | "error";
 }) {
   const t = useTranslations("recruitmentDetail");
   const [open, setOpen] = useState(false);
   const [pendingAction, setPendingAction] = useState<ActionDef | null>(null);
-  const [activeDialog, setActiveDialog] = useState<"interview" | "offer" | null>(null);
+  const [activeDialog, setActiveDialog] = useState<"interview" | "offer" | "fee" | null>(null);
   const [rejectCode, setRejectCode] = useState<RejectionReasonCode | "">("");
   const rejectCodeSelectId = useId();
   const ref = useRef<HTMLDivElement>(null);
@@ -417,6 +334,7 @@ function ContextMenu({
   const STAGE_ACTIONS: Record<string, ActionDef[]> = {
     applied: [
       { label: t("actionShortlist"), key: "shortlist", variant: "primary" },
+      { label: t("actionFee"),       key: "fee",       variant: "ghost",   dialog: "fee" },
       { label: t("actionReject"),    key: "reject",    variant: "danger", confirm: REJECT_CONFIRM },
     ],
     shortlisted: [
@@ -428,13 +346,16 @@ function ContextMenu({
       // (below) backed by already-built, already-hardened endpoints.
       { label: t("actionScheduleInterview"), key: "schedule_interview", variant: "primary", dialog: "interview" },
       { label: t("actionSendOffer"),         key: "send_offer",         variant: "primary", dialog: "offer" },
+      { label: t("actionFee"),               key: "fee",                variant: "ghost",   dialog: "fee" },
       { label: t("actionReject"),            key: "reject",             variant: "danger", confirm: REJECT_CONFIRM },
     ],
     selected: [
+      { label: t("actionManageOffer"), key: "manage_offer", variant: "primary", dialog: "offer" },
       { label: t("actionMarkJoined"), key: "mark_joined", variant: "primary", disabled: true, disabledReason: t("actionMarkJoinedDisabledReason") },
       { label: t("actionWithdraw"),   key: "withdraw",    variant: "danger", confirm: WITHDRAW_CONFIRM },
     ],
     offered: [
+      { label: t("actionManageOffer"), key: "manage_offer", variant: "primary", dialog: "offer" },
       { label: t("actionMarkJoined"), key: "mark_joined", variant: "primary", disabled: true, disabledReason: t("actionMarkJoinedDisabledReason") },
       { label: t("actionWithdraw"),   key: "withdraw",    variant: "danger", confirm: WITHDRAW_CONFIRM },
     ],
@@ -606,9 +527,17 @@ function ContextMenu({
         />
       )}
       {activeDialog === "offer" && (
-        <SendOfferDialog
+        <OfferWorkflowDialog
+          applicationId={app.id}
           applicantName={app.applicantName}
-          onSubmit={(payload) => onAction(app.id, "send_offer", payload)}
+          onChanged={onOfferChanged}
+          onClose={() => setActiveDialog(null)}
+        />
+      )}
+      {activeDialog === "fee" && (
+        <ApplicationFeeDialog
+          applicationId={app.id}
+          applicantName={app.applicantName}
           onClose={() => setActiveDialog(null)}
         />
       )}
@@ -659,6 +588,17 @@ export default function JobOpeningDetailPage() {
     return { hiredByCategory, categoryDataAvailable, totalVacancies };
   }, [applications, opening?.vacancies, appsLoadError]);
   const [decisionStates, setDecisionStates] = useState<DecisionState>({});
+  // Screened-eligible pool for the card's reservation shortlist (never offered in blind mode).
+  const shortlistPool = useMemo(
+    () => applications
+      .filter((a) => a.screeningDecision === "eligible" || a.screeningDecision === "shortlisted")
+      .map((a) => ({ id: a.id, label: a.applicantName, category: a.category })),
+    [applications],
+  );
+  // GAP-RECRUITMENT-DETAIL-08: blind screening loads the service's redacted list (no name, contact,
+  // category or resume in the payload at all), so what is hidden here was never sent to the browser.
+  const [blind, setBlind] = useState(false);
+  const [resumeError, setResumeError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState("all");
   // Guards the "shortlist all pending" quick action below: without it,
@@ -712,16 +652,19 @@ export default function JobOpeningDetailPage() {
   const loadApplications = useCallback(async (signal?: AbortSignal) => {
     setAppsLoadError(false);
     try {
-      const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/applications`, { signal });
+      const res = await fetch(`/api/proxy/v1/hrms/job-openings/${id}/${blind ? "blind-list" : "applications"}`, { signal });
       if (!res.ok) { setAppsLoadError(true); return; }
       const data = await res.json() as { data?: Application[] };
-      setApplications(data.data ?? []);
+      // Blind rows carry no name: show the application reference instead (never invent a name).
+      setApplications((data.data ?? []).map((a, i) => blind
+        ? { ...a, applicantName: a.applicationNo ?? t("blindCandidate", { n: i + 1 }), email: undefined, mobile: undefined, category: undefined }
+        : a));
     } catch (e) {
       if (!(e instanceof Error && e.name === "AbortError")) setAppsLoadError(true);
     } finally {
       setLoadingApps(false);
     }
-  }, [id]);
+  }, [id, blind, t]);
 
   // GAP-RECRUITMENT-DETAIL-02: scheduling an interview does not move the application's stage, so the
   // inbox shows the scheduled slot from the interviews list instead.
@@ -757,6 +700,25 @@ export default function JobOpeningDetailPage() {
     }, QUEUED_RELOAD_MS);
   }, [loadApplications, loadInterviews]);
 
+  // GAP-RECRUITMENT-DETAIL-08: open the applicant's resume through the audited short-lived link.
+  const openResume = useCallback(async (appId: string) => {
+    setResumeError(null);
+    try {
+      const res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/resume-link`);
+      if (!res.ok) { setResumeError(t("resumeLinkFailed")); return; }
+      const j = await res.json() as { data?: { url?: string } };
+      if (!j.data?.url || !/^https:\/\//i.test(j.data.url)) { setResumeError(t("resumeLinkFailed")); return; }
+      window.open(j.data.url, "_blank", "noopener,noreferrer");
+    } catch {
+      setResumeError(t("resumeLinkFailed"));
+    }
+  }, [t]);
+
+  const toggleBlind = useCallback(() => {
+    setLoadingApps(true);
+    setBlind((b) => !b);
+  }, []);
+
   // The soonest confirmed (status scheduled) slot per application, for the inbox hint.
   const nextInterviewByApp = useMemo(() => {
     const m = new Map<string, string>();
@@ -772,9 +734,9 @@ export default function JobOpeningDetailPage() {
 
   const handleAction = useCallback(async (appId: string, actionKey: string, payload?: unknown) => {
     // withdraw's only ever payload is an optional reason string; schedule_interview
-    // / send_offer pass a structured object instead (see ScheduleInterviewPayload /
-    // SendOfferPayload above) — narrow per-branch below rather than widening every
-    // call site to the union.
+    // passes a structured object instead (see ScheduleInterviewPayload above) —
+    // narrow per-branch below rather than widening every call site to the union.
+    // Offers no longer go through here: the approval workflow has its own dialog.
     const reason = typeof payload === "string" ? payload : undefined;
     setDecisionStates((s) => ({ ...s, [appId]: "submitting" }));
     try {
@@ -827,25 +789,6 @@ export default function JobOpeningDetailPage() {
           body: JSON.stringify({ jobOpeningId: id, applicationId: appId, ...p }),
         });
         if (res.ok) reloadAfterQueuedWrite();
-      } else if (actionKey === "send_offer") {
-        // CRITICAL fix (Bug 2): real caller for the already-hardened PATCH
-        // .../offer (PR #1542) — this is the actual missing link. Nothing in
-        // the UI previously called this endpoint from "shortlisted", so no
-        // application could ever reach "offered"/"selected" (the only stages
-        // the Hire endpoint — and the already-built Hire dialog on the
-        // application detail page — accept). Optimistic stage update below
-        // mirrors this same function's existing shortlist/reject/withdraw
-        // convention for this endpoint family, which is async (202 Accepted,
-        // queued through commands.offerApplication -> consumer.ts).
-        const p = payload as SendOfferPayload;
-        res = await fetch(`/api/proxy/v1/hrms/applications/${appId}/offer`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(p),
-        });
-        if (res.ok) {
-          setApplications((prev) => prev.map((a) => a.id === appId ? { ...a, stage: "offered" } : a));
-        }
       } else {
         // Unimplemented action — no-op
         setDecisionStates((s) => ({ ...s, [appId]: "idle" }));
@@ -890,7 +833,7 @@ export default function JobOpeningDetailPage() {
   // queued through the same publishF3Write path this file's sibling
   // advertisement/extend/cancel actions already use) — optimistic update
   // here matches this page's own existing convention for that same class of
-  // endpoint (see handleAction's shortlist/send_offer branches above).
+  // endpoint (see handleAction's shortlist branch above).
   const handleTogglePublish = useCallback(async () => {
     if (!opening) return;
     const target = !(opening.isPublished === true || opening.isPublished === "true");
@@ -965,7 +908,7 @@ export default function JobOpeningDetailPage() {
     const q = search.toLowerCase();
     const matchesSearch = !q
       || a.applicantName.toLowerCase().includes(q)
-      || (a.email ?? "").toLowerCase().includes(q)
+      || (a.applicationNo ?? "").toLowerCase().includes(q)
       || (a.qualification ?? "").toLowerCase().includes(q)
       || (a.skills ?? []).some((s) => s.toLowerCase().includes(q));
     const matchesStage = stageFilter === "all" || a.stage === stageFilter;
@@ -1014,6 +957,10 @@ export default function JobOpeningDetailPage() {
             {opening.jobTitle}
           </h1>
           <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">{opening.refNo ? `${opening.refNo} · ` : ""}{opening.department ?? "—"}</p>
+          <nav aria-label={t("subpagesNav")} className="mt-2 flex flex-wrap gap-3 text-xs">
+            <Link href={`/hr/recruitment/${id}/selection`} className="text-indigo-600 dark:text-indigo-400 hover:underline">{t("linkSelectionLists")}</Link>
+            <Link href={`/hr/recruitment/${id}/results`} className="text-indigo-600 dark:text-indigo-400 hover:underline">{t("linkResults")}</Link>
+          </nav>
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex items-center gap-2">
@@ -1070,6 +1017,7 @@ export default function JobOpeningDetailPage() {
         totalVacancies={opening.vacancies}
         hiredByCategory={reservation.hiredByCategory}
         categoryDataAvailable={reservation.categoryDataAvailable}
+        candidates={blind || appsLoadError ? undefined : shortlistPool}
       />
 
       {/* ── Application Pipeline tracker ── */}
@@ -1093,6 +1041,16 @@ export default function JobOpeningDetailPage() {
             )}
           </h2>
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              role="switch"
+              aria-checked={blind}
+              onClick={toggleBlind}
+              title={t("blindHelp")}
+              className={`rounded-lg border px-3 py-1.5 text-xs font-medium ${blind ? "border-indigo-300 bg-indigo-50 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-300" : "border-slate-200 dark:border-slate-700 bg-white dark:bg-gray-900 text-slate-600 dark:text-slate-300"}`}
+            >
+              {blind ? t("blindOn") : t("blindOff")}
+            </button>
             <label htmlFor={searchId} className="sr-only">{t("searchApplicants")}</label>
             <input
               id={searchId}
@@ -1114,6 +1072,7 @@ export default function JobOpeningDetailPage() {
           </div>
         </div>
 
+        {resumeError && <p role="alert" className="px-5 py-2 text-xs text-red-600 dark:text-red-400">{resumeError}</p>}
         {loadingApps ? (
           <div className="px-5 py-10 text-center text-slate-500 dark:text-slate-400 text-sm">{t("loadingApplications")}</div>
         ) : appsLoadError ? (
@@ -1152,9 +1111,27 @@ export default function JobOpeningDetailPage() {
                       >
                         {app.applicantName}
                       </Link>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
-                        {app.email}{app.mobile ? ` · ${app.mobile}` : ""}
-                      </p>
+                      {blind ? (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{t("blindRowHint")}</p>
+                      ) : (
+                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                          {app.contactMasked === false ? (
+                            <span>{app.email}{app.mobile ? ` · ${app.mobile}` : ""}</span>
+                          ) : (
+                            <ContactReveal applicationId={app.id} applicantName={app.applicantName} email={app.email} mobile={app.mobile} scope="inbox" />
+                          )}
+                        </p>
+                      )}
+                      {!blind && app.category?.trim() && (
+                        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
+                          {t("categoryClaim", { category: app.category.trim().toUpperCase() })}
+                        </p>
+                      )}
+                      {!blind && app.hasResume && (
+                        <button type="button" className="text-xs text-indigo-600 dark:text-indigo-400 underline mt-1" onClick={() => void openResume(app.id)}>
+                          {t("viewResume")}
+                        </button>
+                      )}
                       {app.qualification && (
                         <p className="text-xs text-slate-600 dark:text-slate-300 mt-1">
                           {app.qualification}{app.experienceYears != null ? ` · ${t("yearsExpSuffix", { count: app.experienceYears })}` : ""}
@@ -1190,6 +1167,7 @@ export default function JobOpeningDetailPage() {
                         app={app}
                         jobTitle={opening.jobTitle}
                         onAction={handleAction}
+                        onOfferChanged={reloadAfterQueuedWrite}
                         actionState={ds}
                       />
                     </div>

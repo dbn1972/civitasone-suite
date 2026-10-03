@@ -16,6 +16,7 @@ import { registerRecruitmentEOfficeConsumers } from "./modules/recruitment/eoffi
 import { registerLeaveConsumers }      from "./modules/leave/consumer.js";
 import { registerAttendanceConsumers } from "./modules/attendance/consumer.js";
 import { registerRecruitmentConsumers } from "./modules/recruitment/consumer.js";
+import { registerRecruitmentFinishConsumers } from "./modules/recruitment/finish-consumer.js";
 import { registerLifecycleMutationConsumers } from "./modules/lifecycle/consumer.js";
 import { registerLoanConsumers } from "./modules/employee/loans-consumer.js";
 import { registerF3LeftoverAll } from "./modules/f3-leftover-register.js";
@@ -96,6 +97,7 @@ registerLeaveConsumers(queue);
 registerLeaveSpecialEOfficeConsumers(queue);
 registerAttendanceConsumers(queue);
 registerRecruitmentConsumers(queue);
+registerRecruitmentFinishConsumers(queue);
 registerRecruitmentEOfficeConsumers(queue);
 registerTrainingConsumers(queue);
 registerF3LeftoverAll(queue);

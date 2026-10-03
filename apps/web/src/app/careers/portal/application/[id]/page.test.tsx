@@ -3,8 +3,8 @@
  * vacancy panel. The page is an async server component, so it is invoked directly with its framework seams mocked.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen } from "@testing-library/react";
-import { createTranslator } from "next-intl";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider, createTranslator } from "next-intl";
 import enMessages from "@/messages/en.json";
 
 const H = vi.hoisted(() => ({ cookie: "" as string | undefined }));
@@ -19,6 +19,13 @@ vi.mock("next-intl/server", () => ({
 }));
 
 import ApplicationDetailPage from "./page";
+
+
+// The page chrome includes the language switcher (a client component), so renders need the intl provider the
+// root layout supplies in production.
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 const token = `${Buffer.from(JSON.stringify({ tenantId: "t-1" })).toString("base64url")}.sig`;
 const base = {
