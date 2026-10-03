@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { NOTIFICATION_SEND, buildNotificationPayload } from "@civitasone/events";
 import type { Queue } from "@civitasone/queue";
 import { pino } from "pino";
 import { db } from "../../shared/db.js";
@@ -54,6 +55,7 @@ import * as scoringRepo from "./interview-scoring-repo.js";
 import * as offerRepo from "./offer-repo.js";
 import * as otpRepo from "./otp-verify-repo.js";
 import { OTP_TTL_SECONDS } from "./otp-verify.js";
+import { publishBlockReason } from "./job-publication.js";
 import * as panelRepo from "./panel-repo.js";
 import * as publicationRepo from "./publication-repo.js";
 import * as qualificationRepo from "./qualification-repo.js";
@@ -558,6 +560,19 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             await otpRepo.insertChallenge(tx, {
                   id, tenantId: p.tenantId, candidateId, channel: "email", code, expiresAt,
                 });
+            // GAP-RECRUITMENT-CAREERS-PORTAL-LOGIN-03: actually deliver the code (the route only
+            // echoes it in explicit dev mode), via the notification-service email template
+            // hrms.candidate.login_otp.
+            await enqueue(tx, {
+              topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
+              tenantId: p.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+              payload: buildNotificationPayload({
+                eventType: "hrms.candidate.login_otp",
+                recipient: p.email as string,
+                channel: "email",
+                variables: { code, expiresInMinutes: String(Math.max(1, Math.round(OTP_TTL_SECONDS / 60))) },
+              }),
+            });
             break;
           }
           case "recruitment_candidate_public_auth_routes__1": {
@@ -1156,7 +1171,7 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
             const patch: Record<string, unknown> = { updatedBy: msg.actorId };
-            if (body.feesMinor != null) patch.feesMinor = BigInt(body.feesMinor);
+            if (body.feesMinor !== undefined) patch.feesMinor = body.feesMinor === null ? null : BigInt(body.feesMinor);
             if (body.minExperienceYears != null) patch.minExperienceYears = Number(body.minExperienceYears);
             for (const k of ["feeExemption", "requiredDocuments", "selectionProcess", "importantDates", "portalScope", "titleAlt", "descriptionAlt"] as const) {
               if (body[k] !== undefined) patch[k] = body[k];
@@ -1203,6 +1218,11 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
             // isPublished flag the route validated.
             const v = await publicationRepo.findVacancyTx(tx, p.tenantId, id);
             if (!v) throw new HttpError(404, "NOT_FOUND", "vacancy not found");
+            // Re-check at write time: the vacancy may have been closed/cancelled/expired since the route accepted it.
+            if (body.isPublished === true) {
+              const blocked = publishBlockReason(v as never, Date.now());
+              if (blocked) throw new HttpError(409, blocked.code, blocked.message);
+            }
             await publicationRepo.updateVacancy(tx, p.tenantId, id, { isPublished: body.isPublished === true, updatedBy: msg.actorId }, v.version);
             // queries.listJobOpenings caches under resource "job_opening" (see
             // shared/infra.ts's cache instance) -- without this, the detail
@@ -1721,9 +1741,19 @@ export function registerF3_recruitment_Consumers(queue: Queue): void {
                     // override that must go through the screening-decision endpoint (admin +
                     // reason, audited as an override).
                     if (BULK_SHORTLIST_BLOCKED.has(a.screeningDecision)) { skipped++; continue; }
-                    await screeningRepo.setScreeningById(tx, p.tenantId, a.id, {
-                      screeningDecision: "shortlisted", screenedBy: msg.actorId, screenedAt: new Date(),
-                    });
+                    // GAP-RECRUITMENT-DETAIL-09: the single decision route also moves the pipeline stage
+                    // (stageForScreeningDecision); bulk did not, leaving a shortlisted row at stage "applied".
+                    // Only advance from "applied" so an application already further along is never dragged back.
+                    // Re-shortlisting an already-shortlisted row must not restamp screened_at (the candidate-facing
+                    // "shortlisted on" date); it only gets its stage advanced if that was missed.
+                    const alreadyShortlisted = a.screeningDecision === "shortlisted";
+                    const advance = a.stage === "applied" || a.stage === "screening";
+                    if (!alreadyShortlisted || advance) {
+                      await screeningRepo.setScreeningById(tx, p.tenantId, a.id, {
+                        ...(alreadyShortlisted ? {} : { screeningDecision: "shortlisted", screenedBy: msg.actorId, screenedAt: new Date() }),
+                        ...(advance ? { stage: "shortlisted" } : {}),
+                      });
+                    }
                     await screeningRepo.insertEvent(tx, {
                       tenantId: p.tenantId, applicationId: a.id, jobOpeningId: id, action: "shortlist",
                       decision: "shortlisted", actorId: msg.actorId,

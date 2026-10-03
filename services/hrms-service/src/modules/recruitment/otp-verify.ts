@@ -20,6 +20,14 @@ export function otpVerificationEnabled(env: Record<string, string | undefined>):
   return env.FEATURE_OTP_VERIFICATION_ENABLED === "true";
 }
 
+/**
+ * Whether an OTP request response may echo the code (devCode). Requires the explicit
+ * ALLOW_DEV_OTP_ECHO=true flag AND a non-production NODE_ENV; never implied by NODE_ENV alone.
+ */
+export function devOtpEchoEnabled(env: Record<string, string | undefined>): boolean {
+  return env.ALLOW_DEV_OTP_ECHO === "true" && env.NODE_ENV !== "production";
+}
+
 /** Generate a cryptographically random numeric OTP of OTP_LENGTH digits. */
 export function generateOtp(randomBytes: (n: number) => Buffer): string {
   const buf = randomBytes(4);

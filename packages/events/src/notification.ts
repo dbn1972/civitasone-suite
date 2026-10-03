@@ -28,6 +28,8 @@ export const SYSTEM_TEMPLATE_IDS = {
   municipalFeeDue:           "00000000-0000-4000-8002-000000000002",
   municipalStatusChanged:    "00000000-0000-4000-8002-000000000003",
   municipalPermitIssued:     "00000000-0000-4000-8002-000000000004",
+  /** Careers-portal candidate sign-in code (email) — notification-service migration 0049. */
+  candidateLoginOtp:         "00000000-0000-4000-8001-00000000000d",
 } as const;
 
 const EVENT_TEMPLATE_MAP: Record<string, string> = {
@@ -45,6 +47,7 @@ const EVENT_TEMPLATE_MAP: Record<string, string> = {
   "estab.rti.created":              SYSTEM_TEMPLATE_IDS.estabRtiCpioAlert,
   "hrms.leave.approved":            SYSTEM_TEMPLATE_IDS.hrLeaveApproved,
   "payroll.run.approved":           SYSTEM_TEMPLATE_IDS.payrollRunApproved,
+  "hrms.candidate.login_otp":       SYSTEM_TEMPLATE_IDS.candidateLoginOtp,
   // Municipal Sec5 (advertisement, vendor, sewerage, shop, trade, animal, fire,
   // crematorium, drainage, event, parking, parks, roadcut, building, refund,
   // market, swm) — canonical event types from packages/events/src/municipal-cross.ts

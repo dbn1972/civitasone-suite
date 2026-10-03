@@ -27,6 +27,24 @@ function isPublishedTrue(isPublished: boolean | string): boolean {
   return isPublished === true || isPublished === "true";
 }
 
+const IST_OFFSET_MS = 330 * 60_000;
+/** The Asia/Kolkata calendar date (YYYY-MM-DD) of an instant. */
+export function istDateOf(ms: number): string {
+  return new Date(ms + IST_OFFSET_MS).toISOString().slice(0, 10);
+}
+
+/**
+ * Why a vacancy may NOT be published to the public careers page right now, or null when it may.
+ * Only an open vacancy whose deadline date (IST) is not before today (IST) can be published.
+ * Unpublishing is never blocked, so callers only ask this when publishing.
+ */
+export function publishBlockReason(v: Pick<VacancyView, "status" | "applicationDeadline">, nowMs: number): { code: string; message: string } | null {
+  if (v.status !== "open") return { code: "VACANCY_NOT_OPEN", message: "only an open vacancy can be published" };
+  const dl = deadlineMs(v.applicationDeadline ?? null);
+  if (dl !== null && istDateOf(dl) < istDateOf(nowMs)) return { code: "DEADLINE_PASSED", message: "the application deadline has passed; extend it before publishing" };
+  return null;
+}
+
 /**
  * May a candidate apply right now? Requires an OPEN, PUBLISHED vacancy whose
  * closing deadline (if set) has not passed. After the deadline the only way to

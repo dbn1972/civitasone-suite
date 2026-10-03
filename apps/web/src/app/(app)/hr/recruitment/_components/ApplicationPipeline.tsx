@@ -18,10 +18,16 @@ export function ApplicationPipeline({
   const ORDERED_STAGES: { key: string; label: string }[] = [
     { key: "applied",      label: t("stageReceived") },
     { key: "shortlisted",  label: t("stageShortlisted") },
-    { key: "interviewing", label: t("stageInterview") },
     { key: "offered",      label: t("stageOffer") },
     { key: "hired",        label: t("stageJoined") },
   ];
+
+  // Nothing in the screening/offer flow writes "interviewing" (scheduling an interview leaves the stage
+  // unchanged), so there is no such column; a "selected" column appears only when an application is in it,
+  // so the counts always add up to the active (non-rejected, non-withdrawn) total.
+  if (applications.some((a) => a.stage === "selected")) {
+    ORDERED_STAGES.splice(2, 0, { key: "selected", label: t("stageSelected") });
+  }
 
   const counts = ORDERED_STAGES.reduce<Record<string, number>>((acc, { key }) => {
     acc[key] = applications.filter((a) => a.stage === key).length;

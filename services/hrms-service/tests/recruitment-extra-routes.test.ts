@@ -176,6 +176,7 @@ afterAll(async () => { await sqlClient.end(); });
 // ===========================================================================
 describe("publication routes — advertisement", () => {
   it("updates advertisement details (200)", async () => {
+    H.findVacancy.mockResolvedValue(vacancy({ isPublished: false })); // a published advertisement is locked
     const app = await buildApp();
     const r = await injectF3(app, {
       method: "PATCH", url: `/v1/hrms/job-openings/${JOB}/advertisement`,
@@ -267,7 +268,7 @@ describe("publication routes — extend deadline", () => {
   it("returns 400 when the new deadline is not later than the current one", async () => {
     H.findVacancy.mockResolvedValue(vacancy({ applicationDeadline: new Date("2027-12-31") }));
     const app = await buildApp();
-    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: "2026-06-01T00:00:00.000Z" } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: "2026-06-01T00:00:00.000Z", reason: "x" } });
     expect(r.statusCode).toBe(400);
     expect(r.json().code).toBe("NOT_AN_EXTENSION");
     await app.close();
@@ -276,7 +277,7 @@ describe("publication routes — extend deadline", () => {
   it("returns 409 for a cancelled vacancy", async () => {
     H.findVacancy.mockResolvedValue(vacancy({ status: "cancelled" }));
     const app = await buildApp();
-    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: futureIso } });
+    const r = await injectF3(app, { method: "POST", url: `/v1/hrms/job-openings/${JOB}/extend`, headers: auth(), payload: { newDeadline: futureIso, reason: "x" } });
     expect(r.statusCode).toBe(409);
     expect(r.json().code).toBe("CANCELLED");
     await app.close();

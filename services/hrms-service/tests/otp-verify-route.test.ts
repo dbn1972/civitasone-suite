@@ -80,6 +80,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   process.env.FEATURE_OTP_VERIFICATION_ENABLED = "true";
   process.env.NODE_ENV = "test";
+  process.env.ALLOW_DEV_OTP_ECHO = "true"; // devCode echo is opt-in
   H.findCandidate.mockResolvedValue({ id: CID, tenantId: TENANT, email: "c@x.in", status: "draft", emailVerified: false, version: 1 });
   H.insertChallenge.mockResolvedValue(undefined);
   H.lockLatestChallenge.mockResolvedValue({ id: "ch-1", code: "123456", expiresAt: new Date(Date.now() + 60_000), attempts: 0, verified: false });
