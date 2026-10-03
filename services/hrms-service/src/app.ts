@@ -280,6 +280,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register((await import("./modules/employee/loans-routes.js")).loansRoutes);
   const { medicalClaimsRoutes } = await import("./modules/medical/routes.js");
   await app.register(medicalClaimsRoutes);
+  const { outsourcedRoutes } = await import("./modules/outsourced/routes.js");
+  await app.register(outsourcedRoutes);
   const { workforcePlanningRoutes } = await import("./modules/workforce-planning/routes.js");
   await app.register(workforcePlanningRoutes);
   const { aiPredictionsRoutes } = await import("./modules/ai-predictions/routes.js");

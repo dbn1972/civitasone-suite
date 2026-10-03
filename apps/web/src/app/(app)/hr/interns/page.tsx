@@ -4,57 +4,40 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PermissionDenied } from "../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
+import { mapInterns, type ApiApprenticeship, type ApiEmployee, type InternRow as Row } from "./internsModel";
 import { getTranslations } from "next-intl/server";
 
-type ApiEmployee = {
-  id: string;
-  name: string;
-  department: string;
-  employeeType: string;
-  status: string;
-};
-
-type Row = {
-  id: string;
-  name: string;
-  department: string;
-  type: string;
-  status: string;
-} & Record<string, unknown>;
-
-const INTERN_TYPES = new Set(["intern", "apprentice", "internship", "apprenticeship"]);
+const EMPTY_APPRENTICESHIPS: ApiApprenticeship[] = [];
 
 /**
- * GAP-HR-INTERNS-01: same bug class as GAP-HR-CONTRACTUAL-01 -- the filter
- * read `e.employmentType ?? e.type`, but GET /v1/hrms/employees sends
- * `employeeType`; neither read field ever existed, so the register was
- * permanently empty. institution/mentor/periodFrom/periodTo are also not in
- * the employee-list payload at all (confirmed: employee/queries.ts's
- * listEmployees returns id/employeeNo/name/department/employeeType/status/
- * designation?/grade?/email? only) -- removed here rather than shown as
- * four permanent "—" columns, per the item's own fix guidance, until an
- * endpoint actually supplies them.
+ * GAP-HR-WORKFORCE-INTERNS-01: the stipend/period columns come from the
+ * apprenticeship engagements (apprentices only). That is a second, best-effort
+ * read: if it fails the register still renders from the employee list, with
+ * the stipend/period cells as an em dash and a visible "details unavailable"
+ * note -- never a fabricated zero.
  */
-function mapInterns(apiItems: ApiEmployee[]): Row[] {
-  return apiItems
-    .filter((e) => INTERN_TYPES.has((e.employeeType ?? "").toLowerCase()))
-    .map((e) => ({
-      id: e.id,
-      name: e.name,
-      department: e.department ?? "—",
-      type: e.employeeType.replace(/^./, (c) => c.toUpperCase()),
-      status: e.status,
-    }));
-}
-
-async function getInterns(): Promise<LoaderResult<Row[]>> {
-  return fetchJson<unknown, Row[]>("/api/v1/hrms/employees?limit=200", [], {
-    telemetryKey: "hr.interns",
-    mapResponse: (p) => {
-      const arr = Array.isArray(p) ? p : (p as { data?: ApiEmployee[] })?.data;
-      return Array.isArray(arr) ? mapInterns(arr as ApiEmployee[]) : null;
-    },
-  });
+async function getInterns(): Promise<LoaderResult<Row[]> & { enrichmentFailed: boolean }> {
+  const [emps, appr] = await Promise.all([
+    fetchJson<unknown, ApiEmployee[]>("/api/v1/hrms/employees?limit=200", [], {
+      telemetryKey: "hr.interns",
+      mapResponse: (p) => {
+        const arr = Array.isArray(p) ? p : (p as { data?: ApiEmployee[] })?.data;
+        return Array.isArray(arr) ? (arr as ApiEmployee[]) : null;
+      },
+    }),
+    fetchJson<unknown, ApiApprenticeship[]>("/api/v1/hrms/apprenticeships", EMPTY_APPRENTICESHIPS, {
+      telemetryKey: "hr.interns.apprenticeships",
+      mapResponse: (p) => {
+        const arr = Array.isArray(p) ? p : (p as { data?: ApiApprenticeship[] })?.data;
+        return Array.isArray(arr) ? (arr as ApiApprenticeship[]) : null;
+      },
+    }),
+  ]);
+  return {
+    data: mapInterns(emps.data, appr.data),
+    source: emps.source,
+    enrichmentFailed: appr.source === "error",
+  } as LoaderResult<Row[]> & { enrichmentFailed: boolean };
 }
 
 const EMPLOYEE_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
@@ -79,7 +62,7 @@ export default async function InternsPage() {
   if (!roles.some((r: string) => INTERNS_VIEW_ROLES.includes(r))) {
     return <PermissionDenied module="the interns register" requiredRoles={INTERNS_VIEW_ROLES} backHref="/hr" backLabel="Back to HR" />;
   }
-  const { data: items, source } = await getInterns();
+  const { data: items, source, enrichmentFailed } = await getInterns();
   const errored = source === "error";
   const canAdd = roles.some((r: string) => EMPLOYEE_ADMIN_ROLES.includes(r));
 
@@ -95,6 +78,8 @@ export default async function InternsPage() {
     { key: "department", label: t("colDepartment") },
     { key: "type", label: t("colType") },
     { key: "status", label: t("colStatus"), cellType: "status" },
+    { key: "stipend", label: t("colStipend") },
+    { key: "period", label: t("colPeriod") },
   ];
 
   return (
@@ -107,6 +92,9 @@ export default async function InternsPage() {
         actions={canAdd ? <a href="/hr/employees/new" className="btn primary">{t("addInternAction")}</a> : undefined}
       />
       <DataSourceBadge source={source} />
+      {!errored && enrichmentFailed && (
+        <p role="status" className="pill warn" style={{ margin: "0 0 12px" }}>{t("detailsUnavailable")}</p>
+      )}
       <StatGrid>
         <StatCard icon="🎓" iconBg="var(--infobg, #e6f0ff)" label={t("statTotalLabel")} value={errored ? "—" : items.length} />
         <StatCard icon="✅" iconBg="var(--goodbg, #e6f7f0)" label={t("statActiveLabel")} value={active ?? "—"} />

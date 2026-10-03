@@ -219,3 +219,32 @@ describe("StaffingPlanPage — plan year column + selector (GAP-HR-STAFFING-PLAN
     expect(screen.queryByLabelText("Plan Year")).not.toBeInTheDocument();
   });
 });
+
+describe("StaffingPlanPage — vacancy over-threshold alert (GAP-HR-WORKFORCE-STAFFING-PLAN-01)", () => {
+  beforeEach(() => { fetchJsonMock.mockReset(); mockRoles = ["hr_admin"]; });
+
+  it("alerts for 100 sanctioned / 85 filled (count 1), flags that row, and not the 95-filled one", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: {
+        items: [
+          row({ id: "a", departmentCadre: "Roads / Engineer", sanctionedPosts: 100, filled: 85, vacant: 15 }),
+          row({ id: "b", departmentCadre: "Parks / Clerk", sanctionedPosts: 100, filled: 95, vacant: 5 }),
+        ],
+        planYear: 2025, availableYears: [2025],
+      },
+      source: "api",
+    });
+    await renderPage();
+    expect(screen.getByRole("alert")).toHaveTextContent(/1 department or cadre has vacancies above 10%/i);
+    expect(screen.getAllByText(/over 10% vacant/i)).toHaveLength(1);
+  });
+
+  it("shows no alert when no row is over the threshold", async () => {
+    fetchJsonMock.mockResolvedValue({
+      data: { items: [row({ sanctionedPosts: 100, filled: 95, vacant: 5 })], planYear: 2025, availableYears: [2025] },
+      source: "api",
+    });
+    await renderPage();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+});

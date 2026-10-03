@@ -72,6 +72,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "medical_claim",
   "nomination",
   "orgchart",
+  "outsourced_contract",
   "pay_matrix",
   "payroll_arrear",
   "payroll_bonus",
@@ -114,6 +115,7 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "travel_request",
   "vigilance_case_list",
   "visiting_card",
+  "work_summary_list",
   "workforce_plan",
 ] as const;
 

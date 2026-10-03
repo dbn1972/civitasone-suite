@@ -4,7 +4,7 @@ import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/com
 import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, requirePermissionKey, HttpError } from "../../shared/context.js";
-import { idParam, taskViewSchema, completeTaskBody, assignTaskBody, bulkCompleteBody } from "./validators.js";
+import { idParam, taskViewSchema, completeTaskBody, assignTaskBody, bulkCompleteBody, openTaskRefsBody } from "./validators.js";
 import { paginatedSchema } from "@civitasone/schemas/common";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -49,6 +49,19 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     sendValidated(reply, tasksListSchema, await queries.listTasks(ctx.tenantId, q.limit, q.offset, listOpts));
   });
 
+  // GAP-HR-LEAVE-APPROVALS-04: internal read for hrms-service. Only a
+  // service-account context (x-internal + INTERNAL_SERVICE_SECRET) may call it
+  // -- an end user's token is refused, so this can never be used to probe which
+  // records someone else holds tasks on.
+  app.post("/v1/workflow/internal/open-task-refs", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ["service_account"]);
+    if (ctx.actorType !== "service_account") throw new HttpError(403, "FORBIDDEN", "internal service call only");
+    const body = openTaskRefsBody.parse(req.body ?? {});
+    const refIds = await queries.openTaskRefIds(ctx.tenantId, body.refType, body.refIds, body.actorId, body.roles);
+    return reply.send({ refIds });
+  });
+
   app.post("/v1/workflow/tasks/:id/complete", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
@@ -56,7 +69,7 @@ export async function taskRoutes(app: FastifyInstance): Promise<void> {
     const body = completeTaskBody.parse(req.body ?? {});
     const task = await queries.getTask(id, ctx.tenantId);
     await requireTaskPermission(ctx, task?.refType);
-    return sendAccepted(reply, acceptedResponseSchema, await commands.completeTask(ctx, id, body.decision));
+    return sendAccepted(reply, acceptedResponseSchema, await commands.completeTask(ctx, id, body.decision, body.reason));
   });
 
   // P1-1 — claim an unassigned task (any role-holder who can see it). Synchronous.

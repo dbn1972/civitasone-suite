@@ -60,6 +60,43 @@ export async function listByInstance(
   return rows.map(toView);
 }
 
+/**
+ * GAP-HR-LEAVE-APPROVALS-04: which of `refIds` (of `refType`) have an OPEN
+ * human task the given actor could act on right now -- same visibility rule as
+ * listPendingForRoles (task with no roleRef is open to all, otherwise the
+ * actor needs the roleRef; super_admin sees every task) plus the assignee
+ * lock (an assigned task is only actionable by its assignee). Returns just the
+ * ref ids, so hrms-service can authorise an id-based read of those records
+ * without being handed the task rows themselves. Tenant-scoped, bounded.
+ */
+export async function openTaskRefIdsForActor(
+  tenantId: string,
+  refType: string,
+  refIds: string[],
+  actorId: string,
+  roles: string[],
+): Promise<string[]> {
+  if (refIds.length === 0) return [];
+  const isSuperAdmin = roles.includes("super_admin");
+  const rolePredicate = isSuperAdmin
+    ? undefined
+    : roles.length > 0
+      ? or(isNull(tasks.roleRef), inArray(tasks.roleRef, roles))
+      : isNull(tasks.roleRef);
+  const rows = await scopedRead((tx) => tx.selectDistinct({ refId: tasks.refId }).from(tasks)
+    .where(and(
+      eq(tasks.tenantId, tenantId),
+      eq(tasks.status, "pending"),
+      eq(tasks.isCall, false),
+      eq(tasks.refType, refType),
+      inArray(tasks.refId, refIds),
+      or(isNull(tasks.assigneeId), eq(tasks.assigneeId, actorId)),
+      ...(rolePredicate ? [rolePredicate] : []),
+    ))
+    .limit(refIds.length));
+  return rows.map((r) => r.refId).filter((v): v is string => v != null);
+}
+
 export async function listPendingForRoles(
   tenantId: string,
   roles: string[],

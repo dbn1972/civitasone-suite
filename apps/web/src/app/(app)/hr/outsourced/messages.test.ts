@@ -7,11 +7,16 @@ import hi from "@/messages/hi.json";
 // GAP-HR-OUTSOURCED-02 / GAP-HR-WORKFORCE-CONTRACTUAL-01: dead i18n
 // namespaces must not linger for translators.
 describe("outsourced / workforceContractual i18n", () => {
-  const src = readFileSync(join(__dirname, "page.tsx"), "utf8");
-  const used = new Set([...src.matchAll(/\bt\("(\w+)"\)/g)].map((m) => m[1]));
+  const keysUsed = (file: string) => new Set([...readFileSync(join(__dirname, file), "utf8").matchAll(/\bt\("(\w+)"[,)]/g)].map((m) => m[1]));
+  const used = keysUsed("page.tsx");
+  const usedRegister = keysUsed("OutsourcedRegister.tsx");
 
   it.each([["en", en], ["hi", hi]] as const)("%s outsourced keys == keys the page uses", (_l, m) => {
     expect(Object.keys((m as { outsourced: object }).outsourced).sort()).toEqual([...used].sort());
+  });
+
+  it.each([["en", en], ["hi", hi]] as const)("%s outsourcedRegister keys == keys the register component uses", (_l, m) => {
+    expect(Object.keys((m as { outsourcedRegister: object }).outsourcedRegister).sort()).toEqual([...usedRegister].sort());
   });
 
   it("drops the unreferenced workforceContractual namespace", () => {

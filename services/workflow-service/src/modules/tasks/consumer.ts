@@ -42,7 +42,7 @@ const MAX_MI_TASKS = Math.max(1, Number(process.env.WORKFLOW_MAX_MI_TASKS ?? 100
 type Tx = Parameters<typeof repo.insert>[0] & Parameters<typeof defRepo.findNodeByKeyTx>[0]
   & Parameters<typeof resolveAssignee>[0];
 
-type CompletePayload = TaskView & { decision?: string; sodOverride?: boolean };
+type CompletePayload = TaskView & { decision?: string; sodOverride?: boolean; reason?: string };
 
 export function registerTasksConsumers(queue: Queue): void {
   // RLS (#146): run every handler inside the message's tenant context so
@@ -123,7 +123,10 @@ export function registerTasksConsumers(queue: Queue): void {
         action: decision === "reject" ? "reject" : decision === "return" ? "return" : "complete",
         decision,
         actorId: msg.actorId,
-        detail: sodOverride ? { sodOverride: true, overriddenBy: "super_admin" } : {},
+        detail: {
+          ...(sodOverride ? { sodOverride: true, overriddenBy: "super_admin" } : {}),
+          ...(p.reason ? { reason: p.reason } : {}),
+        },
       });
 
       // 11.3 — Track completed nodes for compensation handlers.
@@ -134,6 +137,25 @@ export function registerTasksConsumers(queue: Queue): void {
 
       if (decision === "reject" && instance) {
         await completeInstance(tx, msg, instance, "reject");
+        // GAP-HR-LEAVE-APPROVALS-03: a rejected leave_app task must reject the
+        // domain row too (previously only estab_file was dispatched, leaving
+        // the application pending) and carry the approver's reason so the
+        // applicant notification shows it -- same transaction as the decision.
+        if (instance.refType === "leave_app" && instance.refId) {
+          await enqueue(tx as Parameters<typeof enqueue>[0], {
+            topic: DISPATCH.leaveReject,
+            eventType: DISPATCH.leaveReject,
+            tenantId: msg.tenantId,
+            actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: {
+              id: instance.refId,
+              tenantId: msg.tenantId,
+              rejectedBy: msg.actorId,
+              reason: p.reason ?? "Rejected by approver (no reason recorded)",
+            },
+          });
+        }
         if (instance.refType === "estab_file" && instance.refId) {
           await enqueue(tx as Parameters<typeof enqueue>[0], {
             topic: DISPATCH.fileReject,
@@ -162,6 +184,7 @@ export function registerTasksConsumers(queue: Queue): void {
         decision,
         refType: instance?.refType,
         refId: instance?.refId,
+        ...(p.reason ? { reason: p.reason } : {}),
       }, "complete", p.id, {
         recipient: p.roleRef ?? msg.actorId,
         variables: {

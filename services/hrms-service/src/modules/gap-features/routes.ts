@@ -1054,7 +1054,7 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
     // sqlPool.query() never set app.tenant_id, so work-summaries silently
     // returned zero rows for every caller (HR included) regardless of the
     // employee-scoping above.
-    const { rows, total } = await sqlClient.begin(async (sql) => {
+    const result = await sqlClient.begin(async (sql) => {
       await sql.unsafe("SELECT set_config('app.tenant_id', $1, true)", [ctx.tenantId]);
       const whereClause = scopeId !== undefined ? "AND a.employee_id = $2" : "";
       const countParams = scopeId !== undefined ? [ctx.tenantId, scopeId] : [ctx.tenantId];
@@ -1064,6 +1064,10 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         WHERE a.tenant_id = $1 ${whereClause}
       `, countParams);
       const total = Number(countRows[0]?.total ?? 0);
+      // GAP-HR-WORK-SUMMARY-05: clamp a manual ?offset= past the end back to the
+      // last real page (snapped to a PAGE_SIZE boundary) -- previously the UI
+      // showed a nonsensical "Showing 1001-1000" for offset > total.
+      const offset = total > 0 && q.offset >= total ? Math.floor((total - 1) / PAGE_SIZE) * PAGE_SIZE : q.offset;
 
       // GAP-HR-WORK-SUMMARY-01/02: this used to invent "tasks" data
       // (COALESCE(...overall_grade...) AS tasksCompleted + a literal
@@ -1080,8 +1084,8 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
       // (GAP-HR-WORK-SUMMARY-05 — LIMIT 500 previously truncated silently
       // with no total count and no way to see the rest).
       const dataParams = scopeId !== undefined
-        ? [ctx.tenantId, scopeId, PAGE_SIZE, q.offset]
-        : [ctx.tenantId, PAGE_SIZE, q.offset];
+        ? [ctx.tenantId, scopeId, PAGE_SIZE, offset]
+        : [ctx.tenantId, PAGE_SIZE, offset];
       const limitIdx = scopeId !== undefined ? 3 : 2;
       const offsetIdx = scopeId !== undefined ? 4 : 3;
       const rows = await sql.unsafe(`
@@ -1095,9 +1099,28 @@ export async function hrmsGapRoutes(app: FastifyInstance): Promise<void> {
         WHERE a.tenant_id = $1 ${whereClause}
         ORDER BY a.appraisal_period DESC, e.full_name LIMIT $${limitIdx} OFFSET $${offsetIdx}
       `, dataParams);
-      return { rows, total };
+      return { rows, total, offset };
     });
-    return reply.send({ data: rows, total, offset: q.offset });
+    // GAP-HR-WORK-SUMMARY-05 (decision, conservative default): an HR/privileged
+    // tenant-wide read of other employees' APAR ratings is itself auditable
+    // (DPDP) -- one audit.event.record per page viewed, with the page window and
+    // row count but never the ratings. A caller reading only their OWN summary
+    // (scopeId set) is not an access to others' data and is not audited.
+    // Best-effort: an audit-emit failure must not take down the read.
+    if (scopeId === undefined) {
+      try {
+        await db.transaction(async (tx) => {
+          await emitAudit(
+            tx, { tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId },
+            "hrms.work_summary.list_viewed", "work_summary_list", ctx.tenantId,
+            { metadata: { offset: result.offset, count: result.rows.length, total: result.total } },
+          );
+        });
+      } catch (err) {
+        captureError(err, { service: "hrms", event: "audit_emit_failed", action: "hrms.work_summary.list_viewed" });
+      }
+    }
+    return reply.send({ data: result.rows, total: result.total, offset: result.offset });
   });
 
   // Error handler

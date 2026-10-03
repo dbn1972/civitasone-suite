@@ -164,26 +164,17 @@ export function LeaveApprovalsPanel() {
     setBusy(true);
     setDialogError(undefined);
     try {
+      // GAP-HR-LEAVE-APPROVALS-03: ONE atomic call. workflow-service's
+      // completeTaskBody now accepts the optional `reason` and persists it
+      // with the decision (task history) in the same transaction; for a
+      // rejection it is also carried to the applicant's rejection notice.
+      // This replaces the old second, non-atomic POST /workflow/comments
+      // (internal-only, could fail after the decision had already committed).
+      const trimmed = reason?.trim();
       const res = await fetch(`/api/proxy/v1/workflow/tasks/${task.id}/complete`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        // NOTE: workflow-service's completeTaskBody only accepts { decision } —
-        // `reason` here is silently dropped by zod (no .strict()), never
-        // persisted, never passed to commands.completeTask (see
-        // services/workflow-service/src/modules/tasks/{validators,commands}.ts).
-        // The reason is instead recorded as a comment on the leave application
-        // below, via the task/comments module that already exists for this.
-        // GAP-HR-LEAVE-APPROVALS-03: that second POST is genuinely
-        // non-atomic and "internal"-only (the applicant never sees it) —
-        // fixing this needs workflow-service's completeTaskBody to accept
-        // and persist `reason`, emitted atomically with the decision event.
-        // workflow-service DOES exist in this repo (services/workflow-
-        // service/src/modules/tasks/{validators,routes,commands}.ts) — the
-        // gap is scope, not availability: this cluster is the web side of
-        // /hr/leave/approvals, and that schema/atomic-emit change belongs
-        // to workflow-service's own owners. Left for a follow-up; not
-        // fixed here.
-        body: JSON.stringify({ decision }),
+        body: JSON.stringify(trimmed ? { decision, reason: trimmed } : { decision }),
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
@@ -191,36 +182,8 @@ export function LeaveApprovalsPanel() {
         return;
       }
 
-      let reasonSaved = true;
-      if (reason && reason.trim().length > 0) {
-        try {
-          const commentRes = await fetch("/api/proxy/v1/workflow/comments", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              entityType: task.refType || "workflow_task",
-              entityId: task.refId || task.id,
-              body: `${decision === "approve" ? "Approved" : "Rejected"}: ${reason.trim()}`,
-              visibility: "internal",
-            }),
-          });
-          reasonSaved = commentRes.ok;
-        } catch {
-          reasonSaved = false;
-        }
-      }
-
       setPending(null);
-      setToast(
-        reasonSaved
-          ? { tone: "good", text: decision === "approve" ? t("toastApproved") : t("toastRejected") }
-          : {
-              tone: "bad",
-              text: t("toastReasonNotSaved", {
-                decision: decision === "approve" ? t("approvedWord") : t("rejectedWord"),
-              }),
-            },
-      );
+      setToast({ tone: "good", text: decision === "approve" ? t("toastApproved") : t("toastRejected") });
       // GAP-HR-LEAVE-APPROVALS-06: remove the decided row immediately
       // instead of waiting on a full refetch, drop the unconditional
       // router.refresh() (this route has no server-rendered data depending

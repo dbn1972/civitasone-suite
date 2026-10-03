@@ -76,9 +76,7 @@ describe("LeavePoliciesPage — UX-016 clerk-safe errors", () => {
     renderPage();
 
     fireEvent.click(await screen.findByRole("button", { name: /^edit$/i }));
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-
-    const dialog = await screen.findByRole("alertdialog");
+    const dialog = await screen.findByRole("dialog");
     fireEvent.click(within(dialog).getByRole("button", { name: /save changes/i }));
 
     await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));

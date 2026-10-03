@@ -34,3 +34,14 @@ export async function listTasks(
   const key = `list:${opts?.status ?? "all"}:${opts?.instanceId ?? "-"}:${limit}:${offset}`;
   return cache.listOrLoad(tenantId, TASK_RESOURCE, key, loader);
 }
+
+/** GAP-HR-LEAVE-APPROVALS-04 — see repo.openTaskRefIdsForActor. Uncached: authorisation data. */
+export async function openTaskRefIds(
+  tenantId: string,
+  refType: string,
+  refIds: string[],
+  actorId: string,
+  roles: string[],
+): Promise<string[]> {
+  return repo.openTaskRefIdsForActor(tenantId, refType, refIds, actorId, roles);
+}

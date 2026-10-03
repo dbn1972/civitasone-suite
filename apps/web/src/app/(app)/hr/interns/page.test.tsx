@@ -12,12 +12,21 @@ vi.mock("next-intl/server", async () => {
 
 import InternsPage from "./page";
 
+const EMP = { id: "1", name: "Asha Rao", department: "IT", employeeType: "intern", status: "active" };
+
+function mockFetches(opts: { apprFail?: boolean; extraEmps?: unknown[]; appr?: unknown[] }) {
+  fetchJsonMock.mockImplementation(async (url: string, fallback: unknown, o: { mapResponse?: (p: unknown) => unknown }) => {
+    if (String(url).includes("/apprenticeships")) {
+      if (opts.apprFail) return { source: "error", data: fallback };
+      return { source: "api", data: o.mapResponse ? o.mapResponse({ data: opts.appr ?? [] }) : [] };
+    }
+    return { source: "api", data: o.mapResponse ? o.mapResponse({ data: [EMP, ...(opts.extraEmps ?? [])] }) : [] };
+  });
+}
+
 beforeEach(() => {
   fetchJsonMock.mockReset();
-  fetchJsonMock.mockResolvedValue({
-    source: "api",
-    data: [{ id: "1", name: "Asha Rao", department: "IT", type: "Intern", status: "active" }],
-  });
+  mockFetches({});
   mockRoles = ["hr_admin"];
 });
 
@@ -34,5 +43,24 @@ describe("/hr/interns role gate (GAP-HR-INTERNS-04)", () => {
     mockRoles = [role];
     render(await InternsPage());
     expect(screen.getByText("Asha Rao")).toBeInTheDocument();
+  });
+});
+
+describe("/hr/interns stipend + period (GAP-HR-WORKFORCE-INTERNS-01)", () => {
+  it("shows the apprentice's monthly stipend from paise as rupees and the training period", async () => {
+    mockFetches({
+      extraEmps: [{ id: "2", name: "Ravi Kumar", department: "Works", employeeType: "apprentice", status: "active" }],
+      appr: [{ apprenticeId: "2", monthlyStipendMinor: "850000", trainingStart: "2026-01-05", trainingEnd: "2026-12-31", status: "active" }],
+    });
+    render(await InternsPage());
+    expect(screen.getByText("₹8,500.00")).toBeInTheDocument();
+    expect(screen.getByText(/05 Jan 2026/)).toBeInTheDocument();
+  });
+
+  it("says details are unavailable (never a fabricated amount) when the apprenticeship read fails", async () => {
+    mockFetches({ apprFail: true });
+    render(await InternsPage());
+    expect(screen.getByText("Asha Rao")).toBeInTheDocument();
+    expect(screen.getByRole("status")).toHaveTextContent(/couldn.t be loaded/i);
   });
 });

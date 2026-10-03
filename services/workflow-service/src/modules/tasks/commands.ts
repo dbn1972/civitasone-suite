@@ -23,6 +23,7 @@ export async function completeTask(
   ctx: RequestContext,
   taskId: string,
   decision: "approve" | "reject" | "return" = "approve",
+  reason?: string,
 ): Promise<Accepted> {
   const existing = await repo.findById(taskId, ctx.tenantId);
   if (!existing) throw new HttpError(404, "NOT_FOUND", "task not found");
@@ -135,7 +136,7 @@ export async function completeTask(
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { ...existing, decision, sodOverride },
+    payload: { ...existing, decision, sodOverride, ...(reason ? { reason } : {}) },
   });
 
   return { id: taskId, status: "accepted", correlationId: ctx.correlationId };

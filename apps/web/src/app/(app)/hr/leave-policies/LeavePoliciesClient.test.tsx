@@ -118,26 +118,55 @@ describe("LeavePoliciesClient", () => {
   });
 
   // GAP-HR-LEAVE-POLICIES-05
-  it("prompts to discard unsaved changes before switching the edit target to a different row", async () => {
+  it("edits in a labelled drawer (not inline) and the table stays read-only", async () => {
     mockList([EL_POLICY, CL_POLICY]);
     renderClient();
     await waitFor(() => expect(screen.getByText("Earned Leave")).toBeInTheDocument());
 
-    const editButtons = screen.getAllByRole("button", { name: /^edit$/i });
-    fireEvent.click(editButtons[0]!); // start editing EL_POLICY
-    const daysInputs = screen.getAllByRole("spinbutton", { name: /days per year/i });
-    fireEvent.change(daysInputs[0]!, { target: { value: "45" } }); // make it dirty
+    // no inline inputs while nothing is being edited
+    expect(screen.queryByRole("spinbutton")).not.toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: /^edit$/i })[0]!);
 
-    // Clicking Edit on the OTHER row (still labelled "Edit" since it isn't being edited)
+    const dialog = await screen.findByRole("dialog");
+    // all 12 editable fields, each with a visible label
+    for (const label of [/days per year/i, /max accumulation/i, /max continuous/i, /min service/i, /med cert required after/i, /count method/i]) {
+      expect(within(dialog).getByLabelText(label)).toBeInTheDocument();
+    }
+    for (const label of [/carry forward/i, /encashable/i, /requires medical certificate/i, /prefix\/suffix rule/i, /sandwich rule/i, /pro-rata on joining/i]) {
+      expect(within(dialog).getByRole("checkbox", { name: label })).toBeInTheDocument();
+    }
+  });
+
+  it("asks before discarding unsaved drawer edits, and keeps them if the user keeps editing", async () => {
+    mockList([EL_POLICY]);
+    renderClient();
+    await waitFor(() => expect(screen.getByText("Earned Leave")).toBeInTheDocument());
+
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/days per year/i), { target: { value: "45" } });
 
-    const discardDialog = await screen.findByRole("alertdialog");
-    expect(discardDialog).toHaveTextContent(/unsaved changes/i);
+    fireEvent.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
+    expect(within(dialog).getByText(/discard unsaved changes/i)).toBeInTheDocument();
 
-    // Cancelling keeps the original edit (45 still showing, not reset to 30)
-    fireEvent.click(within(discardDialog).getByRole("button", { name: /^cancel$/i }));
-    expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
-    expect(screen.getByDisplayValue("45")).toBeInTheDocument();
+    fireEvent.click(within(dialog).getByRole("button", { name: /keep editing/i }));
+    expect(within(dialog).queryByText(/discard unsaved changes/i)).not.toBeInTheDocument();
+    expect(within(dialog).getByDisplayValue("45")).toBeInTheDocument();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
+    fireEvent.click(within(dialog).getByRole("button", { name: /discard changes/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(screen.getByText("30")).toBeInTheDocument(); // original value, edit discarded
+  });
+
+  it("closes a clean drawer without a discard prompt", async () => {
+    mockList([EL_POLICY]);
+    renderClient();
+    await waitFor(() => expect(screen.getByText("Earned Leave")).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.click(within(dialog).getByRole("button", { name: /^cancel$/i }));
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
   });
 
   // GAP-HR-LEAVE-POLICIES-03
@@ -147,15 +176,14 @@ describe("LeavePoliciesClient", () => {
     await waitFor(() => expect(screen.getByText("Earned Leave")).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole("button", { name: /^edit$/i }));
-    const daysInput = screen.getByRole("spinbutton", { name: /days per year/i });
-    fireEvent.change(daysInput, { target: { value: "22" } });
-    fireEvent.click(screen.getByRole("button", { name: /^save$/i }));
-
-    const dialog = await screen.findByRole("alertdialog");
+    const dialog = await screen.findByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/days per year/i), { target: { value: "22" } });
     fireEvent.click(within(dialog).getByRole("button", { name: /save changes/i }));
 
     await waitFor(() => expect(screen.getByText(/change submitted/i)).toBeInTheDocument());
     expect(screen.queryByText(/policy updated successfully/i)).not.toBeInTheDocument();
     expect(screen.getByText("22")).toBeInTheDocument(); // optimistic value, before any refetch
+    const patch = fetchMock.mock.calls.find((c) => (c[1] as RequestInit | undefined)?.method === "PATCH");
+    expect(JSON.parse(String((patch![1] as RequestInit).body))).toMatchObject({ maxDaysPerYear: 22, prefixSuffixRule: false, proRataOnJoining: true });
   });
 });
