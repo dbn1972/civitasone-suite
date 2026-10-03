@@ -25,7 +25,12 @@ const FAKE = randomUUID();
 // DB, queue, and outbox stay real, per this file's stated convention.
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
-  return { ...actual, verifyEmployeeExists: async () => true };
+  return {
+    ...actual,
+    verifyEmployeeExists: async () => true,
+    // no HRMS in this isolated env: the payroll input has no basic for the (random) employee
+    fetchPayrollInput: async () => ({ month: "2026-10", employees: [], lopDays: {}, overtimeHours: {} }),
+  };
 });
 
 function token(roles = ["payroll_admin", "super_admin", "hr_admin", "finance_officer"]) {
@@ -292,6 +297,7 @@ describe("POST /v1/payroll/bonus/compute — valid payload", () => {
         fy: "2025-26",
         basicMinor: 5000000,
         bonusPct: 8.33,
+        overrideReason: "no HRMS basic on record in this test",
       },
     });
     await app.close();

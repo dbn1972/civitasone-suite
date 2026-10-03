@@ -1,3 +1,4 @@
+import { assertBonusWithinRule } from "../bonus-rules/guard.js";
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { idempotentId } from "@civitasone/auth";
@@ -7,7 +8,7 @@ import { sql } from "drizzle-orm";
 import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
-import { verifyEmployeeExists, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { verifyEmployeeExists, fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import * as repo from "./repo.js";
 import { audit } from "./consumer.js";
 import type {
@@ -258,11 +259,33 @@ export async function createArrear(ctx: RequestContext, body: CreateArrearBody):
  */
 export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody): Promise<Accepted> {
   await assertEmployeeExists(ctx, body.employeeId);
+  // GAP-PAYROLL-BONUS-02: never trust a client-supplied basic for the Act's
+  // eligibility ceiling. Compare it with the HRMS basic (the payroll input the
+  // run itself uses); a difference needs an override reason, which is audited.
+  let hrmsBasic: bigint | null = null;
+  try {
+    const input = await fetchPayrollInput(ctx.tenantId, new Date().toISOString().slice(0, 7));
+    const emp = input.employees.find((e) => e.id === body.employeeId);
+    hrmsBasic = emp ? BigInt(emp.basicMinor) : null;
+  } catch (err) {
+    if (err instanceof HrmsUnavailableError) {
+      throw new HttpError(502, "HRMS_UNAVAILABLE", "cannot verify the employee's basic: HRMS payroll input unreachable");
+    }
+    throw err;
+  }
+  const submittedBasic = BigInt(body.basicMinor);
+  if ((hrmsBasic === null || hrmsBasic !== submittedBasic) && !body.overrideReason) {
+    throw new HttpError(400, "BONUS_OVERRIDE_REASON_REQUIRED",
+      "the basic differs from the HRMS basic (or none is on record): an override reason is required");
+  }
+  // Eligibility / band are checked on the HIGHER of the two, so understating the basic cannot dodge the ceiling.
+  const checkBasic = hrmsBasic !== null && hrmsBasic > submittedBasic ? hrmsBasic : submittedBasic;
+  const rule = await assertBonusWithinRule(ctx, { basicMinor: Number(checkBasic), bonusPct: body.bonusPct });
   const id = randomUUID();
   await queue.publish(COMMANDS.bonusCompute, {
     messageId: id, type: COMMANDS.bonusCompute,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body },
+    payload: { id, tenantId: ctx.tenantId, ...body, wageCeilingMinor: rule.wageCeilingMinor?.toString() ?? null, hrmsBasicMinor: hrmsBasic?.toString() ?? null },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

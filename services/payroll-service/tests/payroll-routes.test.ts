@@ -45,7 +45,12 @@ import { sqlClient } from "../src/shared/db.js";
 // DB, queue, and outbox stay real.
 vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
-  return { ...actual, verifyEmployeeExists: async () => true };
+  return {
+    ...actual,
+    verifyEmployeeExists: async () => true,
+    // computeBonus verifies the submitted basic against the HRMS basic (review fix 3)
+    fetchPayrollInput: async () => ({ month: "2026-10", employees: [{ id: ACTOR, basicMinor: "6000000" }], lopDays: {}, overtimeHours: {} }),
+  };
 });
 
 afterAll(async () => { await sqlClient.end(); });

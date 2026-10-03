@@ -105,3 +105,39 @@ describe("PerquisiteComponentForm", () => {
     expect(body).not.toHaveProperty("valueByEmployerMinor");
   });
 });
+
+// GAP-PAYROLL-STATUTORY-PERQUISITE-06: correcting an existing component.
+describe("PerquisiteComponentForm editing an existing component", () => {
+  function renderEditing() {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PerquisiteComponentForm
+          defaultEmployeeId="emp-1"
+          defaultFy="2026-27"
+          editing={{ nature: "car", description: "Pool car", valueByEmployerMinor: "123456", amountRecoveredMinor: "0" }}
+        />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("prefills nature/description/amounts from the line, locks the nature, and offers Update + Cancel", () => {
+    renderEditing();
+    expect((screen.getByLabelText(/^Nature/) as HTMLSelectElement).value).toBe("car");
+    expect(screen.getByLabelText(/^Nature/)).toBeDisabled();
+    expect((screen.getByLabelText(/^Description/) as HTMLInputElement).value).toBe("Pool car");
+    expect((screen.getByLabelText(/Value by Employer/i) as HTMLInputElement).value).toBe("1234.56");
+    expect(screen.getByRole("button", { name: "Update component" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Cancel" })).toBeInTheDocument();
+  });
+
+  it("saving posts the SAME nature (an upsert), so the line is corrected rather than duplicated", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "x", status: "accepted" }), { status: 202 }));
+    renderEditing();
+    fireEvent.change(screen.getByLabelText(/Value by Employer/i), { target: { value: "2000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Update component" }));
+    await screen.findByRole("alertdialog");
+    fireEvent.click(screen.getByRole("button", { name: "Confirm & Save" }));
+    await waitFor(() => expect(fetchSpy).toHaveBeenCalled());
+    expect(JSON.parse(String((fetchSpy.mock.calls[0]![1] as RequestInit).body))).toMatchObject({ employeeId: "emp-1", fy: "2026-27", nature: "car", valueByEmployer: 2000 });
+  });
+});

@@ -176,6 +176,8 @@ export const computeBonusBody = z.object({
   bonusPct:   z.number().min(8.33).max(20)
     .refine((p) => Math.abs(p * 100 - Math.round(p * 100)) < 1e-9, "bonusPct allows at most 2 decimals")
     .default(8.33),
+  // GAP-PAYROLL-BONUS-02: why the basic differs from the HRMS value the form prefilled (audited, never part of the amount).
+  overrideReason: z.string().trim().min(5).max(256).optional(),
 });
 export type ComputeBonusBody = z.infer<typeof computeBonusBody>;
 

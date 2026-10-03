@@ -225,3 +225,139 @@ describe("TaxDeclarationForm — GAP-PAYROLL-TAX-DECLARATION-05 replace confirma
     expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
   });
 });
+
+/**
+ * GAP-PAYROLL-TAX-DECLARATION-02/04/05: landlord PAN, effective caps, window.
+ * Routes by URL so the form's three GETs (declaration, limits, window) each
+ * get their own answer.
+ */
+function routeFetch(opts: { declaration?: unknown; limits?: unknown; window?: unknown } = {}) {
+  const posts: Array<Record<string, unknown>> = [];
+  const spy = vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+    if (init?.method === "POST") {
+      posts.push(JSON.parse(String(init.body)));
+      return Promise.resolve(jsonResponse({ id: "d1", status: "accepted" }, 202));
+    }
+    if (String(url).includes("/tax-declarations/limits")) {
+      return Promise.resolve(opts.limits === undefined ? new Response("", { status: 500 }) : jsonResponse(opts.limits));
+    }
+    if (String(url).includes("/tax-declarations/window")) {
+      return Promise.resolve(opts.window === undefined ? new Response("", { status: 500 }) : jsonResponse(opts.window));
+    }
+    return Promise.resolve(opts.declaration === undefined ? new Response("null", { status: 200 }) : jsonResponse(opts.declaration));
+  });
+  vi.stubGlobal("fetch", spy);
+  return { posts, spy };
+}
+
+const LIMITS = { fy: "2025-26", sec80cCapMinor: "15000000", sec80dCapMinor: "7500000", sec80ccd1bCapMinor: "5000000", landlordPanRentThresholdMinor: "10000000" };
+
+async function readyForm() {
+  renderForm();
+  await waitFor(() => expect(screen.getByRole("button", { name: /submit declaration/i })).toBeInTheDocument());
+}
+
+describe("TaxDeclarationForm -- GAP-PAYROLL-TAX-DECLARATION-04 effective caps", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("blocks an 80C amount above the tenant's EFFECTIVE cap (old regime) without posting, quoting that cap", async () => {
+    const { posts } = routeFetch({ limits: { ...LIMITS, sec80cCapMinor: "20000000" } });
+    await readyForm();
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/tax-declarations/limits"), expect.anything()));
+    fireEvent.click(screen.getByLabelText(/old regime/i));
+    fireEvent.change(screen.getByLabelText(/80C/), { target: { value: "250000" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit declaration/i }));
+    await waitFor(() => expect(screen.getByText(/Section 80C is limited to ₹2,00,000.00/)).toBeInTheDocument());
+    expect(posts).toHaveLength(0);
+  });
+
+  it("allows an amount at the cap, and an over-cap 80C under the NEW regime is not checked (field is disabled anyway)", async () => {
+    const { posts } = routeFetch({ limits: LIMITS });
+    await readyForm();
+    await waitFor(() => expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining("/tax-declarations/limits"), expect.anything()));
+    fireEvent.click(screen.getByLabelText(/old regime/i));
+    fireEvent.change(screen.getByLabelText(/80C/), { target: { value: "150000" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit declaration/i }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toMatchObject({ regime: "old", section80c: 15000000 });
+  });
+
+  it("when the caps cannot be loaded there is no client-side limit check (the server stays the gate)", async () => {
+    const { posts } = routeFetch();
+    await readyForm();
+    fireEvent.click(screen.getByLabelText(/old regime/i));
+    fireEvent.change(screen.getByLabelText(/80C/), { target: { value: "999999" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit declaration/i }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+  });
+});
+
+describe("TaxDeclarationForm -- GAP-PAYROLL-TAX-DECLARATION-02 landlord PAN", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("rent above Rs 1,00,000 (old regime) shows the landlord fields and blocks submit without a PAN", async () => {
+    const { posts } = routeFetch({ limits: LIMITS });
+    await readyForm();
+    fireEvent.click(screen.getByLabelText(/old regime/i));
+    expect(screen.queryByLabelText(/Landlord PAN/)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/rent/i), { target: { value: "120000" } });
+    expect(screen.getByLabelText(/Landlord PAN/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /submit declaration/i }));
+    await waitFor(() => expect(screen.getByText(/Enter the landlord's PAN/)).toBeInTheDocument());
+    expect(posts).toHaveLength(0);
+  });
+
+  it("rejects a malformed PAN, then posts an upper-cased valid one with the landlord name", async () => {
+    const { posts } = routeFetch({ limits: LIMITS });
+    await readyForm();
+    fireEvent.click(screen.getByLabelText(/old regime/i));
+    fireEvent.change(screen.getByLabelText(/rent/i), { target: { value: "120000" } });
+    fireEvent.change(screen.getByLabelText(/Landlord PAN/), { target: { value: "bad-pan" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit declaration/i }));
+    await waitFor(() => expect(screen.getByText(/landlord PAN is not valid/)).toBeInTheDocument());
+    expect(posts).toHaveLength(0);
+    fireEvent.change(screen.getByLabelText(/Landlord PAN/), { target: { value: "abcde1234f" } });
+    fireEvent.change(screen.getByLabelText(/Landlord name/), { target: { value: "A Landlord" } });
+    fireEvent.click(screen.getByRole("button", { name: /submit declaration/i }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).toMatchObject({ landlordPan: "ABCDE1234F", landlordName: "A Landlord", rentPaidMinor: 12000000 });
+  });
+
+  it("a PAN already on file (masked) is not required again and is not sent when left blank", async () => {
+    const { posts } = routeFetch({
+      limits: LIMITS,
+      declaration: { regime: "old", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: 12000000, status: "submitted", createdAt: "2026-04-15T00:00:00.000Z", updatedAt: "2026-05-01T00:00:00.000Z", landlordName: "A Landlord", landlordPanMasked: "ABCDE****F" },
+    });
+    renderForm();
+    await waitFor(() => expect(screen.getByText(/PAN on file: ABCDE\*\*\*\*F/)).toBeInTheDocument());
+    fireEvent.click(screen.getByRole("button", { name: /submit declaration/i }));
+    fireEvent.click(await screen.findByRole("button", { name: /replace/i }));
+    await waitFor(() => expect(posts).toHaveLength(1));
+    expect(posts[0]).not.toHaveProperty("landlordPan");
+  });
+});
+
+describe("TaxDeclarationForm -- GAP-PAYROLL-TAX-DECLARATION-05 window and last updated", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("a closed window shows the date and disables submit", async () => {
+    routeFetch({ window: { fy: "2025-26", configured: true, open: false, state: "closed", opensOn: null, closesOn: "2026-01-31" } });
+    await readyForm();
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/closed on/i));
+    expect(screen.getByRole("button", { name: /submit declaration/i })).toBeDisabled();
+  });
+
+  it("an open window shows the deadline and leaves submit enabled", async () => {
+    routeFetch({ window: { fy: "2025-26", configured: true, open: true, state: "open", opensOn: null, closesOn: "2099-12-31" } });
+    await readyForm();
+    await waitFor(() => expect(screen.getByText(/Declarations are open until/)).toBeInTheDocument());
+    expect(screen.getByRole("button", { name: /submit declaration/i })).toBeEnabled();
+  });
+
+  it("shows 'Last updated' next to the filed-on date for an existing declaration", async () => {
+    routeFetch({ declaration: { regime: "new", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: 0, status: "submitted", createdAt: "2026-04-15T00:00:00.000Z", updatedAt: "2026-06-20T00:00:00.000Z" } });
+    renderForm();
+    await waitFor(() => expect(screen.getByText(/Last updated/)).toBeInTheDocument());
+    expect(screen.getByText(/Filed on/)).toBeInTheDocument();
+  });
+});

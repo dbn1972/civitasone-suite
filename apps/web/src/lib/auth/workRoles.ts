@@ -297,3 +297,15 @@ export const FLEET_WRITE_ROLES = ["super_admin", "asset_admin", "fleet_manager"]
 export function canWriteFleet(roles: readonly string[]): boolean {
   return roles.some((r) => (FLEET_WRITE_ROLES as readonly string[]).includes(r));
 }
+
+/**
+ * fin-payroll-02: payroll-service role lists for the finish-wave mutations.
+ * Mirrors the route guards exactly (the service stays authoritative; these
+ * only decide whether a control is shown).
+ *  - STATUTORY_WRITE: perquisite-components upsert/delete (statutory-returns STATUTORY_ROLES).
+ *  - CONFIG_ADMIN: gratuity / bonus rule rows, declaration window, arrears approval policy.
+ *  - ARREAR_DECIDER: POST /v1/payroll/arrears/:id/approve|reject (maker != checker enforced server-side).
+ */
+export const PAYROLL_STATUTORY_WRITE_ROLES = ["payroll_admin", "payroll_officer", "super_admin"] as const;
+export const PAYROLL_CONFIG_ADMIN_ROLES = ["payroll_admin", "super_admin"] as const;
+export const PAYROLL_ARREAR_DECIDER_ROLES = ["payroll_admin", "payroll_officer", "super_admin"] as const;

@@ -67,6 +67,13 @@ export const COMMANDS = {
   taxProofVerifiedFromSet: "payroll.tax_proof.verified_from_set",
   taxProofViewAudit:      "payroll.tax_proof.view_audit",
   taxProofPurge:          "payroll.tax_proof.purge",
+  // fin-payroll-02 (finish wave)
+  gratuityRuleCreate:     "payroll.gratuity_rule.create",
+  arrearDecide:           "payroll.arrear.decide",
+  arrearPolicySet:        "payroll.arrear_policy.set",
+  perquisiteComponentDelete: "payroll.perquisite_component.delete",
+  taxDeclarationWindowSet:   "payroll.tax_declaration_window.set",
+  bonusRuleCreate:        "payroll.bonus_rule.create",
 } as const;
 
 export const EVENTS = {
@@ -83,6 +90,7 @@ export const EVENTS = {
   ddoUpserted:            "payroll.ddo.upserted",
   pensionerCreated:       "payroll.pensioner.created",
   arrearCreated:          "payroll.arrear.created",
+  arrearDecided:          "payroll.arrear.decided",
   bonusComputed:          "payroll.bonus.computed",
   reimbursementCreated:   "payroll.reimbursement.created",
   salaryRevisionCreated:  "payroll.salary_revision.created",

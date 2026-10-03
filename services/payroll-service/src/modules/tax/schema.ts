@@ -1,6 +1,7 @@
 import {
-  pgSchema, uuid, integer, bigint, char, varchar, timestamp, jsonb,
+  pgSchema, uuid, integer, bigint, char, varchar, timestamp, jsonb, date, text, primaryKey,
 } from "drizzle-orm/pg-core";
+import { encryptedText } from "../../shared/pii-crypto.js";
 
 export const payrollSchema = pgSchema("payroll");
 
@@ -22,7 +23,23 @@ export const taxDeclarations = payrollSchema.table("payroll_tax_declarations", {
   status:          varchar("status", { length: 16 }).notNull().default("draft"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:       uuid("created_by").notNull(),
+  /** migration 0062: Form 12BB landlord details (PAN encrypted at rest). */
+  landlordName:    varchar("landlord_name", { length: 128 }),
+  landlordPan:     encryptedText("landlord_pan"),
+  updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:       uuid("updated_by"),
 });
+
+/** migration 0062: per-tenant, per-FY declaration submission window (no row => always open). */
+export const taxDeclarationWindows = payrollSchema.table("tax_declaration_windows", {
+  tenantId:     uuid("tenant_id").notNull(),
+  fy:           char("fy", { length: 7 }).notNull(),
+  opensOn:      date("opens_on"),
+  closesOn:     date("closes_on").notNull(),
+  changeReason: text("change_reason").notNull(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  updatedBy:    uuid("updated_by").notNull(),
+}, (t) => ({ pk: primaryKey({ columns: [t.tenantId, t.fy] }) }));
 
 export type TaxDeclarationRow = typeof taxDeclarations.$inferSelect;
 export type TaxDeclarationInsert = typeof taxDeclarations.$inferInsert;
@@ -74,4 +91,4 @@ export const perquisiteComponents = payrollSchema.table("perquisite_components",
 export type TaxSlabConfigRow = typeof taxSlabConfig.$inferSelect;
 export type PerquisiteComponentRow = typeof perquisiteComponents.$inferSelect;
 
-export const schema = { taxDeclarations, taxSlabConfig, perquisiteComponents };
+export const schema = { taxDeclarations, taxDeclarationWindows, taxSlabConfig, perquisiteComponents };

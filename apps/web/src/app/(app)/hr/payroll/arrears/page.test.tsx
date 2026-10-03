@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render as rtlRender, screen } from "@testing-library/react";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 const fetchJsonMock = vi.fn();
 vi.mock("@/app/_data/apiClient", () => ({
@@ -16,6 +18,11 @@ vi.mock("@/lib/auth/roleGuard", () => ({
 }));
 
 import ArrearsPage from "./page";
+
+// ArrearsTable / ArrearPolicyCard are client components (useTranslations).
+function render(ui: React.ReactElement) {
+  return rtlRender(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+}
 
 // GAP-PAYROLL-ARREARS-01: the page now also resolves employee names through
 // the hrms directory (fetchJson, ids= batch). Route each mocked call by path.

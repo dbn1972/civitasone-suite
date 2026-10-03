@@ -364,7 +364,7 @@
     "registerCardTitle": "Arrears Register",
     "filterPlaceholder": "Filter by employee or period…",
     "emptyTitle": "No arrears computed",
-    "emptyMessage": "Arrears arise from DA revisions, promotions, and pay fixations applied retroactively. They appear here automatically after each payroll run that includes a backdated revision.",
+    "emptyMessage": "Arrears arise from DA revisions, promotions, and pay fixations applied retroactively, or are added manually. Revision arrears appear here automatically after a back-dated revision; manual arrears wait for approval.",
     "colEmployee": "Employee",
     "colArrearType": "Arrear Type",
     "colFromPeriod": "From Period",
@@ -379,7 +379,23 @@
     "componentHra": "House Rent Allowance",
     "componentTa": "Transport Allowance",
     "componentArrear": "Arrears",
-    "componentArrearRecovery": "Arrears Recovery"
+    "componentArrearRecovery": "Arrears Recovery",
+    "colActions": "Actions",
+    "approveBtn": "Approve",
+    "rejectBtn": "Reject",
+    "approveAria": "Approve arrear for {employee}",
+    "rejectAria": "Reject arrear for {employee}",
+    "needsOtherApprover": "Needs another approver",
+    "approveTitle": "Approve this arrear?",
+    "rejectTitle": "Reject this arrear?",
+    "reasonLabel": "Reason",
+    "approveDescription": "Approve the arrear of {amount} for {employee}. Approved arrears are paid in the next payroll run.",
+    "rejectDescription": "Reject the arrear of {amount} for {employee}. It will not be paid. The reason is recorded.",
+    "selfDecisionError": "You created this arrear, so another payroll user must decide it.",
+    "alreadyDecidedError": "This arrear has already been decided or paid.",
+    "approvedMessage": "Approval submitted for {employee}.",
+    "rejectedMessage": "Rejection submitted for {employee}.",
+    "networkError": "Network error. Please try again."
   },
   "assets": {
     "title": "Assets",
@@ -2905,7 +2921,10 @@
     "filterPlaceholder": "Filter by employee or status…",
     "emptyTitleFiltered": "No gratuity records found",
     "emptyMessageFiltered": "No records match your filter criteria.",
-    "loadErrorMessage": "Couldn't load the gratuity register — the calculator below still works"
+    "loadErrorMessage": "Couldn't load the gratuity register — the calculator below still works",
+    "subtitleDcrg": "Death-cum-retirement gratuity (DCRG) on separation under the CCS (Pension) Rules.",
+    "ceilingNoteDcrg": "DCRG ceiling in force: {amount}; minimum qualifying service {years, plural, one {# year} other {# years}}. Rows follow this organisation's configured rule set.",
+    "ruleLoadFailed": "Could not load this organisation's gratuity rule; the Payment of Gratuity Act default is shown."
   },
   "gratuityCalculator": {
     "disclaimerEstimateOnly": "This is an estimate only. The register above is authoritative.",
@@ -2917,10 +2936,14 @@
     "yearsPlaceholder": "e.g. 15",
     "yearsCount": "{count, plural, one {# year} other {# years}}",
     "cappedAtInline": "→ capped at {amount}",
-    "belowEligibilityMessage": "Gratuity requires a minimum of <strong>5 years</strong> of continuous service. Current: <strong>{years, plural, one {# year} other {# years}}</strong>.",
+    "belowEligibilityMessage": "Gratuity requires a minimum of <strong>{min, plural, one {# year} other {# years}}</strong> of continuous service. Current: <strong>{years, plural, one {# year} other {# years}}</strong>.",
     "resultLabel": "Estimated Gratuity",
     "cappedNote": "Capped at statutory maximum of {amount} as per the Payment of Gratuity Act, 1972.",
-    "roundingNote": "A fraction of a year over six months counts as a full year of service."
+    "roundingNote": "A fraction of a year over six months counts as a full year of service.",
+    "descriptionDcrg": "Government DCRG under the CCS (Pension) Rules. Formula: 1/4 × (Basic + DA) × completed six-monthly periods, at most 16.5 × (Basic + DA). Maximum: {ceiling}.",
+    "halfYearsNote": "Only completed six-monthly periods count; a part period is not rounded up.",
+    "halfYearsCount": "{count, plural, one {# half-year} other {# half-years}}",
+    "cappedNoteDcrg": "Capped at the DCRG ceiling of {amount} configured for this organisation."
   },
   "grievance": {
     "title": "Grievance Redressal",
@@ -4434,7 +4457,17 @@
     "colDescription": "Description",
     "colValueByEmployer": "Value by Employer",
     "colAmountRecovered": "Amount Recovered",
-    "colTaxableValue": "Taxable Value"
+    "colTaxableValue": "Taxable Value",
+    "colActions": "Actions",
+    "actionEdit": "Edit",
+    "actionDelete": "Delete",
+    "editAria": "Edit {nature}",
+    "deleteAria": "Delete {nature}",
+    "deleteTitle": "Delete this perquisite component?",
+    "deleteDescription": "The {nature} component is removed from this employee's Form 12BA. The deletion is audited with the values removed.",
+    "deleteConfirm": "Delete component",
+    "deleteReasonLabel": "Reason for deleting",
+    "deleteFailed": "Could not delete the component. Please try again."
   },
   "perquisiteComponentForm": {
     "formTitle": "Add Perquisite Component",
@@ -4463,7 +4496,10 @@
     "confirmTitle": "Save this perquisite component?",
     "confirmLabel": "Confirm & Save",
     "confirmDescriptionBase": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}.",
-    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}."
+    "confirmDescriptionWithRecovered": "Save perquisite <strong>{nature}</strong> for employee <strong>{employeeId}</strong> (FY {fy}): value ₹{value}, recovered ₹{recovered}.",
+    "updateBtn": "Update component",
+    "cancelEdit": "Cancel",
+    "editingNotice": "Correcting an existing component. The nature is fixed; saving replaces its amounts."
   },
   "pf": {
     "selectPeriodLabel": "Period",
@@ -5919,7 +5955,8 @@
     "loadingSubtitle": "80C/80D investment declarations.",
     "errorBackLabel": "Back to Payroll",
     "errorArea": "Tax Declaration",
-    "viewIncomeTaxLink": "View income tax computation"
+    "viewIncomeTaxLink": "View income tax computation",
+    "metaDescription": "Submit self-declared income tax investments (80C/80D/HRA) and upload supporting documents"
   },
   "taxProofs": {
     "title": "Investment proofs",
@@ -6082,7 +6119,19 @@
     "confirmReplaceConfirmLabel": "Yes, replace declaration",
     "confirmReplaceCancelLabel": "Cancel",
     "proofsNote": "This is a self-declaration of planned investments, not proof of investment. Keep your receipts and documents — your employer may ask to see them separately.",
-    "footerNote": "All amounts are in INR. The system converts to paise internally. Submitting updates any existing declaration for FY {fy}."
+    "footerNote": "All amounts are in INR. The system converts to paise internally. Submitting updates any existing declaration for FY {fy}.",
+    "limit80cError": "Section 80C is limited to {cap} under this organisation's configured limit. Reduce the amount to submit.",
+    "limit80dError": "Section 80D is limited to {cap} under this organisation's configured limit. Reduce the amount to submit.",
+    "landlordNameLabel": "Landlord name",
+    "landlordPanLabel": "Landlord PAN",
+    "landlordPanHelp": "Required when annual rent exceeds ₹1,00,000.",
+    "landlordPanKeepHelp": "PAN on file: {masked}. Leave blank to keep it, or type a new one to replace it.",
+    "landlordPanRequiredError": "Enter the landlord's PAN: it is required when annual rent exceeds {threshold}.",
+    "landlordPanInvalidError": "The landlord PAN is not valid. It looks like ABCDE1234F.",
+    "windowOpenUntil": "Declarations are open until {date}.",
+    "windowClosed": "Declarations for {fy} closed on {date}. Contact payroll to change your declaration.",
+    "windowNotOpen": "Declarations open on {date}.",
+    "lastUpdatedLabel": "Last updated {date}"
   },
   "verifyForm16Form": {
     "cardTitle": "Verify a Form-16",
@@ -7102,7 +7151,12 @@
     "employeeLabel": "Employee",
     "bonusPctRangeError": "Bonus % must be between 8.33 and 20, with at most 2 decimals.",
     "basicHelpText": "Enter the basic wage the bonus is calculated on, in rupees (up to 2 decimals).",
-    "submittedMessage": "Bonus computation of {amount} submitted."
+    "submittedMessage": "Bonus computation of {amount} submitted.",
+    "basicPrefilledText": "Prefilled from the employee's current basic in HRMS ({amount}). You can change it; a changed basic needs a reason.",
+    "basicLookupFailed": "Could not read the employee's basic from HRMS. Enter it manually.",
+    "wageCeilingText": "Bonus is computed on wages up to {amount} a month (the Payment of Bonus Act ceiling configured for this organisation).",
+    "overrideReasonLabel": "Reason for changing the basic (min 5 characters)",
+    "overrideReasonRequired": "Give a reason for changing the basic from the HRMS value."
   },
   "payrollComparison": {
     "title": "Payroll Comparison",
@@ -7422,7 +7476,7 @@
     "colFormula": "Formula",
     "colTaxability": "Taxability",
     "calcFormulaAriaLabel": "Calculation formula for {code}",
-    "formulaNotConfigured": "Calculation rule isn't shown on this page",
+    "formulaNotConfigured": "No calculation rule is configured for this component",
     "taxabilityTaxable": "Taxable",
     "taxabilityNotMarked": "Not marked taxable",
     "taxabilityNote": "Taxable flag as stored on each component. It is not an exemption determination: for example, HRA exemption under section 10(13A) depends on rent, city and the employee’s tax regime, and is not available under the new regime (section 115BAC).",
@@ -7431,7 +7485,11 @@
     "typeDeduction": "Deduction",
     "typeEmployerContribution": "Employer Contribution",
     "typeReimbursement": "Reimbursement",
-    "typeOther": "Other"
+    "typeOther": "Other",
+    "rulePctOfBasic": "Calculated as {pct}% of basic",
+    "ruleFixed": "Fixed amount {amount}",
+    "ruleFormula": "Formula: {formula}",
+    "ruleSourceNote": "As configured for this component; not a statutory rate."
   },
   "salaryStructureCard": {
     "defaultBadge": "Default",
@@ -9265,5 +9323,34 @@
     "submitting": "Submitting…",
     "submit": "Submit application",
     "secureNote": "Your information is sent securely and used only for this recruitment process."
+  },
+  "gratuityRuleForm": {
+    "title": "Gratuity rule set",
+    "verifyNote": "Payment of Gratuity Act, 1972 for PSU / small office; CCS (Pension) Rules DCRG for a Government Department. The pre-filled ceilings (Rs 20,00,000 and Rs 25,00,000) are standard figures; verify them against the current notification before saving. Saved as an effective-dated, audited change.",
+    "ruleSetLabel": "Rule set",
+    "ruleSetPogAct": "Payment of Gratuity Act, 1972",
+    "ruleSetCcsDcrg": "CCS (Pension) Rules DCRG",
+    "effectiveFromLabel": "Effective from",
+    "minYearsLabel": "Minimum service (years)",
+    "ceilingLabel": "Ceiling (₹)",
+    "reasonLabel": "Reason for the change (min 10 characters)",
+    "submit": "Save rule set",
+    "saved": "Rule set saved. It applies to separations on or after the effective date.",
+    "failed": "Could not save the rule set. Please try again.",
+    "invalid": "Enter an effective date, a valid ceiling and minimum service, and a reason of at least 10 characters."
+  },
+  "arrearPolicy": {
+    "title": "Arrears approval policy",
+    "onDescription": "Approval required: the payroll run pays only approved arrears, and a second payroll user must approve each manual arrear.",
+    "offDescription": "Approval not required: pending manual arrears are paid in the next payroll run without a second approver.",
+    "turnOff": "Turn approval off",
+    "turnOn": "Turn approval on",
+    "turnOffTitle": "Stop requiring approval for arrears?",
+    "turnOnTitle": "Require approval for arrears?",
+    "turnOffWarning": "Pending manual arrears will be paid in the next run without a second approver. The change is audited with your reason.",
+    "turnOnWarning": "Pending manual arrears will not be paid until a different payroll user approves them. The change is audited with your reason.",
+    "reasonLabel": "Reason (min 10 characters)",
+    "savedMessage": "Policy change submitted.",
+    "networkError": "Network error. Please try again."
   }
 }

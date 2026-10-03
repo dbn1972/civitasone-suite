@@ -7,7 +7,8 @@ import * as lopRepo from "./lop-repo.js";
 import { leaveLopDays } from "./lop-math.js";
 import { fetchAttendanceLopApplies, fetchLeaveLopFractionBps } from "../../shared/hrms-client.js";
 import * as statutoryRepo from "../statutory/repo.js";
-import { computeGratuity, completedYearsPgAct, computeLeaveEncashmentGrossMinor } from "../payroll/domain.js";
+import { completedYearsPgAct, computeLeaveEncashmentGrossMinor } from "../payroll/domain.js";
+import { calendarServiceYears, computeGratuityByRule, loadGratuityRule } from "../gratuity-rules/rules.js";
 import { NonRetryableError } from "@civitasone/queue";
 import { computeLtcExemption } from "../tax/ltc-exemption.js";
 import { ltcExemptions } from "../fnf/schema.js";
@@ -203,9 +204,18 @@ export function registerIntegrationConsumers(queue: Queue): void {
       // PAY-PROFILES: a deputed-IN employee's gratuity is the PARENT
       // organisation's liability -- this tenant settles the final salary
       // only; likewise when the engagement is not gratuity-eligible.
+      // GAP-PAYROLL-STATUTORY-GRATUITY-01: the rule set (Payment of Gratuity
+      // Act vs CCS DCRG), 5-year floor and ceiling come from the tenant's
+      // effective-dated statutory.gratuity_rule_config row; no row => the
+      // built-in Payment of Gratuity Act default (unchanged behaviour).
+      const gratuityRule = await loadGratuityRule(tx, msg.tenantId, p.effectiveDate);
       const gratuityMinor = separationProfile.finalSalaryOnly || !separationProfile.eligibleForGratuity
         ? 0n
-        : computeGratuity(years, basicMinor, lastDaMinor, p.separationType);
+        : computeGratuityByRule(
+            gratuityRule,
+            // DCRG counts completed six-monthly periods: use calendar months so an exact anniversary is not lost to days/365.25.
+            gratuityRule.ruleSet === "ccs_dcrg" ? calendarServiceYears(join, sep) : years,
+            basicMinor, lastDaMinor, p.separationType, p.effectiveDate);
       // BUG FIX: this used to `return` here whenever gratuityMinor was 0
       // (< 5 years' qualifying service), which skipped the fnfCompute
       // publish below entirely -- a short-tenure separation got NO F&F

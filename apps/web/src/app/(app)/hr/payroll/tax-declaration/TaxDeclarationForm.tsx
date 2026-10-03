@@ -4,7 +4,7 @@ import { useCallback, useEffect, useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { currentFinancialYear } from "@/lib/fiscalYear";
 import { useFormError } from "@/lib/useFormError";
-import { formatIndianDate } from "@/lib/formatters";
+import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { Button, ConfirmDialog, StatusPill } from "../../../../_components/ds";
 
@@ -32,6 +32,25 @@ function parseRupeesToPaise(input: string): number | null {
   return minor === null ? null : Number(minor);
 }
 
+/** Mirrors payroll-service LANDLORD_PAN_RENT_THRESHOLD_MINOR (Rs 1,00,000) until the limits endpoint answers. */
+const DEFAULT_LANDLORD_PAN_RENT_THRESHOLD_MINOR = 10_000_000;
+const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+
+/**
+ * GAP-PAYROLL-TAX-DECLARATION-04: the EFFECTIVE (tenant-resolved) Chapter VI-A
+ * caps from GET /v1/payroll/tax-declarations/limits -- the same figures the
+ * payroll engine applies, never a hard-coded copy. null = unknown (the
+ * request failed): no client-side limit check, the server remains the gate.
+ */
+type Limits = { sec80cCapMinor: number | null; sec80dCapMinor: number | null; landlordPanRentThresholdMinor: number };
+
+/** GAP-PAYROLL-TAX-DECLARATION-05: GET /v1/payroll/tax-declarations/window. */
+type WindowInfo = { open: boolean; state: "open" | "not_open" | "closed"; opensOn: string | null; closesOn: string | null };
+
+function toCapMinor(v: unknown): number | null {
+  return typeof v === "string" && /^\d+$/.test(v) && Number.isSafeInteger(Number(v)) ? Number(v) : null;
+}
+
 /** Format paise as a plain rupees string for a step="0.01" input (never native parseFloat math). */
 function formatPaiseForInput(paise: unknown): string {
   const n = typeof paise === "number" ? paise : Number(paise);
@@ -51,6 +70,12 @@ export function TaxDeclarationForm() {
   const [prevEmployerSalary, setPrevEmployerSalary] = useState("");
   const [otherSourcesIncome, setOtherSourcesIncome] = useState("");
   const [perquisites, setPerquisites] = useState("");
+  const [landlordName, setLandlordName] = useState("");
+  const [landlordPan, setLandlordPan] = useState("");
+  const [landlordPanMasked, setLandlordPanMasked] = useState<string | null>(null);
+  const [limits, setLimits] = useState<Limits | null>(null);
+  const [windowInfo, setWindowInfo] = useState<WindowInfo | null>(null);
+  const [updatedAt, setUpdatedAt] = useState<string | null>(null);
 
   const [busy, setBusy] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -80,6 +105,9 @@ export function TaxDeclarationForm() {
   const prevSalId = useId();
   const otherIncId = useId();
   const perqId = useId();
+  const landlordNameId = useId();
+  const landlordPanId = useId();
+  const landlordPanHelpId = useId();
 
   const load = useCallback(
     async (signal?: AbortSignal) => {
@@ -100,6 +128,9 @@ export function TaxDeclarationForm() {
             setHasExisting(true);
             setExistingStatus(typeof data.status === "string" ? data.status : null);
             setFiledAt(typeof data.createdAt === "string" ? data.createdAt : null);
+            setUpdatedAt(typeof data.updatedAt === "string" ? data.updatedAt : null);
+            setLandlordName(typeof data.landlordName === "string" ? data.landlordName : "");
+            setLandlordPanMasked(typeof data.landlordPanMasked === "string" ? data.landlordPanMasked : null);
           } else {
             setHasExisting(false);
             setExistingStatus(null);
@@ -124,6 +155,42 @@ export function TaxDeclarationForm() {
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+
+  // Effective caps + submission window (best effort: a failure never blocks
+  // the form -- the server enforces both regardless).
+  useEffect(() => {
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const res = await fetch(`/api/proxy/v1/payroll/tax-declarations/limits?fy=${fy}`, { signal: controller.signal });
+        if (res.ok) {
+          const d = (await res.json()) as Record<string, unknown> | null;
+          const threshold = toCapMinor(d?.landlordPanRentThresholdMinor);
+          if (d && (toCapMinor(d.sec80cCapMinor) !== null || toCapMinor(d.sec80dCapMinor) !== null)) {
+            setLimits({
+              sec80cCapMinor: toCapMinor(d.sec80cCapMinor),
+              sec80dCapMinor: toCapMinor(d.sec80dCapMinor),
+              landlordPanRentThresholdMinor: threshold ?? DEFAULT_LANDLORD_PAN_RENT_THRESHOLD_MINOR,
+            });
+          }
+        }
+      } catch { /* aborted or offline: no client-side limit check */ }
+      try {
+        const res = await fetch(`/api/proxy/v1/payroll/tax-declarations/window?fy=${fy}`, { signal: controller.signal });
+        if (res.ok) {
+          const d = (await res.json()) as Record<string, unknown> | null;
+          if (d && typeof d.open === "boolean" && (d.state === "open" || d.state === "not_open" || d.state === "closed")) {
+            setWindowInfo({
+              open: d.open, state: d.state,
+              opensOn: typeof d.opensOn === "string" ? d.opensOn : null,
+              closesOn: typeof d.closesOn === "string" ? d.closesOn : null,
+            });
+          }
+        }
+      } catch { /* aborted or offline: treated as open; the server enforces the window */ }
+    })();
+    return () => controller.abort();
+  }, [fy]);
 
   function retryLoad() {
     setLoading(true);
@@ -167,6 +234,9 @@ export function TaxDeclarationForm() {
           prevEmployerSalaryMinor: parsed.prevEmployerSalary || undefined,
           otherSourcesIncomeMinor: parsed.otherSourcesIncome || undefined,
           perquisitesMinor: parsed.perquisites || undefined,
+          // GAP-PAYROLL-TAX-DECLARATION-02: blank PAN/name = keep what is on file.
+          landlordName: landlordName.trim() || undefined,
+          landlordPan: landlordPan.trim() ? landlordPan.trim().toUpperCase() : undefined,
         }),
       });
 
@@ -180,6 +250,8 @@ export function TaxDeclarationForm() {
       setMessage(t("savedMessage"));
       setHasExisting(true);
       setExistingStatus("submitted");
+      setUpdatedAt(new Date().toISOString());
+      if (landlordPan.trim()) { setLandlordPanMasked(`${landlordPan.trim().toUpperCase().slice(0, 5)}****${landlordPan.trim().toUpperCase().slice(-1)}`); setLandlordPan(""); }
     } catch {
       setTone("bad");
       setMessage(formError.fromException("save").message);
@@ -196,6 +268,41 @@ export function TaxDeclarationForm() {
     if (!parsed) {
       setTone("bad");
       setMessage(t("invalidAmountError"));
+      return;
+    }
+
+    // GAP-PAYROLL-TAX-DECLARATION-04: block over-limit 80C / 80D (old regime
+    // only -- neither reduces tax under the new regime) against the EFFECTIVE caps.
+    if (regime === "old" && limits) {
+      if (limits.sec80cCapMinor !== null && parsed.section80c > limits.sec80cCapMinor) {
+        setTone("bad");
+        setMessage(t("limit80cError", { cap: formatMoney(limits.sec80cCapMinor) }));
+        return;
+      }
+      if (limits.sec80dCapMinor !== null && parsed.section80d > limits.sec80dCapMinor) {
+        setTone("bad");
+        setMessage(t("limit80dError", { cap: formatMoney(limits.sec80dCapMinor) }));
+        return;
+      }
+    }
+
+    // GAP-PAYROLL-TAX-DECLARATION-02: annual rent above Rs 1,00,000 needs the landlord's PAN.
+    const threshold = limits?.landlordPanRentThresholdMinor ?? DEFAULT_LANDLORD_PAN_RENT_THRESHOLD_MINOR;
+    if (regime === "old" && parsed.rentPaid > threshold) {
+      const typed = landlordPan.trim().toUpperCase();
+      if (!typed && !landlordPanMasked) {
+        setTone("bad");
+        setMessage(t("landlordPanRequiredError", { threshold: formatMoney(threshold) }));
+        return;
+      }
+      if (typed && !PAN_RE.test(typed)) {
+        setTone("bad");
+        setMessage(t("landlordPanInvalidError"));
+        return;
+      }
+    } else if (landlordPan.trim() && !PAN_RE.test(landlordPan.trim().toUpperCase())) {
+      setTone("bad");
+      setMessage(t("landlordPanInvalidError"));
       return;
     }
 
@@ -234,6 +341,8 @@ export function TaxDeclarationForm() {
   }
 
   const regimeDisablesDeductions = regime === "new";
+  const windowClosed = windowInfo !== null && !windowInfo.open;
+  const showLandlord = regime === "old" && (parseRupeesToPaise(rentPaid) ?? 0) > (limits?.landlordPanRentThresholdMinor ?? DEFAULT_LANDLORD_PAN_RENT_THRESHOLD_MINOR);
 
   return (
     <>
@@ -248,11 +357,23 @@ export function TaxDeclarationForm() {
       </div>
     )}
 
+    {/* GAP-PAYROLL-TAX-DECLARATION-05: submission window (deadline / closed / not yet open). */}
+    {windowInfo && windowInfo.closesOn && (
+      <div role={windowClosed ? "alert" : "status"} className={`pill ${windowClosed ? "bad" : "info"}`} style={{ marginBottom: 16, width: "fit-content" }}>
+        {windowInfo.state === "not_open"
+          ? t("windowNotOpen", { date: formatIndianDate(windowInfo.opensOn ?? "") })
+          : windowClosed
+            ? t("windowClosed", { fy, date: formatIndianDate(windowInfo.closesOn) })
+            : t("windowOpenUntil", { date: formatIndianDate(windowInfo.closesOn) })}
+      </div>
+    )}
+
     {hasExisting && !loadFailed && (
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="pad" style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           {existingStatus && <StatusPill status={existingStatus} />}
           {filedAt && <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("filedOnLabel", { date: formatIndianDate(filedAt) })}</span>}
+          {updatedAt && <span style={{ fontSize: 12, color: "var(--ink2)" }}>{t("lastUpdatedLabel", { date: formatIndianDate(updatedAt) })}</span>}
         </div>
       </div>
     )}
@@ -402,8 +523,29 @@ export function TaxDeclarationForm() {
           </div>
         </div>
 
+        {showLandlord && (
+          <div style={{ display: "grid", gap: 14, gridTemplateColumns: "repeat(auto-fit,minmax(220px,1fr))" }}>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={landlordNameId} style={{ fontSize: 13, fontWeight: 600 }}>{t("landlordNameLabel")}</label>
+              <input id={landlordNameId} value={landlordName} maxLength={128} onChange={(e) => setLandlordName(e.target.value)}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }} />
+            </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={landlordPanId} style={{ fontSize: 13, fontWeight: 600 }}>
+                {t("landlordPanLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
+              </label>
+              <input id={landlordPanId} value={landlordPan} maxLength={10} autoCapitalize="characters" onChange={(e) => setLandlordPan(e.target.value.toUpperCase())}
+                aria-required="true" aria-describedby={landlordPanHelpId}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, textTransform: "uppercase" }} />
+              <span id={landlordPanHelpId} style={{ fontSize: 12, color: "var(--ink2)" }}>
+                {landlordPanMasked ? t("landlordPanKeepHelp", { masked: landlordPanMasked }) : t("landlordPanHelp")}
+              </span>
+            </div>
+          </div>
+        )}
+
         <div>
-          <Button type="submit" style={{ minHeight: 44 }} disabled={busy || loadFailed}>
+          <Button type="submit" style={{ minHeight: 44 }} disabled={busy || loadFailed || windowClosed}>
             {busy ? t("submittingBtn") : t("submitBtn")}
           </Button>
         </div>

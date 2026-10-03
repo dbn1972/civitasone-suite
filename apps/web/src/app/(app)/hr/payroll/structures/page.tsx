@@ -44,6 +44,9 @@ type ComponentRow = {
   componentType: string;
   isTaxable: boolean;
   structureId: string | null;
+  formula?: string | null;
+  pctOfBasic?: string | number | null;
+  fixedMinor?: string | null;
 } & Record<string, unknown>;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
@@ -169,6 +172,9 @@ export default async function PayStructuresPage() {
               componentType: c.componentType,
               isTaxable: c.isTaxable,
               structureId: c.structureId,
+              formula: c.formula ?? null,
+              pctOfBasic: c.pctOfBasic ?? null,
+              fixedMinor: c.fixedMinor ?? null,
             }))}
           />
         )}

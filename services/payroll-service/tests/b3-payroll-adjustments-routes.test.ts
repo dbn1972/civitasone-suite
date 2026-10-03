@@ -47,6 +47,8 @@ vi.mock("../src/shared/hrms-client.js", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../src/shared/hrms-client.js")>();
   return {
     ...actual,
+    // computeBonus verifies the submitted basic against the HRMS basic (review fix 3)
+    fetchPayrollInput: async () => ({ month: "2026-10", employees: [{ id: OTHER_EMP_ID, basicMinor: "2100000" }], lopDays: {}, overtimeHours: {} }),
     verifyEmployeeExists: vi.fn(async () => true),
     resolveActorEmployeeId: vi.fn(async (_tenant: string, actorId: string) => ACTOR_TO_EMPLOYEE[actorId] ?? null),
   };

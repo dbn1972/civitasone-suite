@@ -218,7 +218,7 @@ describe("4. Pension Computation Accuracy (CCS 2021)", () => {
     // DCRG raw = emoluments(84000) * 58 / 4 * 100 (paise) — but formula may differ
     const dcrg = BigInt(body.dcrg.payableMinor);
     expect(dcrg).toBeGreaterThan(0n);
-    // DCRG cap is ₹20,00,000 (200000000 paise)
+    // DCRG cap is date-aware (Rs 20,00,000 before 1-Jan-2024, Rs 25,00,000 from); this 2030 case is below both
     expect(dcrg).toBeLessThanOrEqual(200000000n);
   });
 

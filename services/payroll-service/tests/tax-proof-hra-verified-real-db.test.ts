@@ -86,7 +86,7 @@ beforeAll(async () => {
   }));
   // Declared rent 3,00,000 (the consumer computes hra_claimed = 1,08,000), tenant opted in from FY 2025-26.
   const submit = await app.inject({ method: "POST", url: "/v1/payroll/tax-declarations", headers: { authorization: `Bearer ${token(EMPLOYEE_LOGIN)}` },
-    payload: { fy: FY, regime: "old", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: 30_000_000 } });
+    payload: { fy: FY, regime: "old", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: 30_000_000, landlordPan: "ABCDE1234F" } });
   expect(submit.statusCode).toBe(202);
   await q.drain();
   await exec(sql`INSERT INTO payroll.payroll_settings (tenant_id, tax_proof_verified_from_fy) VALUES (${TENANT}::uuid, ${FY})

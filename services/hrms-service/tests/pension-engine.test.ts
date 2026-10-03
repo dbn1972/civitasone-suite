@@ -13,6 +13,7 @@ import {
   summariseNonQualifying,
   MAX_QUALIFYING_HALF_YEARS,
   DCRG_ABSOLUTE_CAP_MINOR,
+  dcrgAbsoluteCapMinor,
   FAMILY_PENSION_NORMAL_PCT,
   FAMILY_PENSION_ENHANCED_PCT,
   type PensionInput,
@@ -248,5 +249,28 @@ describe("pension/engine — elEncashment()", () => {
   it("handles zero balance", () => {
     const r = elEncashment(5600000n, 50, 0);
     expect(r).toBe(0n);
+  });
+});
+
+describe("DCRG ceiling is date-aware (Rs 20 lakh before 1-Jan-2024, Rs 25 lakh from)", () => {
+  const rich = { pensionScheme: "GPF" as const, dateOfJoining: "1990-04-01", lastBasicMinor: 200_000_00n, daRatePct: 50 };
+
+  it("retirement before 1-Jan-2024 is capped at Rs 20,00,000", () => {
+    const r = computePension({ ...rich, retirementDate: "2023-12-31" });
+    expect(r.dcrg.payableMinor).toBe(200_000_000n);
+    expect(r.dcrg.absoluteCapMinor).toBe(200_000_000n);
+    expect(r.dcrg.cappedBy).toBe("absolute_ceiling");
+  });
+
+  it("retirement on/after 1-Jan-2024 is capped at Rs 25,00,000", () => {
+    const r = computePension({ ...rich, retirementDate: "2024-01-01" });
+    expect(r.dcrg.payableMinor).toBe(250_000_000n);
+    expect(r.dcrg.absoluteCapMinor).toBe(250_000_000n);
+    expect(r.dcrg.cappedBy).toBe("absolute_ceiling");
+  });
+
+  it("dcrgAbsoluteCapMinor switches exactly at the revision date", () => {
+    expect(dcrgAbsoluteCapMinor("2023-12-31")).toBe(200_000_000n);
+    expect(dcrgAbsoluteCapMinor("2024-01-01")).toBe(250_000_000n);
   });
 });

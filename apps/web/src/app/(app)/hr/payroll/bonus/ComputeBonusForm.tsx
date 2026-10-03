@@ -1,15 +1,26 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatMoney } from "@/lib/formatters";
-import { applyBpsToMinor, rupeesToMinorString, percentToBps } from "@/lib/money";
+import { applyBpsToMinor, rupeesToMinorString, percentToBps, minorToDecimalString } from "@/lib/money";
 import { recentFinancialYears } from "@/lib/fiscalYear";
 import { parseBonusForm, BONUS_PCT_MIN_BPS, BONUS_PCT_MAX_BPS, type BonusFormField, type BonusPayload } from "./bonusSchema";
+
+/**
+ * GAP-PAYROLL-BONUS-02: GET /v1/payroll/bonus/basic -- the employee's CURRENT
+ * basic from the HRMS payroll input, plus the tenant's Payment-of-Bonus-Act
+ * parameters (null = not enforced). The calculation stays authoritative on
+ * the server; this only prefills and previews.
+ */
+type BasicLookup = {
+  basicMinor: string;
+  rule: { wageCeilingMinor: string | null; eligibilityCeilingMinor: string | null } | null;
+};
 
 const inputStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
@@ -30,6 +41,41 @@ export function ComputeBonusForm() {
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"good" | "bad">("good");
   const [invalidField, setInvalidField] = useState<BonusFormField | null>(null);
+  const [lookup, setLookup] = useState<BasicLookup | null>(null);
+  const [lookupFailed, setLookupFailed] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const overrideId = useId();
+
+  // Prefill the basic when an employee is picked (best effort: a failure leaves
+  // manual entry available and says so).
+  useEffect(() => {
+    setLookup(null);
+    setLookupFailed(false);
+    setOverrideReason("");
+    if (!employeeId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await browserJson<Partial<BasicLookup>>(`v1/payroll/bonus/basic?employeeId=${encodeURIComponent(employeeId)}`);
+        if (cancelled) return;
+        if (res && typeof res.basicMinor === "string" && /^\d+$/.test(res.basicMinor)) {
+          setLookup({ basicMinor: res.basicMinor, rule: res.rule ?? null });
+          setBasic(minorToDecimalString(res.basicMinor) ?? "");
+        } else {
+          setLookupFailed(true);
+        }
+      } catch {
+        if (!cancelled) setLookupFailed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [employeeId]);
+
+  const prefilledBasic = lookup ? (minorToDecimalString(lookup.basicMinor) ?? "") : null;
+  // The server compares the submitted basic with the HRMS one: a difference, or no HRMS basic
+  // to compare with (lookup failed), needs a reason.
+  const basicOverridden = employeeId !== null && (lookup === null ? !!basic.trim() : rupeesToMinorString(basic) !== lookup.basicMinor);
+  const wageCeilingMinor = lookup?.rule?.wageCeilingMinor ?? null;
 
   const empId = useId();
   const fyId = useId();
@@ -48,7 +94,9 @@ export function ComputeBonusForm() {
     const b = rupeesToMinorString(basic);
     const bps = percentToBps(bonusPct);
     if (b === null || bps === null || bps < BONUS_PCT_MIN_BPS || bps > BONUS_PCT_MAX_BPS) return null;
-    return applyBpsToMinor(BigInt(b), bps);
+    // With a configured wage ceiling the bonus is computed on capped wages (s.12).
+    const wages = wageCeilingMinor !== null && BigInt(b) > BigInt(wageCeilingMinor) ? BigInt(wageCeilingMinor) : BigInt(b);
+    return applyBpsToMinor(wages, bps);
   })();
 
   function handleSubmit(e: React.FormEvent) {
@@ -64,6 +112,14 @@ export function ComputeBonusForm() {
       else if (result.field === "basic") basicRef.current?.focus();
       else if (result.field === "bonusPct") pctRef.current?.focus();
       else document.getElementById(empId)?.focus();
+      return;
+    }
+    // An edited basic needs a reason (audited): the HRMS value is the default.
+    if (basicOverridden && overrideReason.trim().length < 5) {
+      setTone("bad");
+      setInvalidField("basic");
+      setMessage(t("overrideReasonRequired"));
+      document.getElementById(overrideId)?.focus();
       return;
     }
     setDialogError(undefined);
@@ -87,9 +143,11 @@ export function ComputeBonusForm() {
           fy: pending.fy,
           basicMinor: pending.basicMinor,
           bonusPct: pending.bonusPct,
+          overrideReason: basicOverridden ? overrideReason.trim() : undefined,
         }),
       });
-      const amount = formatMoney(applyBpsToMinor(BigInt(pending.basicMinor), pending.bonusBps));
+      const cappedWages = wageCeilingMinor !== null && BigInt(pending.basicMinor) > BigInt(wageCeilingMinor) ? BigInt(wageCeilingMinor) : BigInt(pending.basicMinor);
+      const amount = formatMoney(applyBpsToMinor(cappedWages, pending.bonusBps));
       setPending(null);
       setTone("good");
       setInvalidField(null);
@@ -177,7 +235,19 @@ export function ComputeBonusForm() {
             </div>
           </div>
 
-          <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>{t("basicHelpText")}</p>
+          <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>
+            {prefilledBasic !== null ? t("basicPrefilledText", { amount: formatMoney(lookup!.basicMinor) }) : t("basicHelpText")}
+          </p>
+          {lookupFailed && <p role="status" style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>{t("basicLookupFailed")}</p>}
+          {wageCeilingMinor !== null && (
+            <p style={{ fontSize: 12, color: "var(--ink2)", margin: 0 }}>{t("wageCeilingText", { amount: formatMoney(wageCeilingMinor) })}</p>
+          )}
+          {basicOverridden && (
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={overrideId} style={{ fontSize: 13, fontWeight: 600 }}>{t("overrideReasonLabel")}</label>
+              <input id={overrideId} value={overrideReason} maxLength={256} onChange={(e) => setOverrideReason(e.target.value)} style={inputStyle} />
+            </div>
+          )}
 
           {previewAmountMinor !== null && (
             <p style={{ fontSize: 13, color: "var(--ink2)" }}>

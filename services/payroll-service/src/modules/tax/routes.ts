@@ -6,7 +6,7 @@ import { eq, and, inArray } from "drizzle-orm";
 import { scopedRead } from "../../shared/db.js";
 import { payrollSlips, payrollRuns } from "../payroll/schema.js";
 import { payrollTds } from "../statutory/schema.js";
-import { taxDeclarations } from "./schema.js";
+import { taxDeclarations, taxDeclarationWindows } from "./schema.js";
 import { exemptionCeilings } from "../fnf/schema.js";
 import { buildForm16 } from "./form16.js";
 import { computeTax, stdDeduction, UnconfiguredFyError } from "./engine.js";
@@ -14,7 +14,10 @@ import { resolveRunStatutoryConfig } from "../payroll/consumer.js";
 import { HrmsUnavailableError, fetchPayrollInput } from "../../shared/hrms-client.js";
 import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
-import { createTaxDeclarationBody } from "./validators.js";
+import { createTaxDeclarationBody, taxDeclarationWindowBody, LANDLORD_PAN_RENT_THRESHOLD_MINOR } from "./validators.js";
+import { maskPan } from "../../shared/pii-mask.js";
+import { encryptPii } from "../../shared/pii-crypto.js";
+import { currentFyWindow } from "./declaration-window.js";
 import * as commands from "./commands.js";
 import { resolveVerificationPlan, applyPlanToRowExact, istToday } from "./verified-inputs.js";
 import { computeHraClaimedMinor } from "./consumer.js";
@@ -370,6 +373,27 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
     const regime = body.regime ?? "new";
 
+    // GAP-PAYROLL-TAX-DECLARATION-05: an employee cannot file outside the
+    // tenant's window; payroll staff may still file on their behalf.
+    // GAP-PAYROLL-TAX-DECLARATION-02: annual rent above Rs 1,00,000 needs the
+    // landlord's PAN (CBDT rule for HRA claims), supplied now or already on
+    // file. Only the old regime claims HRA, so only it is checked.
+    const isStaff = isRouteStaff(ctx, WRITER_STAFF_ROLES);
+    const [windowRow, existingRow] = await scopedRead(async (tx) => [
+      (await tx.select().from(taxDeclarationWindows)
+        .where(and(eq(taxDeclarationWindows.tenantId, ctx.tenantId), eq(taxDeclarationWindows.fy, body.fy))).limit(1))[0] ?? null,
+      (await tx.select().from(taxDeclarations)
+        .where(and(eq(taxDeclarations.tenantId, ctx.tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, body.fy))).limit(1))[0] ?? null,
+    ] as const);
+    const win = currentFyWindow(windowRow ? { opensOn: windowRow.opensOn, closesOn: windowRow.closesOn } : null, istToday());
+    if (!isStaff && !win.open) {
+      throw new HttpError(409, "DECLARATION_WINDOW_CLOSED",
+        win.state === "not_open" ? `declarations for ${body.fy} open on ${win.opensOn}` : `declarations for ${body.fy} closed on ${win.closesOn}; contact payroll to change it`);
+    }
+    if (regime === "old" && body.rentPaidMinor > LANDLORD_PAN_RENT_THRESHOLD_MINOR && !body.landlordPan && !existingRow?.landlordPan) {
+      throw new HttpError(400, "LANDLORD_PAN_REQUIRED", "landlord PAN is required when annual rent exceeds Rs 1,00,000");
+    }
+
     return sendAccepted(reply, acceptedResponseSchema, await commands.submitDeclaration(ctx, {
       employeeId,
       fy: body.fy,
@@ -381,6 +405,9 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       prevEmployerSalaryMinor: body.prevEmployerSalaryMinor,
       otherSourcesIncomeMinor: body.otherSourcesIncomeMinor,
       perquisitesMinor: body.perquisitesMinor,
+      landlordName: body.landlordName,
+      // sealed here: the PAN never travels in cleartext in the queue command (consumer unseals it)
+      landlordPanSealed: body.landlordPan ? encryptPii(body.landlordPan) : undefined,
     }));
   });
 
@@ -422,7 +449,53 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
       perquisitesMinor: Number(dec.perquisitesMinor),
       status: dec.status,
       createdAt: dec.createdAt,
+      updatedAt: dec.updatedAt,
+      // PAN is PII: masked on read; a resubmit with it blank keeps the stored value.
+      landlordName: dec.landlordName ?? null,
+      landlordPanMasked: dec.landlordPan ? maskPan(dec.landlordPan) : null,
     });
+  });
+
+  /**
+   * GET /v1/payroll/tax-declarations/limits?fy=2026-27
+   * GAP-PAYROLL-TAX-DECLARATION-04: the EFFECTIVE (tenant-resolved) Chapter VI-A
+   * caps, so the form validates against the same figures payroll applies
+   * instead of a hard-coded copy (DOM-020/026).
+   */
+  app.get("/v1/payroll/tax-declarations/limits", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { fy } = z.object({ fy: z.string() }).parse(req.query);
+    const { startYear } = parseFy(fy);
+    const cfg = await scopedRead((tx) => resolveRunStatutoryConfig(tx, ctx.tenantId, `${startYear + 1}-03`));
+    return reply.send({
+      fy,
+      sec80cCapMinor: cfg.sec80cCapMinor.toString(),
+      sec80dCapMinor: cfg.sec80dCapMinor.toString(),
+      sec80ccd1bCapMinor: cfg.sec80ccd1bCapMinor.toString(),
+      landlordPanRentThresholdMinor: String(LANDLORD_PAN_RENT_THRESHOLD_MINOR),
+    });
+  });
+
+  /** GET /v1/payroll/tax-declarations/window?fy= -- submission window + whether it is open now (IST). */
+  app.get("/v1/payroll/tax-declarations/window", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { fy } = z.object({ fy: z.string() }).parse(req.query);
+    parseFy(fy);
+    const row = (await scopedRead((tx) => tx.select().from(taxDeclarationWindows)
+      .where(and(eq(taxDeclarationWindows.tenantId, ctx.tenantId), eq(taxDeclarationWindows.fy, fy))).limit(1)))[0] ?? null;
+    const win = currentFyWindow(row ? { opensOn: row.opensOn, closesOn: row.closesOn } : null, istToday());
+    return reply.send({ fy, configured: !!row, opensOn: win.opensOn, closesOn: win.closesOn, open: win.open, state: win.state });
+  });
+
+  /** PUT /v1/payroll/tax-declarations/window -- payroll_admin / super_admin; audited with a reason. */
+  app.put("/v1/payroll/tax-declarations/window", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, CEILING_ROLES);
+    const body = taxDeclarationWindowBody.parse(req.body);
+    parseFy(body.fy);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.setDeclarationWindow(ctx, body));
   });
 
   /**

@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 // next-intl / ICU MessageFormat: `select` compares the interpolated value
 // after string coercion, so passing the raw `isDefault` boolean works with
@@ -10,6 +10,9 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+
+/** one delayed follow-up refresh after the 202 (GAP-PAYROLL-STRUCTURES-05) */
+export const CREATE_REFRESH_DELAY_MS = 2000;
 
 type AcceptedResponse = { id: string; status: string; correlationId?: string };
 
@@ -30,6 +33,8 @@ export function CreateStructureForm() {
   const defaultId = useId();
   const errId = useId();
   const nameRef = useRef<HTMLInputElement>(null);
+  const refreshTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => { if (refreshTimer.current) clearTimeout(refreshTimer.current); }, []);
   const nameInvalid = tone === "bad" && !!message && !name.trim();
 
   function handleSubmit(e: React.FormEvent) {
@@ -68,6 +73,9 @@ export function CreateStructureForm() {
       setDescription("");
       setIsDefault(false);
       router.refresh();
+      // GAP-PAYROLL-STRUCTURES-05: creation is async (202 + consumer), so the
+      // first refresh can race it. Refresh once more shortly after.
+      refreshTimer.current = setTimeout(() => router.refresh(), CREATE_REFRESH_DELAY_MS);
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
     } finally {

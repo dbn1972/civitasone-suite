@@ -10,6 +10,9 @@ import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { payrollRoutes } from "./modules/payroll/routes.js";
 import { payProfileRoutes } from "./modules/pay-profiles/routes.js";
+import { gratuityRuleRoutes } from "./modules/gratuity-rules/routes.js";
+import { arrearApprovalRoutes } from "./modules/arrears-approval/routes.js";
+import { bonusRuleRoutes } from "./modules/bonus-rules/routes.js";
 import { loansRoutes }   from "./modules/loans/routes.js";
 import { statutoryRoutes } from "./modules/statutory/routes.js";
 import { ecrRoutes } from "./modules/statutory/ecr-routes.js";
@@ -82,6 +85,9 @@ export async function buildApp(): Promise<FastifyInstance> {
 
   await app.register(payrollRoutes);
   await app.register(payProfileRoutes);
+  await app.register(gratuityRuleRoutes);
+  await app.register(arrearApprovalRoutes);
+  await app.register(bonusRuleRoutes);
   await app.register(loansRoutes);
   await app.register(statutoryRoutes);
   await app.register(ecrRoutes);

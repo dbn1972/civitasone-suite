@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, integer, bigint, char, varchar, numeric, timestamp, date,
+  pgSchema, uuid, integer, bigint, char, varchar, numeric, timestamp, date, text,
 } from "drizzle-orm/pg-core";
 import { encryptedText } from "../../shared/pii-crypto.js";
 
@@ -194,7 +194,42 @@ export const statutoryConfig = statutorySchema.table("statutory_config", {
   createdBy:          uuid("created_by").notNull(),
 });
 
+/**
+ * migration 0061 (GAP-PAYROLL-STATUTORY-GRATUITY-01/04): per-tenant,
+ * effective-dated gratuity rule set (Payment of Gratuity Act vs CCS DCRG).
+ * Read/written through raw SQL in modules/gratuity-rules (FORCE RLS table);
+ * mirrored here so db/schema and drizzle stay in sync.
+ */
+export const gratuityRuleConfig = statutorySchema.table("gratuity_rule_config", {
+  id:              uuid("id").primaryKey().defaultRandom(),
+  tenantId:        uuid("tenant_id").notNull(),
+  effectiveFrom:   date("effective_from").notNull(),
+  ruleSet:         varchar("rule_set", { length: 16 }).notNull(),
+  minServiceYears: integer("min_service_years").notNull().default(5),
+  ceilingMinor:    bigint("ceiling_minor", { mode: "bigint" }).notNull(),
+  changeReason:    text("change_reason").notNull(),
+  createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:       uuid("created_by").notNull(),
+});
+
+/**
+ * migration 0063 (GAP-PAYROLL-BONUS-02): Payment of Bonus Act parameters per
+ * tenant, effective-dated. Every limit is nullable (NULL = not enforced).
+ */
+export const bonusRuleConfig = statutorySchema.table("bonus_rule_config", {
+  id:                      uuid("id").primaryKey().defaultRandom(),
+  tenantId:                uuid("tenant_id").notNull(),
+  effectiveFrom:           date("effective_from").notNull(),
+  wageCeilingMinor:        bigint("wage_ceiling_minor", { mode: "bigint" }),
+  eligibilityCeilingMinor: bigint("eligibility_ceiling_minor", { mode: "bigint" }),
+  minBonusBps:             integer("min_bonus_bps"),
+  maxBonusBps:             integer("max_bonus_bps"),
+  changeReason:            text("change_reason").notNull(),
+  createdAt:               timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  createdBy:               uuid("created_by").notNull(),
+});
+
 export type StatutoryConfigRow = typeof statutoryConfig.$inferSelect;
 export type StatutoryConfigInsert = typeof statutoryConfig.$inferInsert;
 
-export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig };
+export const schema = { payrollPf, payrollEsi, payrollTds, payrollGratuity, payrollGpf, payrollNps, payrollTdsChallan, payrollTdsNonSalary, statutoryConfig, gratuityRuleConfig, bonusRuleConfig };

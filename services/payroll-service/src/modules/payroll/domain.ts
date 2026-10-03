@@ -786,13 +786,21 @@ export function computeGratuity(
   lastBasicMinor: bigint,
   lastDaMinor = 0n,
   separationType?: string | null,
+  /**
+   * GAP-PAYROLL-STATUTORY-GRATUITY-01/04: per-tenant overrides of the 5-year
+   * floor and the statutory ceiling (gratuity-rules module). Omitted => the
+   * legacy constants, so existing callers are byte-identical.
+   */
+  opts?: { minServiceYears?: number; ceilingMinor?: bigint },
 ): bigint {
-  if (yearsOfService < 5 && !waivesGratuityMinService(separationType)) return 0n;
+  const minYears = opts?.minServiceYears ?? 5;
+  const cap = opts?.ceilingMinor ?? GRATUITY_CAP;
+  if (yearsOfService < minYears && !waivesGratuityMinService(separationType)) return 0n;
   const completedYears = BigInt(completedYearsPgAct(yearsOfService));
   const emoluments = lastBasicMinor + lastDaMinor;
   const raw = (emoluments * 15n * completedYears) / 26n;
   const rounded = roundRupee(raw);
-  return rounded > GRATUITY_CAP ? GRATUITY_CAP : rounded;
+  return rounded > cap ? cap : rounded;
 }
 
 /**

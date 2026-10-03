@@ -3,7 +3,9 @@ import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { exemptionCeilings } from "../fnf/schema.js";
-import { perquisiteComponents, taxDeclarations } from "./schema.js";
+import { perquisiteComponents, taxDeclarations, taxDeclarationWindows } from "./schema.js";
+import { sql } from "drizzle-orm";
+import { decryptPii } from "../../shared/pii-crypto.js";
 import { hraExemptionMinor } from "./engine.js";
 import { govtHraMinor, roundRupee } from "../payroll/domain.js";
 import { loadAllowanceRuleRows, resolveAllowanceRules } from "../pay-profiles/allowance-rules.js";
@@ -31,6 +33,8 @@ export function registerTaxConsumers(queue: Queue): void {
       prevEmployerSalaryMinor?: number;
       otherSourcesIncomeMinor?: number;
       perquisitesMinor?: number;
+      landlordName?: string;
+      landlordPanSealed?: string;
     };
 
     await db.transaction(async (tx) => {
@@ -55,6 +59,11 @@ export function registerTaxConsumers(queue: Queue): void {
         prevEmployerSalaryMinor: BigInt(p.prevEmployerSalaryMinor ?? 0),
         otherSourcesIncomeMinor: BigInt(p.otherSourcesIncomeMinor ?? 0),
         perquisitesMinor: BigInt(p.perquisitesMinor ?? 0),
+        // GAP-PAYROLL-TAX-DECLARATION-02: undefined => the column is left untouched on a resubmit.
+        ...(p.landlordName !== undefined ? { landlordName: p.landlordName } : {}),
+        ...(p.landlordPanSealed !== undefined ? { landlordPan: decryptPii(p.landlordPanSealed) } : {}),
+        updatedAt: new Date(),
+        updatedBy: msg.actorId,
       };
 
       await tx.insert(taxDeclarations).values({
@@ -132,6 +141,18 @@ export function registerTaxConsumers(queue: Queue): void {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
 
+      // Audit the row that was ACTUALLY written (on an overwrite the existing
+      // row keeps its own id, not the command's p.id) with before/after values.
+      const snapshotSql = (employeeId: string) => sql`
+        SELECT id::text AS id, description, value_by_employer_minor::text AS value_minor,
+               amount_recovered_minor::text AS recovered_minor, taxable_value_minor::text AS taxable_minor
+          FROM payroll.perquisite_components
+         WHERE tenant_id = ${msg.tenantId}::uuid AND employee_id = ${employeeId}::uuid
+           AND fy = ${p.fy} AND nature = ${p.nature}`;
+      type Snap = { id: string; description: string; value_minor: string; recovered_minor: string; taxable_minor: string };
+      const beforeRows = ((await tx.execute(sql`${snapshotSql(p.employeeId)} FOR UPDATE`)) ?? []) as unknown as Snap[];
+      const before = Array.isArray(beforeRows) ? beforeRows[0] : undefined;
+
       await tx.insert(perquisiteComponents).values({
         id: p.id,
         tenantId: msg.tenantId,
@@ -172,8 +193,77 @@ export function registerTaxConsumers(queue: Queue): void {
           taxableValueMinor: taxableValueMinor.toString(),
         },
       });
-      await audit(tx, msg, "upsert", "perquisite_component", p.id);
+      const afterRows = ((await tx.execute(snapshotSql(p.employeeId))) ?? []) as unknown as Snap[];
+      const after = Array.isArray(afterRows) ? afterRows[0] : undefined;
+      const writtenId = after?.id ?? p.id;
+      const view = (r: Snap | undefined) => r
+        ? { description: r.description, valueByEmployerMinor: r.value_minor, amountRecoveredMinor: r.recovered_minor, taxableValueMinor: r.taxable_minor }
+        : null;
+      await auditDetail(tx, msg, before ? "update" : "create", "perquisite_component", writtenId, {
+        employeeId: p.employeeId, fy: p.fy, nature: p.nature,
+        before: view(before),
+        after: view(after) ?? { description: p.description ?? "", valueByEmployerMinor: valueByEmployerMinor.toString(), amountRecoveredMinor: amountRecoveredMinor.toString(), taxableValueMinor: taxableValueMinor.toString() },
+      });
     });
+  });
+
+  // GAP-PAYROLL-TAX-DECLARATION-05: per-FY submission window (payroll_admin).
+  queue.subscribe(COMMANDS.taxDeclarationWindowSet, async (msg) => {
+    const p = msg.payload as { id: string; fy: string; opensOn?: string | null; closesOn: string; changeReason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const prev = (await tx.execute(sql`
+        SELECT opens_on::text AS opens_on, closes_on::text AS closes_on
+          FROM payroll.tax_declaration_windows
+         WHERE tenant_id = ${msg.tenantId}::uuid AND fy = ${p.fy} FOR UPDATE
+      `)) as unknown as Array<{ opens_on: string | null; closes_on: string }>;
+      await tx.insert(taxDeclarationWindows).values({
+        tenantId: msg.tenantId, fy: p.fy, opensOn: p.opensOn ?? null, closesOn: p.closesOn,
+        changeReason: p.changeReason, updatedBy: msg.actorId,
+      }).onConflictDoUpdate({
+        target: [taxDeclarationWindows.tenantId, taxDeclarationWindows.fy],
+        set: { opensOn: p.opensOn ?? null, closesOn: p.closesOn, changeReason: p.changeReason, updatedBy: msg.actorId, updatedAt: new Date() },
+      });
+      await auditDetail(tx, msg, "set_window", "tax_declaration_window", `${msg.tenantId}:${p.fy}`, {
+        fy: p.fy, reason: p.changeReason,
+        before: prev[0] ? { opensOn: prev[0].opens_on, closesOn: prev[0].closes_on } : null,
+        after: { opensOn: p.opensOn ?? null, closesOn: p.closesOn },
+      });
+    });
+  });
+
+  // GAP-PAYROLL-STATUTORY-PERQUISITE-06: remove a mistaken component. The
+  // audit row carries the deleted values, so a delete stays reconstructable.
+  queue.subscribe(COMMANDS.perquisiteComponentDelete, async (msg) => {
+    const p = msg.payload as { id: string; reason: string };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const deleted = (await tx.execute(sql`
+        DELETE FROM payroll.perquisite_components
+         WHERE id = ${p.id}::uuid AND tenant_id = ${msg.tenantId}::uuid
+        RETURNING employee_id::text AS employee_id, fy, nature,
+                  value_by_employer_minor::text AS value_minor, amount_recovered_minor::text AS recovered_minor,
+                  taxable_value_minor::text AS taxable_minor
+      `)) as unknown as Array<{ employee_id: string; fy: string; nature: string; value_minor: string; recovered_minor: string; taxable_minor: string }>;
+      if (deleted.length === 0) return; // already gone: idempotent
+      const d = deleted[0]!;
+      await auditDetail(tx, msg, "delete", "perquisite_component", p.id, {
+        reason: p.reason, employeeId: d.employee_id, fy: d.fy, nature: d.nature,
+        valueByEmployerMinor: d.value_minor, amountRecoveredMinor: d.recovered_minor, taxableValueMinor: d.taxable_minor,
+      });
+    });
+  });
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+async function auditDetail(tx: any, msg: any, action: string, resourceType: string, resourceId: string, details: Record<string, unknown>): Promise<void> {
+  await enqueue(tx, {
+    topic: AUDIT,
+    eventType: AUDIT,
+    tenantId: msg.tenantId,
+    actorId: msg.actorId,
+    correlationId: msg.correlationId,
+    payload: { ...details, service: "payroll", action, resourceType, resourceId, outcome: "success" },
   });
 }
 

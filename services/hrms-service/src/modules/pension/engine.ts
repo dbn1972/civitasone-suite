@@ -51,7 +51,26 @@ export const FULL_PENSION_FRACTION = 0.5; // 50% of average emoluments (flat, ir
 export const MAX_COMMUTABLE_PCT = 40; // up to 40% commutable
 export const DCRG_HALF_YEAR_FACTOR = 0.25; // 1/4 per half-year
 export const DCRG_EMOLUMENT_CAP_MULTIPLE = 16.5; // 16.5 x emoluments
-export const DCRG_ABSOLUTE_CAP_MINOR = 2_000_000_00n; // Rs 20,00,000 in paise
+/**
+ * DCRG absolute ceiling is date-dependent per the Department of Pension &
+ * Pensioners' Welfare (DoP&PW) Office Memorandum raising the retirement /
+ * death gratuity ceiling to Rs 25 lakh once DA reached 50% (effective
+ * 1-Jan-2024; VERIFY the OM number and date): Rs 20,00,000 for retirement /
+ * death before 1-Jan-2024; Rs 25,00,000 from 1-Jan-2024. The same pair is mirrored in payroll-service
+ * gratuity-rules/rules.ts (services cannot import each other).
+ */
+export const DCRG_ABSOLUTE_CAP_PRE_2024_MINOR = 2_000_000_00n; // Rs 20,00,000 in paise
+export const DCRG_ABSOLUTE_CAP_FROM_2024_MINOR = 2_500_000_00n; // Rs 25,00,000 in paise
+export const DCRG_CEILING_REVISION_DATE = "2024-01-01";
+/** Latest ceiling (kept under its old name for callers that mean "the current cap"). */
+export const DCRG_ABSOLUTE_CAP_MINOR = DCRG_ABSOLUTE_CAP_FROM_2024_MINOR;
+
+/** DCRG ceiling for a retirement / death date (ISO YYYY-MM-DD). */
+export function dcrgAbsoluteCapMinor(retirementDateISO: string): bigint {
+  return retirementDateISO.slice(0, 10) < DCRG_CEILING_REVISION_DATE
+    ? DCRG_ABSOLUTE_CAP_PRE_2024_MINOR
+    : DCRG_ABSOLUTE_CAP_FROM_2024_MINOR;
+}
 export const FAMILY_PENSION_NORMAL_PCT = 30; // 30% of last basic
 export const FAMILY_PENSION_ENHANCED_PCT = 50; // 50% of last basic (enhanced)
 export const FAMILY_PENSION_ENHANCED_MAX_YEARS = 7; // first 7 years
@@ -262,6 +281,7 @@ export interface PensionResult {
  */
 export function computePension(input: PensionInput): PensionResult {
   const qualifying = qualifyingService(input.dateOfJoining, input.retirementDate, input.nonQualifyingDays ?? 0);
+  const dcrgAbsoluteCap = dcrgAbsoluteCapMinor(input.retirementDate);
   const daRate = input.daRatePct / 100;
 
   // Last-drawn Basic+DA (emoluments base for DCRG and commutation).
@@ -292,7 +312,7 @@ export function computePension(input: PensionInput): PensionResult {
       },
       dcrg: {
         completedHalfYears: qualifying.halfYears, rawMinor: 0n,
-        emolumentCapMinor: 0n, absoluteCapMinor: DCRG_ABSOLUTE_CAP_MINOR,
+        emolumentCapMinor: 0n, absoluteCapMinor: dcrgAbsoluteCap,
         payableMinor: 0n, cappedBy: "none",
       },
       familyPension: {
@@ -342,7 +362,7 @@ export function computePension(input: PensionInput): PensionResult {
   let dcrgPayable = dcrgRaw;
   let cappedBy: PensionResult["dcrg"]["cappedBy"] = "none";
   if (dcrgPayable > emolumentCap) { dcrgPayable = emolumentCap; cappedBy = "emolument_multiple"; }
-  if (dcrgPayable > DCRG_ABSOLUTE_CAP_MINOR) { dcrgPayable = DCRG_ABSOLUTE_CAP_MINOR; cappedBy = "absolute_ceiling"; }
+  if (dcrgPayable > dcrgAbsoluteCap) { dcrgPayable = dcrgAbsoluteCap; cappedBy = "absolute_ceiling"; }
 
   // Family pension on last Basic.
   const familyNormal = toPaise(lastBasic * (FAMILY_PENSION_NORMAL_PCT / 100));
@@ -370,7 +390,7 @@ export function computePension(input: PensionInput): PensionResult {
       completedHalfYears: qualifying.halfYears,
       rawMinor: dcrgRaw,
       emolumentCapMinor: emolumentCap,
-      absoluteCapMinor: DCRG_ABSOLUTE_CAP_MINOR,
+      absoluteCapMinor: dcrgAbsoluteCap,
       payableMinor: dcrgPayable,
       cappedBy,
     },

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog, EmptyState } from "../../../../../_components/ds";
 import { browserJson } from "@/lib/api/browserClient";
+import { minorToDecimalString } from "@/lib/money";
 
 const NATURES = [
   "accommodation", "car", "loan", "medical", "club_membership", "gas_electricity_water",
@@ -54,14 +55,22 @@ const NATURE_LABEL_KEYS: Record<(typeof NATURES)[number], string> = {
  * unchanged -- this was a false positive in the original snapshot audit,
  * not a real unit mismatch.
  */
-export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defaultEmployeeId: string; defaultFy: string }) {
+export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy, editing }: {
+  defaultEmployeeId: string;
+  defaultFy: string;
+  /** GAP-PAYROLL-STATUTORY-PERQUISITE-06: an existing line being corrected (nature is its key, so it is fixed). */
+  editing?: { nature: string; description: string; valueByEmployerMinor: string; amountRecoveredMinor: string };
+}) {
   const t = useTranslations("perquisiteComponentForm");
   const router = useRouter();
   const canSave = !!defaultEmployeeId && !!defaultFy;
-  const [nature, setNature] = useState<typeof NATURES[number]>("accommodation");
-  const [description, setDescription] = useState("");
-  const [valueByEmployer, setValueByEmployer] = useState("");
-  const [amountRecovered, setAmountRecovered] = useState("");
+  const editingNature = editing && (NATURES as readonly string[]).includes(editing.nature) ? (editing.nature as typeof NATURES[number]) : undefined;
+  const [nature, setNature] = useState<typeof NATURES[number]>(editingNature ?? "accommodation");
+  const [description, setDescription] = useState(editing?.description ?? "");
+  const [valueByEmployer, setValueByEmployer] = useState(editing ? (minorToDecimalString(editing.valueByEmployerMinor) ?? "") : "");
+  const [amountRecovered, setAmountRecovered] = useState(
+    editing && editing.amountRecoveredMinor !== "0" ? (minorToDecimalString(editing.amountRecoveredMinor) ?? "") : "",
+  );
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -148,6 +157,7 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
                 id={natureId}
                 value={nature}
                 onChange={(e) => setNature(e.target.value as typeof NATURES[number])}
+                disabled={!!editingNature}
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "#fff" }}
               >
                 {NATURES.map((n) => (
@@ -192,10 +202,16 @@ export function PerquisiteComponentForm({ defaultEmployeeId, defaultFy }: { defa
             </div>
           </div>
 
-          <div>
+          {editingNature && (
+            <p role="status" style={{ margin: 0, fontSize: 13, color: "var(--ink2)" }}>{t("editingNotice")}</p>
+          )}
+          <div style={{ display: "flex", gap: 10 }}>
             <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
-              {t("submitBtn")}
+              {editingNature ? t("updateBtn") : t("submitBtn")}
             </Button>
+            {editingNature && (
+              <a href={`/hr/payroll/statutory/perquisite?employeeId=${encodeURIComponent(defaultEmployeeId)}&fy=${encodeURIComponent(defaultFy)}`}>{t("cancelEdit")}</a>
+            )}
           </div>
 
           {message && (

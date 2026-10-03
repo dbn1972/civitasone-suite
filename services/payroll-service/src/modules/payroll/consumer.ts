@@ -502,7 +502,7 @@ export async function generateRetroArrears(
  * persisted. Arrears: status in (pending,approved) up to run month; bonus:
  * approved; reimbursements: approved up to run month.
  */
-async function collectAdHocEarnings(
+export async function collectAdHocEarnings(
   tx: typeof db,
   tenantId: string,
   employeeId: string,
@@ -520,7 +520,13 @@ async function collectAdHocEarnings(
   const arrears = (await tx.execute(sql`
     SELECT id, component_code, difference_minor FROM payroll.payroll_arrears
     WHERE tenant_id = ${tenantId}::uuid AND employee_id = ${employeeId}::uuid
-      AND status IN ('pending','approved') AND run_id IS NULL
+      AND (status = 'approved'
+           OR (status = 'pending'
+               -- GAP-PAYROLL-ARREARS-03: a pending MANUAL arrear is paid only when
+               -- the tenant has switched approval off (default: approval required).
+               AND NOT COALESCE((SELECT arrears_approval_required FROM payroll.payroll_settings
+                                  WHERE tenant_id = ${tenantId}::uuid), true)))
+      AND run_id IS NULL
       AND from_period <= ${runMonth}
     ORDER BY from_period
     FOR UPDATE
@@ -976,12 +982,18 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.bonusCompute, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; employeeId: string; fy: string; basicMinor: number; bonusPct: number };
+    const p = msg.payload as { id: string; tenantId: string; employeeId: string; fy: string; basicMinor: number; bonusPct: number; wageCeilingMinor?: string | null; overrideReason?: string; hrmsBasicMinor?: string | null };
     // bonusPct scaled to basis points to avoid IEEE 754 error (e.g. 8.33 -> 833n bps)
     const bonusPctBps = BigInt(Math.round(p.bonusPct * 100));
-    const bonusAmountMinor = Number((BigInt(p.basicMinor) * bonusPctBps + 5000n) / 10000n);
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // GAP-PAYROLL-BONUS-02: with a tenant Payment-of-Bonus-Act rule the bonus
+      // is computed on wages capped at the calculation ceiling (s.12), which
+      // the command carries (resolved when it was accepted). No ceiling => the
+      // legacy basic * pct, unchanged.
+      const ceiling = p.wageCeilingMinor != null ? BigInt(p.wageCeilingMinor) : null;
+      const bonusWages = ceiling != null && BigInt(p.basicMinor) > ceiling ? ceiling : BigInt(p.basicMinor);
+      const bonusAmountMinor = Number((bonusWages * bonusPctBps + 5000n) / 10000n);
       await tx.execute(sql`
         INSERT INTO payroll.payroll_bonus (id, tenant_id, employee_id, fy, basic_minor, bonus_pct, bonus_amount_minor)
         VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.employeeId}::uuid, ${p.fy}, ${p.basicMinor}, ${p.bonusPct}, ${bonusAmountMinor})
@@ -992,7 +1004,11 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
         payload: { id: p.id, employeeId: p.employeeId, bonusAmountMinor },
       });
-      await audit(tx, msg, "compute", "payroll_bonus", p.id);
+      const auditExtra = {
+        ...(bonusWages !== BigInt(p.basicMinor) ? { wageCeilingApplied: true, wagesMinor: bonusWages.toString() } : {}),
+        ...(p.overrideReason ? { basicOverrideReason: p.overrideReason, hrmsBasicMinor: p.hrmsBasicMinor ?? null, submittedBasicMinor: String(p.basicMinor) } : {}),
+      };
+      await audit(tx, msg, "compute", "payroll_bonus", p.id, Object.keys(auditExtra).length > 0 ? auditExtra : undefined);
     });
   });
 

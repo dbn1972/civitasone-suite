@@ -72,7 +72,7 @@ async function declare(employee: Record<string, unknown>): Promise<bigint> {
   const r = await app.inject({
     method: "POST", url: "/v1/payroll/tax-declarations",
     headers: { authorization: `Bearer ${signToken({ sub: LOGIN, tid: TENANT, roles: ["employee"], sid: "hra2" }, SECRET)}` },
-    payload: { fy: FY, regime: "old", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: 12_000_000 },
+    payload: { fy: FY, regime: "old", section80c: 0, section80d: 0, otherDeductions: 0, rentPaidMinor: 12_000_000, landlordPan: "ABCDE1234F" },
   });
   expect(r.statusCode).toBe(202);
   await (queue as unknown as MemoryQueue).drain();
