@@ -23,6 +23,19 @@ vi.mock("next/navigation", () => ({
 
 import DisbursementPage from "./page";
 import { eligibleBankFileRuns } from "./eligibility";
+import type { IssuedFile, SigningSettings } from "./signingState";
+
+const SIGNING_DEFAULT: SigningSettings = {
+  config: { format: "pgp_detached", perBankOverrides: {}, encryptToBank: false, keyRef: "default" },
+  isDefault: true,
+  unsignedAllowed: true,
+  key: { provider: "dev-file", present: true, fingerprint: "AB12CD34EF56AB12CD34EF56AB12CD34EF56AB12", detail: null },
+};
+const ISSUED: IssuedFile = {
+  id: "f1", runNo: "RUN/2026/07", month: "2026-07", seq: 1, fileFormat: "csv", fileName: "bank_transfer_RUN-2026-07_2026-07.csv",
+  lineCount: 12, createdAt: "2026-08-01T10:00:00Z", signatureFormat: "pgp_detached", signed: true, hasDetachedSignature: true,
+  fileSha256: "ab".repeat(32), encryptedToBank: false,
+};
 
 // UX-017: DisbursementPage is a server component (translated via
 // getTranslations(), which vitest.setup.ts mocks centrally -- no provider
@@ -52,6 +65,10 @@ describe("DisbursementPage", () => {
       sponsor?: unknown;
       dsc?: unknown;
       transfers?: unknown;
+      files?: IssuedFile[];
+      signing?: SigningSettings | null;
+      filesSource?: "api" | "error";
+      signingSource?: "api" | "error";
       source?: "api" | "error";
       // UX-013: per-loader overrides, so a test can simulate ONE of the 4
       // independent loaders failing without the other 3 -- the shared
@@ -70,6 +87,8 @@ describe("DisbursementPage", () => {
       if (path.includes("/runs")) return Promise.resolve({ data: overrides.runs ?? [], source: overrides.runsSource ?? source });
       if (path.includes("sponsor-bank-config")) return Promise.resolve({ data: overrides.sponsor ?? null, source: overrides.sponsorSource ?? source, status: overrides.sponsorStatus });
       if (path.includes("dsc-config")) return Promise.resolve({ data: overrides.dsc ?? null, source: overrides.dscSource ?? source, status: overrides.dscStatus });
+      if (path.includes("bank-file-signing")) return Promise.resolve({ data: overrides.signing === undefined ? SIGNING_DEFAULT : overrides.signing, source: overrides.signingSource ?? source });
+      if (path.includes("disbursement/files")) return Promise.resolve({ data: overrides.files ?? [], source: overrides.filesSource ?? source });
       if (path.includes("disbursement/transfers")) return Promise.resolve({ data: overrides.transfers ?? [], source: overrides.transfersSource ?? source, status: overrides.transfersStatus });
       // Every real loader on this page declares its own empty default ([] or
       // null), and fetchJson() always resolves to that default on failure --
@@ -252,6 +271,62 @@ describe("DisbursementPage", () => {
     await renderPage();
     expect(screen.getByText("DSC Status").parentElement).toHaveTextContent("Not configured");
     expect(screen.queryByText("Couldn't load — showing nothing")).not.toBeInTheDocument();
+  });
+
+  // ───────────────────────────────────────────────────────────────────────
+  // GAP-PAYROLL-DISBURSEMENT-03: bank-file signing
+  // ───────────────────────────────────────────────────────────────────────
+  it("[DISB-03] issued bank files list shows the server-stated signing badge and a signature download", async () => {
+    mockResponses({
+      files: [
+        ISSUED,
+        { ...ISSUED, id: "f2", fileName: "bank_transfer_dev.csv", signatureFormat: "none", signed: false, hasDetachedSignature: false },
+      ],
+    });
+    await renderPage();
+    expect(screen.getByText("Issued bank files")).toBeInTheDocument();
+    expect(screen.getByText("bank_transfer_RUN-2026-07_2026-07.csv")).toBeInTheDocument();
+    expect(screen.getByText("Signed (PGP)")).toBeInTheDocument();
+    expect(screen.getByText("Unsigned (dev only)")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Download the signature of/ })).toHaveLength(1);
+  });
+
+  it("[DISB-03] no issued files yet reads as empty, and a files outage reads as an error -- never as empty", async () => {
+    mockResponses({});
+    await renderPage();
+    expect(screen.getByText("No bank files issued yet")).toBeInTheDocument();
+  });
+
+  it("[DISB-03] a files fetch error renders the error state, not 'No bank files issued yet'", async () => {
+    mockResponses({ filesSource: "error" });
+    await renderPage();
+    expect(screen.getByText("We couldn't load issued bank files.")).toBeInTheDocument();
+    expect(screen.queryByText("No bank files issued yet")).not.toBeInTheDocument();
+  });
+
+  it("[DISB-03] payroll_admin sees the Bank file signing card with the key status", async () => {
+    mockResponses({});
+    await renderPage();
+    expect(screen.getByText("Bank file signing")).toBeInTheDocument();
+    expect(screen.getByText("Signing key present")).toBeInTheDocument();
+    expect(screen.getByLabelText(/Signing format/)).toBeInTheDocument();
+  });
+
+  it("[DISB-03] payroll_officer sees the issued-files list but not the signing settings card, and the admin signing API is not called", async () => {
+    getSessionRolesMock.mockReturnValue(["payroll_officer"]);
+    mockResponses({ files: [ISSUED] });
+    await renderPage();
+    expect(screen.getByText("Signed (PGP)")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Signing format/)).not.toBeInTheDocument();
+    const paths = fetchJsonMock.mock.calls.map((c) => String(c[0]));
+    expect(paths.some((p) => p.includes("bank-file-signing"))).toBe(false);
+  });
+
+  it("[DISB-03] a signing-settings outage shows an error, not an empty or default form", async () => {
+    mockResponses({ signingSource: "error", signing: null });
+    await renderPage();
+    expect(screen.getByText("We couldn't load bank file signing settings.")).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Signing format/)).not.toBeInTheDocument();
   });
 
   // ───────────────────────────────────────────────────────────────────────

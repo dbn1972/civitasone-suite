@@ -73,6 +73,7 @@ vi.mock("../src/modules/bank-transfer/issuance.js", async (importOriginal) => ({
     payableSlips: Array<{ id: string; employeeId: string; employeeNo: string; netPayMinor: bigint }>;
     master: Map<string, { fullName: string; bankAccountNo: string | null; bankIfsc: string | null }>;
     render: (lines: unknown[], at: { seq: number; batchBase: number }) => unknown;
+    sign: (file: unknown) => Promise<{ file: unknown; record: unknown }>;
   }) => {
     const lines = input.payableSlips.map((s) => {
       const b = input.master.get(s.employeeId);
@@ -82,10 +83,21 @@ vi.mock("../src/modules/bank-transfer/issuance.js", async (importOriginal) => ({
         ifsc: (b?.bankIfsc ?? "").trim().toUpperCase(), accountNo: (b?.bankAccountNo ?? "").trim(),
       };
     });
-    const file = input.render(lines, { seq: 1, batchBase: 1 });
-    return { file, issuanceId: "iss-1", mode: "first", lineCount: lines.length, totalMinor: 0n };
+    const rendered = input.render(lines, { seq: 1, batchBase: 1 });
+    // the route's real signing step (default policy = pgp_detached)
+    const { file, record } = await input.sign(rendered);
+    return { file, issuanceId: "iss-1", mode: "first", lineCount: lines.length, totalMinor: 0n, signing: record };
   }),
 }));
+
+// GAP-PAYROLL-DISBURSEMENT-03: the signing policy is read through scopedRead
+// (real SQL, covered in bank-file-signing-real-db.test.ts). Here it is the
+// application default, so scopedRead's queued run/slips values stay in order.
+vi.mock("../src/modules/bank-file-signing/config-repo.js", async (importOriginal) => {
+  const real = await importOriginal<typeof import("../src/modules/bank-file-signing/config-repo.js")>();
+  const { DEFAULT_BANK_FILE_SIGNING } = await import("../src/modules/bank-file-signing/types.js");
+  return { ...real, loadBankFileSigning: vi.fn(async () => ({ config: DEFAULT_BANK_FILE_SIGNING, isDefault: true, updatedAt: null })) };
+});
 
 vi.mock("../src/modules/tax/config.js", () => ({
   loadTaxConfig: vi.fn(),
@@ -655,7 +667,7 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
     expect(await issueCalls()).toHaveLength(0);
   });
 
-  it("[DISB-03] every generated file states x-bank-file-signed: false (the route does not sign)", async () => {
+  it("[DISB-03] a generated file is signed by default and the response states so (pgp_detached, sha256 of the body)", async () => {
     await mockCsvHappyPath();
     const { buildApp } = await import("../src/app.js");
     const app = await buildApp();
@@ -667,7 +679,11 @@ describe("POST /v1/payroll/runs/:id/bank-file", () => {
     });
     await app.close();
     expect(res.statusCode).toBe(200);
-    expect(res.headers["x-bank-file-signed"]).toBe("false");
+    expect(res.headers["x-bank-file-signed"]).toBe("true");
+    expect(res.headers["x-bank-file-signature-format"]).toBe("pgp_detached");
+    expect(res.headers["x-bank-file-encrypted"]).toBe("false");
+    const { createHash } = await import("node:crypto");
+    expect(res.headers["x-bank-file-sha256"]).toBe(createHash("sha256").update(res.rawPayload).digest("hex"));
   });
 
   it("[DISB-06] refuses a NACH file when the sponsor config has NACH switched off", async () => {

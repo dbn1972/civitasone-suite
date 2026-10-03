@@ -54,6 +54,7 @@ export const COMMANDS = {
   dscConfigUpsert:        "payroll.dsc_config.upsert",
   dscConfigRemove:        "payroll.dsc_config.remove",
   sponsorConfigUpsert:    "payroll.sponsor_config.upsert",
+  bankFileSigningUpdate:  "payroll.bank_file_signing.update",
   // Read-side audit events previously written via route db.transaction+outbox
   auditRecord:            "payroll.audit.record",
   // GAP-PAYROLL-TAX-DECLARATION-02: investment-proof upload / verification / retention
@@ -100,6 +101,7 @@ export const EVENTS = {
   dscConfigUpserted:      "payroll.dsc_config.upserted",
   dscConfigRemoved:       "payroll.dsc_config.removed",
   sponsorConfigUpserted:  "payroll.sponsor_config.upserted",
+  bankFileSigningUpdated: "payroll.bank_file_signing.updated",
 } as const;
 
 export const CONSUMED_EVENTS = {

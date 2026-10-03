@@ -27,7 +27,16 @@ export async function DELETE(req: Request, ctx: { params: { path: string[] } }) 
 }
 
 // Response headers safe to pass back to the browser (download metadata only).
-const FORWARD_RESPONSE = ["content-disposition", "x-bank-file-signed"];
+const FORWARD_RESPONSE = [
+  "content-disposition",
+  "x-bank-file-signed",
+  // GAP-PAYROLL-DISBURSEMENT-03: what the server did with the file, and the id
+  // needed to fetch its detached signature.
+  "x-bank-file-signature-format",
+  "x-bank-file-sha256",
+  "x-bank-file-encrypted",
+  "x-bank-file-issuance-id",
+];
 
 // Status codes that must not carry a body (undici constraint)
 const NO_BODY_STATUSES = new Set([204, 205, 304]);

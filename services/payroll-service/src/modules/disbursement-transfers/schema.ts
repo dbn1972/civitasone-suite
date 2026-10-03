@@ -4,7 +4,7 @@
  * 4 characters of the beneficiary account are ever stored here.
  */
 import {
-  pgSchema, uuid, varchar, bigint, text, timestamp, integer,
+  pgSchema, uuid, varchar, bigint, text, timestamp, integer, boolean,
 } from "drizzle-orm/pg-core";
 
 const payrollSchema = pgSchema("payroll");
@@ -64,6 +64,16 @@ export const disbursementFileIssuances = payrollSchema.table("disbursement_file_
   fullReissueReason: varchar("full_reissue_reason", { length: 500 }),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:         uuid("created_by").notNull(),
+  // Migration 0074 (GAP-PAYROLL-DISBURSEMENT-03): signature of the issued file.
+  /** NULL = issued before signing existed (treated as unsigned). */
+  signatureFormat:        varchar("signature_format", { length: 16 }),
+  /** Detached signature: armoured text (pgp) or base64 DER (pkcs7); NULL for xml_dsig / none. */
+  signature:              text("signature"),
+  /** hex sha256 of the signed bytes (pre encrypt-to-bank wrapping). */
+  fileSha256:             varchar("file_sha256", { length: 64 }),
+  signedAt:               timestamp("signed_at", { withTimezone: true }),
+  signingKeyFingerprint:  varchar("signing_key_fingerprint", { length: 128 }),
+  encryptedToBank:        boolean("encrypted_to_bank").notNull().default(false),
 });
 
 export const schema = { disbursementTransfers, disbursementFileIssuances };

@@ -106,26 +106,81 @@ describe("BankFileWizard", () => {
   });
 
   // ── GAP-PAYROLL-DISBURSEMENT-03 ──────────────────────────────────────────
-  it("[DISB-03] success screen shows UNSIGNED unless the server explicitly says the file is signed", async () => {
-    fetchMock.mockResolvedValue(okFile({ "x-bank-file-signed": "false" }));
+  it("[DISB-03] success screen shows Unsigned (dev only) + the disclosure unless the server explicitly says the file is signed", async () => {
+    fetchMock.mockResolvedValue(okFile({ "x-bank-file-signed": "false", "x-bank-file-signature-format": "none" }));
     renderWizard();
     goToDownloadStep();
     fireEvent.click(screen.getByRole("button", { name: /download bank file/i }));
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: REASON } });
     fireEvent.click(screen.getByRole("button", { name: /generate & download/i }));
-    expect(await screen.findByText(/UNSIGNED/)).toBeInTheDocument();
-    expect(screen.queryByText("Signed")).not.toBeInTheDocument();
+    expect(await screen.findByText("Unsigned (dev only)")).toBeInTheDocument();
+    expect(screen.getByText(/This file is UNSIGNED/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Signed \(/)).not.toBeInTheDocument();
   });
 
-  it("[DISB-03] success screen shows Signed when the server sends x-bank-file-signed: true", async () => {
-    fetchMock.mockResolvedValue(okFile({ "x-bank-file-signed": "true" }));
+  it("[DISB-03] a missing x-bank-file-signed header is treated as unsigned", async () => {
+    fetchMock.mockResolvedValue(okFile());
     renderWizard();
     goToDownloadStep();
     fireEvent.click(screen.getByRole("button", { name: /download bank file/i }));
     fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: REASON } });
     fireEvent.click(screen.getByRole("button", { name: /generate & download/i }));
-    expect(await screen.findByText("Signed")).toBeInTheDocument();
+    expect(await screen.findByText("Unsigned (dev only)")).toBeInTheDocument();
+  });
+
+  it("[DISB-03] signed PGP file: badge says Signed (PGP) and the detached signature is downloaded too (.sig, by issuance id)", async () => {
+    fetchMock
+      .mockResolvedValueOnce(okFile({ "x-bank-file-signed": "true", "x-bank-file-signature-format": "pgp_detached", "x-bank-file-issuance-id": "iss-9" }))
+      .mockResolvedValueOnce(new Response("-----BEGIN PGP SIGNATURE-----", {
+        status: 200,
+        headers: { "content-type": "application/pgp-signature", "content-disposition": 'attachment; filename="bank_transfer_RUN1_2026-09.csv.sig"' },
+      }));
+    renderWizard();
+    goToDownloadStep();
+    fireEvent.click(screen.getByRole("button", { name: /download bank file/i }));
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: REASON } });
+    fireEvent.click(screen.getByRole("button", { name: /generate & download/i }));
+    expect(await screen.findByText("Signed (PGP)")).toBeInTheDocument();
     expect(screen.queryByText(/UNSIGNED/)).not.toBeInTheDocument();
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(String(fetchMock.mock.calls[1]![0])).toBe("/api/proxy/v1/payroll/disbursement/files/iss-9/signature");
+    expect(screen.getByRole("button", { name: /download signature/i })).toBeInTheDocument();
+  });
+
+  it("[DISB-03] a 503 SIGNING_NOT_IMPLEMENTED shows the plain 'signing key isn't set up' message, not a generic error or the code", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "SIGNING_NOT_IMPLEMENTED", message: "keystore adapter" }), { status: 503, headers: { "content-type": "application/json" } }));
+    renderWizard();
+    goToDownloadStep();
+    fireEvent.click(screen.getByRole("button", { name: /download bank file/i }));
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: REASON } });
+    fireEvent.click(screen.getByRole("button", { name: /generate & download/i }));
+    expect(await screen.findByText(/production signing key isn't set up\. Contact your administrator\./)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/SIGNING_NOT_IMPLEMENTED/);
+  });
+
+  it("[DISB-03] an XML-DSig file shows its badge and needs no separate signature download", async () => {
+    fetchMock.mockResolvedValue(okFile({ "x-bank-file-signed": "true", "x-bank-file-signature-format": "xml_dsig", "x-bank-file-issuance-id": "iss-x" }));
+    renderWizard();
+    goToDownloadStep();
+    fireEvent.click(screen.getByRole("button", { name: /download bank file/i }));
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: REASON } });
+    fireEvent.click(screen.getByRole("button", { name: /generate & download/i }));
+    expect(await screen.findByText("Signed (XML-DSig)")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /download signature/i })).not.toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("[DISB-03] a failed signature download is reported without losing the file", async () => {
+    fetchMock
+      .mockResolvedValueOnce(okFile({ "x-bank-file-signed": "true", "x-bank-file-signature-format": "pgp_detached", "x-bank-file-issuance-id": "iss-9" }))
+      .mockResolvedValueOnce(new Response("{}", { status: 500, headers: { "content-type": "application/json" } }));
+    renderWizard();
+    goToDownloadStep();
+    fireEvent.click(screen.getByRole("button", { name: /download bank file/i }));
+    fireEvent.change(screen.getByLabelText(/^Reason/), { target: { value: REASON } });
+    fireEvent.click(screen.getByRole("button", { name: /generate & download/i }));
+    expect(await screen.findByText(/Couldn't download the signature file/)).toBeInTheDocument();
+    expect(screen.getByText("bank_transfer_RUN1_2026-09.csv")).toBeInTheDocument();
   });
 
   it("[DISB-03] an expired DSC is flagged as an error on the DSC step", () => {
@@ -142,12 +197,13 @@ describe("BankFileWizard", () => {
     expect(screen.getByText(/DSC expires in \d+ day\(s\)/)).toBeInTheDocument();
   });
 
-  it("[DISB-03] the DSC step no longer claims the file will be signed", () => {
+  it("[DISB-03] the DSC step says bank files are signed with the payroll signing key, not the DSC", () => {
     renderWizard([RUN], { kind: "configured", subjectCn: "CN=DDO", notAfter: isoDaysFromNow(400), sha256Fingerprint: "AB".repeat(32) });
     fireEvent.click(screen.getByRole("button", { name: /next: preview/i }));
     fireEvent.click(screen.getByRole("button", { name: /next: dsc/i }));
     expect(screen.queryByText(/ready to sign/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/not digitally signed by this system yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/not digitally signed by this system yet/)).not.toBeInTheDocument();
+    expect(screen.getByText(/signed with the payroll signing key/)).toBeInTheDocument();
   });
 
   // ── GAP-PAYROLL-DISBURSEMENT-05 ──────────────────────────────────────────

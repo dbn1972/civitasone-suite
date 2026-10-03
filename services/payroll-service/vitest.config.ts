@@ -1,4 +1,6 @@
 import { defineConfig } from "vitest/config";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { sharedTestTimeouts } from "../../vitest.shared";
 
 export default defineConfig({
@@ -28,6 +30,11 @@ export default defineConfig({
                 "REL-035: DATABASE_URL is not set. This test suite no longer silently falls back to the shared, long-lived civitasone-postgres:5435 dev instance outside CI — export DATABASE_URL explicitly (point it at your own disposable Postgres) before running tests.",
               );
             })()),
+      // GAP-PAYROLL-DISBURSEMENT-03: bank files are signed by default. Tests
+      // that issue a file without injecting a provider use a throwaway dev key
+      // file in the temp dir (generated on first use, mode 600) -- never the
+      // developer's real ~/.civitasone-payroll-signing-key.
+      PAYROLL_SIGNING_KEY_FILE: join(tmpdir(), `civitasone-payroll-test-signing-key-${process.pid}`),
       QUEUE_DRIVER: "memory",
       CACHE_DRIVER: "memory",
     },

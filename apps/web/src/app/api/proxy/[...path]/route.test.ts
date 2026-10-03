@@ -26,7 +26,12 @@ describe("BFF proxy response passthrough", () => {
       headers: {
         "content-type": "application/zip",
         "content-disposition": 'attachment; filename="NACH_SBIN_1.zip"',
-        "x-bank-file-signed": "false",
+        "x-bank-file-signed": "true",
+        "x-bank-file-signature-format": "pgp_detached",
+        "x-bank-file-sha256": "ab".repeat(32),
+        "x-bank-file-encrypted": "false",
+        "x-bank-file-issuance-id": "iss-1",
+        "x-internal-debug": "must-not-pass",
         "set-cookie": "should=not-pass",
       },
     }));
@@ -37,7 +42,13 @@ describe("BFF proxy response passthrough", () => {
     expect(new Uint8Array(await res.arrayBuffer())).toEqual(bytes);
     expect(res.headers.get("content-type")).toBe("application/zip");
     expect(res.headers.get("content-disposition")).toBe('attachment; filename="NACH_SBIN_1.zip"');
-    expect(res.headers.get("x-bank-file-signed")).toBe("false");
+    expect(res.headers.get("x-bank-file-signed")).toBe("true");
+    // GAP-PAYROLL-DISBURSEMENT-03: what the server did with the file + the id for its signature
+    expect(res.headers.get("x-bank-file-signature-format")).toBe("pgp_detached");
+    expect(res.headers.get("x-bank-file-sha256")).toBe("ab".repeat(32));
+    expect(res.headers.get("x-bank-file-encrypted")).toBe("false");
+    expect(res.headers.get("x-bank-file-issuance-id")).toBe("iss-1");
+    expect(res.headers.get("x-internal-debug")).toBeNull();
     expect(res.headers.get("set-cookie")).toBeNull();
   });
 
