@@ -12,6 +12,16 @@ import * as repo from "./repo.js";
 const ASSET_ROLES  = ["asset_manager", "asset_admin", "super_admin"];
 const READER_ROLES = [...ASSET_ROLES, "audit_officer"];
 
+/** The paging-free part of a list query (what `total` counts). */
+function filterOf(o: { category?: string; status?: string; type?: string; search?: string }) {
+  const f: { category?: string; status?: string; type?: string; search?: string } = {};
+  if (o.category !== undefined) f.category = o.category;
+  if (o.status !== undefined) f.status = o.status;
+  if (o.type !== undefined) f.type = o.type;
+  if (o.search !== undefined) f.search = o.search;
+  return f;
+}
+
 export async function registerRoutes(app: FastifyInstance): Promise<void> {
   // Gateway upstreamPath "/v1/assets" + loader prefix "/assets" → service sees "/v1/assets/assets"
   // ── Category master data ────────────────────────────────────────────────
@@ -92,7 +102,7 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (q.type !== undefined) opts.type = q.type;
     if (q.search !== undefined) opts.search = q.search;
     const assets = await queries.listAssets(ctx.tenantId, opts);
-    return reply.send({ data: assets, limit: q.limit, offset: q.offset });
+    return reply.send({ data: assets, limit: q.limit, offset: q.offset, total: await queries.countAssets(ctx.tenantId, filterOf(opts)) });
   });
 
   app.get("/v1/assets/assets", async (req, reply) => {
@@ -105,7 +115,9 @@ export async function registerRoutes(app: FastifyInstance): Promise<void> {
     if (q.type !== undefined) opts.type = q.type;
     if (q.search !== undefined) opts.search = q.search;
     const assets = await queries.listAssets(ctx.tenantId, opts);
-    return reply.send({ data: assets, limit: q.limit, offset: q.offset });
+    // GAP-ASSETS-LIST-06: `total` (all rows matching the filters, ignoring paging) so a client can
+    // tell a truncated page from the whole register. Default page 50, max 200 (assetQueryParams).
+    return reply.send({ data: assets, limit: q.limit, offset: q.offset, total: await queries.countAssets(ctx.tenantId, filterOf(opts)) });
   });
 
   app.patch("/v1/assets/assets/:id/barcode", async (req, reply) => {

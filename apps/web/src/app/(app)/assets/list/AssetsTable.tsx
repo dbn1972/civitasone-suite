@@ -23,6 +23,8 @@ type Row = {
   location: string;
   currentValue: number;
   status: string;
+  /** The typed asset status (not the display text) -- the tabs filter on this. */
+  statusKey: string;
 };
 
 const TABS = ["All", "Active", "In maintenance"] as const;
@@ -65,13 +67,15 @@ export function AssetsTable({ assets, source = "api", cacheKey = "assets.registe
     location: a.location ?? "—",
     currentValue: a.currentValue,
     status: a.status.replace(/_/g, " "),
+    statusKey: a.status,
   }));
 
+  // GAP-ASSETS-LIST-04: compare the typed status, not a regex over the display text.
   const filtered =
     tab === "Active"
-      ? tableRows.filter((r) => /^(active|in use)$/i.test(r.status))
+      ? tableRows.filter((r) => r.statusKey === "active" || r.statusKey === "in_use")
       : tab === "In maintenance"
-        ? tableRows.filter((r) => /maintenance|repair/i.test(r.status))
+        ? tableRows.filter((r) => r.statusKey === "maintenance")
         : tableRows;
 
   return (

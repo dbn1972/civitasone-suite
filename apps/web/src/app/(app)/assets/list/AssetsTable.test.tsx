@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent } from "@testing-library/react";
 
 const seeded = vi.fn();
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: (...a: unknown[]) => seeded(...a) }));
@@ -34,6 +34,24 @@ describe("AssetsTable stats (GAP-ASSETS-LIST-02)", () => {
     render(<AssetsTable assets={[]} source="error" />);
     expect(screen.getAllByText("—").length).toBeGreaterThanOrEqual(4);
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
+  });
+
+  // GAP-ASSETS-LIST-04: tabs filter on the typed status, not a regex over the display text
+  it("the Active / In maintenance tabs use the typed status", () => {
+    seeded.mockReturnValue({
+      data: [A("1", "it", "active"), A("2", "it", "in_use"), A("3", "it", "maintenance"), A("4", "it", "written_off"), A("5", "it", "unknown"), A("6", "it", "lost")],
+      provenance: "live", offline: false, cachedAt: null,
+    });
+    render(<AssetsTable assets={[]} />);
+    fireEvent.click(screen.getByText("In maintenance"));
+    expect(screen.getByText("Asset 3")).toBeInTheDocument();
+    for (const n of ["1", "2", "4", "5", "6"]) expect(screen.queryByText(`Asset ${n}`)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("Active"));
+    expect(screen.getByText("Asset 1")).toBeInTheDocument();
+    expect(screen.getByText("Asset 2")).toBeInTheDocument();
+    for (const n of ["3", "4", "5", "6"]) expect(screen.queryByText(`Asset ${n}`)).not.toBeInTheDocument();
+    fireEvent.click(screen.getByText("All"));
+    expect(screen.getByText("Asset 5")).toBeInTheDocument(); // unknown stays visible under All
   });
 
   it("restricts to the type filter for the fixed register (GAP-ASSETS-FIXED-ASSETS-01)", () => {

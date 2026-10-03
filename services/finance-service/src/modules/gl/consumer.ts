@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { Queue, CommandEnvelope } from "@civitasone/queue";
 import { NonRetryableError } from "@civitasone/queue";
+import { captureError } from "@civitasone/observability";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -34,14 +35,24 @@ async function resolveHeadIdTx(tx: unknown, tenantId: string, accountCode: strin
   const head = await budgetRepo.findHeadByCodeTx(
     tx as Parameters<typeof budgetRepo.findHeadByCodeTx>[0], tenantId, accountCode,
   );
-  if (!head) throw new Error(`UNKNOWN_ACCOUNT_CODE: head code ${accountCode} not found for tenant ${tenantId}`);
+  if (!head) throw new UnknownAccountCodeError(accountCode, tenantId);
   return head.id;
 }
 
-const DEP_EXPENSE = process.env.FINANCE_DEP_EXPENSE_CODE ?? "5100";
-const DEP_EXPENSE_STAT = process.env.FINANCE_STAT_DEP_EXPENSE_CODE ?? "5101";
-const ACCUM_DEP = process.env.FINANCE_ACCUM_DEP_CODE ?? "1250";
-const FIXED_ASSET = process.env.FINANCE_FIXED_ASSET_CODE ?? "1200";
+/**
+ * A journal line names an account code that is not in the tenant's chart of accounts. Retrying can never succeed (the
+ * chart does not change between attempts), so this is NON-RETRYABLE: the message dead-letters immediately instead of
+ * looping, and the generic posting path first reports it as `finance.gl.rejected` so the producer (e.g. asset-service)
+ * can show the record as "journal not posted". Tagged GL_UNKNOWN_ACCOUNT_CODE for alerting.
+ */
+export class UnknownAccountCodeError extends NonRetryableError {
+  constructor(public readonly accountCode: string, public readonly tenantId: string) {
+    super(`UNKNOWN_ACCOUNT_CODE: head code ${accountCode} not found for tenant ${tenantId}`);
+    this.name = "UnknownAccountCodeError";
+  }
+}
+
+import { DEP_EXPENSE, DEP_EXPENSE_STAT, ACCUM_DEP, FIXED_ASSET } from "./system-heads.js";
 const GAIN_LOSS = process.env.FINANCE_GAIN_LOSS_CODE ?? "4200";
 const CASH = process.env.FINANCE_CASH_CODE ?? "1100";
 
@@ -410,10 +421,30 @@ export function registerGlConsumers(queue: Queue): void {
     }
 
     const p = raw as StandardJournal;
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await postJournal(tx, msg, p);
-    });
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await postJournal(tx, msg, p);
+      });
+    } catch (err) {
+      if (err instanceof UnknownAccountCodeError) {
+        // The posting transaction rolled back. Tell the producer (finance.gl.rejected, in its own transaction, which
+        // also marks the message processed) and raise an alertable error, then dead-letter -- never retry.
+        captureError(err, {
+          service: "finance-service", alert: "GL_UNKNOWN_ACCOUNT_CODE", topic: COMMANDS.journalPost,
+          journalId: p.id, voucherNo: p.voucherNo, accountCode: err.accountCode, tenantId: msg.tenantId,
+        });
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await enqueue(tx, {
+            topic: EVENTS.glRejected, eventType: EVENTS.glRejected,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: { journalId: p.id, voucherNo: p.voucherNo, type: p.type, reason: `UNKNOWN_ACCOUNT_CODE: account ${err.accountCode} is not in the chart of accounts`, accountCode: err.accountCode },
+          });
+        });
+      }
+      throw err;
+    }
     await cache.invalidate(cache.makeKey(msg.tenantId, "gl_trial_balance", msg.tenantId));
     // BUG FIX (review follow-up): see the matching comment above
     // (depreciation branch) -- gl_financial_statements needs invalidating at

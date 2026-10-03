@@ -41,7 +41,7 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; name: string; code: string; categoryId: string;
       assetType?: string; acquisitionCost: number; salvageValue?: number; usefulLifeYears?: number;
       depRate?: number; depMethod?: string; currency?: string;
-      acquisitionDate: string; poRef?: string; grnRef?: string; location?: string; notes?: string;
+      acquisitionDate: string; poRef?: string; grnRef?: string; location?: string; locationId?: string; notes?: string;
       barcode?: string;
     };
     try {
@@ -60,7 +60,7 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
         bookValue: costMinor, accumulatedDep: 0n,
         acquisitionDate: p.acquisitionDate,
         poRef: p.poRef ?? null, grnRef: p.grnRef ?? null,
-        location: p.location ?? null, notes: p.notes ?? null,
+        location: p.location ?? null, locationId: p.locationId ?? null, notes: p.notes ?? null,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
       await enqueue(tx, {
@@ -204,11 +204,33 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
 
   queue.subscribe(COMMANDS.assetTagBarcode, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; barcode: string };
-    await db.transaction(async (tx) => {
-      if (!(await markProcessed(tx, msg.messageId))) return;
-      await repo.updateAssetBarcode(tx, p.id, p.tenantId, p.barcode, msg.actorId);
-      await audit(tx, msg, "tag_barcode", "asset", p.id);
-    });
+    try {
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await repo.updateAssetBarcode(tx, p.id, p.tenantId, p.barcode, msg.actorId);
+        await audit(tx, msg, "tag_barcode", "asset", p.id);
+      });
+    } catch (err) {
+      // GAP-ASSETS-SCAN-06: two racing tags of the same barcode -- the loser hits
+      // uq_asset_assets_tenant_barcode. Its transaction (and inbox row) rolled back; the barcode
+      // stays with the winner, and retrying could never succeed, so the command is dropped -- but never silently:
+      // the refusal is recorded as an audited failure in a fresh transaction.
+      if (isUniqueViolation(err)) {
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "asset", action: "tag_barcode", resourceType: "asset", resourceId: p.id, outcome: "failure",
+              details: { failure: "DUPLICATE_BARCODE", barcode: p.barcode },
+            },
+          });
+        });
+        return;
+      }
+      throw err;
+    }
     await cache.invalidate(cache.makeKey(msg.tenantId, "asset", p.id));
   });
 }

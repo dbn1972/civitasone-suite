@@ -188,6 +188,8 @@ describe("AssetDetailActions", () => {
     expect(openSpy).toHaveBeenCalled();
     expect(popup.querySelector("img")).toBeNull();
     expect(popup.querySelector("h2")?.textContent).toBe(payload);
+    // GAP-ASSETS-DETAIL-03: a real QR (svg path) is drawn, built from DOM nodes -- not parsed from text.
+    expect(popup.querySelector("svg path")?.getAttribute("d")).toMatch(/^(M\d+ \d+h1v1h-1z)+$/);
     expect(fake.opener).toBeNull();
     expect(fake.print).toHaveBeenCalled();
   });
