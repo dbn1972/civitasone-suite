@@ -1,4 +1,4 @@
-import { eq, and, desc, ilike, gte, sql, type SQL } from "drizzle-orm";
+import { eq, and, ne, desc, ilike, gte, sql, type SQL } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { HttpError } from "../../shared/context.js";
 import { hrmsJobOpenings, hrmsVacancyCorrigenda, type CorrigendumRow } from "./schema.js";
@@ -15,6 +15,17 @@ export async function findVacancyTx(tx: Writer, tenantId: string, id: string): P
   const rows = await (tx as typeof db).select().from(hrmsJobOpenings)
     .where(and(eq(hrmsJobOpenings.tenantId, tenantId), eq(hrmsJobOpenings.id, id))).limit(1);
   return rows[0] ?? null;
+}
+
+/** True when ANOTHER vacancy of the tenant already carries this advertisement number (case-insensitive). */
+export async function advertisementNoTaken(tenantId: string, advertisementNo: string, exceptId: string): Promise<boolean> {
+  const rows = await scopedRead((tx) => tx.select({ id: hrmsJobOpenings.id }).from(hrmsJobOpenings)
+    .where(and(
+      eq(hrmsJobOpenings.tenantId, tenantId),
+      sql`lower(${hrmsJobOpenings.advertisementNo}) = lower(${advertisementNo})`,
+      ne(hrmsJobOpenings.id, exceptId),
+    )).limit(1));
+  return rows.length > 0;
 }
 
 export async function updateVacancy(

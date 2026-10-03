@@ -28,6 +28,8 @@ export const COMMANDS = {
   appraisalCreate:      "hrms.appraisal.create",
   appraisalAdvanceStage: "hrms.appraisal.advance_stage",
   jobCreate:            "hrms.job.create",
+  // GAP-RECRUITMENT-NEW-06: per-tenant edition policy (requisition-first vacancy creation).
+  recruitmentPolicySet: "hrms.recruitment_policy.set",
   jdTemplateCreate:     "hrms.jd_template.create",
   jdTemplateUpdate:     "hrms.jd_template.update",
   jdTemplateArchive:    "hrms.jd_template.archive",

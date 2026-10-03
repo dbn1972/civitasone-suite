@@ -32,13 +32,15 @@ type Opening = {
   vacancyType?: string;
   /** GAP-RECRUITMENT-HOME-04: live on /careers. */
   isPublished?: boolean;
+  /** GAP-RECRUITMENT-HOME-05: advertisement / notification number, null until assigned. */
+  advertisementNo?: string | null;
   /** GAP-RECRUITMENT-HOME-05: "none" | "draft" | "approved". */
   rosterStatus?: string;
   /** GAP-RECRUITMENT-HOME-05: application fee in paise, as a string. */
   feesMinor?: string | null;
 } & Record<string, unknown>;
 
-type OpeningRow = Opening & { visibility: string; rosterDisplay: string };
+type OpeningRow = Opening & { visibility: string; rosterDisplay: string; advertisementDisplay: string };
 
 async function getDashboard(): Promise<LoaderResult<DashboardStats>> {
   const res = await fetchJson<unknown, DashboardStats>("/api/v1/hrms/recruitment/dashboard", {
@@ -88,6 +90,7 @@ export default async function RecruitmentPage() {
     ...o,
     visibility: o.isPublished === true ? "published" : "unpublished",
     rosterDisplay: t(`roster_${normaliseRosterStatus(o.rosterStatus)}`),
+    advertisementDisplay: o.advertisementNo ? o.advertisementNo : "—",
   }));
 
   return (
@@ -100,6 +103,7 @@ export default async function RecruitmentPage() {
         actions={
           <>
             <Link href="/hr/recruitment/talent-pool" className="btn ghost">{t("talentPool")}</Link>
+            {canCreate && <Link href="/hr/recruitment/requisitions" className="btn ghost">{t("requisitions")}</Link>}
             {canCreate && <Link href="/hr/recruitment/new" className="btn primary">{t("newVacancy")}</Link>}
           </>
         }
@@ -130,6 +134,7 @@ export default async function RecruitmentPage() {
           <DataTable<OpeningRow>
             columns={[
               { key: "jobTitle", label: t("colPosition") },
+              { key: "advertisementDisplay", label: t("colAdvertisementNo") },
               { key: "department", label: t("colDepartment") },
               { key: "vacancies", label: t("colPosts"), align: "right" },
               { key: "applicationsReceived", label: t("colApplications"), align: "right" },

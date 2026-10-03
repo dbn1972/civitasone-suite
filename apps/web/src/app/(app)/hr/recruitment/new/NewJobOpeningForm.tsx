@@ -11,6 +11,8 @@ import { useSearchParams } from "next/navigation";
 import { useFormError } from "@/lib/useFormError";
 import { formatMoney, todayIST } from "@/lib/formatters";
 import { Button } from "@/app/_components/ds";
+import { RequisitionRequiredNotice } from "./RequisitionRequiredNotice";
+import { useRequisitionPolicy, isRequisitionRequiredResponse } from "./requisitionPolicy";
 
 type NamedOption = { id: string; name: string };
 type LookupState = "loading" | "ready" | "error";
@@ -104,6 +106,9 @@ export function NewJobOpeningForm() {
   const [desigState, setDesigState] = useState<LookupState>("loading");
   const [payLevels, setPayLevels] = useState<string[] | null>(null);
   const [lookupAttempt, setLookupAttempt] = useState(0);
+  // GAP-RECRUITMENT-NEW-06: Govt editions create vacancies only by publishing an approved requisition.
+  // The server enforces this on POST /job-openings; the form just says so up front.
+  const { requisitionRequired, markRequired } = useRequisitionPolicy();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -297,6 +302,12 @@ export function NewJobOpeningForm() {
       });
 
       if (!res.ok) {
+        if (await isRequisitionRequiredResponse(res)) {
+          markRequired();
+          setStatus("idle");
+          setMessage("");
+          return;
+        }
         const resolved = await formError.fromResponse(res, "save");
         // Server fieldErrors (VALIDATION_FAILED) land under their own field instead of only a summary line.
         const mapped: Partial<Record<JobOpeningField, string>> = {};
@@ -333,6 +344,7 @@ export function NewJobOpeningForm() {
       aria-describedby={message ? statusMsgId : undefined}
       noValidate
     >
+      {requisitionRequired && <RequisitionRequiredNotice />}
       {errorFields.length > 0 && (
         <div role="alert" style={{ padding: "10px 14px", border: "1px solid var(--bad)", borderRadius: 8, fontSize: 13, color: "var(--bad)" }}>
           <strong>{t("errorSummary", { count: errorFields.length })}</strong>
@@ -660,7 +672,7 @@ export function NewJobOpeningForm() {
       <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
         <Button
           type="submit"
-          disabled={status === "submitting" || status === "success" || deptState === "error"}
+          disabled={status === "submitting" || status === "success" || deptState === "error" || requisitionRequired}
           variant="primary"
           className="btn-tall"
           style={{ alignSelf: "flex-start" }}

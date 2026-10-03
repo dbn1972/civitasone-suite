@@ -7,6 +7,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
+import * as editionPolicyRepo from "./edition-policy-repo.js";
 import * as offerRepo from "./offer-repo.js";
 import * as templateRepo from "./jd-template-repo.js";
 import * as employeeRepo from "../employee/repo.js";
@@ -69,6 +70,23 @@ export function registerRecruitmentConsumers(queue: Queue): void {
     // Confirmed live: with `void` here, this regression test's useCount
     // assertion saw 0 every time, not intermittently.
     if (didInsert && p.templateId) await templateRepo.incrementUseCount(p.tenantId, p.templateId);
+  });
+
+  // GAP-RECRUITMENT-NEW-06: set the tenant's edition policy. Idempotent via markProcessed; the audit event
+  // records the before/after so a switch of "requisition required" is always attributable.
+  queue.subscribe(COMMANDS.recruitmentPolicySet, async (msg) => {
+    const p = msg.payload as { tenantId: string; edition: "govt" | "psu" | "small_office"; requireRequisition: boolean | null };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const { before, after } = await editionPolicyRepo.upsertPolicyTx(
+        tx, p.tenantId, { edition: p.edition, requireRequisition: p.requireRequisition }, msg.actorId,
+      );
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: { service: "hrms", action: "update", resourceType: "recruitment_edition_policy", resourceId: p.tenantId, outcome: "success", before, after },
+      });
+    });
   });
 
   queue.subscribe(COMMANDS.applicationCreate, async (msg) => {

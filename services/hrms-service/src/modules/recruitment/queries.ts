@@ -33,6 +33,8 @@ export async function listJobOpenings(tenantId: string, limit: number, departmen
       id: r.id,
       // GAP-RECRUITMENT-DETAIL-01: the HR detail page reads these from this list payload.
       refNo: r.refNo,
+      // GAP-RECRUITMENT-HOME-05: advertisement / notification number (null until one is assigned).
+      advertisementNo: r.advertisementNo ?? null,
       vacancyType: r.vacancyType,
       jobTitle: r.title,
       department: deptMap.get(r.departmentId) ?? r.departmentId.slice(0, 8),

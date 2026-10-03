@@ -19,6 +19,8 @@ import { formatIndianDateTime } from "@/lib/formatters";
 type Advertisement = {
   id: string;
   status: string;
+  /** GAP-RECRUITMENT-HOME-05: advertisement / notification number (null until assigned). */
+  advertisementNo?: string | null;
   applicationDeadline: string | null;
   /** bigint paise, as a string. */
   feesMinor: string | null;
@@ -58,6 +60,7 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
   const [loadFailed, setLoadFailed] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [advtNo, setAdvtNo] = useState("");
   const [fee, setFee] = useState("");
   const [feeExemption, setFeeExemption] = useState("");
   const [docs, setDocs] = useState("");
@@ -82,6 +85,7 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
   }, []);
 
   const hydrate = useCallback((a: Advertisement) => {
+    setAdvtNo(a.advertisementNo ?? "");
     setFee(paiseToRupeesInput(a.feesMinor));
     setFeeExemption(a.feeExemption ?? "");
     setDocs(a.requiredDocuments.join("\n"));
@@ -128,6 +132,9 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
     e.preventDefault();
     if (readOnly) return;
     const body: Record<string, unknown> = {};
+    // GAP-RECRUITMENT-HOME-05: sent only when it changed; an emptied field clears the number explicitly.
+    const trimmedAdvt = advtNo.trim();
+    if (trimmedAdvt !== (ad?.advertisementNo ?? "")) body.advertisementNo = trimmedAdvt === "" ? null : trimmedAdvt;
     const trimmedFee = fee.trim();
     if (trimmedFee === "") {
       // Clearing a previously set fee is explicit; an untouched empty field sends nothing.
@@ -220,6 +227,11 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
       <form onSubmit={save} className="grid gap-3" aria-label={t("advertisementHeading")}>
         <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">{t("advertisementHeading")}</h3>
         <div className="grid sm:grid-cols-2 gap-3">
+          <div>
+            <label htmlFor={`${uid}-advt`} className={labelCls}>{t("advertisementNoLabel")}</label>
+            <input id={`${uid}-advt`} type="text" className={inputCls} value={advtNo} maxLength={64} disabled={readOnly} onChange={(e) => setAdvtNo(e.target.value)} placeholder={t("advertisementNoPlaceholder")} aria-describedby={`${uid}-advt-help`} />
+            <p id={`${uid}-advt-help`} className="mt-1 text-xs text-slate-500 dark:text-slate-400">{t("advertisementNoHelp")}</p>
+          </div>
           <div>
             <label htmlFor={`${uid}-fee`} className={labelCls}>{t("feeLabel")}</label>
             <input id={`${uid}-fee`} type="text" inputMode="decimal" className={inputCls} value={fee} disabled={readOnly} onChange={(e) => setFee(e.target.value)} placeholder={t("feePlaceholder")} />
