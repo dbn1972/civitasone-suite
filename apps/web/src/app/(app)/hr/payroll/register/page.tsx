@@ -27,6 +27,9 @@ type Row = {
   total_esi_minor: number | string;
   total_tds_minor: number | string;
   total_pt_minor: number | string;
+  /** GAP-PAYROLL-REGISTER-04: Govt-edition deductions; absent on an older API. */
+  total_gpf_minor?: number | string;
+  total_nps_minor?: number | string;
   period: string;
 } & Record<string, unknown>;
 
@@ -52,16 +55,28 @@ async function getData(period?: string, runId?: string): Promise<LoaderResult<Ro
 }
 
 /**
- * GAP-PAYROLL-REGISTER-04: the register table has no GPF/NPS columns
- * (payroll.payroll_register only stores PF/ESI/TDS/PT totals), so a Govt
- * department's GPF/NPS deductions were invisible inside "Deductions". Show
- * the remainder explicitly so the split always adds up.
+ * GAP-PAYROLL-REGISTER-04: Deductions = PF + ESI + TDS + PT + GPF + NPS +
+ * whatever the register does not itemise (loan EMIs, recoveries, ...). "Other
+ * deductions" is that remainder, so the split always adds up. GPF / NPS come
+ * from the register's own columns (absent on an older API / rows written
+ * before they existed -- those are then part of the remainder).
  */
 function otherDeductions(r: Row): string | null {
   const total = toMinorBigInt(r.total_deductions_minor);
-  const listed = sumMinor([r.total_pf_minor, r.total_esi_minor, r.total_tds_minor, r.total_pt_minor]);
+  const listed = sumMinor([
+    r.total_pf_minor, r.total_esi_minor, r.total_tds_minor, r.total_pt_minor,
+    r.total_gpf_minor ?? 0, r.total_nps_minor ?? 0,
+  ]);
   if (total === null || listed === null) return null;
   return (total - listed).toString();
+}
+
+/** True when any row carries a non-zero amount in `key` (a Govt-edition tenant); decides whether the column is shown. */
+function anyNonZero(rows: readonly Row[], key: "total_gpf_minor" | "total_nps_minor"): boolean {
+  return rows.some((r) => {
+    const v = toMinorBigInt(r[key] ?? 0);
+    return v !== null && v !== 0n;
+  });
 }
 
 export default async function PayrollRegisterPage({
@@ -137,6 +152,10 @@ export default async function PayrollRegisterPage({
     { key: "total_esi_minor", label: t("colEsi"), align: "right", cellType: "amount" },
     { key: "total_tds_minor", label: t("colTds"), align: "right", cellType: "amount" },
     { key: "total_pt_minor", label: t("colPt"), align: "right", cellType: "amount" },
+    // GAP-PAYROLL-REGISTER-04: GPF / NPS columns appear once a department
+    // actually deducts them (a Govt-edition tenant), not as always-zero clutter.
+    ...(anyNonZero(items, "total_gpf_minor") ? [{ key: "total_gpf_minor" as const, label: t("colGpf"), align: "right" as const, cellType: "amount" as const }] : []),
+    ...(anyNonZero(items, "total_nps_minor") ? [{ key: "total_nps_minor" as const, label: t("colNps"), align: "right" as const, cellType: "amount" as const }] : []),
     { key: "otherDeductionsMinor", label: t("colOtherDeductions"), align: "right", cellType: "amount" },
     { key: "period", label: t("colPeriod") },
   ];

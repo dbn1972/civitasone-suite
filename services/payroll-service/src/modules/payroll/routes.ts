@@ -11,6 +11,7 @@ import { scopedRead } from "../../shared/db.js";
 import { sql } from "drizzle-orm";
 import { resolveActorEmployeeId, HrmsUnavailableError } from "../../shared/hrms-client.js";
 import { lockedThroughMonth } from "../pay-profiles/rules-api.js";
+import { maskPpoNo } from "./fin03-domain.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -175,16 +176,17 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT d.ddo_code, d.name,
+      SELECT d.ddo_code, d.name, d.is_active,
              COALESCE(array_agg(m.department_id) FILTER (WHERE m.department_id IS NOT NULL), '{}') AS department_ids
       FROM payroll.payroll_ddos d
       LEFT JOIN payroll.payroll_ddo_departments m
         ON m.tenant_id = d.tenant_id AND m.ddo_code = d.ddo_code
       WHERE d.tenant_id = ${ctx.tenantId}::uuid
-      GROUP BY d.ddo_code, d.name
+      GROUP BY d.ddo_code, d.name, d.is_active
       ORDER BY d.ddo_code
-    `))) as unknown as Array<{ ddo_code: string; name: string; department_ids: string[] }>;
-    return reply.send(rows.map((r) => ({ ddoCode: r.ddo_code, name: r.name, departmentIds: r.department_ids })));
+    `))) as unknown as Array<{ ddo_code: string; name: string; is_active: boolean; department_ids: string[] }>;
+    // GAP-PAYROLL-DDOS-03: isActive lets the UI show status + offer (de)activate.
+    return reply.send(rows.map((r) => ({ ddoCode: r.ddo_code, name: r.name, isActive: r.is_active !== false, departmentIds: r.department_ids })));
   });
 
   // CQRS lift (quality-payroll-95): was a synchronous upsert in the request
@@ -210,7 +212,9 @@ export async function payrollRoutes(app: FastifyInstance): Promise<void> {
       ORDER BY ppo_no
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send(rows.map((r) => ({
-      id: r.id, ppoNo: r.ppo_no, fullName: r.full_name, dateOfBirth: r.date_of_birth,
+      // GAP-PAYROLL-PENSIONERS-04: the register lists the PPO number MASKED;
+      // the full value is only served by the audited reveal endpoint (fin03-routes.ts).
+      id: r.id, ppoNo: maskPpoNo(String(r.ppo_no ?? "")), ppoNoMasked: true, fullName: r.full_name, dateOfBirth: r.date_of_birth,
       basicPensionMinor: Number(r.basic_pension_minor), commutedPensionMinor: Number(r.commuted_pension_minor),
       commutationDate: r.commutation_date, medicalAllowanceMinor: Number(r.medical_allowance_minor),
       ddoCode: r.ddo_code, taxRegime: r.tax_regime, status: r.status,

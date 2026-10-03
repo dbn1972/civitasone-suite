@@ -1499,7 +1499,7 @@ describe("POST /v1/payroll/reimbursements (world-class)", () => {
   // asynchronously.
   it("202 — valid reimbursement", async () => {
     const app = await buildApp();
-    const res = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(["payroll_admin"]), payload: { employeeId: ACTOR, category: "travel", amountMinor: 500000, period: "2026-07" } });
+    const res = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(["payroll_admin"]), payload: { employeeId: ACTOR, category: "food", amountMinor: 500000, period: "2026-07" } });
     await app.close();
     expect(res.statusCode).toBe(202);
     expect(res.json().id).toBeDefined();
@@ -1528,7 +1528,7 @@ describe("POST /v1/payroll/reimbursements (world-class)", () => {
 
   it("403 — citizen role", async () => {
     const app = await buildApp();
-    const res = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(["citizen"]), payload: { employeeId: ACTOR, category: "medical", amountMinor: 100, period: "2026-07" } });
+    const res = await app.inject({ method: "POST", url: "/v1/payroll/reimbursements", headers: auth(["citizen"]), payload: { employeeId: ACTOR, category: "food", amountMinor: 100, period: "2026-07" } });
     await app.close();
     expect(res.statusCode).toBe(403);
   });

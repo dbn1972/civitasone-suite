@@ -21,6 +21,8 @@ type Row = {
   bill_ref: string | null;
   period: string;
   status: string;
+  /** GAP-PAYROLL-REIMBURSEMENTS-03: number of receipts on the claim (keys never leave the API). */
+  attachment_count?: number;
 } & Record<string, unknown>;
 
 /**
@@ -98,6 +100,7 @@ export default async function ReimbursementsPage() {
       period_display: formatPeriod(r.period),
       bill_date_display: formatIndianDate(r.bill_date),
       bill_ref: r.bill_ref?.trim() ? r.bill_ref : "—",
+      receipt_count: Number(r.attachment_count ?? 0),
       status: r.status,
     };
   });

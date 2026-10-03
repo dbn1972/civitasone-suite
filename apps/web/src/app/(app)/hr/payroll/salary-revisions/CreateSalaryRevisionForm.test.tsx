@@ -21,10 +21,10 @@ vi.mock("@/lib/entityAdapters/employee", () => ({
 
 import { CreateSalaryRevisionForm } from "./CreateSalaryRevisionForm";
 
-function renderForm() {
+function renderForm(secondApprover?: boolean) {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
-      <CreateSalaryRevisionForm />
+      <CreateSalaryRevisionForm {...(secondApprover === undefined ? {} : { secondApprover })} />
     </NextIntlClientProvider>,
   );
 }
@@ -170,7 +170,9 @@ describe("CreateSalaryRevisionForm", () => {
     await waitFor(() => {
       // PR #1756 review: the write is async (202 + consumer), so the copy
       // says "submitted ... will appear shortly", not "recorded".
-      expect(screen.getByText(/Salary revision to .* for employee e1 submitted\. It is saved in the background/)).toBeInTheDocument();
+      // fin-payroll-03: second approver is ON by default, so the copy says the
+      // revision now waits for a different payroll user.
+      expect(screen.getByText(/Salary revision to .* submitted\. It is saved in the background and then waits for approval by a different payroll user/)).toBeInTheDocument();
     });
     expect(refreshMock).toHaveBeenCalled();
 
@@ -189,6 +191,21 @@ describe("CreateSalaryRevisionForm", () => {
     expect(body.oldGrossMinor).toBe(8000000);
     expect(body.newGrossMinor).toBe(8800000);
     expect(body.revisionType).toBe("annual_increment");
+  });
+
+  it("with the tenant's second-approver switch OFF the confirmation keeps the 'appears shortly' copy", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ id: "sr1", status: "accepted", correlationId: "c1" }), { status: 202 }),
+    );
+    renderForm(false);
+    await fillValidForm();
+    fireEvent.click(screen.getByRole("button", { name: "Record Revision" }));
+    await waitFor(() => expect(screen.getByText("Record this salary revision?")).toBeInTheDocument());
+    fireEvent.click(screen.getByText("Record revision"));
+    await waitFor(() => {
+      expect(screen.getByText(/Salary revision to .* for employee e1 submitted\. It is saved in the background and will appear/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/waits for approval/)).not.toBeInTheDocument();
   });
 
   it("surfaces a clerk-safe error on the confirm dialog, never the server's raw code/status", async () => {

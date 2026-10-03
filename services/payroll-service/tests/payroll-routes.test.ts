@@ -1029,7 +1029,7 @@ describe("POST /v1/payroll/reimbursements", () => {
       headers: authHeader(["payroll_admin"]),
       payload: {
         employeeId: ACTOR,
-        category: "medical",
+        category: "food",
         amountMinor: 250000,
         period: "2026-07",
       },
@@ -1073,7 +1073,7 @@ describe("POST /v1/payroll/reimbursements", () => {
     const res = await app.inject({
       method: "POST",
       url: "/v1/payroll/reimbursements",
-      payload: { employeeId: ACTOR, category: "medical", amountMinor: 100, period: "2026-07" },
+      payload: { employeeId: ACTOR, category: "food", amountMinor: 100, period: "2026-07" },
     });
     await app.close();
     expect(res.statusCode).toBe(401);
@@ -1085,7 +1085,7 @@ describe("POST /v1/payroll/reimbursements", () => {
       method: "POST",
       url: "/v1/payroll/reimbursements",
       headers: authHeader(["citizen"]),
-      payload: { employeeId: ACTOR, category: "medical", amountMinor: 100, period: "2026-07" },
+      payload: { employeeId: ACTOR, category: "food", amountMinor: 100, period: "2026-07" },
     });
     await app.close();
     expect(res.statusCode).toBe(403);

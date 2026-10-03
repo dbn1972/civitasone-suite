@@ -2386,10 +2386,13 @@ export type TaxDeclaration = {
 
 export type PensionerSummary = {
   id: string;
+  /** Masked ("••••0123") -- the register never lists the full PPO number; the audited reveal endpoint serves it. */
   ppoNo: string;
+  ppoNoMasked?: boolean;
   fullName: string;
   basicPensionMinor: number;
-  status: "active" | "suspended" | "ceased" | "commuted";
+  /** payroll_pensioners_status_check (migration 0067). */
+  status: "active" | "stopped" | "deceased";
   ddoCode: string;
   bankAccount?: string;
   retirementDate?: string;
@@ -2882,3 +2885,11 @@ export type FinanceVendorSummary = {
   status: string;
   ratingDisplay: string;
 };
+
+
+/**
+ * GAP-PAYROLL-REIMBURSEMENTS-03: reimbursement categories whose claims need at
+ * least one receipt (medical bills, LTA / travel tickets). ONE list shared by
+ * the web form and payroll-service (route + consumer) so they cannot drift.
+ */
+export const REIMBURSEMENT_RECEIPT_REQUIRED_CATEGORIES: readonly string[] = ["medical", "lta", "travel"];

@@ -80,6 +80,12 @@ export const COMMANDS = {
   // and the manual Form 24Q filing record (GAP-PAYROLL-RETURNS-01).
   letterheadUpsert:       "payroll.letterhead.upsert",
   returnFilingRecord:     "payroll.return_filing.record",
+  // fin-payroll-03 gap batch (fin03-consumer.ts)
+  ddoSetActive:           "payroll.ddo.set_active",
+  payGroupUpdate:         "payroll.paygroup.update",
+  payGroupSetActive:      "payroll.paygroup.set_active",
+  pensionerSetStatus:     "payroll.pensioner.set_status",
+  salaryRevisionDecide:   "payroll.salary_revision.decide",
 } as const;
 
 export const EVENTS = {

@@ -3,7 +3,13 @@
  */
 
 export type DepartmentOption = { id: string; code: string; name: string };
-export type DdoRecord = { ddoCode: string; name: string; departmentIds: string[] };
+export type DdoRecord = {
+  ddoCode: string;
+  name: string;
+  departmentIds: string[];
+  /** GAP-PAYROLL-DDOS-03: false once deactivated (absent on an older API = active). */
+  isActive?: boolean;
+};
 
 /**
  * DDO codes: letters, digits and - / _ . only (no spaces), 1-32 chars --
