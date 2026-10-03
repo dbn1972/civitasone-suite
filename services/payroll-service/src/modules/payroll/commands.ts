@@ -583,11 +583,9 @@ export async function processOffCycle(ctx: RequestContext, offCycleId: string, r
 
 export type UpsertStateRulesInput = {
   stateCode: string;
-  ptSlabs?: Array<{ fromMinor: number; toMinor: number; taxMinor: number }> | undefined;
   lwfEmployee?: number | undefined;
   lwfEmployer?: number | undefined;
   lwfFrequency?: "monthly" | "quarterly" | "half_yearly" | "yearly" | undefined;
-  effectiveFrom?: string | undefined;
 };
 export async function upsertStateRules(ctx: RequestContext, body: UpsertStateRulesInput): Promise<Accepted> {
   await queue.publish(COMMANDS.stateRulesUpsert, {

@@ -1,6 +1,8 @@
 import { eq, ne, and, sql, inArray, count, desc } from "drizzle-orm";
 import { db, scopedRead } from "../../shared/db.js";
 import { listRunSuspensions, type RunSuspensionSummary } from "./subsistence-repo.js";
+import { inForceRows } from "./pt-versions-repo.js";
+import { todayIst } from "./pt-versions-domain.js";
 import {
   payrollStructures, payrollComponents, payrollRuns, payrollSlips,
   type PayrollRunRow, type PayrollRunInsert, type PayrollSlipRow,
@@ -256,7 +258,8 @@ export async function insertBonus(p: BonusInsert) {
 // ─── Professional Tax ─────────────────────────────────────────────────────────
 
 export async function listProfessionalTax(tenantId: string) {
-  return scopedRead((tx) => tx.execute(sql`SELECT * FROM payroll.payroll_professional_tax WHERE tenant_id=${tenantId}::uuid AND is_active=true ORDER BY state_code,slab_from_minor`));
+  // GAP-PAYROLL-STATUTORY-PT-04: the slab version in force today, per state (history: GET .../statutory/pt/versions).
+  return scopedRead((tx) => inForceRows(tx as never, tenantId, todayIst()));
 }
 
 // ─── Labour Welfare Fund ──────────────────────────────────────────────────────

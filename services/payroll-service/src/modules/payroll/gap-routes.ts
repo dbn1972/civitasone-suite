@@ -17,7 +17,9 @@ import { scopeEmployeeId, requireOwnEmployeeId, staffRolesOf } from "../../share
 import { scopedRead } from "../../shared/db.js";
 import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
-import { stateRulesBody, findPtSlabOverlap } from "./state-rules.js";
+import { stateRulesBody } from "./state-rules.js";
+import { inForceRows } from "./pt-versions-repo.js";
+import { todayIst } from "./pt-versions-domain.js";
 import { validatePaySchedule, payDatesForMonth, type PayFrequency } from "./fin03-domain.js";
 import { assertElectionWithinPlan } from "./adjustment-guards.js";
 import { isValidIanaTimeZone } from "./validators.js";
@@ -661,36 +663,21 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/payroll/statutory/state-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
-    const body = stateRulesBody.parse(req.body);
-    // GAP-PAYROLL-STATUTORY-PT-03: each slab is upserted on its own
-    // (tenant, state, slab_from) key — the state's other slabs are never
-    // deleted. Reject a slab whose range overlaps another active slab of the
-    // same state (or another slab in the same request), since overlapping
-    // ranges make the PT lookup ambiguous.
-    if (body.ptSlabs && body.ptSlabs.length > 0) {
-      const existing = (await scopedRead((tx) => tx.execute(sql`
-        SELECT slab_from_minor, slab_to_minor
-        FROM payroll.payroll_professional_tax
-        WHERE tenant_id = ${ctx.tenantId}::uuid AND state_code = ${body.stateCode} AND is_active = true
-      `))) as unknown as Array<{ slab_from_minor: string | number; slab_to_minor: string | number }>;
-      const overlap = findPtSlabOverlap(body.ptSlabs, existing.map((r) => ({
-        fromMinor: Number(r.slab_from_minor), toMinor: Number(r.slab_to_minor),
-      })));
-      if (overlap) {
-        throw new HttpError(422, "PT_SLAB_OVERLAP", overlap);
-      }
+    // GAP-PAYROLL-STATUTORY-PT-04: PT slabs are effective-dated, immutable versions now --
+    // they are created through POST /v1/payroll/statutory/pt/versions, never overwritten
+    // here. Refuse loudly rather than silently dropping them.
+    if (req.body && typeof req.body === "object" && "ptSlabs" in (req.body as Record<string, unknown>)) {
+      throw new HttpError(422, "PT_SLABS_USE_VERSIONS", "professional tax slabs are versioned; create a new version with POST /v1/payroll/statutory/pt/versions");
     }
+    const body = stateRulesBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.upsertStateRules(ctx, body));
   });
 
   app.get("/v1/payroll/statutory/state-rules", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
-    const pt = (await scopedRead((tx) => tx.execute(sql`
-      SELECT state_code, slab_from_minor, slab_to_minor, pt_amount_minor, effective_from::text AS effective_from
-      FROM payroll.payroll_professional_tax WHERE tenant_id = ${ctx.tenantId}::uuid AND is_active = true
-      ORDER BY state_code, slab_from_minor
-    `))) as unknown as Array<Record<string, unknown>>;
+    // The slab version in force today, per state; the full timeline is GET .../statutory/pt/versions.
+    const pt = await scopedRead((tx) => inForceRows(tx as never, ctx.tenantId, todayIst()));
     const lwf = (await scopedRead((tx) => tx.execute(sql`
       SELECT state_code, employee_contrib_minor, employer_contrib_minor, frequency
       FROM payroll.payroll_lwf WHERE tenant_id = ${ctx.tenantId}::uuid
