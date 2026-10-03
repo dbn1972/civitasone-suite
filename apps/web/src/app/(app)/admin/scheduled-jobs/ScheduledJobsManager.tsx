@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Button, ConfirmDialog, PageHeader, StatGrid, StatCard } from "@/app/_components/ds";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
-import type { AdminScheduledJob } from "@/app/_data/loaders";
+import type { AdminScheduledJob, AdminScheduledJobTargets } from "@/app/_data/loaders";
 import { useFormError } from "@/lib/useFormError";
 import { toHumanError } from "@/lib/messages";
 import { cronToHuman } from "@/lib/cron";
@@ -69,7 +69,16 @@ export const QUEUED_RELOAD_DELAY_MS = 1500;
 
 type PendingAction = { kind: "run" | "delete" | "disable"; job: AdminScheduledJob };
 
-export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: AdminScheduledJob[]; source: "api" | "error" }) {
+/** Targets whose run touches money, people or the audit trail: running one by hand needs a reason (mirrors admin-service targets.ts). */
+const DEFAULT_SENSITIVE_SERVICES = ["finance-service", "hrms-service", "audit-service"];
+const DEFAULT_SERVICES = ["admin-service", "finance-service", "hrms-service", "report-service", "audit-service", "notification-service"];
+
+export function ScheduledJobsManager({ initialJobs, source, targets = null }: { initialJobs: AdminScheduledJob[]; source: "api" | "error"; targets?: AdminScheduledJobTargets | null }) {
+  // GAP-ADMIN-SCHEDULED-JOBS-02: the create form offers only what the server will accept.
+  const serviceOptions = targets ? targets.services : DEFAULT_SERVICES.map((service) => ({ service, commandPrefix: `${service.replace(/-service$/, "")}.`, sensitive: DEFAULT_SENSITIVE_SERVICES.includes(service), allowList: null, schedulable: !DEFAULT_SENSITIVE_SERVICES.includes(service) }));
+  const isSensitive = (service: string) => serviceOptions.some((o) => o.service === service && o.sensitive);
+  const [createService, setCreateService] = useState("");
+  const [commandError, setCommandError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<AdminScheduledJob[]>(initialJobs);
   const [showModal, setShowModal] = useState(false);
   const [historyJobId, setHistoryJobId] = useState<string | null>(null);
@@ -161,19 +170,21 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
     setPending({ kind: "delete", job });
   }
 
-  async function runConfirmed() {
+  async function runConfirmed(reason?: string) {
     if (!pending) return;
     const { kind, job } = pending;
     setConfirmBusy(true);
     setConfirmError(undefined);
     setBusyId(job.id);
     let result: { ok: boolean; status?: number; message?: string };
+    // GAP-ADMIN-SCHEDULED-JOBS-01: the operator's reason travels with the request and is written to the audit trail.
+    const withReason = reason ? { reason } : undefined;
     if (kind === "disable") {
-      result = await callApi(`/${job.id}`, "PUT", { enabled: false });
+      result = await callApi(`/${job.id}/pause`, "POST", withReason);
     } else if (kind === "run") {
-      result = await callApi(`/${job.id}/run-now`, "POST");
+      result = await callApi(`/${job.id}/run-now`, "POST", withReason);
     } else {
-      result = await callApi(`/${job.id}`, "DELETE");
+      result = await callApi(`/${job.id}`, "DELETE", withReason);
     }
     setBusyId(null);
     setConfirmBusy(false);
@@ -228,6 +239,16 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
       setSaving(false);
       return;
     }
+    // Fast, readable check before the request; the server still decides (it also blocks destructive verbs and enforces any allow-list).
+    const wantedService = String(fd.get("service") ?? "");
+    const wantedCommand = String(fd.get("command") ?? "").trim();
+    const prefix = serviceOptions.find((o) => o.service === wantedService)?.commandPrefix;
+    if (prefix && !wantedCommand.startsWith(prefix)) {
+      setCommandError(`The command must start with "${prefix}" for ${wantedService}.`);
+      setSaving(false);
+      return;
+    }
+    setCommandError(null);
     const body = {
       name: String(fd.get("name") ?? ""),
       description: String(fd.get("description") ?? ""),
@@ -344,9 +365,13 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
           ) : undefined
         }
         confirmLabel={pending?.kind === "delete" ? "Delete job" : pending?.kind === "disable" ? "Disable job" : "Run now"}
+        requireReason={pending?.kind === "delete" || (pending?.kind === "run" && isSensitive(pending.job.targetService))}
+        optionalReason={pending?.kind === "disable" || (pending?.kind === "run" && !isSensitive(pending.job.targetService))}
+        minReasonLength={3}
+        maxReasonLength={500}
         busy={confirmBusy}
         errorMessage={confirmError}
-        onConfirm={() => void runConfirmed()}
+        onConfirm={(reason) => void runConfirmed(reason)}
         onCancel={() => { if (!confirmBusy) { setPending(null); setConfirmError(undefined); } }}
       />
 
@@ -381,14 +406,10 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-service">Target Service</label>
-                <select id="job-service" name="service" className="input" required defaultValue="">
+                <select id="job-service" name="service" className="input" required value={createService} onChange={(e) => { setCreateService(e.target.value); setCommandError(null); }}>
                   <option value="" disabled>Select service...</option>
-                  <option value="admin-service">admin-service</option>
-                  <option value="finance-service">finance-service</option>
-                  <option value="hrms-service">hrms-service</option>
-                  <option value="report-service">report-service</option>
-                  <option value="audit-service">audit-service</option>
-                  <option value="notification-service">notification-service</option>
+                  {/* A finance/hrms/audit service stays unavailable until an operator configures its allow-list (server-enforced). */}
+                  {serviceOptions.map((o) => <option key={o.service} value={o.service} disabled={!o.schedulable}>{o.schedulable ? o.service : `${o.service} (allow-list required)`}</option>)}
                 </select>
                 {formError.fieldError("targetService") && (
                   <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("targetService")}</span>
@@ -396,7 +417,11 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
               </div>
               <div style={{ marginBottom: 12 }}>
                 <label htmlFor="job-command">Target Command</label>
-                <input id="job-command" name="command" type="text" className="input" placeholder="service.entity.action" required />
+                <input id="job-command" name="command" type="text" className="input" placeholder={`${serviceOptions.find((o) => o.service === createService)?.commandPrefix ?? "service."}entity.action`} required aria-describedby="job-command-hint" />
+                <small id="job-command-hint" style={{ display: "block", color: "var(--mut)", marginTop: 4 }}>
+                  Lower-case, dot separated, starting with the service&apos;s own prefix. Destructive commands (delete, purge, wipe…) cannot be scheduled.
+                </small>
+                {commandError && <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{commandError}</span>}
                 {formError.fieldError("targetCommand") && (
                   <span role="alert" style={{ display: "block", fontSize: 12, color: "#b42318", marginTop: 4 }}>{formError.fieldError("targetCommand")}</span>
                 )}

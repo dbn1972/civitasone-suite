@@ -4,6 +4,9 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { roleAssignmentHistory } from "./schema.js";
+import { TENANT_ADMIN_ROLE_KEY } from "../users/domain.js";
+import { strandsTenantAdmins } from "../users/last-admin.js";
+import { lockTenantAdmins } from "../users/repo.js";
 import { assertCanConfer, assertKeyAllowed, DomainError } from "./domain.js";
 
 const AUDIT_TOPIC = "audit.event.record";
@@ -158,6 +161,21 @@ export function registerRbacConsumers(q: Queue): void {
       const p = msg.payload;
       const cur = await repo.findAssignment(tx, msg.tenantId, p.roleId, p.userId);
       if (!cur || cur.status !== "active") return; // idempotent / nothing to revoke
+      // GAP-ADMIN-USERS-01: serialise with user-status changes (same per-tenant lock), then refuse to
+      // leave the tenant without an active tenant admin.
+      const role = await repo.findRoleById(tx, msg.tenantId, p.roleId);
+      if (role?.key === TENANT_ADMIN_ROLE_KEY) {
+        await lockTenantAdmins(tx as never, msg.tenantId);
+        if (await strandsTenantAdmins(tx as never, msg.tenantId, p.userId)) {
+          const t = tx as Parameters<typeof enqueue>[0];
+          await enqueue(t, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: { service: "identity", action: "revoke", resourceType: "rbac_role_assignment", resourceId: p.userId, outcome: "denied", reason: "LAST_TENANT_ADMIN", severity: "high" },
+          });
+          return;
+        }
+      }
       const n = await repo.setAssignmentStatus(tx, msg.tenantId, cur.id, "revoked", cur.version, msg.actorId);
       if (n === 0) throw new Error("optimistic lock conflict on role revoke");
       await tx.insert(roleAssignmentHistory).values({

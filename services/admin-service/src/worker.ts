@@ -1,6 +1,7 @@
 import { pino } from "pino";
 import { db, sqlClient } from "./shared/db.js";
 import { queue } from "./shared/infra.js";
+import { tenantScoped } from "./shared/tenant-queue.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerTenantConsumers } from "./modules/tenants/consumer.js";
@@ -16,6 +17,7 @@ import { registerFeatureFlagConsumers } from "./modules/feature-flags/consumer.j
 import { registerAuditLogExportConsumers } from "./modules/audit-log-export/consumer.js";
 import { registerPlatformOpsConsumers } from "./modules/platform-ops/consumer.js";
 import { registerUserExportConsumers } from "./modules/user-export/consumer.js";
+import { registerTenantSettingsConsumers } from "./modules/tenant-settings/consumer.js";
 // WC-009: subscriber for the admin.sandbox_refresh.execute command published by
 // the approve route. Without this the command would have no consumer.
 import { registerSandboxConsumers } from "./modules/sandbox/consumer.js";
@@ -26,7 +28,7 @@ registerTenantConsumers(queue);
 registerConfigConsumers(queue);
 registerBackupConsumers(queue);
 registerSupportConsumers(queue);
-registerScheduledJobConsumers(queue);
+registerScheduledJobConsumers(tenantScoped(queue));
 registerCustomDomainConsumers(queue);
 registerWebhookConsumers(queue);
 registerDataExportConsumers(queue);
@@ -34,6 +36,7 @@ registerFeatureFlagConsumers(queue);
 registerAuditLogExportConsumers(queue);
 registerUserExportConsumers(queue);
 registerPlatformOpsConsumers(queue);
+registerTenantSettingsConsumers(tenantScoped(queue));
 // handleSandboxRefreshExecute wraps its own work in runWithTenant(), so it does
 // not need the tenantScoped(queue) proxy.
 registerSandboxConsumers(queue);
@@ -42,7 +45,6 @@ import { registerReconciliationConsumers } from "./modules/reconciliation-consum
 registerReconciliationConsumers(queue);
 import { registerSecurityComplianceConsumers } from "./modules/security-compliance/consumer.js";
 import { registerSecurityIncidentConsumers } from "./modules/security-incident/consumer.js";
-import { tenantScoped } from "./shared/tenant-queue.js";
 import { registerApiKeyConsumers } from "./modules/api-keys/consumer.js";
 import { registerMobileTelemetryConsumers } from "./modules/health/mobile-consumer.js";
 import { registerF3_change_Consumers } from "./modules/change/f3-consumer.js";

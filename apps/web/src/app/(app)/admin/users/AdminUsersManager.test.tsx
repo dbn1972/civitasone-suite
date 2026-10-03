@@ -3,6 +3,14 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { AdminUsersManager } from "./AdminUsersManager";
 import type { AdminUserSummary, AdminRoleSummary } from "@/app/_data/loaders";
 
+const push = vi.fn();
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push, replace: vi.fn(), back: vi.fn(), prefetch: vi.fn(), refresh: vi.fn() }),
+  usePathname: () => "/admin/users",
+  useSearchParams: () => new URLSearchParams(),
+  redirect: vi.fn(),
+}));
+
 const me: AdminUserSummary = { id: "u-me", email: "me@x.gov.in", name: "Me Admin", empCode: null, status: "active", mfaEnabled: true };
 const other: AdminUserSummary = { id: "u-other", email: "o@x.gov.in", name: "Olive Other", empCode: null, status: "active", mfaEnabled: false };
 const roles: AdminRoleSummary[] = [
@@ -46,13 +54,69 @@ describe("AdminUsersManager", () => {
   });
 
   // GAP-ADMIN-USERS-03
-  it("shows the truncation notice when the directory may hold more users", () => {
-    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" truncatedAt={200} />);
-    expect(screen.getByText(/Showing the first 200 users only/)).toBeInTheDocument();
+  const dirState = (over: Partial<NonNullable<Parameters<typeof AdminUsersManager>[0]["directory"]>> = {}) => ({
+    total: 1240, counts: { active: 1100, suspended: 100, locked: 0, deactivated: 40 }, page: 2, pageSize: 25, query: "", status: null as null, ...over,
   });
-  it("shows no notice for a complete directory", () => {
-    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" />);
+  const tile = (label: string) => Array.from(document.querySelectorAll(".lab")).find((e) => e.textContent === label)!.parentElement!.textContent ?? "";
+
+  it("shows the real total, the window and prev/next links instead of a 200-row cap", () => {
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" directory={dirState()} />);
+    expect(screen.getByTestId("users-window")).toHaveTextContent("Showing 26–26 of 1,240");
+    expect(screen.getByRole("link", { name: /Previous/ })).toHaveAttribute("href", "/admin/users");
+    expect(screen.getByRole("link", { name: /Next/ })).toHaveAttribute("href", "/admin/users?page=3");
+    expect(tile("Total users")).toContain("1240");
+    expect(tile("Suspended")).toContain("100");
     expect(screen.queryByText(/Showing the first/)).not.toBeInTheDocument();
+  });
+
+  it("the last page has no Next link; the first has no Previous", () => {
+    const { unmount } = render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" directory={dirState({ page: 50, total: 1226 })} />);
+    expect(screen.queryByRole("link", { name: /Next/ })).not.toBeInTheDocument();
+    unmount();
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" directory={dirState({ page: 1 })} />);
+    expect(screen.queryByRole("link", { name: /Previous/ })).not.toBeInTheDocument();
+  });
+
+  it("search is a GET form that keeps the status filter; the paging links keep the search", () => {
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" directory={dirState({ query: "rao k", status: "suspended", page: 1 })} />);
+    const form = screen.getByRole("search", { name: "Search users" });
+    expect(form).toHaveAttribute("method", "get");
+    expect(screen.getByRole("searchbox")).toHaveValue("rao k");
+    expect(form.querySelector('input[name="status"]')).toHaveValue("suspended");
+    expect(screen.getByRole("link", { name: /Next/ })).toHaveAttribute("href", "/admin/users?q=rao+k&status=suspended&page=2");
+    expect(screen.getByRole("link", { name: "Clear search" })).toHaveAttribute("href", "/admin/users?status=suspended");
+    expect(screen.getByTestId("users-window")).toHaveTextContent("matching “rao k”");
+  });
+
+  it("a status tab asks the server for that status (so the total stays right)", () => {
+    push.mockClear();
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" directory={dirState({ query: "rao", page: 1 })} />);
+    fireEvent.click(screen.getByRole("tab", { name: "Suspended" }));
+    expect(push).toHaveBeenCalledWith("/admin/users?q=rao&status=suspended");
+    fireEvent.click(screen.getByRole("tab", { name: "All" }));
+    expect(push).toHaveBeenLastCalledWith("/admin/users?q=rao");
+  });
+
+  it("suspending moves the tenant-wide counts, not just the page", async () => {
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" currentUserId="u-me" directory={dirState({ page: 1 })} />);
+    fireEvent.click(screen.getByRole("button", { name: "Suspend" }));
+    fireEvent.change(await screen.findByRole("textbox"), { target: { value: "left the department" } });
+    fireEvent.click(screen.getByRole("button", { name: "Suspend user" }));
+    await waitFor(() => expect(tile("Suspended")).toContain("101"));
+    expect(tile("Active")).toContain("1099");
+  });
+
+  // GAP-ADMIN-USERS-01 (server-side half): say WHY a status change was refused
+  it("tells the operator when the server refuses to suspend the last tenant admin", async () => {
+    fetchSpy.mockImplementation(async () => new Response(JSON.stringify({ code: "LAST_TENANT_ADMIN", message: "internal wording" }), { status: 409 }));
+    render(<AdminUsersManager initialUsers={[other]} roles={roles} source="api" currentUserId="u-me" />);
+    fireEvent.click(screen.getByRole("button", { name: "Suspend" }));
+    fireEvent.change(await screen.findByRole("textbox"), { target: { value: "left the department" } });
+    fireEvent.click(screen.getByRole("button", { name: "Suspend user" }));
+    expect(await screen.findByText(/last active tenant admin/)).toBeInTheDocument();
+    expect(screen.queryByText(/internal wording/)).not.toBeInTheDocument();
+    // the row did not change
+    expect(screen.getByRole("button", { name: "Suspend" })).toBeInTheDocument();
   });
 
   // GAP-ADMIN-USERS-02

@@ -73,9 +73,12 @@ export async function invoicesRoutes(app: FastifyInstance): Promise<void> {
   });
 
   // Read model: bill detail (items + approvals + outstanding), tenant-scoped.
+  // GAP-ADMIN-INVOICES-06: same readers as the invoice LIST the detail is opened from
+  // (BILLING_ROLES), so a billing_admin / tenant_admin who can see the register can open a row.
+  // Read-only and tenant-scoped; every write route stays super-admin only.
   app.get("/v1/billing/invoices/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireSuperAdmin(ctx);
+    requireRole(ctx, BILLING_ROLES);
     const { id } = idParam.parse(req.params);
     const detail = await queries.getInvoiceDetail(id, ctx.tenantId);
     if (!detail) throw new HttpError(404, "NOT_FOUND", "invoice not found");

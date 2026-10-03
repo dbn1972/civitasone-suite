@@ -2,10 +2,10 @@ import { normStatus, str } from "../_components/status";
 import type { PillVariant } from "@/app/_components/ds/StatusPill";
 
 /**
- * GET /v1/billing/metering rows. No billing-service route serves this path in
- * the current tree, so the field set and the unit of `amount` are the page's
- * long-standing contract, not a verified one (see GAP-ADMIN-METERING-02):
- * `amount` is therefore left unformatted and typed as an opaque value.
+ * GET /v1/billing/metering rows (billing-service usage/queries.ts getMetering).
+ * GAP-ADMIN-METERING-02: `amountMinor` is integer PAISE as a string, never rupees;
+ * the table renders it with formatMoney (lakh/crore grouping), the same unit and
+ * formatter the invoice register uses.
  */
 export type MeterRow = {
   tenant: string;
@@ -13,7 +13,7 @@ export type MeterRow = {
   storage: string | number | null;
   users: string | number | null;
   billingPeriod: string;
-  amount: string | number | null;
+  amountMinor: string | number | null;
   status: string;
 };
 
@@ -28,7 +28,7 @@ export function toMeterRows(raw: Record<string, unknown>[]): MeterRow[] {
     storage: opaque(r.storage),
     users: opaque(r.users),
     billingPeriod: str(r.billingPeriod),
-    amount: opaque(r.amount),
+    amountMinor: opaque(r.amountMinor),
     status: str(r.status),
   }));
 }

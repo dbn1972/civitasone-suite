@@ -4,6 +4,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE } from "../../topics.js";
 import * as repo from "./repo.js";
+import { strandsTenantAdmins } from "./last-admin.js";
 import { assertTransition, type UserView } from "./domain.js";
 import * as keycloak from "../../shared/keycloak.js";
 import { recordPendingDeactivation, resolvePendingDeactivation } from "../../shared/kc-reconcile.js";
@@ -82,6 +83,19 @@ export function registerUserConsumers(rawQueue: Queue): void {
       const cur = await repo.findByIdTx(tx, msg.tenantId, msg.payload.id);
       if (!cur) throw new Error(`user ${msg.payload.id} not found`);
       assertTransition(cur.status, msg.payload.status as UserView["status"]);
+      // GAP-ADMIN-USERS-01 (race-safe half): serialise the tenant's admin status changes, then
+      // re-check against current state. If this change would strand the tenant it is NOT applied.
+      if (msg.payload.status !== "active" && cur.status === "active") {
+        await repo.lockTenantAdmins(tx, msg.tenantId);
+        if (await strandsTenantAdmins(tx as never, msg.tenantId, msg.payload.id)) {
+          await enqueue(tx as Parameters<typeof enqueue>[0], {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC, tenantId: msg.tenantId, actorId: msg.actorId,
+            correlationId: msg.correlationId,
+            payload: { service: "identity", action: "status_change", resourceType: "user", resourceId: msg.payload.id, outcome: "denied", reason: "LAST_TENANT_ADMIN", severity: "high" },
+          });
+          return;
+        }
+      }
       await repo.update(tx, msg.tenantId, msg.payload.id, {
         status: msg.payload.status, updatedBy: msg.actorId, version: cur.version + 1,
       });
