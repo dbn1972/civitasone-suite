@@ -9,6 +9,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
+import { useFormError } from "@/lib/useFormError";
 import { Button, EntityPicker } from "@/app/_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
@@ -31,6 +32,7 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
   const { toast } = useToast();
   const t = useTranslations("successionPlanCard");
 
+  const formError = useFormError("succession plan");
   const [roleRef, setRoleRef] = useState("");
   const [deptId, setDeptId] = useState("");
   const [savingRole, setSavingRole] = useState(false);
@@ -49,7 +51,10 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ roleRef: roleRef.trim(), departmentId: deptId || undefined }),
       });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
+      }
       toast.success(t("roleAddedToast"));
       setRoleRef("");
       setDeptId("");
@@ -90,7 +95,10 @@ export function CreatePlanForm({ departments, roles }: { departments: Department
           developmentPlan: developmentPlan.trim() || undefined,
         }),
       });
-      if (!res.ok) throw new Error(String(res.status));
+      if (!res.ok) {
+        const resolved = await formError.fromResponse(res, "save");
+        throw new Error(resolved.message);
+      }
       toast.success(t("nomineeAddedToast"));
       setEmployeeId(null);
       setDevelopmentPlan("");
