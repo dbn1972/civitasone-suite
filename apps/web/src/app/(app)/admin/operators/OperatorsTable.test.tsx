@@ -3,8 +3,11 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { OperatorsTable } from "./OperatorsTable";
 import { operatorStats, permissionList, toOperatorRows, twoFaState, twoFaTone } from "./operatorRows";
 import { useSeededResource } from "@/lib/sync/resource";
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 
 vi.mock("@/lib/sync/resource", () => ({ useSeededResource: vi.fn() }));
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 
 const op = (over: Record<string, unknown> = {}) => ({ name: "A", role: "super_admin", lastLogin: "2026-09-30", status: "active", twoFaStatus: "Enabled", permissions: ["a", "b"], ...over });
 function seeded(data: Record<string, unknown>[], provenance: "live" | "cached" | "error-no-data") {
@@ -111,5 +114,32 @@ describe("OperatorsTable audited export (GAP-ADMIN-OPERATORS-06)", () => {
     fireEvent.click(screen.getByText("⬇ CSV"));
     await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/no file was created/));
     expect(created).not.toHaveBeenCalled();
+  });
+});
+
+describe("OperatorsTable change requests (GAP-ADMIN-OPERATORS-05)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ data: [] }), { status: 200 }))));
+  });
+
+  it("adds an Actions column and the approvals panel only for a manager, and hides your own row's actions", async () => {
+    const ME = "11111111-1111-4111-8111-111111111111";
+    seeded([op({ id: ME, name: "Me" }), op({ id: "22222222-2222-4222-8222-222222222222", name: "Other Op" })], "live");
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <OperatorsTable operators={[]} canManage viewerId={ME} viewerRoles={["super_admin"]} />
+      </NextIntlClientProvider>,
+    );
+    expect(screen.getByRole("button", { name: "Suspend: Other Op" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Suspend: Me" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Nothing is waiting for approval.")).toBeInTheDocument();
+  });
+
+  it("is read-only without canManage", () => {
+    seeded([op({ id: "22222222-2222-4222-8222-222222222222", name: "Other Op" })], "live");
+    render(<OperatorsTable operators={[]} />);
+    expect(screen.queryByRole("button", { name: /Suspend/ })).not.toBeInTheDocument();
+    expect(screen.queryByText("Change requests")).not.toBeInTheDocument();
   });
 });

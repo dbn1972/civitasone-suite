@@ -15,6 +15,7 @@ import { schema as devicesSyncSchema } from "../modules/devices/schema.js";
 import { samlModuleSchema } from "../modules/saml/schema.js";
 import { webauthnModuleSchema } from "../modules/webauthn/schema.js";
 import { scimModuleSchema } from "../modules/scim/schema.js";
+import { operatorsModuleSchema } from "../modules/operators/schema.js";
 import { outboxSchema } from "./outbox.js";
 import { kcReconcileSchema } from "./kc-reconcile.js";
 
@@ -31,6 +32,8 @@ const SCHEMA = {
   // SEC-007: scim.scim_tokens — see modules/scim/schema.ts and
   // migrations/0022_scim_per_tenant_tokens.sql (deliberately no RLS policy).
   ...scimModuleSchema,
+  // Migration 0028: maker-checker requests for platform operators.
+  ...operatorsModuleSchema,
   ...outboxSchema,
   ...kcReconcileSchema,
 };
