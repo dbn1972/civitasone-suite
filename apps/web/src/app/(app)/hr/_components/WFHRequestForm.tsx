@@ -5,6 +5,7 @@
  */
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState, useId } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -119,12 +120,12 @@ export function WFHRequestForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ employeeId, fromDate, toDate, reason: reason || undefined }),
         });
-      } catch {
-        throw new Error(formError.fromException("save").message);
+      } catch (caught) {
+        throw UserFacingError.from(formError.fromException("save", caught));
       }
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       return (await res.json()) as CreatedRequest;
     },
@@ -133,7 +134,7 @@ export function WFHRequestForm({
       const res = await fetch(`/api/proxy/v1/hrms/wfh-requests${qs}`);
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "load");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       return (await res.json()) as WfhRequestsList;
     },

@@ -41,7 +41,7 @@ describe("ComposeNotificationPage", () => {
     await waitFor(() => expect(screen.getByText("Send this notification?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Send" }));
 
-    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     expect(screen.queryByText(/rejected by provider/)).not.toBeInTheDocument();
   });
 

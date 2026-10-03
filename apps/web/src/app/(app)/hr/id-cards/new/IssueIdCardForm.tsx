@@ -71,8 +71,8 @@ export function IssueIdCardForm() {
       setValidUntil("");
       router.push("/hr/id-cards");
       router.refresh();
-    } catch {
-      err.fromException("save");
+    } catch (caught) {
+      err.fromException("save", caught);
     } finally {
       setBusy(false);
     }

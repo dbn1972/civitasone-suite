@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Card, ActionButton, EmptyState } from "../../../_components/ds";
@@ -118,7 +119,7 @@ export function LocationActions({ rows }: { rows: Row[] }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: reason || undefined }),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     router.refresh();
   }
 

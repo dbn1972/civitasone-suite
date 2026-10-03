@@ -60,7 +60,7 @@ describe("CtcCalculatorForm", () => {
     fireEvent.click(screen.getByText("Calculate Breakup"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR/)).not.toBeInTheDocument();
   });

@@ -45,8 +45,8 @@ export function ProposalActions({ id, status, roles }: ProposalActionsProps) {
       toast.success("Proposal submitted for DAO finalization. It will show as finalized once processed.");
       setOpen(false);
       setTimeout(() => router.refresh(), 600);
-    } catch {
-      setErrorMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setErrorMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

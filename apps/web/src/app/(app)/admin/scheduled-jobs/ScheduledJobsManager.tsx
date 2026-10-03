@@ -252,9 +252,9 @@ export function ScheduledJobsManager({ initialJobs, source }: { initialJobs: Adm
       }
       setShowModal(false);
       await refresh();
-    } catch {
+    } catch (caught) {
       setSaving(false);
-      setError(formError.fromException("save").message);
+      setError(formError.fromException("save", caught).message);
     }
   }
 

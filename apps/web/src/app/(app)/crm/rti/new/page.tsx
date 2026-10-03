@@ -57,8 +57,8 @@ export default function NewRtiPage() {
       }
       const { data } = (await res.json()) as { data: { id: string } };
       router.push(`/crm/rti/${data.id}`);
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
       setSaving(false);
     }
   }

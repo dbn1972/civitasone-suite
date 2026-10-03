@@ -92,10 +92,10 @@ export function NewUCForm({ schemes }: { schemes: SchemeOption[] | null }) {
       setMessage(t("submitted"));
       router.refresh();
       setTimeout(() => router.push("/finance/expenditure/utilization-certificates"), 700);
-    } catch {
+    } catch (caught) {
       setConfirmOpen(false);
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

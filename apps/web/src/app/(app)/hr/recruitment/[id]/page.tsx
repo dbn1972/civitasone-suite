@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useId, useState, useCallback, useMemo, useRef } from "react";
 import { useTranslations } from "next-intl";
 import Link from "next/link";
@@ -699,7 +700,7 @@ export default function JobOpeningDetailPage() {
       setOpening(found);
       return found;
     } catch (e) {
-      if (!(e instanceof Error && e.name === "AbortError")) setError(formError.fromException("load").message);
+      if (!(e instanceof Error && e.name === "AbortError")) setError(formError.fromException("load", e).message);
       return null;
     } finally {
       setLoadingOpening(false);
@@ -854,12 +855,12 @@ export default function JobOpeningDetailPage() {
       if (!res.ok) {
         setDecisionStates((s) => ({ ...s, [appId]: "error" }));
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       setDecisionStates((s) => ({ ...s, [appId]: "done" }));
     } catch (e) {
       setDecisionStates((s) => ({ ...s, [appId]: "error" }));
-      throw e instanceof Error ? e : new Error(formError.fromException("save").message);
+      throw e instanceof UserFacingError ? e : UserFacingError.from(formError.fromException("save", e));
     }
     // formError.fromResponse/fromException are stable across renders (see
     // useFormError) even though the wrapping object literal isn't — safe to
@@ -900,8 +901,8 @@ export default function JobOpeningDetailPage() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ isPublished: target }),
     }).catch(() => null);
-    if (!res) throw new Error(formError.fromException("save").message);
-    if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+    if (!res) throw UserFacingError.from(formError.fromException("save", new TypeError("no response")));
+    if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
     // GAP-RECRUITMENT-DETAIL-10: 202 means "queued", not "done". Keep a pending state and poll until the
     // opening actually reads back with the new value; never assume success.
     setPublishPending(target);
@@ -945,7 +946,7 @@ export default function JobOpeningDetailPage() {
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ applicationIds: ids.slice(i, i + BULK_SHORTLIST_CHUNK) }),
           });
-          if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+          if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
           const j = await res.json() as { shortlisted?: number; skipped?: number; requested?: number };
           total.shortlisted += j.shortlisted ?? 0;
           total.skipped += j.skipped ?? 0;

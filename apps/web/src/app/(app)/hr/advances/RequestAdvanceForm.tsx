@@ -112,8 +112,8 @@ export function RequestAdvanceForm({ selfServiceOnly = false }: { selfServiceOnl
       setAmount(""); setPurpose(""); setMonths("3"); setRequestDate("");
       setOpen(false);
       router.refresh();
-    } catch {
-      setMessage({ tone: "bad", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ tone: "bad", text: formError.fromException("save", caught).message });
     } finally {
       setBusy(false);
     }

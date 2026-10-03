@@ -111,8 +111,8 @@ export default function ComposeNotificationPage() {
       setConfirmOpen(false);
       setResult("Notification queued. It will appear in Deliveries once the send is processed.");
       setRecipient("");
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

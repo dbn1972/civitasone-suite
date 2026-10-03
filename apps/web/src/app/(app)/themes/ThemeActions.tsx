@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useId, useState } from "react";
 import { ActionButton } from "@/app/_components/ds";
@@ -21,7 +22,7 @@ export function ThemeActions() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ name, reason }),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Failed to publish theme revision.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     setStatus(`Theme revision “${name}” published.`);
     router.refresh();
   }

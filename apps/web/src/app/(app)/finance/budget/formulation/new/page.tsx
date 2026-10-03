@@ -79,8 +79,8 @@ export default function NewBudgetEstimatePage() {
           setAccounts(budgetableHeads(rows));
           setHeadsTruncated(rows.length >= HEADS_LIMIT);
         }
-      } catch {
-        if (active) setLoadError(formError.fromException("load").message);
+      } catch (caught) {
+        if (active) setLoadError(formError.fromException("load", caught).message);
       } finally {
         if (active) setAccountsLoading(false);
       }
@@ -139,10 +139,10 @@ export default function NewBudgetEstimatePage() {
       router.refresh();
       // Long enough to read; the link below goes there immediately.
       redirectTimer.current = setTimeout(() => router.push(listHref), REDIRECT_DELAY_MS);
-    } catch {
+    } catch (caught) {
       setConfirmMinor(null);
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       inFlight.current = false;
       setBusy(false);

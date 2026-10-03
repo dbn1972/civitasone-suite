@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { EmployeeSummary } from "@civitasone/types";
 import { fetchOrQueue } from "@/lib/sync/requestQueue";
@@ -130,7 +131,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       );
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "load");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       const ctx = (await res.json()) as LeaveContext;
       setLeaveContext(ctx);
@@ -146,7 +147,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       setLeaveContext(null);
       setStatus("error");
       setMessage(
-        err instanceof Error ? err.message : formError.fromException("load").message,
+        formError.fromException("load", err).message,
       );
     }
     // formError.fromResponse/fromException are stable across renders (see
@@ -253,7 +254,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       if (!response || !response.ok) {
         const resolved = response
           ? await formError.fromResponse(response, "save")
-          : formError.fromException("save");
+          : formError.fromException("save", new TypeError("no response"));
         setStatus("error");
         setMessage(resolved.message);
         toast.error(resolved.message);
@@ -265,9 +266,9 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       toast.success(t("acceptedMessage"));
       resetFields();
       void loadContext(employeeId);
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

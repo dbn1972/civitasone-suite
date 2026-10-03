@@ -108,9 +108,9 @@ export default function LocationsPage() {
       setMessage("Functional location submitted. It appears in the list once processed.");
       setForm({ code: "", name: "", orgUnit: "", parentId: "" });
       await load();
-    } catch {
+    } catch (caught) {
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
@@ -135,9 +135,9 @@ export default function LocationsPage() {
       setMessage("Location updated. The code cannot be changed.");
       setEditing(null);
       await load();
-    } catch {
+    } catch (caught) {
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

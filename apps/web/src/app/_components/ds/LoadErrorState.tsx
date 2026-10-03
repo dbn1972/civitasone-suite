@@ -1,14 +1,14 @@
 import { PermissionDenied } from "../PermissionDenied";
 import { RefreshErrorState } from "./RefreshErrorState";
-import { toHumanError } from "@/lib/messages";
+import { humanErrorForStatus, type HumanError } from "@/lib/messages";
 import type { LoaderResult } from "@/app/_data/apiClient";
 
 export interface LoadErrorStateProps {
   /**
    * The failed `fetchJson()` loader's result (or just the `status` /
-   * `errorMessage` slice of it). Only these two fields are read.
+   * `errorMessage` slice of it). `errorMessage` (the backend's own text) is never rendered; it is only forwarded to PermissionDenied, which logs it in development.
    */
-  result: Pick<LoaderResult<unknown>, "status" | "errorMessage">;
+  result: Pick<LoaderResult<unknown>, "status" | "errorMessage"> & { errorCode?: string };
   /** Plain noun for the generic "couldn't load X, try again" copy (toHumanError's `area`). */
   area: string;
   /**
@@ -53,17 +53,29 @@ export interface LoadErrorStateProps {
  * only the backend can actually evaluate. Every other failure still gets
  * the existing generic retry copy unchanged.
  */
-export function LoadErrorState({ result, area, backHref, backLabel, module, requiredRoles }: LoadErrorStateProps) {
+export function LoadErrorState({ result, area, backHref, backLabel, module }: LoadErrorStateProps) {
   if (result.status === 403) {
     return (
       <PermissionDenied
         module={module ?? area}
         reason={result.errorMessage}
-        requiredRoles={result.errorMessage ? undefined : requiredRoles}
+        code={result.errorCode}
         {...(backHref ? { backHref } : {})}
         {...(backLabel ? { backLabel } : {})}
       />
     );
   }
-  return <RefreshErrorState error={toHumanError("load", { area })} backHref={backHref} />;
+  // Standard, status-aware copy (apps/web/docs/ERROR-MESSAGES.md). Retry for every
+  // failure except 401 (sign in again instead) -- 403 is handled above.
+  const error: HumanError = {
+    ...humanErrorForStatus(result.status, { area, intent: "load", code: result.errorCode }),
+    actions: result.status === 401 ? ["signin", "help"] : ["retry", "back", "help"],
+  };
+  return (
+    <RefreshErrorState
+      error={error}
+      backHref={backHref}
+      source={{ status: result.status, code: result.errorCode, area }}
+    />
+  );
 }

@@ -107,8 +107,8 @@ export function QcInspectionForm({
       toast.success("QC verdict recorded.");
       // The page is already on this URL: refresh to flip to the read-only verdict.
       router.refresh();
-    } catch {
-      setDialogError(formError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

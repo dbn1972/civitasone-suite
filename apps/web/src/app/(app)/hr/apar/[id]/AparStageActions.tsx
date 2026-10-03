@@ -17,6 +17,7 @@
  * clerk-safe error any other save failure would show, never a client-side
  * "guess" about who may act.
  */
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -82,8 +83,8 @@ export function AparStageActions({ appraisalId, status, actions }: Props) {
       }
       router.refresh();
       return true;
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
       return false;
     }
   }
@@ -101,11 +102,11 @@ export function AparStageActions({ appraisalId, status, actions }: Props) {
     let res: Response;
     try {
       res = await doPost(path, body);
-    } catch {
-      throw new Error(formError.fromException("save").message);
+    } catch (caught) {
+      throw UserFacingError.from(formError.fromException("save", caught));
     }
     if (!res.ok) {
-      throw new Error((await formError.fromResponse(res, "save")).message);
+      throw UserFacingError.from(await formError.fromResponse(res, "save"));
     }
     router.refresh();
   }

@@ -139,7 +139,7 @@ describe("assignment client calls", () => {
     await updateAgentCapacity("a1", { maxLeads: 5, available: true, onLeave: false });
     expect((fetchMock.mock.calls[0][1] as RequestInit).method).toBe("PATCH");
     fetchMock.mockResolvedValueOnce(res({ code: "BOOM", message: "no" }, 400));
-    await expect(deleteEscalationRule("e1")).rejects.toThrow(/couldn't save/i);
+    await expect(deleteEscalationRule("e1")).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "BOOM", message: "no" }, 400));
     await expect(deleteEscalationRule("e1")).rejects.not.toThrow(/BOOM/);
   });
@@ -197,7 +197,7 @@ describe("assignment CRUD wrappers (paths, methods, error propagation)", () => {
     await deleteResource("branches", "b1");
     expect((fetchMock.mock.calls.at(-1)![1] as RequestInit).method).toBe("DELETE");
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "m" }, 400));
-    await expect(createResource("branches", body)).rejects.toThrow(/couldn't save/i);
+    await expect(createResource("branches", body)).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "m" }, 400));
     await expect(createResource("branches", body)).rejects.not.toThrow(/E/);
   });
@@ -211,7 +211,7 @@ describe("assignment CRUD wrappers (paths, methods, error propagation)", () => {
     fetchMock.mockRejectedValueOnce(new Error("net"));
     expect((await getAgents()).source).toBe("error");
     fetchMock.mockResolvedValueOnce(res({ code: "CAP", message: "bad" }, 422));
-    await expect(updateAgentCapacity("a1", { maxLeads: 1, available: true, onLeave: false })).rejects.toThrow(/couldn't save/i);
+    await expect(updateAgentCapacity("a1", { maxLeads: 1, available: true, onLeave: false })).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "CAP", message: "bad" }, 422));
     await expect(updateAgentCapacity("a1", { maxLeads: 1, available: true, onLeave: false })).rejects.not.toThrow(/CAP/);
   });

@@ -111,7 +111,7 @@ describe("SeniorityListActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Generate" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/HR admin role required/)).not.toBeInTheDocument();
     // Failure must stay visible in the dialog, not disappear silently, and
@@ -180,7 +180,7 @@ describe("SeniorityListActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Approve" }));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/INVALID_STATUS/)).not.toBeInTheDocument();
     // Must never show any approval-submitted/approved copy on this path.

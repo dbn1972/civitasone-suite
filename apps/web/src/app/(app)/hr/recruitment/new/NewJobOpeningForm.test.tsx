@@ -113,7 +113,7 @@ describe("NewJobOpeningForm", () => {
     await fillRequiredFields();
     submit();
     await waitFor(() => {
-      expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i);
+      expect(screen.getByRole("alert")).toHaveTextContent(/This job opening was changed by someone else\. Refresh to see the latest version, then try again\./);
     });
   });
 
@@ -124,7 +124,7 @@ describe("NewJobOpeningForm", () => {
     await fillRequiredFields();
     submit();
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This job opening was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/duplicate refNo/);
     expect(alert.textContent).not.toMatch(/\b409\b/);
   });

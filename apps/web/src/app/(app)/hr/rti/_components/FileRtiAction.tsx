@@ -62,8 +62,8 @@ export function FileRtiAction() {
       setOpen(false);
       reset();
       router.refresh();
-    } catch {
-      err.fromException("save");
+    } catch (caught) {
+      err.fromException("save", caught);
     } finally {
       setBusy(false);
     }

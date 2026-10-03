@@ -1,4 +1,5 @@
 "use client";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -49,7 +50,7 @@ export function RequestDetailClient({
     try {
       const res = await fetch(`/api/proxy/v1/citizen/grievances/${id}`, { cache: "no-store", signal });
       if (res.status === 404) { setGrievance(null); return; }
-      if (!res.ok) throw new Error((await res.text()) || "Failed to load request.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "load");
       setGrievance((await res.json()) as Grievance);
     } catch (e) {
       if (e instanceof Error && e.name === "AbortError") return;
@@ -86,7 +87,7 @@ export function RequestDetailClient({
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ actionType: actionForm.actionType, note: actionForm.note || undefined }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not record the action.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setShowAction(false);
       setActionForm({ actionType: "comment", note: "" });
       afterMutate("Action submitted. It will appear once processed.");
@@ -103,7 +104,7 @@ export function RequestDetailClient({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ note: reason || undefined }),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not resolve the grievance.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   async function escalate(reason?: string) {
@@ -112,7 +113,7 @@ export function RequestDetailClient({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: reason || "Escalated by officer" }),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not escalate the grievance.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   async function reopen(reason?: string) {
@@ -121,7 +122,7 @@ export function RequestDetailClient({
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ reason: reason || "Reopened" }),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not reopen the grievance.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   if (loading) {

@@ -120,8 +120,8 @@ function RecordMeasurementForm() {
         if (workId) router.push("/works/billing/" + workId);
         else router.push("/works/billing");
       }, 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

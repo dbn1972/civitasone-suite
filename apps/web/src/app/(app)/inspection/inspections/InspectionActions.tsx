@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "@/app/_components/ds";
@@ -91,7 +92,7 @@ export function InspectionRowAction({ id, status }: RowProps) {
       body: spec.body ? JSON.stringify(spec.body) : undefined,
     });
     if (res.status !== 202 && !res.ok) {
-      throw new Error((await formError.fromResponse(res, "save")).message);
+      throw UserFacingError.from(await formError.fromResponse(res, "save"));
     }
   }
 
@@ -104,8 +105,8 @@ export function InspectionRowAction({ id, status }: RowProps) {
       await callApi(action);
       setMessage(`${action.label} accepted (queued).`);
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

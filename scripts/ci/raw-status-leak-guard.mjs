@@ -232,6 +232,13 @@ const STATUS_STRING_CALL_RE = new RegExp(`\\bString\\(\\s*${RESPONSE_STATUS_EXPR
 // so the list stays to the verbs that showed a real hit.
 const FAILED_LITERAL_RE = /\b(?:Request|Create|Update|Save|Delete|Submit|Upload|Load) failed\b/i;
 
+// A thrown Error whose message is the raw response body: `new Error(await res.text())`
+// or `new Error((await res.text()) || "...")`. Whatever catches it renders `.message`,
+// so the backend's own text reaches the screen. Use `userFacingErrorFromResponse`
+// (apps/web/src/lib/api/userFacingFromResponse.ts) or `errorMessageFromResponse`.
+// Never baseline a site of this shape: fix it.
+const RAW_BODY_THROW_RE = /new Error\(\s*\(?\s*await\s+[\w.]+\.(?:text|json)\(\)/;
+
 const SUPPRESS_COMMENT = "status-leak-ok";
 
 // A line that is (or continues) a `//` or `/* … */`/JSDoc comment. This
@@ -265,6 +272,15 @@ export function checkRawStatusLeakViolations(source) {
         line: idx + 1,
         snippet: line.trim().slice(0, 160),
         reason: "raw HTTP status code coerced to a string for user-facing text",
+      });
+      return;
+    }
+
+    if (RAW_BODY_THROW_RE.test(line)) {
+      violations.push({
+        line: idx + 1,
+        snippet: line.trim().slice(0, 160),
+        reason: "raw response body thrown as an Error message (use userFacingErrorFromResponse)",
       });
       return;
     }

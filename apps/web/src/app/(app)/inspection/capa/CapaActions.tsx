@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
@@ -49,7 +50,7 @@ export function CapaRowAction({ id, status }: RowProps) {
         method: "POST",
       });
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Start failed");
+        throw await userFacingErrorFromResponse(res, "save");
       }
       setMessage("CAPA start accepted (queued).");
       router.refresh();
@@ -73,7 +74,7 @@ export function CapaRowAction({ id, status }: RowProps) {
         }),
       });
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Complete failed");
+        throw await userFacingErrorFromResponse(res, "save");
       }
       setMessage("CAPA completion accepted (queued).");
       router.refresh();
@@ -95,7 +96,7 @@ export function CapaRowAction({ id, status }: RowProps) {
         body: JSON.stringify({ effectivenessVerified: true }),
       });
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Verify failed");
+        throw await userFacingErrorFromResponse(res, "save");
       }
       setMessage("CAPA verification accepted (queued).");
       router.refresh();

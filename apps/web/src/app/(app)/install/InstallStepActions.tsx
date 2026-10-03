@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ConfirmDialog } from "@/app/_components/ds";
@@ -27,7 +28,7 @@ export function InstallStepActions({
     setError(null);
     try {
       const res = await fetch(`/api/proxy/v1/install/steps/${id}/${verb}`, { method: "PATCH" });
-      if (!res.ok) throw new Error((await res.text()) || `Failed to ${verb} step.`);
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : `Could not ${verb} this step. Please try again.`);

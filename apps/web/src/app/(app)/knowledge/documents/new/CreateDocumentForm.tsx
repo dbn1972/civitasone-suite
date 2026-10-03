@@ -50,9 +50,9 @@ export function CreateDocumentForm({
       }
       router.push(backHref);
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

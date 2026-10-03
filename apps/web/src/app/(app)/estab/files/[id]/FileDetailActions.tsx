@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { Button, useConfirmAction, ConfirmDialog } from "../../../../_components/ds";
@@ -86,7 +87,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
           action: "draft",
         }),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setNoteBody("");
       setMessage("Yellow note saved.");
       router.refresh();
@@ -108,7 +109,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ notingId: draftNotingId, remarks }),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     setMessage("Submitted — Section Officer review task created (SO → US → DS chain).");
     router.refresh();
   }
@@ -128,7 +129,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
       headers: { "content-type": "application/json" },
       body: "{}",
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     setMessage("Note signed — recorded as a green note in the file's hash-chained noting trail.");
     router.refresh();
   }
@@ -152,7 +153,7 @@ export function FileDetailActions({ fileId, draftNotingId, status }: Props) {
         remarks: referRemarks.trim() || "Referred back",
       }),
     });
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
     setReferRemarks("");
     setMessage("File referred back.");
     router.refresh();

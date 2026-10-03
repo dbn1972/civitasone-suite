@@ -50,8 +50,8 @@ export function ApplyTemplateCard({ employeeId, hasTasks }: { employeeId: string
       setNotice(t("applied", { count: body.stepCount ?? 0 }));
       // Async write (queue) -- refresh shortly so the new tasks actually show.
       setTimeout(() => router.refresh(), 1000);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

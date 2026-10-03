@@ -42,8 +42,8 @@ export function GrievanceActions({ id, grievantId }: { id: string; grievantId: s
       });
       if (!res.ok) return (await formError.fromResponse(res, "save")).message;
       return null;
-    } catch {
-      return formError.fromException("save").message;
+    } catch (caught) {
+      return formError.fromException("save", caught).message;
     }
   }
 

@@ -67,7 +67,7 @@ describe("NewAdvancePage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create advance/i }));
     fireEvent.click(await screen.findByRole("button", { name: "Issue advance" }));
 
-    const alert = await screen.findByText(/couldn't save/i);
+    const alert = await screen.findByText(/Some details weren't accepted\. Check what you entered and try again\./);
     expect(alert.textContent).not.toMatch(/insufficient_budget/i);
     expect(alert.textContent).not.toMatch(/\b422\b/);
   });

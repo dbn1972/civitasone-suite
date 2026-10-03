@@ -75,9 +75,9 @@ export default function ApplyPage({ params }: ApplyPageProps) {
       setFormStatus("success");
       setMessage("Application submitted successfully. It is now under review.");
       setTimeout(() => router.push("/grants/applications"), 2000);
-    } catch {
+    } catch (caught) {
       setFormStatus("error");
-      formError.fromException("save");
+      formError.fromException("save", caught);
     }
   }
 

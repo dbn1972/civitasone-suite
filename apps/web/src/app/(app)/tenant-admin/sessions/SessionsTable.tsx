@@ -66,8 +66,8 @@ export function SessionsTable({ sessions }: { sessions: Session[] }) {
       setNotice(`Session for ${pending.userName ?? pending.userEmail} revoked.`);
       setPending(null);
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

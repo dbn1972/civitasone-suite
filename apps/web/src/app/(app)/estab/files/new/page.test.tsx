@@ -24,7 +24,7 @@ describe("NewFilePage (estab) — UX-016 clerk-safe errors", () => {
     fireEvent.change(screen.getByLabelText(/^Subject/i), { target: { value: "Road repair request" } });
     fireEvent.click(screen.getByRole("button", { name: "Create File" }));
 
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
     expect(document.body.textContent).not.toMatch(/dept quota exceeded/i);
     expect(document.body.textContent).not.toMatch(/\b422\b/);
   });

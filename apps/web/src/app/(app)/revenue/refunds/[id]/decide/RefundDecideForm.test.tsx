@@ -97,7 +97,7 @@ describe("RefundDecideForm", () => {
     fireEvent.click(screen.getByText("Reject refund"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/MAKER_CHECKER_VIOLATION|separation of duties/)).not.toBeInTheDocument();
   });

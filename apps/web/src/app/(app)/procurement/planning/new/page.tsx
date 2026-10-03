@@ -95,9 +95,9 @@ export default function NewAnnualPlanPage() {
       setStatus("accepted");
       setClientMessage("Plan submitted. It will appear in the list shortly.");
       setTimeout(() => router.push("/procurement/planning"), 1200);
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      formError.fromException("save");
+      formError.fromException("save", caught);
     }
   }
 

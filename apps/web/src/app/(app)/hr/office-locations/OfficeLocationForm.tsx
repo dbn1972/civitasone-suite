@@ -99,8 +99,8 @@ export function OfficeLocationForm() {
       setLongitude("");
       setRadiusMeters(String(RADIUS_DEFAULT_METERS));
       router.refresh();
-    } catch {
-      setMessage({ tone: "error", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ tone: "error", text: formError.fromException("save", caught).message });
     } finally {
       setBusy(false);
       setPending(null);

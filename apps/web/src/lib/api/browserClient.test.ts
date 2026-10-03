@@ -1,9 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { errorMessageFromResponse } from "./browserClient";
+import { errorMessageFromResponse, errorMessageForStatus, browserFetch, browserJson, UserFacingError, referenceFromError } from "./browserClient";
+import { vi, afterEach } from "vitest";
 
-function mockRes(status: number, body?: unknown, throwOnJson = false): Response {
+function mockRes(status: number, body?: unknown, throwOnJson = false, headers: Record<string, string> = {}): Response {
   return {
     status,
+    ok: status < 400,
+    headers: new Headers(headers),
     clone() {
       return this;
     },
@@ -31,13 +34,13 @@ describe("errorMessageFromResponse", () => {
     );
     expect(msg).not.toContain("ALREADY_CLOSED");
     expect(msg).not.toContain("period is already hard-closed");
-    expect(msg).toMatch(/couldn't save/i);
+    expect(msg).toBe("This information was changed by someone else. Refresh to see the latest version, then try again.");
   });
 
   it("never echoes a bare message with no code either", async () => {
     const msg = await errorMessageFromResponse(mockRes(400, { message: "IFSC must be exactly 11 characters." }));
     expect(msg).not.toContain("IFSC must be exactly 11 characters.");
-    expect(msg).toMatch(/couldn't save/i);
+    expect(msg).toBe("Some details weren't accepted. Check what you entered and try again.");
   });
 
   it("never echoes a nested error.{code,message} envelope", async () => {
@@ -46,7 +49,9 @@ describe("errorMessageFromResponse", () => {
     );
     expect(msg).not.toContain("INTEGRATION_DISABLED");
     expect(msg).not.toContain("PFMS is offline");
-    expect(msg).toMatch(/couldn't save/i);
+    expect(msg).toBe(
+      "We couldn't save the information because of a problem on our side. Your changes haven't been saved. Try again in a few minutes.",
+    );
   });
 
   it('never falls back to "API_ERROR: <status>" when the body is absent/unparseable', async () => {
@@ -61,37 +66,112 @@ describe("errorMessageFromResponse", () => {
     expect(msg).not.toContain("404");
   });
 
-  it("does not read the response body at all — nothing in it can leak", async () => {
-    // A body that would throw if `.json()` were ever awaited on it for real;
-    // mockRes's `clone()` returns `this`, so a stray body-read would surface
-    // here too.
-    const res = mockRes(400, { code: "SHOULD_NEVER_APPEAR", message: "should never appear either" });
-    const msg = await errorMessageFromResponse(res);
+  it("does not echo anything from the body, only uses the code as a lookup key", async () => {
+    const msg = await errorMessageFromResponse(mockRes(400, { code: "SHOULD_NEVER_APPEAR", message: "should never appear either" }));
     expect(msg).not.toContain("SHOULD_NEVER_APPEAR");
     expect(msg).not.toContain("should never appear either");
   });
 
-  it('maps a 404 to the "load" catalogue entry ("couldn\'t load"), not "save"', async () => {
-    const msg = await errorMessageFromResponse(mockRes(404, {}));
-    expect(msg).toMatch(/couldn't load/i);
+  it("a 400 without field errors is action-neutral; with field errors it points at the highlighted fields", async () => {
+    expect(await errorMessageFromResponse(mockRes(400, { message: "x" }))).toBe(
+      "Some details weren't accepted. Check what you entered and try again.",
+    );
+    expect(await errorMessageFromResponse(mockRes(400, { fieldErrors: [{ field: "a", message: "Bad" }] }))).toBe(
+      "Some details need changing. Check the highlighted fields and try again.",
+    );
   });
 
-  it("still resolves the status internally only to pick a catalogue entry, never to display it", async () => {
+  it("maps a 404 to the standard not-found copy, naming the object", async () => {
+    const msg = await errorMessageFromResponse(mockRes(404, {}), undefined, "invoice");
+    expect(msg).toBe("We couldn't find this invoice. It may have been removed or the link may be wrong.");
+  });
+
+  it("still resolves the status internally only to pick the wording, never to display it", async () => {
     const msg = await errorMessageFromResponse(mockRes(404, { message: "Not found: widget 404 missing" }));
-    // The body's own message text happens to contain "404" — proves the
-    // guard isn't just stripping the literal status digits post hoc, it
-    // never reads the message into the output at all.
     expect(msg).not.toContain("Not found: widget 404 missing");
-    expect(msg).toMatch(/couldn't load/i);
+    expect(msg).not.toMatch(/\b404\b/);
+    expect(msg).toMatch(/couldn't find/i);
   });
 
-  it("accepts an explicit kind + area, matching useFormError.fromResponse's own parameters", async () => {
+  it("an explicit load kind + area gives the 5xx load wording (no 'changes' claim)", async () => {
     const msg = await errorMessageFromResponse(mockRes(500, {}), "load", "payroll run");
-    expect(msg).toMatch(/couldn't load payroll run/i);
+    expect(msg).toBe("We couldn't load the payroll run because of a problem on our side. Try again in a few minutes.");
   });
 
-  it("a 404 with an explicit kind still prefers the caller's kind over the status-based default", async () => {
+  it("an explicit offline kind wins over the status", async () => {
     const msg = await errorMessageFromResponse(mockRes(404, {}), "offline");
-    expect(msg).toMatch(/offline/i);
+    expect(msg).toBe("We couldn't connect. Check your internet connection and try again.");
+  });
+
+  // The status-aware mapping is the default for every caller (no opt-in).
+  it.each([
+    [400, "Some details weren't accepted. Check what you entered and try again."],
+    [422, "Some details weren't accepted. Check what you entered and try again."],
+    [401, "Your session has ended. Sign in again to continue."],
+    [403, "You don't have permission to do this. Ask your administrator if you need access."],
+    [413, "The file is too large. Upload a file smaller than the allowed size."],
+    [415, "This file type isn't accepted. Upload a supported file."],
+    [429, "Too many attempts. Wait a minute, then try again."],
+    [500, "We couldn't save the leave request because of a problem on our side. Your changes haven't been saved. Try again in a few minutes."],
+    [502, "We couldn't save the leave request because of a problem on our side. Your changes haven't been saved. Try again in a few minutes."],
+  ])("status %s resolves to the standard wording by default", async (status, expected) => {
+    expect(await errorMessageFromResponse(mockRes(status, {}), undefined, "leave request")).toBe(expected);
+  });
+
+  it("a known domain code wins over the generic status copy", async () => {
+    const msg = await errorMessageFromResponse(mockRes(409, { code: "SELF_APPROVAL_FORBIDDEN", message: "x" }));
+    expect(msg).toBe("You can't approve your own request. Another approver needs to do this.");
+    expect(msg).not.toContain("SELF_APPROVAL_FORBIDDEN");
+  });
+
+  it("errorMessageForStatus is an alias of the (now default) status-aware mapping", async () => {
+    const res = mockRes(403, {});
+    expect(await errorMessageForStatus(res)).toBe(await errorMessageFromResponse(res));
+  });
+});
+
+describe("browserJson failures", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("throws a UserFacingError with standard copy and the support reference separate from the message", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => mockRes(500, { message: "pg: relation x missing" }, false, { "x-request-id": "req_77ab" })));
+    let caught: unknown;
+    try {
+      await browserJson("v1/things");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(UserFacingError);
+    expect((caught as Error).message).not.toContain("req_77ab");
+    expect((caught as Error).message).not.toContain("pg:");
+    expect(referenceFromError(caught)).toBe("req_77ab");
+  });
+});
+
+describe("browserFetch network failures", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("converts a raw 'Failed to fetch' TypeError into a UserFacingError with the network copy", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("Failed to fetch"); }));
+    let caught: unknown;
+    try {
+      await browserFetch("v1/things");
+    } catch (e) {
+      caught = e;
+    }
+    expect(caught).toBeInstanceOf(UserFacingError);
+    expect((caught as Error).message).toBe("We couldn't connect. Check your internet connection and try again.");
+    expect((caught as Error).message).not.toContain("Failed to fetch");
+  });
+
+  it("browserJson surfaces the same network copy", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new TypeError("NetworkError when attempting to fetch resource."); }));
+    await expect(browserJson("v1/things")).rejects.toThrow("We couldn't connect. Check your internet connection and try again.");
+  });
+
+  it("leaves a caller-initiated abort untouched so callers can still detect it", async () => {
+    const abort = Object.assign(new Error("aborted"), { name: "AbortError" });
+    vi.stubGlobal("fetch", vi.fn(async () => { throw abort; }));
+    await expect(browserFetch("v1/things")).rejects.toBe(abort);
   });
 });

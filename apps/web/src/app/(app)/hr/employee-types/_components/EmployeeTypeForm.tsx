@@ -130,8 +130,8 @@ export function EmployeeTypeForm({ mode, id, initial }: Props) {
       }
       router.push("/hr/employee-types");
       router.refresh();
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

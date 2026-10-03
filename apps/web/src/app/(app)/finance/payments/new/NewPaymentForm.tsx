@@ -86,8 +86,8 @@ export function NewPaymentForm({
       setConfirmOpen(false);
       router.refresh();
       setTimeout(() => router.push("/finance/payments"), 700);
-    } catch {
-      setDialogError(formError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

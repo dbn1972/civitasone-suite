@@ -38,8 +38,8 @@ export function ExpenseReceiptLink({ id, hasReceipt }: { id: string; hasReceipt:
         // today's signature into the page's own markup/cache).
         window.open(body.url, "_blank", "noopener,noreferrer");
       }
-    } catch {
-      setError(formError.fromException("load").message);
+    } catch (caught) {
+      setError(formError.fromException("load", caught).message);
     } finally {
       setBusy(false);
     }

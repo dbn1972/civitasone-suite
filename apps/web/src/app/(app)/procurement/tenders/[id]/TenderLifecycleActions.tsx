@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ActionButton, Button } from "@/app/_components/ds";
@@ -53,12 +54,12 @@ export function TenderLifecycleActions({
 
   async function publish(): Promise<void> {
     const res = await fetch(`/api/proxy/v1/procurement/tenders/${tenderId}/publish`, { method: "POST" });
-    if (!res.ok) throw new Error((await res.text()) || "Could not publish the tender.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   async function openFinancial(): Promise<void> {
     const res = await fetch(`/api/proxy/v1/procurement/tenders/${tenderId}/open-financial`, { method: "POST" });
-    if (!res.ok) throw new Error((await res.text()) || "Could not open financial bids.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   async function award(): Promise<void> {
@@ -67,7 +68,7 @@ export function TenderLifecycleActions({
       headers: { "content-type": "application/json" },
       body: JSON.stringify(sanctionRef.trim() ? { sanctionRef: sanctionRef.trim() } : {}),
     });
-    if (!res.ok) throw new Error((await res.text()) || "Could not award the tender.");
+    if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
   }
 
   if (status === "draft") {

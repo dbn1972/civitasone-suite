@@ -70,7 +70,7 @@ describe("InspectionRowAction", () => {
     );
     render(<InspectionRowAction id="11111111-2222-4333-8444-555555555555" status="scheduled" />);
     fireEvent.click(screen.getByRole("button", { name: "Start" }));
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/invalid transition/i)).not.toBeInTheDocument();
   });
 });

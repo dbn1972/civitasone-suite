@@ -87,8 +87,8 @@ export function BillForm({
       setMessage(t("success"));
       router.refresh();
       setTimeout(() => router.push("/finance/expenditure/bills"), 700);
-    } catch {
-      setDialogError(formError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

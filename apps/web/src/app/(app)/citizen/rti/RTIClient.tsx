@@ -110,8 +110,8 @@ export function RTIClient({ rtis, today }: Props) {
       setTransferBusy(false);
       setTransferId(null);
       // Soft-refresh: the server component will revalidate on next navigation.
-    } catch {
-      setTransferError(formError.fromException("save").message);
+    } catch (caught) {
+      setTransferError(formError.fromException("save", caught).message);
       setTransferBusy(false);
     }
   }

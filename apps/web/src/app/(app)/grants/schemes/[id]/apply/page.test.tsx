@@ -51,7 +51,7 @@ describe("ApplyPage (grant scheme application)", () => {
     fillForm();
     fireEvent.click(screen.getByRole("button", { name: "Submit Application" }));
 
-    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     expect(screen.queryByText(/budget exhausted/)).not.toBeInTheDocument();
     expect(pushMock).not.toHaveBeenCalled();
   });

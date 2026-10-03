@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect } from "react";
-import { SUPPORT_REFERENCE_PREFIX } from "@/lib/messages";
+import { formatReference, resolveHumanError } from "@/lib/errorCatalogue";
 import { Button } from "./ds";
 
 /**
@@ -41,6 +41,11 @@ export function RouteError({
     console.error("Route error:", error);
   }, [error]);
 
+  // A route that crashed is "a problem on our side" (5xx copy); a thrown network
+  // failure reads as "couldn't connect". Never the error's own message.
+  const offline = typeof navigator !== "undefined" && navigator.onLine === false;
+  const human = resolveHumanError({ status: offline ? undefined : 500, ctx: { area: area?.trim() || "page", intent: "load" } });
+
   return (
     <div
       className="wrap"
@@ -48,24 +53,14 @@ export function RouteError({
       aria-live="assertive"
       style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "60vh", gap: 24, textAlign: "center" }}
     >
-      <span style={{ fontSize: 48 }} role="img" aria-label="Warning">⚠️</span>
+      <span style={{ fontSize: 48 }} aria-hidden="true">⚠️</span>
       <div>
         <h1 style={{ fontSize: "1.5rem", fontWeight: 600, color: "var(--ink)", marginBottom: 8 }}>
-          Something went wrong
+          {human.what}
         </h1>
-        <p style={{ color: "var(--ink2)", maxWidth: 480, margin: "0 auto" }}>
-          {/* No "this" before the area: it's caller-supplied free text and is
-              often plural or a list ("Insurance Claims", "Condemnation,
-              Auction & Disposal"), which "this X" reads as broken ("this
-              Insurance Claims"). Dropping the determiner reads correctly
-              regardless of the area's grammatical number. Same fix as
-              toHumanError() in lib/messages.ts. */}
-          We couldn&apos;t open {area?.trim() || "this page"}. Please try again — your information is safe.
-        </p>
+        <p style={{ color: "var(--ink2)", maxWidth: 480, margin: "0 auto" }}>{human.next}</p>
         {error.digest && (
-          <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 8 }}>
-            {SUPPORT_REFERENCE_PREFIX} {error.digest}
-          </p>
+          <p style={{ fontSize: 12, color: "var(--mut)", marginTop: 8 }}>{formatReference(error.digest)}</p>
         )}
       </div>
       <div style={{ display: "flex", gap: 12, flexWrap: "wrap", justifyContent: "center" }}>

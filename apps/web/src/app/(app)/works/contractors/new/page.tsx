@@ -66,8 +66,8 @@ export default function NewContractorPage() {
       setMessage("Registered.");
       toast.success("Contractor registered.");
       setTimeout(() => router.push("/works/contractors"), 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

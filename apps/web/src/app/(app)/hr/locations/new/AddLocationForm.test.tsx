@@ -51,7 +51,7 @@ describe("AddLocationForm — UX-016 clerk-safe errors", () => {
 
     // AddLocationForm doesn't render fieldError spans (no addressable-field
     // wiring in this file); the clerk-safe summary must still surface here.
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details need changing\. Check the highlighted fields and try again\./)).toBeInTheDocument());
   });
 });
 

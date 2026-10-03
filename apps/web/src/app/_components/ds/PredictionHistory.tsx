@@ -94,9 +94,9 @@ export function PredictionHistory({
         if (!cancelled) {
           setEntries(mapped);
         }
-      } catch {
+      } catch (caught) {
         if (!cancelled) {
-          setError(formError.fromException("load").message);
+          setError(formError.fromException("load", caught).message);
           setEntries([]);
         }
       } finally {

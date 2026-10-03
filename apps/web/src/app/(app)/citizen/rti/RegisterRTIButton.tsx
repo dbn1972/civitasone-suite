@@ -1,4 +1,5 @@
 "use client";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -32,7 +33,7 @@ export function RegisterRTIButton() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ subject: form.subject, description: form.description, cpioRef: form.cpioRef.trim() }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not register the RTI application.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("RTI application submitted. It will appear once processed.");
       setOpen(false);
       setForm({ subject: "", description: "", cpioRef: "" });

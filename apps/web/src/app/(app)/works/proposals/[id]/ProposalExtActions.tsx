@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import Link from "next/link";
 import { useToast } from "@/app/_components/ds/Toast";
@@ -108,7 +109,7 @@ function SplitProposalForm({
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
 
       // Capture child work info from response envelope (best-effort)
@@ -266,7 +267,7 @@ function MapCOAForm({
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       toast.success("COA mapped.");
     },
@@ -379,7 +380,7 @@ function MapOfficeForm({
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       toast.success("Office mapped.");
     },

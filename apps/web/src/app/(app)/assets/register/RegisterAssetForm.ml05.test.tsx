@@ -56,7 +56,7 @@ describe("RegisterAssetForm ml-assets-05", () => {
     render(<RegisterAssetForm categories={CATS} />);
     fill();
     await submitThroughDialog();
-    await waitFor(() => expect(screen.getAllByRole("alert").some((a) => /couldn.t save/i.test(a.textContent ?? "") || /save/i.test(a.textContent ?? ""))).toBe(true));
+    await waitFor(() => expect(screen.getAllByRole("alert").some((a) => /Some details weren't accepted. Check what you entered and try again./.test(a.textContent ?? ""))).toBe(true));
     const text = document.body.textContent ?? "";
     expect(text).not.toMatch(/ZodError|VALIDATION_FAILED|correlationId|\{"code"/);
     expect(screen.queryByText(/submitted for registration/)).not.toBeInTheDocument();
@@ -67,7 +67,7 @@ describe("RegisterAssetForm ml-assets-05", () => {
     render(<RegisterAssetForm categories={CATS} />);
     fill();
     await submitThroughDialog();
-    await waitFor(() => expect(screen.getAllByRole("alert").some((a) => (a.textContent ?? "").length > 0 && !/Choose|Enter/.test(a.textContent ?? ""))).toBe(true));
+    await waitFor(() => expect(screen.getAllByRole("alert").some((a) => /This code is already in use\. Choose a different code and try again\./.test(a.textContent ?? ""))).toBe(true));
     expect(document.body.textContent).not.toMatch(/DUPLICATE_CODE|already exists/);
   });
 

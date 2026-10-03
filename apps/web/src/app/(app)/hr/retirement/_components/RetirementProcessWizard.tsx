@@ -10,6 +10,7 @@
  * client-side useState with no persistence at all, and "Issue PPO" was a
  * styled <span>, not a working action.
  */
+import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
@@ -99,7 +100,7 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
     } catch {
       setChecked((prev) => ({ ...prev, [stepId]: { ...(prev[stepId] ?? {}), [checkIndex]: prevValue } }));
@@ -114,7 +115,7 @@ export function RetirementProcessWizard({ employeeName, separationId }: Props) {
       const res = await fetch(`/api/proxy/v1/hrms/separations/${separationId}/issue-ppo`, { method: "POST" });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       setPpoIssuedAt(new Date().toISOString());
       setConfirmOpen(false);

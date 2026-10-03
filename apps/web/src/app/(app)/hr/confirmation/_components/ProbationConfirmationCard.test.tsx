@@ -67,7 +67,7 @@ describe("ProbationConfirmationCard", () => {
     fireEvent.change(await screen.findByLabelText("Order reference"), { target: { value: "CONFIRM/2026/014" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
 
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument());
     expect(screen.queryByText(/not authorised/i)).not.toBeInTheDocument();
     expect(screen.queryByText("Confirmation submitted")).not.toBeInTheDocument();
   });
@@ -79,7 +79,7 @@ describe("ProbationConfirmationCard", () => {
     fireEvent.change(await screen.findByLabelText("Order reference"), { target: { value: "CONFIRM/2026/014" } });
     fireEvent.click(screen.getByRole("button", { name: "Confirm service" }));
 
-    const errorMessage = await waitFor(() => screen.getByText(/couldn't save/i));
+    const errorMessage = await waitFor(() => screen.getByText(/We couldn't save the probation confirmation because of a problem on our side\. Your changes haven't been saved\. Try again in a few minutes\./));
     // Scoped to the error text itself, not the whole document -- the
     // dialog's own optional-remark field legitimately renders a
     // "0/500 characters" hint (maxReasonLength={500}), which is not the

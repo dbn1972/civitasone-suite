@@ -13,6 +13,7 @@
  * showed a checkmark and persisted nothing; a refresh silently reverted
  * it).
  */
+import { UserFacingError } from "@/lib/userFacingError";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { StatusPill, ConfirmDialog, useConfirmAction, Button } from "@/app/_components/ds";
@@ -88,7 +89,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       });
       if (!res.ok) {
         const resolved = await confirmFormError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
     },
     // GAP-HR-CONFIRMATION-04: this only means "the command was accepted",
@@ -128,7 +129,7 @@ function ProbationCard({ row }: { row: ConfirmationRow }) {
       });
       if (!res.ok) {
         const resolved = await extendFormError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
     },
     onSuccess: () => {

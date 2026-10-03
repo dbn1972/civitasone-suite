@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
@@ -27,7 +28,7 @@ export function IntakePanel() {
 
   async function post<T>(path: string, body: unknown): Promise<T> {
     const res = await fetch(`/api/proxy${path}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-    if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+    if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
     return (await res.json()) as T;
   }
 
@@ -36,7 +37,7 @@ export function IntakePanel() {
     setBusy(true); setError(""); setAck(null);
     try {
       setDraft(await post<Draft>("/v1/citizen/intake/drafts", { serviceId, channel }));
-    } catch { setError(formError.fromException("save").message); } finally { setBusy(false); }
+    } catch (caught) { setError(formError.fromException("save", caught).message); } finally { setBusy(false); }
   }
 
   async function submitDraft() {
@@ -45,7 +46,7 @@ export function IntakePanel() {
     try {
       const a = await post<Ack>(`/v1/citizen/intake/drafts/${draft.id}/submit`, {});
       setAck(a); setTrackNo(a.trackingNo); setDraft(null);
-    } catch { setError(formError.fromException("save").message); } finally { setBusy(false); }
+    } catch (caught) { setError(formError.fromException("save", caught).message); } finally { setBusy(false); }
   }
 
   async function doTrack(e: React.FormEvent) {
@@ -53,9 +54,9 @@ export function IntakePanel() {
     setBusy(true); setError(""); setTrack(null);
     try {
       const res = await fetch(`/api/proxy/v1/citizen/intake/track/${encodeURIComponent(trackNo)}`);
-      if (!res.ok) throw new Error((await formError.fromResponse(res, "load")).message);
+      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "load"));
       setTrack((await res.json()) as Track);
-    } catch { setError(formError.fromException("load").message); } finally { setBusy(false); }
+    } catch (caught) { setError(formError.fromException("load", caught).message); } finally { setBusy(false); }
   }
 
   return (

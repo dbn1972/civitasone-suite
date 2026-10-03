@@ -76,8 +76,8 @@ export function RaiseRegularisation({ canPickEmployee }: { canPickEmployee: bool
       reset();
       setNotice(t("raiseSuccess"));
       router.refresh();
-    } catch {
-      setServerError(formError.fromException("save").message);
+    } catch (caught) {
+      setServerError(formError.fromException("save", caught).message);
     } finally {
       submitting.current = false;
       setBusy(false);

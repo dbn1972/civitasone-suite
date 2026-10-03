@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ErrorState } from "../../../_components/ds";
@@ -30,7 +31,7 @@ export function NotificationsPanel() {
     setLoading(true);
     try {
       const res = await fetch("/api/proxy/v1/estab/notifications?limit=80", { signal });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setItems(((await res.json()) as { data?: Notification[] }).data ?? []);
       setError("");
     } catch (err) {

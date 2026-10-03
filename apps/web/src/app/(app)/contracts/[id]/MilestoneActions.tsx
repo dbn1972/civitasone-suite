@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../_components/ds";
@@ -53,7 +54,7 @@ export function MilestoneActions({ contractId, milestones }: Props) {
         },
       );
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await formError.fromResponse(res, "save")).message);
+        throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
       setMessage(kind === "late" ? "Late milestone accepted (queued)." : "Milestone completion accepted (queued).");
       router.refresh();

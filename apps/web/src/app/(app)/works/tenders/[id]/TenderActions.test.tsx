@@ -90,7 +90,7 @@ describe("TenderActions — UX-016 clerk-safe errors", () => {
     fireEvent.change(screen.getByPlaceholderText("0.00"), { target: { value: "500000" } });
     fireEvent.click(screen.getByRole("button", { name: "Create Award" }));
 
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This work award was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/409/)).not.toBeInTheDocument();
   });
 });

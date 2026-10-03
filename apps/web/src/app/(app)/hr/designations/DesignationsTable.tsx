@@ -147,8 +147,8 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
             : d,
         ),
       );
-    } catch {
-      setRowError(formError.fromException("save").message);
+    } catch (caught) {
+      setRowError(formError.fromException("save", caught).message);
     } finally {
       setSaving(false);
       try { router.refresh(); } catch { /* ignore */ }
@@ -168,8 +168,8 @@ export function DesignationsTable({ items, canEdit = false }: { items: Designati
       }
       setDeleteTarget(null);
       setLocalItems((prev) => prev.filter((d) => d.id !== id));
-    } catch {
-      setDeleteError(formError.fromException("save").message);
+    } catch (caught) {
+      setDeleteError(formError.fromException("save", caught).message);
     } finally {
       setDeletingId(null);
       try { router.refresh(); } catch { /* ignore */ }

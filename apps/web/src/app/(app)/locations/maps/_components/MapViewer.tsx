@@ -82,7 +82,7 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
       setLayers(normalizeLayers(body));
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
-      setError(formError.fromException("load").message);
+      setError(formError.fromException("load", err).message);
     } finally {
       setLoading(false);
     }
@@ -123,8 +123,8 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
       setDraft(EMPTY_DRAFT);
       setFormOpen(false);
       await load();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setSaving(false);
     }
@@ -141,8 +141,8 @@ export function MapViewer({ canManage = false }: { canManage?: boolean }) {
           return;
         }
         await load();
-      } catch {
-        setError(formError.fromException("save").message);
+      } catch (caught) {
+        setError(formError.fromException("save", caught).message);
       }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.

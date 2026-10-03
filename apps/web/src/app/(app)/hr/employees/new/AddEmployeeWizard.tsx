@@ -279,8 +279,8 @@ export function AddEmployeeWizard({ departments, designations, employeeTypes }: 
 
       clearDraft();
       setSuccess({ id: id ?? "", employeeNo: data.employeeNo });
-    } catch {
-      setGlobalError(formError.fromException("save").message);
+    } catch (caught) {
+      setGlobalError(formError.fromException("save", caught).message);
     } finally {
       setSubmitting(false);
     }

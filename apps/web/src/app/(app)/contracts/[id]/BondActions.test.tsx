@@ -38,7 +38,8 @@ describe("BondActions", () => {
     fireEvent.change(screen.getByPlaceholderText("BG-…"), { target: { value: "BG-2" } });
     fireEvent.change(screen.getByPlaceholderText("100000"), { target: { value: "500" } });
     fireEvent.click(screen.getByRole("button", { name: "Register bond" }));
-    await waitFor(() => expect(screen.getByText(/bond rejected|failed/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
+    expect(screen.queryByText(/bond rejected/i)).not.toBeInTheDocument();
   });
 
   it("a held bond offers Release, Claim, and Forfeit, none of which fire without confirming", () => {

@@ -158,8 +158,8 @@ export default function AparNewForm() {
       }
       const data = await res.json() as { id?: string };
       router.push(`/hr/apar/${data.id}`);
-    } catch {
-      setMsg(formError.fromException("save").message);
+    } catch (caught) {
+      setMsg(formError.fromException("save", caught).message);
       setStatus("error");
     }
   }

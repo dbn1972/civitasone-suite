@@ -112,9 +112,9 @@ export default function NewStockItemPage() {
       setMessage("Stock item created.");
       router.refresh();
       setTimeout(() => router.push("/stock/list"), 700);
-    } catch {
+    } catch (caught) {
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -47,7 +47,7 @@ describe("PlanAuditButton", () => {
     openAndFillDialog();
     fireEvent.click(screen.getByRole("button", { name: "Plan audit" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/This audit plan was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(screen.queryByText(/already exists for this fiscal year/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });

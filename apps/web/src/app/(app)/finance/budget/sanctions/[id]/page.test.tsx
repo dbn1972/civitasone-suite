@@ -16,7 +16,7 @@ describe("SanctionDetailPage error states (GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-0
   it("500 -> load error with retry, never 'not found'", async () => {
     getById.mockResolvedValue({ data: null, source: "error", status: 500 });
     render(await SanctionDetailPage({ params: { id: "x" } }));
-    expect(screen.getByText("We couldn't load sanction.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the sanction because of a problem on our side.")).toBeInTheDocument();
     expect(screen.queryByText("Sanction not found")).not.toBeInTheDocument();
   });
 
@@ -30,7 +30,7 @@ describe("SanctionDetailPage error states (GAP-FINANCE-BUDGET-SANCTIONS-DETAIL-0
     getById.mockResolvedValue({ data: null, source: "error", status: 403 });
     render(await SanctionDetailPage({ params: { id: "x" } }));
     expect(screen.queryByText("Sanction not found")).not.toBeInTheDocument();
-    expect(screen.queryByText("We couldn't load sanction.")).not.toBeInTheDocument();
+    expect(screen.queryByText("We couldn't load the sanction because of a problem on our side.")).not.toBeInTheDocument();
   });
 });
 

@@ -153,7 +153,7 @@ describe("leadQualification client calls", () => {
       clone: () => ({ json: async () => ({ code: "INVALID_TRANSITION", message: "not allowed" }) }),
     });
     await expect(transitionLead("l1", { targetStatus: "qualified", reasonCode: "X" })).rejects.toThrow(
-      /couldn't save/i,
+      "This information was changed by someone else. Refresh to see the latest version, then try again.",
     );
     await expect(transitionLead("l1", { targetStatus: "qualified", reasonCode: "X" })).rejects.not.toThrow(
       /INVALID_TRANSITION|not allowed/,
@@ -201,7 +201,7 @@ describe("leadQualification framework + rule + reason CRUD calls", () => {
     expect(fetchMock.mock.calls[0][1].method).toBe("POST");
     fetchMock.mockResolvedValueOnce(fail);
     await expect(createFramework({ name: "F", businessLine: "gov", active: true, questions: [] })).rejects.toThrow(
-      /couldn't save/i,
+      "Some details weren't accepted. Check what you entered and try again.",
     );
     fetchMock.mockResolvedValueOnce(fail);
     await expect(
@@ -248,14 +248,14 @@ describe("leadQualification framework + rule + reason CRUD calls", () => {
     await saveReasonCodes([{ code: "X", label: "X", appliesToStatus: "", active: true }]);
     expect(JSON.parse(fetchMock.mock.calls[0][1].body)).toHaveProperty("codes");
     fetchMock.mockResolvedValueOnce(fail);
-    await expect(saveReasonCodes([])).rejects.toThrow(/couldn't save/i);
+    await expect(saveReasonCodes([])).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     fetchMock.mockResolvedValueOnce(fail);
     await expect(saveReasonCodes([])).rejects.not.toThrow(/BAD/);
   });
 
   it("saveClassification throws a clerk-safe message on failure, never the server's raw code/message (UX-020)", async () => {
     fetchMock.mockResolvedValue(fail);
-    await expect(saveClassification("c1", { temperature: "hot" })).rejects.toThrow(/couldn't save/i);
+    await expect(saveClassification("c1", { temperature: "hot" })).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     await expect(saveClassification("c1", { temperature: "hot" })).rejects.not.toThrow(/BAD/);
   });
 });

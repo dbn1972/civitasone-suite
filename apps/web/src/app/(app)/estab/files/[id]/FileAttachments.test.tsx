@@ -100,7 +100,7 @@ describe("FileAttachments — real presigned-URL upload, not a fake placeholder 
     await waitFor(() => expect(screen.getByRole("button", { name: "Add attachment" })).not.toBeDisabled());
     fireEvent.click(screen.getByRole("button", { name: "Add attachment" }));
 
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
     expect(document.body.textContent).not.toMatch(/attachment quota exceeded/i);
     expect(document.body.textContent).not.toMatch(/\b422\b/);
   });

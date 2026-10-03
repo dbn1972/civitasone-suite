@@ -77,8 +77,8 @@ export default function AccountCompilePage() {
       toast.success("Account compile initiated.");
       setDone(true);
       setTimeout(() => router.push("/works/billing"), 1200);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

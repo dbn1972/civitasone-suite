@@ -74,7 +74,7 @@ describe("AucForm", () => {
     fireEvent.click(screen.getByText("Confirm & create"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/VALIDATION_FAILED: invalid request/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();

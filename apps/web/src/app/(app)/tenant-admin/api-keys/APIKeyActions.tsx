@@ -82,8 +82,8 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
       setOkMessage("API key issued. Copy the secret now — it is shown only once.");
       setName("");
       router.refresh();
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
@@ -115,8 +115,8 @@ export function APIKeyActions({ keys }: { keys: KeyRow[] }) {
       }
       setPending(null);
       router.refresh();
-    } catch {
-      setDialogError(formError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(formError.fromException("save", caught).message);
     } finally {
       setDialogBusy(false);
     }

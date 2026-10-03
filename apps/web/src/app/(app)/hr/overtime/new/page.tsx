@@ -113,8 +113,8 @@ export default function OvertimeNewPage() {
       setStatus("done");
       setMsg(t("successMessage"));
       redirectTimeout.current = setTimeout(() => router.push("/hr/overtime"), 1000);
-    } catch {
-      setMsg(formError.fromException("save").message);
+    } catch (caught) {
+      setMsg(formError.fromException("save", caught).message);
       setStatus("error");
     }
   }

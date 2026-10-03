@@ -106,10 +106,10 @@ function NewWorkOrderForm() {
       setDone(true);
       setMessage("Maintenance job submitted. It appears in the jobs list once processed.");
       setNotes("");
-    } catch {
+    } catch (caught) {
       setConfirmOpen(false);
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
