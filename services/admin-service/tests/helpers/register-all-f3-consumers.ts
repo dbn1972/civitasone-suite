@@ -45,6 +45,7 @@ import type { Queue } from "@civitasone/queue";
 import { tenantScoped } from "../../src/shared/tenant-queue.js";
 
 import { registerTenantConsumers } from "../../src/modules/tenants/consumer.js";
+import { registerTenantLifecycleConsumers } from "../../src/modules/tenants/lifecycle-consumer.js";
 import { registerConfigConsumers } from "../../src/modules/config/consumer.js";
 import { registerBackupConsumers } from "../../src/modules/backup/consumer.js";
 import { registerSupportConsumers } from "../../src/modules/support/consumer.js";
@@ -108,4 +109,5 @@ export function registerAllF3Consumers(queue: Queue): void {
   registerF3_uploads_Consumers(tenantScoped(queue));
   registerF3_support_Consumers(tenantScoped(queue));
   registerIntegrationOpsConsumers(tenantScoped(queue));
+  registerTenantLifecycleConsumers(tenantScoped(queue));
 }

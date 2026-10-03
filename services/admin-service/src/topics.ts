@@ -1,10 +1,20 @@
 /** Topic + event names owned by admin-service. */
 export const COMMANDS = {
   tenantCreate:       "admin.tenant.create",
-  tenantEditionChange:"admin.tenant.edition_change",
-  tenantSuspend:      "admin.tenant.suspend",
-  tenantReactivate:   "admin.tenant.reactivate",
   tenantSync:         "admin.tenant.sync",
+  // GAP-ADMIN-TENANTS-DETAIL-05: maker-checker for tenant lifecycle actions.
+  // request: Payload LifecycleRequestPayload (tenants/lifecycle-commands.ts).
+  //   Published by POST /v1/admin/tenants/:id/lifecycle-requests, the legacy
+  //   PATCH suspend/reactivate/edition routes and PUT .../approval-policy.
+  // decide: Payload LifecycleDecisionPayload; published by POST .../decision.
+  // execute_due: { requestId }; published by the worker's due-sweep for a
+  //   suspension approved with a future effective time.
+  // All three are consumed by registerTenantLifecycleConsumers.
+  tenantLifecycleRequest:    "admin.tenant_lifecycle.request",
+  tenantLifecycleDecide:     "admin.tenant_lifecycle.decide",
+  tenantLifecycleExecuteDue: "admin.tenant_lifecycle.execute_due",
+  // cancel: Payload LifecycleCancelPayload; published by POST .../cancel for a scheduled request.
+  tenantLifecycleCancel:     "admin.tenant_lifecycle.cancel",
   moduleToggle:       "admin.module.toggle",
   // Platform-wide flag registry (config module — config.admin_feature_flags,
   // global + per-tenant `overrides` jsonb).
@@ -122,6 +132,10 @@ export const COMMANDS = {
 export const EVENTS = {
   tenantCreated:      "admin.tenant.created",
   tenantSuspended:    "admin.tenant.suspended",
+  tenantReactivated:  "admin.tenant.reactivated",
+  // Payload: { tenantId, action: "suspend"|"reactivate"|"edit", requestId }.
+  // Emitted when the tenant's approvalPolicy.notifyTenantAdmins is on.
+  tenantLifecycleNotify: "admin.tenant.lifecycle_notification",
   breakGlassOpened:   "admin.breakglass.opened",
   breakGlassClosed:   "admin.breakglass.closed",
   featureFlagCreated: "admin.feature_flag.created",

@@ -4,11 +4,12 @@ import { eq } from "drizzle-orm";
 import { signToken } from "@civitasone/auth";
 import { runWithTenant, withTenantConsumer } from "@civitasone/db";
 import { db, sqlClient } from "../src/shared/db.js";
-import { adminTenants } from "../src/modules/tenants/schema.js";
+import { adminTenants, tenantLifecycleRequests, tenantLifecycleApprovals } from "../src/modules/tenants/schema.js";
 import { adminBreakGlassLog } from "../src/modules/support/schema.js";
 import { adminApiKeys } from "../src/modules/api-keys/schema.js";
 import { processed, outboxMessages } from "../src/shared/outbox.js";
 import { registerTenantConsumers } from "../src/modules/tenants/consumer.js";
+import { registerTenantLifecycleConsumers } from "../src/modules/tenants/lifecycle-consumer.js";
 import { registerSupportConsumers, sweepExpiredBreakGlass } from "../src/modules/support/consumer.js";
 import { queue } from "../src/shared/infra.js";
 import { tenantScoped } from "../src/shared/tenant-queue.js";
@@ -434,37 +435,48 @@ function tenantSeed(id: string, status: string) {
   };
 }
 
-// edition change: applied, version bumped, and idempotent on re-delivery.
-describe("tenant edition change — consumer apply + idempotency (integration)", () => {
+// Tenant edit / suspend / reactivate now go ONLY through the lifecycle
+// request path (the policy-free direct consumers were removed). These cases are
+// ported onto it with the policy that needs no second approver, so the requester's
+// action applies in one consumer pass -- same assertions as before.
+const DIRECT_POLICY = { approvalPolicy: { requiresSecondApprover: false } };
+function lifecycleCmd(tenantId: string, messageId: string, payload: Record<string, unknown>, corr: string) {
+  return {
+    messageId, type: COMMANDS.tenantLifecycleRequest, tenantId, actorId: ACTOR, correlationId: corr, schemaVersion: "1.0",
+    payload: { effectiveAt: null, actorTenantId: "0a000000-0000-4000-8000-0000000000a1", actorRoles: ["platform_admin"], ...payload },
+  };
+}
+async function wipeLifecycle(id: string, messageIds: string[]) {
+  await runWithTenant(id, () => db.transaction(async (tx) => {
+    await tx.delete(tenantLifecycleApprovals).where(eq(tenantLifecycleApprovals.tenantId, id));
+    await tx.delete(tenantLifecycleRequests).where(eq(tenantLifecycleRequests.tenantId, id));
+    await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, id));
+    await tx.delete(adminTenants).where(eq(adminTenants.id, id));
+    for (const m of messageIds) await tx.delete(processed).where(eq(processed.messageId, m));
+  }));
+}
+
+// edit: applied, version bumped, and idempotent on re-delivery.
+describe("tenant edition change — lifecycle consumer apply + idempotency (integration)", () => {
   const MSG = "eeee0001-1111-4000-8000-000000000001";
   beforeAll(async () => {
+    await wipeLifecycle(T_ED, [MSG]);
     await runWithTenant(T_ED, () => db.transaction(async (tx) => {
-      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
-      await tx.delete(adminTenants).where(eq(adminTenants.id, T_ED));
-      await tx.delete(processed).where(eq(processed.messageId, MSG));
-      await tx.insert(adminTenants).values(tenantSeed(T_ED, "active"));
+      await tx.insert(adminTenants).values({ ...tenantSeed(T_ED, "active"), settings: DIRECT_POLICY });
     }));
   });
-  afterAll(async () => {
-    await runWithTenant(T_ED, () => db.transaction(async (tx) => {
-      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_ED));
-      await tx.delete(adminTenants).where(eq(adminTenants.id, T_ED));
-      await tx.delete(processed).where(eq(processed.messageId, MSG));
-    }));
-  });
+  afterAll(async () => { await wipeLifecycle(T_ED, [MSG]); });
 
   it("edition_change applies, bumps version, and a re-delivery (same messageId) is a no-op", async () => {
     const q = wireTenantAwareQueue(new MemoryQueue());
-    registerTenantConsumers(q);
+    registerTenantLifecycleConsumers(q);
     await q.start();
-    const env = {
-      messageId: MSG, type: COMMANDS.tenantEditionChange, tenantId: T_ED,
-      actorId: ACTOR, correlationId: "corr-ed-1", schemaVersion: "1.0",
-      payload: { id: T_ED, edition: "govt_dept" },
-    };
-    await q.publish(COMMANDS.tenantEditionChange, env);
-    await q.publish(COMMANDS.tenantEditionChange, env); // duplicate delivery
-    await new Promise((r) => setTimeout(r, 500));
+    const env = lifecycleCmd(T_ED, MSG, {
+      requestId: "eeee0001-2222-4000-8000-000000000001", kind: "edit", reason: "edition change", edit: { edition: "govt_dept" },
+    }, "corr-ed-1");
+    await q.publish(COMMANDS.tenantLifecycleRequest, env);
+    await q.publish(COMMANDS.tenantLifecycleRequest, env); // duplicate delivery
+    await new Promise((r) => setTimeout(r, 700));
     await q.stop();
 
     const [rows, audits] = await runWithTenant(T_ED, () =>
@@ -484,48 +496,34 @@ describe("tenant suspend/reactivate — state guard + idempotency (integration)"
   const MSG_SUS = "eeee0002-1111-4000-8000-000000000002";
   const MSG_REACT = "eeee0003-1111-4000-8000-000000000003";
   beforeAll(async () => {
+    await wipeLifecycle(T_SUS, [MSG_SUS, MSG_REACT]);
     await runWithTenant(T_SUS, () => db.transaction(async (tx) => {
-      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_SUS));
-      await tx.delete(adminTenants).where(eq(adminTenants.id, T_SUS));
-      await tx.delete(processed).where(eq(processed.messageId, MSG_SUS));
-      await tx.delete(processed).where(eq(processed.messageId, MSG_REACT));
-      await tx.insert(adminTenants).values(tenantSeed(T_SUS, "active"));
+      await tx.insert(adminTenants).values({ ...tenantSeed(T_SUS, "active"), settings: DIRECT_POLICY });
     }));
   });
-  afterAll(async () => {
-    await runWithTenant(T_SUS, () => db.transaction(async (tx) => {
-      await tx.delete(outboxMessages).where(eq(outboxMessages.tenantId, T_SUS));
-      await tx.delete(adminTenants).where(eq(adminTenants.id, T_SUS));
-      await tx.delete(processed).where(eq(processed.messageId, MSG_SUS));
-      await tx.delete(processed).where(eq(processed.messageId, MSG_REACT));
-    }));
-  });
+  afterAll(async () => { await wipeLifecycle(T_SUS, [MSG_SUS, MSG_REACT]); });
 
   it("active → suspended → active; duplicate suspend is a no-op", async () => {
     const q = wireTenantAwareQueue(new MemoryQueue());
-    registerTenantConsumers(q);
+    registerTenantLifecycleConsumers(q);
     await q.start();
 
-    const susEnv = {
-      messageId: MSG_SUS, type: COMMANDS.tenantSuspend, tenantId: T_SUS,
-      actorId: ACTOR, correlationId: "c-sus", schemaVersion: "1.0",
-      payload: { id: T_SUS, reason: "policy violation" },
-    };
-    await q.publish(COMMANDS.tenantSuspend, susEnv);
-    await q.publish(COMMANDS.tenantSuspend, susEnv); // duplicate
-    await new Promise((r) => setTimeout(r, 400));
+    const susEnv = lifecycleCmd(T_SUS, MSG_SUS, {
+      requestId: "eeee0002-2222-4000-8000-000000000002", kind: "suspend", reason: "policy violation",
+    }, "c-sus");
+    await q.publish(COMMANDS.tenantLifecycleRequest, susEnv);
+    await q.publish(COMMANDS.tenantLifecycleRequest, susEnv); // duplicate
+    await new Promise((r) => setTimeout(r, 600));
 
     let rows = await runWithTenant(T_SUS, () =>
       db.transaction((tx) => tx.select().from(adminTenants).where(eq(adminTenants.id, T_SUS))));
     expect(rows[0]?.status).toBe("suspended");
     expect(rows[0]?.version).toBe(2);
 
-    await q.publish(COMMANDS.tenantReactivate, {
-      messageId: MSG_REACT, type: COMMANDS.tenantReactivate, tenantId: T_SUS,
-      actorId: ACTOR, correlationId: "c-react", schemaVersion: "1.0",
-      payload: { id: T_SUS },
-    });
-    await new Promise((r) => setTimeout(r, 400));
+    await q.publish(COMMANDS.tenantLifecycleRequest, lifecycleCmd(T_SUS, MSG_REACT, {
+      requestId: "eeee0003-2222-4000-8000-000000000003", kind: "reactivate", reason: "dues cleared",
+    }, "c-react"));
+    await new Promise((r) => setTimeout(r, 600));
     await q.stop();
 
     rows = await runWithTenant(T_SUS, () =>

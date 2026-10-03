@@ -9,6 +9,7 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { tenantRoutes } from "./modules/tenants/routes.js";
+import { tenantLifecycleRoutes } from "./modules/tenants/lifecycle-routes.js";
 import { configRoutes } from "./modules/config/routes.js";
 import { healthRoutes } from "./modules/health/routes.js";
 import { backupRoutes } from "./modules/backup/routes.js";
@@ -68,6 +69,7 @@ export async function buildApp(): Promise<FastifyInstance> {
 
 
   await app.register(tenantRoutes);
+  await app.register(tenantLifecycleRoutes);
   await app.register(configRoutes);
   await app.register(healthRoutes);
   await app.register(backupRoutes);
