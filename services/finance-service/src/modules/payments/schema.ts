@@ -70,6 +70,17 @@ export const financePayments = paymentsSchema.table("finance_payments", {
   version:     integer("version").notNull().default(1),
 });
 
+// Append-only payment status history (migrations/0086): every status write also appends a row here.
+export const financePaymentEvents = paymentsSchema.table("finance_payment_events", {
+  id:        uuid("id").primaryKey().defaultRandom(),
+  tenantId:  uuid("tenant_id").notNull(),
+  paymentId: uuid("payment_id").notNull(),
+  status:    varchar("status", { length: 24 }).notNull(),
+  actorId:   uuid("actor_id"),
+  note:      text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const financePfms = paymentsSchema.table("finance_pfms", {
   id:               uuid("id").primaryKey().defaultRandom(),
   tenantId:         uuid("tenant_id").notNull(),
@@ -164,9 +175,10 @@ export type GrnMatchRow    = typeof financeGrnMatch.$inferSelect;
 export type GrnMatchInsert = typeof financeGrnMatch.$inferInsert;
 export type PaymentRow    = typeof financePayments.$inferSelect;
 export type PaymentInsert = typeof financePayments.$inferInsert;
+export type PaymentEventRow = typeof financePaymentEvents.$inferSelect;
 export type AdvanceRow    = typeof financeAdvances.$inferSelect;
 export type AdvanceInsert = typeof financeAdvances.$inferInsert;
 export type UCRow    = typeof financeUC.$inferSelect;
 export type UCInsert = typeof financeUC.$inferInsert;
 
-export const schema = { financeBills, financeGrnMatch, financePayments, financePfms, financeAdvances, financeUC };
+export const schema = { financeBills, financeGrnMatch, financePayments, financePaymentEvents, financePfms, financeAdvances, financeUC };

@@ -2435,12 +2435,27 @@ export type FinanceInstrumentSummary = {
   amountMinor: string;
   currency: string;
   issueDate: string;
-  status: "issued" | "presented" | "cleared" | "bounced" | "cancelled";
+  status: "issued" | "presented" | "cleared" | "bounced" | "cancelled" | "stale";
   presentedAt: string | null;
   clearedAt: string | null;
   bouncedAt: string | null;
   cancelledAt: string | null;
   bounceReason: string | null;
+  /** Per-transition actors (user ids; the web resolves names). Absent on payloads that predate them. */
+  issuedBy?: string | null;
+  presentedBy?: string | null;
+  clearedBy?: string | null;
+  bouncedBy?: string | null;
+  cancelledBy?: string | null;
+  cancelReason?: string | null;
+  representCount?: number;
+  lastRepresentedAt?: string | null;
+  lastRepresentedBy?: string | null;
+  representReason?: string | null;
+  staledAt?: string | null;
+  staledBy?: string | null;
+  /** Last day the instrument is valid (detail route only); "Mark stale" is offered after it. */
+  validUntil?: string | null;
 };
 
 export type BudgetOutcomeSummary = {
@@ -2863,6 +2878,20 @@ export type FinanceVendorDetail = {
   version: number;
   createdAt: string;
   updatedAt: string;
+  createdBy?: string | null;
+  approvedBy?: string | null;
+  approvedAt?: string | null;
+  decisionReason?: string | null;
+  /** The open bank-detail change request awaiting a different user's decision; never carries the clear account number. */
+  pendingBankChange?: {
+    id: string;
+    proposedBy: string;
+    proposedAt: string;
+    bankName: string;
+    ifsc: string;
+    accountMasked: string;
+    reason: string;
+  } | null;
   bills?: FinanceVendorBillHistoryEntry[];
 };
 

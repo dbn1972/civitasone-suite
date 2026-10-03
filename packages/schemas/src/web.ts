@@ -2447,12 +2447,26 @@ export const FinanceInstrumentSummarySchema = z.object({
   amountMinor: z.string(),
   currency: z.string(),
   issueDate: z.string(),
-  status: z.enum(["issued", "presented", "cleared", "bounced", "cancelled"]),
+  status: z.enum(["issued", "presented", "cleared", "bounced", "cancelled", "stale"]),
   presentedAt: z.string().nullable(),
   clearedAt: z.string().nullable(),
   bouncedAt: z.string().nullable(),
   cancelledAt: z.string().nullable(),
   bounceReason: z.string().nullable(),
+  // fp-finance-02: per-transition actors + lifecycle extras (optional: older payloads omit them).
+  issuedBy: z.string().nullable().optional(),
+  presentedBy: z.string().nullable().optional(),
+  clearedBy: z.string().nullable().optional(),
+  bouncedBy: z.string().nullable().optional(),
+  cancelledBy: z.string().nullable().optional(),
+  cancelReason: z.string().nullable().optional(),
+  representCount: z.number().optional(),
+  lastRepresentedAt: z.string().nullable().optional(),
+  lastRepresentedBy: z.string().nullable().optional(),
+  representReason: z.string().nullable().optional(),
+  staledAt: z.string().nullable().optional(),
+  staledBy: z.string().nullable().optional(),
+  validUntil: z.string().nullable().optional(),
 });
 export const FinanceInstrumentSummaryListSchema = z.array(FinanceInstrumentSummarySchema);
 
@@ -2874,6 +2888,19 @@ export const FinanceVendorDetailSchema = z.object({
   version: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),
+  createdBy: z.string().nullable().optional(),
+  approvedBy: z.string().nullable().optional(),
+  approvedAt: z.string().nullable().optional(),
+  decisionReason: z.string().nullable().optional(),
+  pendingBankChange: z.object({
+    id: z.string(),
+    proposedBy: z.string(),
+    proposedAt: z.string(),
+    bankName: z.string(),
+    ifsc: z.string(),
+    accountMasked: z.string(),
+    reason: z.string(),
+  }).nullable().optional(),
   // Vendor<->bills rollup for the [id] page's Total Bills/Total Paid/TDS
   // Deducted stat cards + Bill History table (masters/routes.ts's
   // toVendorBillHistory()). Defaults to [] so a POST/PATCH echo (which never

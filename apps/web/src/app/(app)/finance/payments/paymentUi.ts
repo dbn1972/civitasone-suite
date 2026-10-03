@@ -58,3 +58,8 @@ export function paymentAmountMinor(p: { amountMinor?: string | undefined; amount
   const raw = p.amountMinor && /^\d+$/.test(p.amountMinor) ? p.amountMinor : parseRupeesToPaise(p.amountDisplay);
   return raw === null ? null : BigInt(raw);
 }
+
+/** True when the payment context carries at least one status-history event (kept out of page.tsx: the empty-vs-error guard). */
+export function hasPaymentHistory<T extends { events: readonly unknown[] }>(ctx: T | null | undefined): ctx is T {
+  return !!ctx && ctx.events.length > 0;
+}

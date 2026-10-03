@@ -3,10 +3,11 @@
 /**
  * GAP-FINANCE-VENDORS-01: New Vendor. POSTs /v1/finance/vendors, which
  * finance-service restricts to finance_admin / super_admin (a 403 is shown as a
- * clerk-safe message). A vendor becomes ACTIVE on creation -- there is no
- * pending/approval workflow in the backend yet, so this form does not pretend
- * there is one. Vendor onboarding is a payment-diversion control point, so the
- * officer confirms the name, PAN and the last four digits of the account first.
+ * clerk-safe message). With the tenant's vendor approval check on (the default)
+ * the vendor is saved PENDING and a different finance admin must approve it
+ * before it can be paid; the response `status` decides which message is shown.
+ * Vendor onboarding is a payment-diversion control point, so the officer
+ * confirms the name, PAN and the last four digits of the account first.
  */
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -43,7 +44,7 @@ export function VendorForm() {
   const [errors, setErrors] = useState<Partial<Record<keyof VendorFormInput, string>>>({});
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<"active" | "pending" | false>(false);
   const [dialogError, setDialogError] = useState<string | undefined>(undefined);
 
   function onSubmit(e: React.FormEvent) {
@@ -73,7 +74,8 @@ export function VendorForm() {
         setDialogError((await formError.fromResponse(res, "save")).message);
         return;
       }
-      setDone(true);
+      const created = (await res.json().catch(() => null)) as { status?: string } | null;
+      setDone(created?.status === "pending" ? "pending" : "active");
       setConfirmOpen(false);
       router.refresh();
       setTimeout(() => router.push("/finance/vendors"), 700);
@@ -87,7 +89,7 @@ export function VendorForm() {
   const built = buildCreateVendorRequest(form);
   return (
     <>
-      {done ? <div role="status" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{t("created")}</div> : null}
+      {done ? <div role="status" className="banner" style={{ background: "#ecfdf3", padding: 12, borderRadius: 12, marginBottom: 16, fontSize: 13 }}>{done === "pending" ? t("createdPending") : t("created")}</div> : null}
       <div className="card">
         <form onSubmit={onSubmit} className="pad" noValidate>
           <div className="fields">
@@ -110,7 +112,7 @@ export function VendorForm() {
               );
             })}
           </div>
-          <Button type="submit" disabled={busy || done} aria-busy={busy} style={{ marginTop: 12 }}>{t("review")}</Button>
+          <Button type="submit" disabled={busy || done !== false} aria-busy={busy} style={{ marginTop: 12 }}>{t("review")}</Button>
         </form>
       </div>
       <ConfirmDialog

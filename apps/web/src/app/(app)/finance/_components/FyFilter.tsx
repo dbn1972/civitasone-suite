@@ -22,6 +22,8 @@ export function FyFilter() {
   function onChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const next = new URLSearchParams(params.toString());
     next.set("fy", e.target.value);
+    // A different year starts a new result set: drop any paging position from the previous one.
+    next.delete("page");
     router.push(`?${next.toString()}`);
   }
 

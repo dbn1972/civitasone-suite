@@ -5,7 +5,7 @@ import type { FastifyInstance } from "fastify";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { findControlAccountRefs } from "../budget/repo.js";
 import { assertNoControlAccounts, DomainError } from "./domain.js";
-import { postJournalBody, ledgerQueryParams, reverseParam } from "./validators.js";
+import { postJournalBody, ledgerQueryParams, reverseParam, ledgerPageQuery } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 
@@ -102,6 +102,14 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, READER_ROLES);
     const q = listQuerySchema.parse(req.query);
     sendValidated(reply, GLEntrySummaryListSchema, await queries.listJournalEntries(ctx.tenantId, q.limit, q.offset));
+  });
+
+  // GAP-FINANCE-ACCOUNTING-GENERAL-LEDGER-03: bounded, filtered ledger LINES with whole-set totals.
+  app.get("/v1/finance/journals/lines", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const q = ledgerPageQuery.parse(req.query);
+    return reply.send(await queries.pageGeneralLedger(ctx.tenantId, q));
   });
 
   app.get("/v1/finance/statements/trial-balance", async (req, reply) => {

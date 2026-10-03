@@ -38,10 +38,30 @@ describe("T2-02 finance CQRS + scanner-db", () => {
       "budget/office-routes.ts",
       "masters/bank-routes.ts",
       "masters/fy-routes.ts",
+      // fp-finance-02 workflow routes: route -> command (fresh messageId) -> consumer
+      "masters/vendor-workflow-routes.ts",
+      "audit/routes.ts",
+      "instruments/routes.ts",
     ]) {
       const src = readFileSync(resolve(__dirname, `../src/modules/${rel}`), "utf8");
       expect(src).not.toMatch(/\bdb\.(transaction|insert|update|delete)\s*\(/);
     }
+  });
+
+  it("fp-finance-02 workflow commands each have a topic and a worker-registered consumer", () => {
+    const topics = readFileSync(resolve(__dirname, "../src/topics.ts"), "utf8");
+    for (const t of [
+      "finance.vendor.decide", "finance.vendor.bank_change_propose", "finance.vendor.bank_change_decide",
+      "finance.policy.change", "finance.policy.change_decide", "finance.audit_para.transition",
+      "finance.instrument.represent", "finance.instrument.mark_stale",
+    ]) expect(topics).toContain(`"${t}"`);
+    const worker = readFileSync(resolve(__dirname, "../src/worker.ts"), "utf8");
+    for (const r of ["registerVendorConsumers(queue)", "registerAuditConsumers(queue)", "registerInstrumentWorkflowConsumers(queue)"]) {
+      expect(worker).toContain(r);
+    }
+    // the routes publish through publishCommand (fresh randomUUID messageId), never write
+    const cmd = readFileSync(resolve(__dirname, "../src/shared/finance-command.ts"), "utf8");
+    expect(cmd).toContain("messageId: randomUUID()");
   });
 
   it("commands publish expected topics", async () => {

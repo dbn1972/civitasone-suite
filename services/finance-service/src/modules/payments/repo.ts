@@ -1,7 +1,7 @@
 import { and, eq, sql, inArray, notInArray, desc } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { db, scopedRead } from "../../shared/db.js";
-import { financeBills, financePayments, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
+import { financeBills, financePayments, financePaymentEvents, financeAdvances, financeUC, financeGrnMatch, type BillRow, type BillInsert, type PaymentRow, type PaymentInsert, type AdvanceRow, type AdvanceInsert, type UCRow, type UCInsert, type GrnMatchRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
 type Exec = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
@@ -101,6 +101,26 @@ export async function findPaymentByIdTx(tx: Writer, id: string): Promise<Payment
  * Returns the number of rows updated (0 = payment missing, other tenant, or already
  * in a blocked status).
  */
+/**
+ * Append a row to the payment status history (GAP-FINANCE-PAYMENTS-DETAIL-04). Called from every
+ * payment write below, inside the SAME transaction as the status change, so the timeline can
+ * never disagree with the payment's current status.
+ */
+export async function appendPaymentEvent(
+  tx: Writer, e: { tenantId: string; paymentId: string; status: string; actorId?: string | null | undefined; note?: string | null | undefined },
+): Promise<void> {
+  await tx.insert(financePaymentEvents).values({
+    tenantId: e.tenantId, paymentId: e.paymentId, status: e.status,
+    actorId: e.actorId ?? null, note: e.note ?? null,
+  });
+}
+
+export async function listPaymentEvents(tenantId: string, paymentId: string) {
+  return scopedRead((tx) => tx.select().from(financePaymentEvents)
+    .where(and(eq(financePaymentEvents.tenantId, tenantId), eq(financePaymentEvents.paymentId, paymentId)))
+    .orderBy(financePaymentEvents.createdAt));
+}
+
 export async function updatePaymentUnlessStatusIn(
   tx: Writer, id: string, tenantId: string, blocked: readonly string[], patch: Partial<PaymentInsert>,
 ): Promise<number> {
@@ -108,11 +128,19 @@ export async function updatePaymentUnlessStatusIn(
     .set({ ...patch, updatedAt: new Date() })
     .where(and(eq(financePayments.id, id), eq(financePayments.tenantId, tenantId), notInArray(financePayments.status, [...blocked])))
     .returning({ id: financePayments.id });
+  if (rows.length > 0 && typeof patch.status === "string") {
+    await appendPaymentEvent(tx, { tenantId, paymentId: id, status: patch.status, actorId: patch.updatedBy });
+  }
   return rows.length;
 }
 
 export async function updatePayment(tx: Writer, id: string, patch: Partial<PaymentInsert>): Promise<void> {
-  await tx.update(financePayments).set({ ...patch, updatedAt: new Date() }).where(eq(financePayments.id, id));
+  const rows = await tx.update(financePayments).set({ ...patch, updatedAt: new Date() }).where(eq(financePayments.id, id))
+    .returning({ tenantId: financePayments.tenantId });
+  const row = rows[0];
+  if (row && typeof patch.status === "string") {
+    await appendPaymentEvent(tx, { tenantId: row.tenantId, paymentId: id, status: patch.status, actorId: patch.updatedBy });
+  }
 }
 
 export async function insertBill(tx: Writer, row: BillInsert): Promise<void> {
@@ -146,6 +174,7 @@ export async function listBillsByTenant(tenantId: string, limit: number, offset 
 export async function insertPayment(tx: Writer, row: PaymentInsert): Promise<PaymentRow> {
   const [inserted] = await tx.insert(financePayments).values(row).returning();
   if (!inserted) throw new Error(`insertPayment: RETURNING produced no row for payment ${row.id}`);
+  await appendPaymentEvent(tx, { tenantId: inserted.tenantId, paymentId: inserted.id, status: inserted.status, actorId: inserted.createdBy });
   return inserted;
 }
 

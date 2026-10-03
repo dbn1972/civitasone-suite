@@ -342,7 +342,7 @@ describe("Cheque/DD lifecycle — issued -> presented -> cleared | bounced", () 
     const id = issued.json().id;
     await act(id, "present");
     await act(id, "clear", undefined, checkerToken());
-    const cancel = await act(id, "cancel");
+    const cancel = await act(id, "cancel", { reason: "Cleared cheque cannot be cancelled" });
     expect(cancel.statusCode).toBe(409);
     expect(cancel.json().code).toBe("ILLEGAL_TRANSITION");
   });
