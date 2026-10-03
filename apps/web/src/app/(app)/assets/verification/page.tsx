@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
-import { formatIndianDate } from "@/lib/formatters";
+import Link from "next/link";
+import { Button, PageHeader, DataTable, EmptyState, ErrorState, ConfirmDialog, SkeletonTable, useConfirmAction } from "../../../_components/ds";
+import { formatIndianDate, todayIST } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
+import { SESSION_LIMIT, isAtSessionLimit } from "./sessions";
 import { LocationPicker, type FunctionalLocation, type LocationsLoad } from "./LocationPicker";
 
 type Verification = { id: string; status: string; verificationDate?: string; location?: string | null };
@@ -20,12 +22,16 @@ export default function AssetVerificationPage() {
   const [location, setLocation] = useState("");
   const [locationError, setLocationError] = useState("");
   const locationRef = useRef<HTMLSelectElement>(null);
+  // GAP-ASSETS-VERIFICATION-04: the session date is chosen, defaulting to
+  // today in India (never the UTC day, which is "yesterday" until 05:30 IST).
+  const [verificationDate, setVerificationDate] = useState(() => todayIST());
+  const [dateError, setDateError] = useState("");
 
   const load = useCallback(async (signal?: AbortSignal) => {
     setLoading(true);
     setLoadError(false);
     try {
-      const res = await fetch("/api/proxy/v1/asset/verifications?limit=50", { signal });
+      const res = await fetch(`/api/proxy/v1/asset/verifications?limit=${SESSION_LIMIT}`, { signal });
       if (!res.ok) {
         setLoadError(true);
         return;
@@ -73,6 +79,15 @@ export default function AssetVerificationPage() {
       return;
     }
     setLocationError("");
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(verificationDate)) {
+      setDateError("Choose the verification date.");
+      return;
+    }
+    if (verificationDate > todayIST()) {
+      setDateError("Verification date cannot be in the future.");
+      return;
+    }
+    setDateError("");
     create.trigger();
   }
 
@@ -82,7 +97,7 @@ export default function AssetVerificationPage() {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
-          verificationDate: new Date().toISOString().slice(0, 10),
+          verificationDate,
           location,
           notes: (reason ?? "").trim(),
         }),
@@ -108,10 +123,15 @@ export default function AssetVerificationPage() {
     <>
       <PageHeader
         title="Physical Verification"
-        subtitle="Barcode-driven audit — GFR-aligned write-off before disposal."
+        subtitle="Physical-verification sessions — open a session to see the assets counted. Write-off and disposal are handled under Condemnation."
         back="/assets/dashboard"
         backLabel="Dashboard"
-        actions={<Button type="button" onClick={startNew}>+ New verification</Button>}
+        actions={
+          <>
+            <Link href="/assets/condemnation" className="btn ghost">Condemnation &amp; write-off</Link>
+            <Button type="button" onClick={startNew}>+ New verification</Button>
+          </>
+        }
       />
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="pad">
@@ -124,6 +144,21 @@ export default function AssetVerificationPage() {
             error={locationError}
             selectRef={locationRef}
           />
+          <div style={{ marginTop: 12 }}>
+            <label className="l" htmlFor="verification-date">Verification date</label>
+            <input
+              id="verification-date"
+              type="date"
+              max={todayIST()}
+              value={verificationDate}
+              aria-required="true"
+              aria-invalid={dateError ? true : undefined}
+              aria-describedby={dateError ? "verification-date-err" : undefined}
+              onChange={(e) => { setVerificationDate(e.target.value); setDateError(""); }}
+              style={{ width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" }}
+            />
+            {dateError ? <p id="verification-date-err" role="alert" style={{ color: "var(--bad)", fontSize: 12, margin: "4px 0 0" }}>{dateError}</p> : null}
+          </div>
         </div>
       </div>
       {message ? (
@@ -131,7 +166,7 @@ export default function AssetVerificationPage() {
       ) : null}
       <div className="card">
         {loading ? (
-          <EmptyState icon="⏳" title="Loading verification sessions…" />
+          <SkeletonTable rows={5} />
         ) : loadError ? (
           <ErrorState error={toHumanError("load", { area: "verification sessions" })} onRetry={() => void load()} />
         ) : tableRows.length === 0 ? (
@@ -144,16 +179,23 @@ export default function AssetVerificationPage() {
         ) : (
           <DataTable
             columns={[
-              { key: "session", label: "Session" },
+              { key: "session", label: "Session ID", render: (r) => <span title={String(r.id)}>{String(r.session)}</span> },
               { key: "date", label: "Date" },
               { key: "location", label: "Location" },
               { key: "status", label: "Status", cellType: "status" },
             ]}
             rows={tableRows}
+            rowLinkKey="id"
+            rowLinkPrefix="/assets/verification/"
+            pageSize={20}
             sortable
           />
         )}
       </div>
+
+      {isAtSessionLimit(rows.length) ? (
+        <p style={{ fontSize: 12, color: "var(--muted)", margin: "8px 0 0" }}>Showing the latest {SESSION_LIMIT} sessions.</p>
+      ) : null}
 
       <ConfirmDialog
         open={create.open}

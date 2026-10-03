@@ -30,6 +30,13 @@ export async function findAssetByIdTx(tx: Writer, id: string, tenantId: string):
   return rows[0] ?? null;
 }
 
+export async function findAssetByCode(tenantId: string, code: string): Promise<AssetRow | null> {
+  const rows = await scopedRead((tx) => tx.select().from(assetAssets)
+    .where(and(eq(assetAssets.tenantId, tenantId), eq(assetAssets.code, code)))
+    .limit(1));
+  return rows[0] ?? null;
+}
+
 export async function findAssetsByTenant(tenantId: string, opts?: { category?: string; status?: string; type?: string; search?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
   const conditions: SQL[] = [eq(assetAssets.tenantId, tenantId)];
   if (opts?.category) conditions.push(eq(assetAssets.categoryId, opts.category));

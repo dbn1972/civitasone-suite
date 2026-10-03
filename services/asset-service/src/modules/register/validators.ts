@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isRealDateNotAfterToday } from "../../shared/dates.js";
 
 export const createAssetBody = z.object({
   name:            z.string().min(1).max(256),
@@ -11,7 +12,7 @@ export const createAssetBody = z.object({
   depRate:         z.number().positive().default(20),
   depMethod:       z.enum(["SLM", "WDV"]).default("SLM"),
   currency:        z.string().length(3).default("INR"),
-  acquisitionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  acquisitionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine((v) => isRealDateNotAfterToday(v), { message: "acquisitionDate must be a real calendar date, not after today (IST)" }),
   poRef:           z.string().optional(),
   grnRef:          z.string().optional(),
   location:        z.string().optional(),

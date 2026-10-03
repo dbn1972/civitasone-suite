@@ -591,13 +591,20 @@ describe("Verification routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("POST /v1/assets/verifications/:id/items → 202 (existence check deferred to the async consumer)", async () => {
+  it("POST /v1/assets/verifications → 400 for a future or impossible verificationDate", async () => {
+    for (const verificationDate of ["2999-01-01", "2026-02-31"]) {
+      const res = await app.inject({ method: "POST", url: "/v1/assets/verifications", headers: authHeader(), payload: { verificationDate } });
+      expect(res.statusCode).toBe(400);
+    }
+  });
+
+  it("POST /v1/assets/verifications/:id/items → 404 for an unknown session (GAP-ASSETS-VERIFICATION-07: lifecycle guard reads the session first)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/verifications/${FAKE_UUID}/items`,
       headers: authHeader(),
       payload: { assetId: FAKE_UUID2, condition: "good" },
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/assets/verifications/:id/items → 400 bad uuid", async () => {
@@ -618,12 +625,12 @@ describe("Verification routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/assets/verifications/:id/submit → 202 (existence check deferred to the async consumer)", async () => {
+  it("POST /v1/assets/verifications/:id/submit → 404 for an unknown session (GAP-ASSETS-VERIFICATION-07: lifecycle guard reads the session first)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/verifications/${FAKE_UUID}/submit`,
       headers: authHeader(),
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/assets/verifications/:id/submit → 400 bad uuid", async () => {
@@ -634,12 +641,12 @@ describe("Verification routes", () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it("POST /v1/assets/verifications/:id/approve → 202 (existence check deferred to the async consumer)", async () => {
+  it("POST /v1/assets/verifications/:id/approve → 404 for an unknown session (GAP-ASSETS-VERIFICATION-07: lifecycle guard reads the session first)", async () => {
     const res = await app.inject({
       method: "POST", url: `/v1/assets/verifications/${FAKE_UUID}/approve`,
       headers: authHeader(),
     });
-    expect(res.statusCode).toBe(202);
+    expect(res.statusCode).toBe(404);
   });
 
   it("POST /v1/assets/verifications/:id/approve → 400 bad uuid", async () => {

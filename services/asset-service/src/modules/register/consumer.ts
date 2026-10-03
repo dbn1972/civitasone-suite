@@ -9,6 +9,12 @@ import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
 
 const AUDIT_TOPIC = "audit.event.record";
+
+/** Postgres unique_violation (SQLSTATE 23505), directly or wrapped by the driver/ORM. */
+export function isUniqueViolation(err: unknown): boolean {
+  const e = err as { code?: string; cause?: { code?: string } } | null;
+  return e?.code === "23505" || e?.cause?.code === "23505";
+}
 const GL_TOPIC    = "finance.gl.post";
 // 4-digit finance head CODES (resolved by finance via findHeadByCodeTx). These
 // must exist in budget.finance_heads. Overridable via env to match a tenant's
@@ -38,6 +44,7 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
       acquisitionDate: string; poRef?: string; grnRef?: string; location?: string; notes?: string;
       barcode?: string;
     };
+    try {
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const costMinor = BigInt(p.acquisitionCost);
@@ -89,6 +96,20 @@ export function registerRegisterConsumers(rawQueue: Queue): void {
       }
       await enqueueDualDepSchedules(tx, msg, p.id, p.tenantId, p.acquisitionDate);
     });
+    } catch (err) {
+      // UNIQUE(tenant_id, code): a racing duplicate create is TERMINAL -- ack it
+      // (no retry) and leave an audit failure record instead of looping.
+      if (!isUniqueViolation(err)) throw err;
+      await db.transaction(async (tx) => {
+        if (!(await markProcessed(tx, msg.messageId))) return;
+        await enqueue(tx, {
+          topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: { service: "asset", action: "create_rejected_duplicate_code", resourceType: "asset", resourceId: p.id, outcome: "failure", code: p.code },
+        });
+      });
+      return;
+    }
     await cache.invalidate(cache.makeKey(msg.tenantId, "asset", p.id));
     await cache.invalidateResource(msg.tenantId, "asset");
   });

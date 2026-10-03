@@ -11,11 +11,11 @@ const AUDIT = "audit.event.record";
 
 function audit(
   actorId: string, tenantId: string, correlationId: string,
-  action: string, resourceType: string, resourceId: string,
+  action: string, resourceType: string, resourceId: string, outcome: "success" | "failure" = "success",
 ) {
   return {
     topic: AUDIT, eventType: AUDIT, tenantId, actorId, correlationId,
-    payload: { service: "asset", action, resourceType, resourceId, outcome: "success" },
+    payload: { service: "asset", action, resourceType, resourceId, outcome },
   };
 }
 
@@ -53,6 +53,12 @@ export function registerVerificationConsumers(rawQueue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
+        // Race guard: lock the session and require it to still be a draft.
+        if (!(await repo.lockDraftSession(tx, p.verificationId, p.tenantId))) {
+          await enqueue(tx, audit(msg.actorId, msg.tenantId, msg.correlationId, "verification_item_add_rejected", "verification_item", p.id, "failure"));
+          log.warn({ messageId: msg.messageId, verificationId: p.verificationId }, "verificationItemAdd skipped: session is not a draft");
+          return;
+        }
         await repo.insertVerificationItem(tx, {
           id: p.id, verificationId: p.verificationId, tenantId: p.tenantId, assetId: p.assetId,
           condition: p.condition, foundAtLocation: p.foundAtLocation ?? true,
@@ -71,7 +77,11 @@ export function registerVerificationConsumers(rawQueue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.updateVerification(tx, p.id, p.tenantId, { status: "submitted" });
+        if (!(await repo.transitionVerification(tx, p.id, p.tenantId, "draft", { status: "submitted" }))) {
+          await enqueue(tx, audit(msg.actorId, msg.tenantId, msg.correlationId, "verification_submit_rejected", "verification", p.id, "failure"));
+          log.warn({ messageId: msg.messageId, id: p.id }, "verificationSubmit skipped: session is not a draft");
+          return;
+        }
         await enqueue(tx, audit(msg.actorId, msg.tenantId, msg.correlationId, "verification_submit", "verification", p.id));
       });
     } catch (err) {
@@ -85,9 +95,13 @@ export function registerVerificationConsumers(rawQueue: Queue): void {
     try {
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
-        await repo.updateVerification(tx, p.id, p.tenantId, {
+        if (!(await repo.transitionVerification(tx, p.id, p.tenantId, "submitted", {
           status: "approved", approvedBy: msg.actorId, approvedAt: new Date(),
-        });
+        }))) {
+          await enqueue(tx, audit(msg.actorId, msg.tenantId, msg.correlationId, "verification_approve_rejected", "verification", p.id, "failure"));
+          log.warn({ messageId: msg.messageId, id: p.id }, "verificationApprove skipped: session is not submitted");
+          return;
+        }
         await enqueue(tx, audit(msg.actorId, msg.tenantId, msg.correlationId, "verification_approve", "verification", p.id));
       });
     } catch (err) {

@@ -4,7 +4,8 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
 import type { AssetCategoryOption } from "../../../_data/loaders";
-import { formatMoney } from "@/lib/formatters";
+import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
+import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 
 type Props = { categories: AssetCategoryOption[] };
@@ -23,10 +24,17 @@ export function RegisterAssetForm({ categories }: Props) {
     categoryId: "",
     assetType: "fixed",
     acquisitionCost: "",
+    // GAP-ASSETS-REGISTER-06: capitalisation date is chosen (backdating is
+    // allowed), defaulting to today in India -- never the UTC day.
+    acquisitionDate: todayIST(),
     location: "",
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
+  // GAP-ASSETS-REGISTER-07: once the service accepted the create, the form
+  // stays locked -- a second click would register a duplicate asset.
+  const [done, setDone] = useState(false);
+  const formError = useFormError("asset");
 
   const category = categories.find((c) => c.id === form.categoryId) ?? null;
   // Positive rupees only (no zero-cost capitalisation) and within the range a
@@ -43,6 +51,8 @@ export function RegisterAssetForm({ categories }: Props) {
     if (!form.code.trim()) next.code = "Enter the asset code.";
     else if (form.code.trim().length > 64) next.code = "Asset code must be at most 64 characters.";
     if (!category) next.categoryId = "Choose a category.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.acquisitionDate)) next.acquisitionDate = "Choose the acquisition date.";
+    else if (form.acquisitionDate > todayIST()) next.acquisitionDate = "Acquisition date cannot be in the future.";
     if (costMinor === null) next.acquisitionCost = "Enter an acquisition cost greater than zero, in rupees (up to 2 decimals).";
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -54,7 +64,9 @@ export function RegisterAssetForm({ categories }: Props) {
     onConfirm: async (reason) => {
       if (!category || costMinor === null) throw new Error("Complete the form first.");
       setMessage("");
-      const res = await fetch("/api/proxy/v1/asset/assets", {
+      let res: Response;
+      try {
+        res = await fetch("/api/proxy/v1/asset/assets", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
@@ -67,15 +79,22 @@ export function RegisterAssetForm({ categories }: Props) {
           depMethod: category.depMethod,
           depRate: category.depRate,
           usefulLifeYears: category.usefulLifeYears,
-          acquisitionDate: new Date().toISOString().slice(0, 10),
+          acquisitionDate: form.acquisitionDate,
           location: form.location.trim() || undefined,
           notes: (reason ?? "").trim() || undefined,
         }),
-      });
-      if (!res.ok) throw new Error(await res.text());
+        });
+      } catch {
+        throw new Error(formError.fromException("save").message);
+      }
+      // GAP-ASSETS-REGISTER-04: a failure shows plain-language copy (never the
+      // raw response body), inside the dialog's role=alert error region.
+      if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+      formError.clear();
       const body = (await res.json().catch(() => ({}))) as { id?: unknown };
+      setDone(true);
       setMessage(`Asset ${form.code.trim()} submitted for registration. It will appear in the register shortly.`);
-      if (typeof body.id === "string") setTimeout(() => router.push(`/assets/${body.id}`), 600);
+      if (typeof body.id === "string") router.push(`/assets/${body.id}`);
     },
   });
 
@@ -139,11 +158,16 @@ export function RegisterAssetForm({ categories }: Props) {
               {err("ast-cost", "acquisitionCost")}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
+              <label className="l" htmlFor="ast-date">Acquisition date</label>
+              <input {...field("ast-date", "acquisitionDate")} type="date" aria-required="true" max={todayIST()} value={form.acquisitionDate} onChange={(e) => setForm({ ...form, acquisitionDate: e.target.value })} style={inputStyle} />
+              {err("ast-date", "acquisitionDate")}
+            </div>
+            <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="ast-loc">Location</label>
               <input id="ast-loc" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} style={inputStyle} />
             </div>
           </div>
-          <Button type="submit" disabled={create.busy} style={{ marginTop: 12 }}>Register asset</Button>
+          <Button type="submit" disabled={create.busy || done} style={{ marginTop: 12 }}>Register asset</Button>
         </form>
       </div>
 
@@ -152,8 +176,8 @@ export function RegisterAssetForm({ categories }: Props) {
         title="Register this asset?"
         description={
           <>
-            Creates <b>{form.code.trim()}</b> · <b>{form.name.trim()}</b> in the asset register at an acquisition cost of{" "}
-            <b>{formatMoney(costMinor)}</b>, depreciated per <b>{category ? categoryLabel(category) : "—"}</b>.
+            Creates <b>{form.code.trim()}</b> · <b>{form.name.trim()}</b> in the asset register, acquired on{" "}
+            <b>{formatIndianDate(form.acquisitionDate)}</b> at an acquisition cost of <b>{formatMoney(costMinor)}</b>, depreciated per <b>{category ? categoryLabel(category) : "—"}</b>.
             An asset with a wrong cost or category is hard to reverse. Provide a reason to proceed.
           </>
         }
