@@ -20,11 +20,12 @@
  */
 
 import { useCallback, useEffect, useState } from "react";
-import { Button, EntityPicker, Field, Select, StatusPill } from "./ds";
+import { Button, Field, Select, StatusPill, type EntityOption } from "./ds";
+import { EmployeePicker } from "./EmployeePicker";
+import { useSelfEmployee } from "./useSelfEmployee";
 import { errorMessageFromResponse } from "@/lib/api/browserClient";
 import { toHumanError } from "@/lib/messages";
 import { isEofficeFileInFlight } from "./eofficeFileStatus";
-import { searchEmployees, resolveEmployees } from "@/lib/entityAdapters/employee";
 
 export type RaiseEOfficeNoteProps = {
   refType: string;
@@ -113,6 +114,12 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
   // plain id string, so `submit` below is otherwise unchanged.
   const [initiatedBy, setInitiatedBy] = useState<string | null>(null);
   const [currentWith, setCurrentWith] = useState<string | null>(null);
+  // GAP-FINANCE-PAYMENTS-DETAIL-02: names of the chosen officers, so the success message can say WHO
+  // initiated and who it went to (a person, not an id), and the signed-in user as the default initiator.
+  const [initiatedOption, setInitiatedOption] = useState<EntityOption | null>(null);
+  const [currentWithOption, setCurrentWithOption] = useState<EntityOption | null>(null);
+  // Remounts the initiator picker once, when the signed-in user is applied as the default, so it shows that name.
+  const [selfDefaultId, setSelfDefaultId] = useState<string | null>(null);
   const [note, setNote] = useState("");
 
   const loadStatus = useCallback(async (signal?: AbortSignal) => {
@@ -143,6 +150,17 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
     onLinkedFileChange?.({ loading, file });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- report only when the lookup result changes, not when the parent re-creates the callback.
   }, [loading, file]);
+
+  // Default "Initiating officer" to the signed-in user's own employee record the first time the form
+  // opens (GAP-FINANCE-PAYMENTS-DETAIL-02). Best-effort: a user with no employee record or a failed
+  // lookup simply gets an empty picker, exactly as before, and can still search for the officer.
+  const self = useSelfEmployee(open);
+  useEffect(() => {
+    if (!self) return;
+    setSelfDefaultId(self.id);
+    setInitiatedBy((cur) => cur ?? self.id);
+    setInitiatedOption((cur) => cur ?? self);
+  }, [self]);
 
   const raisable = !file || (allowRaiseAfterTerminal && !isEofficeFileInFlight(file.status));
 
@@ -190,7 +208,8 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       if (notifyFailed) {
         setWarning("The eFile was raised, but the record could not be marked as awaiting approval. Refresh the page; if its status has not changed, contact the Finance helpdesk.");
       }
-      setMessage(`Raised eFile ${body.fileNo ?? ""} for approval. Routing by amount via the approval matrix.`);
+      const who = initiatedOption && currentWithOption ? ` Initiated by ${initiatedOption.label}, forwarded to ${currentWithOption.label}.` : "";
+      setMessage(`Raised eFile ${body.fileNo ?? ""} for approval. Routing by amount via the approval matrix.${who}`);
       setOpen(false);
       setNote("");
       setTimeout(() => void loadStatus(), 900);
@@ -205,7 +224,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       setSaving(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps -- notifyPath is always a pure function of refId/the entity id (see call sites), which is already listed here; it cannot change independently.
-  }, [initiatedBy, currentWith, note, refType, refId, subject, dept, classification, priority, defaultApprovalChain, amountMinor, loadStatus]);
+  }, [initiatedBy, currentWith, initiatedOption, currentWithOption, note, refType, refId, subject, dept, classification, priority, defaultApprovalChain, amountMinor, loadStatus]);
 
   return (
     <div className="card" style={{ marginTop: 18 }}>
@@ -245,30 +264,18 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
             <Field label="Initiating officer">
-              <EntityPicker
+              <EmployeePicker
+                key={selfDefaultId ?? "none"}
                 value={initiatedBy}
-                onChange={(v) => setInitiatedBy(Array.isArray(v) ? v[0] ?? null : v)}
-                search={searchEmployees}
-                resolve={resolveEmployees}
+                onChange={(id, opt) => { setInitiatedBy(id); setInitiatedOption(opt); }}
+                {...(self ? { initialOption: self } : {})}
                 placeholder="Search by name or employee number…"
               />
             </Field>
-            {/* Known limitation, not fixed here: this component has no way
-                to know the current actor's own employee id (a client
-                component with no session/employee context threaded in), so
-                it cannot default "Initiating officer" to self or exclude
-                self from "Forward to officer" -- both were suggested
-                follow-ons for this gap. Threading that through would touch
-                this shared component's public API (used by 7 other modules
-                beyond HR: assets, contracts, finance x2, grants, legal,
-                procurement), so it's left as a separate, smaller follow-up
-                rather than folded in here. */}
             <Field label="Forward to officer">
-              <EntityPicker
+              <EmployeePicker
                 value={currentWith}
-                onChange={(v) => setCurrentWith(Array.isArray(v) ? v[0] ?? null : v)}
-                search={searchEmployees}
-                resolve={resolveEmployees}
+                onChange={(id, opt) => { setCurrentWith(id); setCurrentWithOption(opt); }}
                 placeholder="Search by name or employee number…"
               />
             </Field>

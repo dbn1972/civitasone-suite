@@ -22,7 +22,7 @@ describe("cancelInstrument audit (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-04)", () =
   it("audits the cancel once with actor and before/after status", async () => {
     findById.mockResolvedValue(row("issued"));
     transitionTx.mockResolvedValue(row("cancelled"));
-    await cancelInstrument(ctx, "i1");
+    await cancelInstrument(ctx, "i1", { reason: "Cheque lost in transit" });
     expect(enqueue).toHaveBeenCalledTimes(1);
     const evt = enqueue.mock.calls[0][1];
     expect(evt.topic).toBe("audit.event.record");
@@ -32,7 +32,7 @@ describe("cancelInstrument audit (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-04)", () =
 
   it("an already-cancelled instrument is an idempotent replay: no write, no second audit", async () => {
     findById.mockResolvedValue(row("cancelled"));
-    await cancelInstrument(ctx, "i1");
+    await cancelInstrument(ctx, "i1", { reason: "Cheque lost in transit" });
     expect(transitionTx).not.toHaveBeenCalled();
     expect(enqueue).not.toHaveBeenCalled();
   });
@@ -40,14 +40,14 @@ describe("cancelInstrument audit (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-04)", () =
   it("a concurrent loser (guard misses, row now cancelled) does not audit again", async () => {
     findById.mockResolvedValueOnce(row("issued")).mockResolvedValueOnce(row("cancelled"));
     transitionTx.mockResolvedValue(null);
-    await cancelInstrument(ctx, "i1");
+    await cancelInstrument(ctx, "i1", { reason: "Cheque lost in transit" });
     expect(enqueue).not.toHaveBeenCalled();
   });
 
   it("an illegal transition (presented) is a 409 and writes no audit", async () => {
     findById.mockResolvedValueOnce(row("presented")).mockResolvedValueOnce(row("presented"));
     transitionTx.mockResolvedValue(null);
-    await expect(cancelInstrument(ctx, "i1")).rejects.toMatchObject({ status: 409 });
+    await expect(cancelInstrument(ctx, "i1", { reason: "Cheque lost in transit" })).rejects.toMatchObject({ status: 409 });
     expect(enqueue).not.toHaveBeenCalled();
   });
 });

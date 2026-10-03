@@ -4,12 +4,19 @@ import {
   issueInstrumentBody,
   bounceInstrumentBody,
   listInstrumentsQuery,
+  reasonedInstrumentBody,
+  staleInstrumentBody,
+  revealAccountBody,
   idParam,
 } from "./validators.js";
 import * as commands from "./commands.js";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
 const READER_ROLES  = [...FINANCE_ROLES, "audit_officer"];
+/** Who may reveal the drawn-on bank account number (audited, reason required). */
+export const BANK_ACCOUNT_REVEAL_ROLES = ["finance_officer", "finance_admin", "accounts_officer", "super_admin"];
 
 /**
  * Cheque / DD payment instruments — issuance + tenant-scoped status lifecycle
@@ -70,7 +77,33 @@ export async function instrumentRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);
     const { id } = idParam.parse(req.params);
-    return reply.send(await commands.cancelInstrument(ctx, id));
+    const body = reasonedInstrumentBody.parse(req.body ?? {});
+    return reply.send(await commands.cancelInstrument(ctx, id, body));
+  });
+
+  app.post("/v1/finance/instruments/:id/represent", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = reasonedInstrumentBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.representInstrument(ctx, id, body));
+  });
+
+  app.post("/v1/finance/instruments/:id/stale", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = staleInstrumentBody.parse(req.body ?? {});
+    return sendAccepted(reply, acceptedResponseSchema, await commands.markInstrumentStale(ctx, id, body));
+  });
+
+  app.post("/v1/finance/instruments/:id/reveal-account", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, BANK_ACCOUNT_REVEAL_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = revealAccountBody.parse(req.body);
+    reply.header("cache-control", "no-store");
+    return reply.send(await commands.revealInstrumentAccount(ctx, id, body.reason));
   });
 
   app.setErrorHandler(financeErrorHandler);

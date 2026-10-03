@@ -28,3 +28,15 @@ export function actorName(names: Map<string, { name: string }>, id: string | nul
   if (!id) return null;
   return names.get(id)?.name ?? null;
 }
+
+/**
+ * Names for just the ids a detail page asks for (cheque / payment / vendor / audit para actors), so a clerk never
+ * sees a raw UUID. Same fail-OPEN contract as above: an unreachable identity-service yields an empty map and the web
+ * falls back to a short "User 1a2b3c4d". Only {id, name} cross the boundary, and only for the ids asked for.
+ */
+export async function fetchUserNames(tenantId: string, ids: readonly string[]): Promise<Map<string, string>> {
+  const wanted = new Set(ids);
+  if (wanted.size === 0) return new Map();
+  const all = await fetchUserSummaries(tenantId);
+  return new Map([...all].filter(([id]) => wanted.has(id)).map(([id, v]) => [id, v.name]));
+}

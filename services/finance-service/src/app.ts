@@ -95,6 +95,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(hoaRoutes);
   const { mastersRoutes } = await import("./modules/masters/routes.js");
   await app.register(mastersRoutes);
+  const { vendorWorkflowRoutes } = await import("./modules/masters/vendor-workflow-routes.js");
+  await app.register(vendorWorkflowRoutes);
   const { orgStructureRoutes } = await import("./modules/org-structure/routes.js");
   await app.register(orgStructureRoutes);
   const { fyRoutes } = await import("./modules/masters/fy-routes.js");

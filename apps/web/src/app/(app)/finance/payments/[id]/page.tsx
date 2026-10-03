@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
-import { PageHeader, Card, StatCard, StatGrid, StatusPill, LoadErrorState } from "@/app/_components/ds";
-import { getFinancePaymentById } from "@/app/_data/loaders";
+import { PageHeader, Card, StatCard, StatGrid, StatusPill, LoadErrorState, EmptyState } from "@/app/_components/ds";
+import { getFinanceActorNames, getFinancePaymentById, getFinancePaymentContext } from "@/app/_data/loaders";
+import { actorLabel } from "@/lib/finance/workflowTypes";
 import { RaiseEOfficeNote } from "@/app/_components/RaiseEOfficeNote";
 import { formatIndianDateTime, formatMoney } from "@/lib/formatters";
-import { canRaiseForApproval, formatPaymentRef, paymentStatusVariant } from "../paymentUi";
+import { canRaiseForApproval, formatPaymentRef, hasPaymentHistory, paymentStatusVariant } from "../paymentUi";
 
 function field(data: Record<string, unknown>, ...keys: string[]): string {
   for (const key of keys) {
@@ -60,6 +61,17 @@ export default async function PaymentDetailPage({ params }: { params: { id: stri
   const createdAt = field(payment, "createdAt");
   const pillVariant = paymentStatusVariant(status);
 
+  // GAP-FINANCE-PAYMENTS-DETAIL-04: beneficiary, linked bill, approver and status history come from the
+  // payment context endpoint. A failed lookup is its own state (never "no history"), and the page still
+  // renders what the base payment carries.
+  const ctxResult = await getFinancePaymentContext(params.id);
+  const ctx = ctxResult.data;
+  const names = await getFinanceActorNames([
+    field(payment, "createdBy") === "—" ? null : field(payment, "createdBy"),
+    ctx?.approvedBy, ...(ctx?.events.map((e) => e.actorId) ?? []),
+  ]);
+  const billNo = ctx?.bill?.billNo ?? null;
+
   return (
     <>
       <nav aria-label="Breadcrumb" className="crumbs" style={{ fontSize: 13, color: "var(--ink2)", marginBottom: 8 }}>
@@ -92,15 +104,39 @@ export default async function PaymentDetailPage({ params }: { params: { id: stri
           <div className="field"><span className="label">Currency</span><span>{currency}</span></div>
           <div className="field"><span className="label">UTR</span><span className="mono">{field(payment, "utr")}</span></div>
           <div className="field">
+            <span className="label">Beneficiary</span>
+            {ctx?.beneficiary ? <a href={`/finance/vendors/${ctx.beneficiary.vendorId}`}>{ctx.beneficiary.name}</a> : <span>—</span>}
+          </div>
+          <div className="field">
             <span className="label">Bill</span>
             {billId !== "—" ? (
-              <a href={`/finance/expenditure/bills/${billId}`}>View bill</a>
+              <a href={`/finance/expenditure/bills/${billId}`}>{billNo ?? "View bill"}</a>
             ) : (
               <span>—</span>
             )}
           </div>
+          <div className="field"><span className="label">Created by</span><span>{actorLabel(field(payment, "createdBy") === "—" ? null : field(payment, "createdBy"), names)}</span></div>
+          <div className="field"><span className="label">Approved by</span><span>{actorLabel(ctx?.approvedBy, names)}</span></div>
           <div className="field"><span className="label">Created</span><span>{createdAt !== "—" ? formatIndianDateTime(createdAt) : "—"}</span></div>
         </div>
+      </Card>
+
+      <Card title="Status history">
+        {ctxResult.source === "error" && !ctx ? (
+          <LoadErrorState result={ctxResult} area="payment history" backHref="/finance/payments" />
+        ) : !hasPaymentHistory(ctx) ? (
+          <EmptyState icon="🕒" title="No history recorded" message="No status changes have been recorded for this payment." />
+        ) : (
+          <ol style={{ listStyle: "none", padding: 0, margin: 0 }} aria-label="Payment status history">
+            {ctx.events.map((e, i) => (
+              <li key={i} style={{ display: "flex", gap: 12, alignItems: "center", padding: "8px 0", borderBottom: i < ctx.events.length - 1 ? "1px solid var(--border)" : "none" }}>
+                <span style={{ minWidth: 150, fontSize: 13, color: "var(--muted)" }}>{formatIndianDateTime(e.at)}</span>
+                <StatusPill status={e.status} {...(paymentStatusVariant(e.status) ? { variant: paymentStatusVariant(e.status)! } : {})} />
+                <span style={{ flex: 1, fontSize: 13 }}>{actorLabel(e.actorId, names)}{e.note ? ` — ${e.note}` : ""}</span>
+              </li>
+            ))}
+          </ol>
+        )}
       </Card>
 
       {/* GAP-FINANCE-PAYMENTS-DETAIL-03: a released / failed / already-submitted payment cannot be

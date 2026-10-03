@@ -10,13 +10,15 @@
  * silently lose precision above 2^53 before Zod ever sees it. The
  * rupees->paise conversion is string-based (lib/money's rupeesToMinorString,
  * GAP-FINANCE-BUDGET-FORMULATION-NEW-01) -- never Number(x) * 100.
- * Heads are loaded from GET /v1/finance/accounts and filtered to expenditure
- * heads (GAP-FINANCE-BUDGET-FORMULATION-NEW-02); finance-service rejects a
- * non-expense head on POST regardless (the real control).
+ * Heads are SEARCHED from GET /v1/finance/accounts?q= (server-side, bounded) through the
+ * shared EntityPicker and filtered to expenditure heads (GAP-FINANCE-BUDGET-FORMULATION-NEW-02,
+ * -05); finance-service rejects a non-expense head on POST regardless (the real control).
+ * The list is never preloaded and presented as complete: the picker is a search, a full
+ * result page says so, and a failed search is its own message (never "no matches").
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { Button, ConfirmDialog, PageHeader } from "../../../../../_components/ds";
+import { Button, ConfirmDialog, EntityPicker, Field, PageHeader, type EntityOption } from "../../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney } from "@/lib/formatters";
@@ -27,8 +29,8 @@ import { budgetableHeads, headOptionLabel, type AccountRow } from "../../_lib/he
 const AMOUNT_ERROR = "Enter an amount in rupees greater than 0, with at most 2 decimals (e.g. 1234567.89).";
 const FY_ERROR = "Enter a valid financial year, e.g. 2026-27 (the second year must follow the first).";
 
-/** GET /v1/finance/accounts page size; a response this full may be truncated (GAP-FINANCE-BUDGET-FORMULATION-NEW-05). */
-const HEADS_LIMIT = 500;
+/** GET /v1/finance/accounts matches requested per search; a response this full may be truncated (GAP-FINANCE-BUDGET-FORMULATION-NEW-05). */
+const HEADS_LIMIT = 50;
 /** How long the success message stays up before the automatic return to the list. */
 const REDIRECT_DELAY_MS = 2500;
 
@@ -36,13 +38,13 @@ const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px so
 
 export default function NewBudgetEstimatePage() {
   const router = useRouter();
-  const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [loadError, setLoadError] = useState("");
+  // Heads seen in search results, so the confirm dialog can name the chosen head.
+  const knownHeads = useRef<Map<string, EntityOption>>(new Map());
   const [headId, setHeadId] = useState("");
   // GAP-FINANCE-BUDGET-FORMULATION-NEW-06: IST-correct current FY from the shared helper.
   const [fy, setFy] = useState(() => currentFinancialYear());
   const [fyError, setFyError] = useState("");
-  const [accountsLoading, setAccountsLoading] = useState(true);
   const [headsTruncated, setHeadsTruncated] = useState(false);
   const [confirmMinor, setConfirmMinor] = useState<string | null>(null);
   // GAP-FINANCE-BUDGET-FORMULATION-NEW-04: one key per attempt, reused on a retry
@@ -64,33 +66,32 @@ export default function NewBudgetEstimatePage() {
 
   useEffect(() => () => { if (redirectTimer.current) clearTimeout(redirectTimer.current); }, []);
 
-  useEffect(() => {
-    let active = true;
-    (async () => {
-      try {
-        const res = await fetch(`/api/proxy/v1/finance/accounts?limit=${HEADS_LIMIT}`, { headers: { accept: "application/json" } });
-        if (!res.ok) {
-          if (active) setLoadError((await formError.fromResponse(res, "load")).message);
-          return;
-        }
-        const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
-        const rows = Array.isArray(json) ? json : json.data ?? [];
-        if (active) {
-          setAccounts(budgetableHeads(rows));
-          setHeadsTruncated(rows.length >= HEADS_LIMIT);
-        }
-      } catch {
-        if (active) setLoadError(formError.fromException("load").message);
-      } finally {
-        if (active) setAccountsLoading(false);
+  // Debounced, cancellable server search (EntityPicker owns the debounce / abort). A failed search is surfaced
+  // in the alert region -- never shown as an empty "No matches" -- and a full page of matches says so.
+  const searchHeads = useCallback(async (q: string, signal: AbortSignal): Promise<EntityOption[]> => {
+    try {
+      const res = await fetch(`/api/proxy/v1/finance/accounts?limit=${HEADS_LIMIT}&q=${encodeURIComponent(q)}`, {
+        headers: { accept: "application/json" },
+        signal,
+      });
+      if (!res.ok) {
+        setLoadError((await formError.fromResponse(res, "load")).message);
+        return [];
       }
-    })();
-    return () => { active = false; };
-    // formError.fromResponse/fromException are stable (useCallback'd on a
-    // fixed `area` string inside useFormError) even though the wrapping
-    // formError object literal isn't, so omitting it here is safe and avoids
-    // re-running this load effect every render.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
+      const json = (await res.json()) as { data?: AccountRow[] } | AccountRow[];
+      const rows = Array.isArray(json) ? json : json.data ?? [];
+      setLoadError("");
+      setHeadsTruncated(rows.length >= HEADS_LIMIT);
+      const options = budgetableHeads(rows).map((a) => ({ id: a.id, label: headOptionLabel(a) }));
+      for (const o of options) knownHeads.current.set(o.id, o);
+      return options;
+    } catch (err) {
+      if (signal.aborted || (err instanceof DOMException && err.name === "AbortError")) throw err;
+      setLoadError(formError.fromException("load").message);
+      return [];
+    }
+    // formError.fromResponse/fromException are stable (see useFormError); the wrapping object is not read here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   /** Validate, then ask for confirmation -- no request is sent from the form submit itself. */
@@ -149,7 +150,7 @@ export default function NewBudgetEstimatePage() {
     }
   }
 
-  const selectedHead = accounts.find((a) => a.id === headId);
+  const selectedHeadLabel = knownHeads.current.get(headId)?.label;
   // The new estimate is for `fy`, which may not be the list's default FY.
   const listHref = `/finance/budget/formulation?fy=${encodeURIComponent(fy)}`;
 
@@ -173,20 +174,21 @@ export default function NewBudgetEstimatePage() {
         <form onSubmit={submit} className="pad">
           <div className="fields">
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
-              <label className="l" htmlFor="be-head">Budget head</label>
-              <select id="be-head" required value={headId} onChange={(e) => { setHeadId(e.target.value); rotateKey(); }} disabled={accountsLoading} aria-busy={accountsLoading} style={inputStyle}>
-                <option value="" disabled>{accountsLoading ? "Loading heads…" : "Select a head…"}</option>
-                {accounts.map((a) => (
-                  <option key={a.id} value={a.id}>{headOptionLabel(a)}</option>
-                ))}
-              </select>
+              <Field label="Budget head" required {...(formError.fieldError("headId") ? { error: formError.fieldError("headId") } : {})}>
+                <EntityPicker
+                  value={headId || null}
+                  onChange={(v) => { setHeadId((Array.isArray(v) ? v[0] : v) ?? ""); rotateKey(); }}
+                  search={searchHeads}
+                  placeholder="Search by code or name…"
+                  searchingText="Searching heads…"
+                  noResultsText="No matching expenditure heads"
+                />
+              </Field>
+              <span style={{ fontSize: 12, color: "var(--mut)" }}>Type a head code or name to search.</span>
               {headsTruncated && (
                 <span role="note" style={{ fontSize: 12, color: "var(--mut)" }}>
-                  Showing the first {HEADS_LIMIT} heads — the list may be incomplete. Ask an administrator if the head you need is missing.
+                  Showing the first {HEADS_LIMIT} matches — type more of the code or name to narrow the list.
                 </span>
-              )}
-              {formError.fieldError("headId") && (
-                <span style={{ fontSize: 12, color: "#b91c1c" }}>{formError.fieldError("headId")}</span>
               )}
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
@@ -238,7 +240,7 @@ export default function NewBudgetEstimatePage() {
         title="Submit budget estimate?"
         description={
           confirmMinor !== null
-            ? `Propose a Budget Estimate of ${formatMoney(BigInt(confirmMinor))} for ${selectedHead ? headOptionLabel(selectedHead) : "the selected head"}, FY ${fy}.`
+            ? `Propose a Budget Estimate of ${formatMoney(BigInt(confirmMinor))} for ${selectedHeadLabel ?? "the selected head"}, FY ${fy}.`
             : undefined
         }
         confirmLabel="Confirm and submit"

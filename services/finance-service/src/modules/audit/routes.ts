@@ -2,6 +2,9 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import * as repo from "./repo.js";
+import { requestAuditParaTransition, listAuditParaEvents, type ParaAction } from "./commands.js";
+import { sendAccepted } from "@civitasone/schemas/validate";
+import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import type { AuditParaRow } from "./schema.js";
 
 const FINANCE_ROLES = ["finance_officer", "finance_admin", "super_admin"];
@@ -18,6 +21,9 @@ const listAuditParasQuery = z.object({
 });
 
 const idParam = z.object({ id: z.string().uuid() });
+/** Recording a reply / escalating is finance work; settling a para (closing it) is admin-only. */
+const SETTLE_ROLES = ["finance_admin", "super_admin"];
+const noteBody = z.object({ note: z.string().trim().min(5).max(2000) });
 
 /**
  * Shape a DB row onto the wire contract already declared in
@@ -69,6 +75,31 @@ export async function auditRoutes(app: FastifyInstance): Promise<void> {
     if (!row) throw new HttpError(404, "NOT_FOUND", "audit para not found");
     return reply.send(serialize(row));
   });
+
+  // GAP-FINANCE-AUDIT-PARAS-DETAIL-04: the reply / escalate / settle trail for one para.
+  app.get("/v1/finance/audit-paras/:id/events", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    if (!(await repo.getAuditParaById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "audit para not found");
+    const rows = await listAuditParaEvents(ctx.tenantId, id);
+    return reply.send({
+      data: rows.map((e) => ({
+        id: e.id, action: e.action, fromStatus: e.fromStatus, toStatus: e.toStatus,
+        note: e.note, actorId: e.actorId, createdAt: e.createdAt,
+      })),
+    });
+  });
+
+  for (const action of ["respond", "escalate", "settle"] as ParaAction[]) {
+    app.post(`/v1/finance/audit-paras/:id/${action}`, async (req, reply) => {
+      const ctx = resolveContext(req);
+      requireRole(ctx, action === "settle" ? SETTLE_ROLES : FINANCE_ROLES);
+      const { id } = idParam.parse(req.params);
+      const body = noteBody.parse(req.body);
+      return sendAccepted(reply, acceptedResponseSchema, await requestAuditParaTransition(ctx, id, action, body.note));
+    });
+  }
 
   app.setErrorHandler(financeErrorHandler);
 }

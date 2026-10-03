@@ -66,6 +66,7 @@ export type VendorPatch = {
   bankAccountNo?: string | undefined;
   ifsc?: string | undefined;
   isActive?: boolean | undefined;
+  status?: string | undefined;
 };
 
 export async function createVendor(tenantId: string, input: VendorWriteInput, actorId: string): Promise<VendorRow> {
@@ -79,6 +80,7 @@ export async function createVendor(tenantId: string, input: VendorWriteInput, ac
       tenantId,
       ...input,
       isActive: true,
+      status: "active",
       version: 1,
       createdBy: actorId,
       updatedBy: actorId,

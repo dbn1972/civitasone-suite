@@ -186,6 +186,29 @@ export async function paymentsRoutes(app: FastifyInstance): Promise<void> {
     });
   });
 
+  // GAP-FINANCE-PAYMENTS-DETAIL-04: the decision context the detail page needs and the base payment
+  // payload does not carry -- beneficiary (the bill's vendor), the linked bill, who approved, and the
+  // status history. Ids only for actors; the web resolves names.
+  app.get("/v1/finance/payments/:id/context", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, FINANCE_ROLES);
+    const { id } = idParam.parse(req.params);
+    const payment = await queries.getPayment(id, ctx.tenantId);
+    if (!payment) throw new HttpError(404, "NOT_FOUND", "payment not found");
+    const [bill, events] = await Promise.all([
+      repo.findBillByIdAndTenant(payment.billId, ctx.tenantId),
+      repo.listPaymentEvents(ctx.tenantId, id),
+    ]);
+    const vendor = bill ? await mastersRepo.getVendorById(ctx.tenantId, bill.vendorId) : null;
+    const released = [...events].reverse().find((e) => e.status === "released");
+    return reply.send({
+      beneficiary: vendor ? { vendorId: vendor.id, name: vendor.name } : null,
+      bill: bill ? { id: bill.id, billNo: bill.billNo } : null,
+      approvedBy: released?.actorId ?? null,
+      events: events.map((e) => ({ status: e.status, actorId: e.actorId ?? null, note: e.note ?? null, at: e.createdAt })),
+    });
+  });
+
   // H1 (payment) — submit a payment to eOffice for administrative approval. The
   // eFile is raised via the eOffice integration; the decision returns on
   // finance.payment.file_decided and moves the payment to released/cancelled.

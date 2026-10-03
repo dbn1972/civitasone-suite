@@ -4,7 +4,13 @@ import { db } from "../../shared/db.js";
 import { enqueue } from "../../shared/outbox.js";
 import type { InstrumentRow } from "../treasury/schema.js";
 import * as repo from "./repo.js";
-import type { IssueInstrumentBody, BounceInstrumentBody } from "./validators.js";
+import type { Queue } from "@civitasone/queue";
+import { recordAudit } from "../../shared/audit-event.js";
+import { publishCommand, subscribeApply, type Accepted, type Actor, type Tx } from "../../shared/finance-command.js";
+import { COMMANDS } from "../../topics.js";
+import { getPolicy, readPolicyWith } from "../masters/policy.js";
+import { isStale, todayIso, validUntil } from "./domain.js";
+import type { IssueInstrumentBody, BounceInstrumentBody, ReasonedInstrumentBody } from "./validators.js";
 
 function serialize(row: InstrumentRow) {
   return {
@@ -25,6 +31,20 @@ function serialize(row: InstrumentRow) {
     bounceReason: row.bounceReason,
     paymentId: row.paymentId,
     version: row.version,
+    // GAP-FINANCE-TREASURY-CHEQUES-DETAIL-03: the actor behind each lifecycle step (ids; the web
+    // resolves names). issuedBy is the creator. Null for steps taken before migration 0085.
+    issuedBy: row.createdBy,
+    presentedBy: row.presentedBy ?? null,
+    clearedBy: row.clearedBy ?? null,
+    bouncedBy: row.bouncedBy ?? null,
+    cancelledBy: row.cancelledBy ?? null,
+    cancelReason: row.cancelReason ?? null,
+    representCount: row.representCount,
+    lastRepresentedAt: row.lastRepresentedAt ?? null,
+    lastRepresentedBy: row.lastRepresentedBy ?? null,
+    representReason: row.representReason ?? null,
+    staledAt: row.staledAt ?? null,
+    staledBy: row.staledBy ?? null,
   };
 }
 export type InstrumentView = ReturnType<typeof serialize>;
@@ -108,6 +128,14 @@ async function load(ctx: RequestContext, id: string): Promise<InstrumentRow> {
 export async function presentInstrument(ctx: RequestContext, id: string): Promise<InstrumentView> {
   const current = await load(ctx, id);
   if (current.status === "presented") return serialize(current);
+  // consistent with re-present: a cheque past its validity horizon can no longer be presented
+  if (current.status === "issued") {
+    const policy = await getPolicy(ctx.tenantId);
+    if (isStale(String(current.issueDate), policy.chequeValidityMonths, todayIso())) {
+      throw new HttpError(409, "INSTRUMENT_STALE",
+        `instrument is past its ${policy.chequeValidityMonths}-month validity (valid until ${validUntil(String(current.issueDate), policy.chequeValidityMonths)}); it cannot be presented`);
+    }
+  }
   const updated = await db.transaction(async (tx) => {
     const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued"], "presented", {}, "presentedAt", ctx.actorId);
     if (row) await auditInstrumentTx(tx, ctx, "present", row, current.status, "presented");
@@ -149,7 +177,8 @@ export async function bounceInstrument(ctx: RequestContext, id: string, body: Bo
 }
 
 /**
- * cancel: only an un-presented (issued) instrument may be cancelled/stopped. Idempotent.
+ * cancel: only an un-presented (issued) instrument may be cancelled/stopped; a reason is mandatory
+ * (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-04). Idempotent.
  *
  * The guarded UPDATE and the audit event are written in ONE transaction, so a
  * cancel is audited exactly once: only the request that actually flips
@@ -157,11 +186,11 @@ export async function bounceInstrument(ctx: RequestContext, id: string, body: Bo
  * audit.event.record; a replay or a concurrent loser sees the already-cancelled
  * row and writes nothing.
  */
-export async function cancelInstrument(ctx: RequestContext, id: string): Promise<InstrumentView> {
+export async function cancelInstrument(ctx: RequestContext, id: string, body: ReasonedInstrumentBody): Promise<InstrumentView> {
   const current = await load(ctx, id);
   if (current.status === "cancelled") return serialize(current);
   const updated = await db.transaction(async (tx) => {
-    const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued"], "cancelled", {}, "cancelledAt", ctx.actorId);
+    const row = await repo.transitionTx(tx, ctx.tenantId, id, ["issued"], "cancelled", { cancelReason: body.reason }, "cancelledAt", ctx.actorId);
     if (row) {
       await enqueue(tx, {
         topic: "audit.event.record", eventType: "audit.event.record",
@@ -169,7 +198,7 @@ export async function cancelInstrument(ctx: RequestContext, id: string): Promise
         payload: {
           service: "finance", action: "cancel", resourceType: "instrument", resourceId: id,
           outcome: "success",
-          details: { instrumentType: row.instrumentType, instrumentNo: row.instrumentNo, fromStatus: current.status, toStatus: "cancelled" },
+          details: { instrumentType: row.instrumentType, instrumentNo: row.instrumentNo, fromStatus: current.status, toStatus: "cancelled", reason: body.reason },
         },
       });
     }
@@ -184,8 +213,105 @@ export async function cancelInstrument(ctx: RequestContext, id: string): Promise
   return serialize(updated);
 }
 
-export async function getInstrument(ctx: RequestContext, id: string): Promise<InstrumentView> {
-  return serialize(await load(ctx, id));
+/**
+ * re-present: bounced -> presented again, with a reason. Refused once the instrument is past its validity horizon
+ * (it can no longer be presented, only re-issued). Consumer side: one guarded UPDATE + audit in the caller's tx.
+ */
+export async function applyRepresent(tx: Tx, actor: Actor, input: { id: string; reason: string }): Promise<void> {
+  const cur = await repo.findByIdTx(tx, actor.tenantId, input.id);
+  if (!cur) throw new HttpError(404, "NOT_FOUND", "instrument not found");
+  if (cur.status !== "bounced") throw illegal(cur.status, "presented");
+  const policy = await readPolicyWith(tx, actor.tenantId);
+  if (isStale(String(cur.issueDate), policy.chequeValidityMonths, todayIso())) {
+    throw new HttpError(409, "INSTRUMENT_STALE",
+      `instrument is past its ${policy.chequeValidityMonths}-month validity (valid until ${validUntil(String(cur.issueDate), policy.chequeValidityMonths)}); re-issue it instead`);
+  }
+  const row = await repo.representTx(tx, actor.tenantId, input.id, input.reason, actor.actorId);
+  if (!row) throw illegal("changed concurrently", "presented");
+  await recordAudit(tx, actor, {
+    action: "represent", resourceType: "instrument", resourceId: input.id,
+    details: { instrumentType: row.instrumentType, instrumentNo: row.instrumentNo, fromStatus: "bounced", toStatus: "presented", reason: input.reason, representCount: row.representCount },
+  });
+}
+
+/** mark stale: issued -> stale, only once older than the tenant's validity horizon (default 3 months, RBI). Idempotent. */
+export async function applyMarkStale(tx: Tx, actor: Actor, input: { id: string; reason?: string | undefined }): Promise<void> {
+  const cur = await repo.findByIdTx(tx, actor.tenantId, input.id);
+  if (!cur) throw new HttpError(404, "NOT_FOUND", "instrument not found");
+  if (cur.status === "stale") return;
+  if (cur.status !== "issued") throw illegal(cur.status, "stale");
+  const policy = await readPolicyWith(tx, actor.tenantId);
+  if (!isStale(String(cur.issueDate), policy.chequeValidityMonths, todayIso())) {
+    throw new HttpError(409, "INSTRUMENT_NOT_STALE",
+      `instrument is valid until ${validUntil(String(cur.issueDate), policy.chequeValidityMonths)}; it cannot be marked stale before then`);
+  }
+  const row = await repo.staleTx(tx, actor.tenantId, input.id, actor.actorId);
+  if (!row) throw illegal("changed concurrently", "stale");
+  await recordAudit(tx, actor, {
+    action: "mark_stale", resourceType: "instrument", resourceId: input.id,
+    details: { instrumentType: row.instrumentType, instrumentNo: row.instrumentNo, fromStatus: "issued", toStatus: "stale", ...(input.reason ? { reason: input.reason } : {}) },
+  });
+}
+
+/** Route side of re-present: read-only pre-checks (immediate 409) then publish; the consumer is authoritative. */
+export async function representInstrument(ctx: RequestContext, id: string, body: ReasonedInstrumentBody): Promise<Accepted> {
+  const cur = await load(ctx, id);
+  if (cur.status !== "bounced") throw illegal(cur.status, "presented");
+  const policy = await getPolicy(ctx.tenantId);
+  if (isStale(String(cur.issueDate), policy.chequeValidityMonths, todayIso())) {
+    throw new HttpError(409, "INSTRUMENT_STALE",
+      `instrument is past its ${policy.chequeValidityMonths}-month validity (valid until ${validUntil(String(cur.issueDate), policy.chequeValidityMonths)}); re-issue it instead`);
+  }
+  return publishCommand(ctx, COMMANDS.instrumentRepresent, { id, reason: body.reason }, id);
+}
+
+export async function markInstrumentStale(ctx: RequestContext, id: string, body: { reason?: string | undefined }): Promise<Accepted> {
+  const cur = await load(ctx, id);
+  if (cur.status !== "stale") {
+    if (cur.status !== "issued") throw illegal(cur.status, "stale");
+    const policy = await getPolicy(ctx.tenantId);
+    if (!isStale(String(cur.issueDate), policy.chequeValidityMonths, todayIso())) {
+      throw new HttpError(409, "INSTRUMENT_NOT_STALE",
+        `instrument is valid until ${validUntil(String(cur.issueDate), policy.chequeValidityMonths)}; it cannot be marked stale before then`);
+    }
+  }
+  return publishCommand(ctx, COMMANDS.instrumentMarkStale, { id, ...(body.reason ? { reason: body.reason } : {}) }, id);
+}
+
+export function registerInstrumentWorkflowConsumers(q: Queue): void {
+  subscribeApply<{ id: string; reason: string }>(q, COMMANDS.instrumentRepresent, async (tx, actor, p) => { await applyRepresent(tx, actor, p); });
+  subscribeApply<{ id: string; reason?: string }>(q, COMMANDS.instrumentMarkStale, async (tx, actor, p) => { await applyMarkStale(tx, actor, p); });
+}
+
+/**
+ * Audited reveal of the drawn-on account number (GAP-FINANCE-TREASURY-CHEQUES-DETAIL-01). The audit
+ * event carries the instrument id, the actor and the reason, never the number itself.
+ */
+export async function revealInstrumentAccount(ctx: RequestContext, id: string, reason: string): Promise<{ accountNo: string }> {
+  return db.transaction(async (tx) => {
+    const cur = await repo.findByIdTx(tx, ctx.tenantId, id);
+    if (!cur) throw new HttpError(404, "NOT_FOUND", "instrument not found");
+    if (!cur.bankAccountId) throw new HttpError(404, "NO_BANK_ACCOUNT", "this instrument is not linked to a bank account");
+    const accountNo = await repo.accountNoForInstrumentTx(tx, ctx.tenantId, cur.bankAccountId);
+    if (!accountNo) throw new HttpError(404, "NO_BANK_ACCOUNT", "the linked bank account was not found");
+    await recordAudit(tx, ctx, {
+      action: "account_reveal", resourceType: "instrument", resourceId: id,
+      details: { instrumentNo: cur.instrumentNo, bankAccountId: cur.bankAccountId, reason },
+    });
+    return { accountNo };
+  });
+}
+
+export async function getInstrument(ctx: RequestContext, id: string) {
+  const row = await load(ctx, id);
+  const policy = await getPolicy(ctx.tenantId);
+  const last4 = row.bankAccountId ? (await repo.accountLast4ByBankId(ctx.tenantId, [row.bankAccountId])).get(row.bankAccountId) ?? null : null;
+  return {
+    ...serialize(row),
+    accountNoLast4: last4,
+    // The last day the instrument is valid; the web offers "Mark stale" only after this date.
+    validUntil: validUntil(String(row.issueDate), policy.chequeValidityMonths),
+  };
 }
 
 export async function listInstruments(

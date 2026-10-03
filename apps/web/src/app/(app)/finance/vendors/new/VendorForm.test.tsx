@@ -57,4 +57,33 @@ describe("VendorForm (GAP-FINANCE-VENDORS-01)", () => {
     const msg = await screen.findByText(/permission|couldn't|not allowed|access/i);
     expect(msg.textContent).not.toMatch(/finance_officer|403/);
   });
+
+  // GAP-FINANCE-VENDORS-01: the confirmation no longer promises immediate activation, and the success
+  // message says what actually happened (pending approval vs active).
+  it("explains that the vendor stays pending until a different admin approves it", async () => {
+    render(<VendorForm />);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /review & create/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(/stays pending until a different finance admin approves/i);
+    expect(dialog).not.toHaveTextContent(/active immediately/i);
+  });
+
+  it("tells the officer the vendor is awaiting approval when the service created it pending", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "v1", status: "pending" }), { status: 201 }));
+    render(<VendorForm />);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /review & create/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create vendor" }));
+    expect(await screen.findByText(/different finance admin must approve it before it can be paid/i)).toBeInTheDocument();
+  });
+
+  it("keeps the plain 'created' message when the tenant switched the approval check off (vendor active)", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response(JSON.stringify({ id: "v1", status: "active" }), { status: 201 }));
+    render(<VendorForm />);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: /review & create/i }));
+    fireEvent.click(await screen.findByRole("button", { name: "Create vendor" }));
+    expect(await screen.findByText("Vendor created.")).toBeInTheDocument();
+  });
 });
