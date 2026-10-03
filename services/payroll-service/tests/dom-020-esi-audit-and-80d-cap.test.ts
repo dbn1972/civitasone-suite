@@ -16,7 +16,7 @@
  * silently ignored by this route's own computation. Fixed by resolving the
  * same effective-dated config `domain.ts` uses.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql, eq, and } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -37,6 +37,12 @@ function token(tenant: string, roles = ["payroll_admin"]) {
 }
 
 afterAll(async () => { await sqlClient.end(); });
+
+// GAP-PAYROLL-TAX-DECLARATION-02: this test asserts the DECLARED-amount behaviour,
+// which applies before the tenant's proof cutoff (default 31 January of the FY).
+// Pin the clock before it so the assertions stay exactly as they were.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-01-15T05:00:00Z"));
 
 describe("DOM-020 (1) -- ESI employer contribution: audit-log matches the slip exactly", () => {
   it("insertEsi's persisted erContribMinor equals computeSlip's rounded esiEmployerMinor, not the pre-fix unrounded formula", async () => {

@@ -56,6 +56,16 @@ export const COMMANDS = {
   sponsorConfigUpsert:    "payroll.sponsor_config.upsert",
   // Read-side audit events previously written via route db.transaction+outbox
   auditRecord:            "payroll.audit.record",
+  // GAP-PAYROLL-TAX-DECLARATION-02: investment-proof upload / verification / retention
+  taxProofSubmit:         "payroll.tax_proof.submit",
+  taxProofDecide:         "payroll.tax_proof.decide",
+  taxProofRemove:         "payroll.tax_proof.remove",
+  taxProofHold:           "payroll.tax_proof.hold",
+  taxProofRetentionSet:   "payroll.tax_proof.retention_set",
+  taxProofCutoffSet:      "payroll.tax_proof.cutoff_set",
+  taxProofVerifiedFromSet: "payroll.tax_proof.verified_from_set",
+  taxProofViewAudit:      "payroll.tax_proof.view_audit",
+  taxProofPurge:          "payroll.tax_proof.purge",
 } as const;
 
 export const EVENTS = {

@@ -114,6 +114,18 @@ export interface PresignedUrlOptions {
   contentType?: string | undefined;
   /** URL expiry in seconds (default: 300 for PUT, 3600 for GET) */
   expiresIn?: number | undefined;
+  /**
+   * PUT only: exact byte length of the upload. It is SIGNED into the URL, so
+   * the object store rejects a body of any other length.
+   */
+  contentLength?: number | undefined;
+  /**
+   * PUT only: server-side encryption at rest (SSE-S3 "AES256" or SSE-KMS).
+   * The header is SIGNED into the URL, so the uploader must send
+   * `x-amz-server-side-encryption` with the PUT -- an upload that omits it
+   * fails the signature check rather than landing unencrypted.
+   */
+  serverSideEncryption?: "AES256" | "aws:kms" | undefined;
 }
 
 /**
@@ -126,6 +138,8 @@ export async function presignedPutUrl(opts: PresignedUrlOptions): Promise<string
     Bucket: getBucket(),
     Key: opts.key,
     ContentType: opts.contentType ?? "application/octet-stream",
+    ...(opts.contentLength !== undefined ? { ContentLength: opts.contentLength } : {}),
+    ...(opts.serverSideEncryption ? { ServerSideEncryption: opts.serverSideEncryption } : {}),
   };
   const command = new PutObjectCommand(input);
   return getSignedUrl(client, command, { expiresIn: opts.expiresIn ?? 300 });
@@ -197,6 +211,20 @@ export async function objectExists(key: string): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * HEAD an object: its stored size and content type, or null when it does not
+ * exist (or cannot be read). `objectExists` is unchanged for other callers.
+ */
+export async function headObject(key: string): Promise<{ contentLength: number | null; contentType: string | null } | null> {
+  const client = getClient();
+  try {
+    const r = await client.send(new HeadObjectCommand({ Bucket: getBucket(), Key: key }));
+    return { contentLength: r.ContentLength ?? null, contentType: r.ContentType ?? null };
+  } catch {
+    return null;
   }
 }
 

@@ -16,6 +16,7 @@ import { ecrRoutes } from "./modules/statutory/ecr-routes.js";
 import { payslipPdfRoutes } from "./modules/payslip-pdf/routes.js";
 import { payslipDownloadRoutes } from "./modules/payslip-pdf/pdf-route.js";
 import { taxRoutes } from "./modules/tax/routes.js";
+import { taxProofRoutes } from "./modules/tax-proofs/routes.js";
 import { statutoryReturnsRoutes } from "./modules/statutory-returns/routes.js";
 import { challanRoutes } from "./modules/statutory-returns/challan-routes.js";
 import { loadTaxConfig } from "./modules/tax/config.js";
@@ -86,6 +87,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(payslipPdfRoutes);
   await app.register(payslipDownloadRoutes);
   await app.register(taxRoutes);
+  await app.register(taxProofRoutes);
   await app.register(statutoryReturnsRoutes);
   await app.register(challanRoutes);
   await app.register(bankTransferRoutes);

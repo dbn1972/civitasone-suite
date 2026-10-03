@@ -5,6 +5,8 @@ import { payrollTds } from "../statutory/schema.js";
 import { taxDeclarations } from "./schema.js";
 import { computeTax, roundRupeeMinor, roundTenRupeesMinor } from "./engine.js";
 import { fetchPayrollInput } from "../../shared/hrms-client.js";
+import { resolveVerificationPlan, applyPlanToRowExact, istToday } from "./verified-inputs.js";
+import { computeHraClaimedMinor } from "./consumer.js";
 import { resolveRunStatutoryConfig } from "../payroll/consumer.js";
 
 /**
@@ -183,7 +185,12 @@ export async function buildForm16(tenantId: string, employeeId: string, fy: stri
   const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
     .where(and(eq(taxDeclarations.tenantId, tenantId), eq(taxDeclarations.employeeId, employeeId), eq(taxDeclarations.fy, fy)))
     .limit(1));
-  const dec = decRows[0] ?? null;
+  // GAP-PAYROLL-TAX-DECLARATION-02: after the tenant's proof cutoff only verified amounts count.
+  const proofPlan = await scopedRead((tx) => resolveVerificationPlan(tx, tenantId, fy, istToday(), [employeeId]));
+  const dec = decRows[0]
+    ? await applyPlanToRowExact(proofPlan, decRows[0], (emp, rent) => scopedRead((tx) =>
+        computeHraClaimedMinor(tx as unknown as Parameters<typeof computeHraClaimedMinor>[0], tenantId, emp, "old", fy, rent)))
+    : null;
   const regime = (dec?.regime ?? "new") as "old" | "new";
 
   const standardDeduction = regime === "new" ? 75000 : 50000;

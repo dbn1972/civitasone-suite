@@ -16,6 +16,8 @@ import { acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendAccepted } from "@civitasone/schemas/validate";
 import { createTaxDeclarationBody } from "./validators.js";
 import * as commands from "./commands.js";
+import { resolveVerificationPlan, applyPlanToRowExact, istToday } from "./verified-inputs.js";
+import { computeHraClaimedMinor } from "./consumer.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES  = [...PAYROLL_ROLES, "hr_admin", "finance_officer", "employee"];
@@ -134,9 +136,14 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
 
     const decRows = await scopedRead((tx) => tx.select().from(taxDeclarations)
       .where(and(eq(taxDeclarations.tenantId, ctx.tenantId), eq(taxDeclarations.fy, fy))));
-    const decByEmployee = new Map(
-      decRows.filter((d) => !scopedEmployeeId || d.employeeId === scopedEmployeeId).map((d) => [d.employeeId, d]),
-    );
+    // GAP-PAYROLL-TAX-DECLARATION-02: after the tenant's proof cutoff only verified amounts count.
+    const proofPlan = await scopedRead((tx) => resolveVerificationPlan(tx, ctx.tenantId, fy, istToday(), null));
+    const hraFor = (emp: string, rent: bigint) => scopedRead((tx) =>
+      computeHraClaimedMinor(tx as unknown as Parameters<typeof computeHraClaimedMinor>[0], ctx.tenantId, emp, "old", fy, rent));
+    const decByEmployee = new Map(await Promise.all(
+      decRows.filter((d) => !scopedEmployeeId || d.employeeId === scopedEmployeeId)
+        .map(async (d) => [d.employeeId, await applyPlanToRowExact(proofPlan, d, hraFor)] as const),
+    ));
 
     const employeeIds = new Set<string>([...grossByEmployee.keys(), ...decByEmployee.keys()]);
 
@@ -259,7 +266,11 @@ export async function taxRoutes(app: FastifyInstance): Promise<void> {
           eq(taxDeclarations.fy, fy),
         ))
         .limit(1));
-      const dec = decRows[0] ?? null;
+      const proofPlan = await scopedRead((tx) => resolveVerificationPlan(tx, ctx.tenantId, fy, istToday(), [employeeId]));
+      const dec = decRows[0]
+        ? await applyPlanToRowExact(proofPlan, decRows[0], (emp, rent) => scopedRead((tx) =>
+            computeHraClaimedMinor(tx as unknown as Parameters<typeof computeHraClaimedMinor>[0], ctx.tenantId, emp, "old", fy, rent)))
+        : null;
       if (dec) {
         // DOM-020/DOM-026: 80C/80D caps were hardcoded 150000/50000 (stale
         // -- domain.ts's config-driven caps are the source of truth and a

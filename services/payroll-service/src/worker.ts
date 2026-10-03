@@ -11,6 +11,8 @@ import { registerPayrollConsumers } from "./modules/payroll/consumer.js";
 import { registerPayProfileConsumers } from "./modules/pay-profiles/consumer.js";
 import { registerLoansConsumers }   from "./modules/loans/consumer.js";
 import { registerTaxConsumers }     from "./modules/tax/consumer.js";
+import { registerTaxProofConsumers } from "./modules/tax-proofs/consumer.js";
+import { startTaxProofPurge } from "./modules/tax-proofs/purge.js";
 import { registerIntegrationConsumers } from "./modules/integration/consumer.js";
 import { registerNachReturnConsumers } from "./modules/nach-return/consumer.js";
 import { registerDisbursementTransferConsumers } from "./modules/disbursement-transfers/consumer.js";
@@ -65,6 +67,7 @@ registerPayrollConsumers(queue);
 registerPayProfileConsumers(queue);
 registerLoansConsumers(queue);
 registerTaxConsumers(queue);
+registerTaxProofConsumers(queue);
 registerIntegrationConsumers(queue);
 registerNachReturnConsumers(queue);
 registerDisbursementTransferConsumers(queue);
@@ -107,9 +110,14 @@ void ensurePartitions();
 const partitionMaint = setInterval(() => void ensurePartitions(), 24 * 60 * 60_000);
 partitionMaint.unref();
 
+// GAP-PAYROLL-TAX-DECLARATION-02: daily investment-proof retention purge
+// (per-tenant command; skips legal holds; audited per purge).
+const taxProofPurge = startTaxProofPurge();
+
 registerGracefulShutdown({
   cleanup: async () => {
     clearInterval(partitionMaint);
+    clearInterval(taxProofPurge);
     clearInterval(purge);
     clearInterval(relay);
     await queue.stop();
