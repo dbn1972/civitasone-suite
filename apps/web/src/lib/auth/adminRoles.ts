@@ -16,6 +16,13 @@ export const ADMIN_PLATFORM_ROLES = ["platform_admin", "super_admin"];
  */
 export const ADMIN_TENANT_ROLES = ["tenant_admin", "platform_admin", "super_admin"];
 
+/**
+ * Platform integrations (e-Sign, DSC, bank API, PFMS), tenant side. Mirrors admin-service
+ * modules/platform-integrations INTEGRATION_ROLES: tenant admins plus the module admins who
+ * own signing and payments. Changing the production-approval policy stays tenant_admin only.
+ */
+export const INTEGRATION_ADMIN_ROLES = [...ADMIN_TENANT_ROLES, "finance_admin", "payroll_admin"];
+
 /** hrms-service device-trust admin routes (list/block/unblock/policy). */
 export const DEVICE_ADMIN_ROLES = ["hr_admin", "it_admin", "super_admin"];
 
