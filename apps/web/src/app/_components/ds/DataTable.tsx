@@ -169,6 +169,14 @@ interface DataTableProps<T extends Record<string, unknown>> {
    * never block the user's own download.
    */
   onExport?: (info: { rowCount: number; filter: string }) => void;
+  /**
+   * GAP-ADMIN-OPERATORS-06 / -ONBOARDING-05: FAIL-CLOSED export gate for personal
+   * data. Awaited before any file is built; when it resolves `{ ok: false }` no
+   * download happens and `message` is shown in an alert under the toolbar. Unlike
+   * `onExport` (fire-and-forget, never blocks) this is for exports that must be
+   * recorded in an audit trail before the data leaves the screen.
+   */
+  exportGuard?: (info: { rowCount: number; filter: string }) => Promise<{ ok: true } | { ok: false; message: string }>;
   /** GAP-HR-LOANS-02: when set, the CSV button opens a confirm dialog first (e.g. a sensitive-data notice). */
   exportConfirm?: { title: string; description: string; confirmLabel?: string };
   /** Screen-reader-only <caption> describing the table's purpose/scope. */
@@ -338,6 +346,7 @@ export function DataTable<T extends Record<string, unknown>>({
   exportable = false,
   exportFilename = "export",
   onExport,
+  exportGuard,
   exportConfirm,
   caption,
   mobileStack = false,
@@ -360,6 +369,8 @@ export function DataTable<T extends Record<string, unknown>>({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [filter, setFilter] = useState("");
   const [exportConfirmOpen, setExportConfirmOpen] = useState(false);
+  const [exportBusy, setExportBusy] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [page, setPage] = useState(0);
 
   const resolveHref = (row: T): string | undefined => {
@@ -450,7 +461,22 @@ export function DataTable<T extends Record<string, unknown>>({
     return csvFormulaSafe(val);
   }
 
-  function downloadCsv() {
+  async function downloadCsv() {
+    if (exportGuard) {
+      setExportBusy(true);
+      setExportError(null);
+      let verdict: Awaited<ReturnType<typeof exportGuard>>;
+      try {
+        verdict = await exportGuard({ rowCount: sorted.length, filter });
+      } catch {
+        verdict = { ok: false, message: "This export could not be recorded, so no file was created. Try again." };
+      }
+      setExportBusy(false);
+      if (!verdict.ok) {
+        setExportError(verdict.message);
+        return;
+      }
+    }
     try {
       onExport?.({ rowCount: sorted.length, filter });
     } catch {
@@ -494,7 +520,7 @@ export function DataTable<T extends Record<string, unknown>>({
             </div>
           )}
           {exportable && sorted.length > 0 && (
-            <Button variant="ghost" size="sm" onClick={exportConfirm ? () => setExportConfirmOpen(true) : downloadCsv} style={{ whiteSpace: "nowrap" }}>
+            <Button variant="ghost" size="sm" disabled={exportBusy} onClick={exportConfirm ? () => setExportConfirmOpen(true) : () => void downloadCsv()} style={{ whiteSpace: "nowrap" }}>
               ⬇ CSV
             </Button>
           )}
@@ -504,11 +530,15 @@ export function DataTable<T extends Record<string, unknown>>({
               title={exportConfirm.title}
               description={exportConfirm.description}
               confirmLabel={exportConfirm.confirmLabel}
-              onConfirm={() => { setExportConfirmOpen(false); downloadCsv(); }}
+              onConfirm={() => { setExportConfirmOpen(false); void downloadCsv(); }}
               onCancel={() => setExportConfirmOpen(false)}
             />
           )}
         </div>
+      )}
+
+      {exportError && (
+        <p role="alert" style={{ color: "var(--danger, #b42318)", fontSize: 13, margin: "6px 0" }}>{exportError}</p>
       )}
 
       {visible.length === 0 ? (

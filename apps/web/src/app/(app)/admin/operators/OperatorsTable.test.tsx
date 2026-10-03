@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { OperatorsTable } from "./OperatorsTable";
 import { operatorStats, permissionList, toOperatorRows, twoFaState, twoFaTone } from "./operatorRows";
 import { useSeededResource } from "@/lib/sync/resource";
@@ -68,5 +68,48 @@ describe("OperatorsTable (GAP-ADMIN-OPERATORS-03/-04)", () => {
     expect(screen.getByText("Not Enabled")).toBeInTheDocument();
     expect(screen.getByText("tenants.read")).toBeInTheDocument();
     expect(screen.getByText("tenants.write")).toBeInTheDocument();
+  });
+});
+
+// GAP-ADMIN-OPERATORS-06
+
+describe("OperatorsTable audited export (GAP-ADMIN-OPERATORS-06)", () => {
+  beforeEach(() => { vi.clearAllMocks(); vi.restoreAllMocks(); });
+
+  it("no Export button without the permission", () => {
+    seeded([op()], "live");
+    render(<OperatorsTable operators={[]} />);
+    expect(screen.queryByText("⬇ CSV")).not.toBeInTheDocument();
+  });
+
+  it("export posts exactly one audit record with the row count BEFORE the file, and omits last login", async () => {
+    seeded([op({ name: "=cmd|calc" }), op({ name: "B" })], "live");
+    const order: string[] = [];
+    const blobs: Blob[] = [];
+    URL.createObjectURL = vi.fn((b: Blob) => { order.push("file"); blobs.push(b); return "blob:x"; }); URL.revokeObjectURL = vi.fn();
+    const spy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => { order.push("audit"); return new Response("{}", { status: 202 }); });
+    render(<OperatorsTable operators={[]} canExport />);
+    fireEvent.click(screen.getByText("⬇ CSV"));
+    await waitFor(() => expect(blobs).toHaveLength(1));
+    expect(order).toEqual(["audit", "file"]);
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(spy.mock.calls[0]![0]).toBe("/api/proxy/v1/admin/platform-exports/audit");
+    expect(JSON.parse((spy.mock.calls[0]![1] as RequestInit).body as string)).toEqual({ resource: "operators", rowCount: 2, filtered: false });
+    const text = await new Promise<string>((res) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result)); fr.readAsText(blobs[0]!); });
+    expect(text.split("\n")[0]).toBe("Name,Role,Account status,2FA,Permissions");
+    expect(text).not.toContain("2026-09-30");
+    // A cell beginning with "=" is neutralised so a spreadsheet does not evaluate it.
+    expect(text).toContain("'=cmd|calc");
+  });
+
+  it("a failed audit means no file and a visible reason", async () => {
+    seeded([op()], "live");
+    const created = vi.fn(() => "blob:x");
+    URL.createObjectURL = created; URL.revokeObjectURL = vi.fn();
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("network"));
+    render(<OperatorsTable operators={[]} canExport />);
+    fireEvent.click(screen.getByText("⬇ CSV"));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/no file was created/));
+    expect(created).not.toHaveBeenCalled();
   });
 });

@@ -3,20 +3,26 @@ import { useMemo } from "react";
 import { DataTable, StatusPill } from "@/app/_components/ds";
 import { useSeededResource } from "@/lib/sync/resource";
 import { AdminRegister } from "../_components/AdminRegister";
+import { platformExportGuard } from "@/lib/admin/platformExport";
 import { operatorAccountStatus } from "./operatorStatus";
 import { operatorStats, permissionList, toOperatorRows, twoFaTone, type OperatorRow } from "./operatorRows";
 
 type RawRow = Record<string, unknown>;
+const exportGuard = platformExportGuard("operators");
+
 export function OperatorsTable({
   operators,
   source = "api",
   errorStatus,
   errorMessage,
+  canExport = false,
 }: {
   operators: RawRow[];
   source?: "api" | "error";
   errorStatus?: number;
   errorMessage?: string;
+  /** GAP-ADMIN-OPERATORS-06: platform-operator permission to export. Without it there is no Export button. */
+  canExport?: boolean;
 }) {
   const { data: raw, provenance, offline, cachedAt } = useSeededResource<RawRow[]>("sa.operators", operators, source, (d) => d.length === 0);
   const rows = useMemo(() => toOperatorRows(raw), [raw]);
@@ -43,7 +49,8 @@ export function OperatorsTable({
         columns={[
           { key: "name", label: "Name" },
           { key: "role", label: "Role" },
-          { key: "lastLogin", label: "Last Login" },
+          // GAP-ADMIN-OPERATORS-06: last-login is behavioural data, so it stays on screen but out of the file.
+          { key: "lastLogin", label: "Last Login", csvExclude: true },
           {
             key: "status",
             label: "Account status",
@@ -73,7 +80,7 @@ export function OperatorsTable({
             ),
           },
         ]}
-        rows={rows} sortable filterable filterPlaceholder="Search operators…" pageSize={15} exportable exportFilename="operators" emptyIcon="👤" emptyTitle="No operators" emptyMessage="No platform operators configured."
+        rows={rows} sortable filterable filterPlaceholder="Search operators…" pageSize={15} exportable={canExport} exportFilename="operators" exportGuard={exportGuard} emptyIcon="👤" emptyTitle="No operators" emptyMessage="No platform operators configured."
       />
     </AdminRegister>
   );

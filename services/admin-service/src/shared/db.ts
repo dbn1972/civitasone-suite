@@ -30,6 +30,7 @@ import { mobileSchema as mobileTelemetryModule } from "../modules/health/mobile-
 import { schema as deptTemplateModule } from "../modules/dept-templates/schema.js";
 import { docSchema as documentGovernanceModule } from "../modules/uploads/doc-schema.js";
 import { schema as orgHierarchyLevelsModule } from "../modules/org-hierarchy-levels/schema.js";
+import { schema as platformOpsModule } from "../modules/platform-ops/schema.js";
 import { outboxSchema } from "./outbox.js";
 
 // NOTE (Phase 4 coverage-gap closure): custom-domains, webhooks, data-export,
@@ -62,6 +63,7 @@ const SCHEMA = {
   ...deptTemplateModule,
   ...documentGovernanceModule,
   ...orgHierarchyLevelsModule,
+  ...platformOpsModule,
   ...outboxSchema,
 };
 

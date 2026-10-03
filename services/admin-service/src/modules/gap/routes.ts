@@ -682,4 +682,19 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
     if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
     return reply.code(status).send(body);
   });
+
+  // GAP-ADMIN-ORG-03: deactivate (end-date) a unit, forwarded to tenant-service which owns the
+  // conditional write, the active-children rule and the audit row. A reason is mandatory.
+  app.post("/v1/admin/org-hierarchy/:id/deactivate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const parsed = z.object({ reason: z.string().trim().min(3).max(500), acknowledgePositions: z.boolean().optional() }).safeParse(req.body);
+    if (!parsed.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    const { status, body } = await callUpstream(req, ctx, "POST", tenantServiceBaseUrl(), `/v1/org/hierarchy/${id}/deactivate`, parsed.data);
+    if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
+    return reply.code(status).send(body);
+  });
 }

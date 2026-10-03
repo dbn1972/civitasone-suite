@@ -22,7 +22,7 @@ export default async function OperatorsPage() {
         back="/admin"
         actions={<Link className="btn ghost" href="/admin/audit-log">View audit log</Link>}
       />
-      <OperatorsTable operators={operators} source={source === "error" ? "error" : "api"} errorStatus={status} errorMessage={errorMessage} />
+      <OperatorsTable operators={operators} source={source === "error" ? "error" : "api"} errorStatus={status} errorMessage={errorMessage} canExport />
     </div>
   );
 }

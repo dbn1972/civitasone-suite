@@ -4,6 +4,7 @@ import { Button, ConfirmDialog, LoadErrorState, PageHeader } from "@/app/_compon
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import type { AdminOrgUnit } from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
+import { activeChildCount, headDisplayName, isUnitInactive, orgConflictMessage } from "./orgUnitState";
 
 // Matches tenant-service's real, flat org-unit taxonomy (org-hierarchy
 // module) — there is no "Ministry" level in the backing store, so this page
@@ -81,8 +82,9 @@ async function callApi(path: string, method: string, body?: unknown): Promise<{ 
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
     if (!res.ok) {
-      const code = ((await res.json().catch(() => undefined)) as { code?: string } | undefined)?.code;
-      return { ok: false, message: orgUnitError(), status: res.status, ...(code ? { code } : {}) };
+      const parsed = (await res.json().catch(() => undefined)) as { code?: string; error?: { code?: string } } | undefined;
+      const code = parsed?.code ?? parsed?.error?.code;
+      return { ok: false, message: orgConflictMessage(code) ?? orgUnitError(), status: res.status, ...(code ? { code } : {}) };
     }
     return { ok: true, status: res.status };
   } catch {
@@ -172,6 +174,10 @@ function OrgTreeNode({
   onCancelRename,
   onRename,
   onStartMove,
+  onStartHead,
+  onStartDeactivate,
+  headNames,
+  nowMs,
   onStartAddChild,
   onCancelAddChild,
   onUnitAdded,
@@ -186,10 +192,16 @@ function OrgTreeNode({
   onCancelRename: () => void;
   onRename: (id: string, name: string) => void;
   onStartMove: (id: string) => void;
+  onStartHead: (id: string) => void;
+  onStartDeactivate: (id: string) => void;
+  headNames: ReadonlyMap<string, string>;
+  nowMs: number;
   onStartAddChild: (id: string) => void;
   onCancelAddChild: () => void;
   onUnitAdded: () => void;
 }) {
+  const inactive = isUnitInactive(node, nowMs);
+  const headName = headDisplayName(node.headUserId, headNames);
   const isEditing = editingId === node.id;
   const isAddingChild = addingChildOf === node.id;
   const color = TYPE_COLORS[node.type];
@@ -248,12 +260,22 @@ function OrgTreeNode({
             aria-label={`Rename ${node.name}`}
           />
         ) : (
-          <span style={{ flex: 1, fontSize: 13.5 }}>{node.name}{node.code ? <span style={{ color: "var(--mut)", fontSize: 12 }}> · {node.code}</span> : null}</span>
+          <span style={{ flex: 1, fontSize: 13.5, opacity: inactive ? 0.65 : 1 }}>
+            {node.name}{node.code ? <span style={{ color: "var(--mut)", fontSize: 12 }}> · {node.code}</span> : null}
+            {headName ? <span style={{ color: "var(--mut)", fontSize: 12 }}> · Head: {headName}</span> : null}
+          </span>
         )}
+        {inactive && <span className="pill mut" style={{ flexShrink: 0 }}>Inactive</span>}
         <span style={{ fontSize: 12, color, background: `color-mix(in srgb, ${color} 14%, transparent)`, padding: "2px 8px", borderRadius: 10, fontWeight: 650, flexShrink: 0 }}>{node.type}</span>
-        <Button variant="ghost" size="sm" style={{ fontSize: 12 }} aria-label={`Rename ${node.name}`} onClick={() => onStartRename(node.id)}>Rename</Button>
-        <Button variant="ghost" size="sm" style={{ fontSize: 12 }} aria-label={`Move ${node.name}`} onClick={() => onStartMove(node.id)}>Move</Button>
-        <Button variant="ghost" size="sm" style={{ fontSize: 12 }} aria-label={`Add child unit under ${node.name}`} onClick={() => onStartAddChild(node.id)}>+ Add child</Button>
+        {!inactive && (
+          <>
+            <Button variant="ghost" size="sm" style={{ fontSize: 12 }} aria-label={`Rename ${node.name}`} onClick={() => onStartRename(node.id)}>Rename</Button>
+            <Button variant="ghost" size="sm" style={{ fontSize: 12 }} aria-label={`Move ${node.name}`} onClick={() => onStartMove(node.id)}>Move</Button>
+            <Button variant="ghost" size="sm" style={{ fontSize: 12 }} aria-label={`Set head of ${node.name}`} onClick={() => onStartHead(node.id)}>Set head</Button>
+            <Button variant="ghost" size="sm" style={{ fontSize: 12 }} aria-label={`Add child unit under ${node.name}`} onClick={() => onStartAddChild(node.id)}>+ Add child</Button>
+            <Button variant="ghost" size="sm" style={{ fontSize: 12, color: "var(--bad)" }} aria-label={`Deactivate ${node.name}`} onClick={() => onStartDeactivate(node.id)}>Deactivate</Button>
+          </>
+        )}
       </div>
       {isAddingChild && (
         <div style={{ marginInlineStart: (depth + 1) * 22 }}>
@@ -275,6 +297,10 @@ function OrgTreeNode({
               onCancelRename={onCancelRename}
               onRename={onRename}
               onStartMove={onStartMove}
+              onStartHead={onStartHead}
+              onStartDeactivate={onStartDeactivate}
+              headNames={headNames}
+              nowMs={nowMs}
               onStartAddChild={onStartAddChild}
               onCancelAddChild={onCancelAddChild}
               onUnitAdded={onUnitAdded}
@@ -308,6 +334,40 @@ export function OrgHierarchyManager({
   const [moveError, setMoveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState<string>("");
+  // GAP-ADMIN-ORG-03: head-of-unit and deactivate.
+  const [headingId, setHeadingId] = useState<string | null>(null);
+  const [headTarget, setHeadTarget] = useState<string>("");
+  const [headError, setHeadError] = useState<string | null>(null);
+  const [deactivatingId, setDeactivatingId] = useState<string | null>(null);
+  const [deactivateError, setDeactivateError] = useState<string | null>(null);
+  // Set when the server refused because open positions sit in the unit; the operator must tick the box to override.
+  const [positionsConflict, setPositionsConflict] = useState(false);
+  const [positionsAck, setPositionsAck] = useState(false);
+  const [directory, setDirectory] = useState<{ id: string; name: string }[]>([]);
+  const [directoryFailed, setDirectoryFailed] = useState(false);
+  const [nowMs, setNowMs] = useState(0);
+  useEffect(() => { setNowMs(Date.now()); }, [units]);
+  // Names for the head-of-unit label and picker. Never block the tree on it: a failure shows
+  // "Unknown user" and a retry notice in the picker, not a broken page.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/proxy/v1/admin/users?limit=200", { cache: "no-store" });
+        if (!res.ok) throw new Error("directory");
+        const body = (await res.json()) as { data?: { id?: unknown; name?: unknown }[] } | { id?: unknown; name?: unknown }[];
+        const rows = Array.isArray(body) ? body : body.data ?? [];
+        if (!cancelled) {
+          setDirectory(rows.filter((r) => typeof r.id === "string" && typeof r.name === "string").map((r) => ({ id: r.id as string, name: r.name as string })));
+          setDirectoryFailed(false);
+        }
+      } catch {
+        if (!cancelled) setDirectoryFailed(true);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+  const headNames = useMemo(() => new Map(directory.map((d) => [d.id, d.name])), [directory]);
   const [collapsed, setCollapsed] = useState<Set<string>>(() => {
     if (initialUnits.length <= LARGE_TREE) return new Set();
     const next = new Set<string>();
@@ -402,6 +462,56 @@ export function OrgHierarchyManager({
     }
   }
 
+  async function handleSetHead() {
+    const id = headingId;
+    if (!id || inFlightRef.current) return;
+    const target = headTarget === "" ? null : headTarget;
+    inFlightRef.current = true;
+    setBusy(true);
+    setHeadError(null);
+    try {
+      const result = await callApi(`/${id}`, "PATCH", { headUserId: target });
+      if (!result.ok) { setHeadError(result.message ?? null); return; }
+      setHeadingId(null);
+      setNotice(target ? "Head of unit saved — the tree updates shortly." : "Head of unit cleared — the tree updates shortly.");
+      for (let attempt = 0; attempt < MOVE_POLL_ATTEMPTS; attempt++) {
+        const rows = await refresh();
+        if ((rows?.find((u) => u.id === id)?.headUserId ?? null) === target) { setNotice("Head of unit applied."); return; }
+        if (attempt < MOVE_POLL_ATTEMPTS - 1) await new Promise((r) => setTimeout(r, MOVE_POLL_MS));
+      }
+    } finally {
+      inFlightRef.current = false;
+      setBusy(false);
+    }
+  }
+
+  async function handleDeactivate(reason: string | undefined) {
+    const id = deactivatingId;
+    if (!id || !reason || inFlightRef.current) return;
+    inFlightRef.current = true;
+    setBusy(true);
+    setDeactivateError(null);
+    try {
+      const result = await callApi(`/${id}/deactivate`, "POST", { reason, ...(positionsAck ? { acknowledgePositions: true } : {}) });
+      if (!result.ok) {
+        if (result.code === "HAS_ACTIVE_POSITIONS") setPositionsConflict(true);
+        setDeactivateError(result.message ?? null);
+        return;
+      }
+      setDeactivatingId(null);
+      setNotice("Deactivation accepted — the unit is marked inactive shortly. Its history is kept and the reason is recorded in the audit log.");
+      for (let attempt = 0; attempt < MOVE_POLL_ATTEMPTS; attempt++) {
+        const rows = await refresh();
+        const row = rows?.find((u) => u.id === id);
+        if (row && isUnitInactive(row, Date.now())) { setNotice("Unit deactivated."); return; }
+        if (attempt < MOVE_POLL_ATTEMPTS - 1) await new Promise((r) => setTimeout(r, MOVE_POLL_MS));
+      }
+    } finally {
+      inFlightRef.current = false;
+      setBusy(false);
+    }
+  }
+
   function handleUnitAdded() {
     setAddingChildOf(null);
     setAddingRoot(false);
@@ -419,6 +529,9 @@ export function OrgHierarchyManager({
 
   const movingUnit = movingId ? units.find((u) => u.id === movingId) : undefined;
   const blockedParents = movingId ? selfAndDescendantIds(units, movingId) : new Set<string>();
+  const headingUnit = headingId ? units.find((u) => u.id === headingId) : undefined;
+  const deactivatingUnit = deactivatingId ? units.find((u) => u.id === deactivatingId) : undefined;
+  const deactivatingChildren = deactivatingUnit ? activeChildCount(units, deactivatingUnit.id, nowMs || Date.now()) : 0;
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -442,7 +555,7 @@ export function OrgHierarchyManager({
       <div className="card">
         <div className="card-h">
           <h3>Organisation tree</h3>
-          <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{busy ? "Saving…" : "Rename, move or add children below. Each change is sent to the server as soon as you confirm it."}</p>
+          <p style={{ fontSize: 12, color: "var(--mut)", margin: 0 }}>{busy ? "Saving…" : "Rename, move, set a head, add or deactivate units below. Changes save as soon as you confirm them and are not undoable from here; deactivation keeps the unit's history and records your reason."}</p>
         </div>
         {addingRoot && !loadFailed && (
           <div style={{ padding: "8px 16px" }}>
@@ -472,6 +585,10 @@ export function OrgHierarchyManager({
                   onCancelRename={() => setEditingId(null)}
                   onRename={(id, name) => void handleRename(id, name)}
                   onStartMove={(id) => { setMoveError(null); setNotice(null); setMovingId(id); setMoveTarget(units.find((u) => u.id === id)?.parentId ?? ""); }}
+                  onStartHead={(id) => { setHeadError(null); setNotice(null); setHeadingId(id); setHeadTarget(units.find((u) => u.id === id)?.headUserId ?? ""); }}
+                  onStartDeactivate={(id) => { setDeactivateError(null); setNotice(null); setPositionsConflict(false); setPositionsAck(false); setDeactivatingId(id); }}
+                  headNames={headNames}
+                  nowMs={nowMs}
                   onStartAddChild={(id) => setAddingChildOf(id)}
                   onCancelAddChild={() => setAddingChildOf(null)}
                   onUnitAdded={handleUnitAdded}
@@ -490,8 +607,7 @@ export function OrgHierarchyManager({
         </div>
       </div>
 
-      {/* GAP-ADMIN-ORG-03: reparenting moves a whole subtree, so it is confirmed first. tenant-service has no delete/deactivate
-          route and PATCH takes no reason, so neither is offered here. */}
+      {/* GAP-ADMIN-ORG-03: reparenting moves a whole subtree, so it is confirmed first. */}
       <ConfirmDialog
         open={movingUnit !== undefined}
         title={movingUnit ? `Move ${movingUnit.name}?` : ""}
@@ -508,10 +624,61 @@ export function OrgHierarchyManager({
           <select className="input" value={moveTarget} onChange={(e) => setMoveTarget(e.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }}>
             <option value="">(top level)</option>
             {units
-              .filter((u) => !blockedParents.has(u.id))
+              .filter((u) => !blockedParents.has(u.id) && !isUnitInactive(u, nowMs || Date.now()))
               .map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
           </select>
         </label>
+      </ConfirmDialog>
+
+      {/* GAP-ADMIN-ORG-03: head of unit. The picker lists the tenant's user directory by NAME. */}
+      <ConfirmDialog
+        open={headingUnit !== undefined}
+        title={headingUnit ? `Set head of ${headingUnit.name}` : ""}
+        description="Records who heads this unit, for display and reporting. It does not by itself change who approves requests. Choose a person, or none to clear it."
+        confirmLabel="Save head"
+        busy={busy}
+        errorMessage={headError ?? undefined}
+        confirmDisabled={headingUnit ? (headingUnit.headUserId ?? "") === headTarget : true}
+        onConfirm={() => void handleSetHead()}
+        onCancel={() => setHeadingId(null)}
+      >
+        <label style={{ display: "block", fontSize: 13, margin: "8px 0" }}>
+          Head of unit
+          <select className="input" value={headTarget} onChange={(e) => setHeadTarget(e.target.value)} style={{ display: "block", width: "100%", marginTop: 4 }}>
+            <option value="">(no head)</option>
+            {directory.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+          </select>
+        </label>
+        {directoryFailed && <p role="status" style={{ fontSize: 12, color: "var(--bad)", margin: 0 }}>The user directory could not be loaded, so only clearing the head is possible right now. Reload the page to try again.</p>}
+      </ConfirmDialog>
+
+      {/* GAP-ADMIN-ORG-03: deactivate is a soft end-date with a mandatory reason; blocked while active sub-units remain. */}
+      <ConfirmDialog
+        open={deactivatingUnit !== undefined}
+        danger
+        requireReason
+        minReasonLength={3}
+        maxReasonLength={500}
+        title={deactivatingUnit ? `Deactivate ${deactivatingUnit.name}?` : ""}
+        description={
+          deactivatingChildren > 0
+            ? `${deactivatingUnit?.name ?? "This unit"} still has ${deactivatingChildren} active sub-unit${deactivatingChildren === 1 ? "" : "s"}. Move or deactivate ${deactivatingChildren === 1 ? "it" : "them"} first.`
+            : "The unit is marked inactive: it can no longer be renamed, moved or given a head, and it stops appearing as a place to move or add units. Its history is kept and your reason is recorded in the audit log. Positions in this unit are not moved; you will be asked to confirm if any are still open. Approval routing is not changed by this action."
+        }
+        confirmLabel="Deactivate"
+        reasonLabel="Reason for deactivating"
+        busy={busy}
+        blockConfirm={deactivatingChildren > 0 || (positionsConflict && !positionsAck)}
+        errorMessage={deactivateError ?? undefined}
+        onConfirm={(reason) => void handleDeactivate(reason)}
+        onCancel={() => setDeactivatingId(null)}
+      >
+        {positionsConflict && (
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: 13, margin: "8px 0" }}>
+            <input type="checkbox" checked={positionsAck} onChange={(e) => setPositionsAck(e.target.checked)} />
+            <span>I understand the open positions in this unit stay assigned to it after it is deactivated.</span>
+          </label>
+        )}
       </ConfirmDialog>
     </div>
   );

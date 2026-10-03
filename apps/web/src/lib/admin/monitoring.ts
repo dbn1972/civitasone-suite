@@ -19,6 +19,8 @@ export type ApiEndpointRow = {
   errorRate: unknown;
   requestsPerMin: unknown;
   status: string;
+  /** ISO time this row was measured (row field, else the response's generatedAt). */
+  checkedAt: string;
 } & Record<string, unknown>;
 
 export type EditionRow = {
@@ -89,7 +91,8 @@ export function normaliseStatus(v: unknown): string {
 }
 
 /** Maps the loader's loose records onto the typed row (same defensive style as the other admin loaders). */
-export function toApiEndpointRow(e: Record<string, unknown>): ApiEndpointRow {
+export function toApiEndpointRow(e: Record<string, unknown>, generatedAt?: string): ApiEndpointRow {
+  const rowTime = [e.checkedAt, e.lastCheckedAt].find((x): x is string => typeof x === "string" && Number.isFinite(Date.parse(x)));
   return {
     ...e,
     service: String(e.service ?? ""),
@@ -98,7 +101,68 @@ export function toApiEndpointRow(e: Record<string, unknown>): ApiEndpointRow {
     errorRate: e.errorRate ?? null,
     requestsPerMin: e.requestsPerMin ?? null,
     status: normaliseStatus(e.status),
+    checkedAt: rowTime ?? generatedAt ?? "",
   };
+}
+
+// GAP-ADMIN-API-MONITORING-06 ------------------------------------------------
+// Wire contract for GET /v1/admin/api-monitoring rows (no service in this tree serves
+// it yet, so this is the contract a serving service must meet; see the PR's VERIFY list):
+//   errorRate    number = PERCENT of requests (0-100), or a string such as "1.2%"
+//   p95Latency   number = milliseconds (the column header already says "p95 (ms)")
+//   checkedAt    ISO timestamp the row was measured; the envelope's generatedAt is the fallback
+// A value outside the contract renders as "-", never as a guessed number.
+
+/** Error-rate thresholds (percent): below WARN is healthy, from CRIT is bad. VERIFY with the SRE owner. */
+export const ERROR_RATE_WARN_PCT = 1;
+export const ERROR_RATE_CRIT_PCT = 5;
+/** A snapshot older than this is flagged as stale. VERIFY with the SRE owner. */
+export const API_SNAPSHOT_STALE_MS = 5 * 60 * 1000;
+
+export type ErrorRateTone = "good" | "warn" | "bad" | "mut";
+
+/** Percent value of an errorRate cell, or null when it is missing / not a finite 0-100 number. */
+export function parseErrorRatePct(v: unknown): number | null {
+  let n: number;
+  if (typeof v === "number") n = v;
+  else if (typeof v === "string") {
+    const m = /^\s*(-?\d+(?:\.\d+)?)\s*%?\s*$/.exec(v);
+    if (!m) return null;
+    n = Number(m[1]);
+  } else return null;
+  return Number.isFinite(n) && n >= 0 && n <= 100 ? n : null;
+}
+
+export function errorRateView(v: unknown): { text: string; tone: ErrorRateTone; label: string } {
+  const pct = parseErrorRatePct(v);
+  if (pct === null) return { text: "\u2014", tone: "mut", label: "Error rate not reported" };
+  const text = `${Number(pct.toFixed(2))}%`;
+  if (pct >= ERROR_RATE_CRIT_PCT) return { text, tone: "bad", label: `${text} error rate, high` };
+  if (pct >= ERROR_RATE_WARN_PCT) return { text, tone: "warn", label: `${text} error rate, elevated` };
+  return { text, tone: "good", label: `${text} error rate, normal` };
+}
+
+/** p95 latency as "123 ms"; missing / non-numeric / negative -> em dash. */
+export function formatLatencyMs(v: unknown): string {
+  const n = typeof v === "number" ? v : typeof v === "string" && v.trim() !== "" ? Number(v) : NaN;
+  return Number.isFinite(n) && n >= 0 ? `${Math.round(n)} ms` : "\u2014";
+}
+
+/** Newest valid timestamp among the rows' checkedAt values, as an ISO string, or null when none is reported. */
+export function newestCheckedAt(rows: ReadonlyArray<{ checkedAt?: unknown }>): string | null {
+  let best: number | null = null;
+  for (const r of rows) {
+    if (typeof r.checkedAt !== "string") continue;
+    const t = Date.parse(r.checkedAt);
+    if (Number.isFinite(t) && (best === null || t > best)) best = t;
+  }
+  return best === null ? null : new Date(best).toISOString();
+}
+
+export function isSnapshotStale(checkedAtIso: string | null, nowMs: number): boolean {
+  if (!checkedAtIso) return false;
+  const t = Date.parse(checkedAtIso);
+  return Number.isFinite(t) && nowMs - t > API_SNAPSHOT_STALE_MS;
 }
 
 export function toEditionRow(e: Record<string, unknown>): EditionRow {

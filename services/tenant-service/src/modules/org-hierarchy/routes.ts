@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { queue } from "../../shared/infra.js";
 import * as repo from "./repo.js";
+import { isUnitInactive } from "./state.js";
 
 const ADMIN = ["super_admin", "platform_admin", "tenant_admin"];
 const UNIT_TYPES = ["department", "division", "section", "unit", "branch"] as const;
@@ -50,6 +51,7 @@ export async function orgHierarchyRoutes(app: FastifyInstance): Promise<void> {
     if (body.parentId) {
       const parent = await repo.findById(ctx.tenantId, body.parentId);
       if (!parent) throw new HttpError(404, "PARENT_NOT_FOUND", "parent org unit not found");
+      if (isUnitInactive(parent)) throw new HttpError(409, "PARENT_INACTIVE", "parent org unit is deactivated");
     }
     const id = randomUUID();
     await queue.publish("tenant.org_unit.create", { messageId: id, type: "tenant.org_unit.create", tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, tenantId: ctx.tenantId, ...body } });
@@ -69,16 +71,45 @@ export async function orgHierarchyRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.body);
     const existing = await repo.findById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "Org unit not found");
+    // GAP-ADMIN-ORG-03: a deactivated unit is history. No rename, head change, retype or move.
+    if (isUnitInactive(existing)) throw new HttpError(409, "UNIT_INACTIVE", "Org unit is deactivated and can no longer be changed");
 
     if (body.parentId) {
       const parent = await repo.findById(ctx.tenantId, body.parentId);
       if (!parent) throw new HttpError(404, "PARENT_NOT_FOUND", "parent org unit not found");
+      if (isUnitInactive(parent)) throw new HttpError(409, "PARENT_INACTIVE", "parent org unit is deactivated");
       if (await repo.wouldCreateCycle(ctx.tenantId, id, body.parentId)) {
         throw new HttpError(409, "HIERARCHY_CYCLE", "reparenting would create a cycle");
       }
     }
 
     await queue.publish("tenant.org_unit.update", { messageId: randomUUID(), type: "tenant.org_unit.update", tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, tenantId: ctx.tenantId, ...body } });
+    return reply.code(202).send({ data: { id, status: "accepted" } });
+  });
+
+  // GAP-ADMIN-ORG-03: deactivate (end-date) a unit. Never a delete: history and audit keep the row.
+  // Refused while the unit still has an in-force child -- the operator moves or deactivates those first.
+  app.post("/v1/org/hierarchy/:id/deactivate", async (req, reply) => {
+    const ctx = resolveContext(req); requireRole(ctx, ADMIN);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const { reason, acknowledgePositions } = z.object({
+      reason: z.string().trim().min(3).max(500),
+      // Deliberate override: deactivate although active positions sit in this unit.
+      acknowledgePositions: z.boolean().optional(),
+    }).parse(req.body);
+    const existing = await repo.findById(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "Org unit not found");
+    if (isUnitInactive(existing)) throw new HttpError(409, "ALREADY_INACTIVE", "Org unit is already deactivated");
+    const children = await repo.countActiveChildren(ctx.tenantId, id);
+    if (children > 0) {
+      throw new HttpError(409, "HAS_ACTIVE_CHILDREN", `Org unit has ${children} active child unit${children === 1 ? "" : "s"}; move or deactivate them first`);
+    }
+    // Safer default: positions would be left pointing at an inactive unit, so refuse until the caller says it is deliberate.
+    const positions = await repo.countActivePositions(ctx.tenantId, id);
+    if (positions > 0 && acknowledgePositions !== true) {
+      throw new HttpError(409, "HAS_ACTIVE_POSITIONS", `Org unit has ${positions} open position${positions === 1 ? "" : "s"}; move or abolish them, or confirm that they stay in a deactivated unit`);
+    }
+    await queue.publish("tenant.org_unit.deactivate", { messageId: randomUUID(), type: "tenant.org_unit.deactivate", tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0", payload: { id, tenantId: ctx.tenantId, reason, positionsAcknowledged: positions > 0 } });
     return reply.code(202).send({ data: { id, status: "accepted" } });
   });
 

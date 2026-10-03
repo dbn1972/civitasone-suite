@@ -4710,7 +4710,11 @@ export async function getSAApiMonitoring(): Promise<LoaderResult<ApiEndpointRow[
     revalidateSeconds: 30, telemetryKey: "sa.api-monitoring",
     mapResponse: (p) => {
       const rows = getArrayPayload(p);
-      return rows ? rows.filter(isRecord).map(toApiEndpointRow) : null;
+      // GAP-ADMIN-API-MONITORING-06: a snapshot time on the envelope applies to rows that carry none of their own.
+      const env = isRecord(p) ? p : {};
+      const meta = isRecord(env.meta) ? env.meta : {};
+      const generated = [env.generatedAt, meta.generatedAt].find((x): x is string => typeof x === "string");
+      return rows ? rows.filter(isRecord).map((r) => toApiEndpointRow(r, generated)) : null;
     },
   });
 }
@@ -5583,6 +5587,8 @@ export type AdminOrgUnit = {
   parentId: string | null;
   headUserId: string | null;
   code: string | null;
+  /** GAP-ADMIN-ORG-03: end date; a unit whose end date has passed is deactivated (kept for history). */
+  effectiveTo?: string | null;
 };
 
 export async function getAdminOrgUnits(): Promise<LoaderResult<AdminOrgUnit[]>> {
@@ -5600,6 +5606,7 @@ export async function getAdminOrgUnits(): Promise<LoaderResult<AdminOrgUnit[]>> 
         parentId: toText(u.parentId),
         headUserId: toText(u.headUserId),
         code: toText(u.code),
+        effectiveTo: toText(u.effectiveTo),
       }));
     },
   });

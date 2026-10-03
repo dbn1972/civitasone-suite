@@ -7,7 +7,7 @@ vi.mock("@/lib/sync/resource", () => ({ useSeededResource: (...a: unknown[]) => 
 
 import { ApiMonitoringTable } from "./ApiMonitoringTable";
 
-const row = (status: string, service = "svc") => ({ service, endpoint: "/v1/x", p95Latency: 12, errorRate: 0.1, requestsPerMin: 5, status });
+const row = (status: string, service = "svc", extra: Record<string, unknown> = {}) => ({ service, endpoint: "/v1/x", p95Latency: 12, errorRate: 0.1, requestsPerMin: 5, status, checkedAt: "", ...extra });
 const statValue = (label: string) => screen.getAllByText(label).find((el) => el.classList.contains("lab"))?.parentElement?.querySelector(".val")?.textContent;
 
 describe("ApiMonitoringTable", () => {
@@ -50,5 +50,42 @@ describe("ApiMonitoringTable", () => {
     render(<ApiMonitoringTable endpoints={[]} source="api" status={200} />);
     expect(screen.getByText("No API data")).toBeInTheDocument();
     expect(statValue("Endpoints")).toBe("0");
+  });
+});
+
+// GAP-ADMIN-API-MONITORING-06
+describe("ApiMonitoringTable units, severity and freshness", () => {
+  beforeEach(() => resourceMock.mockReset());
+
+  it("formats p95 with ms and error rate with %, with a text severity cue", () => {
+    resourceMock.mockReturnValue({
+      data: [row("healthy", "ok-svc", { p95Latency: 120, errorRate: 0.4 }), row("down", "bad-svc", { p95Latency: 2300.6, errorRate: "7.5%" }), row("healthy", "gap-svc", { p95Latency: null, errorRate: null })],
+      provenance: "live", offline: false, cachedAt: null, fromCache: false,
+    });
+    render(<ApiMonitoringTable endpoints={[]} source="api" status={200} />);
+    expect(screen.getByText("120 ms")).toBeInTheDocument();
+    expect(screen.getByText("2301 ms")).toBeInTheDocument();
+    expect(screen.getByLabelText("0.4% error rate, normal")).toHaveClass("good");
+    expect(screen.getByLabelText("7.5% error rate, high")).toHaveClass("bad");
+    expect(screen.getByLabelText("Error rate not reported")).toBeInTheDocument();
+  });
+
+  it("states when the data was measured, and warns when it is stale", async () => {
+    const old = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+    resourceMock.mockReturnValue({ data: [row("healthy", "a", { checkedAt: old })], provenance: "live", offline: false, cachedAt: null, fromCache: false });
+    render(<ApiMonitoringTable endpoints={[]} source="api" status={200} />);
+    expect(await screen.findByText(/more than 5 minutes old/)).toBeInTheDocument();
+  });
+
+  it("a fresh snapshot is not flagged; one with no timestamp says freshness cannot be confirmed", async () => {
+    const fresh = new Date().toISOString();
+    resourceMock.mockReturnValue({ data: [row("healthy", "a", { checkedAt: fresh })], provenance: "live", offline: false, cachedAt: null, fromCache: false });
+    const { unmount } = render(<ApiMonitoringTable endpoints={[]} source="api" status={200} />);
+    expect(await screen.findByText(/Data as of/)).toBeInTheDocument();
+    expect(screen.queryByText(/more than 5 minutes old/)).not.toBeInTheDocument();
+    unmount();
+    resourceMock.mockReturnValue({ data: [row("healthy", "a")], provenance: "live", offline: false, cachedAt: null, fromCache: false });
+    render(<ApiMonitoringTable endpoints={[]} source="api" status={200} />);
+    expect(screen.getByText(/did not report when this data was measured/)).toBeInTheDocument();
   });
 });

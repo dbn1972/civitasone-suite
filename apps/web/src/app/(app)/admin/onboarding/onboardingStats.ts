@@ -7,6 +7,8 @@ import type { PillVariant } from "@/app/_components/ds/StatusPill";
  * explicit allow-lists (GAP-ADMIN-ONBOARDING-04) rather than "everything else".
  */
 export type OnboardingRow = {
+  /** Request id; empty when the API row carries none (then no provisioning link is offered). */
+  id: string;
   org: string;
   contact: string;
   requested: string;
@@ -16,6 +18,7 @@ export type OnboardingRow = {
 
 export function toOnboardingRows(raw: Record<string, unknown>[]): OnboardingRow[] {
   return raw.map((r) => ({
+    id: str(r.id),
     org: str(r.org),
     contact: str(r.contact),
     requested: str(r.requested),
@@ -28,6 +31,12 @@ const NEW = "new request";
 const READY = "go-live pending"; // normStatus form: "go live pending"
 const ACTIVE = new Set(["in progress", "provisioning", "configuring", "configuration", "under review", "verification", "kyc review"]);
 const CLOSED = new Set(["completed", "rejected", "cancelled", "canceled"]);
+
+/** GAP-ADMIN-ONBOARDING-07: where an open request is actioned. Closed or id-less rows have no link. */
+export function provisioningHref(r: Pick<OnboardingRow, "id" | "stage">): string | null {
+  if (!r.id || CLOSED.has(normStatus(r.stage))) return null;
+  return `/admin/tenant-provision?requestId=${encodeURIComponent(r.id)}`;
+}
 
 export function onboardingStats(rows: OnboardingRow[]) {
   let newReqs = 0, ready = 0, inProgress = 0, inQueue = 0, other = 0;
