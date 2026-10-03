@@ -38,6 +38,7 @@ import { documentGovernanceRoutes } from "./modules/uploads/doc-routes.js";
 // distinct concept and route path from gap/routes.ts's /v1/admin/org-hierarchy
 // (real org-unit INSTANCES, forwarded to tenant-service).
 import { platformOpsRoutes } from "./modules/platform-ops/routes.js";
+import { apiMonitoringRoutes } from "./modules/api-monitoring/routes.js";
 import { orgHierarchyLevelRoutes } from "./modules/org-hierarchy-levels/routes.js";
 
 export async function buildApp(): Promise<FastifyInstance> {
@@ -96,6 +97,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(documentGovernanceRoutes);
   await app.register(orgHierarchyLevelRoutes);
   await app.register(platformOpsRoutes);
+  await app.register(apiMonitoringRoutes);
   const { adminGapRoutes } = await import("./modules/gap/routes.js");
   await app.register(adminGapRoutes);
 

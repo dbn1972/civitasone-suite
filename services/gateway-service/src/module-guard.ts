@@ -80,7 +80,7 @@ const ROUTE_TO_MODULE: Record<string, string> = {
 // Platform routes (always available, not module-gated)
 const PLATFORM_ROUTES = new Set([
   "identity", "policy", "policy-v1", "audit-events", "audit",
-  "notification", "notification-v1", "admin", "admin-users", "install", "plugin",
+  "notification", "notification-v1", "admin", "admin-users", "admin-operators", "install", "plugin",
   "theme", "tenant", "tenant-singular", "sync", "devices", "queue", "locations",
 ]);
 

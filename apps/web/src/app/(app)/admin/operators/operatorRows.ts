@@ -1,25 +1,32 @@
 import { normStatus, str } from "../_components/status";
 import { summariseOperators } from "./operatorStatus";
+import { parsePendingRequest, type PendingRequestRef } from "@/lib/admin/operatorActions";
 import type { PillVariant } from "@/app/_components/ds/StatusPill";
 
 /** GET /v1/admin/operators rows. `permissions` may arrive as a list or a free-text string. */
 export type OperatorRow = {
+  /** Identity-service user id; absent when the source row carries none (then no action is offered). */
+  id?: string;
   name: string;
   role: string;
   lastLogin: string;
   status: string;
   twoFaStatus: string;
   permissions: string | string[];
+  /** GAP-ADMIN-OPERATORS-05: a change waiting for a second super admin's approval. */
+  pendingRequest: PendingRequestRef | null;
 };
 
 export function toOperatorRows(raw: Record<string, unknown>[]): OperatorRow[] {
   return raw.map((r) => ({
+    ...(str(r.id) ? { id: str(r.id) } : {}),
     name: str(r.name),
     role: str(r.role),
     lastLogin: str(r.lastLogin),
     status: str(r.status),
     twoFaStatus: str(r.twoFaStatus),
     permissions: Array.isArray(r.permissions) ? r.permissions.map((p) => str(p)) : str(r.permissions),
+    pendingRequest: parsePendingRequest(r.pendingRequest),
   }));
 }
 

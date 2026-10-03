@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { scopedRead } from "../../shared/db.js";
 import { queue } from "../../shared/infra.js";
+import { assertNotPlatformOperator } from "../operators/commands.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
 import * as repo from "./repo.js";
@@ -153,6 +154,9 @@ export async function assignRole(ctx: RequestContext, roleId: string, userId: st
 export async function revokeRole(ctx: RequestContext, roleId: string, userId: string, reason?: string): Promise<Accepted> {
   const role = await scopedRead((tx) => repo.findRoleById(tx, ctx.tenantId, roleId));
   if (!role) throw new HttpError(404, "NOT_FOUND", "role not found");
+  // GAP-ADMIN-OPERATORS-05: taking a platform-authority role away from an operator is a role change
+  // that needs a second super admin's approval (it could also remove the last super admin).
+  if (isPlatformAuthorityKey(role.key)) await assertNotPlatformOperator(ctx.tenantId, userId);
   // Caller must have authority over the role to revoke it too (no privilege via revoke side-effects).
   if (!hasUnconditionalAuthority(ctx.roles)) {
     const roleperms = await scopedRead((tx) => repo.permissionKeysForRole(tx, ctx.tenantId, roleId));

@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { HttpError } from "../../shared/context.js";
+import { assertNotPlatformOperator } from "../operators/commands.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { CreateUserBody, UpdateUserBody, StatusBody } from "./validators.js";
 import type { UserView } from "./domain.js";
@@ -44,6 +45,9 @@ export async function changeUserStatus(ctx: RequestContext, id: string, body: St
   if (body.status !== "active" && isSameUuid(id, ctx.actorId)) {
     throw new HttpError(409, "SELF_STATUS_CHANGE", "you cannot suspend, lock or deactivate your own account");
   }
+  // GAP-ADMIN-OPERATORS-05: suspending a platform operator needs a second super admin's approval,
+  // so it cannot be done through this direct route.
+  if (body.status !== "active") await assertNotPlatformOperator(ctx.tenantId, id);
   await queue.publish(COMMANDS.deactivateUser, {
     messageId: randomUUID(),
     type: COMMANDS.deactivateUser, tenantId: ctx.tenantId, actorId: ctx.actorId,
