@@ -55,6 +55,13 @@ export const BILLING_INVOICE_READER_ROLES: readonly string[] = [
   ...PLATFORM_ADMIN_ROLES,
 ];
 
+/**
+ * Who may record an offline payment, approve/reject one, send an invoice reminder or change billing
+ * settings: PLATFORM staff only, like every other invoice write (billing-service requireSuperAdmin /
+ * invoice-ops OPS_ROLES). billing_admin is a tenant-side role, so it only views.
+ */
+export const BILLING_INVOICE_OPERATOR_ROLES: readonly string[] = [...PLATFORM_ADMIN_ROLES];
+
 /** True when any of `sessionRoles` is in `allowed`. Pure, so it is unit-testable without a request scope. */
 export function rolesAllow(sessionRoles: readonly string[], allowed: readonly string[]): boolean {
   return sessionRoles.some((r) => allowed.includes(r));

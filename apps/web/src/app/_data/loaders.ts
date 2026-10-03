@@ -363,6 +363,7 @@ import {
   NotificationDeliveryListSchema,
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult, type LoaderSource } from "./apiClient";
+import { mapBillingSettings, mapOfflinePayments, mapReminderStatus, type BillingSettingsView, type OfflinePaymentView, type ReminderView } from "@/lib/admin/invoiceOps";
 import { mapDiscoveryRegistry as mapDiscoveryRegistryImpl, type DiscoveryRegistry as DiscoveryRegistryModel } from "@/lib/admin/discoveryRegistry";
 import { formatMoney } from "@/lib/formatters";
 import { toApiEndpointRow, toEditionRow, type ApiEndpointRow, type EditionRow } from "@/lib/admin/monitoring";
@@ -6469,4 +6470,17 @@ export async function getAdminInvoiceDetail(id: string): Promise<LoaderResult<Ad
     telemetryKey: "admin.invoice.detail",
     mapResponse: mapInvoiceDetail,
   });
+}
+
+/** GAP-ADMIN-INVOICES-06: the invoice's offline-payment requests and reminder status (each read can fail on its own). */
+export async function getInvoiceOpsData(id: string, includeSettings: boolean): Promise<{ payments: OfflinePaymentView[] | null; reminders: ReminderView | null; settings: BillingSettingsView | null }> {
+  const [p, r, st] = await Promise.all([
+    fetchJson<unknown, OfflinePaymentView[] | null>(`/api/v1/billing/invoices/${encodeURIComponent(id)}/offline-payments`, null, { telemetryKey: "admin.invoice.offline", mapResponse: mapOfflinePayments }),
+    fetchJson<unknown, ReminderView | null>(`/api/v1/billing/invoices/${encodeURIComponent(id)}/reminders`, null, { telemetryKey: "admin.invoice.reminders", mapResponse: mapReminderStatus }),
+    // Settings are platform-operator data: only asked for when the caller may use them.
+    includeSettings
+      ? fetchJson<unknown, BillingSettingsView | null>("/api/v1/billing/settings", null, { telemetryKey: "admin.billing.settings", mapResponse: mapBillingSettings })
+      : Promise.resolve({ data: null, source: "api" as const }),
+  ]);
+  return { payments: p.source === "error" ? null : p.data, reminders: r.source === "error" ? null : r.data, settings: st.source === "error" ? null : st.data };
 }

@@ -5,8 +5,14 @@ import { hasAnyRole } from "@civitasone/auth";
 import type { RequestContext } from "@civitasone/types";
 
 export class HttpError extends Error {
+  /** Extra machine-readable fields merged into the error body (e.g. nextAllowedAt on a 429). */
+  public extra: Record<string, unknown> | undefined;
   constructor(public status: number, public code: string, message: string) {
     super(message);
+  }
+  withExtra(extra: Record<string, unknown>): this {
+    this.extra = extra;
+    return this;
   }
 }
 
