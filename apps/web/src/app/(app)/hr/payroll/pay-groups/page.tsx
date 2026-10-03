@@ -8,6 +8,11 @@ import { toResourceState } from "@/app/_data/useResource";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
+import Link from "next/link";
+import { todayIST } from "@/lib/formatters";
+import { MembershipSettings } from "./MembershipSettings";
+import { getActiveDdos, getMembershipSettings, getUnassignedTotal } from "./payGroupData";
+import { hasNoRows, isBillType } from "./payGroupMembership";
 
 /**
  * GET /v1/payroll/pay-groups (payroll-service gap-routes.ts) returns only
@@ -26,6 +31,8 @@ type Row = {
   timezone: string;
   status: string;
   employeeCount?: number;
+  ddo_code?: string | null;
+  bill_type?: string | null;
   salaryStructureName?: string;
   lastRevisionDate?: string;
 } & Record<string, unknown>;
@@ -57,7 +64,12 @@ export default async function PayGroupsPage({ searchParams }: { searchParams?: {
   }
   const canAdminister = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
 
-  const result = await getData();
+  const [result, ddosResult, unassignedResult, settingsResult] = await Promise.all([
+    getData(),
+    canAdminister ? getActiveDdos() : Promise.resolve({ data: [], source: "api" as const }),
+    getUnassignedTotal(todayIST().slice(0, 7)),
+    canAdminister ? getMembershipSettings() : Promise.resolve({ data: null, source: "api" as const }),
+  ]);
   const { data: groups } = result;
   const resource = toResourceState(result);
   const errored = resource.status === "error";
@@ -90,6 +102,15 @@ export default async function PayGroupsPage({ searchParams }: { searchParams?: {
         <StatCard icon="📆" iconBg="var(--goodbg)" label={t("statBiWeekly")} value={biWeeklyCount} />
         <StatCard icon="🗓️" iconBg="var(--panel)" label={t("statWeekly")} value={weeklyCount} />
         <StatCard icon="🚫" iconBg="var(--badbg)" label={t("statInactive")} value={inactiveCount} />
+        {/* Employees a run would pay but who sit in no pay group this month; "—" when the count is unavailable. */}
+        <StatCard
+          icon="⚠️"
+          tone="warn"
+          label={t("statUnassigned")}
+          value={unassignedResult.source === "error" ? null : unassignedResult.data}
+          href="/hr/payroll/pay-groups/unassigned"
+          hint={t("statUnassignedHint")}
+        />
       </StatGrid>
 
       {canAdminister && (
@@ -102,11 +123,21 @@ export default async function PayGroupsPage({ searchParams }: { searchParams?: {
                   payDayOfMonth: editRow.pay_day_of_month, payWeekday: editRow.pay_weekday ?? null,
                   payLastDay: editRow.pay_last_day === true, payWeekParity: editRow.pay_week_parity ?? null,
                   timezone: editRow.timezone,
+                  ddoCode: editRow.ddo_code ?? null,
+                  billType: isBillType(editRow.bill_type) ? editRow.bill_type : null,
                 },
               }
             : {})}
+          ddos={ddosResult.data}
+          ddosUnavailable={ddosResult.source === "error"}
         />
       )}
+      {canAdminister && (
+        <MembershipSettings allowMidMonth={settingsResult.source === "error" ? null : settingsResult.data} />
+      )}
+      <p style={{ margin: "0 0 12px" }}>
+        <Link href="/hr/payroll/pay-groups/unassigned">{t("unassignedLink")}</Link>
+      </p>
 
       {errored ? (
         <Card title={t("cardTitle")}>
@@ -114,7 +145,7 @@ export default async function PayGroupsPage({ searchParams }: { searchParams?: {
             <RefreshErrorState error={toHumanError("load", { area: "pay groups" })} backHref="/hr/payroll" />
           </div>
         </Card>
-      ) : groups.length === 0 ? (
+      ) : hasNoRows(groups) ? (
         <Card title={t("cardTitle")}>
           <EmptyState
             icon="👥"
@@ -148,6 +179,8 @@ export default async function PayGroupsPage({ searchParams }: { searchParams?: {
                 employeeCount={typeof g.employeeCount === "number" ? g.employeeCount : undefined}
                 associatedStructureName={g.salaryStructureName}
                 lastRevisionDate={g.lastRevisionDate}
+                ddoCode={g.ddo_code ?? null}
+                billType={g.bill_type ?? null}
               />
             ))}
           </div>

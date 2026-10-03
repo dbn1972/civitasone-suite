@@ -10,6 +10,8 @@ import { pino } from "pino";
 import { db } from "../../shared/db.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS } from "../../topics.js";
+import { countActiveRuns, countCurrentMembers } from "./pay-group-repo.js";
+import { todayIst } from "./pay-group-domain.js";
 
 const AUDIT = "audit.event.record";
 const log = pino({ name: "payroll-fin03" });
@@ -71,11 +73,12 @@ export function registerFin03Consumers(queue: Pick<Queue, "subscribe">): void {
     const p = msg.payload as {
       tenantId: string; id: string; name: string; frequency: string; payDayOfMonth: number; timezone: string;
       payWeekday: number | null; payLastDay: boolean; payWeekParity: number | null;
+      ddoCode: string | null; billType: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       const before = (await tx.execute(sql`
-        SELECT name, frequency, pay_day_of_month, timezone, pay_weekday, pay_last_day, pay_week_parity
+        SELECT name, frequency, pay_day_of_month, timezone, pay_weekday, pay_last_day, pay_week_parity, ddo_code, bill_type
           FROM payroll.pay_groups WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid FOR UPDATE
       `)) as unknown as Array<Record<string, unknown>>;
       if (before.length === 0) return;
@@ -83,7 +86,7 @@ export function registerFin03Consumers(queue: Pick<Queue, "subscribe">): void {
         UPDATE payroll.pay_groups
            SET name = ${p.name}, frequency = ${p.frequency}, pay_day_of_month = ${p.payDayOfMonth},
                timezone = ${p.timezone}, pay_weekday = ${p.payWeekday}, pay_last_day = ${p.payLastDay},
-               pay_week_parity = ${p.payWeekParity}, updated_by = ${msg.actorId}::uuid, updated_at = NOW()
+               pay_week_parity = ${p.payWeekParity}, ddo_code = ${p.ddoCode}, bill_type = ${p.billType}, updated_by = ${msg.actorId}::uuid, updated_at = NOW()
          WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid
       `);
       await auditEvent(tx, msg, "update", "payroll_pay_group", p.id, {
@@ -91,6 +94,7 @@ export function registerFin03Consumers(queue: Pick<Queue, "subscribe">): void {
         newValue: {
           name: p.name, frequency: p.frequency, pay_day_of_month: p.payDayOfMonth, timezone: p.timezone,
           pay_weekday: p.payWeekday, pay_last_day: p.payLastDay, pay_week_parity: p.payWeekParity,
+          ddo_code: p.ddoCode, bill_type: p.billType,
         },
       });
     });
@@ -103,6 +107,23 @@ export function registerFin03Consumers(queue: Pick<Queue, "subscribe">): void {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // 'archived' is the stored inactive state (pay_groups_status_check).
       const next = p.active ? "active" : "archived";
+      if (!p.active) {
+        // GAP-PAYROLL-PAY-GROUPS-03: authoritative guard. The group row lock
+        // serialises with membership assignment (which takes FOR SHARE on the
+        // same row), so a member added after the route's pre-check is seen here.
+        await tx.execute(sql`
+          SELECT 1 FROM payroll.pay_groups WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid FOR UPDATE
+        `);
+        const members = await countCurrentMembers(tx, p.tenantId, p.id, todayIst());
+        const runs = await countActiveRuns(tx, p.tenantId, p.id);
+        if (members > 0 || runs > 0) {
+          log.warn({ id: p.id, members, runs }, "pay group deactivation refused (members or in-flight runs)");
+          await auditEvent(tx, msg, "deactivate", "payroll_pay_group", p.id, {
+            reason: p.reason, members, activeRuns: runs, blockedBy: members > 0 ? "PAY_GROUP_HAS_MEMBERS" : "PAY_GROUP_HAS_ACTIVE_RUN",
+          }, "rejected");
+          return;
+        }
+      }
       const rows = (await tx.execute(sql`
         UPDATE payroll.pay_groups SET status = ${next}, updated_by = ${msg.actorId}::uuid, updated_at = NOW()
          WHERE id = ${p.id}::uuid AND tenant_id = ${p.tenantId}::uuid AND status <> ${next}

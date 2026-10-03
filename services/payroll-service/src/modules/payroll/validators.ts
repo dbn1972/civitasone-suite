@@ -18,9 +18,19 @@ export const createRunBody = z.object({
   // structureId is irrelevant for pensioner runs (pension uses the pensioner master).
   structureId:  z.string().uuid().optional(),
   runType:      z.enum(["regular", "supplementary", "arrears", "pensioner"]).optional(),
+  // GAP-PAYROLL-PAY-GROUPS-03: pay-group runs. One regular run is created per
+  // selected pay group (a pay group is one bill); each includes exactly the
+  // employees whose membership covers `month`. Omit all three for the legacy
+  // whole-tenant / DDO run (behaviour unchanged).
+  payGroupId:         z.string().uuid().optional(),
+  payGroupIds:        z.array(z.string().uuid()).min(1).max(20).optional(),
+  allPayGroupsOfDdo:  z.boolean().optional(),
 }).refine((b) => b.runType === "pensioner" || b.structureId != null, {
   message: "structureId is required for non-pensioner runs",
   path: ["structureId"],
+}).refine((b) => !b.allPayGroupsOfDdo || (b.ddoCode != null && b.payGroupId === undefined && b.payGroupIds === undefined), {
+  message: "allPayGroupsOfDdo needs ddoCode and cannot be combined with payGroupId / payGroupIds",
+  path: ["allPayGroupsOfDdo"],
 });
 export type CreateRunBody = z.infer<typeof createRunBody>;
 

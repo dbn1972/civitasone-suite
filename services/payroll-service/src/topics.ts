@@ -88,6 +88,11 @@ export const COMMANDS = {
   ptCheckerSet:           "payroll.pt_checker.set",
   payGroupUpdate:         "payroll.paygroup.update",
   payGroupSetActive:      "payroll.paygroup.set_active",
+  // GAP-PAYROLL-PAY-GROUPS-03: effective-dated pay-group membership
+  payGroupMemberAssign:   "payroll.paygroup.member.assign",
+  payGroupMemberEnd:      "payroll.paygroup.member.end",
+  payGroupMemberBulkAssign: "payroll.paygroup.member.bulk_assign",
+  payGroupSettingsSet:    "payroll.paygroup.settings.set",
   pensionerSetStatus:     "payroll.pensioner.set_status",
   salaryRevisionDecide:   "payroll.salary_revision.decide",
 } as const;

@@ -11,9 +11,15 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), refresh: vi.fn() }),
 }));
 
+const payGroupMock = vi.fn();
+vi.mock("../../payroll/pay-groups/payGroupData", () => ({
+  getEmployeePayGroup: (...args: unknown[]) => payGroupMock(...args),
+}));
+
 let mockRoles: string[] = [];
 vi.mock("@/lib/auth/roleGuard", () => ({
   getSessionRoles: () => mockRoles,
+  PAYROLL_READER_ROLES: ["payroll_admin", "payroll_officer", "super_admin", "hr_admin", "finance_officer"],
 }));
 
 import EmployeeDetailPage from "./page";
@@ -191,5 +197,42 @@ describe("EmployeeDetailPage", () => {
 
     expect(screen.queryByRole("heading", { name: "Statutory & Bank" })).not.toBeInTheDocument();
     expect(screen.queryByText("******123F")).not.toBeInTheDocument();
+  });
+
+  /** GAP-PAYROLL-PAY-GROUPS-03: current pay group on the profile. */
+  it("shows the employee's current pay group to payroll readers", async () => {
+    mockRoles = ["hr_admin"];
+    getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
+    payGroupMock.mockResolvedValue({
+      source: "api",
+      data: {
+        current: { payGroupId: "g1", payGroupName: "Gazetted Staff", ddoCode: "DDO-1", billType: "gazetted", effectiveFrom: "2026-10-01", effectiveTo: null },
+        history: [],
+      },
+    });
+    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(payGroupMock).toHaveBeenCalledWith("e1");
+    expect(screen.getByRole("link", { name: "Gazetted Staff" })).toHaveAttribute("href", "/hr/payroll/pay-groups/g1");
+  });
+
+  it("shows 'unavailable', not 'none', when the pay group lookup fails", async () => {
+    mockRoles = ["hr_admin"];
+    getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
+    payGroupMock.mockResolvedValue({ source: "error", data: null });
+    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(screen.getByText("Pay group details couldn't be loaded right now.")).toBeInTheDocument();
+    expect(screen.queryByText("Not in any pay group.")).not.toBeInTheDocument();
+  });
+
+  it("does not fetch or show the pay group card for roles that cannot read payroll", async () => {
+    mockRoles = ["manager"];
+    payGroupMock.mockReset();
+    getEmployeeByIdMock.mockResolvedValue({ data: BASE_EMPLOYEE, source: "api" });
+    const ui = await EmployeeDetailPage({ params: { id: "e1" } });
+    render(<NextIntlClientProvider locale="en" messages={enMessages}>{ui}</NextIntlClientProvider>);
+    expect(payGroupMock).not.toHaveBeenCalled();
+    expect(screen.queryByRole("heading", { name: "Pay group" })).not.toBeInTheDocument();
   });
 });

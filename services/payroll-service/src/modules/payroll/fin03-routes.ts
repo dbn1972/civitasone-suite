@@ -25,6 +25,8 @@ import {
   type PayFrequency,
 } from "./fin03-domain.js";
 import { isValidIanaTimeZone } from "./validators.js";
+import { PAY_GROUP_BILL_TYPES } from "./pay-group-domain.js";
+import { assertActiveDdo, payGroupDeactivationBlockers } from "./pay-group-guards.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -40,6 +42,9 @@ const payGroupPatchBody = z.object({
   payLastDay: z.boolean().optional(),
   payWeekParity: z.number().int().min(0).max(1).nullable().optional(),
   timezone: z.string().max(64).refine(isValidIanaTimeZone, "must be an IANA timezone name, e.g. Asia/Kolkata").optional(),
+  // GAP-PAYROLL-PAY-GROUPS-03
+  ddoCode: z.string().trim().min(1).max(32).nullable().optional(),
+  billType: z.enum(PAY_GROUP_BILL_TYPES).optional(),
 }).refine((b) => Object.keys(b).length > 0, { message: "nothing to update" });
 
 export async function fin03Routes(app: FastifyInstance): Promise<void> {
@@ -81,11 +86,12 @@ export async function fin03Routes(app: FastifyInstance): Promise<void> {
     const { id } = idParam.parse(req.params);
     const b = payGroupPatchBody.parse(req.body);
     const cur = (await scopedRead((tx) => tx.execute(sql`
-      SELECT name, frequency, pay_day_of_month, timezone, pay_weekday, pay_last_day, pay_week_parity, status
+      SELECT name, frequency, pay_day_of_month, timezone, pay_weekday, pay_last_day, pay_week_parity, status, ddo_code, bill_type
         FROM payroll.pay_groups WHERE id = ${id}::uuid AND tenant_id = ${ctx.tenantId}::uuid LIMIT 1
     `))) as unknown as Array<{
       name: string; frequency: PayFrequency; pay_day_of_month: number; timezone: string;
       pay_weekday: number | null; pay_last_day: boolean; pay_week_parity: number | null; status: string;
+      ddo_code: string | null; bill_type: string;
     }>;
     const g = cur[0];
     if (!g) throw new HttpError(404, "NOT_FOUND", "pay group not found");
@@ -102,7 +108,11 @@ export async function fin03Routes(app: FastifyInstance): Promise<void> {
       payWeekday: b.payWeekday !== undefined ? b.payWeekday : (switched && frequency === "monthly" ? null : g.pay_weekday),
       payLastDay: b.payLastDay !== undefined ? b.payLastDay : (switched && frequency !== "monthly" ? false : g.pay_last_day),
       payWeekParity: b.payWeekParity !== undefined ? b.payWeekParity : (switched && frequency !== "bi_weekly" ? null : g.pay_week_parity),
+      ddoCode: b.ddoCode !== undefined ? b.ddoCode : g.ddo_code,
+      billType: b.billType ?? g.bill_type,
     };
+    // A DDO already on the group may stay even if it was deactivated since; a NEW one must be active.
+    if (b.ddoCode !== undefined && b.ddoCode !== g.ddo_code) await assertActiveDdo(ctx.tenantId, b.ddoCode);
     const problem = validatePaySchedule({ ...merged });
     if (problem) throw new HttpError(400, "VALIDATION_FAILED", problem);
     if (merged.name !== g.name) {
@@ -127,9 +137,18 @@ export async function fin03Routes(app: FastifyInstance): Promise<void> {
     if ((cur[0].status === "active") === body.active) {
       throw new HttpError(409, "INVALID_STATE", `pay group is already ${body.active ? "active" : "inactive"}`);
     }
-    // No employee or payroll run references a pay group today (pay_groups has
-    // no inbound FK and employees carry no pay-group id), so deactivation can
-    // strand nothing; revisit this guard if employee assignment is added.
+    // Members and in-flight runs reference a pay group; deactivating it would
+    // strand them. Checked here for a clear 409 and re-checked, under a row
+    // lock, by the consumer (a member added meanwhile cannot be stranded).
+    if (!body.active) {
+      const blockers = await payGroupDeactivationBlockers(ctx.tenantId, id);
+      if (blockers.members > 0) {
+        throw new HttpError(409, "PAY_GROUP_HAS_MEMBERS", `the pay group still has ${blockers.members} current or scheduled member(s); end or move them first`);
+      }
+      if (blockers.activeRuns > 0) {
+        throw new HttpError(409, "PAY_GROUP_HAS_ACTIVE_RUN", `the pay group has ${blockers.activeRuns} draft or processing run(s); finish or fail them first`);
+      }
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.setPayGroupActive(ctx, id, body.active, body.reason));
   });
 

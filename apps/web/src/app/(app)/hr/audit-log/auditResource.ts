@@ -89,6 +89,8 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "payroll_input",
   "payroll_off_cycle_run",
   "payroll_pay_group",
+  "payroll_pay_group_member",
+  "payroll_pay_group_settings",
   "payroll_pensioner",
   "payroll_reimbursement",
   "payroll_run",

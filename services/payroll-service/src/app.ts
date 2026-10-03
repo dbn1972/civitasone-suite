@@ -122,6 +122,8 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(fin03Routes);
   const { ptVersionRoutes } = await import("./modules/payroll/pt-versions-routes.js");
   await app.register(ptVersionRoutes);
+  const { payGroupMembershipRoutes } = await import("./modules/payroll/pay-group-routes.js");
+  await app.register(payGroupMembershipRoutes);
   await app.register((await import("./modules/form16-pdf/routes.js")).form16PdfRoutes);
 
   return app;

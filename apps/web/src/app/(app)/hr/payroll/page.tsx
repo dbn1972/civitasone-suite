@@ -6,6 +6,7 @@ import { toHumanError } from "@/lib/messages";
 import { formatRupees } from "@/lib/formatters";
 import { CreatePayrollRunForm } from "./CreatePayrollRunForm";
 import { PayrollRunsTable } from "./PayrollRunsTable";
+import { getActiveDdos, getActiveGroups } from "./pay-groups/payGroupData";
 import Link from "next/link";
 import { getTranslations } from "next-intl/server";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
@@ -30,9 +31,11 @@ export default async function PayrollPage() {
     );
   }
 
-  const [runsResult, structuresResult] = await Promise.all([
+  const [runsResult, structuresResult, payGroupsResult, ddosResult] = await Promise.all([
     getPayrollRunDetails(),
     getPayrollStructures(),
+    canAdminister ? getActiveGroups() : Promise.resolve({ data: [], source: "api" as const }),
+    canAdminister ? getActiveDdos() : Promise.resolve({ data: [], source: "api" as const }),
   ]);
   const { data: runs, source } = runsResult;
   const runsResource = toResourceState(runsResult);
@@ -100,7 +103,7 @@ export default async function PayrollPage() {
             </p>
           </Card>
         ) : (
-          <CreatePayrollRunForm structures={structures} existingPeriods={existingPeriods} />
+          <CreatePayrollRunForm structures={structures} existingPeriods={existingPeriods} payGroups={payGroupsResult.data} ddos={ddosResult.data} />
         )
       )}
       <StatGrid>
