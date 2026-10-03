@@ -23,9 +23,16 @@ describe("ScheduledJobsManager confirmations", () => {
     fireEvent.click(screen.getByRole("button", { name: "Delete Payroll export" }));
     expect(await screen.findByText(/Delete job "Payroll export"\?/)).toBeInTheDocument();
     expect(mutations()).toHaveLength(0);
-    fireEvent.click(screen.getByRole("button", { name: "Delete job" }));
+    // GAP-ADMIN-SCHEDULED-JOBS-01: a reason is mandatory for delete, and is what the server audits.
+    const confirm = screen.getByRole("button", { name: "Delete job" });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(mutations()).toHaveLength(0);
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "obsolete export" } });
+    fireEvent.click(confirm);
     await waitFor(() => expect(mutations()).toHaveLength(1));
     expect(String((mutations()[0]![1] as RequestInit).method)).toBe("DELETE");
+    expect(JSON.parse((mutations()[0]![1] as RequestInit).body as string)).toEqual({ reason: "obsolete export" });
   });
 
   it("Cancel closes the dialog without any request", async () => {
@@ -43,6 +50,31 @@ describe("ScheduledJobsManager confirmations", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Run now" }));
     await waitFor(() => expect(mutations()).toHaveLength(1));
     expect(String(mutations()[0]![0])).toContain("/job-1/run-now");
+    // an ordinary target: no reason needed, none sent
+    expect((mutations()[0]![1] as RequestInit).body).toBeUndefined();
+  });
+
+  it("Run now on a finance/hrms/audit job requires a reason and sends it", async () => {
+    render(<ScheduledJobsManager initialJobs={[{ ...job, targetService: "finance-service", targetCommand: "finance.report.generate" }]} source="api" />);
+    fireEvent.click(screen.getByRole("button", { name: "Run Payroll export now" }));
+    const confirm = await screen.findByRole("button", { name: "Run now" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "month-end re-run" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(mutations()).toHaveLength(1));
+    expect(JSON.parse((mutations()[0]![1] as RequestInit).body as string)).toEqual({ reason: "month-end re-run" });
+  });
+
+  it("disabling goes through /pause and carries an optional reason", async () => {
+    render(<ScheduledJobsManager initialJobs={[job]} source="api" />);
+    fireEvent.click(screen.getByLabelText("Toggle Payroll export").querySelector("input")!);
+    const confirm = await screen.findByRole("button", { name: "Disable job" });
+    expect(confirm).not.toBeDisabled(); // reason optional
+    fireEvent.change(screen.getByRole("textbox"), { target: { value: "freeze for audit" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(mutations()).toHaveLength(1));
+    expect(String(mutations()[0]![0])).toContain("/job-1/pause");
+    expect(JSON.parse((mutations()[0]![1] as RequestInit).body as string)).toEqual({ reason: "freeze for audit" });
   });
 
   it("disabling an enabled job asks first", async () => {
@@ -57,7 +89,8 @@ describe("ScheduledJobsManager confirmations", () => {
       String((init as RequestInit | undefined)?.method) === "DELETE" ? new Response("{}", { status: 500 }) : new Response(JSON.stringify({ data: [job] }), { status: 200 }));
     render(<ScheduledJobsManager initialJobs={[job]} source="api" />);
     fireEvent.click(screen.getByRole("button", { name: "Delete Payroll export" }));
-    fireEvent.click(await screen.findByRole("button", { name: "Delete job" }));
+    fireEvent.change(await screen.findByRole("textbox"), { target: { value: "obsolete export" } });
+    fireEvent.click(screen.getByRole("button", { name: "Delete job" }));
     expect(await screen.findByRole("alert")).toBeInTheDocument();
     expect(screen.getByText(/Delete job "Payroll export"\?/)).toBeInTheDocument();
   });
@@ -95,7 +128,8 @@ describe("ScheduledJobsManager - reload failures, history errors, layout, copy",
     });
     render(<ScheduledJobsManager initialJobs={[job]} source="api" />);
     fireEvent.click(screen.getByLabelText("Delete Payroll export"));
-    fireEvent.click(await screen.findByRole("button", { name: /delete job/i }));
+    fireEvent.change(await screen.findByRole("textbox"), { target: { value: "obsolete export" } });
+    fireEvent.click(screen.getByRole("button", { name: /delete job/i }));
     await waitFor(() => expect(screen.queryByText("Payroll export")).not.toBeInTheDocument());
     expect(await screen.findByRole("alert")).toHaveTextContent(/could not be reloaded/i);
   });
@@ -181,5 +215,50 @@ describe("ScheduledJobsManager - reload failures, history errors, layout, copy",
     } finally {
       vi.useRealTimers();
     }
+  });
+});
+
+// GAP-ADMIN-SCHEDULED-JOBS-02
+describe("ScheduledJobsManager create form targets", () => {
+  const targets = {
+    services: [
+      { service: "finance-service", commandPrefix: "finance.", sensitive: true, allowList: ["finance\\.report\\..+"], schedulable: true },
+      { service: "audit-service", commandPrefix: "audit.", sensitive: true, allowList: null, schedulable: false },
+      { service: "report-service", commandPrefix: "report.", sensitive: false, allowList: null, schedulable: true },
+    ],
+    commandFormat: "service.entity.action", payloadMaxChars: 10000,
+  };
+  beforeEach(() => { vi.restoreAllMocks(); });
+
+  it("offers only the services the server allows, and refuses a foreign-namespace command before any request", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response("{}", { status: 202 }));
+    render(<ScheduledJobsManager initialJobs={[]} source="api" targets={targets} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Create Job" }));
+    const select = screen.getByLabelText("Target Service") as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => o.value).filter(Boolean)).toEqual(["finance-service", "audit-service", "report-service"]);
+    // a sensitive service with no allow-list is visible but cannot be chosen
+    expect(screen.getByRole("option", { name: "audit-service (allow-list required)" })).toBeDisabled();
+    expect(screen.getByRole("option", { name: "finance-service" })).not.toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Evil" } });
+    fireEvent.change(screen.getByLabelText("Cron Expression"), { target: { value: "0 8 * * *" } });
+    fireEvent.change(select, { target: { value: "report-service" } });
+    fireEvent.change(screen.getByLabelText("Target Command"), { target: { value: "finance.payment.release" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent('must start with "report."');
+    expect(fetchSpy.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toHaveLength(0);
+  });
+
+  it("a command in the right namespace is sent", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockImplementation(async () => new Response(JSON.stringify({ data: [] }), { status: 202 }));
+    render(<ScheduledJobsManager initialJobs={[]} source="api" targets={targets} />);
+    fireEvent.click(screen.getByRole("button", { name: "+ Create Job" }));
+    fireEvent.change(screen.getByLabelText("Name"), { target: { value: "Daily report" } });
+    fireEvent.change(screen.getByLabelText("Cron Expression"), { target: { value: "0 8 * * *" } });
+    fireEvent.change(screen.getByLabelText("Target Service"), { target: { value: "report-service" } });
+    fireEvent.change(screen.getByLabelText("Target Command"), { target: { value: "report.generate.daily" } });
+    fireEvent.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(fetchSpy.mock.calls.some(([, init]) => (init as RequestInit | undefined)?.method === "POST")).toBe(true));
+    const post = fetchSpy.mock.calls.find(([, init]) => (init as RequestInit | undefined)?.method === "POST")!;
+    expect(JSON.parse((post[1] as RequestInit).body as string)).toMatchObject({ targetService: "report-service", targetCommand: "report.generate.daily" });
   });
 });

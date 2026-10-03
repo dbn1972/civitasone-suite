@@ -27,3 +27,12 @@ export const tenantIdQuery = z.object({
   limit:    z.coerce.number().int().min(1).max(200).default(50),
   offset:   z.coerce.number().int().min(0).default(0),
 });
+
+/** GAP-ADMIN-USERS-03: server-side directory search (name / email / employee code substring, status, paging). */
+export const userSearchQuery = z.object({
+  tenantId: z.string().uuid(),
+  q:        z.string().trim().max(100).optional(),
+  status:   z.enum(["active", "suspended", "locked", "deactivated"]).optional(),
+  limit:    z.coerce.number().int().min(1).max(200).default(25),
+  offset:   z.coerce.number().int().min(0).default(0),
+});

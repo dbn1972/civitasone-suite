@@ -8,3 +8,4 @@ export const recordUsageBody = z.object({
 
 export const tenantParam = z.object({ id: z.string().uuid() });
 export const usageQuery = z.object({ month: z.string().regex(/^\d{4}-\d{2}$/).optional() });
+export const meteringQuery = z.object({ months: z.coerce.number().int().min(1).max(24).default(6) });

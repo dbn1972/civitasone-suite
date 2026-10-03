@@ -1,3 +1,5 @@
+import { TENANT_ADMIN_ROLE_KEY } from "../users/domain.js";
+import { strandsTenantAdmins } from "../users/last-admin.js";
 import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { scopedRead } from "../../shared/db.js";
@@ -159,6 +161,11 @@ export async function revokeRole(ctx: RequestContext, roleId: string, userId: st
     try {
       assertCanConfer(ctx.roles, await callerPermissions(ctx), roleperms);
     } catch (err) { mapDomainError(err); }
+  }
+  // GAP-ADMIN-USERS-01: revoking tenant_admin from the last active tenant admin would strand the tenant.
+  // Fast 409 here; the consumer re-checks under a per-tenant lock.
+  if (role.key === TENANT_ADMIN_ROLE_KEY && (await scopedRead((tx) => strandsTenantAdmins(tx as unknown as repo.Writer, ctx.tenantId, userId)))) {
+    throw new HttpError(409, "LAST_TENANT_ADMIN", "this is the last active tenant admin; make someone else a tenant admin first");
   }
   const messageId = randomUUID();
   await queue.publish(COMMANDS.rbacRevokeRole, {

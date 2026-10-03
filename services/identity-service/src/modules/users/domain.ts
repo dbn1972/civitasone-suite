@@ -34,3 +34,14 @@ export class DomainError extends Error {
     this.name = "DomainError";
   }
 }
+
+/**
+ * GAP-ADMIN-USERS-01: a tenant must never be left with no active tenant admin.
+ * True when `userId` is one of the tenant admins and every OTHER holder is
+ * inactive (or there is none), i.e. taking this user out of service strands the tenant.
+ */
+export function wouldStrandTenantAdmins(holderIds: readonly string[], activeHolderIds: readonly string[], userId: string): boolean {
+  if (!holderIds.includes(userId)) return false;
+  return !activeHolderIds.some((id) => id !== userId);
+}
+export const TENANT_ADMIN_ROLE_KEY = "tenant_admin";

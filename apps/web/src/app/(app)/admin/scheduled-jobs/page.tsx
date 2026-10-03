@@ -1,4 +1,4 @@
-import { getAdminScheduledJobs } from "@/app/_data/loaders";
+import { getAdminScheduledJobs, getAdminScheduledJobTargets } from "@/app/_data/loaders";
 import { ScheduledJobsManager } from "./ScheduledJobsManager";
 import { requireAnyRole } from "@/lib/auth/roleGuard";
 import { ADMIN_PLATFORM_ROLES } from "@/lib/auth/adminRoles";
@@ -13,6 +13,6 @@ import { ADMIN_PLATFORM_ROLES } from "@/lib/auth/adminRoles";
 export default async function ScheduledJobsPage() {
   // GAP-ADMIN-SCHEDULED-JOBS-02: admin-service gates every scheduled-jobs route to platform_admin/super_admin.
   requireAnyRole(ADMIN_PLATFORM_ROLES);
-  const { data: jobs, source } = await getAdminScheduledJobs();
-  return <ScheduledJobsManager initialJobs={jobs} source={source} />;
+  const [{ data: jobs, source }, { data: targets }] = await Promise.all([getAdminScheduledJobs(), getAdminScheduledJobTargets()]);
+  return <ScheduledJobsManager initialJobs={jobs} source={source} targets={targets} />;
 }

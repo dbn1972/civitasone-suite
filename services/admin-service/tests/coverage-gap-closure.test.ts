@@ -599,7 +599,7 @@ describe("previously-missing-table modules — lifecycle (update/delete/kill/pau
     );
     expect(rows[0]?.name).toBe("Renamed lifecycle job");
 
-    const del = await app.inject({ method: "DELETE", url: `/v1/admin/scheduled-jobs/${jobId}`, headers: bearer(["super_admin"], T, ACTOR) });
+    const del = await app.inject({ method: "DELETE", url: `/v1/admin/scheduled-jobs/${jobId}`, headers: bearer(["super_admin"], T, ACTOR), payload: { reason: "lifecycle cleanup" } });
     expect(del.statusCode).toBe(202);
     rows = await waitFor(
       () => runWithTenant(T, () => db.transaction((tx) => tx.select().from(scheduledJobs).where(eq(scheduledJobs.id, jobId)))),

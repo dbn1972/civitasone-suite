@@ -57,6 +57,7 @@ import {
   type EnvScope,
 } from "./providers.js";
 import type { IntegrationSettingRow, IntegrationChangeRow } from "./schema.js";
+import { fetchUserNames } from "../../shared/identity-names.js";
 
 const AUDIT_TOPIC = "audit.event.record";
 const ROLES = [...TENANT_ADMIN_ROLES];
@@ -161,10 +162,18 @@ export async function integrationSettingsRoutes(app: FastifyInstance): Promise<v
     const row = await repo.findSetting(ctx.tenantId, provider, env);
     const history = await repo.listChanges(ctx.tenantId, provider, env, 50);
     const pending = history.find((c) => c.status === "pending");
+    // GAP-ADMIN-INTEGRATIONS-04: show people, not ids. Resolved by identity-service within
+    // THIS tenant only; an unresolved id is null and the UI falls back to a neutral label.
+    const names = await fetchUserNames(ctx.tenantId, history.flatMap((c) => [c.proposedBy, c.approvedBy].filter((v): v is string => !!v)));
+    const named = (c: IntegrationChangeRow) => ({
+      ...serializeChange(c),
+      proposedByName: names.get(c.proposedBy) ?? null,
+      approvedByName: c.approvedBy ? (names.get(c.approvedBy) ?? null) : null,
+    });
     return reply.send({
       data: serializeSetting(provider, env, row),
-      pendingChange: pending ? serializeChange(pending) : null,
-      history: history.map(serializeChange),
+      pendingChange: pending ? named(pending) : null,
+      history: history.map(named),
     });
   });
 

@@ -38,7 +38,7 @@ export async function jobUpdate(ctx: RequestContext, jobId: string, body: Update
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function jobDelete(ctx: RequestContext, jobId: string): Promise<Accepted> {
+export async function jobDelete(ctx: RequestContext, jobId: string, reason?: string): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.scheduledJobDelete, {
     messageId: id,
@@ -47,12 +47,12 @@ export async function jobDelete(ctx: RequestContext, jobId: string): Promise<Acc
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { jobId, tenantId: ctx.tenantId },
+    payload: { jobId, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function jobRunNow(ctx: RequestContext, jobId: string): Promise<Accepted> {
+export async function jobRunNow(ctx: RequestContext, jobId: string, reason?: string): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.scheduledJobRunNow, {
     messageId: id,
@@ -61,12 +61,12 @@ export async function jobRunNow(ctx: RequestContext, jobId: string): Promise<Acc
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { jobId, tenantId: ctx.tenantId },
+    payload: { jobId, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function jobPause(ctx: RequestContext, jobId: string): Promise<Accepted> {
+export async function jobPause(ctx: RequestContext, jobId: string, reason?: string): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.scheduledJobPause, {
     messageId: id,
@@ -75,12 +75,12 @@ export async function jobPause(ctx: RequestContext, jobId: string): Promise<Acce
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { jobId, tenantId: ctx.tenantId },
+    payload: { jobId, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function jobResume(ctx: RequestContext, jobId: string): Promise<Accepted> {
+export async function jobResume(ctx: RequestContext, jobId: string, reason?: string): Promise<Accepted> {
   const id = randomUUID();
   await queue.publish(COMMANDS.scheduledJobResume, {
     messageId: id,
@@ -89,7 +89,7 @@ export async function jobResume(ctx: RequestContext, jobId: string): Promise<Acc
     actorId: ctx.actorId,
     correlationId: ctx.correlationId,
     schemaVersion: "1.0",
-    payload: { jobId, tenantId: ctx.tenantId },
+    payload: { jobId, tenantId: ctx.tenantId, ...(reason ? { reason } : {}) },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

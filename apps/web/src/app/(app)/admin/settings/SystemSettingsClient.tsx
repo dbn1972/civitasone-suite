@@ -1,6 +1,13 @@
 "use client";
 import { useState, useId, useEffect, useRef, type KeyboardEvent } from "react";
-import { Button, ConfirmDialog, PageHeader, Card } from "@/app/_components/ds";
+import { useTranslations } from "next-intl";
+import { Button, ConfirmDialog, PageHeader, Card, RefreshErrorState } from "@/app/_components/ds";
+import type { AdminSettings } from "@/app/_data/loaders";
+import { toHumanError } from "@/lib/messages";
+import {
+  changedFields, emailForm, generalForm, integrationsForm, logoProblem, securityForm,
+  LOGO_MAX_BYTES, type EmailForm, type GeneralForm, type IntegrationsForm, type SecurityForm,
+} from "./settingsModel";
 import { useFormError } from "@/lib/useFormError";
 import {
   SESSION_TIMEOUT_MIN,
@@ -33,43 +40,34 @@ export type TenantConfigData =
   | { state: "error"; forbidden: boolean }
   | { state: "ready"; name: string; domain: string; edition: string; status: string; region: string };
 
+/** What the server page could read from GET /v1/admin/settings. A failed read makes the four forms read-only-by-absence: no form, no Save. */
+export type SettingsLoad =
+  | { state: "ready"; settings: AdminSettings }
+  | { state: "error"; forbidden: boolean };
+
 type SaveState = "idle" | "saving" | "saved" | "error";
 
 /**
- * GAP-ADMIN-SETTINGS-01: there is no GET for these settings yet, so the form can
- * not know what is currently stored. It therefore starts BLANK (never with
- * invented defaults) and tracks which fields the admin actually edited; Save
- * sends only those fields. Untouched fields -- and an untyped SMTP password --
- * are never part of the request, so a save can no longer overwrite the real
- * server settings with seed values.
+ * GAP-ADMIN-SETTINGS-01: every section starts from the STORED values (GET /v1/admin/settings)
+ * and tracks which fields differ from them. Save sends only those fields, so saving one field can
+ * never overwrite the rest of the server settings, and an untyped SMTP password is never sent.
  */
-function useSectionState<T extends Record<string, unknown>>(initial: T, area: string, onDirtyChange?: (dirty: boolean) => void) {
-  const [values, setValues] = useState<T>(initial);
-  const [changed, setChanged] = useState<ReadonlySet<keyof T>>(new Set());
+function useSectionState<T extends Record<string, unknown>>(loaded: T, area: string, onDirtyChange?: (dirty: boolean) => void) {
+  const [baseline, setBaseline] = useState<T>(loaded);
+  const [values, setValues] = useState<T>(loaded);
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [localErrors, setLocalErrors] = useState<Record<string, string>>({});
   const formError = useFormError(area);
 
   function update(patch: Partial<T>) {
     setValues((prev) => ({ ...prev, ...patch }));
-    setChanged((prev) => {
-      const next = new Set(prev);
-      for (const k of Object.keys(patch) as (keyof T)[]) next.add(k);
-      return next;
-    });
     setSaveState("idle");
     setLocalErrors({});
   }
 
   /** The edited fields only, with an empty password treated as "not provided". */
   function changedValues(): Partial<T> {
-    const out: Partial<T> = {};
-    for (const k of changed) {
-      const v = values[k];
-      if (k === "smtpPass" && (v === "" || v === undefined)) continue;
-      out[k] = v;
-    }
-    return out;
+    return changedFields(baseline, values);
   }
 
   const dirty = Object.keys(changedValues()).length > 0;
@@ -94,9 +92,11 @@ function useSectionState<T extends Record<string, unknown>>(initial: T, area: st
         return;
       }
       setSaveState("saved");
-      setChanged(new Set());
-      // A typed password must not linger in client state after it was sent.
-      setValues((prev) => ("smtpPass" in prev ? { ...prev, smtpPass: "" } : prev));
+      // What was sent is now what is stored; a typed password must not linger in client state.
+      const { smtpPass: _sent, ...stored } = body;
+      void _sent;
+      setBaseline((prev) => ({ ...prev, ...(stored as Partial<T>) }));
+      setValues((prev) => ({ ...prev, ...(stored as Partial<T>), ...("smtpPass" in prev ? { smtpPass: "" } : {}) }));
     } catch {
       formError.fromException("save");
       setSaveState("error");
@@ -108,11 +108,13 @@ function useSectionState<T extends Record<string, unknown>>(initial: T, area: st
   return { values, update, dirty, saveState, save, formError, changedValues, setLocalErrors, fieldError };
 }
 
-/** Shown on every section: the form does not display stored values. */
-function BlankFormNote() {
+/** Shown when this section has never been saved: the empty fields are "no value yet", not a stored blank. */
+function NotConfiguredNote({ configured }: { configured: boolean }) {
+  const t = useTranslations("adminSettings");
+  if (configured) return null;
   return (
     <p role="note" style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>
-      Current values are not shown on this screen. Fields you leave empty are not changed; only the fields you edit are saved.
+      {t("notConfigured")}
     </p>
   );
 }
@@ -128,9 +130,10 @@ function SaveButton({
   onSave: () => void;
   errorMessage?: string;
 }) {
+  const t = useTranslations("adminSettings");
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      {dirty && <span title="Unsaved changes" aria-label="Unsaved changes" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />}
+      {dirty && <span title={t("unsavedChangesTitle")} aria-label={t("unsavedChangesTitle")} style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f59e0b" }} />}
       <Button
         type="button"
         size="sm"
@@ -138,13 +141,13 @@ function SaveButton({
         onClick={onSave}
         loading={saveState === "saving"}
       >
-        {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : "Save changes"}
+        {saveState === "saving" ? t("saving") : saveState === "saved" ? t("saved") : t("saveChanges")}
       </Button>
       {saveState === "error" && (
         <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{errorMessage}</span>
       )}
       {saveState === "saved" && (
-        <span role="status" style={{ fontSize: 12, color: "#027a48" }}>Changes saved.</span>
+        <span role="status" style={{ fontSize: 12, color: "#027a48" }}>{t("changesSaved")}</span>
       )}
     </div>
   );
@@ -176,17 +179,137 @@ function FieldRow({
 
 const inp: React.CSSProperties = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--line)", fontSize: 13.5, fontFamily: "inherit", color: "var(--ink)", background: "var(--panel)" };
 
-// ── GENERAL TAB ──────────────────────────────────────────────────────────────
-function GeneralSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+// ── LOGO (GAP-ADMIN-SETTINGS-05) ─────────────────────────────────────────────
+/** base64 of a File without the data: prefix. */
+function readBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const result = String(reader.result ?? "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.slice(comma + 1) : result);
+    };
+    reader.onerror = () => reject(reader.error ?? new Error("read failed"));
+    reader.readAsDataURL(file);
+  });
+}
+
+/**
+ * The organisation logo: a real file input (keyboard and screen-reader operable), checked for type and
+ * size before anything is sent, uploaded as base64 JSON (the admin-service stores PNG/JPEG only, so no
+ * SVG can carry script), with a preview and a confirmed remove.
+ */
+function LogoField({ initial }: { initial: AdminSettings["logo"] }) {
+  const t = useTranslations("adminSettings");
   const id = useId();
-  const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState(
-    {
-      orgName: "",
-      timezone: "",
-      currency: "",
-      dateFormat: "",
-      fiscalYearStart: "",
-    },
+  const [present, setPresent] = useState(initial.present);
+  const [preview, setPreview] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+  const [removeOpen, setRemoveOpen] = useState(false);
+  const [removeError, setRemoveError] = useState<string | undefined>(undefined);
+
+  // Show the stored logo. A failed preview read is not an error for the form: the upload still works.
+  useEffect(() => {
+    if (!initial.present) return;
+    let cancelled = false;
+    fetch("/api/proxy/v1/admin/settings/logo", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body: { data?: { contentType?: string; dataBase64?: string } } | null) => {
+        const d = body?.data;
+        if (!cancelled && d?.contentType && d.dataBase64) setPreview(`data:${d.contentType};base64,${d.dataBase64}`);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [initial.present]);
+
+  async function onPick(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    const bad = logoProblem(file);
+    if (bad) { setProblem(bad === "type" ? t("logoTypeProblem") : bad === "empty" ? t("logoEmptyProblem") : t("logoSizeProblem", { kb: Math.floor(LOGO_MAX_BYTES / 1000) })); return; }
+    setProblem(null);
+    setBusy(true);
+    try {
+      const dataBase64 = await readBase64(file);
+      const res = await fetch("/api/proxy/v1/admin/settings/logo", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ contentType: file.type, dataBase64 }),
+      });
+      if (!res.ok) {
+        const human = toHumanError(res.status === 403 ? "forbidden" : "save", { area: "logo" });
+        setProblem(`${human.what} ${human.next}`);
+        return;
+      }
+      setPreview(`data:${file.type};base64,${dataBase64}`);
+      setPresent(true);
+    } catch {
+      const human = toHumanError("save", { area: "logo" });
+      setProblem(`${human.what} ${human.next}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    setBusy(true);
+    setRemoveError(undefined);
+    try {
+      const res = await fetch("/api/proxy/v1/admin/settings/logo", { method: "DELETE" });
+      if (!res.ok) {
+        const human = toHumanError("save", { area: "logo" });
+        setRemoveError(`${human.what} ${human.next}`);
+        return;
+      }
+      setPreview(null);
+      setPresent(false);
+      setRemoveOpen(false);
+    } catch {
+      const human = toHumanError("save", { area: "logo" });
+      setRemoveError(`${human.what} ${human.next}`);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div style={{ display: "grid", gap: 8 }}>
+      <label htmlFor={`${id}-logo`} style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink2)" }}>{t("logo")}</label>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
+        {preview ? (
+          <img src={preview} alt={t("logoAlt")} style={{ maxHeight: 56, maxWidth: 160, objectFit: "contain", border: "1px solid var(--line)", borderRadius: 8, padding: 6, background: "#fff" }} />
+        ) : (
+          <span style={{ fontSize: 12.5, color: "var(--mut)" }}>{present ? t("logoSaved") : t("logoNone")}</span>
+        )}
+        <input id={`${id}-logo`} type="file" accept="image/png,image/jpeg" onChange={(e) => void onPick(e)} disabled={busy} aria-describedby={`${id}-logo-hint`} />
+        {present && <Button type="button" variant="ghost" size="sm" onClick={() => { setRemoveError(undefined); setRemoveOpen(true); }} disabled={busy}>{t("logoRemove")}</Button>}
+      </div>
+      <span id={`${id}-logo-hint`} style={{ fontSize: 12, color: "var(--mut)" }}>{t("logoHint", { kb: Math.floor(LOGO_MAX_BYTES / 1000) })}</span>
+      {busy && <span role="status" style={{ fontSize: 12, color: "var(--mut)" }}>{t("logoWorking")}</span>}
+      {problem && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{problem}</span>}
+      <ConfirmDialog
+        open={removeOpen}
+        danger
+        title={t("logoRemoveTitle")}
+        description={t("logoRemoveBody")}
+        confirmLabel={t("logoRemove")}
+        busy={busy}
+        errorMessage={removeError}
+        onConfirm={() => void remove()}
+        onCancel={() => { if (!busy) setRemoveOpen(false); }}
+      />
+    </div>
+  );
+}
+
+// ── GENERAL TAB ──────────────────────────────────────────────────────────────
+function GeneralSection({ settings, onDirtyChange }: { settings: AdminSettings; onDirtyChange: (dirty: boolean) => void }) {
+  const t = useTranslations("adminSettings");
+  const id = useId();
+  const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState<GeneralForm>(
+    generalForm(settings),
     "general settings",
     onDirtyChange,
   );
@@ -195,47 +318,41 @@ function GeneralSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
     <Card>
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0 }}>General Settings</h3>
+          <h3 style={{ margin: 0 }}>{t("generalTitle")}</h3>
           <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/general")} errorMessage={formError.message} />
         </div>
-        <BlankFormNote />
-        <FieldRow label="Organisation name" htmlFor={`${id}-orgName`} error={fieldError("orgName")}>
+        <NotConfiguredNote configured={settings.general.configured} />
+        <FieldRow label={t("orgName")} htmlFor={`${id}-orgName`} error={fieldError("orgName")}>
           <input id={`${id}-orgName`} value={values.orgName} onChange={(e) => update({ orgName: e.target.value })} style={inp} />
         </FieldRow>
-        {/* GAP-ADMIN-SETTINGS-05: the old drop zone did nothing (no handler) and PATCHed a bare file
-            name as logoUrl. There is no logo storage/upload endpoint to send a file to, so the control is
-            replaced by an honest notice rather than a dead drop zone. */}
-        <div role="note" style={{ border: "1px dashed var(--line)", borderRadius: 10, padding: "14px 16px", background: "var(--line2)", fontSize: 13, color: "var(--ink2)" }}>
-          <strong>Logo</strong>
-          <p style={{ margin: "4px 0 0", fontSize: 12.5, color: "var(--mut)" }}>Logo upload is not available yet. Contact the platform team to change the organisation logo.</p>
-        </div>
+        <LogoField initial={settings.logo} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FieldRow label="Timezone" htmlFor={`${id}-tz`} error={formError.fieldError("timezone")}>
+          <FieldRow label={t("timezone")} htmlFor={`${id}-tz`} error={formError.fieldError("timezone")}>
             <select id={`${id}-tz`} value={values.timezone} onChange={(e) => update({ timezone: e.target.value })} style={inp}>
-              <option value="">Unchanged</option>
-              <option value="Asia/Kolkata">IST (Asia/Kolkata) +05:30</option>
-              <option value="UTC">UTC +00:00</option>
+              <option value="">{t("unchanged")}</option>
+              <option value="Asia/Kolkata">{t("tzIst")}</option>
+              <option value="UTC">{t("tzUtc")}</option>
             </select>
           </FieldRow>
-          <FieldRow label="Currency" htmlFor={`${id}-curr`} error={formError.fieldError("currency")}>
+          <FieldRow label={t("currency")} htmlFor={`${id}-curr`} error={formError.fieldError("currency")}>
             <select id={`${id}-curr`} value={values.currency} onChange={(e) => update({ currency: e.target.value })} style={inp}>
-              <option value="">Unchanged</option>
-              <option value="INR">INR — Indian Rupee (₹)</option>
-              <option value="USD">USD — US Dollar ($)</option>
+              <option value="">{t("unchanged")}</option>
+              <option value="INR">{t("curInr")}</option>
+              <option value="USD">{t("curUsd")}</option>
             </select>
           </FieldRow>
-          <FieldRow label="Date format" htmlFor={`${id}-df`} error={formError.fieldError("dateFormat")}>
+          <FieldRow label={t("dateFormat")} htmlFor={`${id}-df`} error={formError.fieldError("dateFormat")}>
             <select id={`${id}-df`} value={values.dateFormat} onChange={(e) => update({ dateFormat: e.target.value })} style={inp}>
-              <option value="">Unchanged</option>
-              <option value="dd/MM/yyyy">dd/MM/yyyy (GFR 2017)</option>
-              <option value="yyyy-MM-dd">yyyy-MM-dd (ISO 8601)</option>
+              <option value="">{t("unchanged")}</option>
+              <option value="dd/MM/yyyy">{t("dfGfr")}</option>
+              <option value="yyyy-MM-dd">{t("dfIso")}</option>
             </select>
           </FieldRow>
-          <FieldRow label="Fiscal year starts" htmlFor={`${id}-fy`} error={formError.fieldError("fiscalYearStart")}>
+          <FieldRow label={t("fiscalYear")} htmlFor={`${id}-fy`} error={formError.fieldError("fiscalYearStart")}>
             <select id={`${id}-fy`} value={values.fiscalYearStart} onChange={(e) => update({ fiscalYearStart: e.target.value })} style={inp}>
-              <option value="">Unchanged</option>
-              <option value="04">April (Government of India)</option>
-              <option value="01">January</option>
+              <option value="">{t("unchanged")}</option>
+              <option value="04">{t("fyApril")}</option>
+              <option value="01">{t("fyJanuary")}</option>
             </select>
           </FieldRow>
         </div>
@@ -245,76 +362,89 @@ function GeneralSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => 
 }
 
 // ── EMAIL TAB ────────────────────────────────────────────────────────────────
-function EmailSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+function EmailSection({ settings, onDirtyChange }: { settings: AdminSettings; onDirtyChange: (dirty: boolean) => void }) {
+  const t = useTranslations("adminSettings");
   const id = useId();
-  const [testStatus, setTestStatus] = useState<"idle" | "sending" | "ok" | "fail">("idle");
-  const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState(
-    {
-      smtpHost: "",
-      smtpPort: "",
-      smtpUser: "",
-      // Write-only: never sent unless the admin types a new one.
-      smtpPass: "",
-      fromName: "",
-      fromEmail: "",
-      useTls: false,
-    },
+  const [testStatus, setTestStatus] = useState<"idle" | "sending" | "queued" | "not-configured" | "rate-limited" | "fail">("idle");
+  const [testRecipient, setTestRecipient] = useState("");
+  const [passwordStored, setPasswordStored] = useState(settings.hasSmtpPassword);
+  const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState<EmailForm>(
+    // smtpPass is write-only: it starts empty and is never sent unless the admin types a new one.
+    emailForm(settings),
     "email settings",
     onDirtyChange,
   );
 
+  async function saveEmail() {
+    const typedPassword = values.smtpPass !== "";
+    await save("/api/proxy/v1/admin/settings/email");
+    if (typedPassword) setPasswordStored(true);
+  }
+
+  // GAP-ADMIN-SETTINGS-06: the test uses the SAVED settings, sends to the address typed here, and the
+  // outcome says what happened (queued / not configured yet / failed), not just "ok".
   async function sendTest() {
     setTestStatus("sending");
     try {
-      const res = await fetch("/api/proxy/v1/admin/settings/email/test", { method: "POST" });
-      setTestStatus(res.ok ? "ok" : "fail");
+      const res = await fetch("/api/proxy/v1/admin/settings/email/test", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ recipient: testRecipient.trim() }),
+      });
+      setTestStatus(res.ok ? "queued" : res.status === 409 ? "not-configured" : res.status === 429 ? "rate-limited" : "fail");
     } catch {
       setTestStatus("fail");
     }
-    setTimeout(() => setTestStatus("idle"), 4000);
   }
 
   return (
     <Card>
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0 }}>Email (SMTP)</h3>
-          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/email")} errorMessage={formError.message} />
+          <h3 style={{ margin: 0 }}>{t("emailTitle")}</h3>
+          <SaveButton dirty={dirty} saveState={saveState} onSave={() => void saveEmail()} errorMessage={formError.message} />
         </div>
-        <BlankFormNote />
+        <NotConfiguredNote configured={settings.email.configured} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 180px", gap: 16 }}>
-          <FieldRow label="SMTP host" htmlFor={`${id}-host`} error={fieldError("smtpHost")}>
+          <FieldRow label={t("smtpHost")} htmlFor={`${id}-host`} error={fieldError("smtpHost")}>
             <input id={`${id}-host`} value={values.smtpHost} onChange={(e) => update({ smtpHost: e.target.value })} placeholder="smtp.nic.in" style={inp} />
           </FieldRow>
-          <FieldRow label="Port" htmlFor={`${id}-port`} error={fieldError("smtpPort")}>
+          <FieldRow label={t("port")} htmlFor={`${id}-port`} error={fieldError("smtpPort")}>
             <input id={`${id}-port`} value={values.smtpPort} onChange={(e) => update({ smtpPort: e.target.value })} placeholder="587" type="number" min={1} max={65535} style={inp} />
           </FieldRow>
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FieldRow label="Username" htmlFor={`${id}-user`} error={formError.fieldError("smtpUser")}>
+          <FieldRow label={t("username")} htmlFor={`${id}-user`} error={formError.fieldError("smtpUser")}>
             <input id={`${id}-user`} value={values.smtpUser} onChange={(e) => update({ smtpUser: e.target.value })} style={inp} />
           </FieldRow>
-          <FieldRow label="Password" htmlFor={`${id}-pass`} error={formError.fieldError("smtpPass")}>
-            <input id={`${id}-pass`} type="password" value={values.smtpPass} onChange={(e) => update({ smtpPass: e.target.value })} placeholder="Unchanged — type to replace" style={inp} autoComplete="new-password" />
+          <FieldRow label={t("password")} htmlFor={`${id}-pass`} error={formError.fieldError("smtpPass")}>
+            <input id={`${id}-pass`} type="password" value={values.smtpPass} onChange={(e) => update({ smtpPass: e.target.value })} placeholder={passwordStored ? t("passwordSaved") : t("passwordNone")} style={inp} autoComplete="new-password" />
           </FieldRow>
-          <FieldRow label="From name" htmlFor={`${id}-fname`} error={formError.fieldError("fromName")}>
+          <FieldRow label={t("fromName")} htmlFor={`${id}-fname`} error={formError.fieldError("fromName")}>
             <input id={`${id}-fname`} value={values.fromName} onChange={(e) => update({ fromName: e.target.value })} style={inp} />
           </FieldRow>
-          <FieldRow label="From email" htmlFor={`${id}-femail`} error={formError.fieldError("fromEmail")}>
+          <FieldRow label={t("fromEmail")} htmlFor={`${id}-femail`} error={formError.fieldError("fromEmail")}>
             <input id={`${id}-femail`} type="email" value={values.fromEmail} onChange={(e) => update({ fromEmail: e.target.value })} style={inp} />
           </FieldRow>
         </div>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13.5 }}>
           <input type="checkbox" checked={values.useTls} onChange={(e) => update({ useTls: e.target.checked })} style={{ width: 16, height: 16, cursor: "pointer" }} />
-          Use STARTTLS / TLS (applies only if you tick it)
+          {t("useTls")}
         </label>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <Button type="button" variant="ghost" size="sm" onClick={() => void sendTest()} loading={testStatus === "sending"}>
-            {testStatus === "sending" ? "Sending…" : "Test saved settings"}
-          </Button>
-          <span style={{ fontSize: 12, color: "var(--mut)" }}>Sends a test email using the settings already saved, not the values typed above.</span>
-          {testStatus === "ok" && <span role="status" style={{ fontSize: 12, color: "#027a48" }}>Test email sent.</span>}
-          {testStatus === "fail" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>Send failed — check credentials.</span>}
+        <div style={{ display: "grid", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" }}>
+            <FieldRow label={t("testTo")} htmlFor={`${id}-testto`}>
+              <input id={`${id}-testto`} type="email" value={testRecipient} onChange={(e) => { setTestRecipient(e.target.value); setTestStatus("idle"); }} placeholder="you@dept.gov.in" style={{ ...inp, width: 280 }} />
+            </FieldRow>
+            <Button type="button" variant="ghost" size="sm" onClick={() => void sendTest()} loading={testStatus === "sending"} disabled={!/^\S+@\S+\.\S+$/.test(testRecipient.trim()) || testStatus === "sending"}>
+              {testStatus === "sending" ? t("testSending") : t("testSend")}
+            </Button>
+          </div>
+          <span style={{ fontSize: 12, color: "var(--mut)" }}>{t("testExplain")}</span>
+          {testStatus === "queued" && <span role="status" style={{ fontSize: 12, color: "#027a48" }}>{t("testQueued", { recipient: testRecipient.trim() })}</span>}
+          {testStatus === "not-configured" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{t("testNotConfigured")}</span>}
+          {testStatus === "rate-limited" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{t("testRateLimited")}</span>}
+          {testStatus === "fail" && <span role="alert" style={{ fontSize: 12, color: "#b42318" }}>{t("testFailed")}</span>}
         </div>
       </div>
     </Card>
@@ -322,19 +452,13 @@ function EmailSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => vo
 }
 
 // ── SECURITY TAB ─────────────────────────────────────────────────────────────
-function SecuritySection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+function SecuritySection({ settings, onDirtyChange }: { settings: AdminSettings; onDirtyChange: (dirty: boolean) => void }) {
+  const t = useTranslations("adminSettings");
   const id = useId();
   const [mfaConfirm, setMfaConfirm] = useState(false);
   const [pendingBody, setPendingBody] = useState<Record<string, unknown> | null>(null);
-  const { values, update, dirty, saveState, save, formError, changedValues, setLocalErrors, fieldError } = useSectionState(
-    {
-      // Numeric inputs stay strings so an emptied field is "empty", never 0.
-      sessionTimeoutMin: "",
-      maxLoginAttempts: "",
-      passwordMinLen: "",
-      mfaRequired: true,
-      ipWhitelist: "",
-    },
+  const { values, update, dirty, saveState, save, formError, changedValues, setLocalErrors, fieldError } = useSectionState<SecurityForm>(
+    securityForm(settings),
     "security settings",
     onDirtyChange,
   );
@@ -363,57 +487,57 @@ function SecuritySection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
     <Card>
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0 }}>Security</h3>
+          <h3 style={{ margin: 0 }}>{t("securityTitle")}</h3>
           <SaveButton dirty={dirty} saveState={saveState} onSave={requestSave} errorMessage={formError.message} />
         </div>
-        <BlankFormNote />
+        <NotConfiguredNote configured={settings.security.configured} />
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-          <FieldRow label={`Session timeout (minutes, ${SESSION_TIMEOUT_MIN.min}-${SESSION_TIMEOUT_MIN.max})`} htmlFor={`${id}-sto`} error={fieldError("sessionTimeoutMin")}>
+          <FieldRow label={t("sessionTimeout", { min: SESSION_TIMEOUT_MIN.min, max: SESSION_TIMEOUT_MIN.max })} htmlFor={`${id}-sto`} error={fieldError("sessionTimeoutMin")}>
             <input id={`${id}-sto`} type="number" inputMode="numeric" min={SESSION_TIMEOUT_MIN.min} max={SESSION_TIMEOUT_MIN.max} value={values.sessionTimeoutMin} onChange={(e) => update({ sessionTimeoutMin: e.target.value })} style={inp} />
           </FieldRow>
-          <FieldRow label={`Max login attempts (${MAX_LOGIN_ATTEMPTS.min}-${MAX_LOGIN_ATTEMPTS.max})`} htmlFor={`${id}-mla`} error={fieldError("maxLoginAttempts")}>
+          <FieldRow label={t("maxAttempts", { min: MAX_LOGIN_ATTEMPTS.min, max: MAX_LOGIN_ATTEMPTS.max })} htmlFor={`${id}-mla`} error={fieldError("maxLoginAttempts")}>
             <input id={`${id}-mla`} type="number" inputMode="numeric" min={MAX_LOGIN_ATTEMPTS.min} max={MAX_LOGIN_ATTEMPTS.max} value={values.maxLoginAttempts} onChange={(e) => update({ maxLoginAttempts: e.target.value })} style={inp} />
           </FieldRow>
-          <FieldRow label={`Minimum password length (${PASSWORD_MIN_LEN.min}-${PASSWORD_MIN_LEN.max})`} htmlFor={`${id}-pwlen`} error={fieldError("passwordMinLen")}>
+          <FieldRow label={t("minPassword", { min: PASSWORD_MIN_LEN.min, max: PASSWORD_MIN_LEN.max })} htmlFor={`${id}-pwlen`} error={fieldError("passwordMinLen")}>
             <input id={`${id}-pwlen`} type="number" inputMode="numeric" min={PASSWORD_MIN_LEN.min} max={PASSWORD_MIN_LEN.max} value={values.passwordMinLen} onChange={(e) => update({ passwordMinLen: e.target.value })} style={inp} />
           </FieldRow>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <label htmlFor={`${id}-mfa`} style={{ fontSize: 13.5, fontWeight: 550, cursor: "pointer" }}>
-            Require MFA for all users
+            {t("mfaRequire")}
           </label>
           <input id={`${id}-mfa`} type="checkbox" role="switch" checked={values.mfaRequired} onChange={(e) => handleMfaToggle(e.target.checked)} style={{ width: 16, height: 16, cursor: "pointer" }} />
         </div>
         {mfaConfirm && (
           <div role="alertdialog" aria-modal="true" style={{ background: "var(--warn-bg, #fffbeb)", border: "1px solid var(--warn-bd, #fcd34d)", borderRadius: 10, padding: "14px 16px", display: "grid", gap: 10 }}>
-            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600 }}>Disable MFA enforcement?</p>
-            <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>Disabling MFA reduces platform security. All users will no longer be required to authenticate with a second factor.</p>
+            <p style={{ margin: 0, fontSize: 13.5, fontWeight: 600 }}>{t("mfaDisableTitle")}</p>
+            <p style={{ margin: 0, fontSize: 12.5, color: "var(--ink2)" }}>{t("mfaDisableBody")}</p>
             <div style={{ display: "flex", gap: 8 }}>
-              <Button type="button" variant="danger" size="sm" onClick={() => { update({ mfaRequired: false }); setMfaConfirm(false); }}>Yes, disable MFA</Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setMfaConfirm(false)}>Cancel</Button>
+              <Button type="button" variant="danger" size="sm" onClick={() => { update({ mfaRequired: false }); setMfaConfirm(false); }}>{t("mfaDisableYes")}</Button>
+              <Button type="button" variant="ghost" size="sm" onClick={() => setMfaConfirm(false)}>{t("cancel")}</Button>
             </div>
           </div>
         )}
-        <FieldRow label="IP whitelist (one CIDR per line)" htmlFor={`${id}-ip`} error={fieldError("ipWhitelist")}>
+        <FieldRow label={t("ipLabel")} htmlFor={`${id}-ip`} error={fieldError("ipWhitelist")}>
           <textarea id={`${id}-ip`} rows={4} value={values.ipWhitelist} onChange={(e) => update({ ipWhitelist: e.target.value })} placeholder={"10.0.0.0/8\n192.168.1.0/24"} style={{ ...inp, resize: "vertical", fontFamily: "monospace", fontSize: 13 }} aria-describedby={`${id}-ip-hint`} />
-          <p id={`${id}-ip-hint`} style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--mut)" }}>Enter one CIDR range per line (for example 10.0.0.0/8). Saving an empty list allows all IPs.</p>
+          <p id={`${id}-ip-hint`} style={{ margin: "4px 0 0", fontSize: 11.5, color: "var(--mut)" }}>{t("ipHint")}</p>
         </FieldRow>
       </div>
       <ConfirmDialog
         open={pendingBody !== null}
         danger={lockoutRisk}
-        title="Save security settings?"
+        title={t("saveSecurityTitle")}
         description={
           <div>
-            <p style={{ margin: "0 0 8px" }}>These changes apply to everyone signing in to this office.</p>
+            <p style={{ margin: "0 0 8px" }}>{t("saveSecurityBody")}</p>
             {lockoutRisk && (
               <p style={{ margin: 0 }}>
-                <strong>Make sure your own IP address is included in the allow-list.</strong> If it is not, you and every other user outside these ranges will be locked out.
+                <strong>{t("lockoutWarnStrong")}</strong> {t("lockoutWarnRest")}
               </p>
             )}
           </div>
         }
-        confirmLabel="Save security settings"
+        confirmLabel={t("saveSecurityConfirm")}
         busy={saveState === "saving"}
         onConfirm={() => { const body = pendingBody; setPendingBody(null); if (body) void save("/api/proxy/v1/admin/settings/security", body); }}
         onCancel={() => setPendingBody(null)}
@@ -423,15 +547,11 @@ function SecuritySection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) =>
 }
 
 // ── INTEGRATIONS TAB ─────────────────────────────────────────────────────────
-function IntegrationsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean) => void }) {
+function IntegrationsSection({ settings, onDirtyChange }: { settings: AdminSettings; onDirtyChange: (dirty: boolean) => void }) {
+  const t = useTranslations("adminSettings");
   const id = useId();
-  const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState(
-    {
-      pfmsUrl: "",
-      nicGatewayUrl: "",
-      digiLockerEnabled: false,
-      umangEnabled: false,
-    },
+  const { values, update, dirty, saveState, save, formError, fieldError } = useSectionState<IntegrationsForm>(
+    integrationsForm(settings),
     "integrations settings",
     onDirtyChange,
   );
@@ -440,21 +560,21 @@ function IntegrationsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
     <Card>
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0 }}>Integrations</h3>
+          <h3 style={{ margin: 0 }}>{t("integrationsTitle")}</h3>
           <SaveButton dirty={dirty} saveState={saveState} onSave={() => void save("/api/proxy/v1/admin/settings/integrations")} errorMessage={formError.message} />
         </div>
-        <BlankFormNote />
-        <FieldRow label="PFMS base URL" htmlFor={`${id}-pfms`} error={fieldError("pfmsUrl")}>
+        <NotConfiguredNote configured={settings.integrations.configured} />
+        <FieldRow label={t("pfmsUrl")} htmlFor={`${id}-pfms`} error={fieldError("pfmsUrl")}>
           <input id={`${id}-pfms`} type="url" value={values.pfmsUrl} onChange={(e) => update({ pfmsUrl: e.target.value })} style={inp} />
         </FieldRow>
-        <FieldRow label="NIC Gateway URL" htmlFor={`${id}-nic`} error={formError.fieldError("nicGatewayUrl")}>
+        <FieldRow label={t("nicUrl")} htmlFor={`${id}-nic`} error={formError.fieldError("nicGatewayUrl")}>
           <input id={`${id}-nic`} type="url" value={values.nicGatewayUrl} onChange={(e) => update({ nicGatewayUrl: e.target.value })} style={inp} />
         </FieldRow>
         <fieldset style={{ border: "none", margin: 0, padding: 0, display: "grid", gap: 14 }}>
-          <legend style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink2)", marginBottom: 8 }}>Third-party integrations</legend>
+          <legend style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink2)", marginBottom: 8 }}>{t("thirdParty")}</legend>
           {([
-            { key: "digiLockerEnabled" as const, label: "DigiLocker", desc: "Allow document verification via DigiLocker (MeitY)" },
-            { key: "umangEnabled" as const, label: "UMANG", desc: "Enable UMANG portal single sign-on" },
+            { key: "digiLockerEnabled" as const, label: t("digiLocker"), desc: t("digiLockerDesc") },
+            { key: "umangEnabled" as const, label: t("umang"), desc: t("umangDesc") },
           ] as const).map(({ key, label, desc }) => (
             <label key={key} style={{ display: "flex", alignItems: "flex-start", gap: 12, cursor: "pointer" }}>
               <input type="checkbox" id={`${id}-${key}`} role="switch" checked={values[key]} onChange={(e) => update({ [key]: e.target.checked } as Record<string, boolean>)} style={{ width: 16, height: 16, cursor: "pointer", marginTop: 2, flexShrink: 0 }} />
@@ -462,7 +582,7 @@ function IntegrationsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
                 <span style={{ display: "block", fontSize: 13.5, fontWeight: 550 }}>{label}</span>
                 <span style={{ display: "block", fontSize: 12, color: "var(--mut)" }}>{desc}</span>
               </span>
-              {values[key] && <span className="pill good" style={{ fontSize: 11, flexShrink: 0 }}>Active</span>}
+              {values[key] && <span className="pill good" style={{ fontSize: 11, flexShrink: 0 }}>{t("active")}</span>}
             </label>
           ))}
         </fieldset>
@@ -473,6 +593,7 @@ function IntegrationsSection({ onDirtyChange }: { onDirtyChange: (dirty: boolean
 
 // ── TENANT CONFIG TAB (platform staff only) ──────────────────────────────────
 function TenantConfigSection({ tenant }: { tenant: TenantConfigData }) {
+  const t = useTranslations("adminSettings");
   // GAP-ADMIN-SETTINGS-02: values come from the real tenant record
   // (GET /v1/admin/tenants/:id), never from constants. Realm / DB schema /
   // storage figures are not exposed by any endpoint, so they are not shown.
@@ -480,18 +601,18 @@ function TenantConfigSection({ tenant }: { tenant: TenantConfigData }) {
     <Card>
       <div className="pad" style={{ display: "grid", gap: 20 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-          <h3 style={{ margin: 0 }}>Tenant Configuration</h3>
-          <span className="pill info" style={{ fontSize: 11 }}>Read-only — platform_admin</span>
+          <h3 style={{ margin: 0 }}>{t("tenantTitle")}</h3>
+          <span className="pill info" style={{ fontSize: 11 }}>{t("tenantReadOnly")}</span>
         </div>
         {tenant.state === "ready" ? (
           <>
-            <p style={{ margin: 0, fontSize: 12.5, color: "var(--mut)" }}>Details managed by the CivitasOne platform team. Contact support to change these values.</p>
+            <p style={{ margin: 0, fontSize: 12.5, color: "var(--mut)" }}>{t("tenantManaged")}</p>
             {([
-              { label: "Tenant name", value: tenant.name },
-              { label: "Domain", value: tenant.domain },
-              { label: "Edition", value: tenant.edition },
-              { label: "Status", value: tenant.status },
-              { label: "Region", value: tenant.region },
+              { label: t("tenantName"), value: tenant.name },
+              { label: t("tenantDomain"), value: tenant.domain },
+              { label: t("tenantEdition"), value: tenant.edition },
+              { label: t("tenantStatus"), value: tenant.status },
+              { label: t("tenantRegion"), value: tenant.region },
             ] as const).map(({ label, value }) => (
               <div key={label} style={{ display: "grid", gridTemplateColumns: "180px 1fr", gap: 8, alignItems: "center" }}>
                 <span style={{ fontSize: 12.5, fontWeight: 650, color: "var(--ink2)" }}>{label}</span>
@@ -502,8 +623,8 @@ function TenantConfigSection({ tenant }: { tenant: TenantConfigData }) {
         ) : (
           <p role="status" style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>
             {tenant.state === "error" && tenant.forbidden
-              ? "Your account is not permitted to view tenant configuration."
-              : "Tenant configuration is not available right now."}
+              ? t("tenantForbidden")
+              : t("tenantUnavailable")}
           </p>
         )}
       </div>
@@ -511,8 +632,22 @@ function TenantConfigSection({ tenant }: { tenant: TenantConfigData }) {
   );
 }
 
+function SettingsLoadError({ forbidden }: { forbidden: boolean }) {
+  const human = toHumanError(forbidden ? "forbidden" : "load", { area: "system settings" });
+  return (
+    <Card>
+      <div className="pad">
+        <RefreshErrorState error={{ ...human, actions: forbidden ? ["back"] : ["retry", "back"] }} backHref="/admin" />
+      </div>
+    </Card>
+  );
+}
+
 // ── PAGE ─────────────────────────────────────────────────────────────────────
-export function SystemSettingsClient({ tenant }: { tenant: TenantConfigData }) {
+export function SystemSettingsClient({ tenant, settings }: { tenant: TenantConfigData; settings: SettingsLoad }) {
+  const t = useTranslations("adminSettings");
+  const TAB_KEYS: Record<Tab, string> = { General: "tabGeneral", Email: "tabEmail", Security: "tabSecurity", Integrations: "tabIntegrations", "Tenant Config": "tabTenantConfig" };
+  const tabLabel = (tab: Tab) => t(TAB_KEYS[tab]);
   const baseId = useId();
   const [activeTab, setActiveTab] = useState<Tab>("General");
   // GAP-ADMIN-SETTINGS-04: every section stays mounted (hidden, not unmounted) so edits survive a
@@ -559,13 +694,13 @@ export function SystemSettingsClient({ tenant }: { tenant: TenantConfigData }) {
     tabRefs.current[next]?.focus();
   }
 
-  const names = TABS.map((t) => t as string);
-  const subtitle = `Platform-wide configuration — ${names.slice(0, -1).join(", ")}, and ${names[names.length - 1]}.`;
+  const names = TABS.map((tab) => tabLabel(tab));
+  const subtitle = t("subtitle", { list: names.slice(0, -1).join(", "), last: names[names.length - 1]! });
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader title="System Settings" subtitle={subtitle} back="/admin" />
-      <div className="tabs" role="tablist" aria-label="Settings sections" style={{ marginBottom: 20 }}>
+      <PageHeader title={t("title")} subtitle={subtitle} back="/admin" />
+      <div className="tabs" role="tablist" aria-label={t("tabsLabel")} style={{ marginBottom: 20 }}>
         {TABS.map((tab, index) => {
           const selected = activeTab === tab;
           return (
@@ -581,21 +716,23 @@ export function SystemSettingsClient({ tenant }: { tenant: TenantConfigData }) {
               onClick={() => setActiveTab(tab)}
               onKeyDown={(e) => onTabKeyDown(e, index)}
             >
-              {tab}
+              {tabLabel(tab)}
               {dirtyTabs.has(tab) && (
                 <>
                   <span aria-hidden="true" style={{ display: "inline-block", width: 8, height: 8, borderRadius: "50%", background: "#f59e0b", marginInlineStart: 6 }} />
-                  <span className="sr-only"> (unsaved changes)</span>
+                  <span className="sr-only"> ({t("unsavedChanges")})</span>
                 </>
               )}
             </span>
           );
         })}
       </div>
-      <div role="tabpanel" id={panelId("General")} aria-labelledby={tabId("General")} hidden={activeTab !== "General"}><GeneralSection onDirtyChange={dirtyGeneral} /></div>
-      <div role="tabpanel" id={panelId("Email")} aria-labelledby={tabId("Email")} hidden={activeTab !== "Email"}><EmailSection onDirtyChange={dirtyEmail} /></div>
-      <div role="tabpanel" id={panelId("Security")} aria-labelledby={tabId("Security")} hidden={activeTab !== "Security"}><SecuritySection onDirtyChange={dirtySecurity} /></div>
-      <div role="tabpanel" id={panelId("Integrations")} aria-labelledby={tabId("Integrations")} hidden={activeTab !== "Integrations"}><IntegrationsSection onDirtyChange={dirtyIntegrations} /></div>
+      {/* GAP-ADMIN-SETTINGS-01: if the stored settings could not be read there is no form and no Save,
+          so nothing can overwrite values this screen never saw. */}
+      <div role="tabpanel" id={panelId("General")} aria-labelledby={tabId("General")} hidden={activeTab !== "General"}>{settings.state === "ready" ? <GeneralSection settings={settings.settings} onDirtyChange={dirtyGeneral} /> : <SettingsLoadError forbidden={settings.forbidden} />}</div>
+      <div role="tabpanel" id={panelId("Email")} aria-labelledby={tabId("Email")} hidden={activeTab !== "Email"}>{settings.state === "ready" ? <EmailSection settings={settings.settings} onDirtyChange={dirtyEmail} /> : <SettingsLoadError forbidden={settings.forbidden} />}</div>
+      <div role="tabpanel" id={panelId("Security")} aria-labelledby={tabId("Security")} hidden={activeTab !== "Security"}>{settings.state === "ready" ? <SecuritySection settings={settings.settings} onDirtyChange={dirtySecurity} /> : <SettingsLoadError forbidden={settings.forbidden} />}</div>
+      <div role="tabpanel" id={panelId("Integrations")} aria-labelledby={tabId("Integrations")} hidden={activeTab !== "Integrations"}>{settings.state === "ready" ? <IntegrationsSection settings={settings.settings} onDirtyChange={dirtyIntegrations} /> : <SettingsLoadError forbidden={settings.forbidden} />}</div>
       {tenant.state !== "hidden" && (
         <div role="tabpanel" id={panelId("Tenant Config")} aria-labelledby={tabId("Tenant Config")} hidden={activeTab !== "Tenant Config"}><TenantConfigSection tenant={tenant} /></div>
       )}

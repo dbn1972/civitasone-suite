@@ -357,6 +357,7 @@ import {
   NotificationDeliveryListSchema,
 } from "@civitasone/schemas/web";
 import { fetchJson, type LoaderResult, type LoaderSource } from "./apiClient";
+import { mapDiscoveryRegistry as mapDiscoveryRegistryImpl, type DiscoveryRegistry as DiscoveryRegistryModel } from "@/lib/admin/discoveryRegistry";
 import { formatMoney } from "@/lib/formatters";
 import { toApiEndpointRow, toEditionRow, type ApiEndpointRow, type EditionRow } from "@/lib/admin/monitoring";
 import {
@@ -5404,23 +5405,59 @@ export type AdminUserSummary = {
   mfaEnabled: boolean;
 };
 
-/** Page size requested from GET /v1/admin/users (the route caps `limit` at 200). A full page means the directory may hold more. */
-export const ADMIN_USERS_LIST_LIMIT = 200;
+/** Rows per page of the user directory (the route caps `limit` at 200). */
+export const ADMIN_USERS_PAGE_SIZE = 25;
 
-export async function getAdminUsersList(): Promise<LoaderResult<AdminUserSummary[]>> {
-  return fetchJson<unknown, AdminUserSummary[]>(`/api/v1/admin/users?limit=${ADMIN_USERS_LIST_LIMIT}`, [], {
+export type AdminUserStatusCounts = { active: number; suspended: number; locked: number; deactivated: number };
+export type AdminUsersPage = {
+  rows: AdminUserSummary[];
+  /** Users matching the current search/filter, across ALL pages. */
+  total: number;
+  /** Tenant-wide per-status counts (independent of the filter), or null when the API did not send them. */
+  counts: AdminUserStatusCounts | null;
+  page: number;
+  pageSize: number;
+};
+export type AdminUsersQuery = { q?: string; status?: AdminUserSummary["status"]; page?: number };
+
+const USER_STATUSES = ["active", "suspended", "locked", "deactivated"] as const;
+export function isUserStatus(v: unknown): v is AdminUserSummary["status"] {
+  return typeof v === "string" && (USER_STATUSES as readonly string[]).includes(v);
+}
+
+function toCounts(v: unknown): AdminUserStatusCounts | null {
+  if (!isRecord(v)) return null;
+  const n = (k: string) => (typeof v[k] === "number" && Number.isFinite(v[k]) ? (v[k] as number) : 0);
+  return { active: n("active"), suspended: n("suspended"), locked: n("locked"), deactivated: n("deactivated") };
+}
+
+/** GAP-ADMIN-USERS-03: one server-side page of the directory with the real total (GET /v1/admin/users?q=&status=&limit=&offset=). */
+export async function getAdminUsersPage(query: AdminUsersQuery = {}): Promise<LoaderResult<AdminUsersPage>> {
+  const page = Math.max(1, Math.floor(query.page ?? 1));
+  const params = new URLSearchParams({ limit: String(ADMIN_USERS_PAGE_SIZE), offset: String((page - 1) * ADMIN_USERS_PAGE_SIZE) });
+  if (query.q) params.set("q", query.q);
+  if (query.status) params.set("status", query.status);
+  return fetchJson<unknown, AdminUsersPage>(`/api/v1/admin/users?${params.toString()}`, { rows: [], total: 0, counts: null, page, pageSize: ADMIN_USERS_PAGE_SIZE }, {
     telemetryKey: "admin.users.list",
     mapResponse: (p) => {
       const rows = getArrayPayload(p);
       if (!rows) return null;
-      return rows.filter(isRecord).map((u) => ({
+      const meta = isRecord(p) && isRecord(p.meta) ? p.meta : {};
+      const mapped = rows.filter(isRecord).map((u) => ({
         id: String(u.id ?? ""),
         email: String(u.email ?? ""),
         name: String(u.name ?? ""),
         empCode: toText(u.empCode),
-        status: (["active", "suspended", "locked", "deactivated"].includes(String(u.status)) ? u.status : "active") as AdminUserSummary["status"],
+        status: (isUserStatus(u.status) ? u.status : "active") as AdminUserSummary["status"],
         mfaEnabled: u.mfaEnabled === true,
       }));
+      return {
+        rows: mapped,
+        total: typeof meta.total === "number" && Number.isFinite(meta.total) ? meta.total : mapped.length,
+        counts: toCounts(meta.counts),
+        page,
+        pageSize: ADMIN_USERS_PAGE_SIZE,
+      };
     },
   });
 }
@@ -5543,6 +5580,31 @@ export async function getAdminScheduledJobs(): Promise<LoaderResult<AdminSchedul
         lastRunStatus: (["success", "failed", "running", "never_run"].includes(String(j.lastRunStatus)) ? j.lastRunStatus : "never_run") as AdminScheduledJob["lastRunStatus"],
         nextRunAt: toText(j.nextRunAt),
       }));
+    },
+  });
+}
+
+/** GAP-ADMIN-SCHEDULED-JOBS-02: what a job may target (GET /v1/admin/scheduled-jobs/targets). */
+export type AdminScheduledJobTarget = { service: string; commandPrefix: string; sensitive: boolean; allowList: string[] | null; /** False for a sensitive service with no configured allow-list. */ schedulable: boolean };
+export type AdminScheduledJobTargets = { services: AdminScheduledJobTarget[]; commandFormat: string; payloadMaxChars: number };
+
+export async function getAdminScheduledJobTargets(): Promise<LoaderResult<AdminScheduledJobTargets | null>> {
+  return fetchJson<unknown, AdminScheduledJobTargets | null>("/api/v1/admin/scheduled-jobs/targets", null, {
+    telemetryKey: "admin.scheduled-jobs.targets",
+    mapResponse: (p) => {
+      const d = isRecord(p) && isRecord(p.data) ? p.data : null;
+      if (!d || !Array.isArray(d.services)) return null;
+      return {
+        services: d.services.filter(isRecord).map((r) => ({
+          service: String(r.service ?? ""),
+          commandPrefix: String(r.commandPrefix ?? ""),
+          sensitive: r.sensitive === true,
+          allowList: Array.isArray(r.allowList) ? r.allowList.map(String) : null,
+          schedulable: r.schedulable !== false,
+        })),
+        commandFormat: String(d.commandFormat ?? "service.entity.action"),
+        payloadMaxChars: typeof d.payloadMaxChars === "number" ? d.payloadMaxChars : 10000,
+      };
     },
   });
 }
@@ -6216,4 +6278,115 @@ export async function getProcurementPOAmendments(poId: string): Promise<LoaderRe
       mapResponse: (p) => getArrayPayload(p) as POAmendmentSummary[] | null,
     }
   );
+}
+
+// ── GAP-ADMIN-DISCOVERY-02: service discovery registry ──────────────────────
+export type { DiscoveryService, DiscoveryRegistry } from "@/lib/admin/discoveryRegistry";
+export const mapDiscoveryRegistry = mapDiscoveryRegistryImpl;
+
+export async function getAdminDiscovery(): Promise<LoaderResult<DiscoveryRegistryModel>> {
+  return fetchJson<unknown, DiscoveryRegistryModel>(
+    "/api/v1/admin/discovery/services",
+    { services: [], checkedAt: null, overall: null, throttled: false },
+    { telemetryKey: "admin.discovery", mapResponse: mapDiscoveryRegistry },
+  );
+}
+
+// ── GAP-ADMIN-SETTINGS-01: stored tenant settings (GET /v1/admin/settings) ──
+export type AdminSettingsSection = { configured: boolean; values: Record<string, unknown>; version: number };
+export type AdminSettings = {
+  general: AdminSettingsSection;
+  email: AdminSettingsSection;
+  security: AdminSettingsSection;
+  integrations: AdminSettingsSection;
+  /** True when an SMTP password is stored. The password itself is never returned. */
+  hasSmtpPassword: boolean;
+  logo: { present: boolean; contentType: string | null; sizeBytes: number | null };
+};
+
+function toSettingsSection(v: unknown): AdminSettingsSection {
+  const o = isRecord(v) ? v : {};
+  return { configured: o.configured === true, values: isRecord(o.values) ? o.values : {}, version: typeof o.version === "number" ? o.version : 0 };
+}
+
+/** Null when the payload is not a settings document, so a bad answer is an error, never "blank settings". */
+export function mapAdminSettings(p: unknown): AdminSettings | null {
+  const d = isRecord(p) && isRecord(p.data) ? p.data : null;
+  if (!d || !isRecord(d.general) || !isRecord(d.email) || !isRecord(d.security) || !isRecord(d.integrations)) return null;
+  const email = toSettingsSection(d.email);
+  const logo = isRecord(d.logo) ? d.logo : {};
+  return {
+    general: toSettingsSection(d.general),
+    email,
+    security: toSettingsSection(d.security),
+    integrations: toSettingsSection(d.integrations),
+    hasSmtpPassword: email.values.hasPassword === true,
+    logo: {
+      present: logo.present === true,
+      contentType: typeof logo.contentType === "string" ? logo.contentType : null,
+      sizeBytes: typeof logo.sizeBytes === "number" ? logo.sizeBytes : null,
+    },
+  };
+}
+
+export async function getAdminSettings(): Promise<LoaderResult<AdminSettings | null>> {
+  return fetchJson<unknown, AdminSettings | null>("/api/v1/admin/settings", null, { telemetryKey: "admin.settings", mapResponse: mapAdminSettings });
+}
+
+// ── GAP-ADMIN-INVOICES-06: invoice detail (GET /v1/billing/invoices/:id) ────
+export type AdminInvoiceItem = { id: string; description: string; kind: string; quantity: string; amountMinor: string };
+export type AdminInvoiceApproval = { id: string; action: string; status: string; amountMinor: string; decidedAt: string | null; reason: string | null };
+export type AdminInvoiceDetail = {
+  id: string;
+  periodMonth: string;
+  status: string;
+  currency: string;
+  totalMinor: string;
+  taxMinor: string;
+  chargesMinor: string;
+  paidMinor: string;
+  outstandingMinor: string;
+  issuedAt: string | null;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  cancelReason: string | null;
+  items: AdminInvoiceItem[];
+  approvals: AdminInvoiceApproval[];
+};
+
+const minorText = (v: unknown): string => (typeof v === "string" && /^-?\d+$/.test(v) ? v : typeof v === "number" && Number.isFinite(v) ? String(Math.trunc(v)) : "0");
+
+/** Null when the body is not an invoice, so it surfaces as an error rather than an empty invoice. */
+export function mapInvoiceDetail(p: unknown): AdminInvoiceDetail | null {
+  if (!isRecord(p) || typeof p.id !== "string" || p.id === "") return null;
+  return {
+    id: p.id,
+    periodMonth: String(p.periodMonth ?? ""),
+    status: String(p.status ?? ""),
+    currency: String(p.currency ?? "INR"),
+    totalMinor: minorText(p.totalMinor),
+    taxMinor: minorText(p.taxMinor),
+    chargesMinor: minorText(p.chargesMinor),
+    paidMinor: minorText(p.paidMinor),
+    outstandingMinor: minorText(p.outstandingMinor),
+    issuedAt: toText(p.issuedAt),
+    paidAt: toText(p.paidAt),
+    cancelledAt: toText(p.cancelledAt),
+    cancelReason: toText(p.cancelReason),
+    items: (Array.isArray(p.items) ? p.items : []).filter(isRecord).map((i) => ({
+      id: String(i.id ?? ""), description: String(i.description ?? ""), kind: String(i.kind ?? "line"),
+      quantity: minorText(i.quantity), amountMinor: minorText(i.amountMinor),
+    })),
+    approvals: (Array.isArray(p.approvals) ? p.approvals : []).filter(isRecord).map((a) => ({
+      id: String(a.id ?? ""), action: String(a.action ?? ""), status: String(a.status ?? ""),
+      amountMinor: minorText(a.amountMinor), decidedAt: toText(a.decidedAt), reason: toText(a.reason),
+    })),
+  };
+}
+
+export async function getAdminInvoiceDetail(id: string): Promise<LoaderResult<AdminInvoiceDetail | null>> {
+  return fetchJson<unknown, AdminInvoiceDetail | null>(`/api/v1/billing/invoices/${encodeURIComponent(id)}`, null, {
+    telemetryKey: "admin.invoice.detail",
+    mapResponse: mapInvoiceDetail,
+  });
 }

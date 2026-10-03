@@ -5,6 +5,9 @@ import { HttpError } from "../../shared/context.js";
 import { COMMANDS, RESOURCE } from "../../topics.js";
 import type { CreateUserBody, UpdateUserBody, StatusBody } from "./validators.js";
 import type { UserView } from "./domain.js";
+import type * as rbacRepo from "../rbac/repo.js";
+import { strandsTenantAdmins } from "./last-admin.js";
+import { scopedRead } from "../../shared/db.js";
 
 export type Accepted = { id: string; status: string; correlationId: string };
 
@@ -43,6 +46,12 @@ export async function changeUserStatus(ctx: RequestContext, id: string, body: St
   // UUIDs are case-insensitive: the route's zod uuid() accepts an upper-cased id, so compare lower-cased.
   if (body.status !== "active" && isSameUuid(id, ctx.actorId)) {
     throw new HttpError(409, "SELF_STATUS_CHANGE", "you cannot suspend, lock or deactivate your own account");
+  }
+  // GAP-ADMIN-USERS-01: never take the tenant's last active tenant admin out of service.
+  // Checked here for a fast, readable 409; the consumer re-checks under a lock so two admins
+  // suspending each other at the same moment cannot both pass.
+  if (body.status !== "active" && (await scopedRead((tx) => strandsTenantAdmins(tx as unknown as rbacRepo.Writer, ctx.tenantId, id)))) {
+    throw new HttpError(409, "LAST_TENANT_ADMIN", "this is the last active tenant admin; make someone else a tenant admin first");
   }
   await queue.publish(COMMANDS.deactivateUser, {
     messageId: randomUUID(),

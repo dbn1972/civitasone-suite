@@ -105,6 +105,18 @@ export async function setAssignmentStatus(tx: Writer, tenantId: string, id: stri
   return res.length;
 }
 
+/**
+ * User ids holding an ACTIVE assignment of the role with this key in the tenant
+ * (GAP-ADMIN-USERS-01: the "last tenant admin" guard). Reads only rbac.* tables.
+ */
+export async function activeRoleHolderIds(tx: Writer, tenantId: string, roleKey: string): Promise<string[]> {
+  const rows = await tx.select({ userId: roleAssignments.userId })
+    .from(roleAssignments)
+    .innerJoin(roles, and(eq(roles.id, roleAssignments.roleId), eq(roles.tenantId, roleAssignments.tenantId)))
+    .where(and(eq(roleAssignments.tenantId, tenantId), eq(roles.key, roleKey), eq(roleAssignments.status, "active")));
+  return [...new Set(rows.map((r) => r.userId))];
+}
+
 // ── effective access for a user ────────────────────────────────────────────
 export async function effectiveAccess(tenantId: string, userId: string): Promise<EffectiveAccess> {
   const roleRows = await scopedRead((tx) => tx.select({ id: roles.id, key: roles.key, name: roles.name })

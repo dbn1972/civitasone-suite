@@ -49,6 +49,11 @@ const listQuery = z.object({
   offset: z.coerce.number().int().min(0).default(0),
 });
 
+const userListQuery = listQuery.extend({
+  q: z.string().trim().max(100).optional(),
+  status: z.enum(["active", "suspended", "locked", "deactivated"]).optional(),
+});
+
 function pageMeta(limit: number, offset: number, total: number) {
   return { page: Math.floor(offset / limit) + 1, pageSize: limit, total };
 }
@@ -198,14 +203,25 @@ export async function adminGapRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/admin/users", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
-    const q = listQuery.parse(req.query);
+    // GAP-ADMIN-USERS-03: server-side search/status filter/paging with a real total.
+    const parsedQuery = userListQuery.safeParse(req.query);
+    if (!parsedQuery.success) {
+      throw new HttpError(400, "VALIDATION_FAILED", parsedQuery.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "));
+    }
+    const q = parsedQuery.data;
+    const params = new URLSearchParams({ tenantId: ctx.tenantId, limit: String(q.limit), offset: String(q.offset) });
+    if (q.q) params.set("q", q.q);
+    if (q.status) params.set("status", q.status);
     const { status, body } = await callUpstream<unknown>(
-      req, ctx, "GET", identityBaseUrl(),
-      `/identity/users?tenantId=${encodeURIComponent(ctx.tenantId)}&limit=${q.limit}&offset=${q.offset}`,
+      req, ctx, "GET", identityBaseUrl(), `/identity/users/search?${params.toString()}`,
     );
     if (status < 200 || status >= 300) { const r = relayError(status, body); return reply.code(r.status).send(r.payload); }
-    const rows = Array.isArray(body) ? body : [];
-    return reply.send({ data: rows, meta: pageMeta(q.limit, q.offset, rows.length) });
+    // An identity-service that predates /search answers a bare array: keep that readable (no total then).
+    const searched = body && typeof body === "object" && !Array.isArray(body)
+      ? (body as { rows?: unknown[]; total?: number; counts?: Record<string, number> }) : null;
+    const rows = Array.isArray(body) ? body : Array.isArray(searched?.rows) ? searched!.rows! : [];
+    const total = typeof searched?.total === "number" ? searched.total : rows.length;
+    return reply.send({ data: rows, meta: { ...pageMeta(q.limit, q.offset, total), ...(searched?.counts ? { counts: searched.counts } : {}) } });
   });
 
   app.post("/v1/admin/users", async (req, reply) => {
