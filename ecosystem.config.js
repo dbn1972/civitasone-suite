@@ -365,6 +365,19 @@ function piiKey(envName, fileSlug, serviceName) {
 }
 
 
+// admin-service seals tenant integration secrets (eSign / DSC / bank API) with the
+// fleet's PII envelope: PII_ENC_KEY from env -> on-host ~/.civitasone-admin-pii-key ->
+// dev fallback. Unlike the services that refuse to boot, admin-service must keep serving
+// every other route when the key is absent in production: it then simply has no key and
+// secret writes answer 503 ENCRYPTION_UNAVAILABLE (fail closed), nothing is stored.
+const ADMIN_PII_ENV = (() => {
+  try {
+    return { PII_ENC_KEY: piiKey("ADMIN_PII_KEY", "admin", "admin-service") };
+  } catch (e) {
+    return {};
+  }
+})();
+
 // Scanner (BYPASSRLS) DSNs for court/visitor outbox relay + maintenance scans.
 // Must be distinct from the service DATABASE_URL in production — FORCE RLS on
 // _outbox.messages would otherwise starve startRelay/startOutboxPurge.
@@ -543,7 +556,7 @@ module.exports = {
     svc("legal",        3021, "legal_svc",         "civitas_legal", {}, { graceful: true }), // PERF-015
 
     // ── Admin & billing ────────────────────────────────────────────────────────
-    svc("admin",        3022, "admin_svc",         "civitas_admin", {}, { graceful: true }), // PERF-015
+    svc("admin",        3022, "admin_svc",         "civitas_admin", ADMIN_PII_ENV, { graceful: true }), // PERF-015
     svc("billing",      3023, "billing_svc",       "civitas_billing", {}, { graceful: true }), // PERF-015
 
     // ── CRM & operations ───────────────────────────────────────────────────────

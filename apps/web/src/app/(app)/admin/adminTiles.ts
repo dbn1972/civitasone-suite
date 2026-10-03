@@ -6,6 +6,7 @@ import {
   BILLING_INVOICE_READER_ROLES,
   AUDIT_LOG_VIEW_ROLES,
   DEVICE_ADMIN_ROLES,
+  INTEGRATION_ADMIN_ROLES,
 } from "@/lib/auth/adminRoles";
 
 /**
@@ -36,6 +37,8 @@ export const ADMIN_TILES: readonly AdminTileDef[] = [
   { id: "entitlements", href: "/admin/entitlements", icon: "🔑", section: "billing", roles: ADMIN_PLATFORM_ROLES },
   { id: "featureFlags", href: "/admin/feature-flags", icon: "🚩", section: "billing", roles: ADMIN_PLATFORM_ROLES },
   { id: "integrations", href: "/admin/integrations", icon: "🔗", section: "connectivity", roles: ADMIN_TENANT_ROLES },
+  { id: "tenantIntegrations", href: "/admin/integrations/platform", icon: "✍️", section: "connectivity", roles: INTEGRATION_ADMIN_ROLES },
+  { id: "platformIntegrations", href: "/admin/platform/integrations", icon: "🧩", section: "connectivity", roles: ADMIN_PLATFORM_ROLES },
   { id: "gateways", href: "/admin/gateways", icon: "📡", section: "connectivity", roles: ADMIN_PLATFORM_ROLES },
   { id: "gatewayConfig", href: "/admin/gateway-config", icon: "🧩", section: "connectivity", roles: ADMIN_PLATFORM_ROLES },
   // api_admin matches the page gate but cannot reach the hub (it admits tenant roles only); kept so the

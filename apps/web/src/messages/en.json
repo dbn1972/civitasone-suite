@@ -164,6 +164,8 @@
       "entitlements": {"title": "Entitlements", "description": "Module limits and overrides"},
       "featureFlags": {"title": "Feature Flags", "description": "Feature toggles and rollout"},
       "integrations": {"title": "Integrations", "description": "External endpoints, API keys and connections"},
+      "platformIntegrations": {"title": "Platform integrations", "description": "e-Sign, DSC, bank API and PFMS provider catalogue"},
+      "tenantIntegrations": {"title": "e-Sign, DSC and bank", "description": "Configure signing and bank connections"},
       "gateways": {"title": "Communication Gateways", "description": "SMS, email, WhatsApp and push gateway status"},
       "gatewayConfig": {"title": "API Gateway: Edge Config", "description": "Rate limits, breakers and JWT verification at the edge"},
       "gatewayRoutes": {"title": "API Gateway: Route Catalogue", "description": "Registered API routes and upstreams"},
@@ -10196,6 +10198,277 @@
           "link": "The link could not be saved.",
           "unlink": "The link could not be removed.",
           "network": "Network error. Please try again."
+    }
+  },
+  "platformIntegrations": {
+    "common": {
+      "retry": "Try again",
+      "cancel": "Cancel",
+      "close": "Close",
+      "save": "Save",
+      "saving": "Saving…",
+      "loading": "Loading integrations",
+      "dash": "—"
+    },
+    "categories": {
+      "esign": "e-Sign",
+      "dsc": "Digital signature (DSC)",
+      "bank_api": "Bank API / H2H",
+      "pfms": "PFMS"
+    },
+    "categoryHelp": {
+      "esign": "Aadhaar eSign service providers",
+      "dsc": "USB-token bridge and remote HSM signing",
+      "bank_api": "Corporate banking API and host-to-host SFTP",
+      "pfms": "Public Financial Management System bridge"
+    },
+    "categoryNoun": {
+      "esign": "e-Sign",
+      "dsc": "DSC",
+      "bank_api": "bank API",
+      "pfms": "PFMS"
+    },
+    "status": {
+      "available": "Available",
+      "beta": "Beta",
+      "disabled": "Disabled"
+    },
+    "env": {
+      "sandbox": "Sandbox",
+      "production": "Production"
+    },
+    "health": {
+      "untested": "Not tested",
+      "success": "Connected",
+      "failure": "Failed",
+      "testedAt": "Last tested {when}",
+      "never": "Never tested",
+      "mock": "Mock result (sandbox)"
+    },
+    "secret": {
+      "stored": "Stored (hidden)",
+      "notSet": "Not set",
+      "keep": "Leave blank to keep the stored value",
+      "clear": "Clear the stored value",
+      "willClear": "Will be cleared when you save"
+    },
+    "scope": {
+      "productionOnly": "Production only",
+      "sandboxOnly": "Sandbox only"
+    },
+    "people": {
+      "you": "You",
+      "another": "Another administrator"
+    },
+    "editions": {
+      "govt_dept": "Government department",
+      "psu": "PSU",
+      "small_office": "Small office"
+    },
+    "fieldType": {
+      "text": "Text",
+      "number": "Number",
+      "url": "URL",
+      "select": "Choice",
+      "boolean": "Yes / no",
+      "multiline": "Multi-line text",
+      "keyRef": "Key reference"
+    },
+    "platform": {
+      "title": "Platform integrations",
+      "subtitle": "The catalogue of e-Sign, DSC, bank API and PFMS providers CivitasOne supports. Decide which are enabled and which organisations may use them.",
+      "tabsLabel": "Integration category",
+      "stats": {
+        "providers": "Providers",
+        "available": "Available",
+        "beta": "Beta",
+        "disabled": "Disabled"
+      },
+      "table": {
+        "provider": "Provider",
+        "status": "Status",
+        "availability": "Availability",
+        "usage": "In use (sandbox / production)",
+        "action": "Details"
+      },
+      "manage": "Manage {name}",
+      "availability": {
+        "all": "All organisations",
+        "tenants": "{count, plural, one {# organisation} other {# organisations}}",
+        "editions": "Editions: {list}",
+        "nobody": "Nobody selected",
+        "allOption": "All organisations",
+        "restrictedOption": "Only selected organisations or editions",
+        "editionsLabel": "Editions",
+        "tenantsLabel": "Organisations",
+        "searchTenants": "Search organisations",
+        "noTenantMatch": "No organisations match your search",
+        "tenantsLoadFailed": "We couldn't load the organisation list. You can still choose editions.",
+        "tenantsTruncated": "Showing the first {count} organisations. Use search to narrow down.",
+        "save": "Save availability",
+        "needOne": "Choose at least one organisation or edition, or allow all organisations."
+      },
+      "empty": {
+        "title": "No providers in this category",
+        "message": "The platform catalogue has no provider here yet."
+      },
+      "drawer": {
+        "tabs": {
+          "overview": "Overview",
+          "fields": "Config fields",
+          "availability": "Availability"
+        },
+        "tabsLabel": "Provider details",
+        "vendor": "Vendor",
+        "description": "Description",
+        "capabilities": "Capabilities",
+        "statusLabel": "Platform status",
+        "statusHelp": "Disabled hides the provider from every organisation and blocks changes to existing configurations.",
+        "endpointsTitle": "Provider endpoints",
+        "endpointsNote": "No provider endpoint is preconfigured. Record the URLs here once the provider issues them during UAT onboarding. They must be https.",
+        "sandboxEndpoint": "Sandbox endpoint",
+        "productionEndpoint": "Production endpoint",
+        "saveOverview": "Save changes",
+        "endpointInvalid": "Enter a valid https URL, or leave the field blank.",
+        "saved": "Saved.",
+        "stillApplying": "Your change was accepted but is still being applied. Refresh in a moment to confirm.",
+        "usage": "In use: {sandbox} sandbox, {production} production"
+      },
+      "fieldsTable": {
+        "label": "Field",
+        "type": "Type",
+        "required": "Required",
+        "secret": "Secret",
+        "environments": "Environments",
+        "visibleWhen": "Shown when",
+        "yes": "Yes",
+        "no": "No",
+        "always": "Always",
+        "hint": "Secret fields are encrypted at rest and are never shown again after they are saved."
+      }
+    },
+    "tenant": {
+      "title": "e-Sign, DSC and bank integrations",
+      "subtitle": "Choose a provider the platform supports, enter your credentials and test it in the sandbox. Production is switched on only after a second administrator approves.",
+      "sandboxNotice": "The sandbox runs against mock services so you can try signing and bank-file flows end to end. Live connections are enabled during UAT.",
+      "otherIntegrations": "Looking for AI, messaging, email or payment endpoints?",
+      "otherIntegrationsLink": "Open endpoint integrations",
+      "tabsLabel": "Integration category",
+      "stats": {
+        "available": "Providers available",
+        "configured": "Configured",
+        "production": "In production",
+        "pending": "Awaiting approval"
+      },
+      "policy": {
+        "title": "Production switch approval",
+        "on": "A second administrator must approve every switch to production.",
+        "off": "Approval is switched off. A switch to production applies immediately and is still recorded in the audit log.",
+        "turnOff": "Request to switch approval off",
+        "turnOn": "Require approval",
+        "tenantAdminOnly": "Only a tenant administrator can change this setting.",
+        "confirmOffTitle": "Request to switch off production approval?",
+        "confirmOffBody": "Another administrator must approve this before approval is switched off. Until then, every switch to production still needs a second administrator.",
+        "confirmOnTitle": "Require approval again?",
+        "confirmOnBody": "Switches to production will again need a second administrator to approve.",
+        "updated": "Approval setting updated.",
+        "reasonLabel": "Why should approval be switched off?",
+        "requested": "Request sent. Another administrator has to approve it.",
+        "pendingTitle": "Request to switch approval off",
+        "pendingBody": "{name} asked to switch approval off on {date}.",
+        "approveTitle": "Switch production approval off?",
+        "approveBody": "After this, switches to production apply immediately without a second administrator. Every switch is still recorded in the audit log.",
+        "rejectTitle": "Reject this request?",
+        "rejectBody": "Production approval stays on.",
+        "cancelBody": "Production approval stays on.",
+        "approved": "Approved. Production approval is now off.",
+        "stillApplying": "Your decision was accepted but is still being applied. Refresh in a moment to confirm."
+      },
+      "pending": {
+        "title": "Production switches awaiting approval",
+        "empty": "Nothing is waiting for approval.",
+        "requestedBy": "Requested by {name} on {date}",
+        "reason": "Reason: {reason}",
+        "approve": "Approve",
+        "reject": "Reject",
+        "cancel": "Cancel request",
+        "ownRequest": "You raised this request, so another administrator must decide it.",
+        "approveTitle": "Approve the switch to production?",
+        "approveBody": "{provider} will start using its production environment.",
+        "rejectTitle": "Reject this request?",
+        "rejectBody": "{provider} stays in the sandbox.",
+        "cancelTitle": "Cancel your request?",
+        "cancelBody": "{provider} stays in the sandbox.",
+        "noteLabel": "Note (optional)",
+        "rejectReasonLabel": "Reason for rejecting",
+        "cancelConfirm": "Cancel request",
+        "approved": "Approved. {provider} is now in production.",
+        "rejected": "Request rejected.",
+        "cancelled": "Request cancelled.",
+        "stillApplying": "Your decision was accepted but is still being applied. Refresh in a moment to confirm.",
+        "stale": "The configuration changed after this request was raised. Ask for a fresh request."
+      },
+      "list": {
+        "notConfigured": "Not configured",
+        "configure": "Configure",
+        "manage": "Manage",
+        "testConnection": "Test connection",
+        "testing": "Testing…",
+        "integrationOff": "Switched off",
+        "betaNote": "Beta: sandbox only",
+        "providerDisabled": "Disabled by the platform",
+        "pendingBadge": "Production request pending",
+        "lastTest": "Last test",
+        "emptyTitle": "No providers available",
+        "emptyMessage": "The platform has not enabled any {category} provider for your organisation yet. Ask your platform administrator."
+      },
+      "drawer": {
+        "title": "Configure {name}",
+        "configuration": "Configuration",
+        "enabledLabel": "Integration enabled",
+        "saveCreate": "Save configuration",
+        "saveUpdate": "Save changes",
+        "saved": "Configuration saved.",
+        "stillApplying": "Your change was accepted but is still being applied. Refresh in a moment to confirm.",
+        "remove": "Remove configuration",
+        "removeTitle": "Remove this configuration?",
+        "removeBody": "The stored credentials are deleted. You can configure the provider again later.",
+        "removeConfirm": "Remove",
+        "removed": "Configuration removed.",
+        "connection": "Connection",
+        "testHint": "Save your changes first; the test uses the saved configuration.",
+        "notYetAvailable": "Not yet available — configured for UAT",
+        "testOk": "Test passed: {message}",
+        "testFail": "Test failed: {message}",
+        "testError": "We couldn't run the test. Try again in a moment.",
+        "productionSection": "Production",
+        "sandboxIs": "This integration runs in the sandbox, against mock services.",
+        "prodIs": "This integration is in production.",
+        "missing": "Still required for production: {fields}",
+        "ready": "All fields required for production are set.",
+        "requestSwitch": "Request switch to production",
+        "directSwitch": "Switch to production",
+        "requestTitle": "Switch {name} to production?",
+        "requestBody": "It will use the production environment of the provider.",
+        "needsApprover": "A second administrator has to approve this before it takes effect.",
+        "appliesDirect": "Approval is switched off for your organisation, so this applies immediately.",
+        "reasonLabel": "Why is this switch needed?",
+        "betaBlock": "Beta providers can only run in the sandbox.",
+        "disabledBlock": "This provider has been disabled by the platform.",
+        "pendingFor": "Waiting for another administrator to approve (requested {date}).",
+        "revert": "Switch back to sandbox",
+        "revertTitle": "Switch back to sandbox?",
+        "revertBody": "The integration stops using production immediately.",
+        "revertReasonLabel": "Reason",
+        "requested": "Request sent for approval.",
+        "switched": "Switched to production.",
+        "reverted": "Switched back to sandbox.",
+        "saveFirst": "Save the configuration first.",
+        "formErrors": "Check the highlighted fields.",
+        "sensitiveTitle": "Save and move back to sandbox?",
+        "sensitiveWarning": "Saving will move this integration back to sandbox until another administrator approves production again.",
+        "sensitiveConfirm": "Save and move to sandbox"
+      }
     }
   }
 }
