@@ -18,6 +18,7 @@ import { scopedRead } from "../../shared/db.js";
 import { resolveRunStatutoryConfig } from "./consumer.js";
 import * as commands from "./commands.js";
 import { stateRulesBody, findPtSlabOverlap } from "./state-rules.js";
+import { validatePaySchedule, payDatesForMonth, type PayFrequency } from "./fin03-domain.js";
 import { assertElectionWithinPlan } from "./adjustment-guards.js";
 import { isValidIanaTimeZone } from "./validators.js";
 import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED, istToday } from "../tax/verified-inputs.js";
@@ -29,6 +30,23 @@ const ALL_ROLES = [...READER_ROLES, "employee"];
 const ALL_STAFF_ROLES = staffRolesOf(ALL_ROLES);
 
 const offCycleProcessBody = z.object({ reason: z.string().trim().min(10).max(512) });
+
+// GAP-PAYROLL-PAY-GROUPS-01: kept outside the handler so the handler body stays
+// the parse -> command -> sendAccepted shape the CQRS static tests pin.
+const createPayGroupBody = z.object({
+  name: z.string().min(1).max(128),
+  frequency: z.enum(["monthly", "bi_weekly", "weekly"]),
+  payDayOfMonth: z.number().int().min(1).max(31).default(28),
+  timezone: z.string().max(64).default("Asia/Kolkata")
+    .refine(isValidIanaTimeZone, "must be an IANA timezone name, e.g. Asia/Kolkata"),
+  // GAP-PAYROLL-PAY-GROUPS-01: weekday / last-day / bi-weekly parity.
+  payWeekday: z.number().int().min(1).max(7).nullable().optional(),
+  payLastDay: z.boolean().optional(),
+  payWeekParity: z.number().int().min(0).max(1).nullable().optional(),
+}).superRefine((b, c) => {
+  const problem = validatePaySchedule(b);
+  if (problem) c.addIssue({ code: z.ZodIssueCode.custom, path: ["frequency"], message: problem });
+});
 
 export async function gapRoutes(app: FastifyInstance): Promise<void> {
   // ─── Gap 1: Payroll Simulation ──────────────────────────────────────────────
@@ -183,22 +201,21 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/payroll/pay-groups", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
-    const body = z.object({
-      name: z.string().min(1).max(128),
-      frequency: z.enum(["monthly", "bi_weekly", "weekly"]),
-      payDayOfMonth: z.number().int().min(1).max(31).default(28),
-      timezone: z.string().max(64).default("Asia/Kolkata")
-        .refine(isValidIanaTimeZone, "must be an IANA timezone name, e.g. Asia/Kolkata"),
-    }).parse(req.body);
+    const body = createPayGroupBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPayGroup(ctx, body));
   });
 
   app.get("/v1/payroll/pay-groups", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
+    // GAP-PAYROLL-PAY-GROUPS-03: deactivated ('archived') groups are listed
+    // only on request, so the default response is unchanged.
+    const q = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).parse(req.query);
+    const includeInactive = q.includeInactive === "true";
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT id, name, frequency, pay_day_of_month, timezone, status, created_at
-      FROM payroll.pay_groups WHERE tenant_id = ${ctx.tenantId}::uuid AND status = 'active'
+      SELECT id, name, frequency, pay_day_of_month, pay_weekday, pay_last_day, pay_week_parity, timezone, status, created_at
+      FROM payroll.pay_groups
+      WHERE tenant_id = ${ctx.tenantId}::uuid AND (${includeInactive} OR status = 'active')
       ORDER BY name LIMIT 100
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
@@ -210,20 +227,28 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const q = z.object({ fy: z.string().regex(/^\d{4}-\d{2}$/) }).parse(req.query);
     const startYear = parseInt(q.fy.slice(0, 4), 10);
     const groups = (await scopedRead((tx) => tx.execute(sql`
-      SELECT id, name, frequency, pay_day_of_month FROM payroll.pay_groups
+      SELECT id, name, frequency, pay_day_of_month, pay_weekday, pay_last_day, pay_week_parity FROM payroll.pay_groups
       WHERE tenant_id = ${ctx.tenantId}::uuid AND status = 'active'
-    `))) as unknown as Array<{ id: string; name: string; frequency: string; pay_day_of_month: number }>;
+    `))) as unknown as Array<{
+      id: string; name: string; frequency: PayFrequency; pay_day_of_month: number;
+      pay_weekday: number | null; pay_last_day: boolean; pay_week_parity: number | null;
+    }>;
 
-    // Generate pay calendar: Apr startYear to Mar startYear+1
+    // Generate pay calendar: Apr startYear to Mar startYear+1. Monthly (and
+    // legacy weekday-less) groups yield one date per month exactly as before;
+    // weekly / bi-weekly groups with a weekday yield every pay date.
     const calendar: Array<{ group: string; month: string; payDate: string }> = [];
+    const months: Array<[number, number]> = [];
+    for (let m = 4; m <= 12; m++) months.push([startYear, m]);
+    for (let m = 1; m <= 3; m++) months.push([startYear + 1, m]);
     for (const g of groups) {
-      for (let m = 4; m <= 12; m++) {
-        const day = Math.min(g.pay_day_of_month, new Date(startYear, m, 0).getDate());
-        calendar.push({ group: g.name, month: `${startYear}-${String(m).padStart(2, "0")}`, payDate: `${startYear}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}` });
-      }
-      for (let m = 1; m <= 3; m++) {
-        const day = Math.min(g.pay_day_of_month, new Date(startYear + 1, m, 0).getDate());
-        calendar.push({ group: g.name, month: `${startYear + 1}-${String(m).padStart(2, "0")}`, payDate: `${startYear + 1}-${String(m).padStart(2, "0")}-${String(day).padStart(2, "0")}` });
+      for (const [y, m] of months) {
+        for (const payDate of payDatesForMonth({
+          frequency: g.frequency, payDayOfMonth: g.pay_day_of_month,
+          payWeekday: g.pay_weekday, payLastDay: g.pay_last_day, payWeekParity: g.pay_week_parity,
+        }, y, m)) {
+          calendar.push({ group: g.name, month: `${y}-${String(m).padStart(2, "0")}`, payDate });
+        }
       }
     }
     return reply.send({ fy: q.fy, groups: groups.length, calendar });
@@ -651,7 +676,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const pt = (await scopedRead((tx) => tx.execute(sql`
-      SELECT state_code, slab_from_minor, slab_to_minor, pt_amount_minor
+      SELECT state_code, slab_from_minor, slab_to_minor, pt_amount_minor, effective_from::text AS effective_from
       FROM payroll.payroll_professional_tax WHERE tenant_id = ${ctx.tenantId}::uuid AND is_active = true
       ORDER BY state_code, slab_from_minor
     `))) as unknown as Array<Record<string, unknown>>;

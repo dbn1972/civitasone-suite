@@ -21,6 +21,8 @@ type SalarySlipRow = {
   deductions: number;
   net: number;
   status: string;
+  /** GAP-PAYROLL-DETAIL-05: pre-disbursement issue codes (never the PAN / account number). */
+  issues?: string[];
 } & Record<string, unknown>;
 
 /** Parse a pay-period string like "2026-07" or "July 2026" → { year, month } */
@@ -162,6 +164,7 @@ export default async function PayrollRunDetailPage({ params }: { params: { id: s
         netAmount={run.netAmount}
         payPeriod={run.payPeriod}
         canAdminister={canAdminister}
+        exceptionCount={exceptions.length}
       />
 
       <Card title={t("runDetailsTitle")}>

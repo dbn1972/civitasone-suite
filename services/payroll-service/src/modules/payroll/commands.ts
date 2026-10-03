@@ -9,6 +9,8 @@ import { HttpError } from "../../shared/context.js";
 import { COMMANDS } from "../../topics.js";
 import { deterministicUuid } from "../../shared/deterministic-id.js";
 import { verifyEmployeeExists, fetchPayrollInput, HrmsUnavailableError } from "../../shared/hrms-client.js";
+import { headObject } from "@civitasone/storage";
+import { receiptRuleViolation, REIMBURSEMENT_ATTACHMENT_MAX_BYTES, REIMBURSEMENT_ATTACHMENT_TYPES } from "./fin03-domain.js";
 import * as repo from "./repo.js";
 import { audit } from "./consumer.js";
 import type {
@@ -27,6 +29,35 @@ export async function createStructure(ctx: RequestContext, body: CreateStructure
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+/**
+ * GAP-PAYROLL-REIMBURSEMENTS-03: every attachment key must sit under THIS
+ * tenant's reimbursement prefix (no pointing a claim at another tenant's, or
+ * an unrelated, object) and must really have been uploaded.
+ */
+async function assertReceipts(ctx: RequestContext, category: string, keys: string[] | undefined): Promise<void> {
+  const violation = receiptRuleViolation(ctx.tenantId, ctx.actorId, category, keys);
+  if (violation === "RECEIPT_REQUIRED") {
+    throw new HttpError(422, "RECEIPT_REQUIRED", `a ${category} claim needs at least one receipt`);
+  }
+  if (violation === "RECEIPT_KEY_INVALID") {
+    throw new HttpError(422, "RECEIPT_KEY_INVALID", "receipts must be uploaded through the receipt upload endpoint by the person submitting the claim");
+  }
+  if (!keys || keys.length === 0) return;
+  // HEAD every object: it must exist, be within the size cap and be a PDF / JPEG /
+  // PNG as stored (the presign signs both, but the stored object is what counts).
+  const heads = await Promise.all(keys.map((k) => headObject(k)));
+  if (heads.some((h) => h === null)) {
+    throw new HttpError(400, "ATTACHMENT_NOT_UPLOADED", "a receipt was not uploaded; upload it again before submitting");
+  }
+  for (const h of heads) {
+    const type = (h!.contentType ?? "").split(";")[0]!.trim().toLowerCase();
+    if (h!.contentLength === null || h!.contentLength <= 0 || h!.contentLength > REIMBURSEMENT_ATTACHMENT_MAX_BYTES
+      || !(REIMBURSEMENT_ATTACHMENT_TYPES as readonly string[]).includes(type)) {
+      throw new HttpError(422, "RECEIPT_FILE_INVALID", "a receipt must be a PDF, JPEG or PNG of at most 10 MB");
+    }
+  }
 }
 
 export async function createRun(ctx: RequestContext, body: CreateRunBody): Promise<Accepted> {
@@ -56,6 +87,16 @@ export async function createRun(ctx: RequestContext, body: CreateRunBody): Promi
     }
   }
   const ddoCode = body.ddoCode ?? null;
+  // GAP-PAYROLL-DDOS-03: a deactivated DDO cannot start new runs.
+  if (ddoCode) {
+    const ddo = await scopedRead((tx) => tx.execute(sql`
+      SELECT is_active FROM payroll.payroll_ddos
+      WHERE tenant_id = ${ctx.tenantId}::uuid AND ddo_code = ${ddoCode} LIMIT 1
+    `)) as unknown as Array<{ is_active: boolean }>;
+    if (ddo[0] && ddo[0].is_active === false) {
+      throw new HttpError(409, "DDO_INACTIVE", `DDO ${ddoCode} is deactivated; reactivate it before starting a run`);
+    }
+  }
   // Concurrency fix (High, proven via a genuine `Promise.all` repro): BUG-3
   // and round2 (see the history of this comment, and consumer.ts's own
   // "round2 fix" note on COMMANDS.runCreate) made this guard correctly
@@ -293,6 +334,7 @@ export async function computeBonus(ctx: RequestContext, body: ComputeBonusBody):
 /** Reimbursement create. */
 export async function createReimbursement(ctx: RequestContext, body: CreateReimbursementBody): Promise<Accepted> {
   await assertEmployeeExists(ctx, body.employeeId);
+  await assertReceipts(ctx, body.category, body.attachmentKeys);
   const id = randomUUID();
   await queue.publish(COMMANDS.reimbursementCreate, {
     messageId: id, type: COMMANDS.reimbursementCreate,
@@ -427,6 +469,8 @@ export async function decideCorrection(ctx: RequestContext, body: DecideCorrecti
 export type CreatePayGroupInput = {
   name: string; frequency: "monthly" | "bi_weekly" | "weekly";
   payDayOfMonth: number; timezone: string;
+  // GAP-PAYROLL-PAY-GROUPS-01
+  payWeekday?: number | null | undefined; payLastDay?: boolean | undefined; payWeekParity?: number | null | undefined;
 };
 export async function createPayGroup(ctx: RequestContext, body: CreatePayGroupInput): Promise<Accepted> {
   const id = randomUUID();
@@ -543,6 +587,7 @@ export type UpsertStateRulesInput = {
   lwfEmployee?: number | undefined;
   lwfEmployer?: number | undefined;
   lwfFrequency?: "monthly" | "quarterly" | "half_yearly" | "yearly" | undefined;
+  effectiveFrom?: string | undefined;
 };
 export async function upsertStateRules(ctx: RequestContext, body: UpsertStateRulesInput): Promise<Accepted> {
   await queue.publish(COMMANDS.stateRulesUpsert, {

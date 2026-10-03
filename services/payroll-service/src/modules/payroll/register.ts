@@ -12,8 +12,9 @@
  *     reports their combined cost;
  *   - money: BIGINT paise, aggregated from the run's slips -- never
  *     recomputed. total_pf_minor is the EPF employee share; GPF/NPS have no
- *     column and stay inside total_deductions_minor (the register page shows
- *     the remainder as "Other deductions"); total_pt_minor is the slip
+ *     column until migration 0067 (total_gpf_minor / total_nps_minor now
+ *     carry them; the register page shows the unlisted remainder as "Other
+ *     deductions"); total_pt_minor is the slip
  *     component coded "PT";
  *   - period: the run's month (YYYY-MM).
  *
@@ -46,6 +47,9 @@ export type RegisterRow = {
   totalEsiMinor: bigint;
   totalTdsMinor: bigint;
   totalPtMinor: bigint;
+  // GAP-PAYROLL-REGISTER-04: Govt-edition deductions (migration 0067).
+  totalGpfMinor: bigint;
+  totalNpsMinor: bigint;
 };
 
 const PT_CODE = "PT";
@@ -76,6 +80,7 @@ export function aggregateRegister(
         departmentId: dept.departmentId, departmentName: dept.departmentName, employeeCount: 0,
         totalGrossMinor: 0n, totalDeductionsMinor: 0n, totalNetMinor: 0n,
         totalPfMinor: 0n, totalEsiMinor: 0n, totalTdsMinor: 0n, totalPtMinor: 0n,
+        totalGpfMinor: 0n, totalNpsMinor: 0n,
       };
       groups.set(key, row);
     }
@@ -88,6 +93,9 @@ export function aggregateRegister(
     row.totalEsiMinor += slip.esiMinor;
     row.totalTdsMinor += slip.tdsMinor;
     row.totalPtMinor += ptOf(slip);
+    row.totalGpfMinor += slip.gpfMinor;
+    // Employee NPS contribution only: the employer share is a cost, not a deduction.
+    row.totalNpsMinor += slip.npsEmployeeMinor;
   }
   return [...groups.values()];
 }
@@ -173,11 +181,13 @@ export async function rebuildRunRegister(
       INSERT INTO payroll.payroll_register
         (tenant_id, run_id, department_id, department_name, employee_count,
          total_gross_minor, total_deductions_minor, total_net_minor,
-         total_pf_minor, total_esi_minor, total_tds_minor, total_pt_minor, period)
+         total_pf_minor, total_esi_minor, total_tds_minor, total_pt_minor,
+         total_gpf_minor, total_nps_minor, period)
       VALUES (${run.tenantId}::uuid, ${run.runId}::uuid, ${r.departmentId}::uuid, ${r.departmentName}, ${r.employeeCount},
               ${r.totalGrossMinor.toString()}::bigint, ${r.totalDeductionsMinor.toString()}::bigint, ${r.totalNetMinor.toString()}::bigint,
               ${r.totalPfMinor.toString()}::bigint, ${r.totalEsiMinor.toString()}::bigint, ${r.totalTdsMinor.toString()}::bigint,
-              ${r.totalPtMinor.toString()}::bigint, ${run.period})
+              ${r.totalPtMinor.toString()}::bigint,
+              ${r.totalGpfMinor.toString()}::bigint, ${r.totalNpsMinor.toString()}::bigint, ${run.period})
     `);
   }
   return rows;

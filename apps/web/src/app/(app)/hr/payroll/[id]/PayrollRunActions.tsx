@@ -17,6 +17,8 @@ type Props = {
   netAmount: number;
   payPeriod: string;
   canAdminister?: boolean;
+  /** GAP-PAYROLL-DETAIL-05: employees with unresolved pre-disbursement issues; shown as a warning in the Approve / Disburse confirmations. */
+  exceptionCount?: number;
 };
 
 type PendingAction = "approve" | "disburse" | "revert" | null;
@@ -29,6 +31,7 @@ export function PayrollRunActions({
   netAmount,
   payPeriod,
   canAdminister = false,
+  exceptionCount = 0,
 }: Props) {
   const t = useTranslations("payrollRunActions");
   const router = useRouter();
@@ -175,12 +178,17 @@ export function PayrollRunActions({
         confirmLabel={t("approveConfirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={t.rich("approveDescription", {
-          period: payPeriod,
-          count: employeeCount,
-          amount: formatRupees(grossAmount),
-          strong: (chunks) => <strong>{chunks}</strong>,
-        })}
+        description={(
+          <>
+            {t.rich("approveDescription", {
+              period: payPeriod,
+              count: employeeCount,
+              amount: formatRupees(grossAmount),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
+            {exceptionCount > 0 && <p role="note" className="pill warn" style={{ margin: "10px 0 0" }}>{t("exceptionsWarning", { count: exceptionCount })}</p>}
+          </>
+        )}
         onConfirm={(reason) => void runAction("approve", reason)}
         onCancel={() => !busy && setPending(null)}
       />
@@ -196,12 +204,20 @@ export function PayrollRunActions({
         confirmLabel={t("disburseConfirmLabel")}
         busy={busy}
         errorMessage={error}
-        description={t.rich("disburseDescription", {
-          amount: formatRupees(netAmount),
-          count: employeeCount,
-          period: payPeriod,
-          strong: (chunks) => <strong>{chunks}</strong>,
-        })}
+        description={(
+          <>
+            {t.rich("disburseDescription", {
+              amount: formatRupees(netAmount),
+              count: employeeCount,
+              period: payPeriod,
+              // GAP-PAYROLL-DETAIL-06: the channel is a translated, replaceable
+              // argument, never a hard-coded "PFMS" in the sentence.
+              channel: t("disburseChannelDefault"),
+              strong: (chunks) => <strong>{chunks}</strong>,
+            })}
+            {exceptionCount > 0 && <p role="note" className="pill warn" style={{ margin: "10px 0 0" }}>{t("exceptionsWarning", { count: exceptionCount })}</p>}
+          </>
+        )}
         onConfirm={(reason) => void runAction("disburse", reason)}
         onCancel={() => !busy && setPending(null)}
       />

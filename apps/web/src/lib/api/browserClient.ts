@@ -65,6 +65,24 @@ export async function errorMessageFromResponse(
 }
 
 /**
+ * GAP-PAYROLL-STATUTORY-PT-06: like errorMessageFromResponse, but the status
+ * CLASS picks the catalogue entry -- 403 reads as a permission problem and
+ * 400/422 as "values not accepted" -- instead of one generic "couldn't save".
+ * OPT-IN on purpose: errorMessageFromResponse's default (the generic entry
+ * for every non-404 failure) is asserted by ~50 forms' tests across other
+ * modules, so changing it app-wide is a separate, deliberate change. Status is
+ * only used to choose the entry; it (and any backend text) is never
+ * interpolated into the message (UX-020).
+ */
+export async function errorMessageForStatus(res: Response, area?: string): Promise<string> {
+  const kind: MessageKind | undefined =
+    res.status === 403 ? "forbidden"
+    : res.status === 400 || res.status === 422 ? "invalid"
+    : undefined;
+  return errorMessageFromResponse(res, kind, area);
+}
+
+/**
  * The machine-readable `code` from a failed API response body (e.g.
  * "SELF_DISBURSE_FORBIDDEN"), or null when absent/unparseable. For callers
  * that map a few KNOWN codes to their own translated copy -- never display

@@ -51,3 +51,39 @@ describe("PayrollRunActions — UX-016 clerk-safe errors", () => {
     expect(dialog.textContent).not.toMatch(/\b500\b/);
   });
 });
+
+// fin-payroll-03 (GAP-PAYROLL-DETAIL-05 / 06)
+describe("PayrollRunActions — pre-disbursement issues and disburse copy", () => {
+  function renderActions(props: Record<string, unknown>) {
+    render(
+      <NextIntlClientProvider locale="en" messages={enMessages}>
+        <PayrollRunActions {...PROPS} {...props} />
+      </NextIntlClientProvider>,
+    );
+  }
+
+  it("DETAIL-05: the Approve confirmation warns when employees still have unresolved issues", async () => {
+    renderActions({ exceptionCount: 3 });
+    fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("3 employees still have unresolved issues");
+  });
+
+  it("DETAIL-05: no warning when there are none", async () => {
+    renderActions({ exceptionCount: 0 });
+    fireEvent.click(screen.getByRole("button", { name: /approve run/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).not.toHaveTextContent("unresolved");
+  });
+
+  it("DETAIL-06: the Disburse confirmation names the real channel and what happens next, not a bare released to PFMS", async () => {
+    renderActions({ status: "completed", exceptionCount: 1 });
+    fireEvent.click(screen.getByRole("button", { name: /disburse/i }));
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent("sends an instruction to the finance EFT / PFMS bridge");
+    expect(dialog).toHaveTextContent("Disbursement page");
+    expect(dialog).toHaveTextContent("irreversible");
+    expect(dialog).not.toHaveTextContent("Funds are released to PFMS");
+    expect(dialog).toHaveTextContent("1 employee still has an unresolved issue");
+  });
+});

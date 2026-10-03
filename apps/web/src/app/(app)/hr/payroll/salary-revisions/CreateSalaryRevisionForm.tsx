@@ -45,7 +45,13 @@ import { REVISION_TYPES, REVISION_TYPE_FORM_LABEL_KEYS, type RevisionType } from
 
 type InvalidField = "employeeId" | "orderNo" | "effectiveDate" | "oldBasic" | "newBasic" | "oldGross" | "newGross" | null;
 
-export function CreateSalaryRevisionForm() {
+/**
+ * `secondApprover` (GAP-PAYROLL-SALARY-REVISIONS-04): the tenant's maker !=
+ * checker switch (default ON). When ON a submitted revision is 'pending' until
+ * another payroll user approves it, and the confirmation says so; when OFF it
+ * takes effect once processed.
+ */
+export function CreateSalaryRevisionForm({ secondApprover = true }: { secondApprover?: boolean } = {}) {
   const t = useTranslations("createSalaryRevisionForm");
   const router = useRouter();
   const [employeeId, setEmployeeId] = useState<string | null>(null);
@@ -204,7 +210,7 @@ export function CreateSalaryRevisionForm() {
       // envelope's `data` field is optional and this route doesn't populate
       // it (see world-class-routes.ts / payroll/commands.ts createSalaryRevision).
       setMessage(
-        t("recordedMessage", {
+        t(secondApprover ? "recordedPendingMessage" : "recordedMessage", {
           amount: formatMoney(pending.newBasicMinor),
           employeeId,
         }),

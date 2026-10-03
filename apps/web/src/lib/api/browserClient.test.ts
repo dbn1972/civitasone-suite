@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { errorMessageFromResponse } from "./browserClient";
+import { errorMessageFromResponse, errorMessageForStatus } from "./browserClient";
 
 function mockRes(status: number, body?: unknown, throwOnJson = false): Response {
   return {
@@ -93,5 +93,35 @@ describe("errorMessageFromResponse", () => {
   it("a 404 with an explicit kind still prefers the caller's kind over the status-based default", async () => {
     const msg = await errorMessageFromResponse(mockRes(404, {}), "offline");
     expect(msg).toMatch(/offline/i);
+  });
+});
+
+// GAP-PAYROLL-STATUTORY-PT-06: opt-in status-class messages.
+describe("errorMessageForStatus", () => {
+  it("maps a 403 to a permission message, never echoing backend text", async () => {
+    const msg = await errorMessageForStatus(mockRes(403, { code: "FORBIDDEN", message: "requires one of: payroll_admin" }));
+    expect(msg).toMatch(/permission/i);
+    expect(msg).not.toContain("payroll_admin");
+    expect(msg).not.toContain("FORBIDDEN");
+  });
+
+  it("maps 400 and 422 to a not-accepted message", async () => {
+    for (const status of [400, 422]) {
+      const msg = await errorMessageForStatus(mockRes(status, { code: "PT_SLAB_OVERLAP", message: "slab 0-1 overlaps" }));
+      expect(msg).toMatch(/not accepted/i);
+      expect(msg).not.toContain("PT_SLAB_OVERLAP");
+      expect(msg).not.toContain("overlaps");
+    }
+  });
+
+  it("everything else keeps the generic catalogue entry, and an area makes it specific", async () => {
+    expect(await errorMessageForStatus(mockRes(500, undefined, true), "professional tax slab")).toMatch(/couldn.t save your professional tax slab/i);
+    expect(await errorMessageForStatus(mockRes(409, {}))).toMatch(/couldn.t save/i);
+    expect(await errorMessageForStatus(mockRes(404, {}))).toMatch(/couldn.t load/i);
+  });
+
+  it("the default errorMessageFromResponse is unchanged: a 403 or 400 is still the generic save entry", async () => {
+    expect(await errorMessageFromResponse(mockRes(403, {}))).toMatch(/couldn.t save/i);
+    expect(await errorMessageFromResponse(mockRes(400, {}))).toMatch(/couldn.t save/i);
   });
 });

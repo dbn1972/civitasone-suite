@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } fr
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { CreateDdoForm } from "./CreateDdoForm";
+import { ActiveToggle } from "../_components/ActiveToggle";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
@@ -59,6 +60,8 @@ export default async function DdosPage({ searchParams }: { searchParams?: { edit
     return {
       ...d,
       id: d.ddoCode,
+      // GAP-PAYROLL-DDOS-03: plain string field (a render fn cannot cross the server boundary).
+      status: d.isActive === false ? "inactive" : "active",
       departmentCount: ids.length,
       // ids is this DDO row's own mapping; rows only exist when the DDO list
       // loaded. If the department-NAMES fetch failed, say so with the count
@@ -79,11 +82,12 @@ export default async function DdosPage({ searchParams }: { searchParams?: { edit
   const editCode = searchParams?.edit?.trim();
   const editing = editCode ? ddos.find((d) => d.ddoCode === editCode) : undefined;
 
-  const columns: { key: (keyof DdoRow & string) | "departmentCount" | "departmentNames"; label: string; align?: "left" | "right" }[] = [
+  const columns: { key: (keyof DdoRow & string) | "departmentCount" | "departmentNames" | "status"; label: string; align?: "left" | "right"; cellType?: "status" }[] = [
     { key: "ddoCode", label: t("colDdoCode") },
     { key: "name", label: t("colName") },
     { key: "departmentNames", label: t("colDepartmentNames") },
     { key: "departmentCount", label: t("colDepartments"), align: "right" },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
@@ -113,13 +117,41 @@ export default async function DdosPage({ searchParams }: { searchParams?: { edit
         />
       )}
 
+      {/* GAP-PAYROLL-DDOS-03: deactivate / reactivate. Server-side the DDO is
+          refused while it still has active pensioners or runs in progress. */}
+      {canAdminister && !errored && editing && (
+        <Card title={t("toggleCardTitle", { code: editing.ddoCode })} padding>
+          <p style={{ margin: "0 0 12px", fontSize: 13, color: "var(--mut)" }}>
+            {editing.isActive === false ? t("toggleInactiveNote") : t("toggleActiveNote")}
+          </p>
+          <ActiveToggle
+            path={`v1/payroll/ddos/${encodeURIComponent(editing.ddoCode)}/status`}
+            active={editing.isActive !== false}
+            area={t("toggleArea")}
+            copy={{
+              deactivateBtn: t("toggleDeactivateBtn"),
+              reactivateBtn: t("toggleReactivateBtn"),
+              deactivateTitle: t("toggleDeactivateTitle"),
+              reactivateTitle: t("toggleReactivateTitle"),
+              deactivateDescription: t("toggleDeactivateDescription"),
+              reactivateDescription: t("toggleReactivateDescription"),
+              reasonLabel: t("toggleReasonLabel"),
+              deactivatedMessage: t("toggleDeactivated"),
+              reactivatedMessage: t("toggleReactivated"),
+              conflictMessage: t("toggleConflict"),
+              networkError: t("toggleNetworkError"),
+            }}
+          />
+        </Card>
+      )}
+
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: "ddos" })} backHref="/hr/payroll" />
           </div>
         ) : (
-          <DataTable<DdoRow & { departmentCount: number; departmentNames: string }>
+          <DataTable<DdoRow & { departmentCount: number; departmentNames: string; status: string }>
           columns={columns}
           rows={rows}
           caption={t("tableCaption")}

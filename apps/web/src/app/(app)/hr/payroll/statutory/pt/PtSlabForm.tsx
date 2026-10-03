@@ -1,17 +1,21 @@
 "use client";
 
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../../_components/ds";
 import { postWithErrorCode } from "../../_lib/postWithErrorCode";
 import { PT_NO_UPPER_BOUND_MINOR } from "./constants";
+import { INDIAN_STATES_UTS } from "@/lib/india/states";
+import { validatePtSlab, slabGaps, type ExistingPtSlab } from "@/lib/schemas/ptSlab";
+import { formatMoney } from "@/lib/formatters";
 
-type ExistingSlab = {
-  state_code: string;
-  slab_from_minor: number | string;
-  slab_to_minor: number | string;
-};
+type ExistingSlab = ExistingPtSlab;
+
+/** Today as YYYY-MM-DD in IST (the statutory calendar), independent of the browser zone. */
+function todayIst(): string {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+}
 
 /**
  * GAP-PAYROLL-STATUTORY-PT-04 [HUMAN REVIEW: statutory compliance]: two
@@ -27,11 +31,12 @@ type ExistingSlab = {
  * The server still re-checks (422 PT_SLAB_OVERLAP); this only saves a round
  * trip. Neither check invents or changes any statutory rate/threshold.
  *
- * Deliberately NOT done here (left open, see the PR description): replacing
- * the free-text state code with a validated state/UT enum (no authoritative
- * list exists yet in this codebase) and adding an effective-from date (would
- * need a backend schema change). Upsert semantics are settled by #1761: each
- * slab is upserted on (state, From) and the state's other slabs are kept.
+ * fin-payroll-03: the state is now a picker over the state / UT list (the
+ * server rejects any other code), validation lives in lib/schemas/ptSlab.ts
+ * (zod, unit-tested), an "Effective from" date is sent and recorded, and a gap
+ * left in the state's slab chain is shown as a warning in the confirm dialog.
+ * Upsert semantics are settled by #1761: each slab is upserted on (state,
+ * From) and the state's other slabs are kept.
  */
 export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSlab[] }) {
   const t = useTranslations("ptSlabForm");
@@ -40,6 +45,10 @@ export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSla
   const [slabFrom, setSlabFrom] = useState("0");
   const [slabTo, setSlabTo] = useState("");
   const [ptAmount, setPtAmount] = useState("");
+  const [effectiveFrom, setEffectiveFrom] = useState("");
+  // Default to today once mounted (kept out of the initial render so the
+  // server and client markup cannot disagree around midnight).
+  useEffect(() => { setEffectiveFrom((v) => v || todayIst()); }, []);
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -56,7 +65,8 @@ export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSla
   const toId = useId();
   const amtId = useId();
   const errId = useId();
-  const stateRef = useRef<HTMLInputElement>(null);
+  const effId = useId();
+  const stateRef = useRef<HTMLSelectElement>(null);
   const amtRef = useRef<HTMLInputElement>(null);
   const toRef = useRef<HTMLInputElement>(null);
   const stateInvalid = invalidField === "stateCode";
@@ -85,29 +95,20 @@ export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSla
 
     const fromMinor = Math.round((parseFloat(slabFrom) || 0) * 100);
     const toMinor = slabTo.trim() ? Math.round(parseFloat(slabTo) * 100) : PT_NO_UPPER_BOUND_MINOR;
-
-    if (toMinor < fromMinor) {
+    const problem = validatePtSlab(
+      { stateCode: stateCode.trim().toUpperCase(), fromMinor, toMinor, taxMinor: Math.round(amt * 100), ...(effectiveFrom ? { effectiveFrom } : {}) },
+      existingSlabs,
+    );
+    if (problem) {
       setTone("bad");
-      setMessage(t("slabRangeInvalidError"));
-      setInvalidField("slabTo");
-      toRef.current?.focus();
-      return;
-    }
-
-    const trimmedState = stateCode.trim().toUpperCase();
-    const overlaps = existingSlabs.some((s) => {
-      if ((s.state_code ?? "").toUpperCase() !== trimmedState) return false;
-      const existingFrom = Number(s.slab_from_minor);
-      const existingTo = Number(s.slab_to_minor);
-      // Same "From" = the row this POST upserts (server upsert key), not an overlap.
-      if (existingFrom === fromMinor) return false;
-      return fromMinor <= existingTo && existingFrom <= toMinor;
-    });
-    if (overlaps) {
-      setTone("bad");
-      setMessage(t("slabOverlapError"));
-      setInvalidField("slabTo");
-      toRef.current?.focus();
+      setMessage(
+        problem.issue === "overlap" ? t("slabOverlapError")
+        : problem.issue === "state" ? t("stateCodeInvalidError")
+        : problem.issue === "amount" ? t("ptAmountInvalidError")
+        : t("slabRangeInvalidError"),
+      );
+      setInvalidField(problem.field === "stateCode" ? "stateCode" : problem.field === "ptAmount" ? "ptAmount" : "slabTo");
+      (problem.field === "stateCode" ? stateRef : problem.field === "ptAmount" ? amtRef : toRef).current?.focus();
       return;
     }
 
@@ -128,12 +129,13 @@ export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSla
       await postWithErrorCode("v1/payroll/statutory/state-rules", {
         stateCode: stateCode.trim().toUpperCase(),
         ptSlabs: [{ fromMinor, toMinor, taxMinor }],
-      }, { PT_SLAB_OVERLAP: t("overlapError") });
+        ...(effectiveFrom ? { effectiveFrom } : {}),
+      }, { PT_SLAB_OVERLAP: t("overlapError") }, { area: t("saveArea"), statusAware: true });
       setConfirmOpen(false);
       setTone("good");
       setInvalidField(null);
       setMessage(t("savedMessage", { state: stateCode.trim().toUpperCase() }));
-      setStateCode(""); setSlabFrom("0"); setSlabTo(""); setPtAmount("");
+      setStateCode(""); setSlabFrom("0"); setSlabTo(""); setPtAmount(""); setEffectiveFrom(todayIst());
       router.refresh();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
@@ -143,6 +145,17 @@ export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSla
   }
 
   const slabToDisplay = slabTo.trim() ? `₹${slabTo}` : t("noUpperBound");
+  // Warn (never block) when the saved slab would leave a gap in the state's chain.
+  const gapList = confirmOpen && stateCode
+    ? slabGaps(
+        {
+          stateCode: stateCode.trim().toUpperCase(),
+          fromMinor: Math.round((parseFloat(slabFrom) || 0) * 100),
+          toMinor: slabTo.trim() ? Math.round(parseFloat(slabTo) * 100) : PT_NO_UPPER_BOUND_MINOR,
+        },
+        existingSlabs,
+      )
+    : [];
 
   return (
     <form onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
@@ -153,18 +166,21 @@ export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSla
               <label htmlFor={stateId} style={{ fontSize: 13, fontWeight: 600 }}>
                 {t("stateCodeLabel")} <span aria-hidden="true" style={{ color: "var(--bad, #c0392b)" }}>*</span>
               </label>
-              <input
+              <select
                 id={stateId}
                 ref={stateRef}
                 value={stateCode}
                 onChange={(e) => setStateCode(e.target.value)}
-                maxLength={4}
-                placeholder={t("stateCodePlaceholder")}
                 aria-required="true"
                 aria-invalid={stateInvalid || undefined}
                 aria-describedby={stateInvalid ? errId : undefined}
-                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
-              />
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44, background: "var(--panel, #fff)" }}
+              >
+                <option value="">{t("stateCodePlaceholder")}</option>
+                {INDIAN_STATES_UTS.map((st) => (
+                  <option key={st.code} value={st.code}>{`${st.name} (${st.code})`}</option>
+                ))}
+              </select>
             </div>
             <div style={{ display: "grid", gap: 6 }}>
               <label htmlFor={fromId} style={{ fontSize: 13, fontWeight: 600 }}>{t("slabFromLabel")}</label>
@@ -205,6 +221,18 @@ export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSla
                 style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
               />
             </div>
+            <div style={{ display: "grid", gap: 6 }}>
+              <label htmlFor={effId} style={{ fontSize: 13, fontWeight: 600 }}>{t("effectiveFromLabel")}</label>
+              <input
+                id={effId}
+                type="date"
+                value={effectiveFrom}
+                onChange={(e) => setEffectiveFrom(e.target.value)}
+                aria-describedby={`${effId}-note`}
+                style={{ padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 }}
+              />
+              <p id={`${effId}-note`} style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("effectiveFromNote")}</p>
+            </div>
           </div>
 
           <div>
@@ -233,13 +261,26 @@ export function PtSlabForm({ existingSlabs = [] }: { existingSlabs?: ExistingSla
         confirmLabel={t("confirmLabel")}
         busy={busy}
         errorMessage={dialogError}
-        description={t.rich("confirmDescription", {
-          strong: (chunks) => <strong>{chunks}</strong>,
-          state: stateCode.trim().toUpperCase(),
-          from: slabFrom || 0,
-          to: slabToDisplay,
-          amount: ptAmount || 0,
-        })}
+        description={
+          <>
+            <p style={{ margin: 0 }}>
+              {t.rich("confirmDescription", {
+                strong: (chunks) => <strong>{chunks}</strong>,
+                state: stateCode.trim().toUpperCase(),
+                from: slabFrom || 0,
+                to: slabToDisplay,
+                amount: ptAmount || 0,
+              })}
+            </p>
+            {effectiveFrom && <p style={{ margin: "8px 0 0", fontSize: 13 }}>{t("confirmEffective", { date: effectiveFrom })}</p>}
+            <p role="note" className="pill warn" style={{ margin: "8px 0 0", width: "fit-content" }}>{t("effectiveFromNote")}</p>
+            {gapList.length > 0 && (
+              <p role="note" className="pill warn" style={{ margin: "8px 0 0", width: "fit-content" }}>
+                {t("gapWarning", { gaps: gapList.map((g) => `${formatMoney(g.fromMinor)}–${formatMoney(g.toMinor)}`).join(", ") })}
+              </p>
+            )}
+          </>
+        }
         onConfirm={() => void saveSlab()}
         onCancel={() => !busy && setConfirmOpen(false)}
       />
