@@ -23,6 +23,9 @@ import { clearRunRegister, rebuildRunRegister, resolveRegisterDepartments } from
 import { computeSubsistenceEarnings, resolveProfiledSuspension, mergeSubsistenceSettings, DEFAULT_SUBSISTENCE_CONFIG, type SubsistenceEarnings } from "./subsistence.js";
 import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
 import { registerFin03Consumers } from "./fin03-consumer.js";
+import { registerPtVersionConsumers } from "./pt-versions-consumer.js";
+import { slabsInForce, ptYtdMinors } from "./pt-versions-repo.js";
+import { computePtMonthMinor, periodEndOf, todayIst, type PtSlab } from "./pt-versions-domain.js";
 import { receiptRuleViolation } from "./fin03-domain.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
@@ -125,35 +128,22 @@ export async function resolveDaRateBps(tx: typeof db, tenantId: string, month: s
   return BigInt(rows[0]!.rate_bps);
 }
 
-/** Active Professional Tax slabs for the tenant + state (H14 fix). */
-export async function resolvePtSlabs(tx: typeof db, tenantId: string, stateCode?: string): Promise<Array<{ from: bigint; to: bigint; amount: bigint }>> {
-  // tenantTransaction re-audit: reads through the caller-supplied tx (db
-  // itself for the pre-loop call, the outer transaction tx for the per-employee
-  // in-loop call) instead of always hitting the pool-level db -- a bare
-  // db.execute() from inside an already-open outer db.transaction() checks out
-  // a SEPARATE pool connection, the same deadlock class as a nested
-  // db.transaction()/scopedRead(), just via a raw query instead of a wrapper.
-  // H14 FIX: filter by employee's state_code. Without this, a two-state tenant
-  // (e.g. Karnataka + Maharashtra) would apply the same PT schedule to everyone.
-  const rows = stateCode
-    ? (await tx.execute(sql`
-        SELECT slab_from_minor, slab_to_minor, pt_amount_minor
-        FROM payroll.payroll_professional_tax
-        WHERE tenant_id = ${tenantId}::uuid AND is_active = true AND state_code = ${stateCode}
-        ORDER BY slab_from_minor
-      `)) as unknown as Array<{ slab_from_minor: string | number; slab_to_minor: string | number; pt_amount_minor: string | number }>
-    : (await tx.execute(sql`
-        SELECT slab_from_minor, slab_to_minor, pt_amount_minor
-        FROM payroll.payroll_professional_tax
-        WHERE tenant_id = ${tenantId}::uuid AND is_active = true
-        ORDER BY slab_from_minor
-      `)) as unknown as Array<{ slab_from_minor: string | number; slab_to_minor: string | number; pt_amount_minor: string | number }>;
-  return rows.map((r) => ({ from: BigInt(r.slab_from_minor), to: BigInt(r.slab_to_minor), amount: BigInt(r.pt_amount_minor) }));
-}
-
-function resolvePt(slabs: Array<{ from: bigint; to: bigint; amount: bigint }>, incomeMinor: bigint): bigint {
-  const s = slabs.find((x) => incomeMinor >= x.from && incomeMinor <= x.to);
-  return s ? s.amount : 0n;
+/**
+ * Professional Tax slabs in force on `asOf` (YYYY-MM-DD; default today) for the
+ * tenant + state (H14 fix). GAP-PAYROLL-STATUTORY-PT-04: slabs are effective-
+ * dated VERSIONS -- the version of each state with the latest effective_from on
+ * or before `asOf` is the one returned; the run engine passes the run's period
+ * end. Reads through the caller-supplied tx (the outer transaction tx inside a
+ * run, scopedRead outside), never the pooled db: a bare db.execute() from
+ * inside an open transaction checks out a SEPARATE pool connection (the
+ * nested-tx deadlock class) and is RLS-blind.
+ * H14 FIX: filtered by the employee's state_code; without a state the tenant's
+ * in-force slabs of every state are returned (the old tenant-level fallback),
+ * ordered by slab start.
+ */
+export async function resolvePtSlabs(tx: typeof db, tenantId: string, stateCode?: string, asOf: string = todayIst()): Promise<PtSlab[]> {
+  const byState = await slabsInForce(tx, tenantId, asOf, stateCode ? [stateCode] : undefined);
+  return [...byState.values()].flat().sort((x, y) => (x.from < y.from ? -1 : x.from > y.from ? 1 : 0));
 }
 
 /**
@@ -163,32 +153,16 @@ function resolvePt(slabs: Array<{ from: bigint; to: bigint; amount: bigint }>, i
  * written anywhere in the run's transaction, and the set of DISTINCT state
  * codes among a run's employees is tiny (India has 28 states + 8 UTs) even
  * when the employee count is large -- so one query keyed on every distinct
- * state code the run actually needs replaces one query per employee.
- * Reads through the caller's tx (same deadlock-avoidance reasoning as
- * resolvePtSlabs itself -- see its own comment above).
+ * state code the run actually needs replaces one query per employee. The
+ * version in force on `asOf` (the run's period end) is used for each state.
  *
- * A state code with zero active slab rows is simply absent from the
+ * A state code with no slab version in force is simply absent from the
  * returned Map; callers must default a miss to `[]` (NOT the tenant-level
  * fallback), exactly matching resolvePtSlabs(tx, tenantId, stateCode)'s own
- * "no rows for this exact state" behaviour (rows.map on an empty result is
- * `[]`, not a fallback to the no-state-filter query).
+ * "no rows for this exact state" behaviour.
  */
-export async function resolvePtSlabsByStatesTx(tx: typeof db, tenantId: string, stateCodes: string[]): Promise<Map<string, Array<{ from: bigint; to: bigint; amount: bigint }>>> {
-  const result = new Map<string, Array<{ from: bigint; to: bigint; amount: bigint }>>();
-  if (stateCodes.length === 0) return result;
-  const rows = (await tx.execute(sql`
-    SELECT state_code, slab_from_minor, slab_to_minor, pt_amount_minor
-    FROM payroll.payroll_professional_tax
-    WHERE tenant_id = ${tenantId}::uuid AND is_active = true
-      AND state_code = ANY(${sql`ARRAY[${sql.join(stateCodes.map((s) => sql`${s}`), sql`, `)}]`})
-    ORDER BY state_code, slab_from_minor
-  `)) as unknown as Array<{ state_code: string; slab_from_minor: string | number; slab_to_minor: string | number; pt_amount_minor: string | number }>;
-  for (const r of rows) {
-    let list = result.get(r.state_code);
-    if (!list) { list = []; result.set(r.state_code, list); }
-    list.push({ from: BigInt(r.slab_from_minor), to: BigInt(r.slab_to_minor), amount: BigInt(r.pt_amount_minor) });
-  }
-  return result;
+export async function resolvePtSlabsByStatesTx(tx: typeof db, tenantId: string, stateCodes: string[], asOf: string = todayIst()): Promise<Map<string, PtSlab[]>> {
+  return slabsInForce(tx, tenantId, asOf, stateCodes);
 }
 
 export type Declaration = {
@@ -603,6 +577,7 @@ export async function resolveDdoDepartments(tx: typeof db, tenantId: string, ddo
 export function registerPayrollConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   registerFin03Consumers(queue);
+  registerPtVersionConsumers(queue);
   queue.subscribe(COMMANDS.structureCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; name: string; description?: string; isDefault: boolean };
     await db.transaction(async (tx) => {
@@ -1318,23 +1293,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
-      for (const slab of p.ptSlabs ?? []) {
-        // GAP-PAYROLL-STATUTORY-PT-04: effective_from is recorded with the slab
-        // (a new slab without one gets the column default; an update without
-        // one keeps the stored date).
-        await tx.execute(sql`
-          INSERT INTO payroll.payroll_professional_tax
-            (tenant_id, state_code, slab_from_minor, slab_to_minor, pt_amount_minor, effective_from)
-          VALUES (${p.tenantId}::uuid, ${p.stateCode},
-            ${slab.fromMinor.toString()}::bigint, ${slab.toMinor.toString()}::bigint,
-            ${slab.taxMinor.toString()}::bigint,
-            COALESCE(${p.effectiveFrom ?? null}::date, DATE '2024-04-01'))
-          ON CONFLICT (tenant_id, state_code, slab_from_minor)
-          DO UPDATE SET slab_to_minor = EXCLUDED.slab_to_minor,
-            pt_amount_minor = EXCLUDED.pt_amount_minor,
-            effective_from = COALESCE(${p.effectiveFrom ?? null}::date, payroll.payroll_professional_tax.effective_from)
-        `);
-      }
+      // GAP-PAYROLL-STATUTORY-PT-04: PT slabs are effective-dated versions written by
+      // pt-versions-consumer.ts. A command still in flight from before versioning that
+      // carries ptSlabs is NOT applied here -- slabs are no longer overwritten in place.
       if (p.lwfEmployee != null || p.lwfEmployer != null || p.lwfFrequency != null) {
         // GAP-PAYROLL-STATUTORY-LWF-02: an omitted field keeps its stored
         // value (COALESCE against the existing row) instead of being reset —
@@ -1361,11 +1322,9 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       await enqueue(tx, {
         topic: EVENTS.stateRulesUpserted, eventType: EVENTS.stateRulesUpserted,
         tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
-        payload: { stateCode: p.stateCode, ptSlabCount: p.ptSlabs?.length ?? 0 },
+        payload: { stateCode: p.stateCode },
       });
-      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode, {
-        ...(p.effectiveFrom ? { newValue: { effectiveFrom: p.effectiveFrom, ptSlabs: p.ptSlabs ?? [] } } : {}),
-      });
+      await audit(tx, msg, "upsert", "payroll_state_rules", p.stateCode);
     });
   });
 
@@ -1524,7 +1483,8 @@ async function processPayrollRun(
   // only this call site was wrong, passing the bare pooled `db` (RLS-blind
   // on payroll.payroll_professional_tax) instead of routing through
   // scopedRead. Sibling in-loop call (further below) was already correct.
-  const ptSlabsFallback = await scopedRead((tx) => resolvePtSlabs(tx, p.tenantId));
+  const ptAsOf = periodEndOf(p.month);
+  const ptSlabsFallback = await scopedRead((tx) => resolvePtSlabs(tx, p.tenantId, undefined, ptAsOf));
   // FORCE-RLS fix: was called with a bare `db` (RLS-blind, see
   // resolveProtectedNetFloorMinor's own doc comment); now routed through scopedRead.
   const protectedNetFloorMinor = await scopedRead((tx) => resolveProtectedNetFloorMinor(tx, p.tenantId));
@@ -1626,7 +1586,9 @@ async function processPayrollRun(
         .map((emp) => (emp as { stateCode?: string }).stateCode)
         .filter((s): s is string => !!s),
     )];
-    const ptSlabsByState = await resolvePtSlabsByStatesTx(tx as unknown as typeof db, p.tenantId, distinctStateCodes);
+    const ptSlabsByState = await resolvePtSlabsByStatesTx(tx as unknown as typeof db, p.tenantId, distinctStateCodes, ptAsOf);
+    // Article 276(2): PT already deducted this FY, per employee, for the annual cap.
+    const ptYtdByEmployee = await ptYtdMinors(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
 
     for (const emp of runEmployees) {
       const cityClass = emp.cityClass ?? "X";
@@ -1831,18 +1793,20 @@ async function processPayrollRun(
         payProfile: plan.slipProfile,
         hraFloorMinor: plan.hraFloorMinor,
         profileSnapshot: plan.snapshot,
-        ptMinor: resolvePt(
+        ptMinor: computePtMonthMinor(
           // H14 FIX: use employee's state_code for PT schedule lookup.
           // Falls back to tenant-level slabs when employee has no state.
           // PERF-021 (Site A): batched pre-fetch (ptSlabsByState) replaces
-          // the per-employee resolvePtSlabs query; a state with no active
-          // slabs is absent from the Map, matching resolvePtSlabs's own
-          // "no rows for this state" `[]` (never the tenant-wide fallback).
+          // the per-employee resolvePtSlabs query; a state with no slab
+          // version in force is absent from the Map, matching resolvePtSlabs's
+          // own "no rows for this state" `[]` (never the tenant-wide fallback).
           (emp as { stateCode?: string }).stateCode
             ? (ptSlabsByState.get((emp as { stateCode?: string }).stateCode!) ?? [])
             : ptSlabsFallback,
           // FR 53: PT on what is actually paid (regular Basic + DA + SA + its DA).
           subsistence ? subsistence.hraSalaryMinor : basicMinor + daMinor,
+          p.month,
+          ptYtdByEmployee.get(emp.id) ?? 0n,
         ),
         taxRegime: decl?.regime ?? emp.taxRegime ?? "new",
         fyStartYear: fyStart,

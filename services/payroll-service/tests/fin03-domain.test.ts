@@ -98,12 +98,12 @@ describe("salary revision sanity (GAP-PAYROLL-SALARY-REVISIONS-03)", () => {
 });
 
 describe("other boundaries", () => {
-  it("state rules: only state / UT codes, upper-cased, with an optional effective date", () => {
+  it("state rules: only state / UT codes, upper-cased (PT slabs are versioned, not part of this body)", () => {
     expect(stateRulesBody.safeParse({ stateCode: "ZZ" }).success).toBe(false);
     expect(stateRulesBody.safeParse({ stateCode: "X" }).success).toBe(false);
-    const ok = stateRulesBody.parse({ stateCode: " ka ", effectiveFrom: "2026-04-01" });
+    const ok = stateRulesBody.parse({ stateCode: " ka ", lwfEmployee: 100 });
     expect(ok.stateCode).toBe("KA");
-    expect(stateRulesBody.safeParse({ stateCode: "KA", effectiveFrom: "01-04-2026" }).success).toBe(false);
+    expect("ptSlabs" in ok).toBe(false);
   });
 
   it("settings accept the second-approver switch", () => {

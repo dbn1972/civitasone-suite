@@ -57,6 +57,8 @@ export const COMMANDS = {
   auditRecord:            "payroll.audit.record",
   // fin-payroll-03 gap batch (fin03-consumer.ts)
   ddoSetActive:           "payroll.ddo.set_active",
+  // GAP-PAYROLL-STATUTORY-PT-04 (pt-versions-consumer.ts)
+  ptVersionCreate:        "payroll.pt_version.create",
   payGroupUpdate:         "payroll.paygroup.update",
   payGroupSetActive:      "payroll.paygroup.set_active",
   pensionerSetStatus:     "payroll.pensioner.set_status",
@@ -90,6 +92,7 @@ export const EVENTS = {
   offCycleCreated:        "payroll.off_cycle.created",
   offCycleProcessed:      "payroll.off_cycle.processed",
   stateRulesUpserted:     "payroll.state_rules.upserted",
+  ptVersionCreated:       "payroll.pt_version.created",
   tdsChallanIngested:     "payroll.tds_challan.ingested",
   dscConfigUpserted:      "payroll.dsc_config.upserted",
   dscConfigRemoved:       "payroll.dsc_config.removed",

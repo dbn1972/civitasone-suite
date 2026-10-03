@@ -339,7 +339,6 @@ describe("FP T1-03 state-rules CQRS", () => {
     const { COMMANDS } = await import("../src/topics.js");
     const result = await upsertStateRules(baseCtx, {
       stateCode: "KA",
-      ptSlabs: [{ fromMinor: 0, toMinor: 1500000, taxMinor: 20000 }],
       lwfEmployee: 2000, lwfEmployer: 4000,
     });
     expect(mockPublish).toHaveBeenCalledTimes(1);

@@ -1,117 +1,147 @@
 import { getTranslations } from "next-intl/server";
-import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } from "../../../../../_components/ds";
+import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState, EmptyState } from "../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { formatMoney } from "@/lib/formatters";
-import { PtSlabForm } from "./PtSlabForm";
+import { formatMoney, formatIndianDate } from "@/lib/formatters";
+import { INDIAN_STATES_UTS } from "@/lib/india/states";
+import { PtVersionForm } from "./PtVersionForm";
+import { PtStatePicker } from "./PtStatePicker";
 import { toHumanError } from "@/lib/messages";
 import { PermissionDenied } from "../../../../../_components/PermissionDenied";
-import { getSessionRoles, PAYROLL_ADMIN_ROLES } from "@/lib/auth/roleGuard";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { PAYROLL_STATUTORY_ADMIN_ROLES } from "@/lib/auth/workRoles";
-import { PT_NO_UPPER_BOUND_MINOR } from "./constants";
+import { PT_VERSION_ADMIN_ROLES } from "./constants";
+import { EMPTY_PT_PAYLOAD, buildPtView, isOpenEnded, parsePtPayload, type PtVersionsPayload } from "./viewModel";
 
-type PtSlabRow = {
-  state_code: string;
-  slab_from_minor: number | string;
-  slab_to_minor: number | string;
-  pt_amount_minor: number | string;
-} & Record<string, unknown>;
-
-type StateRulesResponse = { ptSlabs?: PtSlabRow[]; lwfConfig?: unknown[] };
-
-async function getData(): Promise<LoaderResult<PtSlabRow[]>> {
-  return fetchJson<StateRulesResponse, PtSlabRow[]>("/api/v1/payroll/statutory/state-rules", [], {
+async function getData(): Promise<LoaderResult<PtVersionsPayload>> {
+  return fetchJson<unknown, PtVersionsPayload>("/api/v1/payroll/statutory/pt/versions", EMPTY_PT_PAYLOAD, {
     telemetryKey: "payroll.statutory.pt",
-    mapResponse: (p) => (Array.isArray(p?.ptSlabs) ? p.ptSlabs! : null),
+    mapResponse: (p) => parsePtPayload(p),
   });
 }
 
-export default async function ProfessionalTaxPage() {
+/**
+ * GAP-PAYROLL-STATUTORY-PT-04 [HUMAN REVIEW: statutory compliance]: slabs are
+ * dated versions per state (each State's PT Act and Rules), not a single set
+ * that is overwritten. Past and current versions are read-only; a change is a
+ * new version that takes effect from its own date.
+ */
+export default async function ProfessionalTaxPage({ searchParams }: { searchParams?: { state?: string; version?: string } }) {
   const t = await getTranslations("pt");
   // GAP-PAYROLL-STATUTORY-PT-01: hr/layout.tsx admits employee/manager to every /hr/payroll/*
-  // URL, but this page's API (professional tax slabs) is READER_ROLES-only in
-  // payroll-service (no employee/manager). Gate before fetching so those
-  // roles get a clear explanation instead of a failed load.
+  // URL, but this page's API is READER_ROLES-only in payroll-service. Gate before
+  // fetching so those roles get a clear explanation instead of a failed load.
   const roles = getSessionRoles();
   if (!roles.some((r) => PAYROLL_STATUTORY_ADMIN_ROLES.includes(r))) {
     return <PermissionDenied module="professional tax slabs" requiredRoles={PAYROLL_STATUTORY_ADMIN_ROLES} backHref="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />;
   }
-  // GAP-PAYROLL-STATUTORY-PT-01: POST statutory/state-rules is PAYROLL_ROLES-only
-  // (payroll_admin/payroll_officer/super_admin); hr_admin/finance_officer may read.
-  const canEdit = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
-  const { data: rows, source } = await getData();
+  // Creating a version is payroll_admin / super_admin only (payroll-service PT_ADMIN_ROLES).
+  const canEdit = roles.some((r) => PT_VERSION_ADMIN_ROLES.includes(r));
+  const { data, source } = await getData();
   const errored = source === "error";
+  const view = buildPtView(data, searchParams?.state, searchParams?.version);
+  const stateName = INDIAN_STATES_UTS.find((s) => s.code === view.stateCode)?.name ?? view.stateCode ?? "";
 
-  const statesCovered = new Set(rows.map((r) => r.state_code).filter(Boolean)).size;
-  const maxPtMinor = rows.length > 0 ? Math.max(...rows.map((r) => Number(r.pt_amount_minor || 0))) : 0;
-
-  // GAP-PAYROLL-STATUTORY-PT-02: a blank "Slab To" is stored as the sentinel
-  // PT_NO_UPPER_BOUND_MINOR, not a real rupee amount -- show it as text,
-  // never through the generic "amount" cellType (which would print
-  // ₹9,99,99,99,999.99). Also treat a missing/null upper bound the same way.
-  // Precomputed as a plain string field: a column `render` function cannot
-  // cross from this Server Component into the client DataTable.
-  const displayRows = rows.map((r) => ({
-    ...r,
-    slabToLabel:
-      r.slab_to_minor == null || Number(r.slab_to_minor) >= PT_NO_UPPER_BOUND_MINOR
-        ? t("noUpperBound")
-        : formatMoney(r.slab_to_minor as number | string),
+  const statusLabels = { past: t("statusPast"), current: t("statusCurrent"), upcoming: t("statusUpcoming") };
+  const timelineRows = view.versions.map((v) => ({
+    href: `/hr/payroll/statutory/pt?state=${encodeURIComponent(v.stateCode)}&version=${encodeURIComponent(v.effectiveFrom)}`,
+    effectiveFromLabel: v.legacy ? t("sinceInception") : formatIndianDate(v.effectiveFrom),
+    effectiveToLabel: v.effectiveTo ? formatIndianDate(v.effectiveTo) : t("openEnded"),
+    status: v.status,
+    slabCount: v.slabs.length,
+    sourceLabel: v.legacy ? t("sourceBaseline") : v.backDated ? t("sourceBackDated") : t("sourceUser"),
   }));
-  type PtDisplayRow = (typeof displayRows)[number];
+  type TimelineRow = (typeof timelineRows)[number];
+  const timelineColumns: { key: keyof TimelineRow & string; label: string; align?: "left" | "right"; cellType?: "status"; statusLabels?: Record<string, string> }[] = [
+    { key: "effectiveFromLabel", label: t("colEffectiveFrom") },
+    { key: "effectiveToLabel", label: t("colEffectiveTo") },
+    { key: "status", label: t("colStatus"), cellType: "status", statusLabels },
+    { key: "slabCount", label: t("colSlabs"), align: "right" },
+    { key: "sourceLabel", label: t("colSource") },
+  ];
 
-  const columns: { key: keyof PtDisplayRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
-    { key: "state_code", label: t("colState") },
-    { key: "slab_from_minor", label: t("colSlabFrom"), align: "right", cellType: "amount" },
-    { key: "slabToLabel", label: t("colSlabTo"), align: "right" },
-    { key: "pt_amount_minor", label: t("colPtAmount"), align: "right", cellType: "amount" },
+  const slabRows = (view.selected?.slabs ?? []).map((s) => ({
+    fromMinor: s.fromMinor,
+    toLabel: isOpenEnded(s.toMinor) ? t("noUpperBound") : formatMoney(s.toMinor),
+    taxMinor: s.taxMinor,
+    februaryLabel: s.februaryTaxMinor == null ? "—" : formatMoney(s.februaryTaxMinor),
+  }));
+  type SlabRow = (typeof slabRows)[number];
+  const slabColumns: { key: keyof SlabRow & string; label: string; align?: "left" | "right"; cellType?: "amount" }[] = [
+    { key: "fromMinor", label: t("colSlabFrom"), align: "right", cellType: "amount" },
+    { key: "toLabel", label: t("colSlabTo"), align: "right" },
+    { key: "taxMinor", label: t("colPtAmount"), align: "right", cellType: "amount" },
+    { key: "februaryLabel", label: t("colFebAmount"), align: "right" },
   ];
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      <PageHeader
-        title={t("title")}
-        subtitle={t("subtitle")}
-        back="/hr/payroll/statutory" backLabel={t("errorBackLabel")}
-      />
+      <PageHeader title={t("title")} subtitle={t("subtitle")} back="/hr/payroll/statutory" backLabel={t("errorBackLabel")} />
       <DataSourceBadge source={source} message={t("loadErrorMessage")} />
-      <StatGrid>
-        <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statPtSlabsConfigured")} value={errored ? null : rows.length} />
-        <StatCard icon="🗺️" iconBg="var(--goodbg)" label={t("statStatesCovered")} value={errored ? null : statesCovered} />
-        {/* GAP-PAYROLL-STATUTORY-PT-05: "Avg PT per Slab" averaged nil-rate
-            slabs from every state together into a number with no compliance
-            meaning -- dropped rather than relabelled (no meaningful
-            replacement metric without a state filter). "Highest PT Amount"
-            is relabelled to make clear it is the highest slab amount across
-            ALL states, not a single state's figure. */}
-        <StatCard icon="📈" iconBg="var(--warnbg)" label={t("statHighestSlabAmount")} value={errored ? null : formatMoney(maxPtMinor)} />
-      </StatGrid>
 
-      {/* GAP-PAYROLL-STATUTORY-PT-04 [HUMAN REVIEW: statutory compliance]:
-          existing slabs are passed in so the form can reject an inverted or
-          overlapping range before it reaches the server, using the same
-          inclusive-range rule as payroll-service's findPtSlabOverlap. */}
-      {canEdit && <PtSlabForm existingSlabs={errored ? [] : rows} />}
-
-      <Card title={t("historyCardTitle")}>
-        {errored ? (
+      {errored ? (
+        <Card title={t("title")}>
           <div className="pad">
             <RefreshErrorState error={toHumanError("load", { area: t("loadErrorArea") })} backHref="/hr/payroll/statutory" />
           </div>
-        ) : (
-          <DataTable<PtDisplayRow>
-          columns={columns}
-          rows={displayRows}
-          sortable
-          filterable
-          filterPlaceholder={t("filterPlaceholder")}
-          pageSize={15}
-          emptyIcon="🏛️"
-          emptyTitle={t("emptyTitle")}
-          emptyMessage={t("emptyMessage")}
-        />
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <>
+          <StatGrid>
+            <StatCard icon="🗺️" iconBg="var(--goodbg)" label={t("statStatesConfigured")} value={view.configuredStates.length} />
+            <StatCard icon="🏛️" iconBg="var(--infobg)" label={t("statVersions")} value={view.stateCode ? view.versions.length : "—"} />
+            <StatCard
+              icon="📅" iconBg="var(--warnbg)" label={t("statCurrentSince")}
+              value={view.current ? (view.current.legacy ? t("sinceInception") : formatIndianDate(view.current.effectiveFrom)) : "—"}
+            />
+          </StatGrid>
+
+          <p role="note" style={{ margin: "0 0 16px", fontSize: 13 }}>{t("capNote")}</p>
+          <PtStatePicker selected={view.stateCode} configured={view.configuredStates} />
+
+          {!view.stateCode && (
+            <EmptyState icon="🏛️" title={t("noStateTitle")} message={view.hasConfiguredStates ? t("noStateMessage") : t("noStateNoneConfigured")} />
+          )}
+
+          {view.stateCode && (
+            <>
+              <Card title={t("timelineCardTitle", { state: `${stateName} (${view.stateCode})` })}>
+                <DataTable<TimelineRow>
+                  columns={timelineColumns}
+                  rows={timelineRows}
+                  rowLinkKey="href"
+                  rowLinkPrefix=""
+                  emptyIcon="🏛️"
+                  emptyTitle={t("noVersionsTitle")}
+                  emptyMessage={t("noVersionsMessage")}
+                />
+              </Card>
+
+              {view.selected && (
+                <Card title={t("selectedVersionTitle", { date: view.selected.legacy ? t("sinceInception") : formatIndianDate(view.selected.effectiveFrom) })}>
+                  <div className="pad" style={{ display: "grid", gap: 8 }}>
+                    <p role="note" style={{ margin: 0, fontSize: 13, color: "var(--mut)" }}>{t("readOnlyNote")}</p>
+                    {view.selected.reason && <p style={{ margin: 0, fontSize: 13 }}>{t("versionReason", { reason: view.selected.reason })}</p>}
+                  </div>
+                  <DataTable<SlabRow> columns={slabColumns} rows={slabRows} emptyIcon="🏛️" emptyTitle={t("noVersionsTitle")} emptyMessage={t("noVersionsMessage")} />
+                </Card>
+              )}
+
+              {canEdit && (
+                <PtVersionForm
+                  key={`${view.stateCode}:${view.current?.effectiveFrom ?? "none"}`}
+                  stateCode={view.stateCode}
+                  stateName={stateName}
+                  baseSlabs={view.baseSlabs}
+                  today={data.today}
+                  earliestEffectiveFrom={data.earliestEffectiveFrom}
+                  lastFinalisedMonth={data.lastFinalisedMonth}
+                />
+              )}
+            </>
+          )}
+        </>
+      )}
     </div>
   );
 }

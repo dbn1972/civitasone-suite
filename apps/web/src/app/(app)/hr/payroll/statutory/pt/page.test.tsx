@@ -1,7 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-// Role gate (see the page's own GAP comment): default every test to an
-// authorized payroll role; the gate tests below override per call.
+// Role gate: default every test to payroll_admin; the gate tests override per call.
 const { getSessionRolesMock } = vi.hoisted(() => ({ getSessionRolesMock: vi.fn((): string[] => ["payroll_admin"]) }));
 vi.mock("@/lib/auth/roleGuard", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/auth/roleGuard")>()),
@@ -21,11 +20,6 @@ vi.mock("next/navigation", () => ({
 
 import ProfessionalTaxPage from "./page";
 
-// UX-017: ProfessionalTaxPage (Server Component, getTranslations("pt")) also
-// renders PtSlabForm, a "use client" component that calls
-// useTranslations("ptSlabForm") -- so every render needs a real
-// NextIntlClientProvider in the tree, same pattern as
-// hr/payroll/disbursement/page.test.tsx (tranche 9).
 function renderPage(ui: React.ReactElement) {
   render(
     <NextIntlClientProvider locale="en" messages={enMessages}>
@@ -34,62 +28,111 @@ function renderPage(ui: React.ReactElement) {
   );
 }
 
-describe("ProfessionalTaxPage", () => {
+const slab = { fromMinor: 0, toMinor: 999999999999, taxMinor: 20000, februaryTaxMinor: null };
+const payload = {
+  today: "2026-10-03", lastFinalisedMonth: "2026-08", earliestEffectiveFrom: "2026-09-01",
+  states: [{
+    stateCode: "MH",
+    versions: [
+      { stateCode: "MH", effectiveFrom: "1900-01-01", effectiveTo: "2025-03-31", status: "past", legacy: true, reason: "Migrated from unversioned slabs", backDated: false, createdAt: null, slabs: [slab] },
+      { stateCode: "MH", effectiveFrom: "2025-04-01", effectiveTo: null, status: "current", legacy: false, reason: null, backDated: false, createdAt: null, slabs: [{ ...slab, taxMinor: 25000, februaryTaxMinor: 30000 }] },
+    ],
+  }],
+};
+const loaded = (data = payload) => fetchJsonMock.mockImplementation((_p: string, _e: unknown, opts: { mapResponse: (x: unknown) => unknown }) => Promise.resolve({ data: opts.mapResponse(data), source: "api" }));
+
+describe("ProfessionalTaxPage (versioned slabs)", () => {
   beforeEach(() => {
     getSessionRolesMock.mockReturnValue(["payroll_admin"]);
     fetchJsonMock.mockReset();
   });
 
-  it("renders PT slabs", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: [{ state_code: "KA", slab_from_minor: 0, slab_to_minor: 1500000, pt_amount_minor: 0 }],
-      source: "api",
-    });
-    const ui = await ProfessionalTaxPage();
-    renderPage(ui);
-    expect(screen.getByText("KA")).toBeInTheDocument();
+  it("without a state: asks for one, lists nothing, still shows the annual cap note", async () => {
+    loaded();
+    renderPage(await ProfessionalTaxPage({}));
+    expect(screen.getByText("Select a state")).toBeInTheDocument();
+    expect(screen.getByText(/Article 276\(2\)/)).toBeInTheDocument();
+    expect(screen.queryByText("Version timeline", { exact: false })).not.toBeInTheDocument();
   });
 
-  it("renders an empty state when there are no PT slabs", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
-    const ui = await ProfessionalTaxPage();
-    renderPage(ui);
-    expect(screen.getByText("No PT slabs configured")).toBeInTheDocument();
+  it("shows the version timeline with effective from / to and status, and the in-force slabs read-only", async () => {
+    loaded();
+    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    expect(screen.getByText(/Version timeline — Maharashtra \(MH\)/)).toBeInTheDocument();
+    expect(screen.getByText("Since the beginning")).toBeInTheDocument();
+    expect(screen.getByText("Open-ended")).toBeInTheDocument();
+    expect(screen.getByText("31 Mar 2025")).toBeInTheDocument();
+    expect(screen.getByText("In force")).toBeInTheDocument();
+    expect(screen.getByText("Superseded")).toBeInTheDocument();
+    expect(screen.getByText("No upper bound")).toBeInTheDocument();
+    // February amount of the selected (current) version
+    expect(screen.getByText(/300\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/This version is read-only/)).toBeInTheDocument();
   });
 
-  it("GAP-PAYROLL-STATUTORY-PT-01: shows Access restricted to employee/manager without calling the API", async () => {
+  it("?version= shows a past version read-only with its recorded reason", async () => {
+    loaded();
+    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH", version: "1900-01-01" } }));
+    expect(screen.getByText(/Reason recorded: Migrated from unversioned slabs/)).toBeInTheDocument();
+  });
+
+  it("the old 'takes effect immediately' copy is gone; the new-version form is offered to payroll_admin", async () => {
+    loaded();
+    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    expect(screen.queryByText(/immediately/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Create a new version — Maharashtra \(MH\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Earlier versions are never altered/)).toBeInTheDocument();
+  });
+
+  it("a payroll_officer can read the timeline but is not offered the create form (API is admin-only)", async () => {
+    getSessionRolesMock.mockReturnValue(["payroll_officer"]);
+    loaded();
+    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    expect(screen.getByText(/Version timeline/)).toBeInTheDocument();
+    expect(screen.queryByText(/Create a new version/)).not.toBeInTheDocument();
+  });
+
+  it("a state with no versions shows the empty state and the form to create the first one", async () => {
+    loaded();
+    renderPage(await ProfessionalTaxPage({ searchParams: { state: "KA" } }));
+    expect(screen.getAllByText("No slab versions for this state").length).toBeGreaterThan(0);
+    expect(screen.getByText(/Create a new version — Karnataka \(KA\)/)).toBeInTheDocument();
+  });
+
+  it("a load failure is an error state, never an empty timeline", async () => {
+    fetchJsonMock.mockResolvedValue({ data: { today: "", lastFinalisedMonth: null, earliestEffectiveFrom: null, states: [] }, source: "error" });
+    renderPage(await ProfessionalTaxPage({ searchParams: { state: "MH" } }));
+    expect(screen.queryByText("Select a state")).not.toBeInTheDocument();
+    expect(screen.queryByText("No slab versions for this state")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Version timeline/)).not.toBeInTheDocument();
+  });
+
+  it("GAP-PAYROLL-STATUTORY-PT-01: employee/manager get Access restricted without calling the API", async () => {
     getSessionRolesMock.mockReturnValue(["employee", "manager"]);
-    const ui = await ProfessionalTaxPage();
-    renderPage(ui);
+    renderPage(await ProfessionalTaxPage({}));
     expect(screen.getByText(/access restricted/i)).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
+});
 
-  it("GAP-PAYROLL-STATUTORY-PT-01: a read-only role (hr_admin) sees the ledger but not the write form", async () => {
-    getSessionRolesMock.mockReturnValue(["hr_admin"]);
-    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
-    const ui = await ProfessionalTaxPage();
-    renderPage(ui);
-    expect(screen.queryByText("Add / Update PT Slab")).not.toBeInTheDocument();
-  });
-
-  it("GAP-PAYROLL-STATUTORY-PT-01: a payroll role sees the write form", async () => {
-    fetchJsonMock.mockResolvedValue({ data: [], source: "api" });
-    const ui = await ProfessionalTaxPage();
-    renderPage(ui);
-    expect(screen.getByText("Add / Update PT Slab")).toBeInTheDocument();
-  });
-
-  it("GAP-PAYROLL-STATUTORY-PT-02/05: prints the open-ended sentinel as 'No upper bound' and drops the average tile", async () => {
-    fetchJsonMock.mockResolvedValue({
-      data: [{ state_code: "KA", slab_from_minor: 1500001, slab_to_minor: 999999999999, pt_amount_minor: 20000 }],
-      source: "api",
+// en + hi must carry the same keys and the same placeholders (the Hindi page
+// itself renders through next-intl/server, which these tests mock to English).
+describe("pt / ptVersionForm messages: en and hi are in step", () => {
+  const placeholders = (v: unknown) => [...String(v).matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort().join(",");
+  for (const ns of ["pt", "ptVersionForm"] as const) {
+    it(`${ns}: same keys, same placeholders, no leftover English-only copy`, async () => {
+      const hi = (await import("@/messages/hi.json")).default as unknown as Record<string, Record<string, string>>;
+      const en = enMessages as unknown as Record<string, Record<string, string>>;
+      expect(Object.keys(hi[ns]!).sort()).toEqual(Object.keys(en[ns]!).sort());
+      for (const k of Object.keys(en[ns]!)) {
+        expect(placeholders(hi[ns]![k]), `${ns}.${k}`).toBe(placeholders(en[ns]![k]));
+      }
+      expect(hi[ns]!.title ?? hi[ns]!.formTitle).not.toBe(en[ns]!.title ?? en[ns]!.formTitle);
     });
-    const ui = await ProfessionalTaxPage();
-    renderPage(ui);
-    expect(screen.getByText("No upper bound")).toBeInTheDocument();
-    expect(screen.queryByText(/9,99,99,99,999/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/Avg PT per Slab/i)).not.toBeInTheDocument();
-    expect(screen.getByText("Highest slab amount (any state)")).toBeInTheDocument();
+  }
+  it("the retired 'takes effect immediately' namespace is gone from both locales", async () => {
+    const hi = (await import("@/messages/hi.json")).default as unknown as Record<string, unknown>;
+    expect("ptSlabForm" in hi).toBe(false);
+    expect("ptSlabForm" in (enMessages as unknown as Record<string, unknown>)).toBe(false);
   });
 });
