@@ -29,6 +29,8 @@ export { EmptyState } from "./EmptyState";
 export { HelpTip } from "./HelpTip";
 export { Term } from "./Term";
 export { ErrorState } from "./ErrorState";
+export { ErrorSummary } from "./ErrorSummary";
+export type { ErrorSummaryProps } from "./ErrorSummary";
 export { RefreshErrorState } from "./RefreshErrorState";
 export type { RefreshErrorStateProps } from "./RefreshErrorState";
 export { LoadErrorState } from "./LoadErrorState";

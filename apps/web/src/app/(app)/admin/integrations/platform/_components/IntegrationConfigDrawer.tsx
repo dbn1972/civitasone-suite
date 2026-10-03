@@ -106,8 +106,8 @@ export function IntegrationConfigDrawer({
       setSecretInputs({}); setClearing([]);
       setNotice(settled ? t("tenant.drawer.saved") : t("tenant.drawer.stillApplying"));
       await onChanged();
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
     } finally {
       setBusy(false);
     }
@@ -134,8 +134,8 @@ export function IntegrationConfigDrawer({
   async function post(path: string, body: Record<string, unknown>): Promise<Response | null> {
     try {
       return await fetch(`${TENANT_API}${path}`, { method: "POST", headers: { ...JSON_HEADERS, "x-idempotency-key": dialogKey }, body: JSON.stringify(body) });
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
       return null;
     }
   }
@@ -179,8 +179,8 @@ export function IntegrationConfigDrawer({
       setDialog(null);
       await onChanged();
       onClose();
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
     } finally {
       setBusy(false);
     }

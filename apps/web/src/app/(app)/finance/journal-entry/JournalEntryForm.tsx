@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useState } from "react";
 import Link from "next/link";
 import type { AccountSummary } from "@civitasone/types";
@@ -289,7 +290,7 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
     setStatus("error");
     setMessage(resolved.message);
     // Surface the error inside the dialog by throwing for ConfirmDialog's busy/error flow.
-    throw new Error(resolved.message);
+    throw UserFacingError.from(resolved);
   }
 
   const errId = "jv-form-error";

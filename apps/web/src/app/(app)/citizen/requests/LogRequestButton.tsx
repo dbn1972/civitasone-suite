@@ -1,4 +1,5 @@
 "use client";
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -27,7 +28,7 @@ export function LogRequestButton() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ category: form.category, subject: form.subject, description: form.description }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Could not log the request.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Request submitted. It will appear in the list once processed.");
       setOpen(false);
       setForm({ category: "grievance", subject: "", description: "" });

@@ -61,9 +61,9 @@ export function CreateTenderForm() {
       setMessage("Tender created and entered the workflow.");
       router.push(parsed.id ? `/procurement/tenders/${parsed.id}` : "/procurement/tenders");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

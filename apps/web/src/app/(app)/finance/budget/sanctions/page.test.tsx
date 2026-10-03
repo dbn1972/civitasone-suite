@@ -20,7 +20,7 @@ describe("SanctionsPage (GAP-FINANCE-BUDGET-SANCTIONS-01/-02)", () => {
     render(await SanctionsPage());
     expect(screen.getAllByText("—").length).toBe(4);
     expect(screen.queryByText("₹0.00")).not.toBeInTheDocument();
-    expect(screen.getByText("We couldn't load sanctions.")).toBeInTheDocument();
+    expect(screen.getByText("We couldn't load the sanctions because of a problem on our side.")).toBeInTheDocument();
   });
 
   it("healthy empty list: zeros, no error", async () => {

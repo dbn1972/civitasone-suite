@@ -41,7 +41,7 @@ describe("ds/FileUpload", () => {
     Object.defineProperty(bigFile, "size", { value: 2 * 1024 * 1024 });
     Object.defineProperty(input, "files", { value: [bigFile], configurable: true });
     fireEvent.change(input);
-    expect(screen.getByText(/too large.*Maximum 1MB/)).toBeInTheDocument();
+    expect(screen.getByText(/The file is too large\. Upload a file smaller than 1 MB\./)).toBeInTheDocument();
   });
 
   it("initiates upload for valid file", async () => {
@@ -85,7 +85,7 @@ describe("ds/FileUpload", () => {
     fireEvent.change(input);
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/You don.t have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/Forbidden/)).not.toBeInTheDocument();
   });

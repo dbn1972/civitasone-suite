@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -49,15 +50,15 @@ export function PtApprovals({ pending, viewerId, canDecide, stateName }: {
           method: "PATCH",
           body: JSON.stringify(noteRef.current ? { note: noteRef.current } : {}),
         });
-      } catch {
-        throw new Error(formError.fromException("save").message);
+      } catch (caught) {
+        throw UserFacingError.from(formError.fromException("save", caught));
       }
       if (!res.ok) {
         let code: string | undefined;
         try { code = ((await res.clone().json()) as { code?: string }).code; } catch { code = undefined; }
         if (code === "SELF_APPROVAL_FORBIDDEN") throw new Error(t("errSelf"));
         if (code === "INVALID_STATE") throw new Error(t("errNotPending"));
-        throw new Error((await formError.fromResponse(res, "save")).message);
+        throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
       return (await res.json()) as Accepted;
     },

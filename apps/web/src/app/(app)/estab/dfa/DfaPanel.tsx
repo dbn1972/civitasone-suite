@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useState } from "react";
 import { Button, DataTable, StatusPill, ActionButton, Segmented } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -65,7 +66,7 @@ export function DfaPanel() {
       // since this effect re-fires on every filter change) a newer load for
       // a different filter has already superseded this one.
       if (err instanceof Error && err.name === "AbortError") return;
-      setError(fromException("load").message);
+      setError(fromException("load", err).message);
     } finally {
       setLoading(false);
     }
@@ -81,8 +82,8 @@ export function DfaPanel() {
     setSaving(true); setMessage(""); setError("");
     clear();
     try {
-      if (form.subject.trim().length < 3) throw new Error("Subject is required");
-      if (form.body.trim().length < 1) throw new Error("Draft body is required");
+      if (form.subject.trim().length < 3) throw new UserFacingError("Subject is required");
+      if (form.body.trim().length < 1) throw new UserFacingError("Draft body is required");
       const payload = {
         communicationType: form.communicationType,
         subject: form.subject.trim(),
@@ -104,7 +105,7 @@ export function DfaPanel() {
     } catch (err) {
       // "Subject is required" / "Draft body is required" above are already
       // clerk-safe, client-side validation copy — preserved via err.message.
-      setError(err instanceof Error ? err.message : fromException("save").message);
+      setError(fromException("save", err).message);
     } finally {
       setSaving(false);
     }
@@ -117,7 +118,7 @@ export function DfaPanel() {
     });
     if (!res.ok) {
       const resolved = await fromResponse(res, "save");
-      throw new Error(`${action}: ${resolved.message}`);
+      throw UserFacingError.from(resolved);
     }
     setMessage(`DFA ${action} done.`);
     const nextStatus = ACTION_STEP_STATUS[action];

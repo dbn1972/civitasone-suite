@@ -97,8 +97,8 @@ function useSectionState<T extends Record<string, unknown>>(loaded: T, area: str
       void _sent;
       setBaseline((prev) => ({ ...prev, ...(stored as Partial<T>) }));
       setValues((prev) => ({ ...prev, ...(stored as Partial<T>), ...("smtpPass" in prev ? { smtpPass: "" } : {}) }));
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
       setSaveState("error");
     }
   }

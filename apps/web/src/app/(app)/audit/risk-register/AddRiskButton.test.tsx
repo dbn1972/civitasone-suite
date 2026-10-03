@@ -44,7 +44,7 @@ describe("AddRiskButton", () => {
     openAndFillDialog();
     fireEvent.click(screen.getByRole("button", { name: "Add risk" }));
 
-    expect(await screen.findByRole("alert")).toHaveTextContent(/couldn't save/i);
+    expect(await screen.findByRole("alert")).toHaveTextContent(/This risk was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(screen.queryByText(/risk_code already exists/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();
   });

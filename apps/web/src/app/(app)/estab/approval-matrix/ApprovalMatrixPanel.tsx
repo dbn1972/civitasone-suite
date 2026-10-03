@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, DataTable, StatusPill, ActionButton } from "../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
@@ -74,7 +75,7 @@ export function ApprovalMatrixPanel() {
       setError("");
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") return;
-      setError(fromException("load").message);
+      setError(fromException("load", err).message);
     } finally {
       setLoading(false);
     }
@@ -107,7 +108,7 @@ export function ApprovalMatrixPanel() {
         .map((s) => s.trim())
         .filter(Boolean)
         .map((role) => ({ role, label: role.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()) }));
-      if (steps.length === 0) throw new Error("Add at least one approver role");
+      if (steps.length === 0) throw new UserFacingError("Add at least one approver role");
 
       const minMinor = Math.round(Number(form.minRupees || "0") * 100);
       const maxMinor = form.maxRupees.trim() === "" ? null : Math.round(Number(form.maxRupees) * 100);
@@ -137,7 +138,7 @@ export function ApprovalMatrixPanel() {
     } catch (err) {
       // "Add at least one approver role" above is already clerk-safe,
       // client-side validation copy — preserved verbatim via err.message.
-      setError(err instanceof Error ? err.message : fromException("save").message);
+      setError(fromException("save", err).message);
     } finally {
       setSaving(false);
     }
@@ -151,7 +152,7 @@ export function ApprovalMatrixPanel() {
         body: JSON.stringify({ active: !rule.active }),
       });
       if (!res.ok) {
-        throw new Error((await fromResponse(res, "save")).message);
+        throw UserFacingError.from(await fromResponse(res, "save"));
       }
       setMessage(`Rule "${rule.label}" ${rule.active ? "deactivated" : "activated"}.`);
       setTimeout(() => void load(), 800);

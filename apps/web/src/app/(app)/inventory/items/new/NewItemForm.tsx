@@ -94,8 +94,8 @@ export function NewItemForm({ categories, uoms }: { categories: Option[]; uoms: 
       toast.success("Item request received. It will appear in the item master shortly.");
       router.push("/inventory/items");
       router.refresh();
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -52,8 +52,8 @@ export default function RecruitmentSettingsPage() {
         return;
       }
       setMessage({ kind: "ok", text: t("setSaved") });
-    } catch {
-      setMessage({ kind: "error", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ kind: "error", text: formError.fromException("save", caught).message });
     } finally { setBusy(false); }
   }
 

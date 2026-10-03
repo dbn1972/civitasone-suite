@@ -2,6 +2,7 @@
 
 import { useId, useRef, useState } from "react";
 import { useFormError } from "@/lib/useFormError";
+import { humanErrorForStatus } from "@/lib/messages";
 
 /** Real metadata of the file that was just uploaded (from the browser File object). */
 export type UploadedFileMeta = {
@@ -37,7 +38,11 @@ export function FileUpload({
   const fileInputId = useId();
   const [status, setStatus] = useState<"idle" | "uploading" | "done" | "error">("idle");
   const [message, setMessage] = useState("");
-  const formError = useFormError("file upload");
+  const formError = useFormError("file");
+  // ".pdf,.jpg" -> "PDF or JPG" for the 415 copy; undefined falls back to "supported".
+  const acceptedTypes = accept
+    ? accept.split(",").map((t) => t.trim().replace(/^\./, "").toUpperCase()).filter((t) => /^[A-Z0-9]+$/.test(t)).join(" or ") || undefined
+    : undefined;
 
   async function handleChange() {
     const file = fileRef.current?.files?.[0];
@@ -45,7 +50,8 @@ export function FileUpload({
 
     if (file.size > maxSizeMb * 1024 * 1024) {
       setStatus("error");
-      setMessage(`File too large. Maximum ${maxSizeMb}MB.`);
+      const human = humanErrorForStatus(413, { limit: `${maxSizeMb} MB`, intent: "upload" });
+      setMessage(`${human.what} ${human.next}`);
       return;
     }
 
@@ -62,7 +68,7 @@ export function FileUpload({
 
       if (!presignRes.ok) {
         setStatus("error");
-        setMessage((await formError.fromResponse(presignRes, "save")).message);
+        setMessage((await formError.fromResponse(presignRes, "save", { limit: `${maxSizeMb} MB`, types: acceptedTypes })).message);
         return;
       }
 
@@ -77,16 +83,16 @@ export function FileUpload({
 
       if (!uploadRes.ok) {
         setStatus("error");
-        setMessage(formError.fromException("save").message);
+        setMessage((await formError.fromResponse(uploadRes, "save", { limit: `${maxSizeMb} MB`, types: acceptedTypes })).message);
         return;
       }
 
       setStatus("done");
       setMessage(`Uploaded: ${file.name}`);
       onUploaded?.(key, { fileName: file.name, size: file.size, mimeType: file.type });
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

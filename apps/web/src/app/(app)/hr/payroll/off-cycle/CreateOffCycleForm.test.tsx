@@ -113,7 +113,7 @@ describe("CreateOffCycleForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create Off-Cycle Run" }));
     await waitFor(() => expect(screen.getByText("Create this off-cycle run?")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Create run"));
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/API_ERROR: 422/)).not.toBeInTheDocument();
   });
 });

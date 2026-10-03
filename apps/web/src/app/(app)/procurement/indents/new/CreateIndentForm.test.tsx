@@ -76,7 +76,7 @@ describe("CreateIndentForm — purpose is required and actually sent (regression
 
     const alert = await screen.findByRole("alert");
     expect(alert.textContent).not.toMatch(/VALIDATION_FAILED/);
-    expect(alert.textContent).toMatch(/couldn't save/i);
+    expect(alert.textContent).toMatch(/Some details weren't accepted\. Check what you entered and try again\./);
   });
 
   // UX-003: the shared useFormError hook must render the backend's per-field

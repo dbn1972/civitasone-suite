@@ -96,8 +96,8 @@ export function ConfigForm({ initial }: { initial: PlatformControllable }) {
         setForm(next);
         setSuccess("Platform configuration saved.");
       }
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setSaving(false);
       setConfirmOpen(false);

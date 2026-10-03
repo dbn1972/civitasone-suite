@@ -71,7 +71,7 @@ export function ApprovalPolicyCard({ tenantId, policy, isDefault, pending, sourc
       router.refresh();
       return;
     }
-    if (!res) setDialogError(formError.fromException("save").message);
+    if (!res) setDialogError(formError.fromException("save", new TypeError("no response")).message);
     else {
       const code = knownErrorCode(await errorCodeOf(res));
       setDialogError(code ? t(`error.${code}` as never) : (await formError.fromResponse(res, "save")).message);

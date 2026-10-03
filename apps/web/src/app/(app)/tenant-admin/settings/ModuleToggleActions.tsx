@@ -62,8 +62,8 @@ export function ModuleToggleActions({ modules }: { modules: ModuleRow[] }) {
       }
       setStatus(`Saved ${dirtyKeys.length} module${dirtyKeys.length === 1 ? "" : "s"}.`);
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -55,7 +55,7 @@ describe("IssuesTable — return action", () => {
     fireEvent.click(screen.getByText("Confirm return"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
+      expect(screen.getByText(/We couldn't find this information\. It may have been removed or the link may be wrong\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/NOT_FOUND/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();

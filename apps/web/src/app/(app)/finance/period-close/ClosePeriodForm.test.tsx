@@ -77,7 +77,7 @@ describe("ClosePeriodForm", () => {
     fireEvent.click(screen.getByText("Soft-close period"));
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This period action was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/ALREADY_CLOSED/);
     expect(alert.textContent).not.toMatch(/period is already hard-closed/);
     expect(refreshMock).not.toHaveBeenCalled();

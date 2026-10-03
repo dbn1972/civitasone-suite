@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useRouter } from "next/navigation";
 import { useMemo, useState } from "react";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
@@ -74,7 +75,7 @@ export function RegisterAssetForm({ categories, locations = [], locationsFailed 
   // a reason, like every other register-changing action in this module.
   const create = useConfirmAction({
     onConfirm: async (reason) => {
-      if (!category || costMinor === null) throw new Error("Complete the form first.");
+      if (!category || costMinor === null) throw new UserFacingError("Complete the form first.");
       setMessage("");
       let res: Response;
       try {
@@ -97,12 +98,12 @@ export function RegisterAssetForm({ categories, locations = [], locationsFailed 
           notes: (reason ?? "").trim() || undefined,
         }),
         });
-      } catch {
-        throw new Error(formError.fromException("save").message);
+      } catch (caught) {
+        throw UserFacingError.from(formError.fromException("save", caught));
       }
       // GAP-ASSETS-REGISTER-04: a failure shows plain-language copy (never the
       // raw response body), inside the dialog's role=alert error region.
-      if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
       formError.clear();
       const body = (await res.json().catch(() => ({}))) as { id?: unknown };
       setDone(true);

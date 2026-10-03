@@ -31,7 +31,7 @@ describe("NewContractorPage — UX-016 clerk-safe errors", () => {
     fireEvent.click(screen.getByRole("button", { name: "Register Contractor" }));
 
     // The error banner is a plain div (no role="alert") in this component.
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/This contractor was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
     expect(document.body.textContent).not.toMatch(/duplicate gst/i);
     expect(document.body.textContent).not.toMatch(/\b409\b/);
   });

@@ -159,8 +159,8 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [], payGrou
         setMessage(t("createdMessage"));
         router.refresh();
       }
-    } catch {
-      setDialogError(formError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

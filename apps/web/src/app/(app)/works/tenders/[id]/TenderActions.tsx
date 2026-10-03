@@ -58,8 +58,8 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
       setQuotedPercentage("");
       setQuotOpen(false);
       setTimeout(() => router.refresh(), 600);
-    } catch {
-      setQuotError(quotFormError.fromException("save").message);
+    } catch (caught) {
+      setQuotError(quotFormError.fromException("save", caught).message);
     } finally {
       setQuotBusy(false);
     }
@@ -109,8 +109,8 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
       toast.success("Work award submitted. It will be recorded once processed.");
       setAwardOpen(false);
       setTimeout(() => router.refresh(), 600);
-    } catch {
-      setAwardError(awardFormError.fromException("save").message);
+    } catch (caught) {
+      setAwardError(awardFormError.fromException("save", caught).message);
     } finally {
       setAwardBusy(false);
     }
@@ -146,8 +146,8 @@ export function TenderActions({ tenderId, workId, awardId }: TenderActionsProps)
       toast.success(`Award ${level.toUpperCase()} finalization submitted. It will show as finalized once processed.`);
       setDialogOpen(false);
       setTimeout(() => router.refresh(), 600);
-    } catch {
-      setDialogError(finalizeFormError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(finalizeFormError.fromException("save", caught).message);
     } finally {
       setDialogBusy(false);
     }

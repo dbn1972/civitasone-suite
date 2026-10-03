@@ -63,7 +63,7 @@ describe("CondemnationWorkflow", () => {
     fireEvent.click(screen.getByRole("button", { name: "Create Survey" }));
     await waitFor(() => expect(screen.getByText("Create this condemnation survey?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Create survey" }));
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/VALIDATION_FAILED: assetId not found/)).not.toBeInTheDocument();
   });
 

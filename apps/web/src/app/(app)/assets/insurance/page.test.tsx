@@ -79,7 +79,7 @@ describe("InsurancePoliciesPage", () => {
     render(await InsurancePoliciesPage());
 
     expect(screen.queryByRole("button", { name: /retry|try again/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/insufficient role/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
   });
 
   it("disables the create form with an explanation when only the assets load fails; the table still renders", async () => {

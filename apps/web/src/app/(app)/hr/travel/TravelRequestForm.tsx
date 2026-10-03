@@ -104,8 +104,8 @@ export function TravelRequestForm() {
       setFields(INITIAL);
       setOpen(false);
       router.refresh();
-    } catch {
-      setMessage({ tone: "bad", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ tone: "bad", text: formError.fromException("save", caught).message });
     } finally {
       setBusy(false);
     }

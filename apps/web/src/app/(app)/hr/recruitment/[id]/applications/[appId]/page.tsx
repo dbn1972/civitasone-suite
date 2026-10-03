@@ -91,7 +91,7 @@ export default function ApplicationDetailPage() {
       setNotFound(true);
     } else {
       setApplication(null);
-      const resolved = outcome.response ? await formError.fromResponse(outcome.response, "load") : formError.fromException("load");
+      const resolved = outcome.response ? await formError.fromResponse(outcome.response, "load") : formError.fromException("load", new TypeError("no response"));
       setError({ message: resolved.message, forbidden: outcome.response?.status === 403 });
     }
     setLoading(false);
@@ -231,9 +231,9 @@ export default function ApplicationDetailPage() {
       setHireMessage(t("hireQueuedMessage"));
       setHirePhase("pending");
       setShowHireDialog(false);
-    } catch {
+    } catch (caught) {
       setHireStatus("error");
-      setHireMessage(formError.fromException("save").message);
+      setHireMessage(formError.fromException("save", caught).message);
     }
   }
 

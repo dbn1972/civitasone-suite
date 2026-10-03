@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
@@ -30,7 +31,7 @@ export function DiscoveryPanel() {
         method: "POST", headers: { "content-type": "application/json" },
         body: JSON.stringify({ citizenId }),
       });
-      if (!res.ok && res.status !== 409) throw new Error((await res.text()) || "Could not grant consent.");
+      if (!res.ok && res.status !== 409) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Consent recorded.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Could not grant consent.");
@@ -48,7 +49,7 @@ export function DiscoveryPanel() {
         body: JSON.stringify({ citizenId, profile: parsed }),
       });
       if (res.status === 403) throw new Error("Consent required — grant consent before running discovery.");
-      if (!res.ok) throw new Error((await res.text()) || "Discovery failed.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       const body = await res.json();
       setMatches(Array.isArray(body.matches) ? body.matches : []);
       setMessage(`${body.notified ?? 0} likely-eligible service(s) found and notified.`);

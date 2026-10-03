@@ -125,18 +125,18 @@ describe("PtVersionForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review and save new version" }));
     await waitFor(() => expect(screen.getByText("Save this new version?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Save new version" }));
-    await waitFor(() => expect(screen.getByText("You don't have permission to do this. Contact your administrator if you think this is a mistake.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("You don't have permission to do this. Ask your administrator if you need access.")).toBeInTheDocument());
     expect(screen.queryByText(/couldn't save/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/payroll_admin|FORBIDDEN|403/)).not.toBeInTheDocument();
   });
 
-  it("PT-06: a 500 shows the catalogued 'couldn't save your professional tax slab version' copy, never the status or body", async () => {
+  it("PT-06: a 500 shows the standard 'couldn't save the professional tax slab version' copy, never the status or body", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(new Response("<html>boom 500</html>", { status: 500 }));
     renderForm();
     fireEvent.click(screen.getByRole("button", { name: "Review and save new version" }));
     await waitFor(() => expect(screen.getByText("Save this new version?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Save new version" }));
-    await waitFor(() => expect(screen.getByText("We couldn't save your professional tax slab version. Nothing was changed. Please try again in a moment.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("We couldn't save the professional tax slab version because of a problem on our side. Your changes haven't been saved. Try again in a few minutes.")).toBeInTheDocument());
     expect(screen.queryByText(/boom|HTTP|status 500/i)).not.toBeInTheDocument();
   });
 

@@ -91,7 +91,7 @@ describe("AccountParentForm", () => {
     renderForm();
     await openAndSave();
 
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/We couldn't connect\. Check your internet connection and try again\./)).toBeInTheDocument());
     expect(screen.queryByText(/Failed to fetch/)).not.toBeInTheDocument();
   });
 

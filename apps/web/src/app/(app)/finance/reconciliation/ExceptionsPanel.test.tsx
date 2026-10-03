@@ -99,7 +99,7 @@ describe("ExceptionsPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Resolve" }));
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This reconciliation exception was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/INVALID_TRANSITION/);
     expect(alert.textContent).not.toMatch(/cannot resolve an exception/);
   });

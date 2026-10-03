@@ -86,8 +86,8 @@ export default function NewGuesthouseBookingPage() {
           message: (await formError.fromResponse(res, "save")).message,
         });
       }
-    } catch {
-      setToast({ type: "error", message: formError.fromException("save").message });
+    } catch (caught) {
+      setToast({ type: "error", message: formError.fromException("save", caught).message });
     } finally {
       setSubmitting(false);
       setTimeout(() => setToast(null), 5000);

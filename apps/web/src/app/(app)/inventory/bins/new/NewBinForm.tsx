@@ -81,8 +81,8 @@ export function NewBinForm({ stores }: { stores: StoreOption[] }) {
       toast.success("Bin request received. It will appear in the register shortly.");
       router.push("/inventory/bins");
       router.refresh();
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

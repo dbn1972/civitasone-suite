@@ -64,7 +64,7 @@ describe("documents HTTP client (DM-001)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 400 }));
     await expect(
       dm.presignUpload({ subjectType: "contact", subjectId: "c1", filename: "a.pdf", mimeType: "application/pdf" }),
-    ).rejects.toThrow(/couldn't save/i);
+    ).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 400 }));
     await expect(
       dm.presignUpload({ subjectType: "contact", subjectId: "c1", filename: "a.pdf", mimeType: "application/pdf" }),
@@ -80,7 +80,7 @@ describe("documents HTTP client (DM-001)", () => {
     expect(call[1]).toMatchObject({ method: "PUT" });
 
     fetchMock.mockResolvedValueOnce(new Response("", { status: 403 }));
-    await expect(dm.uploadToStorage("https://s3/put", file, "application/pdf")).rejects.toThrow(/couldn't save/i);
+    await expect(dm.uploadToStorage("https://s3/put", file, "application/pdf")).rejects.toThrow("You don't have permission to do this. Ask your administrator if you need access.");
     fetchMock.mockResolvedValueOnce(new Response("", { status: 403 }));
     await expect(dm.uploadToStorage("https://s3/put", file, "application/pdf")).rejects.not.toThrow(/403|STORAGE_UPLOAD_FAILED/);
   });
@@ -103,7 +103,7 @@ describe("documents HTTP client (DM-001)", () => {
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "bad" }, { status: 400 }));
     await expect(
       dm.confirmDocument({ subjectType: "contact", subjectId: "c1", title: "x", filename: "x", storageKey: "k", mimeType: "m", sizeBytes: 1 }),
-    ).rejects.toThrow(/couldn't save/i);
+    ).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "bad" }, { status: 400 }));
     await expect(
       dm.confirmDocument({ subjectType: "contact", subjectId: "c1", title: "x", filename: "x", storageKey: "k", mimeType: "m", sizeBytes: 1 }),
@@ -153,7 +153,7 @@ describe("document-types + verify (DM-002)", () => {
     fetchMock.mockResolvedValueOnce(res({}, { status: 200 }));
     await expect(dm.deleteDocumentType("t1")).resolves.toBeUndefined();
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 400 }));
-    await expect(dm.createDocumentType(type)).rejects.toThrow(/couldn't save/i);
+    await expect(dm.createDocumentType(type)).rejects.toThrow("Some details weren't accepted. Check what you entered and try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 400 }));
     await expect(dm.createDocumentType(type)).rejects.not.toThrow(/E/);
   });
@@ -166,7 +166,7 @@ describe("document-types + verify (DM-002)", () => {
     const body = JSON.parse(fetchMock.mock.calls[1][1].body);
     expect(body).toMatchObject({ status: "rejected", reason: "blurry scan" });
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 409 }));
-    await expect(dm.verifyDocument("d1", "verified")).rejects.toThrow(/couldn't save/i);
+    await expect(dm.verifyDocument("d1", "verified")).rejects.toThrow("This information was changed by someone else. Refresh to see the latest version, then try again.");
     fetchMock.mockResolvedValueOnce(res({ code: "E", message: "no" }, { status: 409 }));
     await expect(dm.verifyDocument("d1", "verified")).rejects.not.toThrow(/E/);
   });

@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useState } from "react";
 import { Button, DataTable, StatusPill, ConfirmDialog, useConfirmAction, ErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
@@ -75,7 +76,7 @@ export function HandoverPanel() {
           reason: form.reason, ...(form.remarks.trim() ? { remarks: form.remarks.trim() } : {}),
         }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Handover failed");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setMessage("Charge handover queued — files are being reassigned.");
       setForm({ ...EMPTY });
       setTimeout(() => void load(), 900);

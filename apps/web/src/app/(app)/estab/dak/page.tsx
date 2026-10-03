@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
@@ -34,7 +35,7 @@ export default function DakRegistryPage() {
     setLoadError(false);
     try {
       const res = await fetch("/api/proxy/v1/estab/inward?limit=100", { signal });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       const body = await res.json() as { data?: InwardRow[] };
       setRows(body.data ?? []);
     } catch (e) {
@@ -65,7 +66,7 @@ export default function DakRegistryPage() {
         // authenticated actor when assignedTo is omitted.
         body: JSON.stringify(form),
       });
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setForm({ dakNo: "", fromAddress: "", subject: "" });
       setMessage("DAK registered.");
       await load();

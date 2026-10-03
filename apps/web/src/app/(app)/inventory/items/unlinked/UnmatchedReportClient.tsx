@@ -32,8 +32,8 @@ export function UnmatchedReportClient({
       }
       toast.success(t("report.confirmed"));
       setTimeout(() => router.refresh(), LINK_REFRESH_DELAY_MS);
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusyId(null);
     }

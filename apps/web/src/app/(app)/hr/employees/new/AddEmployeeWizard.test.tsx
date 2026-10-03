@@ -73,7 +73,7 @@ describe("AddEmployeeWizard — UX-016 clerk-safe errors", () => {
     await driveToFinalStepAndSubmit();
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This employee was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/duplicate employeeNo/);
   });
 });

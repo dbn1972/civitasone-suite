@@ -54,8 +54,8 @@ export function NewScheduledForm() {
       setState({ status: "success", message: "Scheduled report created." });
       setTemplateId("");
       setRecipients("");
-    } catch {
-      setState({ status: "error", message: formError.fromException("save").message });
+    } catch (caught) {
+      setState({ status: "error", message: formError.fromException("save", caught).message });
     }
   }
 

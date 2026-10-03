@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useState } from "react";
 import { useTranslations } from "next-intl";
 import { Button } from "@/app/_components/ds";
@@ -30,7 +31,7 @@ export function EligibilityCheck() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ serviceId, subject: parsed }),
       });
-      if (!res.ok) throw new Error((await res.text()) || "Evaluation failed.");
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       setResult((await res.json()) as Result);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Evaluation failed.");

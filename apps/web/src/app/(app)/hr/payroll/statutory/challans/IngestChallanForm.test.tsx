@@ -68,7 +68,7 @@ describe("IngestChallanForm", () => {
     fireEvent.click(screen.getByText("Confirm & Ingest"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 409/)).not.toBeInTheDocument();
   });

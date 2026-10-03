@@ -78,8 +78,8 @@ export function AddHolidayForm({ year }: Props) {
       setOpen(false);
       router.refresh();
       setTimeout(() => router.refresh(), 1500);
-    } catch {
-      setMessage({ tone: "bad", text: formError.fromException("save").message });
+    } catch (caught) {
+      setMessage({ tone: "bad", text: formError.fromException("save", caught).message });
     } finally {
       setBusy(false);
     }

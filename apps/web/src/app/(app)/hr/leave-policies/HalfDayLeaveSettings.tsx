@@ -53,8 +53,8 @@ export default function HalfDayLeaveSettings() {
       }
       setSaved(draft);
       setNote(t("halfDaySaved"));
-    } catch {
-      err.fromException("save");
+    } catch (caught) {
+      err.fromException("save", caught);
     } finally {
       setBusy(false);
     }

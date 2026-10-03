@@ -109,7 +109,7 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
         const put = await fetch(uploadUrl, { method: "PUT", headers, body: file });
         if (!put.ok) {
           setUploadSuccessMessage(null);
-          setUploadError(formError.fromException("save").message);
+          setUploadError((await formError.fromResponse(put, "save", { limit: "10 MB" })).message);
           return;
         }
         setUploadError(null);
@@ -121,9 +121,9 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
         setUploadSuccessMessage(null);
         setUploadError((await formError.fromResponse(res, "save")).message);
       }
-    } catch {
+    } catch (caught) {
       setUploadSuccessMessage(null);
-      setUploadError(formError.fromException("save").message);
+      setUploadError(formError.fromException("save", caught).message);
     } finally {
       setUploading(false);
     }
@@ -141,8 +141,8 @@ function DocCard({ doc, onUploaded, onVerify, onReject }: SingleCardProps) {
       }
       const { downloadUrl } = await res.json() as { downloadUrl: string };
       window.open(downloadUrl, "_blank", "noopener,noreferrer");
-    } catch {
-      setViewError(formError.fromException("load").message);
+    } catch (caught) {
+      setViewError(formError.fromException("load", caught).message);
     } finally {
       setViewing(false);
     }

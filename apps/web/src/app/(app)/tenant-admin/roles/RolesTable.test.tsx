@@ -24,7 +24,7 @@ describe("RolesTable (NewRoleDialog) — UX-016 clerk-safe errors", () => {
     fireEvent.change(within(dialog).getByLabelText(/Role name/i), { target: { value: "Finance Reviewer" } });
     fireEvent.click(within(dialog).getByRole("button", { name: "Create role" }));
 
-    await waitFor(() => expect(dialog.textContent).toMatch(/couldn't save/i));
+    await waitFor(() => expect(dialog.textContent).toMatch(/This role was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(dialog.textContent).not.toMatch(/already exists/i);
     expect(dialog.textContent).not.toMatch(/\b409\b/);
   });

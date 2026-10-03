@@ -172,9 +172,9 @@ export function ApplyForm({ jobOpeningId, vacancyType = "regular" }: { jobOpenin
       setApplicationNo(data.applicationNo ?? null);
       setStatus("success");
       setMessage(t("received"));
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useTranslations } from "next-intl";
@@ -8,6 +9,7 @@ import { rupeesToMinorString } from "@/lib/money";
 import { formatMoney, formatIndianDate } from "@/lib/formatters";
 import { toHumanError } from "@/lib/messages";
 import { errorCodeFromResponse, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { UserFacingError } from "@/lib/userFacingError";
 import { glErrorKey, journalKey, journalState } from "../glStatus";
 import { percentToBps, isDiscounted, parseSchedule, LEASE_FREQUENCIES, type LeaseFrequency, type LeaseScheduleRow } from "./leaseTerms";
 
@@ -144,9 +146,9 @@ export default function LeasesPage() {
         body: JSON.stringify(leaseBody()),
       });
       if (!res.ok) {
-        // GL-heads errors are translated (en + hi); anything else is plain copy, never the raw response body.
+        // GL-heads errors are translated (en + hi); anything else is the standard copy, never the raw response body.
         const gl = glErrorKey(await errorCodeFromResponse(res));
-        throw new Error(gl ? t(gl) : await errorMessageFromResponse(res, "save", "lease"));
+        throw gl ? new UserFacingError(t(gl)) : await userFacingErrorFromResponse(res, "save", "lease");
       }
       setMessage(`Lease ${leaseNo} submitted. Its ROU asset ROU/${leaseNo} and lease liability will appear shortly.`);
       setForm(EMPTY_FORM);

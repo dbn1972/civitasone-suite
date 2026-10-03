@@ -133,10 +133,10 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
     await fillAndSubmit();
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This leave request was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/leave-service/);
     expect(alert.textContent).not.toMatch(/\b409\b/);
-    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/couldn't save/i));
+    expect(toastError).toHaveBeenCalledWith(expect.stringMatching(/This leave request was changed by someone else\. Refresh to see the latest version, then try again\./));
   });
 
   it("shows a clerk-safe message when there is no response at all (network failure, not queued)", async () => {
@@ -144,7 +144,7 @@ describe("ApplyLeaveForm — UX-016 clerk-safe errors", () => {
     await fillAndSubmit();
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/We couldn't connect\. Check your internet connection and try again\./));
     expect(alert.textContent).not.toMatch(/\bnetwork\b/);
   });
 });

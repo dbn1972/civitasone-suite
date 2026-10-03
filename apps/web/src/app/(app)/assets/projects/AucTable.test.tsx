@@ -63,7 +63,7 @@ describe("AucTable", () => {
     // status 404 -> kind "load", not "save" (this is the one file in the UX-020
     // batch where the fixture's status actually maps to the "load" catalogue entry).
     await waitFor(() => {
-      expect(screen.getByText(/couldn't load/i)).toBeInTheDocument();
+      expect(screen.getByText(/We couldn't find this information\. It may have been removed or the link may be wrong\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/NOT_FOUND: AUC not found/)).not.toBeInTheDocument();
     expect(refreshMock).not.toHaveBeenCalled();

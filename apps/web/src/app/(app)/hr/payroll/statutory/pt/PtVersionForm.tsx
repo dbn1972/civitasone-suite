@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
@@ -102,13 +103,13 @@ export function PtVersionForm({
           method: "POST",
           body: JSON.stringify({ stateCode, effectiveFrom, slabs: check.slabs, ...(reasonRef.current ? { reason: reasonRef.current } : {}) }),
         });
-      } catch {
-        throw new Error(formError.fromException("save").message);
+      } catch (caught) {
+        throw UserFacingError.from(formError.fromException("save", caught));
       }
       if (!res.ok) {
         let code: string | undefined;
         try { code = ((await res.clone().json()) as { code?: string }).code; } catch { code = undefined; }
-        throw new Error(knownRejection(code) ?? (await formError.fromResponse(res, "save")).message);
+        throw new UserFacingError(knownRejection(code) ?? (await formError.fromResponse(res, "save")).message);
       }
       return (await res.json()) as Accepted;
     },

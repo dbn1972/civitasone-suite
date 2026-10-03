@@ -77,7 +77,7 @@ describe("ContractorEditToggle — clearing a field actually sends the clear", (
     fireEvent.change(screen.getByLabelText(/^PAN$/), { target: { value: "" } });
     fireEvent.click(screen.getByRole("button", { name: /save changes/i }));
 
-    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(screen.getByRole("alert")).toHaveTextContent(/Some details weren't accepted\. Check what you entered and try again\./));
     expect(screen.getByRole("alert").textContent).not.toMatch(/invalid request/);
     expect(screen.queryByText("Contractor updated.")).not.toBeInTheDocument();
   });

@@ -102,7 +102,8 @@ describe("AssetDetailActions", () => {
     fireEvent.click(screen.getByRole("button", { name: "Transfer to organisation" }));
 
     await waitFor(() => {
-      expect(screen.getByText("ORG_NOT_FOUND")).toBeInTheDocument();
+      expect(screen.getByText(/We couldn't find this information\. It may have been removed or the link may be wrong\./)).toBeInTheDocument();
+      expect(screen.queryByText(/ORG_NOT_FOUND/)).not.toBeInTheDocument();
     });
   });
 
@@ -174,7 +175,7 @@ describe("AssetDetailActions", () => {
     await waitFor(() => expect(screen.getByText("Directly dispose this asset?")).toBeInTheDocument());
     fireEvent.change(screen.getByLabelText("Reason for direct disposal"), { target: { value: "Approved write-off" } });
     fireEvent.click(screen.getByRole("button", { name: "Dispose asset" }));
-    await waitFor(() => expect(screen.getByText(/requires one of: asset_manager/)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument());
     expect(screen.queryByText("Direct disposal submitted (workflow bypassed).")).not.toBeInTheDocument();
   });
 

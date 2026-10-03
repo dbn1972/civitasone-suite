@@ -35,8 +35,8 @@ export function UserSecurityActions({ userId }: Props) {
       }
       setStatus(okMessage);
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(null);
     }

@@ -79,8 +79,8 @@ export function VendorForm() {
       setConfirmOpen(false);
       router.refresh();
       setTimeout(() => router.push("/finance/vendors"), 700);
-    } catch {
-      setDialogError(formError.fromException("save").message);
+    } catch (caught) {
+      setDialogError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

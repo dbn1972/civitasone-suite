@@ -133,9 +133,9 @@ function ProposalEditForm({
         router.refresh();
         onClose();
       }, 800);
-    } catch {
+    } catch (caught) {
       setMsg({
-        text: formError.fromException("save").message,
+        text: formError.fromException("save", caught).message,
         ok: false,
       });
     } finally {

@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import { ConfirmDialog, ErrorState, useConfirmAction, Button } from "../../../../_components/ds";
@@ -171,9 +172,9 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
       if (!res.ok) { setSaveState("error"); setSaveMessage((await formError.fromResponse(res, "save")).message); return; }
       setSaveState("saved");
       reloadAfterWrite(false);
-    } catch {
+    } catch (caught) {
       setSaveState("error");
-      setSaveMessage(formError.fromException("save").message);
+      setSaveMessage(formError.fromException("save", caught).message);
     }
   }
 
@@ -193,7 +194,7 @@ export function VacancyNotificationPanel({ jobOpeningId, published, onChanged }:
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
-      if (!res.ok) throw new Error((await formError.fromResponse(res, "save")).message);
+      if (!res.ok) throw UserFacingError.from(await formError.fromResponse(res, "save"));
       reloadAfterWrite(true);
     },
   });

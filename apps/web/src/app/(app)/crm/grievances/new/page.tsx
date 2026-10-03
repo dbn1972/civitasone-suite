@@ -43,8 +43,8 @@ export default function NewGrievancePage() {
       }
       const { data } = (await res.json()) as { data: { id: string } };
       router.push(`/crm/grievances/${data.id}`);
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
       setSaving(false);
     }
   }

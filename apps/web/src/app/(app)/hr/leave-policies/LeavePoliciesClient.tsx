@@ -103,7 +103,7 @@ export default function LeavePoliciesClient() {
       setState("ready");
     } catch (err) {
       if (err instanceof Error && err.name !== 'AbortError') {
-        setLoadError(formError.fromException("load").message);
+        setLoadError(formError.fromException("load", err).message);
         setState("error");
       }
     }
@@ -188,8 +188,8 @@ export default function LeavePoliciesClient() {
       // `state` back to "loading" mid-session since `state` is already
       // "ready" here, so this is already a quiet background refresh).
       setTimeout(() => { void fetchPolicies(); }, 1500);
-    } catch {
-      setSaveError(formError.fromException("save").message);
+    } catch (caught) {
+      setSaveError(formError.fromException("save", caught).message);
     } finally {
       setSaving(false);
     }
@@ -230,8 +230,8 @@ export default function LeavePoliciesClient() {
       setToast({ tone: "good", text: t("toastUpdated") });
       setTimeout(() => setToast(null), 4000);
       setTimeout(() => { void fetchPolicies(); }, 1500);
-    } catch {
-      setDeactivateError(formError.fromException("save").message);
+    } catch (caught) {
+      setDeactivateError(formError.fromException("save", caught).message);
     } finally {
       setStatusBusyId(null);
     }

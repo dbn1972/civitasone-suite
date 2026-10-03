@@ -42,8 +42,8 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
       toast.success("Work physically marked as complete.");
       setPhysDialog(false);
       setTimeout(() => router.refresh(), 600);
-    } catch {
-      setPhysError(physFormError.fromException("save").message);
+    } catch (caught) {
+      setPhysError(physFormError.fromException("save", caught).message);
     } finally {
       setPhysBusy(false);
     }
@@ -74,8 +74,8 @@ export function ExecutionActions({ workId }: ExecutionActionsProps) {
       toast.success(`Work closed (${closureType}).`);
       setClosureDialog(false);
       setTimeout(() => router.refresh(), 600);
-    } catch {
-      setClosureError(closureFormError.fromException("save").message);
+    } catch (caught) {
+      setClosureError(closureFormError.fromException("save", caught).message);
     } finally {
       setClosureBusy(false);
     }

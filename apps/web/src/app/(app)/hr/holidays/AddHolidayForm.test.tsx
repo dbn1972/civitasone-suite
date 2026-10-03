@@ -54,7 +54,7 @@ describe("AddHolidayForm — UX-016 clerk-safe errors", () => {
     openAndFillForm();
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This holiday was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/duplicate holiday date/);
   });
 });

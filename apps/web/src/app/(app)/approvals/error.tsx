@@ -1,18 +1,9 @@
 "use client";
 
-import { ErrorState } from "../../_components/ds";
+import { RouteError } from "@/app/_components/RouteError";
 
-export default function ApprovalsError({ reset }: { reset: () => void }) {
+export default function ApprovalsError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
   return (
-    <ErrorState
-      error={{
-        what: "Something went wrong.",
-        next: "We couldn't load your approvals. This is usually a temporary issue — please try again.",
-        actions: ["retry", "back", "help"],
-      }}
-      onRetry={reset}
-      backHref="/dashboard"
-      helpHref="/help/approvals"
-    />
+    <RouteError error={error} reset={reset} backHref="/dashboard" backLabel="Back to dashboard" area="approvals" />
   );
 }

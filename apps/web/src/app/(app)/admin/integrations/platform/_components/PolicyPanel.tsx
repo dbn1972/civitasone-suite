@@ -54,8 +54,8 @@ export function PolicyPanel({
       setNotice(settled ? okNotice : t("tenant.policy.stillApplying"));
       setDialog(null);
       await onChanged();
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
     } finally {
       setBusy(false);
     }

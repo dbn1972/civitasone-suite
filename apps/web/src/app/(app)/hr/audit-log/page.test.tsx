@@ -72,7 +72,7 @@ describe("HrAuditLogPage — empty vs. error (GAP-HR-AUDIT-LOG-01/02)", () => {
   it("shows PermissionDenied (not a generic retry state) on a live 403 from audit-service", async () => {
     fetchJsonMock.mockResolvedValue({ data: [], source: "error", status: 403, errorMessage: "audit trail access is restricted" });
     await renderPage();
-    expect(screen.getByText(/audit trail access is restricted/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
   });
 });
 

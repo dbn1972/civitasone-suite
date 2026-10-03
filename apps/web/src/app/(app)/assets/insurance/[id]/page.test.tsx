@@ -99,7 +99,7 @@ describe("PolicyDetailPage", () => {
     render(await PolicyDetailPage({ params: { id: "p1" } }));
 
     expect(screen.queryByRole("button", { name: /retry|try again/i })).not.toBeInTheDocument();
-    expect(screen.getByText(/insufficient role/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
   });
 
   it("still renders the full detail page for a lapsed (expired) policy", async () => {

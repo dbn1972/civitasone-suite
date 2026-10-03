@@ -11,6 +11,7 @@
  * can be posted here, and the stock-service id is what the entry carries. An optional
  * ?itemId= query param (a stock item id, passed from a stock item detail page) preselects it.
  */
+import { UserFacingError } from "@/lib/userFacingError";
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
@@ -59,8 +60,8 @@ export default function NewStockEntryPage() {
           if (entry) setPicked(entry);
           else setLoadError(formError.fromException("load").message);
         }
-      } catch {
-        if (active) setLoadError(formError.fromException("load").message);
+      } catch (caught) {
+        if (active) setLoadError(formError.fromException("load", caught).message);
       }
     })();
     return () => { active = false; };
@@ -94,7 +95,7 @@ export default function NewStockEntryPage() {
       headers: { "content-type": "application/json" },
       body: JSON.stringify(body),
     });
-    if (!(res.ok || res.status === 202)) throw new Error((await formError.fromResponse(res, "save")).message);
+    if (!(res.ok || res.status === 202)) throw UserFacingError.from(await formError.fromResponse(res, "save"));
   }
 
   const post = useConfirmAction({

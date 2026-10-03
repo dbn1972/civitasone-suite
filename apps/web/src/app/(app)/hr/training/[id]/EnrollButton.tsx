@@ -59,8 +59,8 @@ export function EnrollButton({ trainingId, employeeId }: EnrollButtonProps) {
       // GAP-HR-TRAINING-NEW-01's cache.invalidateResource fix makes this an
       // immediately-fresh re-render, not a stale cached list.
       router.refresh();
-    } catch {
-      formError.fromException("save");
+    } catch (caught) {
+      formError.fromException("save", caught);
       setState("idle");
     }
   }

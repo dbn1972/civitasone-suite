@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useRef, useCallback } from "react";
+import { humanErrorForStatus } from "@/lib/messages";
 
 interface FileUploadProps {
   accept?: string;
@@ -26,7 +27,8 @@ export function FileUpload({
     (f: File) => {
       setError(null);
       if (maxSizeMB && f.size > maxSizeMB * 1024 * 1024) {
-        setError(`File exceeds ${maxSizeMB}MB limit`);
+        const human = humanErrorForStatus(413, { limit: `${maxSizeMB} MB`, intent: "upload" });
+        setError(`${human.what} ${human.next}`);
         return;
       }
       setFile(f);

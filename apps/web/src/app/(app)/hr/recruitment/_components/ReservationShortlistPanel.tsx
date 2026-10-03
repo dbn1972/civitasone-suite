@@ -43,8 +43,8 @@ export function ReservationShortlistPanel({ jobOpeningId, candidates }: { jobOpe
         return;
       }
       setResult((await res.json()) as Result);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

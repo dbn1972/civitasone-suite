@@ -125,7 +125,7 @@ describe("StewardQueuePanel", () => {
     );
     fireEvent.click(dialogConfirm);
 
-    await waitFor(() => expect(within(dialog).getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(within(dialog).getByText(/This information was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument());
     expect(within(dialog).queryByText(/ALREADY_DECIDED/)).not.toBeInTheDocument();
     // The dialog stays open on failure so the steward can retry or cancel — nothing silently swallowed.
     expect(screen.getByText("Reject this merge suggestion?")).toBeInTheDocument();

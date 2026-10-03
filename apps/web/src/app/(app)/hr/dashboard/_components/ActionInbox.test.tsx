@@ -67,7 +67,7 @@ describe("ActionInbox", () => {
       fireEvent.click(screen.getByRole("button", { name: /yes, decline/i }));
 
       const alert = await screen.findByRole("alert");
-      await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+      await waitFor(() => expect(alert).toHaveTextContent(/We couldn't find this leave application\. It may have been removed or the link may be wrong\./));
       expect(alert.textContent).not.toMatch(/leave-service/);
     });
 

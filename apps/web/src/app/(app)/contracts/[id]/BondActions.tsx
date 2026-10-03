@@ -1,5 +1,6 @@
 "use client";
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ActionButton } from "../../../_components/ds";
@@ -108,7 +109,7 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
         }),
       });
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Register failed");
+        throw await userFacingErrorFromResponse(res, "save");
       }
       setMessage("Performance bond registration accepted (queued).");
       setReferenceNo("");
@@ -137,7 +138,7 @@ export function BondActions({ contractId, bonds, canRegister }: Props) {
         },
       );
       if (res.status !== 202 && !res.ok) {
-        throw new Error((await res.text()) || "Transition failed");
+        throw await userFacingErrorFromResponse(res, "save");
       }
       setMessage(`Bond ${toStatus} accepted (queued).`);
       router.refresh();

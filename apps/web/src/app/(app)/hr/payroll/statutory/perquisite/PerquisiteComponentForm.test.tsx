@@ -76,7 +76,7 @@ describe("PerquisiteComponentForm", () => {
     fireEvent.click(screen.getByText("Confirm & Save"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save/i)).toBeInTheDocument();
+      expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 400/)).not.toBeInTheDocument();
   });

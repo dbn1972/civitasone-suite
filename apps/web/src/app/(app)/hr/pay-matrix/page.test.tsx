@@ -84,7 +84,7 @@ describe("PayMatrixPage", () => {
       errorMessage: "requires one of: hr_admin, hr_officer, super_admin, payroll_admin, finance_officer",
     });
     await renderPage();
-    expect(screen.getByText(/requires one of: hr_admin/i)).toBeInTheDocument();
+    expect(screen.getByText(/You don't have permission to do this\. Ask your administrator if you need access\./)).toBeInTheDocument();
   });
 
   it("passes a valid level filter through to the loader", async () => {

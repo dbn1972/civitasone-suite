@@ -65,10 +65,10 @@ export function RecordChallanForm({ heads }: { heads: ReceiptHeadOption[] }) {
       setMessage(t("recorded"));
       router.refresh();
       setTimeout(() => router.push("/finance/revenue/challans"), 700);
-    } catch {
+    } catch (caught) {
       setConfirmOpen(false);
       setIsError(true);
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

@@ -115,7 +115,7 @@ describe("NachMandateForm", () => {
     fireEvent.click(screen.getByText("Check Status"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't check the status/i)).toBeInTheDocument();
+      expect(screen.getByText(/We couldn't find this mandate\. It may have been removed or the link may be wrong\./)).toBeInTheDocument();
     });
     expect(screen.queryByText("mandate not found")).not.toBeInTheDocument();
     expect(screen.queryByText(/NOT_FOUND/)).not.toBeInTheDocument();
@@ -129,7 +129,7 @@ describe("NachMandateForm", () => {
     fireEvent.click(screen.getByText("Check Status"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't check the status/i)).toBeInTheDocument();
+      expect(screen.getByText(/We couldn't load the mandate because of a problem on our side\. Try again in a few minutes\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/\b500\b/)).not.toBeInTheDocument();
   });

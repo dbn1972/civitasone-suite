@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -156,11 +157,11 @@ export default function LeaveHistoryClient({ roles, myEmployeeId, initialEmploye
       });
       if (!res.ok) {
         const resolved = await formError.fromResponse(res, "save");
-        throw new Error(resolved.message);
+        throw UserFacingError.from(resolved);
       }
       setApps((prev) => prev.map((a) => (a.id === appId ? { ...a, status: "cancelled" } : a)));
     } catch (err) {
-      const msg = err instanceof Error ? err.message : formError.fromException("save").message;
+      const msg = formError.fromException("save", err).message;
       setCancelError(msg);
       throw err instanceof Error ? err : new Error(msg);
     } finally {

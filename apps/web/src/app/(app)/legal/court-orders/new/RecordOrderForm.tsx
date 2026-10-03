@@ -1,5 +1,6 @@
 "use client";
 
+import { UserFacingError } from "@/lib/userFacingError";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -41,7 +42,7 @@ export function RecordOrderForm({ cases }: { cases: CaseOption[] }) {
         body: JSON.stringify(body),
       });
       if (!res.ok) {
-        throw new Error((await formError.fromResponse(res, "save")).message);
+        throw UserFacingError.from(await formError.fromResponse(res, "save"));
       }
     },
     onSuccess: () => {

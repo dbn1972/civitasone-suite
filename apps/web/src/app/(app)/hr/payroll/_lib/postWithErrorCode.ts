@@ -1,4 +1,6 @@
-import { browserFetch, errorMessageFromResponse, errorMessageForStatus } from "@/lib/api/browserClient";
+import { browserFetch, errorMessageFromResponse } from "@/lib/api/browserClient";
+import { UserFacingError } from "@/lib/userFacingError";
+import { referenceFromHeaders } from "@/lib/errorCatalogue";
 
 /**
  * Send a request through the BFF proxy and, on failure, let the caller turn a
@@ -10,12 +12,13 @@ import { browserFetch, errorMessageFromResponse, errorMessageForStatus } from "@
  *
  * `codeMessages` maps code -> already-translated display text. `opts.area` is
  * an optional plain noun ("professional tax slab") that makes the generic
- * "couldn't save your ..." fallback specific; `opts.statusAware` (opt-in) makes
- * a 403 read as a permission problem and a 400/422 as "values not accepted"
- * instead of the generic save failure (GAP-PAYROLL-STATUTORY-PT-06).
+ * fallback specific. The fallback is the app-wide status-aware standard
+ * (apps/web/docs/ERROR-MESSAGES.md) for every caller; `opts.statusAware` is a
+ * deprecated no-op kept so call sites written against the old opt-in still compile.
  */
 export type ErrorCodeOptions = {
   area?: string;
+  /** @deprecated status-aware is now the default. */
   statusAware?: boolean;
   /** Sent as `x-idempotency-key` so a retried submit cannot double-apply. */
   idempotencyKey?: string;
@@ -27,13 +30,13 @@ export type ErrorCodeOptions = {
  * displayed) and `details` the backend `details` object, for callers that need
  * structured data from a rejection (e.g. the per-row result of a rejected bulk
  * assign). Still an `Error`, so every existing `err instanceof Error` caller
- * is unaffected.
+ * is unaffected. Being a UserFacingError, `fromException` keeps its message.
  */
-export class CodedRequestError extends Error {
+export class CodedRequestError extends UserFacingError {
   readonly code: string | undefined;
   readonly details: unknown;
-  constructor(message: string, code?: string, details?: unknown) {
-    super(message);
+  constructor(message: string, code?: string, details?: unknown, reference: string | null = null) {
+    super(message, reference);
     this.name = "CodedRequestError";
     this.code = code;
     this.details = details;
@@ -66,9 +69,10 @@ export async function requestWithErrorCode<T = unknown>(
     throw new CodedRequestError(codeMessages[code], code, details);
   }
   throw new CodedRequestError(
-    opts.statusAware ? await errorMessageForStatus(res, opts.area) : await errorMessageFromResponse(res, undefined, opts.area),
+    await errorMessageFromResponse(res, undefined, opts.area),
     code,
     details,
+    referenceFromHeaders(res.headers),
   );
 }
 

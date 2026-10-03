@@ -77,8 +77,8 @@ export default function NewProposalPage() {
       setMessage("Created.");
       toast.success("Work proposal submitted.");
       setTimeout(() => router.push("/works/proposals"), 600);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

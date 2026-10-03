@@ -19,6 +19,7 @@
  *   />
  */
 
+import { userFacingErrorFromResponse } from "@/lib/api/userFacingFromResponse";
 import { useCallback, useEffect, useState } from "react";
 import { Button, Field, Select, StatusPill, type EntityOption } from "./ds";
 import { EmployeePicker } from "./EmployeePicker";
@@ -128,7 +129,7 @@ export function RaiseEOfficeNote(props: RaiseEOfficeNoteProps) {
       const qs = new URLSearchParams({ refType, refId });
       const res = await fetch(`/api/proxy/v1/estab/files/by-ref?${qs.toString()}`, { signal });
       if (res.status === 404) { setFile(null); return; }
-      if (!res.ok) throw new Error(await res.text());
+      if (!res.ok) throw await userFacingErrorFromResponse(res, "save");
       const body = (await res.json()) as { data?: LinkedFile };
       setFile(body.data ?? null);
     } catch (err) {

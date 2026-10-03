@@ -116,7 +116,7 @@ describe("ComputeBonusForm", () => {
     fireEvent.click(screen.getByRole("button", { name: "Compute Bonus" }));
     await screen.findByText("Compute this bonus?");
     fireEvent.click(screen.getByText("Compute bonus"));
-    await waitFor(() => expect(screen.getByText(/couldn't save/i)).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText(/Some details weren't accepted\. Check what you entered and try again\./)).toBeInTheDocument());
   });
 
   // GAP-PAYROLL-BONUS-02

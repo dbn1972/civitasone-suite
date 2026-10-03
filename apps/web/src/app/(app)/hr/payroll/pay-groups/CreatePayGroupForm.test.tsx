@@ -144,7 +144,7 @@ describe("CreatePayGroupForm", () => {
     fireEvent.click(screen.getByText("Create pay group"));
 
     await waitFor(() => {
-      expect(screen.getByText(/couldn't save your pay group/i)).toBeInTheDocument();
+      expect(screen.getByText(/This pay group was changed by someone else\. Refresh to see the latest version, then try again\./)).toBeInTheDocument();
     });
     expect(screen.queryByText(/API_ERROR: 409/)).not.toBeInTheDocument();
   });

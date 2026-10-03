@@ -271,7 +271,7 @@ describe("triggerIngestion", () => {
     fetchMock.mockResolvedValue(res({ code: "DISABLED", message: "connector off" }, 409));
     const out = await triggerIngestion("sftp", "prod");
     expect(out.ok).toBe(false);
-    expect(out.error).toMatch(/couldn't save/i);
+    expect(out.error).toMatch(/This information was changed by someone else\. Refresh to see the latest version, then try again\./);
     expect(out.error).not.toMatch(/DISABLED|connector off/);
   });
 

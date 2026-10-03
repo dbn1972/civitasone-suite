@@ -71,9 +71,9 @@ export function AmendGrnForm({ grnId, items }: {
       setStatus("saved");
       setMessage("GRN amended — quantities updated.");
       router.refresh();
-    } catch {
+    } catch (caught) {
       setStatus("error");
-      setMessage(formError.fromException("save").message);
+      setMessage(formError.fromException("save", caught).message);
     }
   }
 

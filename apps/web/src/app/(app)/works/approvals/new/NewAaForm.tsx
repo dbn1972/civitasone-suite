@@ -67,8 +67,8 @@ export function NewAaForm() {
       setMessage("Administrative approval submitted. It will appear in the register once processed.");
       toast.success("Administrative approval submitted.");
       setTimeout(() => router.push("/works/approvals"), 700);
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

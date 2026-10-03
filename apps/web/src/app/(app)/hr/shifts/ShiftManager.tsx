@@ -54,8 +54,8 @@ export function ShiftManager({ shifts }: { shifts: ManagedShift[] }) {
       // list may need one more refresh to show it (same as every F3 mutation).
       setEditing(null);
       router.refresh();
-    } catch {
-      err.fromException("save");
+    } catch (caught) {
+      err.fromException("save", caught);
     } finally {
       setBusy(false);
     }

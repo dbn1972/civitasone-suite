@@ -57,8 +57,8 @@ export function TdsFilingsPanel({ fy, filings, canFile }: { fy: string; filings:
       setNote(`${open.quarter} return recorded as filed. It appears here once processed.`);
       setOpen(null);
       router.refresh();
-    } catch {
-      setError(formError.fromException("save").message);
+    } catch (caught) {
+      setError(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }

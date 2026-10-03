@@ -70,7 +70,7 @@ describe("MapHeadOfAccountPage", () => {
     fireEvent.click(screen.getByRole("button", { name: /create head/i }));
 
     const alert = await screen.findByRole("alert");
-    await waitFor(() => expect(alert).toHaveTextContent(/couldn't save/i));
+    await waitFor(() => expect(alert).toHaveTextContent(/This head of account was changed by someone else\. Refresh to see the latest version, then try again\./));
     expect(alert.textContent).not.toMatch(/duplicate_code/i);
     expect(alert.textContent).not.toMatch(/\b409\b/);
   });

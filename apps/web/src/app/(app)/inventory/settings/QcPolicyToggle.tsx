@@ -34,8 +34,8 @@ export function QcPolicyToggle({ initial }: { initial: boolean }) {
       setEnabled(next);
       toast.success("Policy saved.");
       router.refresh();
-    } catch {
-      setMessage(formError.fromException("save").message);
+    } catch (caught) {
+      setMessage(formError.fromException("save", caught).message);
     } finally {
       setBusy(false);
     }
