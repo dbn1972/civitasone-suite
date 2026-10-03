@@ -27,15 +27,21 @@ export async function gstRoutes(app: FastifyInstance): Promise<void> {
     }).parse(req.query);
 
     const rows = await scopedRead((tx) => tx.execute(sql`
-      SELECT id, invoice_id, invoice_no, invoice_date, party_gstin, party_name,
-             gst_type, direction, taxable_minor, tax_minor, rate_pct, hsn_code,
-             period, status, created_at
-      FROM gl.finance_gst_ledger
-      WHERE tenant_id = ${ctx.tenantId}::uuid
-        AND (${q.period ?? null}::text IS NULL OR period = ${q.period ?? null})
-        AND (${q.direction ?? null}::text IS NULL OR direction = ${q.direction ?? null})
-        AND (${q.gstType ?? null}::text IS NULL OR gst_type = ${q.gstType ?? null})
-      ORDER BY invoice_date DESC
+      SELECT g.id, g.invoice_id, g.invoice_no, g.invoice_date, g.party_gstin, g.party_name,
+             g.gst_type, g.direction, g.taxable_minor, g.tax_minor, g.rate_pct, g.hsn_code,
+             g.period, g.status, g.created_at,
+             -- GAP-FINANCE-GST-05: true only when invoice_id is a real bill of this tenant, so the
+             -- UI links the invoice number to the source bill and never to a document that is not there.
+             (g.invoice_id IS NOT NULL AND EXISTS (
+               SELECT 1 FROM payments.finance_bills b
+               WHERE b.id = g.invoice_id AND b.tenant_id = g.tenant_id
+             )) AS invoice_is_bill
+      FROM gl.finance_gst_ledger g
+      WHERE g.tenant_id = ${ctx.tenantId}::uuid
+        AND (${q.period ?? null}::text IS NULL OR g.period = ${q.period ?? null})
+        AND (${q.direction ?? null}::text IS NULL OR g.direction = ${q.direction ?? null})
+        AND (${q.gstType ?? null}::text IS NULL OR g.gst_type = ${q.gstType ?? null})
+      ORDER BY g.invoice_date DESC, g.id
       LIMIT ${q.limit} OFFSET ${q.offset}
     `));
 

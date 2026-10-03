@@ -1,5 +1,5 @@
 import {
-  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, type AnyPgColumn,
+  pgSchema, uuid, text, integer, bigint, char, varchar, timestamp, boolean, type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 
 export const budgetSchema = pgSchema("budget");
@@ -19,6 +19,9 @@ export const financeHeads = budgetSchema.table("finance_heads", {
   // has at least one other head pointing at it via parentId (a group/summary
   // account), instead of silently letting a posting corrupt roll-up totals.
   parentId:       uuid("parent_id").references((): AnyPgColumn => financeHeads.id),
+  // GAP-FINANCE-JOURNAL-ENTRY-04: a control account is maintained by a
+  // sub-ledger; manual journals may not post to it directly (migration 0087).
+  isControl:      boolean("is_control").notNull().default(false),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:      timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   createdBy:      uuid("created_by").notNull(),

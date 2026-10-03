@@ -1,5 +1,7 @@
 import { pino } from "pino";
-import type { Queue } from "@civitasone/queue";
+import { NonRetryableError, type Queue } from "@civitasone/queue";
+import { HttpError } from "../../shared/context.js";
+import { assertInstrumentChecker } from "./commands.js";
 import { db } from "../../shared/db.js";
 import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
@@ -74,6 +76,19 @@ export function registerInstrumentsConsumers(queue: Queue): void {
       const to = toStatus[p.action];
       const ts = tsField[p.action];
       if (!from || !to || !ts) throw new Error(`UNKNOWN_ACTION: ${p.action}`);
+      // GAP-FINANCE-TREASURY-CHEQUES-03: maker != checker also on this queue path, so it cannot be
+      // used to get around the check the HTTP routes enforce.
+      if (p.action === "clear" || p.action === "bounce") {
+        const issuer = await repo.findIssuerTx(tx, p.tenantId, p.id);
+        if (issuer) {
+          try {
+            assertInstrumentChecker(issuer, msg.actorId);
+          } catch (err) {
+            if (err instanceof HttpError) throw new NonRetryableError(`MAKER_CHECKER_VIOLATION: ${err.message}`);
+            throw err;
+          }
+        }
+      }
       const extras = p.action === "bounce" && p.reason ? { bounceReason: p.reason } : {};
       const updated = await repo.transitionTx(
         tx, p.tenantId, p.id, from, to,

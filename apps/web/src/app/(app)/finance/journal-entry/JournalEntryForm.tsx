@@ -110,7 +110,8 @@ export function JournalEntryForm({ accounts: allAccounts, redirectTo, periods }:
   // that is some other head's parent is a group head, which the GL consumer
   // refuses (DOM-010 NOT_LEAF_ACCOUNT), so it is not offered.
   const groupHeadIds = new Set(allAccounts.map((a) => a.parentId).filter((p): p is string => Boolean(p)));
-  const accounts = allAccounts.filter((a) => a.status !== "inactive" && !(a.id && groupHeadIds.has(a.id)));
+  // GAP-FINANCE-JOURNAL-ENTRY-04: control accounts (sub-ledger maintained) are not postable from a manual journal.
+  const accounts = allAccounts.filter((a) => a.status !== "inactive" && !a.isControl && !(a.id && groupHeadIds.has(a.id)));
   const postableCodes = new Set(accounts.map((a) => a.code));
   // No invented "1000"/"2000" fallbacks: defaults come only from the loaded chart.
   const defaultDebit  = accounts.find((a) => a.type === "asset")?.code     ?? accounts[0]?.code ?? "";

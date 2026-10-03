@@ -11,6 +11,8 @@ export const createOutcomeBody = z.object({
   outcomeDesc:    z.string().min(3).max(500),
   indicator:      z.string().min(1).max(200),
   unit:           z.string().min(1).max(40),
+  // GAP-FINANCE-BUDGET-OUTCOME-BUDGET-02: direction of "better". lower_is_better needs baseline > target.
+  polarity:       z.enum(["higher_is_better", "lower_is_better"]).default("higher_is_better"),
   baselineValue:  z.number().int().nonnegative().default(0),
   targetValue:    z.number().int().positive(),
   allocatedMinor: z.number().int().nonnegative().default(0),

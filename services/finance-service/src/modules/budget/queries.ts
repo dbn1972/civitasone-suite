@@ -41,6 +41,8 @@ export type AccountListItem = {
   /** 0 = major, 1 = minor, 2 = sub-minor */
   level: number;
   parentId: string | null;
+  /** Sub-ledger-controlled account: not postable from a manual journal. */
+  isControl: boolean;
   type: "asset" | "liability" | "equity" | "income" | "expense";
   currency: string;
   balanceDisplay: string;
@@ -114,6 +116,7 @@ export async function listAccounts(tenantId: string, limit: number, search?: str
         // create form can offer only heads one level up as a parent.
         level: h.level,
         parentId: h.parentId ?? null,
+        isControl: h.isControl === true,
         type,
         currency: "INR",
         balanceDisplay: formatBalanceMinor(balanceMinor),

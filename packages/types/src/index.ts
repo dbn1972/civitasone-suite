@@ -560,6 +560,8 @@ export interface AccountSummary {
   id?: string;
   /** Parent head id, or null/absent for a top-level head. A head that is some other head's parent is a non-postable group head. */
   parentId?: string | null;
+  /** Sub-ledger-controlled account: not postable from a manual journal (GAP-FINANCE-JOURNAL-ENTRY-04). */
+  isControl?: boolean;
   code: string;
   name: string;
   type: 'asset' | 'liability' | 'equity' | 'income' | 'expense';
@@ -2434,6 +2436,8 @@ export type BudgetOutcomeSummary = {
   outcomeDesc: string;
   indicator: string;
   unit: string;
+  /** "higher_is_better" (default) or "lower_is_better" (e.g. days, cost): which direction scores as progress. */
+  polarity?: string;
   baselineValue: string;
   targetValue: string;
   achievedValue: string;
@@ -2577,6 +2581,8 @@ export type CashBookEntry = {
   bank_or_cash: string;
   reference: string | null;
   created_at: string;
+  /** GL journal (voucher) behind the entry, when one exists (GAP-FINANCE-TREASURY-CASH-BANK-05). */
+  journal_id?: string | null;
 };
 
 /** Modeled on treasury.finance_challans DDL — no live GET route (see file header note). */

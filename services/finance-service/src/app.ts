@@ -79,6 +79,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await app.register(cashBookRoutes);
   const { vendorTdsRoutes } = await import("./modules/tds/routes.js");
   await app.register(vendorTdsRoutes);
+  const { demandLinesRoutes } = await import("./modules/budget/demand-lines-routes.js");
+  await app.register(demandLinesRoutes);
+  const { tdsReturnFilingRoutes } = await import("./modules/tds/filings-routes.js");
+  await app.register(tdsReturnFilingRoutes);
   const { gstRoutes } = await import("./modules/gst/routes.js");
   await app.register(gstRoutes);
   const { financialStatementsRoutes } = await import("./modules/financial-statements/routes.js");

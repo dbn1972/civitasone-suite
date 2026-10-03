@@ -1,3 +1,4 @@
+import { fetchUserSummaries, actorName } from "../../shared/identity-client.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { sendAccepted } from "@civitasone/schemas/validate";
@@ -103,7 +104,11 @@ export async function periodCloseRoutes(app: FastifyInstance): Promise<void> {
       offset: z.coerce.number().int().min(0).default(0),
     }).parse(req.query);
     const rows = await periodRepo.listPeriodClose(ctx.tenantId, q.limit);
-    return reply.send({ data: rows.slice(q.offset, q.offset + q.limit), total: rows.length });
+    // GAP-FINANCE-PERIOD-CLOSE-06: closed_by is an identity user uuid; resolve it to a
+    // display name (best-effort, fails open) so the cockpit never has to show a raw id.
+    const names = await fetchUserSummaries(ctx.tenantId);
+    const page = rows.slice(q.offset, q.offset + q.limit).map((r) => ({ ...r, closedByName: actorName(names, r.closedBy) }));
+    return reply.send({ data: page, total: rows.length });
   });
 
   app.setErrorHandler(financeErrorHandler);

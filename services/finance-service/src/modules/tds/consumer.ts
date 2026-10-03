@@ -98,6 +98,43 @@ export function registerTdsConsumers(queue: Queue): void {
     await cache.invalidateResource(msg.tenantId, "tds");
     log.info({ id: msg.messageId }, "Processed tds.deposit_mark");
   });
+
+  // GAP-FINANCE-STATUTORY-TDS-RETURNS-04: record a quarterly return as filed.
+  // The unique (tenant, fy, quarter, form) key makes this race-safe: of two
+  // concurrent recordings exactly one INSERT wins, the other is a no-op and
+  // writes neither a second filing nor a second audit event.
+  queue.subscribe(COMMANDS.tdsReturnFile, async (msg) => {
+    const p = msg.payload as {
+      id: string; tenantId: string; fy: string; quarter: string; formType: string;
+      ackNo: string; filedOn: string; dueDate: string;
+    };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      const { sql } = await import("drizzle-orm");
+      const inserted = (await (tx as any).execute(sql`
+        INSERT INTO gl.finance_tds_return_filings
+          (id, tenant_id, fy, quarter, form_type, due_date, status, ack_no, filed_on, filed_by)
+        VALUES
+          (${p.id}::uuid, ${p.tenantId}::uuid, ${p.fy}, ${p.quarter}, ${p.formType}, ${p.dueDate}::date,
+           'filed', ${p.ackNo}, ${p.filedOn}::date, ${msg.actorId}::uuid)
+        ON CONFLICT (tenant_id, fy, quarter, form_type) DO NOTHING
+        RETURNING id
+      `)) as unknown as unknown[];
+      if (inserted.length === 0) {
+        log.warn({ fy: p.fy, quarter: p.quarter }, "tds.return_file ignored: quarter already filed");
+        return;
+      }
+      // Deposited deductions of the quarter now count as filed; anything still
+      // 'deducted' (not yet deposited) keeps its status so the gap stays visible.
+      await (tx as any).execute(sql`
+        UPDATE gl.finance_vendor_tds SET status = 'filed'
+        WHERE tenant_id = ${p.tenantId}::uuid AND fy = ${p.fy} AND quarter = ${p.quarter} AND status = 'deposited'
+      `);
+      await audit(tx, msg, "file_return", "tds_return", p.id);
+    });
+    await cache.invalidateResource(msg.tenantId, "tds");
+    log.info({ id: msg.messageId }, "Processed tds.return_file");
+  });
 }
 
 async function audit(tx: any, msg: any, action: string, resourceType: string, resourceId: string): Promise<void> {

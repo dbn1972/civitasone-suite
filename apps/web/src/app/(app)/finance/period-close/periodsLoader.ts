@@ -5,6 +5,8 @@ export type PeriodRow = {
   fiscalYear: string;
   status: string;
   closedBy: string | null;
+  /** Display name resolved server-side from closedBy (null when unknown). */
+  closedByName?: string | null;
   closedAt: string | null;
 } & Record<string, unknown>;
 
@@ -32,6 +34,7 @@ export function mapPeriods(payload: unknown): PeriodRow[] | null {
       fiscalYear: typeof raw.fiscalYear === "string" ? raw.fiscalYear : "",
       status,
       closedBy: typeof raw.closedBy === "string" ? raw.closedBy : null,
+      closedByName: typeof raw.closedByName === "string" && raw.closedByName ? raw.closedByName : null,
       closedAt: typeof raw.closedAt === "string" ? raw.closedAt : null,
     });
   }

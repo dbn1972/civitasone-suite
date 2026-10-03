@@ -1,7 +1,9 @@
 import { z } from "zod";
 
 export const createChallanBody = z.object({
-  challanNo:     z.string().min(1).max(64),
+  // The challan number is allocated by the consumer from the gapless CHLN series; this field is
+  // accepted for compatibility and ignored, so a client never has to invent one.
+  challanNo:     z.string().min(1).max(64).default("AUTO"),
   receiptHeadId: z.string().uuid(),
   depositor:     z.string().min(1).max(200),
   amountMinor:   z.number().int().positive(),

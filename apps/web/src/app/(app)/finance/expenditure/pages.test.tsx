@@ -34,7 +34,7 @@ describe("expenditure list pages on a FAILED load (FAILMASK)", () => {
     ["bills", "getFinanceBills", () => BillsPage(), 4],
     ["guarantees", "getFinanceGuarantees", () => GuaranteesPage(), 4],
     ["scheme tracking", "getFinanceSchemes", () => SchemeTrackingPage(), 4],
-    ["utilization certificates", "getFinanceUCs", () => UCsPage(), 6],
+    ["utilization certificates", "getFinanceUCs", () => UCsPage({}), 6],
   ];
 
   for (const [name, loader, page, dashes] of cases) {
@@ -89,7 +89,7 @@ describe("expenditure stat cards mean what they say", () => {
       ],
       source: "api",
     });
-    render(await UCsPage());
+    render(await UCsPage({}));
     expect(screen.getByText("statPendingSubmission").closest(".stat")).toHaveTextContent("1");
     expect(screen.getByText("statRejected").closest(".stat")).toHaveTextContent("1");
   });

@@ -2,10 +2,11 @@ import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, LoadErrorState } from "../../../../_components/ds";
 import { getFinanceUCs } from "../../../../_data/loaders";
 import { UCsTable } from "./UCsTable";
+import { ucMatchesScheme } from "./ucScheme";
 import { formatMoney } from "@/lib/formatters";
 import { ucStats } from "@/lib/finance/expenditureStats";
 
-export default async function UCsPage() {
+export default async function UCsPage({ searchParams }: { searchParams?: { scheme?: string } }) {
   const t = await getTranslations("expenditureUtilizationCertificates");
   const result = await getFinanceUCs();
   const { data: ucs, source } = result;
@@ -13,7 +14,11 @@ export default async function UCsPage() {
   // Failed load with nothing to show must not read as zero UCs / ₹0.00
   // (GAP-FINANCE-EXPENDITURE-UTILIZATION-CERTIFICATES-02).
   const failed = result.source === "error" && ucs.length === 0;
-  const stats = ucStats(ucs);
+  // GAP-FINANCE-EXPENDITURE-SCHEME-TRACKING-DETAIL-05: ?scheme= narrows the register to one scheme
+  // (linked from the scheme detail page); the stats and the table both follow it.
+  const scheme = searchParams?.scheme?.trim() || undefined;
+  const shown = scheme ? ucs.filter((u) => ucMatchesScheme(u, scheme)) : ucs;
+  const stats = ucStats(shown);
 
   return (
     <>
@@ -47,7 +52,12 @@ export default async function UCsPage() {
         <LoadErrorState result={result} area={t("areaUcs")} backHref="/finance" />
       ) : (
         <Card title={t("cardTitle")}>
-          <UCsTable ucs={ucs} source={source} />
+          {scheme ? (
+            <p style={{ padding: "8px 16px", fontSize: 13 }}>
+              {t("schemeFilterNote", { scheme })} <a href="/finance/expenditure/utilization-certificates">{t("schemeFilterClear")}</a>
+            </p>
+          ) : null}
+          <UCsTable ucs={ucs} source={source} scheme={scheme} />
         </Card>
       )}
     </>

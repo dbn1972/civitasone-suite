@@ -2,8 +2,14 @@ import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { getFinanceCheques } from "@/app/_data/loaders";
 import { chequeStatusCounts } from "@/lib/finance/chequeRegister";
 import { ChequesTable } from "./ChequesTable";
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { canWrite } from "@/lib/finance/writeRoles";
+import { INSTRUMENT_WRITE_ROLES } from "./[id]/chequeUi";
 
 export default async function ChequesPage() {
+  const t = await getTranslations("financeChequesNew");
   const { data: cheques, source } = await getFinanceCheques();
   // GAP-FINANCE-TREASURY-CHEQUES-04: every lifecycle status is counted, so the cards
   // add up to Total; a failed load shows a dash, not a misleading 0.
@@ -17,6 +23,9 @@ export default async function ChequesPage() {
         title="Cheque / DD Register"
         subtitle="Cheque and demand draft register with clearance and bounce tracking."
         back="/finance"
+        actions={canWrite(getSessionRoles(), INSTRUMENT_WRITE_ROLES) ? (
+          <Link href="/finance/treasury/cheques/new" className="btn primary">{t("issueAction")}</Link>
+        ) : null}
       />
       <StatGrid>
         <StatCard icon="📝" iconBg="#e7edfd" label="Total Instruments" value={n(c.total)} />

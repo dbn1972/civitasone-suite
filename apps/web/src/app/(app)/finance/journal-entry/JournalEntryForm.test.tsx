@@ -266,6 +266,22 @@ describe("JournalEntryForm", () => {
     expect(values).not.toContain("2000");
   });
 
+  // GAP-FINANCE-JOURNAL-ENTRY-04: control accounts are sub-ledger maintained, so not postable manually.
+  it("does not offer control accounts in the account dropdown", () => {
+    render(
+      <JournalEntryForm
+        accounts={[
+          ...accounts,
+          { id: "ctl", code: "2300-ctl", name: "Creditors Control", type: "liability", currency: "INR", balanceDisplay: "0", status: "active", isControl: true },
+        ]}
+      />,
+    );
+    const select = screen.getByLabelText("Account code, line 1") as HTMLSelectElement;
+    const values = [...select.options].map((o) => o.value);
+    expect(values).toContain("2202-cash");
+    expect(values).not.toContain("2300-ctl");
+  });
+
   // Review M4: default posting date is the IST calendar date, not UTC.
   it("defaults the posting date to the IST date (00:30 IST on 1 April is still 1 April)", () => {
     vi.useFakeTimers();

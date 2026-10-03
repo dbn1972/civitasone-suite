@@ -102,6 +102,29 @@ export async function treasuryRoutes(app: FastifyInstance): Promise<void> {
     })));
   });
 
+  // GAP-FINANCE-TREASURY-DEPOSITS-03: one deposit with its ledger of events.
+  app.get("/v1/finance/deposits/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = idParam.parse(req.params);
+    const r = await repo.findDepositByIdAndTenant(id, ctx.tenantId);
+    if (!r) throw new HttpError(404, "NOT_FOUND", "deposit not found");
+    const events = await repo.listDepositEvents(ctx.tenantId, id);
+    return reply.send({
+      data: {
+        id: r.id, pdNo: r.pdNo, type: r.type, administrator: r.administrator,
+        balanceMinor: r.balanceMinor.toString(), currency: r.currency, status: r.status,
+        sourceBillId: r.sourceBillId,
+        refundedMinor: r.refundedMinor.toString(), forfeitedMinor: r.forfeitedMinor.toString(), adjustedMinor: r.adjustedMinor.toString(),
+        createdAt: r.createdAt.toISOString(), updatedAt: r.updatedAt.toISOString(), version: r.version,
+        events: events.map((e) => ({
+          id: e.id, eventType: e.eventType, amountMinor: e.amountMinor.toString(),
+          reference: e.reference, journalId: e.journalId, createdAt: e.createdAt.toISOString(),
+        })),
+      },
+    });
+  });
+
   app.post("/v1/finance/deposits", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, FINANCE_ROLES);

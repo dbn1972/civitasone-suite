@@ -75,6 +75,7 @@ export const COMMANDS = {
   budgetOutcomeCreate: "finance.budget.outcome.create",
   budgetOutcomeAchievement: "finance.budget.outcome.achievement",
   budgetOutcomeEvaluate: "finance.budget.outcome.evaluate",
+  demandLinesSet: "finance.budget.demand.lines_set",
   supplementaryCreate: "finance.budget.supplementary.create",
   supplementaryApprove: "finance.budget.supplementary.approve",
   supplementaryReject: "finance.budget.supplementary.reject",
@@ -83,6 +84,7 @@ export const COMMANDS = {
   recurringEntryUpdate: "finance.recurring.entry_update",
   tdsDeductionRecord: "finance.tds.deduction_record",
   tdsDepositMark: "finance.tds.deposit_mark",
+  tdsReturnFile: "finance.tds.return_file",
 } as const;
 
 export const EVENTS = {

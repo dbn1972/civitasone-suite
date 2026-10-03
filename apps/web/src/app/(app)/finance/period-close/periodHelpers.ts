@@ -69,8 +69,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
  * a clerk, so it is shortened to "User 1a2b3c4d" (the full id stays in the cell's
  * title for support). A real name / non-UUID value is shown as-is.
  */
-export function formatClosedBy(closedBy: string | null | undefined): { text: string; title?: string } {
+export function formatClosedBy(closedBy: string | null | undefined, closedByName?: string | null): { text: string; title?: string } {
   if (!closedBy) return { text: "—" };
+  if (closedByName) return { text: closedByName, title: closedBy };
   if (UUID_RE.test(closedBy)) return { text: `User ${closedBy.slice(0, 8)}`, title: closedBy };
   return { text: closedBy };
 }

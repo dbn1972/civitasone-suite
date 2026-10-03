@@ -104,13 +104,26 @@ describe("FinanceDashboardPage", () => {
   });
 
   // GAP-FINANCE-DASHBOARD-06
-  it("labels the button Print (not Export MIS) and keeps the tiles and FY filter out of print", async () => {
+  it("labels the print button Print and keeps the tiles and FY filter out of print", async () => {
     mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
     const { container } = render(await FinanceDashboardPage({}));
-    expect(screen.queryByText(/Export MIS|exportMis/)).not.toBeInTheDocument();
     expect(screen.getByText("printPage")).toBeInTheDocument(); // translation key under the mocked getTranslations
     expect(screen.getByText("Sanctions").closest(".no-print")).not.toBeNull();
     expect(screen.getByText("fy-filter").closest(".no-print")).not.toBeNull();
     expect(container.querySelector(".print-header")).not.toBeNull();
+  });
+
+  // GAP-FINANCE-DASHBOARD-06 (remainder): a real MIS export now exists (finance-service CSV).
+  it("offers the MIS export as a download of the selected FY, and hides it when the load failed", async () => {
+    mockFinanceLoader({ data: MOCK_DASHBOARD, source: "api" });
+    const { unmount } = render(await FinanceDashboardPage({}));
+    const link = screen.getByText("exportMis").closest("a");
+    expect(link?.getAttribute("href")).toMatch(/^\/api\/proxy\/v1\/finance\/dashboard\/mis-export\?fy=\d{4}-\d{2}$/);
+    expect(link?.hasAttribute("download")).toBe(true);
+    expect(link?.className).toContain("no-print");
+    unmount();
+    mockFinanceLoader({ data: MOCK_DASHBOARD, source: "error" });
+    render(await FinanceDashboardPage({}));
+    expect(screen.queryByText("exportMis")).not.toBeInTheDocument();
   });
 });

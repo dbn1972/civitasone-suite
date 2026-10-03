@@ -7,7 +7,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, CONSUMED_EVENTS } from "../../topics.js";
 import * as repo from "./repo.js";
 import * as budgetRepo from "../budget/repo.js";
-import { assertJournalBalances, assertJournalHasAmount } from "./domain.js";
+import { assertJournalBalances, assertJournalHasAmount, assertNoControlAccounts, DomainError as GlDomainError } from "./domain.js";
 import { assertBudgetNotExceeded, availableBalance, DomainError } from "../budget/domain.js";
 import { assertDistinctMakerChecker } from "../payments/domain.js";
 import { getPeriodStatusTx } from "../period-close/repo.js";
@@ -448,6 +448,16 @@ export function registerGlConsumers(queue: Queue): void {
       // with nothing to post. See assertJournalHasAmount()'s doc comment
       // (gl/domain.ts).
       assertJournalHasAmount(p.lines);
+      // GAP-FINANCE-JOURNAL-ENTRY-04 defense in depth (the route checks too): no
+      // manual draft may post to a sub-ledger control account.
+      try {
+        assertNoControlAccounts(await budgetRepo.findControlAccountRefsTx(
+          tx as Parameters<typeof budgetRepo.findControlAccountRefsTx>[0], p.tenantId, p.lines.map((l: JournalLine) => l.accountCode),
+        ));
+      } catch (err) {
+        if (err instanceof GlDomainError) throw new NonRetryableError(err.message);
+        throw err;
+      }
       // finance_journals has UNIQUE(tenant_id, voucher_no). The real gapless
       // number is only allocated at actual-posting time (approval) — see
       // postJournal()'s voucher-numbering block — so a still-pending draft

@@ -7,6 +7,7 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import type { UCSummary } from "@civitasone/types";
 import { formatIndianDate } from "@/lib/formatters";
 import { useSeededResource } from "@/lib/sync/resource";
+import { ucMatchesScheme } from "./ucScheme";
 
 // UX-017 (tranche 10): same tab-identity fix as AdvancesTable.tsx -- TABS
 // used to double as both <Segmented>'s displayed text AND the filter
@@ -27,7 +28,7 @@ export function ucPeriod(from?: string | null, to?: string | null): string {
   return from && to ? `${from} – ${to}` : "—";
 }
 
-export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "api" | "error" }) {
+export function UCsTable({ ucs, source = "api", scheme }: { ucs: UCSummary[]; source?: "api" | "error"; scheme?: string }) {
   const t = useTranslations("expenditureUtilizationCertificatesTable");
   const TABS = [t("tabAll"), t("tabPending"), t("tabSubmitted"), t("tabRejected")];
   const [activeTabIndex, setActiveTabIndex] = useState(0);
@@ -38,10 +39,11 @@ export function UCsTable({ ucs, source = "api" }: { ucs: UCSummary[]; source?: "
     (d) => d.length === 0,
   );
 
+  const bySchemeRows = scheme ? rows.filter((u) => ucMatchesScheme(u, scheme)) : rows;
   const filtered =
     activeTabIndex === 0
-      ? rows
-      : rows.filter((u) => TAB_STATUS_MAP[activeTabIndex].includes(u.status));
+      ? bySchemeRows
+      : bySchemeRows.filter((u) => TAB_STATUS_MAP[activeTabIndex].includes(u.status));
 
   const tableRows: Row[] = filtered.map((u) => ({ ...u, period: ucPeriod(u.periodFrom, u.periodTo) }));
 

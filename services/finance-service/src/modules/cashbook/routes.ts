@@ -25,14 +25,19 @@ export async function cashBookRoutes(app: FastifyInstance): Promise<void> {
     const bankOrCash = q.type ?? null;
 
     const rows = await scopedRead((tx) => tx.execute(sql`
-      SELECT id, entry_date, voucher_type, voucher_no, particulars,
-             receipt_minor, payment_minor, balance_minor, bank_or_cash, reference, created_at
-      FROM gl.finance_cash_book
-      WHERE tenant_id = ${ctx.tenantId}::uuid
-        AND entry_date >= ${fromDate}::date
-        AND entry_date <= ${toDate}::date
-        AND (${bankOrCash}::text IS NULL OR bank_or_cash = ${bankOrCash})
-      ORDER BY entry_date DESC, created_at DESC
+      SELECT cb.id, cb.entry_date, cb.voucher_type, cb.voucher_no, cb.particulars,
+             cb.receipt_minor, cb.payment_minor, cb.balance_minor, cb.bank_or_cash, cb.reference, cb.created_at,
+             j.id AS journal_id
+      FROM gl.finance_cash_book cb
+      -- GAP-FINANCE-TREASURY-CASH-BANK-05: the GL voucher behind the entry (voucher_no is
+      -- unique per tenant in gl.finance_journals), so the UI can open the voucher.
+      LEFT JOIN gl.finance_journals j
+        ON j.tenant_id = cb.tenant_id AND j.voucher_no = cb.voucher_no
+      WHERE cb.tenant_id = ${ctx.tenantId}::uuid
+        AND cb.entry_date >= ${fromDate}::date
+        AND cb.entry_date <= ${toDate}::date
+        AND (${bankOrCash}::text IS NULL OR cb.bank_or_cash = ${bankOrCash})
+      ORDER BY cb.entry_date DESC, cb.created_at DESC
       LIMIT ${q.limit} OFFSET ${q.offset}
     `));
 

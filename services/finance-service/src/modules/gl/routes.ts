@@ -2,7 +2,9 @@ import { sendAccepted, sendValidated } from "@civitasone/schemas/validate";
 import { acceptedResponseSchema, listQuerySchema } from "@civitasone/schemas/common";
 import { GLEntrySummaryListSchema, FinancialStatementSummaryListSchema } from "@civitasone/schemas/web";
 import type { FastifyInstance } from "fastify";
-import { resolveContext, requireRole, financeErrorHandler } from "../../shared/context.js";
+import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
+import { findControlAccountRefs } from "../budget/repo.js";
+import { assertNoControlAccounts, DomainError } from "./domain.js";
 import { postJournalBody, ledgerQueryParams, reverseParam } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
@@ -43,6 +45,15 @@ export async function glRoutes(app: FastifyInstance): Promise<void> {
     // from a queue message.
     if (body.budgetOverride) {
       requireRole(ctx, BUDGET_OVERRIDE_ROLES);
+    }
+    // GAP-FINANCE-JOURNAL-ENTRY-04: a manual journal may not post to a
+    // sub-ledger control account. Checked synchronously so the officer sees the
+    // refusal instead of a silently-dropped async draft.
+    try {
+      assertNoControlAccounts(await findControlAccountRefs(ctx.tenantId, body.lines.map((l) => l.accountCode)));
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(400, err.code, err.message);
+      throw err;
     }
     // DOM-024: this now creates a pending_approval draft, not a posted
     // journal — see gl/commands.ts createJournal() / gl/consumer.ts

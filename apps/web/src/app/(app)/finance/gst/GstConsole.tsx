@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type ComponentProps } from "react";
+import Link from "next/link";
 import { DataTable, Tabs, EmptyState, RefreshErrorState } from "../../../_components/ds";
 import { toHumanError } from "@/lib/messages";
 import type { SummaryRow, LedgerRow, ItcRow } from "./types";
@@ -17,12 +18,26 @@ interface GstConsoleProps {
   errors?: { summary?: boolean; ledger?: boolean; itc?: boolean };
 }
 
+/** GAP-FINANCE-GST-05: link target of a ledger row's invoice number, or null when none is verified. */
+export function invoiceHref(r: Pick<LedgerRow, "invoice_id" | "invoice_is_bill">): string | null {
+  return r.invoice_is_bill === true && r.invoice_id ? `/finance/expenditure/bills/${encodeURIComponent(r.invoice_id)}` : null;
+}
+
 /** Ledger columns; HSN, Rate and Status are the low-priority ones (GAP-FINANCE-GST-05). */
 type LedgerColumn = ComponentProps<typeof DataTable<LedgerRow>>["columns"][number];
 
 export function ledgerColumns(all: boolean): LedgerColumn[] {
   const cols: LedgerColumn[] = [
-    { key: "invoice_no", label: "Invoice No." },
+    {
+      key: "invoice_no",
+      label: "Invoice No.",
+      // Linked to the source bill only when the server confirmed invoice_id is a real bill.
+      render: (r: LedgerRow) => {
+        const href = invoiceHref(r);
+        return href ? <Link href={href}>{r.invoice_no}</Link> : r.invoice_no;
+      },
+      csv: (r: LedgerRow) => String(r.invoice_no ?? ""),
+    },
     { key: "invoice_date", label: "Invoice Date" },
     { key: "party_gstin", label: "Party GSTIN" },
     { key: "party_name", label: "Party Name" },

@@ -42,6 +42,13 @@ export async function insertInstrumentTx(tx: Writer, row: InstrumentInsert): Pro
   return { row: existing[0], created: false };
 }
 
+/** Who issued the instrument (its creator), read inside the caller's transaction; null when it does not exist. */
+export async function findIssuerTx(tx: Writer, tenantId: string, id: string): Promise<string | null> {
+  const rows = await tx.select({ createdBy: financeInstruments.createdBy }).from(financeInstruments)
+    .where(and(eq(financeInstruments.tenantId, tenantId), eq(financeInstruments.id, id))).limit(1);
+  return rows[0]?.createdBy ?? null;
+}
+
 export async function findById(tenantId: string, id: string): Promise<InstrumentRow | null> {
   return scopedRead(async (tx) => {
     const rows = await tx

@@ -7,8 +7,23 @@ import { sideAmountOrNull } from "@/lib/finance/cashBook";
 import type { CashBookEntry } from "@civitasone/types";
 
 type Entry = CashBookEntry;
+
+/** GAP-FINANCE-TREASURY-CASH-BANK-05: voucher number as a link to the voucher when its journal id is known. */
+export function voucherHref(journalId: string | null | undefined): string | null {
+  return journalId ? `/api/proxy/v1/finance/journals/${encodeURIComponent(journalId)}/pdf` : null;
+}
 // Receipt/Payment are null on the empty side of a row so the cell shows a dash, not ₹0.00.
 type Row = Omit<Entry, "receipt_minor" | "payment_minor"> & { receipt_minor: string | null; payment_minor: string | null };
+
+function voucherCell(r: { voucher_no: string; journal_id?: string | null }) {
+  const href = voucherHref(r.journal_id);
+  if (!href) return r.voucher_no;
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" aria-label={`Open voucher ${r.voucher_no}`}>
+      {r.voucher_no}
+    </a>
+  );
+}
 
 export function CashBankTable({
   entries,
@@ -48,7 +63,8 @@ export function CashBankTable({
         columns={[
           { key: "entry_date", label: "Date", cellType: "date" },
           { key: "particulars", label: "Particulars" },
-          { key: "voucher_no", label: "Voucher No" },
+          // Links to the GL voucher when the entry has one; otherwise plain text (never a dead link).
+          { key: "voucher_no", label: "Voucher No", render: (r: Row) => voucherCell(r), csv: (r: Row) => String(r.voucher_no ?? "") },
           { key: "receipt_minor", label: "Receipt", align: "right", cellType: "amount" },
           { key: "payment_minor", label: "Payment", align: "right", cellType: "amount" },
           { key: "balance_minor", label: "Balance", align: "right", cellType: "amount" },

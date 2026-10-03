@@ -154,7 +154,7 @@ export function PeriodsTable({
     { key: "fiscalYear" as const, label: "Fiscal Year", render: (row: DisplayRow) => row.fiscalYear || "—" },
     { key: "status" as const, label: "Status", cellType: "status" as const },
     { key: "closedBy" as const, label: "Closed By", render: (row: DisplayRow) => {
-      const actor = formatClosedBy(row.closedBy);
+      const actor = formatClosedBy(row.closedBy, row.closedByName);
       return actor.title ? <span title={actor.title}>{actor.text}</span> : actor.text;
     } },
     { key: "closedAt" as const, label: "Closed At", render: (row: DisplayRow) => (row.closedAt ? formatIndianDateTime(row.closedAt) : "—") },
