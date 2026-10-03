@@ -83,6 +83,12 @@ async function seedOverrideConfig(): Promise<void> {
   }));
 }
 
+// GAP-PAYROLL-TAX-DECLARATION-02: this test asserts the DECLARED-amount behaviour,
+// which applies before the tenant's proof cutoff (default 31 January of the FY).
+// Pin the clock before it so the assertions stay exactly as they were.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-01-15T05:00:00Z"));
+
 describe("DOM-030 -- Form 16: tenant's 80C override honored in Part B, not the old Rs 1,50,000 hardcode", () => {
   it("buildForm16 applies the tenant's overridden 80C cap", async () => {
     const employeeId = randomUUID();

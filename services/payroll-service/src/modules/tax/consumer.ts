@@ -211,7 +211,7 @@ async function audit(tx: any, msg: any, action: string, resourceType: string, re
  * (declared rent captured, exemption never applied). "No rent declared" is
  * the one legitimate 0n case, short-circuited before any lookup.
  */
-async function computeHraClaimedMinor(
+export async function computeHraClaimedMinor(
   tx: Parameters<typeof resolveDaRateBps>[0],
   tenantId: string,
   employeeId: string,

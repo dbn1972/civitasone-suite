@@ -1,4 +1,5 @@
 import type { Queue } from "@civitasone/queue";
+import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED } from "../tax/verified-inputs.js";
 import { NonRetryableError } from "@civitasone/queue";
 import { pino } from "pino";
 import { randomUUID } from "node:crypto";
@@ -214,7 +215,7 @@ export type Declaration = {
  * changes). An employee with no declaration row for the FY is simply absent
  * from the returned Map; callers must default a miss to `null`.
  */
-export async function resolveDeclarationsTx(tx: typeof db, tenantId: string, employeeIds: string[], fy: string): Promise<Map<string, Declaration>> {
+export async function resolveDeclarationsTx(tx: typeof db, tenantId: string, employeeIds: string[], fy: string, asOf?: string): Promise<Map<string, Declaration>> {
   const result = new Map<string, Declaration>();
   if (employeeIds.length === 0) return result;
   const rows = (await tx.execute(sql`
@@ -240,6 +241,21 @@ export async function resolveDeclarationsTx(tx: typeof db, tenantId: string, emp
       otherSourcesIncomeMinor: BigInt(d.other_sources_income_minor),
       perquisitesMinor: BigInt(d.perquisites_minor),
     });
+  }
+  // GAP-PAYROLL-TAX-DECLARATION-02: once the tenant's proof cutoff for the FY has
+  // passed (as of `asOf`), proof-needing deductions use ONLY the verified amount.
+  // Before the cutoff the declared figures above are returned untouched.
+  if (asOf !== undefined) {
+    const plan = await resolveVerificationPlan(tx, tenantId, fy, asOf, employeeIds);
+    if (plan.apply) {
+      for (const [id, d] of result) {
+        const f = verifiedDeductionFigures(
+          { section80c: d.ded80cMinor, section80d: d.ded80dMinor, otherDeductions: d.otherDedMinor, rentPaidMinor: d.rentPaidAnnualMinor, hraClaimed: 0n },
+          plan.verified.get(id) ?? NO_VERIFIED,
+        );
+        result.set(id, { ...d, ded80cMinor: f.section80c, ded80dMinor: f.section80d, otherDedMinor: f.otherDeductions, rentPaidAnnualMinor: f.rentPaidMinor });
+      }
+    }
   }
   return result;
 }
@@ -1627,7 +1643,7 @@ async function processPayrollRun(
     const latestRevisionByEmployee = await resolveLatestRevisionsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, p.month);
     const lopByEmployee = await lopRepo.getLopForMonthsTx(tx, p.tenantId, runEmployeeIds, p.month);
     const loansByEmployee = await loansRepo.findLoansByEmployeesTx(tx, p.tenantId, runEmployeeIds);
-    const declarationByEmployee = await resolveDeclarationsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStr);
+    const declarationByEmployee = await resolveDeclarationsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStr, `${p.month}-01`);
     const tdsYtdByEmployee = await resolveTdsYtdMinorsTx(tx as unknown as typeof db, p.tenantId, runEmployeeIds, fyStart, p.month);
     const distinctStateCodes = [...new Set(
       runEmployees

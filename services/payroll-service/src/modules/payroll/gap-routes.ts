@@ -20,6 +20,7 @@ import * as commands from "./commands.js";
 import { stateRulesBody, findPtSlabOverlap } from "./state-rules.js";
 import { assertElectionWithinPlan } from "./adjustment-guards.js";
 import { isValidIanaTimeZone } from "./validators.js";
+import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED, istToday } from "../tax/verified-inputs.js";
 import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
@@ -466,7 +467,18 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
       WHERE tenant_id = ${ctx.tenantId}::uuid AND employee_id = ${employeeId}::uuid AND fy = ${fy}
       ORDER BY created_at DESC LIMIT 1
     `))) as unknown as Array<{ section_80c: string; section_80d: string; other_deductions: string; rent_paid_minor: string; regime: string }>;
-    const dec = decRows[0];
+    let dec = decRows[0];
+    // GAP-PAYROLL-TAX-DECLARATION-02: follow the same declared-vs-verified switch as TDS.
+    if (dec) {
+      const plan = await scopedRead((tx) => resolveVerificationPlan(tx, ctx.tenantId, fy, istToday(), [employeeId]));
+      if (plan.apply) {
+        const f = verifiedDeductionFigures(
+          { section80c: BigInt(dec.section_80c), section80d: BigInt(dec.section_80d), otherDeductions: BigInt(dec.other_deductions), rentPaidMinor: BigInt(dec.rent_paid_minor), hraClaimed: 0n },
+          plan.verified.get(employeeId) ?? NO_VERIFIED,
+        );
+        dec = { ...dec, section_80c: String(f.section80c), section_80d: String(f.section80d), other_deductions: String(f.otherDeductions), rent_paid_minor: String(f.rentPaidMinor) };
+      }
+    }
 
     // DOM-025/DOM-026/DOM-034: cap80c, cap80d and the 80CCD(1B) headroom
     // were independently hardcoded (Rs 1.5L / Rs 50,000 / Rs 50,000, paise),

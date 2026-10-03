@@ -145,6 +145,12 @@ async function readDeclarationRow(): Promise<{ hraClaimed: bigint; rentPaidMinor
 
 beforeEach(() => { ensureConsumersRegistered(); });
 
+// GAP-PAYROLL-TAX-DECLARATION-02: this test asserts the DECLARED-amount behaviour,
+// which applies before the tenant's proof cutoff (default 31 January of the FY).
+// Pin the clock before it so the assertions stay exactly as they were.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-01-15T05:00:00Z"));
+
 describe("BUG-HRA-1 — old regime: declared rent now produces a real Sec 10(13A) exemption", () => {
   it("computes and stores hraClaimed, and tax/computation reflects it", async () => {
     await cleanup();

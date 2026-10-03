@@ -32,7 +32,7 @@
  * assertion below therefore uses a tenant OVERRIDE cap that differs from
  * both, so a hardcoded site and a config-driven site provably diverge.
  */
-import { describe, it, expect, afterAll } from "vitest";
+import { describe, it, expect, afterAll, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { sql, eq } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
@@ -75,6 +75,12 @@ async function seedOverrideConfig(): Promise<void> {
     `);
   }));
 }
+
+// GAP-PAYROLL-TAX-DECLARATION-02: this test asserts the DECLARED-amount behaviour,
+// which applies before the tenant's proof cutoff (default 31 January of the FY).
+// Pin the clock before it so the assertions stay exactly as they were.
+vi.useFakeTimers({ toFake: ["Date"] });
+vi.setSystemTime(new Date("2026-01-15T05:00:00Z"));
 
 describe("DOM-026 (0) -- baseline: computeSlip (the payslip) already applies the tenant's overridden 80C cap", () => {
   it("computeSlip honors sec80cCapMinor, not a hardcoded literal (established by DOM-008, not touched by this fix)", () => {
