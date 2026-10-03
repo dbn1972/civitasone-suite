@@ -75,7 +75,7 @@ export async function reappropriateBudget(ctx: RequestContext, id: string, body:
     assertReappropriationValid({ reMinor: source.reMinor, utilisedMinor: source.utilisedMinor }, body.amountMinor);
   } catch (err) { toDomain(err, 409); }
   await queue.publish(COMMANDS.budgetReappropriate, {
-    type: COMMANDS.budgetReappropriate,
+    messageId: randomUUID(), type: COMMANDS.budgetReappropriate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body },
   });
@@ -137,7 +137,7 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
     assertSanctionApproverDistinct(existing.createdBy, ctx.actorId);
   } catch (err) { toDomain(err, 409); }
   await queue.publish(COMMANDS.sanctionReject, {
-    type: COMMANDS.sanctionReject,
+    messageId: randomUUID(), type: COMMANDS.sanctionReject,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, reason: body.reason },
   });
@@ -154,7 +154,7 @@ export async function rejectSanction(ctx: RequestContext, id: string, body: Reje
  */
 export async function submitSanctionForApproval(ctx: RequestContext, id: string): Promise<Accepted> {
   await queue.publish(COMMANDS.sanctionSubmitApproval, {
-    type: COMMANDS.sanctionSubmitApproval,
+    messageId: randomUUID(), type: COMMANDS.sanctionSubmitApproval,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },
   });
@@ -187,7 +187,7 @@ export async function approveSanction(ctx: RequestContext, id: string): Promise<
     assertSanctionApproverDistinct(existing.createdBy, ctx.actorId);
   } catch (err) { toDomain(err, 409); }
   await queue.publish(COMMANDS.sanctionApprove, {
-    type: COMMANDS.sanctionApprove,
+    messageId: randomUUID(), type: COMMANDS.sanctionApprove,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId },
   });

@@ -99,6 +99,8 @@ async function emitExpiryWarningIfNeeded(tenantId: string, certInfo: Certificate
 
   if (daysRemaining <= EXPIRY_WARNING_DAYS && daysRemaining > 0) {
     await queue.publish(DSC_EXPIRY_TOPIC, {
+      // One warning per tenant/cert/day: a re-run the same day dedupes.
+      messageId: `dsc-expiry:${tenantId}:${certInfo.notAfter.toISOString()}:${now.toISOString().slice(0, 10)}`,
       type: DSC_EXPIRY_TOPIC,
       tenantId,
       actorId: "system",

@@ -7,7 +7,7 @@ import { COMMANDS } from "../../topics.js";
 import * as repo from "./repo.js";
 import { NonRetryableError } from "@civitasone/queue";
 import { payTermsColumns, mergedTermsError, moneyChanges, patchDiff, type PayTermsPatch } from "./pay-terms.js";
-import { liveProfileReferencesDeputation } from "../pay-profile/repo.js";
+import { liveProfileReferencesDeputationTx } from "../pay-profile/repo.js";
 
 const log = pino({ name: "deputation-consumer" });
 const AUDIT = "audit.event.record";
@@ -168,7 +168,7 @@ export function registerDeputationConsumers(queue: Queue): void {
       // Re-assert the profile lock at write time (a profile may have been
       // requested/approved since the route accepted this edit).
       const money = moneyChanges(dep, cols);
-      if (money.fields.length > 0 && await liveProfileReferencesDeputation(tx, msg.tenantId, p.deputationId)) {
+      if (money.fields.length > 0 && await liveProfileReferencesDeputationTx(tx, msg.tenantId, p.deputationId)) {
         throw new NonRetryableError(`PAY_TERMS_LOCKED_BY_PROFILE: ${money.fields.join(", ")} are fixed by an active or pending pay profile`);
       }
       const diff = patchDiff(dep, cols);

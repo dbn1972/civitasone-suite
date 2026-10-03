@@ -94,6 +94,21 @@ export async function liveProfileReferencesDeputation(tx: Writer | null, tenantI
   return rows.length > 0;
 }
 
+/**
+ * Tx-only sibling of liveProfileReferencesDeputation (TX-001): reads strictly
+ * through the caller-supplied tx, never opening a scopedRead/second transaction.
+ * For use inside a db.transaction (e.g. the deputation pay-terms consumer).
+ */
+export async function liveProfileReferencesDeputationTx(tx: Writer, tenantId: string, deputationId: string): Promise<boolean> {
+  const rows = await (tx as typeof db).select({ id: hrmsPayProfiles.id }).from(hrmsPayProfiles)
+    .where(and(
+      eq(hrmsPayProfiles.tenantId, tenantId),
+      eq(hrmsPayProfiles.deputationId, deputationId),
+      inArray(hrmsPayProfiles.status, ["active", "pending"]),
+    )).limit(1);
+  return rows.length > 0;
+}
+
 export async function listByEmployee(tenantId: string, employeeId: string): Promise<PayProfileDbRow[]> {
   return scopedRead((tx) => tx.select().from(hrmsPayProfiles)
     .where(and(eq(hrmsPayProfiles.tenantId, tenantId), eq(hrmsPayProfiles.employeeId, employeeId)))
