@@ -18,6 +18,10 @@ export const hrmsJobOpenings = recruitmentSchema.table("hrms_job_openings", {
   location:      varchar("location", { length: 200 }),
   qualification: varchar("qualification", { length: 500 }),
   payRange:      varchar("pay_range", { length: 120 }),
+  // GAP-RECRUITMENT-NEW-02: structured pay (0170) -- level + bigint paise.
+  payLevel:      varchar("pay_level", { length: 16 }),
+  payMinMinor:   bigint("pay_min_minor", { mode: "bigint" }),
+  payMaxMinor:   bigint("pay_max_minor", { mode: "bigint" }),
   isPublished:   boolean("is_published").notNull().default(false),
   eligibility:   jsonb("eligibility").notNull().default({}),
   applicationDeadline: timestamp("application_deadline", { withTimezone: true }),

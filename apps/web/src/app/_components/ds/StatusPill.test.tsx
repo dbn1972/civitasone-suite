@@ -347,3 +347,17 @@ describe("budget module status vocabularies", () => {
   });
 });
 
+
+
+describe("recruitment status keys (GAP-RECRUITMENT-TALENT-POOL-04 / GAP-RECRUITMENT-HOME-04)", () => {
+  it.each([
+    ["not_selected", "mut", "Not Selected"],
+    ["published", "good", "Published"],
+    ["unpublished", "mut", "Unpublished"],
+  ])("%s renders the %s pill labelled %s", (status, variant, label) => {
+    const { container } = render(<StatusPill status={status} />);
+    const el = container.querySelector(`.pill.${variant}`);
+    expect(el).toBeInTheDocument();
+    expect(el?.textContent?.toLowerCase()).toBe(label.toLowerCase());
+  });
+});

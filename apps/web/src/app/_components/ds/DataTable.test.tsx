@@ -222,6 +222,24 @@ describe("DataTable", () => {
     expect(screen.getByText("⬇ CSV")).toBeInTheDocument();
   });
 
+  // GAP-RECRUITMENT-TALENT-POOL-03: a row whose link key is empty must not link to ".../undefined",
+  // and a full-path key works with an empty prefix.
+  describe("rowLinkKey with an empty value / empty prefix", () => {
+    it("links using a full-path key and an empty prefix, and renders no link for an empty value", () => {
+      const cols: { key: string; label: string }[] = [{ key: "name", label: "Name" }];
+      const data: Record<string, unknown>[] = [
+        { id: "1", name: "Has Link", href: "/x/1" },
+        { id: "2", name: "No Link", href: "" },
+        { id: "3", name: "Null Link", href: null },
+      ];
+      render(<DataTable columns={cols} rows={data} rowLinkKey="href" rowLinkPrefix="" identifyingColumnKey="name" />);
+      expect(screen.getByRole("link", { name: "Open Has Link" })).toHaveAttribute("href", "/x/1");
+      expect(screen.queryByRole("link", { name: "Open No Link" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Open Null Link" })).not.toBeInTheDocument();
+      expect(screen.getByText("No Link")).toBeInTheDocument();
+    });
+  });
+
   // UX-015: the row-link's accessible name must name the row after the field
   // a person would use to tell rows apart, not blindly after column 0 --
   // e.g. a vendor's own name, not its internal vendorCode. identifyingColumnKey

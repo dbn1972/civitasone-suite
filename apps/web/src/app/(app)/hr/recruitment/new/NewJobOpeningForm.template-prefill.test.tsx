@@ -48,6 +48,12 @@ function mockFetchForTemplateFlow() {
     // an empty list here (falls back to the same raw-UUID input these tests
     // already fill in).
     if (url === "/api/proxy/v1/hrms/departments?limit=200") {
+      return { ok: true, status: 200, json: async () => ({ data: [{ id: "3f2504e0-4f89-41d3-9a0c-0305e82c3301", name: "Finance" }] }) } as Response;
+    }
+    if (url === "/api/proxy/v1/hrms/designations?limit=200") {
+      return { ok: true, status: 200, json: async () => ({ data: [] }) } as Response;
+    }
+    if (url === "/api/proxy/v1/hrms/pay-matrix") {
       return { ok: true, status: 200, json: async () => ({ data: [] }) } as Response;
     }
     throw new Error(`unexpected fetch: ${url}`);
@@ -70,7 +76,7 @@ describe("NewJobOpeningForm — template pre-fill (MEDIUM finding)", () => {
     await waitFor(() => {
       expect(screen.getByLabelText(/qualification/i)).toHaveValue(TEMPLATE_RESPONSE.qualification);
     });
-    expect(screen.getByLabelText(/pay range/i)).toHaveValue(TEMPLATE_RESPONSE.payRange);
+    expect(screen.getByLabelText(/^pay range/i)).toHaveValue(TEMPLATE_RESPONSE.payRange);
     expect(screen.getByLabelText(/selection process/i)).toHaveValue(TEMPLATE_RESPONSE.selectionProcess);
     expect(screen.getByDisplayValue(TEMPLATE_RESPONSE.name)).toBeInTheDocument(); // title, pre-existing behavior unchanged
   });
@@ -84,7 +90,8 @@ describe("NewJobOpeningForm — template pre-fill (MEDIUM finding)", () => {
     });
 
     fireEvent.change(screen.getByLabelText(/reference no/i), { target: { value: "JOB-2027-0099" } });
-    fireEvent.change(screen.getByLabelText(/department/i), { target: { value: "3f2504e0-4f89-41d3-9a0c-0305e82c3301" } });
+    await waitFor(() => expect(screen.getByRole("option", { name: "Finance" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^department/i), { target: { value: "3f2504e0-4f89-41d3-9a0c-0305e82c3301" } });
     fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
 
     await waitFor(() => {
@@ -100,6 +107,41 @@ describe("NewJobOpeningForm — template pre-fill (MEDIUM finding)", () => {
     expect(body.selectionProcess).toBe(TEMPLATE_RESPONSE.selectionProcess);
     expect(body.requiredDocuments).toEqual(TEMPLATE_RESPONSE.requiredDocuments);
     expect(body.eligibility).toEqual(TEMPLATE_RESPONSE.eligibility);
+  });
+
+  // GAP-RECRUITMENT-NEW-05: template-provided documents/eligibility are visible and editable.
+  it("shows template documents as editable rows; removing one omits it from the POST", async () => {
+    const fetchMock = mockFetchForTemplateFlow();
+    renderForm();
+    await waitFor(() => expect(screen.getByLabelText("Document 3")).toHaveValue("Caste Certificate"));
+    expect(screen.getByLabelText("Document 1")).toHaveValue("Aadhaar");
+    fireEvent.click(screen.getByRole("button", { name: "Remove document 3" }));
+
+    fireEvent.change(screen.getByLabelText(/reference no/i), { target: { value: "JOB-2027-0100" } });
+    await waitFor(() => expect(screen.getByRole("option", { name: "Finance" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^department/i), { target: { value: "3f2504e0-4f89-41d3-9a0c-0305e82c3301" } });
+    fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/submitted/i));
+    const postCall = fetchMock.mock.calls.find(([url, init]) => url === "/api/proxy/v1/hrms/job-openings" && (init as RequestInit)?.method === "POST");
+    const body = JSON.parse((postCall![1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.requiredDocuments).toEqual(["Aadhaar", "Degree Certificate"]);
+  });
+
+  it("lists inherited template eligibility keys read-only, and ticking allowMultiple keeps them (spread, not replace)", async () => {
+    const fetchMock = mockFetchForTemplateFlow();
+    renderForm();
+    await waitFor(() => expect(screen.getByText("minAge")).toBeInTheDocument());
+    expect(screen.getByText("maxAge")).toBeInTheDocument();
+    fireEvent.click(screen.getByLabelText(/allow multiple applications from the same email/i));
+
+    fireEvent.change(screen.getByLabelText(/reference no/i), { target: { value: "JOB-2027-0101" } });
+    await waitFor(() => expect(screen.getByRole("option", { name: "Finance" })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/^department/i), { target: { value: "3f2504e0-4f89-41d3-9a0c-0305e82c3301" } });
+    fireEvent.click(screen.getByRole("button", { name: /create job opening/i }));
+    await waitFor(() => expect(screen.getByRole("status")).toHaveTextContent(/submitted/i));
+    const postCall = fetchMock.mock.calls.find(([url, init]) => url === "/api/proxy/v1/hrms/job-openings" && (init as RequestInit)?.method === "POST");
+    const body = JSON.parse((postCall![1] as RequestInit).body as string) as Record<string, unknown>;
+    expect(body.eligibility).toEqual({ minAge: 21, maxAge: 35, allowMultiple: true });
   });
 
   it("HR can still override a pre-filled field before saving", async () => {

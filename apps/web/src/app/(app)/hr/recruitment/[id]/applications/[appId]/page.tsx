@@ -2,67 +2,57 @@
 
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import type { CSSProperties } from "react";
+import Link from "next/link";
 import { useTranslations } from "next-intl";
-import { useParams, useRouter } from "next/navigation";
-import { PageHeader, Card, Button } from "../../../../../../_components/ds";
+import { useParams } from "next/navigation";
+import { PageHeader, Card, Button, ErrorState } from "../../../../../../_components/ds";
 import { DataSourceBadge } from "../../../../../../_components/DataSourceBadge";
 import { useFormError } from "@/lib/useFormError";
+import { toHumanError } from "@/lib/messages";
 import { rupeesToMinorString } from "@/lib/money";
 import { formatIndianDate, formatMoney, humanizeStatus } from "@/lib/formatters";
+import {
+  HIRE_POLL_INTERVAL_MS, HIRE_POLL_MAX_ATTEMPTS, fetchApplicationOnce, fetchNamedList, isHireConfirmed,
+  type Application, type LookupState, type NamedOption,
+} from "./applicationData";
+import { ApplicationExtras } from "./ApplicationExtras";
 
 const inputStyle: CSSProperties = {
   width: "100%", padding: "8px 12px", border: "1px solid var(--line)",
   borderRadius: 8, background: "var(--bg2)", color: "var(--ink)", fontSize: 14,
 };
 
-type Application = {
-  id: string;
-  /** Human-readable reference (hrms_applications.application_no); null for legacy rows. */
-  applicationNo?: string | null;
-  applicantName: string;
-  email?: string;
-  mobile?: string;
-  qualification?: string;
-  experienceYears?: number;
-  skills?: string[];
-  source: string;
-  stage: string;
-  screeningDecision: string;
-  appliedAt: string;
-};
-
-type Department = { id: string; name: string };
-type Designation = { id: string; name: string };
+type HirePhase = "idle" | "pending" | "confirmed" | "stalled";
 
 export default function ApplicationDetailPage() {
   const t = useTranslations("recruitmentApplicationDetail");
   const { id: jobOpeningId, appId } = useParams<{ id: string; appId: string }>();
-  const router = useRouter();
-
   const [application, setApplication] = useState<Application | null>(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<"api" | "error">("api");
+  // GAP-...-APPLICATION-07: a real "not found" and a fetch failure are different states.
+  const [notFound, setNotFound] = useState(false);
+  const [error, setError] = useState<{ message: string; forbidden: boolean } | null>(null);
 
   const [showHireDialog, setShowHireDialog] = useState(false);
   const [employeeNo, setEmployeeNo] = useState("");
   const [dateOfJoining, setDateOfJoining] = useState("");
-  // MEDIUM finding: defaulted to 0, which the backend now rejects outright
-  // (hireApplicationBody.basicMinor is z.number().int().positive() -- see
-  // recruitment/validators.ts -- "a genuinely positive basic pay is
-  // required for a real hire" per PR #1550). Default to empty so a user who
-  // never touches the field gets a clear client-side validation message
-  // instead of a raw 400 from the server.
   // Entered in RUPEES (decimal string) and converted to paise only at submit via
   // rupeesToMinorString (string-based, no float) -- GAP-RECRUITMENT-DETAIL-APPLICATIONS-APPLICATION-01.
+  // Defaults empty: the backend rejects 0 (hireApplicationBody.basicMinor is positive).
   const [basicRupees, setBasicRupees] = useState("");
   const [departmentId, setDepartmentId] = useState("");
   const [designationId, setDesignationId] = useState("");
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [designations, setDesignations] = useState<Designation[]>([]);
+  const [departments, setDepartments] = useState<NamedOption[]>([]);
+  const [designations, setDesignations] = useState<NamedOption[]>([]);
+  const [deptState, setDeptState] = useState<LookupState>("loading");
+  const [desigState, setDesigState] = useState<LookupState>("loading");
+  const [lookupAttempt, setLookupAttempt] = useState(0);
   const [employeeType, setEmployeeType] = useState<"permanent" | "temporary" | "contract" | "deputation">("permanent");
   const [hireStatus, setHireStatus] = useState<"idle" | "submitting" | "success" | "error">("idle");
   const [hireMessage, setHireMessage] = useState("");
+  // GAP-...-APPLICATION-03: a 202 only means the hire command was QUEUED; the stage is shown from
+  // server data and the page polls until the consumer has actually finished (or warns).
+  const [hirePhase, setHirePhase] = useState<HirePhase>("idle");
   const formError = useFormError("application");
 
   const empNoId = useId();
@@ -73,71 +63,79 @@ export default function ApplicationDetailPage() {
   const typeId = useId();
   const hireDialogDescId = useId();
 
-  useEffect(() => {
-    async function load() {
-      try {
-        // There is no GET /v1/hrms/applications/:id route (confirmed 404 against
-        // the live gateway) — only GET /v1/hrms/job-openings/:id/applications
-        // (a list) exists. Fetch the pipeline for this vacancy and find the one
-        // application we need, mirroring the same list-and-find pattern the
-        // parent job-opening page already uses for its own missing singular GET.
-        const res = await fetch(`/api/proxy/v1/hrms/job-openings/${jobOpeningId}/applications`);
-        if (!res.ok) {
-          setSource("error");
-          setError((await formError.fromResponse(res, "load")).message);
-          return;
-        }
-        const data = await res.json() as { data?: Application[] };
-        const found = (data.data ?? []).find((a) => a.id === appId) ?? null;
-        if (!found) {
-          setError(t("notFoundMessage"));
-          return;
-        }
-        setApplication(found);
-      } catch {
-        setSource("error");
-        setError(formError.fromException("load").message);
-      } finally {
-        setLoading(false);
-      }
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    setNotFound(false);
+    const outcome = await fetchApplicationOnce(appId, jobOpeningId);
+    if (outcome.kind === "ok") {
+      setApplication(outcome.application);
+    } else if (outcome.kind === "notfound") {
+      setApplication(null);
+      setNotFound(true);
+    } else {
+      setApplication(null);
+      const resolved = outcome.response ? await formError.fromResponse(outcome.response, "load") : formError.fromException("load");
+      setError({ message: resolved.message, forbidden: outcome.response?.status === 403 });
     }
-    if (appId && jobOpeningId) load();
-    // `t` is a real dependency (not the safe formError-object-identity
-    // omission documented elsewhere): the not-found branch below calls
-    // t("notFoundMessage"), so a locale switch while this effect's closure is
-    // still the active one would freeze that message in the old language —
-    // the same stale-closure class already fixed in CreateLeavePolicyForm.tsx.
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException/clear are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
-  }, [appId, jobOpeningId, t]);
+    setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- formError.fromResponse/fromException are stable (useCallback'd on a fixed area string in useFormError); the wrapping object is recreated every render but isn't read here.
+  }, [appId, jobOpeningId]);
 
-  // UX: replaces the raw departmentId/designationId UUID text boxes in the
-  // hire dialog below with searchable name-based dropdowns, matching the
-  // pattern already used by PromoteWithApproval/TransferWithApproval.
-  // Fetched only once the dialog is actually opened.
+  useEffect(() => {
+    if (appId && jobOpeningId) void load();
+  }, [appId, jobOpeningId, load]);
+
+  // The hire dialog's department/designation are name-based selects (never free-text UUIDs: hire
+  // requires valid ids). Fetched once the dialog opens; a failure is shown inline with a Retry.
   useEffect(() => {
     if (!showHireDialog) return;
     const controller = new AbortController();
+    setDeptState("loading");
+    setDesigState("loading");
     void (async () => {
       try {
-        const [deptRes, desigRes] = await Promise.all([
-          fetch("/api/proxy/v1/hrms/departments?limit=200", { signal: controller.signal }),
-          fetch("/api/proxy/v1/hrms/designations?limit=200", { signal: controller.signal }),
+        const [depts, desigs] = await Promise.all([
+          fetchNamedList("/api/proxy/v1/hrms/departments?limit=200", controller.signal),
+          fetchNamedList("/api/proxy/v1/hrms/designations?limit=200", controller.signal),
         ]);
-        if (deptRes.ok) {
-          const body = (await deptRes.json()) as { data?: Department[] } | Department[];
-          setDepartments(Array.isArray(body) ? body : (body.data ?? []));
-        }
-        if (desigRes.ok) {
-          const body = (await desigRes.json()) as { data?: Designation[] } | Designation[];
-          setDesignations(Array.isArray(body) ? body : (body.data ?? []));
-        }
-      } catch (err) {
-        if (err instanceof Error && err.name === "AbortError") return;
-        /* graceful fallback to raw-UUID inputs below */
+        setDepartments(depts ?? []);
+        setDeptState(depts ? "ready" : "error");
+        setDesignations(desigs ?? []);
+        setDesigState(desigs ? "ready" : "error");
+      } catch {
+        /* aborted: the dialog closed */
       }
     })();
     return () => controller.abort();
-  }, [showHireDialog]);
+  }, [showHireDialog, lookupAttempt]);
+
+  // Post-hire confirmation: refetch the application every few seconds and derive the stage from
+  // server data; give up after HIRE_POLL_MAX_ATTEMPTS with a visible warning.
+  useEffect(() => {
+    if (hirePhase !== "pending") return;
+    let cancelled = false;
+    let attempts = 0;
+    const timer = setInterval(() => {
+      attempts += 1;
+      void (async () => {
+        const outcome = await fetchApplicationOnce(appId, jobOpeningId);
+        if (cancelled) return;
+        if (outcome.kind === "ok") setApplication(outcome.application);
+        if (outcome.kind === "ok" && isHireConfirmed(outcome.application)) {
+          clearInterval(timer);
+          setHirePhase("confirmed");
+        } else if (attempts >= HIRE_POLL_MAX_ATTEMPTS) {
+          clearInterval(timer);
+          setHirePhase("stalled");
+        }
+      })();
+    }, HIRE_POLL_INTERVAL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+    };
+  }, [hirePhase, appId, jobOpeningId]);
 
   // Focus-trap: lock Tab inside the hire dialog while open; Escape closes.
   const dialogRef = useRef<HTMLDivElement>(null);
@@ -211,9 +209,11 @@ export default function ApplicationDetailPage() {
         setHireMessage(resolved.message);
         return;
       }
+      // 202 = queued, not done. Do NOT mark the application hired locally (the consumer can still reject
+      // it: no vacancy left, department/designation gone); poll the server for the real stage.
       setHireStatus("success");
-      setHireMessage(t("hireSuccessMessage"));
-      setApplication((prev) => prev ? { ...prev, stage: "hired" } : prev);
+      setHireMessage(t("hireQueuedMessage"));
+      setHirePhase("pending");
       setShowHireDialog(false);
     } catch {
       setHireStatus("error");
@@ -229,13 +229,33 @@ export default function ApplicationDetailPage() {
     );
   }
 
-  if (error || !application) {
+  if (error) {
+    // A real failure: shared error state with a Retry that re-runs load() (a 403 is permanent, so no Retry).
+    const human = toHumanError("load", { area: "application" });
     return (
       <div className="page-main wrap" aria-labelledby="page-heading">
-        <PageHeader title={t("notFoundTitle")} subtitle={t("notFoundSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} backLabel="Back to Applications" />
-        <DataSourceBadge source={source} />
+        <PageHeader title={t("notFoundTitle")} subtitle={t("errorSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} backLabel={t("backToApplications")} />
+        <DataSourceBadge source="error" />
         <Card padding>
-          <p style={{ color: "var(--mut)", textAlign: "center" }}>{error ?? t("notFoundMessage")}</p>
+          <ErrorState
+            error={{ what: error.message, next: human.next, actions: error.forbidden ? ["back", "help"] : human.actions }}
+            onRetry={() => void load()}
+            backHref={`/hr/recruitment/${jobOpeningId}`}
+          />
+        </Card>
+      </div>
+    );
+  }
+
+  if (notFound || !application) {
+    return (
+      <div className="page-main wrap" aria-labelledby="page-heading">
+        <PageHeader title={t("notFoundTitle")} subtitle={t("notFoundSubtitle")} back={`/hr/recruitment/${jobOpeningId}`} backLabel={t("backToApplications")} />
+        <Card padding>
+          <p style={{ color: "var(--mut)", textAlign: "center" }}>{t("notFoundMessage")}</p>
+          <p style={{ textAlign: "center" }}>
+            <Link href={`/hr/recruitment/${jobOpeningId}`} className="btn primary">{t("backToPipeline")}</Link>
+          </p>
         </Card>
       </div>
     );
@@ -244,6 +264,15 @@ export default function ApplicationDetailPage() {
   const basicPayPreviewMinor = rupeesToMinorString(basicRupees);
   // Known enum values get a translated label; anything else falls back to a humanised form, never the raw token.
   const enumLabel = (prefix: string, value: string) => (t.has(`${prefix}_${value}`) ? t(`${prefix}_${value}`) : humanizeStatus(value));
+  // Step 4: restate exactly what Confirm Hire will create before the user commits.
+  const deptName = departments.find((d) => d.id === departmentId)?.name;
+  const desigName = designations.find((d) => d.id === designationId)?.name;
+  const hireSummary = employeeNo.trim() && dateOfJoining && basicPayPreviewMinor && deptName && desigName
+    ? t("hireSummary", {
+        employeeNo: employeeNo.trim(), department: deptName, designation: desigName,
+        date: formatIndianDate(dateOfJoining), amount: formatMoney(basicPayPreviewMinor),
+      })
+    : null;
   const canHire = application.stage === "selected" || application.stage === "offered";
 
   return (
@@ -251,21 +280,31 @@ export default function ApplicationDetailPage() {
       <PageHeader
         title={application.applicantName}
         subtitle={t("subtitle")}
-        back={`/hr/recruitment/${jobOpeningId}`} backLabel="Back to Applications"
+        back={`/hr/recruitment/${jobOpeningId}`} backLabel={t("backToApplications")}
         actions={
-          canHire && hireStatus !== "success" ? (
+          canHire && hirePhase === "idle" ? (
             <Button onClick={() => setShowHireDialog(true)}>
               {t("hire")}
             </Button>
           ) : undefined
         }
       />
-      <DataSourceBadge source={source} />
 
-      {hireStatus === "success" && (
-        <p role="status" aria-live="polite" className="pill good" style={{ marginBottom: 12 }}>
+      {hirePhase === "pending" && (
+        <p role="status" aria-live="polite" className="pill warn" style={{ marginBottom: 12 }}>
           {hireMessage}
         </p>
+      )}
+      {hirePhase === "confirmed" && (
+        <p role="status" aria-live="polite" className="pill good" style={{ marginBottom: 12 }}>
+          {t("hireConfirmedMessage")}
+        </p>
+      )}
+      {hirePhase === "stalled" && (
+        <div role="alert" className="pill bad" style={{ marginBottom: 12, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          <span>{t("hireStalledMessage")}</span>
+          <Button variant="ghost" size="sm" onClick={() => { setHirePhase("idle"); setHireStatus("idle"); void load(); }}>{t("refresh")}</Button>
+        </div>
       )}
 
       <Card title={t("summaryTitle")}>
@@ -277,9 +316,14 @@ export default function ApplicationDetailPage() {
           {application.email && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("email")}</span>{application.email}</div>}
           {application.qualification && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("qualification")}</span>{application.qualification}</div>}
           {application.experienceYears != null && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("experience")}</span>{t("experienceYears", { count: application.experienceYears })}</div>}
+          {application.category && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("category")}</span>{application.category}</div>}
+          {application.dateOfBirth && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("dateOfBirth")}</span>{formatIndianDate(application.dateOfBirth)}</div>}
+          {application.hasResume !== undefined && <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("resume")}</span>{application.hasResume ? t("resumeOnFile") : t("resumeNone")}</div>}
           <div><span style={{ color: "var(--mut)", marginInlineEnd: 8 }}>{t("applied")}</span>{formatIndianDate(application.appliedAt)}</div>
         </div>
       </Card>
+
+      <ApplicationExtras appId={appId} />
 
       {showHireDialog && (
         <div
@@ -324,29 +368,33 @@ export default function ApplicationDetailPage() {
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
                 <div>
-                  <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>{t("departmentId")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
-                  {departments.length > 0 ? (
-                    <select id={deptId} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} style={inputStyle} required>
-                      <option value="">Select department…</option>
-                      {departments.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input id={deptId} type="text" value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} placeholder={t("uuidPlaceholder")} style={inputStyle} required />
+                  <label htmlFor={deptId} style={{ fontSize: 13, fontWeight: 500 }}>{t("department")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
+                  <select id={deptId} value={departmentId} onChange={(e) => setDepartmentId(e.target.value)} style={inputStyle} required disabled={deptState !== "ready"} aria-describedby={deptState === "error" ? `${deptId}-err` : undefined}>
+                    <option value="">{t("selectDepartment")}</option>
+                    {departments.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  {deptState === "error" && (
+                    <p id={`${deptId}-err`} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>
+                      {t("departmentsLoadError")}{" "}
+                      <button type="button" className="btn ghost sm" onClick={() => setLookupAttempt((n) => n + 1)}>{t("retry")}</button>
+                    </p>
                   )}
                 </div>
                 <div>
-                  <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>{t("designationId")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
-                  {designations.length > 0 ? (
-                    <select id={desigId} value={designationId} onChange={(e) => setDesignationId(e.target.value)} style={inputStyle} required>
-                      <option value="">Select designation…</option>
-                      {designations.map((d) => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                      ))}
-                    </select>
-                  ) : (
-                    <input id={desigId} type="text" value={designationId} onChange={(e) => setDesignationId(e.target.value)} placeholder={t("uuidPlaceholder")} style={inputStyle} required />
+                  <label htmlFor={desigId} style={{ fontSize: 13, fontWeight: 500 }}>{t("designation")} <span aria-hidden="true" style={{ color: "var(--color-error)" }}>*</span></label>
+                  <select id={desigId} value={designationId} onChange={(e) => setDesignationId(e.target.value)} style={inputStyle} required disabled={desigState !== "ready"} aria-describedby={desigState === "error" ? `${desigId}-err` : undefined}>
+                    <option value="">{t("selectDesignation")}</option>
+                    {designations.map((d) => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                  {desigState === "error" && (
+                    <p id={`${desigId}-err`} role="alert" style={{ fontSize: 12, color: "var(--bad)", marginTop: 4 }}>
+                      {t("designationsLoadError")}{" "}
+                      <button type="button" className="btn ghost sm" onClick={() => setLookupAttempt((n) => n + 1)}>{t("retry")}</button>
+                    </p>
                   )}
                 </div>
               </div>
@@ -359,6 +407,10 @@ export default function ApplicationDetailPage() {
                   <option value="deputation">{t("typeDeputation")}</option>
                 </select>
               </div>
+
+              {hireSummary && (
+                <p style={{ fontSize: 13, background: "var(--bg2)", padding: "8px 12px", borderRadius: 8, margin: 0 }}>{hireSummary}</p>
+              )}
 
               {hireStatus === "error" && hireMessage && (
                 <p role="alert" className="pill bad">{hireMessage}</p>

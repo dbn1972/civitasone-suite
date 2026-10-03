@@ -29,6 +29,12 @@ describe("StatIcon", () => {
     );
   });
 
+  it.each(["🟢", "📨", "🌐", "💼"])("renders a vector icon, not the raw emoji, for %s (GAP-RECRUITMENT-HOME-06)", (glyph) => {
+    const { container } = render(<StatIcon icon={glyph} />);
+    expect(container.querySelector("svg")).toBeInTheDocument();
+    expect(container.textContent).toBe("");
+  });
+
   it("falls back to the raw glyph when there is no mapping", () => {
     // Not a regression: this is exactly today's pre-fix behavior for the
     // long tail of emoji not yet in the map, so adding entries later can

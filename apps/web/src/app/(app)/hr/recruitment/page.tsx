@@ -5,6 +5,8 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { Globe, Users } from "lucide-react";
+import { buildHubCards, isNoOpenings, normaliseRosterStatus, type HubStats } from "./recruitmentHomeView";
 
 // Both "New Vacancy" and "Post First Job" used to render for every viewer
 // regardless of role, even though the destination page
@@ -16,14 +18,7 @@ import { getSessionRoles } from "@/lib/auth/roleGuard";
 // vacancy -- only the two create affordances are restricted here.
 const RECRUITMENT_ADMIN_ROLES = ["hr_admin", "hr_officer", "super_admin"];
 
-type DashboardStats = {
-  totalOpenings: number;
-  openVacancies: number;
-  publishedVacancies: number;
-  internshipsApprenticeships: number;
-  applicationsInternal: number;
-  applicationsPublic: number;
-};
+type DashboardStats = HubStats;
 
 type Opening = {
   id: string;
@@ -34,7 +29,16 @@ type Opening = {
   applicationsReceived: number;
   postedDate: string;
   applicationDeadline?: string;
+  vacancyType?: string;
+  /** GAP-RECRUITMENT-HOME-04: live on /careers. */
+  isPublished?: boolean;
+  /** GAP-RECRUITMENT-HOME-05: "none" | "draft" | "approved". */
+  rosterStatus?: string;
+  /** GAP-RECRUITMENT-HOME-05: application fee in paise, as a string. */
+  feesMinor?: string | null;
 } & Record<string, unknown>;
+
+type OpeningRow = Opening & { visibility: string; rosterDisplay: string };
 
 async function getDashboard(): Promise<LoaderResult<DashboardStats>> {
   const res = await fetchJson<unknown, DashboardStats>("/api/v1/hrms/recruitment/dashboard", {
@@ -59,29 +63,32 @@ export default async function RecruitmentPage() {
   const t = await getTranslations("recruitment");
   const roles = getSessionRoles();
   const canCreate = roles.some((r) => RECRUITMENT_ADMIN_ROLES.includes(r));
-  const [{ data: stats, source: statsSource }, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
-  const totalApps = stats.applicationsInternal + stats.applicationsPublic;
+  const [{ data: stats, source: statsSource, status: statsStatus }, { data: openings, source: openingSource }] = await Promise.all([getDashboard(), getOpenings()]);
+  // GAP-RECRUITMENT-HOME-02: a 403 on the HR-only dashboard endpoint is a permanent role restriction
+  // (a manager still gets a real, department-scoped openings list), not a transient failure -- the cards
+  // are derived from that list instead of showing zeros next to a populated table, and no "couldn't be
+  // loaded" chip invites a pointless retry. Any other stats failure keeps the chip and shows "—".
+  const { mode: statsMode, cards } = buildHubCards({ statsSource, statsStatus, stats, openings, openingsSource: openingSource });
   // Either fetch failing is worth telling the clerk about -- the stat cards
   // below would otherwise show a silent, indistinguishable-from-real all-zero
-  // dashboard when only /recruitment/dashboard fails (openings table has its
-  // own badge, but stats previously had none at all).
-  const pageSource = statsSource === "error" || openingSource === "error" ? "error" : "api";
+  // dashboard when only /recruitment/dashboard fails.
+  const pageSource = openingSource === "error" || statsMode === "unavailable" ? "error" : "api";
   // The badge's default copy ("Couldn't load -- showing nothing") is only
   // true when the openings list itself -- this page's actual content --
-  // failed to load. A manager role (or anyone else correctly denied the
-  // HR-only /recruitment/dashboard stats endpoint) still gets a full,
-  // real openings table below; telling them "showing nothing" while a
-  // real table of vacancies renders directly underneath is false and was
-  // read, in live testing, as the whole page being broken. Same principle
-  // the badge's own doc comment already applies to the cached-data case
-  // (UX-002: never say "showing nothing" when something IS showing) --
-  // just not yet applied to this partial-failure case.
+  // failed to load (UX-002: never say "showing nothing" when something IS showing).
   const badgeMessage =
     openingSource === "error"
       ? undefined
-      : statsSource === "error"
-        ? "Some figures on this page couldn't be loaded."
+      : statsMode === "unavailable"
+        ? t("statsPartialError")
         : undefined;
+
+  // GAP-RECRUITMENT-HOME-04/05: published + roster state per row, as plain data (server-safe).
+  const rows: OpeningRow[] = openings.map((o) => ({
+    ...o,
+    visibility: o.isPublished === true ? "published" : "unpublished",
+    rosterDisplay: t(`roster_${normaliseRosterStatus(o.rosterStatus)}`),
+  }));
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
@@ -99,34 +106,41 @@ export default async function RecruitmentPage() {
       />
 
       <DataSourceBadge source={pageSource} message={badgeMessage} />
+      {statsMode === "derived" && (
+        <p role="note" style={{ fontSize: 13, color: "var(--mut)", margin: "0 0 8px" }}>{t("statsDerivedNote", { count: openings.length })}</p>
+      )}
       <StatGrid>
-        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalVacancies")} value={stats.totalOpenings} />
-        <StatCard icon="🟢" iconBg="var(--goodbg)" label={t("statOpenNow")} value={stats.openVacancies} />
-        <StatCard icon="📨" iconBg="var(--line2)" label={t("statApplicationsReceived")} value={totalApps} />
-        <StatCard icon="🌐" iconBg="var(--infobg)" label={t("statPublishedPublic")} value={stats.publishedVacancies} />
+        <StatCard icon="📋" iconBg="var(--infobg)" label={t("statTotalVacancies")} value={cards.total} />
+        <StatCard icon="🟢" iconBg="var(--goodbg)" label={t("statOpenNow")} value={cards.open} />
+        <StatCard icon="📨" iconBg="var(--line2)" label={t("statApplicationsReceived")} value={cards.applications} />
+        <StatCard icon="🌐" iconBg="var(--infobg)" label={t("statPublishedPublic")} value={cards.published} />
+        <StatCard icon="🎓" iconBg="var(--primary-soft)" label={t("statInternshipsApprenticeships")} value={cards.internships} />
       </StatGrid>
 
       <Card title={t("allVacanciesTitle")}>
         {openingSource === "error" ? (
           <RefreshErrorState error={toHumanError("load", { area: "job openings" })} />
-        ) : openings.length === 0 ? (
+        ) : isNoOpenings(openings) ? (
           <EmptyState
-            icon="💼"
             title={t("emptyTitle")}
             message={t("emptyMessage")}
             action={canCreate ? <Link href="/hr/recruitment/new" className="btn primary">{t("postFirstJob")}</Link> : undefined}
           />
         ) : (
-          <DataTable<Opening>
+          <DataTable<OpeningRow>
             columns={[
               { key: "jobTitle", label: t("colPosition") },
               { key: "department", label: t("colDepartment") },
               { key: "vacancies", label: t("colPosts"), align: "right" },
               { key: "applicationsReceived", label: t("colApplications"), align: "right" },
-              { key: "postedDate", label: t("colPosted") },
+              // GAP-RECRUITMENT-HOME-01: shared Indian date format; sorts/exports on the raw ISO value.
+              { key: "postedDate", label: t("colPosted"), cellType: "date" },
               { key: "status", label: t("colStatus"), cellType: "status" },
+              { key: "visibility", label: t("colPublished"), cellType: "status" },
+              { key: "rosterDisplay", label: t("colRoster") },
+              { key: "feesMinor", label: t("colFee"), cellType: "amount", align: "right" },
             ]}
-            rows={openings}
+            rows={rows}
             rowLinkKey="id"
             rowLinkPrefix="/hr/recruitment/"
             sortable
@@ -142,9 +156,11 @@ export default async function RecruitmentPage() {
 
       <div style={{ marginTop: 16, display: "flex", gap: 12, flexWrap: "wrap" }}>
         <Link href="/careers" target="_blank" className="btn ghost">
+          <Globe size={16} aria-hidden="true" />
           {t("viewPublicCareersPage")}
         </Link>
         <Link href="/hr/recruitment/talent-pool" className="btn ghost">
+          <Users size={16} aria-hidden="true" />
           {t("browseTalentPool")}
         </Link>
       </div>

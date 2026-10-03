@@ -107,7 +107,7 @@ interface DataTableProps<T extends Record<string, unknown>> {
   rows: T[];
   /** Client-only row link builder */
   rowHref?: (row: T) => string;
-  /** Server-safe: link first column to `${rowLinkPrefix}${row[rowLinkKey]}` */
+  /** Server-safe: link first column to `${rowLinkPrefix}${row[rowLinkKey]}` (no link when that value is empty; prefix may be "" for a full-path key) */
   rowLinkKey?: keyof T & string;
   rowLinkPrefix?: string;
   /**
@@ -357,7 +357,12 @@ export function DataTable<T extends Record<string, unknown>>({
 
   const resolveHref = (row: T): string | undefined => {
     if (rowHref) return rowHref(row);
-    if (rowLinkKey && rowLinkPrefix) return `${rowLinkPrefix}${row[rowLinkKey]}`;
+    if (rowLinkKey && rowLinkPrefix !== undefined) {
+      // A row with no value at the key (e.g. a candidate whose vacancy id is missing) has no link,
+      // rather than a link to ".../undefined". rowLinkPrefix may be "" when the key holds a full path.
+      const v = row[rowLinkKey];
+      return v === undefined || v === null || v === "" ? undefined : `${rowLinkPrefix}${String(v)}`;
+    }
     return undefined;
   };
 

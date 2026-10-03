@@ -56,6 +56,10 @@ import {
   Plus,
   Ticket,
   Repeat,
+  Globe,
+  Mail,
+  Briefcase,
+  CircleDot,
 } from "lucide-react";
 
 /**
@@ -143,6 +147,11 @@ const STAT_ICON_MAP: Record<string, LucideIcon> = {
   "⚙": Settings,
   "📡": Radio,
   "🧰": Wrench,
+  // Recruitment hub stat cards (GAP-RECRUITMENT-HOME-06): these used to fall back to the raw emoji.
+  "🟢": CircleDot,
+  "📨": Mail,
+  "🌐": Globe,
+  "💼": Briefcase,
 };
 
 // Variation Selector-16 (U+FE0F) makes an otherwise-identical emoji string
