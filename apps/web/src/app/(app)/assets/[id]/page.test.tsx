@@ -43,6 +43,18 @@ describe("AssetDetailPage sub-fetch failures", () => {
     expect(screen.queryByText("Maintenance history")).not.toBeInTheDocument();
   });
 
+  // GAP-ASSETS-LOCATIONS-03
+  it("links a registered location to the locations register and shows plain text for a free-text one", async () => {
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, location: "Block A", locationId: "loc-1" }, source: "api", parts: { depreciation: "api", maintenance: "api" } });
+    const { unmount } = render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.getByRole("link", { name: "Block A" })).toHaveAttribute("href", "/assets/locations");
+    unmount();
+    getAssetByIdMock.mockResolvedValue({ data: { ...ASSET, location: "Old store room" }, source: "api", parts: { depreciation: "api", maintenance: "api" } });
+    render(await AssetDetailPage({ params: { id: "a1" } }));
+    expect(screen.getByText("Old store room")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Old store room" })).not.toBeInTheDocument();
+  });
+
   // GAP-ASSETS-DETAIL-02
   it("hides the eOffice disposal route for a read-only role", async () => {
     rolesMock.mockReturnValue(["audit_officer"]);

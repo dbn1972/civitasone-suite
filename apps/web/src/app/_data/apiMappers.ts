@@ -861,7 +861,12 @@ export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {
             : rawStatus === "condemned" ? "condemned"
               // GAP-ASSETS-DETAIL-05: a written-off asset must not be folded into "active".
               : rawStatus === "written_off" ? "written_off"
-                : "active";
+                // asset-service statuses (migration 0011) that used to fall through to "active":
+                : rawStatus === "lost" ? "lost"
+                  : rawStatus === "scrapped" ? "scrapped"
+                    // "transferred" is an in-service status; anything else is surfaced as unknown (GAP-ASSETS-LIST-04).
+                    : rawStatus === "active" || rawStatus === "transferred" ? "active"
+                      : "unknown";
     mapped.push({
       id,
       assetCode,
@@ -875,6 +880,7 @@ export function mapAssetSummaries(payload: unknown): AssetSummary[] | null {
       status,
       // GAP-ASSETS-FIXED-ASSETS-03: only a real barcode counts as tagged.
       ...(toText(row.barcode) ? { barcode: toText(row.barcode) as string } : {}),
+      ...(toText(row.locationId) ? { locationId: toText(row.locationId) as string } : {}),
     });
   }
   return mapped;

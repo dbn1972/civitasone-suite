@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, type MockInstance } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { screen, fireEvent, waitFor } from "@testing-library/react";
 import LeasesPage from "./page";
+import { renderIntl as render } from "../testIntl";
 
 function fill() {
   fireEvent.change(screen.getByLabelText("Lease no."), { target: { value: "L-7" } });
@@ -28,7 +29,7 @@ describe("LeasesPage register", () => {
     render(<LeasesPage />);
     fill();
     fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
-    await waitFor(() => expect(screen.getByText("Register this IFRS 16 lease?")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Register this lease?")).toBeInTheDocument());
     expect(screen.getByText("₹12,00,000.10")).toBeInTheDocument();
     expect(posts()).toHaveLength(0);
     fireEvent.click(screen.getAllByRole("button", { name: "Register lease" }).at(-1)!);
@@ -43,7 +44,7 @@ describe("LeasesPage register", () => {
     render(<LeasesPage />);
     fill();
     fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
-    await waitFor(() => expect(screen.getByText("Register this IFRS 16 lease?")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Register this lease?")).toBeInTheDocument());
     fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
     expect(posts()).toHaveLength(0);
     expect(screen.getByLabelText("Lease no.")).toHaveValue("L-7");
@@ -56,9 +57,148 @@ describe("LeasesPage register", () => {
     render(<LeasesPage />);
     fill();
     fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
-    await waitFor(() => expect(screen.getByText("Register this IFRS 16 lease?")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Register this lease?")).toBeInTheDocument());
     fireEvent.click(screen.getAllByRole("button", { name: "Register lease" }).at(-1)!);
-    expect(await screen.findByText(/duplicate lease number/)).toBeInTheDocument();
+    // plain copy, never the raw response body
+    expect(await screen.findByText(/couldn't save/i)).toBeInTheDocument();
+    expect(screen.queryByText(/duplicate lease number/)).not.toBeInTheDocument();
+  });
+
+  // fp-assets-01: GL heads
+  it("refuses with a clear (translated) message when GL accounts are not configured, and shows no raw server text", async () => {
+    fetchSpy.mockImplementation(async (_url, init) =>
+      (init as RequestInit | undefined)?.method === "POST"
+        ? new Response(JSON.stringify({ code: "GL_HEADS_NOT_CONFIGURED", message: "server text" }), { status: 409 })
+        : new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    render(<LeasesPage />);
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
+    await waitFor(() => expect(screen.getByText("Register this lease?")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: "Register lease" }).at(-1)!);
+    expect(await screen.findByText(/GL accounts are not set up yet/)).toBeInTheDocument();
+    expect(screen.queryByText(/server text/)).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Asset settings" })).toHaveAttribute("href", "/assets/settings");
+  });
+
+  it("shows the Hindi message too", async () => {
+    fetchSpy.mockImplementation(async (_url, init) =>
+      (init as RequestInit | undefined)?.method === "POST"
+        ? new Response(JSON.stringify({ code: "GL_HEAD_INVALID" }), { status: 409 })
+        : new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    render(<LeasesPage />, "hi");
+    fill();
+    fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
+    await waitFor(() => expect(screen.getByText("Register this lease?")).toBeInTheDocument());
+    fireEvent.click(screen.getAllByRole("button", { name: "Register lease" }).at(-1)!);
+    expect(await screen.findByText(/स्वीकार नहीं किया गया/)).toBeInTheDocument();
+  });
+
+  it("offers Repost only on a failed journal, confirms first, then posts to the lease repost route", async () => {
+    const base = { leaseStart: "2026-04-01", leaseEnd: "2031-03-31", assetId: null, status: "active", rouCostMinor: 1000, liabilityMinor: 900 };
+    fetchSpy.mockImplementation(async (url, init) =>
+      (init as RequestInit | undefined)?.method === "POST"
+        ? new Response(JSON.stringify({ id: "c" }), { status: 202 })
+        : new Response(JSON.stringify({ data: [
+            { ...base, id: "p", leaseNo: "L-P", lessorName: "P", glPostStatus: "pending" },
+            { ...base, id: "c", leaseNo: "L-C", lessorName: "C", glPostStatus: "failed" },
+          ] }), { status: 200 }));
+    render(<LeasesPage />);
+    expect(await screen.findByText("Journal not posted")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: /Repost journal/ })).toHaveLength(1);
+    fireEvent.click(screen.getByRole("button", { name: "Repost journal: L-C" }));
+    expect(await screen.findByText("Repost this journal?")).toBeInTheDocument();
+    expect(posts()).toHaveLength(0);
+    fireEvent.click(screen.getByText("Repost"));
+    await waitFor(() => expect(posts()).toHaveLength(1));
+    expect(String(posts()[0]![0])).toBe("/api/proxy/v1/asset/leases/c/journal/repost");
+    expect(await screen.findByText(/Journal sent to Finance again/)).toBeInTheDocument();
+  });
+
+  it("shows the recognition journal state per lease (pending / posted / not posted)", async () => {
+    const base = { leaseStart: "2026-04-01", leaseEnd: "2031-03-31", assetId: null, status: "active", rouCostMinor: 1000, liabilityMinor: 900 };
+    fetchSpy.mockResolvedValue(new Response(JSON.stringify({ data: [
+      { ...base, id: "a", leaseNo: "L-A", lessorName: "A", glPostStatus: "pending" },
+      { ...base, id: "b", leaseNo: "L-B", lessorName: "B", glPostStatus: "posted" },
+      { ...base, id: "c", leaseNo: "L-C", lessorName: "C", glPostStatus: "failed" },
+    ] }), { status: 200 }));
+    render(<LeasesPage />);
+    expect(await screen.findByText("Journal pending")).toBeInTheDocument();
+    expect(screen.getByText("Journal posted")).toBeInTheDocument();
+    expect(screen.getByText("Journal not posted").className).toContain("bad");
+  });
+
+  // GAP-ASSETS-LEASES-04: no IFRS wording anywhere on the page
+  it("uses Ind AS 116 wording, never IFRS 16", async () => {
+    render(<LeasesPage />);
+    expect(screen.getByRole("heading", { name: "Leases" })).toBeInTheDocument();
+    expect(await screen.findByText(/Ind AS 116/)).toBeInTheDocument();
+    expect(document.body.textContent).not.toMatch(/IFRS/i);
+  });
+
+  // GAP-ASSETS-LEASES-07: discounted lease -> the service computes the liability
+  it("with a discount rate and payment: previews the present value, confirms it, and posts no user liability", async () => {
+    fetchSpy.mockImplementation(async (url, init) => {
+      const u = String(url);
+      if ((init as RequestInit | undefined)?.method === "POST" && u.endsWith("/leases/preview")) {
+        return new Response(JSON.stringify({ liabilityMinor: "11495790", totalInterestMinor: "504210", periods: 12 }), { status: 200 });
+      }
+      return (init as RequestInit | undefined)?.method === "POST"
+        ? new Response(JSON.stringify({ id: "l1", status: "accepted" }), { status: 202 })
+        : new Response(JSON.stringify({ data: [] }), { status: 200 });
+    });
+    render(<LeasesPage />);
+    fill();
+    fireEvent.change(screen.getByLabelText("Liability (₹)"), { target: { value: "" } });
+    fireEvent.change(screen.getByLabelText(/Discount rate/), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Periodic payment (₹)"), { target: { value: "10000" } });
+    expect(screen.getByLabelText("Liability (₹)")).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
+    await waitFor(() => expect(screen.getByText("Register this lease?")).toBeInTheDocument());
+    expect(screen.getByText("₹1,14,957.90")).toBeInTheDocument(); // the service's present value, not typed
+    expect(screen.getByText(/present value of 12 monthly payments at 8% a year/)).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "Register lease" }).at(-1)!);
+    await waitFor(() => expect(posts().filter(([u]) => String(u).endsWith("/leases"))).toHaveLength(1));
+    const body = JSON.parse((posts().find(([u]) => String(u).endsWith("/leases"))![1] as RequestInit).body as string);
+    expect(body).toMatchObject({ ibrBps: 800, paymentMinor: 1000000, paymentFrequency: "monthly" });
+    expect(body.liabilityMinor).toBeUndefined();
+  });
+
+  it("requires both discounting fields once either is entered", () => {
+    render(<LeasesPage />);
+    fill();
+    fireEvent.change(screen.getByLabelText(/Discount rate/), { target: { value: "8" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/periodic payment/);
+    fireEvent.change(screen.getByLabelText(/Discount rate/), { target: { value: "abc" } });
+    fireEvent.change(screen.getByLabelText("Periodic payment (₹)"), { target: { value: "10000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(/discount rate/);
+    expect(posts()).toHaveLength(0);
+  });
+
+  it("a failed preview shows plain copy and opens no dialog", async () => {
+    fetchSpy.mockImplementation(async (url, init) =>
+      (init as RequestInit | undefined)?.method === "POST" && String(url).endsWith("/leases/preview")
+        ? new Response(JSON.stringify({ code: "INVALID_LEASE_TERMS", message: "lease term exceeds 600 periods" }), { status: 400 })
+        : new Response(JSON.stringify({ data: [] }), { status: 200 }));
+    render(<LeasesPage />);
+    fill();
+    fireEvent.change(screen.getByLabelText(/Discount rate/), { target: { value: "8" } });
+    fireEvent.change(screen.getByLabelText("Periodic payment (₹)"), { target: { value: "10000" } });
+    fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
+    expect(await screen.findByText(/cannot be scheduled/)).toBeInTheDocument();
+    expect(screen.queryByText("Register this lease?")).not.toBeInTheDocument();
+  });
+
+  it("opens the repayment schedule of a discounted lease", async () => {
+    const row = { id: "l9", leaseNo: "L-9", lessorName: "Acme", rouCostMinor: 1000, liabilityMinor: 900, leaseStart: "2026-04-01", leaseEnd: "2027-03-31", assetId: null, status: "active", ibrBps: 800 };
+    fetchSpy.mockImplementation(async (url) => String(url).endsWith("/leases/l9/schedule")
+      ? new Response(JSON.stringify({ data: [{ seq: 1, dueDate: "2026-04-30", openingMinor: "90000", interestMinor: "600", paymentMinor: "10000", principalMinor: "9400", closingMinor: "80600" }] }), { status: 200 })
+      : new Response(JSON.stringify({ data: [row] }), { status: 200 }));
+    render(<LeasesPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "View repayment schedule for lease L-9" }));
+    expect(await screen.findByText(/Repayment schedule — lease L-9/)).toBeInTheDocument();
+    expect(await screen.findByText("₹806.00")).toBeInTheDocument(); // closing balance
   });
 
   it("rejects an invalid amount before opening the dialog", () => {
@@ -67,7 +207,7 @@ describe("LeasesPage register", () => {
     fireEvent.change(screen.getByLabelText("ROU cost (₹)"), { target: { value: "12,00,000" } });
     fireEvent.click(screen.getByRole("button", { name: "Register lease" }));
     expect(screen.getByRole("alert")).toHaveTextContent(/valid ROU cost/);
-    expect(screen.queryByText("Register this IFRS 16 lease?")).not.toBeInTheDocument();
+    expect(screen.queryByText("Register this lease?")).not.toBeInTheDocument();
   });
 
   it("rejects an amount beyond safe-integer paise", () => {

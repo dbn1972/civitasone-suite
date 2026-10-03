@@ -85,6 +85,51 @@ describe("LocationsPage", () => {
     expect(JSON.parse(String(post?.init?.body))).toEqual({ code: "PLANT-B2", name: "Boiler 2", orgUnit: "Works", parentId: "p" });
   });
 
+  // GAP-ASSETS-LOCATIONS-02: deactivate / reactivate
+  it("deactivates with a required reason, posts it, and offers Reactivate for inactive rows (muted, with a status pill)", async () => {
+    mockFetch({ locations: [{ ...ROWS[1]!, isActive: true }, { id: "x", code: "OLD-1", name: "Old shed", orgUnit: null, parentId: null, isActive: false }] });
+    render(<LocationsPage />);
+    await screen.findByText(/— Boiler house/);
+    expect(screen.getByText("Inactive")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reactivate location OLD-1" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Deactivate location OLD-1" })).not.toBeInTheDocument();
+    // an inactive location is not offered as a parent for a new one
+    expect(screen.queryByRole("option", { name: /OLD-1/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate location PLANT-B1" }));
+    const confirm = await screen.findByRole("button", { name: "Deactivate" });
+    expect(confirm).toBeDisabled();
+    fireEvent.change(screen.getByLabelText("Reason"), { target: { value: "Boiler house demolished" } });
+    fireEvent.click(confirm);
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/locations/c/deactivate"))).toBe(true));
+    const post = calls.find((c) => c.url.endsWith("/locations/c/deactivate"));
+    expect(JSON.parse(String(post?.init?.body))).toEqual({ reason: "Boiler house demolished" });
+    expect(await screen.findByText(/Location PLANT-B1 deactivated/)).toBeInTheDocument();
+  });
+
+  it("explains a refusal to deactivate a parent that still has active children", async () => {
+    mockFetch({ locations: ROWS });
+    const base = (globalThis.fetch as unknown as (i: string | URL | Request, init?: RequestInit) => Promise<Response>);
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) =>
+      String(input).endsWith("/deactivate")
+        ? new Response(JSON.stringify({ code: "HAS_ACTIVE_CHILDREN", message: "deactivate the child locations first" }), { status: 409 })
+        : base(input, init));
+    render(<LocationsPage />);
+    await screen.findByText(/— Boiler house/);
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate location PLANT" }));
+    fireEvent.change(await screen.findByLabelText("Reason"), { target: { value: "Closing the plant" } });
+    fireEvent.click(screen.getByRole("button", { name: "Deactivate" }));
+    expect(await screen.findByText(/still has active child locations/)).toBeInTheDocument();
+    expect(screen.queryByText(/HAS_ACTIVE_CHILDREN/)).not.toBeInTheDocument();
+  });
+
+  it("reactivates an inactive location", async () => {
+    mockFetch({ locations: [{ id: "x", code: "OLD-1", name: "Old shed", orgUnit: null, parentId: null, isActive: false }] });
+    render(<LocationsPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Reactivate location OLD-1" }));
+    await waitFor(() => expect(calls.some((c) => c.url.endsWith("/locations/x/reactivate") && c.init?.method === "POST")).toBe(true));
+    expect(await screen.findByText(/Location OLD-1 reactivated/)).toBeInTheDocument();
+  });
+
   it("falls back to a free-text org unit when the org hierarchy is forbidden (GAP-ASSETS-LOCATIONS-05)", async () => {
     mockFetch({ locations: ROWS, orgStatus: 403 });
     render(<LocationsPage />);

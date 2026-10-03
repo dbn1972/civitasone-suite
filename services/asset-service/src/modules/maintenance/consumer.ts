@@ -6,6 +6,7 @@ import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS } from "../../topics.js";
 import { uuidV5 } from "../../shared/ids.js";
 import * as repo from "./repo.js";
+import { isUniqueViolation } from "../register/consumer.js";
 
 const log = pino({ name: "asset-maintenance-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -56,6 +57,25 @@ export function registerMaintenanceConsumers(rawQueue: Queue): void {
         await audit(tx, msg, "create", "work_order", p.id);
       });
     } catch (err) {
+      if (isUniqueViolation(err)) {
+        // GAP-ASSETS-MAINTENANCE-NEW-06: the loser of a race on uq_work_orders_one_open_per_asset_type. The insert's
+        // transaction rolled back (so did its inbox row). Record the refusal as an audited FAILURE in a fresh
+        // transaction and mark the message processed: a retry could never succeed, so it must not loop.
+        const p = msg.payload as { id: string; assetId: string; maintenanceType?: string };
+        await db.transaction(async (tx) => {
+          if (!(await markProcessed(tx, msg.messageId))) return;
+          await enqueue(tx, {
+            topic: AUDIT_TOPIC, eventType: AUDIT_TOPIC,
+            tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+            payload: {
+              service: "asset", action: "create", resourceType: "work_order", resourceId: p.id, outcome: "failure",
+              details: { failure: "DUPLICATE_OPEN_WORK_ORDER", assetId: p.assetId, maintenanceType: p.maintenanceType ?? "corrective" },
+            },
+          });
+        });
+        log.warn({ messageId: msg.messageId, assetId: p.assetId }, "duplicate open work order refused");
+        return;
+      }
       log.error({ err, messageId: msg.messageId, type: COMMANDS.workOrderCreate }, "Consumer processing failed");
     }
   });

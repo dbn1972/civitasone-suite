@@ -90,6 +90,9 @@ export const CONSUMED_EVENTS = {
   // works-service emits this on a completion-type work closure so the newly
   // built public asset is registered here (closes the asset-handover loop).
   worksAssetHandover: "works.asset.handover",
+  // finance-service answers every journal it is sent: posted, or rejected (e.g. an unknown GL head).
+  glPosted: "finance.gl.posted",
+  glRejected: "finance.gl.rejected",
 } as const;
 
 export const SERVICE = "asset";

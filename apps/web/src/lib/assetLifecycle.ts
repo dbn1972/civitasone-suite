@@ -10,7 +10,7 @@ export type AssetStatus = AssetDetail["status"];
 
 /** Off the books: nothing further can be done to the asset. */
 export function isTerminalAsset(status: string): boolean {
-  return status === "disposed" || status === "written_off";
+  return status === "disposed" || status === "written_off" || status === "scrapped";
 }
 
 /**
@@ -24,7 +24,8 @@ export function isTerminalAsset(status: string): boolean {
 export type AssetActionScope = "none" | "tag-only" | "full";
 export function assetActionScope(status: string): AssetActionScope {
   if (isTerminalAsset(status)) return "none";
-  if (status === "condemned") return "tag-only";
+  // A lost asset cannot be transferred / disposed until it is found or written off through the workflow.
+  if (status === "condemned" || status === "lost") return "tag-only";
   return "full";
 }
 

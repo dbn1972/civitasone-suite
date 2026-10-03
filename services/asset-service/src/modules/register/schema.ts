@@ -43,6 +43,8 @@ export const assetAssets = registerSchema.table("asset_assets", {
   orgUnit:         varchar("org_unit", { length: 64 }),
   aucId:           uuid("auc_id"),
   location:        text("location"),
+  // GAP-ASSETS-LOCATIONS-03 (migration 0036): the functional location the asset sits in.
+  locationId:      uuid("location_id"),
   notes:           text("notes"),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

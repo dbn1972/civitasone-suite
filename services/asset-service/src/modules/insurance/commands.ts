@@ -3,6 +3,7 @@ import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
 import { HttpError } from "../../shared/context.js";
+import { objectExists } from "@civitasone/storage";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import type { PolicyBody, ClaimBody } from "./validators.js";
@@ -44,6 +45,22 @@ export async function createClaim(ctx: RequestContext, body: ClaimBody): Promise
     );
   }
 
+  // Attachments must be THIS caller's own uploads under THIS tenant's prefix, and must really exist in storage.
+  // (`?? []`: in-process callers that skip the route's zod parse have no attachments.)
+  const prefix = `uploads/${ctx.tenantId}/`;
+  for (const a of body.attachments ?? []) {
+    const seg = a.key.split("/"); // uploads / tenant / category / uploader / file
+    if (!a.key.startsWith(prefix) || seg[3] !== ctx.actorId) {
+      throw new HttpError(400, "INVALID_ATTACHMENT", "an attachment is not one of your own uploads for this tenant");
+    }
+    let exists: boolean;
+    try {
+      exists = await objectExists(a.key);
+    } catch {
+      throw new HttpError(503, "STORAGE_UNAVAILABLE", "document storage could not be checked right now");
+    }
+    if (!exists) throw new HttpError(400, "ATTACHMENT_NOT_FOUND", `attachment ${a.fileName} was not found in storage; upload it again`);
+  }
   const id = randomUUID();
   await queue.publish(COMMANDS.insuranceClaimCreate, {
     messageId: id, type: COMMANDS.insuranceClaimCreate,

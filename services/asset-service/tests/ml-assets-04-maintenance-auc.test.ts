@@ -15,7 +15,7 @@ import { signToken } from "@civitasone/auth";
 import { buildApp } from "../src/app.js";
 import { db, sqlClient } from "../src/shared/db.js";
 import { assetAssets } from "../src/modules/register/schema.js";
-import { functionalLocations, projectAuc } from "../src/modules/enterprise/schema.js";
+import { functionalLocations, projectAuc, assetSettings } from "../src/modules/enterprise/schema.js";
 import { assetWorkOrders } from "../src/modules/maintenance/schema.js";
 import { registerMaintenanceConsumers } from "../src/modules/maintenance/consumer.js";
 import { registerF3EnterpriseConsumers } from "../src/modules/enterprise/f3-consumer.js";
@@ -51,6 +51,7 @@ afterAll(async () => {
     await tx.delete(assetWorkOrders).where(eq(assetWorkOrders.tenantId, TENANT));
     await tx.delete(assetAssets).where(eq(assetAssets.id, ASSET));
     await tx.delete(functionalLocations).where(eq(functionalLocations.tenantId, TENANT));
+    await tx.delete(assetSettings).where(eq(assetSettings.tenantId, TENANT));
   });
   await app.close();
   await sqlClient.end();
@@ -173,6 +174,8 @@ describe("AUC capitalize double-click guard", () => {
     const q = new MemoryQueue();
     registerF3EnterpriseConsumers(q);
     await q.start();
+    // The direct (single-actor) consumer path is only valid while the tenant has maker-checker switched OFF.
+    await asTenant((tx) => tx.insert(assetSettings).values({ tenantId: TENANT, capitalizeMakerChecker: false, cwipAccountCode: "1300", updatedBy: ACTOR }).onConflictDoNothing());
     const aucId = randomUUID();
     await q.publish(COMMANDS.f3RouteWrite, {
       messageId: randomUUID(), type: COMMANDS.f3RouteWrite, tenantId: TENANT, actorId: ACTOR, correlationId: "c", schemaVersion: "1.0",

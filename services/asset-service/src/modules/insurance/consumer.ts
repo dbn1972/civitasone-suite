@@ -42,6 +42,7 @@ export function registerInsuranceConsumers(rawQueue: Queue): void {
       const p = msg.payload as {
         id: string; tenantId: string; policyId: string; assetId: string;
         claimDate: string; claimAmountMinor: number; currency: string; notes?: string;
+        attachments?: Array<{ key: string; fileName: string; size: number; mimeType: string }>;
       };
       await db.transaction(async (tx) => {
         if (!(await markProcessed(tx, msg.messageId))) return;
@@ -49,7 +50,7 @@ export function registerInsuranceConsumers(rawQueue: Queue): void {
           id: p.id, tenantId: p.tenantId, policyId: p.policyId, assetId: p.assetId,
           claimDate: p.claimDate, claimAmountMinor: BigInt(p.claimAmountMinor),
           currency: p.currency, status: "pending", settledAmountMinor: 0n,
-          notes: p.notes ?? null, createdBy: msg.actorId, updatedBy: msg.actorId,
+          notes: p.notes ?? null, attachments: p.attachments ?? [], createdBy: msg.actorId, updatedBy: msg.actorId,
         });
         await audit(tx, msg, "create", "insurance_claim", p.id);
       });

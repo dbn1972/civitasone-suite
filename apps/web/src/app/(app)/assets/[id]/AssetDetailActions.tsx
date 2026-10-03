@@ -8,6 +8,7 @@ import { formatMoney, todayIST, addDaysIST } from "@/lib/formatters";
 import { canWriteAssets } from "@/lib/auth/workRoles";
 import { assetActionScope } from "@/lib/assetLifecycle";
 import { isRealCalendarDate } from "@/lib/calendarDate";
+import { createQrSvg } from "@/lib/qr";
 
 type Props = {
   assetId: string;
@@ -47,6 +48,8 @@ export function printAssetTag(code: string): void {
   h2.textContent = code;
   const p = doc.createElement("p");
   p.textContent = "Asset tag \u2014 scan the code for verification";
+  // A real QR of the code (integers-only path, see lib/qr.ts). If encoding fails the printed code text still works.
+  try { body.appendChild(createQrSvg(doc, code)); } catch { /* text-only tag */ }
   body.appendChild(h2);
   body.appendChild(p);
   w.focus();

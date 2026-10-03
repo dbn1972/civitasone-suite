@@ -1,14 +1,21 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button, ConfirmDialog, useConfirmAction } from "../../../_components/ds";
-import type { AssetCategoryOption } from "../../../_data/loaders";
+import type { AssetCategoryOption, AssetLocationOption } from "../../../_data/loaders";
 import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
 import { useFormError } from "@/lib/useFormError";
 import { rupeesToMinorString } from "@/lib/money";
+import { flattenTree, buildLocationTree } from "../locations/locationTree";
 
-type Props = { categories: AssetCategoryOption[] };
+type Props = {
+  categories: AssetCategoryOption[];
+  /** GAP-ASSETS-LOCATIONS-03: active functional locations to place the asset in (empty => free-text fallback). */
+  locations?: AssetLocationOption[];
+  /** The locations could not be loaded (as opposed to there being none): free text is offered with a note. */
+  locationsFailed?: boolean;
+};
 
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
@@ -16,7 +23,7 @@ export function categoryLabel(c: AssetCategoryOption): string {
   return `${c.name}${c.code ? ` (${c.code})` : ""} · ${c.depMethod} ${c.depRate}% · ${c.usefulLifeYears} yrs`;
 }
 
-export function RegisterAssetForm({ categories }: Props) {
+export function RegisterAssetForm({ categories, locations = [], locationsFailed = false }: Props) {
   const router = useRouter();
   const [form, setForm] = useState({
     name: "",
@@ -28,7 +35,12 @@ export function RegisterAssetForm({ categories }: Props) {
     // allowed), defaulting to today in India -- never the UTC day.
     acquisitionDate: todayIST(),
     location: "",
+    locationId: "",
   });
+  // The asset is placed in a registered functional location (nested by parent). With none registered, or when
+  // the list could not be loaded, the form falls back to free text rather than blocking registration.
+  const locationOptions = useMemo(() => flattenTree(buildLocationTree(locations)), [locations]);
+  const hasLocations = locationOptions.length > 0;
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState("");
   // GAP-ASSETS-REGISTER-07: once the service accepted the create, the form
@@ -80,7 +92,8 @@ export function RegisterAssetForm({ categories }: Props) {
           depRate: category.depRate,
           usefulLifeYears: category.usefulLifeYears,
           acquisitionDate: form.acquisitionDate,
-          location: form.location.trim() || undefined,
+          // A chosen register location sends its id (the service stores the name for display); otherwise free text.
+          ...(hasLocations && form.locationId ? { locationId: form.locationId } : { location: form.location.trim() || undefined }),
           notes: (reason ?? "").trim() || undefined,
         }),
         });
@@ -164,7 +177,19 @@ export function RegisterAssetForm({ categories }: Props) {
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="ast-loc">Location</label>
-              <input id="ast-loc" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} style={inputStyle} />
+              {hasLocations ? (
+                <select id="ast-loc" value={form.locationId} onChange={(e) => setForm({ ...form, locationId: e.target.value })} style={inputStyle}>
+                  <option value="">No location</option>
+                  {locationOptions.map((l) => (
+                    <option key={l.id} value={l.id}>{`${"— ".repeat(l.depth)}${l.code} · ${l.name}`}</option>
+                  ))}
+                </select>
+              ) : (
+                <input id="ast-loc" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} style={inputStyle} />
+              )}
+              {locationsFailed ? (
+                <p role="status" style={{ color: "var(--muted)", fontSize: 12, margin: "4px 0 0" }}>The location list could not be loaded, so type the location instead.</p>
+              ) : null}
             </div>
           </div>
           <Button type="submit" disabled={create.busy || done} style={{ marginTop: 12 }}>Register asset</Button>

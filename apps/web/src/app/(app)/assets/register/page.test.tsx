@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen } from "@testing-library/react";
 
 const getAssetCategoriesMock = vi.fn();
-vi.mock("../../../_data/loaders", () => ({ getAssetCategories: () => getAssetCategoriesMock() }));
+const getAssetLocationsMock = vi.fn();
+vi.mock("../../../_data/loaders", () => ({
+  getAssetCategories: () => getAssetCategoriesMock(),
+  getAssetLocations: () => getAssetLocationsMock(),
+}));
 const rolesMock = vi.fn<() => string[]>(() => ["asset_manager"]);
 vi.mock("@/lib/auth/roleGuard", () => ({ getSessionRoles: () => rolesMock() }));
 vi.mock("./RegisterAssetForm", () => ({ RegisterAssetForm: () => <form aria-label="register form" /> }));
@@ -11,7 +15,12 @@ vi.mock("next/navigation", () => ({ useRouter: () => ({ push: vi.fn(), refresh: 
 import RegisterAssetPage from "./page";
 
 describe("RegisterAssetPage", () => {
-  beforeEach(() => { getAssetCategoriesMock.mockReset(); rolesMock.mockReturnValue(["asset_manager"]); });
+  beforeEach(() => {
+    getAssetCategoriesMock.mockReset();
+    getAssetLocationsMock.mockReset();
+    getAssetLocationsMock.mockResolvedValue({ data: [], source: "api" });
+    rolesMock.mockReturnValue(["asset_manager"]);
+  });
 
   it("asks for category setup instead of posting a magic id when no categories exist", async () => {
     getAssetCategoriesMock.mockResolvedValue({ data: [], source: "api" });

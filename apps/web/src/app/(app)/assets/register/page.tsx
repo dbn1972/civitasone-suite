@@ -1,5 +1,5 @@
 import { PageHeader, EmptyState, RefreshErrorState } from "../../../_components/ds";
-import { getAssetCategories } from "../../../_data/loaders";
+import { getAssetCategories, getAssetLocations } from "../../../_data/loaders";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { canWriteAssets } from "@/lib/auth/workRoles";
 import { toHumanError } from "@/lib/messages";
@@ -29,6 +29,8 @@ export default async function RegisterAssetPage() {
   // GAP-ASSETS-REGISTER-02: the category decides depreciation method, rate and
   // useful life, so it must be chosen -- never a hard-coded category id.
   const { data: categories, source } = await getAssetCategories();
+  // GAP-ASSETS-LOCATIONS-03: a failed locations load degrades to free text (the form says so); it never blocks registration.
+  const { data: locations, source: locationsSource } = await getAssetLocations();
 
   return (
     <>
@@ -42,7 +44,7 @@ export default async function RegisterAssetPage() {
           message="No asset categories exist yet. An asset administrator must create categories (with depreciation method, rate and useful life) before assets can be registered."
         />
       ) : (
-        <RegisterAssetForm categories={categories} />
+        <RegisterAssetForm categories={categories} locations={locations ?? []} locationsFailed={locationsSource === "error"} />
       )}
     </>
   );

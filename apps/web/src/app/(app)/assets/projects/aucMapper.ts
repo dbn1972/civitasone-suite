@@ -1,4 +1,5 @@
 import type { AucRow } from "./AucTable";
+import { journalState } from "../glStatus";
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === "object" && v !== null;
@@ -49,6 +50,7 @@ export function mapAucRows(payload: unknown): AucRow[] | null {
       accumulatedMinor,
       status,
       assetId: typeof raw.assetId === "string" ? raw.assetId : null,
+      glPostStatus: journalState(raw.glPostStatus),
     });
   }
   return mapped;
