@@ -6,6 +6,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { maintenancePlanBody, workOrderBody, completeWorkOrderBody, idParam, meterReadingBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
+import * as repo from "./repo.js";
 import { z } from "zod";
 
 const ASSET_ROLES  = ["asset_manager", "asset_admin", "super_admin"];
@@ -55,6 +56,11 @@ export async function maintenanceRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
     const body = workOrderBody.parse(req.body);
+    // GAP-ASSETS-MAINTENANCE-NEW-06: one open work order per asset + type. The consumer's
+    // insert is also guarded by a partial unique index, so two racing requests cannot both persist.
+    if (await repo.findOpenWorkOrderByAssetType(ctx.tenantId, body.assetId, body.maintenanceType ?? "corrective")) {
+      throw new HttpError(409, "DUPLICATE_OPEN_WORK_ORDER", "an open work order of this type already exists for this asset");
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.createWorkOrder(ctx, body));
   });
 

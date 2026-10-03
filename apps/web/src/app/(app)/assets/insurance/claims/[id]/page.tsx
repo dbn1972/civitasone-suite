@@ -4,6 +4,7 @@ import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { formatIndianDate, formatMoney } from "@/lib/formatters";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { ClaimActions } from "../ClaimActions";
+import { ClaimAttachments } from "../ClaimAttachments";
 import { canDecideClaims, isDecidable } from "../claimRules";
 import { mapClaimDetail, type ClaimDetail } from "./claimDetail";
 
@@ -101,6 +102,7 @@ export default async function ClaimDetailPage({ params }: { params: { id: string
           <div className="fld"><div className="l">Claim Amount</div><div className="v">{formatMoney(claim.claimAmountMinor)}</div></div>
           <div className="fld"><div className="l">Settled Amount</div><div className="v">{formatMoney(claim.settledAmountMinor)}</div></div>
           <div className="fld"><div className="l">Notes</div><div className="v" style={{ whiteSpace: "pre-wrap" }}>{claim.notes ?? "—"}</div></div>
+          <div className="fld"><div className="l">Supporting documents</div><div className="v"><ClaimAttachments attachments={claim.attachments} /></div></div>
         </div>
       </Card>
 

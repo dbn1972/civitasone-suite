@@ -20,6 +20,30 @@ describe("mapAssetSummaries status (GAP-ASSETS-DETAIL-05)", () => {
   });
 });
 
+// GAP-ASSETS-LIST-04: an unrecognised status is shown as unknown, never folded into active
+describe("mapAssetSummaries status (GAP-ASSETS-LIST-04)", () => {
+  it("keeps lost and scrapped instead of reading them as active", () => {
+    expect(status("lost")).toBe("lost");
+    expect(status("scrapped")).toBe("scrapped");
+  });
+  it("surfaces an unrecognised or missing-enum status as unknown (a missing status stays the old active default)", () => {
+    expect(status("quarantined")).toBe("unknown");
+    expect(status("under_repair")).toBe("unknown");
+    expect(mapAssetSummaries({ data: [{ id: "a1", name: "N", code: "C" }] })![0]!.status).toBe("active");
+  });
+  it("is case-insensitive", () => {
+    expect(status("WRITTEN_OFF")).toBe("written_off");
+    expect(status("Under_Maintenance")).toBe("maintenance");
+  });
+});
+
+describe("locationId (GAP-ASSETS-LOCATIONS-03)", () => {
+  it("carries the registered location id and omits it when absent", () => {
+    expect(mapAssetSummaries({ data: [row({ locationId: "loc-1", location: "Block A" })] })![0]).toMatchObject({ locationId: "loc-1", location: "Block A" });
+    expect(mapAssetSummaries({ data: [row({ locationId: null })] })![0]).not.toHaveProperty("locationId");
+  });
+});
+
 describe("barcode (GAP-ASSETS-FIXED-ASSETS-03 / DETAIL-08)", () => {
   it("maps a real barcode and omits the field when there is none", () => {
     expect(mapAssetSummaries({ data: [row({ barcode: "AST-1-BC" })] })![0]!.barcode).toBe("AST-1-BC");

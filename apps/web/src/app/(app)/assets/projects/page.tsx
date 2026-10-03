@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { DataSourceBadge } from "@/app/_components/DataSourceBadge";
 import { PageHeader, StatGrid, StatCard, Card } from "@/app/_components/ds";
 import { LoadErrorState } from "@/app/_components/ds/LoadErrorState";
@@ -19,11 +21,24 @@ async function getAucProjects(): Promise<LoaderResult<AucRow[]>> {
   });
 }
 
+/** GAP-ASSETS-PROJECTS-09: per-tenant maker-checker setting; defaults ON when it cannot be read (the service decides anyway). */
+async function getMakerChecker(): Promise<boolean> {
+  const res = await fetchJson<unknown, { capitalizeMakerChecker: boolean }>("/api/v1/asset/settings", { capitalizeMakerChecker: true }, {
+    telemetryKey: "assets.settings",
+    mapResponse: (p) => (typeof p === "object" && p !== null && typeof (p as { capitalizeMakerChecker?: unknown }).capitalizeMakerChecker === "boolean"
+      ? { capitalizeMakerChecker: (p as { capitalizeMakerChecker: boolean }).capitalizeMakerChecker } : null),
+  });
+  return res?.data?.capitalizeMakerChecker !== false;
+}
+
 export default async function ProjectsAucPage() {
+  const t = await getTranslations("assetsGl");
   const result = await getAucProjects();
   const { data: rows, source } = result;
+  const makerChecker = await getMakerChecker();
 
-  const underConstruction = rows.filter((r) => r.status === "under_construction");
+  // A project awaiting approval is still WIP (nothing has been posted yet).
+  const underConstruction = rows.filter((r) => r.status === "under_construction" || r.status === "pending_capitalization");
   const capitalized = rows.filter((r) => r.status === "capitalized");
   const accumulatedTotal = underConstruction.reduce((sum, r) => sum + BigInt(r.accumulatedMinor), 0n);
 
@@ -34,7 +49,12 @@ export default async function ProjectsAucPage() {
         subtitle="Assets under construction — accumulate WIP, then capitalize to the fixed-asset register with dual-book depreciation."
         back="/assets"
         backLabel="Assets"
-        actions={source === "error" ? <DataSourceBadge source="error" /> : null}
+        actions={
+          <>
+            <Link href="/assets/settings" className="btn ghost">{t("settingsLink")}</Link>
+            {source === "error" ? <DataSourceBadge source="error" /> : null}
+          </>
+        }
       />
 
       <StatGrid>
@@ -66,7 +86,7 @@ export default async function ProjectsAucPage() {
         {source === "error" ? (
           <LoadErrorState result={result} area="AUC projects" backHref="/assets" backLabel="Assets" />
         ) : (
-          <AucTable rows={rows} />
+          <AucTable rows={rows} makerChecker={makerChecker} />
         )}
       </Card>
     </div>

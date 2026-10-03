@@ -16,6 +16,18 @@ export async function insertWorkOrder(tx: Writer, row: WorkOrderInsert): Promise
   await tx.insert(assetWorkOrders).values(row);
 }
 
+/**
+ * GAP-ASSETS-MAINTENANCE-NEW-06: the open work order (if any) already raised for this
+ * asset + type. A second one is a duplicate; uq_work_orders_one_open_per_asset_type
+ * (migration 0036) is the race-safe backstop for the route's pre-check.
+ */
+export async function findOpenWorkOrderByAssetType(tenantId: string, assetId: string, type: string): Promise<{ id: string } | null> {
+  const rows = await scopedRead((tx) => tx.select({ id: assetWorkOrders.id }).from(assetWorkOrders)
+    .where(and(eq(assetWorkOrders.tenantId, tenantId), eq(assetWorkOrders.assetId, assetId),
+      eq(assetWorkOrders.maintenanceType, type), eq(assetWorkOrders.status, "open"))).limit(1));
+  return rows[0] ?? null;
+}
+
 export async function findWorkOrderById(id: string, tenantId: string): Promise<WorkOrderRow | null> {
   // scopedRead() so wrapWithTenantGuc injects app.tenant_id before this
   // read — a bare db.select() runs with no RLS GUC set.

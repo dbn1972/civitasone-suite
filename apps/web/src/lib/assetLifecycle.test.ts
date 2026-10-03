@@ -21,6 +21,16 @@ describe("assetActionScope / isTerminalAsset (GAP-ASSETS-DETAIL-05)", () => {
   });
 });
 
+describe("lost / scrapped (GAP-ASSETS-LIST-04)", () => {
+  it("scrapped is terminal; lost allows tagging only until it is found or written off", () => {
+    expect(isTerminalAsset("scrapped")).toBe(true);
+    expect(assetActionScope("scrapped")).toBe("none");
+    expect(isTerminalAsset("lost")).toBe(false);
+    expect(assetActionScope("lost")).toBe("tag-only");
+    expect(assetActionScope("unknown")).toBe("full");
+  });
+});
+
 describe("deriveLifecycle (GAP-ASSETS-DETAIL-08)", () => {
   const step = (steps: ReturnType<typeof deriveLifecycle>, label: string) => steps.find((s) => s.label === label)!;
 

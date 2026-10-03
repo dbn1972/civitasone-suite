@@ -279,6 +279,16 @@ export function canWriteAssets(roles: readonly string[]): boolean {
 }
 
 /**
+ * fp-assets-01: roles asset-service admits on the asset SETTINGS routes (GL heads, capitalisation approval control)
+ * and as the capitalisation approver (APPROVER_ROLES in the enterprise routes module). Client gate is UX only.
+ */
+export const ASSET_APPROVER_ROLES = ["asset_admin", "super_admin"] as const;
+
+export function canManageAssetSettings(roles: readonly string[]): boolean {
+  return roles.some((r) => (ASSET_APPROVER_ROLES as readonly string[]).includes(r));
+}
+
+/**
  * GAP-FINANCE-BUDGET-SANCTIONS-04: roles finance-service lets POST
  * /v1/finance/sanctions (budget/routes.ts FINANCE_ROLES). The read-only budget
  * roles (audit_officer, procurement_officer, ...) can open the sanctions list

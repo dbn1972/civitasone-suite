@@ -1756,9 +1756,15 @@ export type AssetSummary = {
   location?: string;
   assignedTo?: string;
   department?: string;
-  status: "active" | "in_use" | "maintenance" | "disposed" | "condemned" | "written_off";
+  /**
+   * "unknown" is a status the backend sent that this UI does not recognise (GAP-ASSETS-LIST-04): it is shown as
+   * such, never folded into "active". lost / scrapped are real asset-service statuses (migration 0011).
+   */
+  status: "active" | "in_use" | "maintenance" | "disposed" | "condemned" | "written_off" | "lost" | "scrapped" | "unknown";
   /** Barcode/QR tag when the asset has been tagged (GAP-ASSETS-FIXED-ASSETS-03). */
   barcode?: string;
+  /** The registered functional location the asset sits in (GAP-ASSETS-LOCATIONS-03); `location` is its display text. */
+  locationId?: string;
   condition?: "excellent" | "good" | "fair" | "poor";
 };
 

@@ -4316,6 +4316,44 @@ export async function getAssetCategories(): Promise<LoaderResult<AssetCategoryOp
   });
 }
 
+/**
+ * GAP-ASSETS-LOCATIONS-03: active functional locations the register form places an asset in.
+ * The API caps a page at 100, so walk the pages; a failure anywhere is a failure (source "error"), never a short list.
+ */
+export type AssetLocationOption = { id: string; code: string; name: string; parentId: string | null };
+
+export function mapAssetLocations(payload: unknown): AssetLocationOption[] | null {
+  const rows = getArrayPayload(payload);
+  if (!rows) return null;
+  const out: AssetLocationOption[] = [];
+  for (const r of rows) {
+    if (!isRecord(r)) continue;
+    const id = toText(r.id);
+    const code = toText(r.code);
+    const name = toText(r.name);
+    if (!id || !code || !name || r.isActive === false) continue;
+    out.push({ id, code, name, parentId: toText(r.parentId) });
+  }
+  return out;
+}
+
+export async function getAssetLocations(): Promise<LoaderResult<AssetLocationOption[]>> {
+  const PAGE = 100;
+  const all: AssetLocationOption[] = [];
+  for (let page = 0; page < 50; page++) {
+    let raw = 0;
+    const res = await fetchJson<unknown, AssetLocationOption[]>(`/api/v1/asset/locations?active=true&limit=${PAGE}&offset=${page * PAGE}`, [], {
+      revalidateSeconds: 60,
+      telemetryKey: "assets.locations",
+      mapResponse: (p) => { raw = getArrayPayload(p)?.length ?? 0; return mapAssetLocations(p); },
+    });
+    if (res.source === "error") return { ...res, data: [] };
+    all.push(...res.data);
+    if (raw < PAGE) return { ...res, data: all };
+  }
+  return { data: all, source: "api" } as LoaderResult<AssetLocationOption[]>;
+}
+
 export async function getAssetMaintenance(): Promise<LoaderResult<MaintenanceSummary[]>> {
   return fetchJson<unknown, MaintenanceSummary[]>("/api/v1/asset/maintenance", [], {
     revalidateSeconds: 120,

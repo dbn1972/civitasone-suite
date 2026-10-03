@@ -22,6 +22,11 @@ export async function getAsset(tenantId: string, id: string): Promise<AssetRow |
   return row ? hydrateBookValue(row) : null;
 }
 
+export async function countAssets(tenantId: string, opts?: { category?: string; status?: string; type?: string; search?: string }): Promise<number> {
+  const key = cache.listKey(tenantId, "asset", `total:${JSON.stringify(opts ?? {})}`);
+  return (await cache.getOrLoad(key, () => repo.countAssetsByTenant(tenantId, opts))) ?? 0;
+}
+
 export async function listAssets(tenantId: string, opts?: { category?: string; status?: string; type?: string; search?: string; limit?: number; offset?: number }): Promise<AssetRow[]> {
   const key = cache.listKey(tenantId, "asset", JSON.stringify(opts ?? {}));
   const rows = (await cache.getOrLoad(key, () => repo.findAssetsByTenant(tenantId, opts))) ?? [];

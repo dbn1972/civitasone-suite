@@ -14,6 +14,7 @@ import { z } from "zod";
 import { resolveContext, requireRole, HttpError, financeErrorHandler } from "../../shared/context.js";
 import { createBudgetBody, reappropriateBody, createSanctionBody, budgetQueryParams, idParam, updateHeadHoABody, rejectSanctionBody, submitReappropriationBody } from "./validators.js";
 import * as repo from "./repo.js";
+import { systemHeads } from "../gl/system-heads.js";
 import { assertValidHeadParent, DomainError } from "./domain.js";
 
 const submitSanctionBody = z.object({ fileNo: z.string().trim().min(1).max(64).optional() });
@@ -211,6 +212,14 @@ export async function budgetRoutes(app: FastifyInstance): Promise<void> {
 
 
   // ── Budget heads (accounts) CRUD ─────────────────────────────────────────────
+  // The codes finance posts depreciation / disposals to. asset-service reads them (internal path) to refuse the
+  // accumulated-depreciation account as a capitalisation / lease head instead of keeping its own copy.
+  app.get("/v1/finance/accounts/system-heads", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    return reply.send(systemHeads());
+  });
+
   // GET /v1/finance/accounts/:id — get a single budget head by UUID
   app.get("/v1/finance/accounts/:id", async (req, reply) => {
     const ctx = resolveContext(req);

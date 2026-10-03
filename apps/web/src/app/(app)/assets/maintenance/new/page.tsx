@@ -15,6 +15,7 @@ import type { EntityOption } from "../../../../_components/ds";
 import { PermissionDenied } from "../../../../_components/PermissionDenied";
 import { toHumanError } from "@/lib/messages";
 import { useFormError } from "@/lib/useFormError";
+import { errorCodeFromResponse } from "@/lib/api/browserClient";
 import { searchAssets, resolveAssets } from "@/lib/entityAdapters/assetPicker";
 import {
   MAINTENANCE_TYPES,
@@ -97,6 +98,11 @@ function NewWorkOrderForm() {
       setConfirmOpen(false);
       if (!(res.ok || res.status === 202)) {
         setIsError(true);
+        // GAP-ASSETS-MAINTENANCE-NEW-06: the service allows one open work order per asset and type.
+        if ((await errorCodeFromResponse(res)) === "DUPLICATE_OPEN_WORK_ORDER") {
+          setMessage("An open maintenance job of this type already exists for this asset. Complete or close it before logging another.");
+          return;
+        }
         setMessage((await formError.fromResponse(res, "save")).message);
         return;
       }

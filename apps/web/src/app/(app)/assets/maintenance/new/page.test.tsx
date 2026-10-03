@@ -13,11 +13,11 @@ const ASSET = "11111111-2222-3333-4444-555555555555";
 type Call = { url: string; init?: RequestInit };
 let calls: Call[] = [];
 
-function mockFetch(opts: { searchStatus?: number; postStatus?: number } = {}) {
+function mockFetch(opts: { searchStatus?: number; postStatus?: number; postBody?: string } = {}) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
     const url = String(input);
     calls.push({ url, init });
-    if (url.includes("/v1/asset/work-orders")) return new Response("{}", { status: opts.postStatus ?? 202 });
+    if (url.includes("/v1/asset/work-orders")) return new Response(opts.postBody ?? "{}", { status: opts.postStatus ?? 202 });
     if (url.includes(`/v1/asset/assets/${ASSET}`)) return new Response(JSON.stringify({ id: ASSET, code: "DG-062", name: "Generator" }), { status: 200 });
     if (url.includes("/v1/asset/assets")) {
       if (opts.searchStatus && opts.searchStatus !== 200) return new Response("{}", { status: opts.searchStatus });
@@ -30,6 +30,18 @@ function mockFetch(opts: { searchStatus?: number; postStatus?: number } = {}) {
 describe("NewWorkOrderPage", () => {
   beforeEach(() => { calls = []; search = ""; });
   afterEach(() => vi.restoreAllMocks());
+
+  // GAP-ASSETS-MAINTENANCE-NEW-06
+  it("explains a duplicate open work order in plain words (409), not a generic failure", async () => {
+    search = `type=breakdown&assetId=${ASSET}`;
+    mockFetch({ postStatus: 409, postBody: JSON.stringify({ code: "DUPLICATE_OPEN_WORK_ORDER", message: "an open work order of this type already exists for this asset" }) });
+    render(<NewWorkOrderPage />);
+    await waitFor(() => expect(screen.getByRole("button", { name: "Log job" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Log job" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Confirm" }));
+    expect(await screen.findByText(/An open maintenance job of this type already exists for this asset/)).toBeInTheDocument();
+    expect(screen.queryByText(/DUPLICATE_OPEN_WORK_ORDER/)).not.toBeInTheDocument();
+  });
 
   it("preselects Preventive from ?type= and titles the page accordingly (GAP-ASSETS-MAINTENANCE-01)", async () => {
     search = "type=preventive";

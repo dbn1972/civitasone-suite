@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { getAssetById } from "../../../_data/loaders";
 import { PageHeader, StatusPill, EmptyState, DataTable, RefreshErrorState } from "../../../_components/ds";
@@ -83,7 +84,7 @@ export default async function AssetDetailPage({ params }: { params: { id: string
             <div className="card-h"><h3>Details</h3></div>
             <div className="fields">
               <div className="fld"><div className="l">Category</div><div className="v">{asset.category}</div></div>
-              <div className="fld"><div className="l">Location</div><div className="v">{asset.location ?? "—"}</div></div>
+              <div className="fld"><div className="l">Location</div><div className="v">{asset.locationId ? <Link href="/assets/locations">{asset.location ?? "View location"}</Link> : (asset.location ?? "—")}</div></div>
               <div className="fld"><div className="l">Serial No / Barcode</div><div className="v">{asset.serialNo ?? asset.barcode ?? "—"}</div></div>
               <div className="fld"><div className="l">Acquired</div><div className="v">{formatIndianDate(asset.purchaseDate)}</div></div>
               <div className="fld"><div className="l">Purchase cost</div><div className="v">{formatMoney(asset.purchaseCost)}</div></div>

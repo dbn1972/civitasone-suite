@@ -10,17 +10,58 @@ import * as registerRepo from "../register/repo.js";
 import { makeBarcode } from "../register/consumer.js";
 import { uuidV5 } from "../../shared/ids.js";
 import { bulkImportBody, duplicateCodes, summariseCodes, parseIdempotencyKey } from "./bulk-import.js";
+import { isRealDateNotAfterToday, todayIST } from "../../shared/dates.js";
+import { buildLeaseSchedule, type LeaseFrequency } from "./lease-domain.js";
+import { requireGlHeads, reasonMessage, assertDistinctHeads, headsFromSettings, ALL_HEAD_KINDS } from "./gl-heads.js";
+import { validateHead, type HeadKind } from "../../shared/finance-client.js";
 
 const ASSET_ROLES = ["asset_manager", "asset_admin", "super_admin"];
 const READER_ROLES = [...ASSET_ROLES, "audit_officer", "finance_officer"];
 const DEFAULT_IT_CATEGORY = "77777777-0001-0000-0000-000000000001";
+// Checker roles for AUC capitalisation (the maker may be any ASSET_ROLES member).
+const APPROVER_ROLES = ["asset_admin", "super_admin"];
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+const leaseBody = z.object({
+  leaseNo: z.string().trim().min(1).max(64),
+  lessorName: z.string().trim().min(1).max(256),
+  rouCostMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
+  // Optional when ibrBps + paymentMinor are given: the service then discounts the payments itself.
+  liabilityMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  leaseStart: isoDate,
+  leaseEnd: isoDate,
+  ibrBps: z.number().int().min(0).max(10_000).optional(),
+  paymentMinor: z.number().int().positive().max(Number.MAX_SAFE_INTEGER).optional(),
+  paymentFrequency: z.enum(["monthly", "quarterly", "annual"]).default("monthly"),
+}).refine((b) => (b.ibrBps === undefined) === (b.paymentMinor === undefined), {
+  message: "ibrBps and paymentMinor must be given together",
+}).refine((b) => b.liabilityMinor !== undefined || b.ibrBps !== undefined, {
+  message: "give liabilityMinor, or ibrBps with paymentMinor",
+}).refine((b) => b.leaseEnd > b.leaseStart, { message: "leaseEnd must be after leaseStart" });
+
+/** Discount the payments when the body carries an IBR; null for a manual-liability lease. */
+function scheduleFor(b: z.infer<typeof leaseBody>) {
+  if (b.ibrBps === undefined || b.paymentMinor === undefined) return null;
+  try {
+    return buildLeaseSchedule({
+      leaseStart: b.leaseStart, leaseEnd: b.leaseEnd, paymentMinor: BigInt(b.paymentMinor),
+      ibrBps: b.ibrBps, frequency: b.paymentFrequency as LeaseFrequency,
+    });
+  } catch (e) {
+    throw new HttpError(400, "INVALID_LEASE_TERMS", e instanceof Error ? e.message : "invalid lease terms");
+  }
+}
 
 export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.get("/v1/assets/scan/:barcode", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, READER_ROLES);
     const { barcode } = z.object({ barcode: z.string().min(1) }).parse(req.params);
+    // Lookup is tenant-scoped (WHERE tenant_id + FORCE RLS), so another tenant's barcode is a 404.
     const asset = await repo.findAssetByBarcode(ctx.tenantId, barcode);
+    // GAP-ASSETS-SCAN-06: every scan (hit or miss) is logged as physical-verification evidence.
+    // The route only publishes; the consumer writes the row.
+    await publishF3Write(ctx, "scan_log", randomUUID(), { barcode, assetId: asset?.id ?? null, found: !!asset });
     if (!asset) throw new HttpError(404, "NOT_FOUND", "no asset for barcode");
     return reply.send({ id: asset.id, code: asset.code, name: asset.name, barcode: asset.barcode, status: asset.status, bookValue: Number(asset.bookValue) });
   });
@@ -50,16 +91,167 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ASSET_ROLES);
     const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
     const auc = await repo.findAucById(id, ctx.tenantId);
-    if (!auc || auc.status !== "under_construction") throw new HttpError(404, "NOT_FOUND", "AUC not found");
+    if (!auc) throw new HttpError(404, "NOT_FOUND", "AUC not found");
+    if (auc.status !== "under_construction") throw new HttpError(409, "AUC_NOT_CAPITALIZABLE", `AUC is already ${auc.status.replace(/_/g, " ")}`);
+    const body = z.object({
+      // Both depreciation books start from this date; defaults to today (IST).
+      capitalizationDate: isoDate.refine((v) => isRealDateNotAfterToday(v), { message: "capitalizationDate must be a real date, not after today (IST)" }).optional(),
+      reason: z.string().trim().min(3).max(500),
+    }).parse(req.body);
+    const capitalizationDate = body.capitalizationDate ?? todayIST();
+    // No GL head defaults: refuse (409) until the CWIP head is configured and valid, so nothing can be capitalised
+    // without a journal that can post. (A zero-cost project has no journal.)
+    if (auc.accumulatedMinor > 0n) await requireGlHeads(ctx.tenantId, ["cwip", "fixed_asset"], ctx.correlationId);
+    const settings = await repo.getAssetSettings(ctx.tenantId);
+    if (settings?.capitalizeMakerChecker ?? true) {
+      // Maker step: the checker (a different asset_admin/super_admin) approves via /capitalize/approve.
+      await publishF3Write(ctx, "auc_capitalize_request", id, { aucId: id, capitalizationDate, reason: body.reason });
+      return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+    }
     const assetId = randomUUID();
-    await publishF3Write(ctx, "auc_capitalize", assetId, {
-      aucId: id,
-      assetId,
-      projectCode: auc.projectCode,
-      name: auc.name,
-      accumulatedMinor: auc.accumulatedMinor.toString(),
-    });
+    await publishF3Write(ctx, "auc_capitalize", assetId, { aucId: id, assetId, capitalizationDate, reason: body.reason });
     return sendAccepted(reply, acceptedResponseSchema, { id: assetId, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // GAP-ASSETS-PROJECTS-09: the checker. Maker != checker is enforced here AND by the consumer's conditional UPDATE.
+  app.post("/v1/assets/projects/auc/:id/capitalize/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const auc = await repo.findAucById(id, ctx.tenantId);
+    if (!auc) throw new HttpError(404, "NOT_FOUND", "AUC not found");
+    if (auc.status !== "pending_capitalization") throw new HttpError(409, "AUC_NOT_PENDING", "AUC is not awaiting capitalisation approval");
+    if (auc.capRequestedBy === ctx.actorId) throw new HttpError(403, "MAKER_CHECKER", "a different approver must approve this capitalisation");
+    if (auc.accumulatedMinor > 0n) await requireGlHeads(ctx.tenantId, ["cwip", "fixed_asset"], ctx.correlationId);
+    const assetId = randomUUID();
+    await publishF3Write(ctx, "auc_capitalize_approve", assetId, { aucId: id, assetId });
+    return sendAccepted(reply, acceptedResponseSchema, { id: assetId, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // Repost a FAILED capitalisation journal (e.g. after the chart of accounts was fixed). asset_admin only; the heads are
+  // re-validated; the consumer flips failed -> pending in one conditional UPDATE and re-enqueues the same journal.
+  app.post("/v1/assets/projects/auc/:id/journal/repost", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const auc = await repo.findAucById(id, ctx.tenantId);
+    if (!auc) throw new HttpError(404, "NOT_FOUND", "AUC not found");
+    if (auc.status !== "capitalized" || auc.glPostStatus !== "failed") throw new HttpError(409, "JOURNAL_NOT_FAILED", "the journal for this project is not in a failed state");
+    await requireGlHeads(ctx.tenantId, ["cwip", "fixed_asset"], ctx.correlationId);
+    await publishF3Write(ctx, "auc_journal_repost", id, { aucId: id });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  app.post("/v1/assets/projects/auc/:id/capitalize/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ reason: z.string().trim().min(3).max(500) }).parse(req.body);
+    const auc = await repo.findAucById(id, ctx.tenantId);
+    if (!auc) throw new HttpError(404, "NOT_FOUND", "AUC not found");
+    if (auc.status !== "pending_capitalization") throw new HttpError(409, "AUC_NOT_PENDING", "AUC is not awaiting capitalisation approval");
+    await publishF3Write(ctx, "auc_capitalize_reject", id, { aucId: id, reason: body.reason });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // Per-tenant asset policy: capitalisation maker-checker (default ON) and the GL heads (NO defaults; unset until configured).
+  app.get("/v1/assets/settings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const s = await repo.getAssetSettings(ctx.tenantId);
+    const pending = await repo.getPendingSettingRequest(ctx.tenantId);
+    return reply.send({
+      capitalizeMakerChecker: s?.capitalizeMakerChecker ?? true,
+      cwipAccountCode: s?.cwipAccountCode ?? null,
+      fixedAssetAccountCode: s?.fixedAssetAccountCode ?? null,
+      impairmentExpenseAccountCode: s?.impairmentExpenseAccountCode ?? null,
+      revaluationReserveAccountCode: s?.revaluationReserveAccountCode ?? null,
+      rouAccountCode: s?.rouAccountCode ?? null,
+      leaseLiabilityAccountCode: s?.leaseLiabilityAccountCode ?? null,
+      leaseOffsetAccountCode: s?.leaseOffsetAccountCode ?? null,
+      pendingMakerCheckerOff: pending ? { id: pending.id, requestedAt: pending.requestedAt, reason: pending.reason, requestedByMe: pending.requestedBy === ctx.actorId } : null,
+    });
+  });
+
+  const headCode = z.string().trim().regex(/^[A-Za-z0-9._-]{1,16}$/).nullable().optional();
+  app.patch("/v1/assets/settings", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const body = z.object({
+      capitalizeMakerChecker: z.boolean().optional(),
+      cwipAccountCode: headCode, fixedAssetAccountCode: headCode, impairmentExpenseAccountCode: headCode, revaluationReserveAccountCode: headCode, rouAccountCode: headCode, leaseLiabilityAccountCode: headCode, leaseOffsetAccountCode: headCode,
+      reason: z.string().trim().min(3).max(500),
+    }).refine((b) => Object.keys(b).some((k) => k !== "reason" && (b as Record<string, unknown>)[k] !== undefined), { message: "nothing to update" }).parse(req.body);
+    // Each head is checked against the finance chart of accounts BEFORE it is stored (exists, active, right type,
+    // not accumulated depreciation). Clearing a head (null) needs no check.
+    const kinds: Array<[HeadKind, keyof typeof body]> = [
+      ["cwip", "cwipAccountCode"], ["fixed_asset", "fixedAssetAccountCode"], ["impairment_expense", "impairmentExpenseAccountCode"], ["revaluation_reserve", "revaluationReserveAccountCode"], ["rou", "rouAccountCode"], ["lease_liability", "leaseLiabilityAccountCode"], ["lease_offset", "leaseOffsetAccountCode"],
+    ];
+    for (const [kind, field] of kinds) {
+      const code = body[field] as string | null | undefined;
+      if (typeof code !== "string") continue;
+      const check = await validateHead(ctx.tenantId, kind, code, ctx.correlationId);
+      if (!check.ok) {
+        if (check.reason === "UNAVAILABLE") throw new HttpError(503, "FINANCE_UNAVAILABLE", reasonMessage(kind, code, check));
+        throw new HttpError(409, "GL_HEAD_INVALID", reasonMessage(kind, code, check));
+      }
+    }
+    const current = await repo.getAssetSettings(ctx.tenantId);
+    // The resulting set of heads (current settings overlaid with this patch) must have no duplicates.
+    const merged = headsFromSettings(current, ALL_HEAD_KINDS);
+    for (const [kind, field] of kinds) {
+      const v = body[field] as string | null | undefined;
+      if (v === null) delete merged[kind];
+      else if (typeof v === "string") merged[kind] = v;
+    }
+    assertDistinctHeads(merged);
+    const turningOff = body.capitalizeMakerChecker === false;
+    if (turningOff) {
+      // Weakening the control needs a SECOND approver (same pending-request pattern as capitalisation itself).
+      if (!(current?.capitalizeMakerChecker ?? true)) throw new HttpError(409, "ALREADY_OFF", "capitalisation maker-checker is already off");
+      if (await repo.getPendingSettingRequest(ctx.tenantId)) throw new HttpError(409, "REQUEST_PENDING", "a request to switch maker-checker off is already awaiting approval");
+    }
+    const id = randomUUID();
+    const hasDirect = body.capitalizeMakerChecker === true || kinds.some(([, f]) => body[f] !== undefined);
+    if (hasDirect) {
+      await publishF3Write(ctx, "asset_settings_update", id, {
+        capitalizeMakerChecker: body.capitalizeMakerChecker === true ? true : undefined,
+        cwipAccountCode: body.cwipAccountCode, fixedAssetAccountCode: body.fixedAssetAccountCode, impairmentExpenseAccountCode: body.impairmentExpenseAccountCode,
+        revaluationReserveAccountCode: body.revaluationReserveAccountCode, rouAccountCode: body.rouAccountCode,
+        leaseLiabilityAccountCode: body.leaseLiabilityAccountCode, leaseOffsetAccountCode: body.leaseOffsetAccountCode, reason: body.reason,
+      });
+    }
+    let requestId: string | undefined;
+    if (turningOff) {
+      requestId = randomUUID();
+      await publishF3Write(ctx, "settings_off_request", requestId, { reason: body.reason });
+    }
+    return sendAccepted(reply, acceptedResponseSchema, { id: requestId ?? id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  app.post("/v1/assets/settings/requests/:id/approve", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ reason: z.string().trim().max(500).optional() }).parse(req.body ?? {});
+    const r = await repo.findSettingRequest(ctx.tenantId, id);
+    if (!r) throw new HttpError(404, "NOT_FOUND", "request not found");
+    if (r.status !== "pending") throw new HttpError(409, "REQUEST_NOT_PENDING", "this request has already been decided");
+    if (r.requestedBy === ctx.actorId) throw new HttpError(403, "MAKER_CHECKER", "a different approver must approve this request");
+    await publishF3Write(ctx, "settings_off_approve", id, { reason: body.reason ?? null });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  app.post("/v1/assets/settings/requests/:id/reject", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ reason: z.string().trim().min(3).max(500) }).parse(req.body);
+    const r = await repo.findSettingRequest(ctx.tenantId, id);
+    if (!r) throw new HttpError(404, "NOT_FOUND", "request not found");
+    if (r.status !== "pending") throw new HttpError(409, "REQUEST_NOT_PENDING", "this request has already been decided");
+    await publishF3Write(ctx, "settings_off_reject", id, { reason: body.reason });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 
   app.get("/v1/assets/leases", async (req, reply) => {
@@ -75,10 +267,18 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
   app.post("/v1/assets/leases", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, ASSET_ROLES);
-    const body = z.object({
-      leaseNo: z.string(), lessorName: z.string(), rouCostMinor: z.number().int().positive(),
-      liabilityMinor: z.number().int().positive(), leaseStart: z.string(), leaseEnd: z.string(),
-    }).parse(req.body);
+    const body = leaseBody.parse(req.body);
+    const schedule = scheduleFor(body);
+    // With an IBR the liability IS the present value of the payments; a different user-entered figure is rejected.
+    // Number.isSafeInteger(liabilityMinor) is enforced right below before it is published.
+    const liabilityMinor = schedule ? Number(schedule.liabilityMinor) : (body.liabilityMinor as number); // precision-ok
+    if (schedule && body.liabilityMinor !== undefined && body.liabilityMinor !== liabilityMinor) {
+      throw new HttpError(400, "LIABILITY_MISMATCH", `lease liability must equal the present value of the payments (${liabilityMinor} minor units)`);
+    }
+    if (liabilityMinor <= 0 || !Number.isSafeInteger(liabilityMinor)) throw new HttpError(400, "INVALID_LEASE_TERMS", "lease liability must be a positive amount");
+    // No GL head defaults: the ROU asset and lease liability heads (and the clearing head when ROU differs from the
+    // liability) must be configured and valid, or the lease is refused with 409 -- never recognised without a journal.
+    await requireGlHeads(ctx.tenantId, body.rouCostMinor === liabilityMinor ? ["rou", "lease_liability"] : ["rou", "lease_liability", "lease_offset"], ctx.correlationId);
     const leaseId = randomUUID();
     const assetId = randomUUID();
     const code = `ROU/${body.leaseNo}`;
@@ -88,13 +288,52 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
       leaseNo: body.leaseNo,
       lessorName: body.lessorName,
       rouCostMinor: body.rouCostMinor,
-      liabilityMinor: body.liabilityMinor,
+      liabilityMinor,
       leaseStart: body.leaseStart,
       leaseEnd: body.leaseEnd,
+      ...(schedule ? { ibrBps: body.ibrBps, paymentMinor: body.paymentMinor, paymentFrequency: body.paymentFrequency } : {}),
       code,
       usefulLifeYears: Math.max(1, Math.ceil((new Date(body.leaseEnd).getTime() - new Date(body.leaseStart).getTime()) / (365.25 * 86400000))),
     });
     return sendAccepted(reply, acceptedResponseSchema, { id: leaseId, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // Pure preview (no write): the discounted liability and amortisation schedule for the given terms.
+  app.post("/v1/assets/leases/:id/journal/repost", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, APPROVER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const lease = await repo.findLeaseById(ctx.tenantId, id);
+    if (!lease) throw new HttpError(404, "NOT_FOUND", "lease not found");
+    if (lease.glPostStatus !== "failed") throw new HttpError(409, "JOURNAL_NOT_FAILED", "the journal for this lease is not in a failed state");
+    await requireGlHeads(ctx.tenantId, lease.rouCostMinor === lease.liabilityMinor ? ["rou", "lease_liability"] : ["rou", "lease_liability", "lease_offset"], ctx.correlationId);
+    await publishF3Write(ctx, "lease_journal_repost", id, { leaseId: id });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  app.post("/v1/assets/leases/preview", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const body = leaseBody.parse(req.body);
+    const schedule = scheduleFor(body);
+    if (!schedule) throw new HttpError(400, "INVALID_LEASE_TERMS", "ibrBps and paymentMinor are needed to compute a schedule");
+    return reply.send({
+      liabilityMinor: schedule.liabilityMinor.toString(),
+      totalInterestMinor: schedule.totalInterestMinor.toString(),
+      periods: schedule.rows.length,
+    });
+  });
+
+  app.get("/v1/assets/leases/:id/schedule", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, READER_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    if (!(await repo.findLeaseById(ctx.tenantId, id))) throw new HttpError(404, "NOT_FOUND", "lease not found");
+    const rows = await repo.listLeaseSchedule(ctx.tenantId, id);
+    return reply.send({ data: rows.map((r) => ({
+      seq: r.seq, dueDate: r.dueDate, openingMinor: r.openingMinor.toString(), interestMinor: r.interestMinor.toString(),
+      paymentMinor: r.paymentMinor.toString(), principalMinor: r.principalMinor.toString(), closingMinor: r.closingMinor.toString(),
+    })) });
   });
 
   app.post("/v1/assets/assets/:id/impairment", async (req, reply) => {
@@ -104,6 +343,8 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ amountMinor: z.number().int().positive(), reason: z.string().optional(), eventDate: z.string().optional() }).parse(req.body);
     const asset = await registerRepo.findAssetById(id, ctx.tenantId);
     if (!asset) throw new HttpError(404, "NOT_FOUND", "asset not found");
+    // no default fixed-asset head: it must be configured (and valid) before a journal-posting write
+    await requireGlHeads(ctx.tenantId, ["fixed_asset", "impairment_expense"], ctx.correlationId);
     const before = asset.bookValue;
     const after = before - BigInt(body.amountMinor);
     if (after < 0n) throw new HttpError(400, "INVALID", "impairment exceeds book value");
@@ -128,6 +369,8 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const body = z.object({ newBookValueMinor: z.number().int().positive(), reason: z.string().optional() }).parse(req.body);
     const asset = await registerRepo.findAssetById(id, ctx.tenantId);
     if (!asset) throw new HttpError(404, "NOT_FOUND", "asset not found");
+    // no default fixed-asset head: it must be configured (and valid) before a journal-posting write
+    await requireGlHeads(ctx.tenantId, ["fixed_asset", "revaluation_reserve"], ctx.correlationId);
     const before = asset.bookValue;
     const after = BigInt(body.newBookValueMinor);
     const isUpward = after > before;
@@ -153,7 +396,8 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const q = req.query as { limit?: string; offset?: string };
     const limit = Math.min(100, Math.max(1, Number(q.limit) || 100));
     const offset = Math.max(0, Number(q.offset) || 0);
-    const rows = await repo.listLocations(ctx.tenantId, limit, offset);
+    const q2 = req.query as { active?: string };
+    const rows = await repo.listLocations(ctx.tenantId, limit, offset, q2.active === "true");
     return reply.send({ data: rows, limit, offset });
   });
 
@@ -190,6 +434,37 @@ export async function enterpriseRoutes(app: FastifyInstance): Promise<void> {
     const existing = await repo.findLocationById(ctx.tenantId, id);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "location not found");
     await publishF3Write(ctx, "location_update", id, { name: body.name, orgUnit: body.orgUnit === "" ? null : body.orgUnit });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  // GAP-ASSETS-LOCATIONS-02: deactivate instead of delete -- assets keep their reference, and the
+  // register picker stops offering the location. Refused while an active child location exists.
+  app.post("/v1/assets/locations/:id/deactivate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ASSET_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = z.object({ reason: z.string().trim().min(3).max(500) }).parse(req.body);
+    const loc = await repo.findLocationById(ctx.tenantId, id);
+    if (!loc) throw new HttpError(404, "NOT_FOUND", "location not found");
+    if (!loc.isActive) throw new HttpError(409, "ALREADY_INACTIVE", "location is already deactivated");
+    const children = await repo.listLocations(ctx.tenantId, 1000, 0, true);
+    if (children.some((c) => c.parentId === id)) throw new HttpError(409, "HAS_ACTIVE_CHILDREN", "deactivate the child locations first");
+    await publishF3Write(ctx, "location_deactivate", id, { reason: body.reason });
+    return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  app.post("/v1/assets/locations/:id/reactivate", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ASSET_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const loc = await repo.findLocationById(ctx.tenantId, id);
+    if (!loc) throw new HttpError(404, "NOT_FOUND", "location not found");
+    if (loc.isActive) throw new HttpError(409, "ALREADY_ACTIVE", "location is already active");
+    if (loc.parentId) {
+      const parent = await repo.findLocationById(ctx.tenantId, loc.parentId);
+      if (parent && !parent.isActive) throw new HttpError(409, "PARENT_INACTIVE", "reactivate the parent location first");
+    }
+    await publishF3Write(ctx, "location_reactivate", id, {});
     return sendAccepted(reply, acceptedResponseSchema, { id, status: "accepted", correlationId: ctx.correlationId });
   });
 

@@ -805,7 +805,7 @@ describe("Enterprise routes", () => {
     expect(res.statusCode).toBe(403);
   });
 
-  it("POST /v1/assets/leases → 202 or 500 (no DB)", async () => {
+  it("POST /v1/assets/leases → 409 GL_HEADS_NOT_CONFIGURED (no GL head defaults exist)", async () => {
     const res = await app.inject({
       method: "POST", url: "/v1/assets/leases",
       headers: authHeader(),
@@ -815,7 +815,8 @@ describe("Enterprise routes", () => {
         leaseStart: "2024-01-01", leaseEnd: "2027-01-01",
       },
     });
-    expect([202, 500]).toContain(res.statusCode);
+    expect(res.statusCode).toBe(409);
+    expect(JSON.parse(res.body).code).toBe("GL_HEADS_NOT_CONFIGURED");
   });
 
   it("POST /v1/assets/leases → 400 empty body", async () => {

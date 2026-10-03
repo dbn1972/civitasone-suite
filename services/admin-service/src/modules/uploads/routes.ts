@@ -10,6 +10,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { randomUUID } from "node:crypto";
 import { resolveContext, requireRole } from "../../shared/context.js";
+import { hasAnyRole } from "@civitasone/auth";
 import { presignedPutUrl, presignedGetUrl } from "@civitasone/storage";
 
 // Anyone who legitimately mints a presigned URL for these upload flows:
@@ -32,7 +33,12 @@ const ALL_ROLES = [
   "procurement_officer", "procurement_admin",
   "works_admin", "works_operator", "dao", "do", "sdo", "section_officer",
   "estab_officer", "estab_admin", "estab_deputy_secretary",
+  // GAP-ASSETS-INSURANCE-CLAIMS-06: asset staff attach supporting documents to insurance claims.
+  "asset_manager", "asset_admin",
 ];
+
+const ASSET_ONLY_ROLES = ["asset_manager", "asset_admin"];
+const NON_ASSET_ROLES = ALL_ROLES.filter((r) => !ASSET_ONLY_ROLES.includes(r));
 
 const ALLOWED_TYPES: Record<string, { maxSizeMb: number; extensions: string[] }> = {
   resume: { maxSizeMb: 5, extensions: ["pdf", "doc", "docx"] },
@@ -62,7 +68,9 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
       return reply.code(400).send({ code: "INVALID_FILE_TYPE", message: `Allowed types for ${body.category}: ${cat.extensions.join(", ")}` });
     }
 
-    const key = `uploads/${ctx.tenantId}/${body.category}/${randomUUID()}.${ext}`;
+    // The uploader's id is part of the key, so a consumer (e.g. an insurance claim) can require that an attached
+    // document is the caller's own upload.
+    const key = `uploads/${ctx.tenantId}/${body.category}/${ctx.actorId}/${randomUUID()}.${ext}`;
     
     const uploadUrl = await presignedPutUrl({
       key,
@@ -88,8 +96,14 @@ export async function uploadRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, ALL_ROLES);
     const key = (req.params as { key: string }).key;
     
-    // Validate the key belongs to this tenant
-    if (!key.includes(ctx.tenantId)) {
+    // Validate the key belongs to this tenant: it must START with this tenant's own prefix (key.includes() was
+    // forgeable by any key that merely contained the tenant id somewhere).
+    if (!key.startsWith(`uploads/${ctx.tenantId}/`)) {
+      return reply.code(403).send({ code: "FORBIDDEN", message: "access denied to this file" });
+    }
+    // Asset staff may open attachments / documents / photos, not resumes or other HR uploads.
+    const category = key.split("/")[2] ?? "";
+    if (!hasAnyRole(ctx, NON_ASSET_ROLES) && !["attachment", "document", "photo"].includes(category)) {
       return reply.code(403).send({ code: "FORBIDDEN", message: "access denied to this file" });
     }
 

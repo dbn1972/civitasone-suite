@@ -3,6 +3,8 @@
 import { useId, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button, Card, ConfirmDialog } from "@/app/_components/ds";
+import { FileUpload } from "@/app/_components/ds/FileUpload";
+import { addAttachment, removeAttachment, formatFileSize, CLAIM_ATTACHMENT_ACCEPT, MAX_CLAIM_ATTACHMENTS, type ClaimAttachment } from "./attachments";
 import { browserJson } from "@/lib/api/browserClient";
 import { formatIndianDate, formatMoney, todayIST } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
@@ -62,6 +64,7 @@ export function ClaimForm({
   const [claimDate, setClaimDate] = useState("");
   const [claimAmount, setClaimAmount] = useState("");
   const [notes, setNotes] = useState("");
+  const [attachments, setAttachments] = useState<ClaimAttachment[]>([]);
 
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -142,6 +145,7 @@ export function ClaimForm({
           claimAmountMinor: Number(claimAmountMinorStr), // safe-integer checked in handleSubmit
           currency: "INR",
           notes: notes.trim() || undefined,
+          attachments,
         }),
       });
       setConfirmOpen(false);
@@ -151,6 +155,7 @@ export function ClaimForm({
       setClaimDate("");
       setClaimAmount("");
       setNotes("");
+      setAttachments([]);
       setFieldErrors({});
       router.refresh();
     } catch (err) {
@@ -255,6 +260,32 @@ export function ClaimForm({
             <span id={`${notesId}-count`} style={{ fontSize: 12, color: "var(--ink2)" }}>
               {notes.length} / {CLAIM_NOTES_MAX}
             </span>
+          </div>
+
+          {/* GAP-ASSETS-INSURANCE-CLAIMS-06: supporting documents (FIR, photos, survey report), uploaded straight to storage. */}
+          <div style={{ display: "grid", gap: 6, gridColumn: "1 / -1" }}>
+            {attachments.length > 0 ? (
+              <ul aria-label="Attached documents" style={{ margin: 0, paddingLeft: 18, fontSize: 13 }}>
+                {attachments.map((a) => (
+                  <li key={a.key} style={{ marginBottom: 4 }}>
+                    {a.fileName} <span style={{ color: "var(--ink2)", fontSize: 12 }}>({formatFileSize(a.size)})</span>{" "}
+                    <Button type="button" size="sm" variant="ghost" aria-label={`Remove ${a.fileName}`} onClick={() => setAttachments((list) => removeAttachment(list, a.key))}>
+                      Remove
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {attachments.length < MAX_CLAIM_ATTACHMENTS ? (
+              <FileUpload
+                category="attachment"
+                accept={CLAIM_ATTACHMENT_ACCEPT}
+                label={`Supporting documents (optional, up to ${MAX_CLAIM_ATTACHMENTS})`}
+                onUploaded={(key, meta) => setAttachments((list) => addAttachment(list, { key, fileName: meta.fileName, size: meta.size, mimeType: meta.mimeType }))}
+              />
+            ) : (
+              <span style={{ fontSize: 12, color: "var(--ink2)" }}>Maximum of {MAX_CLAIM_ATTACHMENTS} documents attached.</span>
+            )}
           </div>
         </div>
 
