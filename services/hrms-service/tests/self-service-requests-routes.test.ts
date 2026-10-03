@@ -89,6 +89,17 @@ vi.mock("../src/shared/infra.js", () => ({
   queue: { publish: async () => {} },
 }));
 
+// GAP-HR-WFH-01: create now reads the wfh_eligibility policy and the employee's pay
+// level; this suite is about self-service scoping, so nobody is excluded here
+// (pay-level behaviour: src/__tests__/attendance-wfh-eligibility-real-db.test.ts).
+vi.mock("../src/modules/policy-settings/repo.js", () => ({
+  getPolicy: async () => ({ enforceGazettedExclusion: false, maxPayLevel: 9 }),
+}));
+vi.mock("../src/modules/attendance/wfh-eligibility.js", () => ({
+  isGazettedForWfh: () => false,
+  resolveEmployeePayLevel: async () => ({ payLevel: null }),
+}));
+
 import { buildApp } from "../src/app.js";
 
 const auth = (sub: string, roles: string[]) =>

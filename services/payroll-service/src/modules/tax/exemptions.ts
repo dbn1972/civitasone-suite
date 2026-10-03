@@ -171,8 +171,10 @@ export function computeLeaveEncashExemption(input: LeaveEncashExemptionInput): L
   // Multiply before dividing (LOW, payroll-calc audit): dividing the monthly
   // salary by 30 first truncated the per-day rate before scaling by
   // maxLeaveDays, under-stating this limb by a sub-rupee amount.
+  // GAP-HR-LEAVE-APPLY-05: balance may include a half day -> half-day units
+  // (identical result for whole-day balances).
   const maxLeaveDays = Math.min(leaveBalanceDays, completedYears * 30);
-  const cashEquivalentMinor = (avgSalaryLast10MonthsMinor * BigInt(maxLeaveDays)) / 30n;
+  const cashEquivalentMinor = (avgSalaryLast10MonthsMinor * BigInt(Math.round(maxLeaveDays * 2))) / 60n;
 
   // LEAST of four limbs
   const exempt = bigMin(

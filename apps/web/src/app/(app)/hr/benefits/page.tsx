@@ -73,6 +73,16 @@ async function getPlans(): Promise<BenefitPlan[]> {
   return r.data ?? [];
 }
 
+/**
+ * GAP-HR-BENEFITS-03: mirrors gap-features/routes.ts ALL_ROLES for
+ * GET /v1/hrms/benefits/my-elections. The /hr layout also admits
+ * payroll roles, tenant_admin and platform_admin to the page shell, but benefit
+ * elections are PERSONAL data (they need an employee record), so the backend
+ * deliberately does not widen to those roles -- they get an honest
+ * "access restricted" state (below) instead of a retryable load error.
+ */
+const BENEFITS_ROLES = ["hr_admin", "hr_officer", "super_admin", "manager", "employee"];
+
 export default async function BenefitsPage() {
   const t = await getTranslations("benefits");
   const labelFor = (key: string) => labelForComponent(key, t);
@@ -125,7 +135,10 @@ export default async function BenefitsPage() {
       <Card title={t("cardTitle")}>
         {errored ? (
           <div className="pad">
-            <LoadErrorState result={result} area="benefits" backHref="/hr" />
+            <LoadErrorState result={result} area="benefits" backHref="/hr" requiredRoles={BENEFITS_ROLES} />
+            {result.status === 403 && (
+              <p style={{ margin: "12px 0 0", fontSize: 13, color: "var(--ink2)" }}>{t("personalNote")}</p>
+            )}
           </div>
         ) : (
           <DataTable<Row>

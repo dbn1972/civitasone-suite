@@ -8,7 +8,7 @@ import { and, eq } from "drizzle-orm";
 import { COMMANDS, EVENTS } from "../../topics.js";
 import { hrmsLeaveApps, hrmsLeaveAllocs } from "./schema.js";
 import * as repo from "./repo.js";
-import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition } from "./domain.js";
+import { assertSufficientLeaveBalance, assertLeaveAppStatusTransition, effectiveBalanceDays, exactAppliedDays, blockingOverlaps, type LeaveDayPart } from "./domain.js";
 import { resolveAccumulationCap } from "./rules-engine.js";
 import { markLeaveDaysOnAttendance } from "../attendance/leave-sync.js";
 import { tenantScoped } from "../../shared/tenant-queue.js";
@@ -111,20 +111,66 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
     });
   });
 
+  // GAP-HR-LEAVE-APPLY-05: upsert the tenant's half-day / short-leave switch.
+  // Idempotent (markProcessed) + audited in the same transaction.
+  queue.subscribe(COMMANDS.leaveTenantConfigSet, async (msg) => {
+    const p = msg.payload as { tenantId: string; halfDayEnabled: boolean; shortLeaveEnabled: boolean };
+    await db.transaction(async (tx) => {
+      if (!(await markProcessed(tx, msg.messageId))) return;
+      await repo.upsertLeaveTenantConfig(tx, p.tenantId, { halfDayEnabled: p.halfDayEnabled, shortLeaveEnabled: p.shortLeaveEnabled }, msg.actorId);
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: "update", resourceType: "leave_tenant_config", resourceId: p.tenantId, outcome: "success",
+          metadata: { halfDayEnabled: p.halfDayEnabled, shortLeaveEnabled: p.shortLeaveEnabled },
+        },
+      });
+    });
+  });
+
   queue.subscribe(COMMANDS.leaveApply, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; employeeId: string; leaveTypeId: string;
       allocId: string; fromDate: string; toDate: string; daysApplied: number; reason?: string;
+      dayPart?: LeaveDayPart;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
+      // The route's overlap pre-check can race (two submits in flight). Serialise
+      // this employee's applications and re-check inside the transaction; a clash
+      // is recorded as a FAILED audit event and nothing is inserted. The only
+      // pair that may share a date is first_half + second_half (blockingOverlaps).
+      await repo.lockEmployeeLeave(tx, p.tenantId, p.employeeId);
+      const clashes = blockingOverlaps(
+        await repo.findOverlappingLeaveAppsTx(tx, p.tenantId, p.employeeId, p.fromDate, p.toDate),
+        { fromDate: p.fromDate, toDate: p.toDate, dayPart: p.dayPart ?? "full" },
+      );
+      if (clashes.length > 0) {
+        await enqueue(tx, {
+          topic: AUDIT, eventType: AUDIT,
+          tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+          payload: {
+            service: "hrms", action: "apply", resourceType: "leave_app", resourceId: p.id, outcome: "failure",
+            metadata: { reason: "LEAVE_OVERLAP", clashesWith: clashes[0]!.id },
+          },
+        });
+        return;
+      }
       const alloc = await repo.findAllocByIdTx(tx, p.allocId);
       if (!alloc) throw new Error(`leave alloc ${p.allocId} not found`);
-      assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: alloc.balanceDays }, p.daysApplied);
+      assertSufficientLeaveBalance({ totalDays: alloc.totalDays, balanceDays: effectiveBalanceDays(alloc) }, p.daysApplied);
+      // GAP-HR-LEAVE-APPLY-05: a fractional request keeps a whole-day CEIL
+      // shadow in days_applied and the exact 0.5-unit figure in the new
+      // numeric column; whole-day rows leave the new column NULL (unchanged).
+      const fractional = !Number.isInteger(p.daysApplied);
       await repo.insertLeaveApp(tx, {
         id: p.id, tenantId: p.tenantId, employeeId: p.employeeId,
         leaveTypeId: p.leaveTypeId, allocId: p.allocId,
-        fromDate: p.fromDate, toDate: p.toDate, daysApplied: p.daysApplied,
+        fromDate: p.fromDate, toDate: p.toDate,
+        daysApplied: Math.ceil(p.daysApplied),
+        daysAppliedExact: fractional ? p.daysApplied.toFixed(1) : null,
+        dayPart: p.dayPart ?? "full",
         reason: p.reason ?? null, status: "pending",
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
@@ -235,7 +281,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
         employeeId = app.employeeId;
         fromDate = app.fromDate;
         toDate = app.toDate;
-        await repo.debitLeaveBalance(tx, app.allocId, app.daysApplied);
+        await repo.debitLeaveBalance(tx, app.allocId, exactAppliedDays(app));
         // H2: race-safe approve — WHERE id = $1 AND status = 'pending' ensures only
         // one concurrent worker succeeds; the other gets rowsAffected = 0 and aborts.
         const rowsAffected = await repo.approveLeaveApp(tx, p.id, { status: "approved", approvedBy: p.approvedBy, updatedBy: msg.actorId });
@@ -246,6 +292,8 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
           fromDate: app.fromDate,
           toDate: app.toDate,
           actorId: msg.actorId,
+          // A half-day / short leave must not blank the whole day's attendance.
+          dayPart: app.dayPart as LeaveDayPart,
         });
         await enqueue(tx, {
           topic: EVENTS.leaveApproved, eventType: EVENTS.leaveApproved,
@@ -256,7 +304,9 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
           // .../leave-types/:id/lop-fraction-bps lookup) before deciding how
           // much of daysApplied counts toward Loss-of-Pay -- previously
           // every approved day counted in full, regardless of leave type.
-          payload: { leaveAppId: p.id, employeeId: app.employeeId, leaveTypeId: app.leaveTypeId, daysApplied: app.daysApplied, fromDate: app.fromDate, toDate: app.toDate },
+          // GAP-HR-LEAVE-APPLY-05: daysExact (0.5 granularity) is what payroll must
+          // use for LOP; daysApplied stays the whole-day CEIL shadow for old consumers.
+          payload: { leaveAppId: p.id, employeeId: app.employeeId, leaveTypeId: app.leaveTypeId, daysApplied: app.daysApplied, daysExact: exactAppliedDays(app), dayPart: app.dayPart, fromDate: app.fromDate, toDate: app.toDate },
         });
         await enqueue(tx, {
           topic: NOTIFICATION_SEND, eventType: NOTIFICATION_SEND,
@@ -265,7 +315,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
             eventType: "hrms.leave.approved",
             recipient: app.employeeId,
             recipientId: app.employeeId,
-            variables: { leaveAppId: p.id, days: String(app.daysApplied) },
+            variables: { leaveAppId: p.id, days: String(exactAppliedDays(app)) },
           }),
         });
         await audit(tx, msg, "approve", "leave_app", p.id);
@@ -357,7 +407,7 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
           // module's repo.ts (H7 fix) — safe under concurrency because
           // Postgres serializes the two UPDATEs via row-level locking on
           // commit instead of relying on an out-of-transaction JS read.
-          await repo.creditLeaveBalance(tx, alloc.id, application.daysApplied);
+          await repo.creditLeaveBalance(tx, alloc.id, exactAppliedDays(application));
         }
       }
       await enqueue(tx, {

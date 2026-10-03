@@ -1,3 +1,4 @@
+import { useDays } from "./useDays";
 interface Props {
   headcount: number | null | undefined;
   headcountLastMonth: number | null | undefined;
@@ -30,6 +31,7 @@ export function HRKPIStrip({
   headcount, headcountLastMonth, pendingLeaves, onLeave,
   departments, attendanceTodayPct, payrollDaysLeft,
 }: Props) {
+  const formatDays = useDays();
   const hcDelta = hasValue(headcount) && hasValue(headcountLastMonth)
     ? headcount - headcountLastMonth
     : null;
@@ -85,7 +87,7 @@ export function HRKPIStrip({
           Days left in month
         </div>
         {/* GAP-HR-DASHBOARD-05: was the unpluralized literal "{payrollDaysLeft} days" (1 -> "1 days"). */}
-        <div className="kpi-val kpi-val-sm">{payrollDaysLeft} day{payrollDaysLeft !== 1 ? "s" : ""}</div>
+        <div className="kpi-val kpi-val-sm">{formatDays(payrollDaysLeft)}</div>
         <div className="kpi-trend trend-flat">End of month</div>
       </div>
 

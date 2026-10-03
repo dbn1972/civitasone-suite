@@ -56,6 +56,10 @@ const CODE_TO_KIND: Record<string, MessageKind> = {
   // duplicate code; the field-level message (under Code) comes from
   // `fieldErrors` regardless, this only shapes the top-of-form summary line.
   DUPLICATE_CODE: "conflict",
+  // fin-hr-02: duplicate shift name (GAP-HR-SHIFTS-01) / duplicate transfer
+  // order number (GAP-HR-TRANSFER-02) -- both are 409 "already exists" cases.
+  SHIFT_NAME_EXISTS: "conflict",
+  ORDER_NO_EXISTS: "conflict",
 };
 
 /**

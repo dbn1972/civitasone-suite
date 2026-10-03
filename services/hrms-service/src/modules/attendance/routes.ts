@@ -7,12 +7,14 @@ import {sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import type { RequestContext } from "@civitasone/types";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { publishF3Write } from "../../shared/f3-publish.js";
-import { markAttendanceBody, regularisationCreateBody, periodLockBody, type ResolvedRegularisationBody } from "./validators.js";
+import { markAttendanceBody, regularisationCreateBody, periodLockBody, createShiftBody, updateShiftBody, type ResolvedRegularisationBody } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import * as employeeRepo from "../employee/repo.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { getPolicy } from "../policy-settings/repo.js";
+import { isGazettedForWfh, resolveEmployeePayLevel } from "./wfh-eligibility.js";
 import { scopedRead } from "../../shared/db.js";
 import { batchEmployees } from "../../shared/batch-resolve.js";
 import { hrmsOvertimeRequests, hrmsWfhRequests, hrmsShiftChangeRequests, hrmsAttendanceRegularisations } from "./schema.js";
@@ -402,6 +404,42 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     return reply.send({ data: await repo.listShifts(ctx.tenantId) });
   });
 
+  // GAP-HR-SHIFTS-01: shift definition CRUD. HR only; the write is a command
+  // (consumer inserts/updates in a transaction and emits the audit event with
+  // before/after). Editing a shift changes the definition going forward only:
+  // nothing in hrms-service re-derives past attendance from hrms_shifts (late
+  // marking reads recorded punches), so no history is rewritten.
+  app.post("/v1/hrms/shifts", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const body = createShiftBody.parse(req.body);
+    if (await repo.findShiftByName(ctx.tenantId, body.name)) {
+      throw new HttpError(409, "SHIFT_NAME_EXISTS", `a shift named '${body.name}' already exists`);
+    }
+    const id = randomUUID();
+    await publishF3Write(ctx, "attendance_shifts__create", id, { body });
+    return reply.code(202).send({ id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
+  app.patch("/v1/hrms/shifts/:id", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, HR_ROLES);
+    const { id } = z.object({ id: z.string().uuid() }).parse(req.params);
+    const body = updateShiftBody.parse(req.body);
+    const existing = await repo.findShiftById(ctx.tenantId, id);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "shift not found");
+    const nextStart = body.startTime ?? existing.startTime.slice(0, 5);
+    const nextEnd = body.endTime ?? existing.endTime.slice(0, 5);
+    if (nextStart === nextEnd) throw new HttpError(422, "SHIFT_TIMES_EQUAL", "startTime and endTime must differ");
+    if (body.name && body.name.toLowerCase() !== existing.name.toLowerCase()) {
+      if (await repo.findShiftByName(ctx.tenantId, body.name)) {
+        throw new HttpError(409, "SHIFT_NAME_EXISTS", `a shift named '${body.name}' already exists`);
+      }
+    }
+    await publishF3Write(ctx, "attendance_shifts__update", id, { body });
+    return reply.code(202).send({ id, status: "accepted", correlationId: ctx.correlationId });
+  });
+
   app.get("/v1/hrms/shift-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "manager", "employee"]);
@@ -662,6 +700,35 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
   //     already-decided OT request can currently be silently re-decided.
   //  2. approve/reject also reject the actor deciding their own request --
   //     no existing precedent in this module checks that at all.
+  // GAP-HR-WFH-01: what the request form needs to render honest eligibility
+  // (pay level when known, this week's count) -- same self-or-HR guard as the
+  // POST it informs, so an employee can only ask about themselves.
+  app.get("/v1/hrms/wfh-eligibility", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, [...HR_ROLES, "employee"]);
+    const q = z.object({ employeeId: z.string().uuid() }).parse(req.query);
+    await assertSelfOrHr(ctx, q.employeeId, "check WFH eligibility");
+    const policy = await getPolicy(ctx.tenantId, "wfh_eligibility");
+    const { payLevel } = await resolveEmployeePayLevel(ctx.tenantId, q.employeeId);
+    const { start, end } = isoWeekBoundsUtc(new Date().toISOString().slice(0, 10));
+    const week = await scopedRead((tx) => tx.select({ id: hrmsWfhRequests.id }).from(hrmsWfhRequests)
+      .where(and(
+        eq(hrmsWfhRequests.tenantId, ctx.tenantId),
+        eq(hrmsWfhRequests.employeeId, q.employeeId),
+        inArray(hrmsWfhRequests.status, ["pending", "approved"]),
+        gte(hrmsWfhRequests.fromDate, start),
+        lte(hrmsWfhRequests.fromDate, end),
+      )));
+    return reply.send({
+      payLevel,
+      maxPayLevel: policy.maxPayLevel,
+      enforceGazettedExclusion: policy.enforceGazettedExclusion,
+      gazetted: isGazettedForWfh(payLevel, policy),
+      weeklyWfhCount: week.length,
+      weeklyCap: 2,
+    });
+  });
+
   app.post("/v1/hrms/wfh-requests", async (req, reply) => {
     const ctx = resolveContext(req);
     requireRole(ctx, [...HR_ROLES, "employee"]);
@@ -676,19 +743,21 @@ export async function attendanceRoutes(app: FastifyInstance): Promise<void> {
     // IDOR guard: employees may only submit WFH requests for themselves.
     await assertSelfOrHr(ctx, body.employeeId, "create WFH requests");
 
-    // GAP-HR-WFH-01 (partial — weekly cap only). DoPT OM 2022 caps WFH at 2
-    // days/week; the OTHER half of this gap (reject gazetted/Level>10 staff
-    // outright) is deliberately NOT enforced here and left open: neither
-    // hrms_employees nor hrms_designations exposes a column confirmed to be
-    // the GoI pay-matrix level this policy means (designations only has
-    // `level`/`payGrade`, whose mapping to it was never verified against a
-    // real data source — see this gap's catalogue entry) — guessing wrong
-    // would wrongly block or allow employees, which is worse than leaving it
-    // open. The weekly cap below is safe to enforce regardless: it only ever
-    // adds a restriction, never grants the gazetted exemption this doesn't
-    // check. Coarse Mon-Sun UTC week boundary (not IST-precise) — same
-    // "don't let this slip through" philosophy already used by the overtime
-    // future-date guard above, not a display-facing date computation.
+    // GAP-HR-WFH-01. Two DoPT WFH rules, both enforced server-side:
+    //  (1) gazetted staff are excluded: the employee's designation `level` is the
+    //      7th CPC pay-matrix level (1-18; 0 = unclassified, never blocked --
+    //      see wfh-eligibility.ts); the threshold (default: Level 10 and above excluded) and
+    //      an on/off switch are per-tenant policy (wfh_eligibility);
+    //  (2) the 2-requests-per-ISO-week cap (DoPT OM 2022) below.
+    // Coarse Mon-Sun UTC week boundary (not IST-precise) -- same "don't let this
+    // slip through" philosophy already used by the overtime future-date guard
+    // above, not a display-facing date computation.
+    const wfhPolicy = await getPolicy(ctx.tenantId, "wfh_eligibility");
+    const { payLevel } = await resolveEmployeePayLevel(ctx.tenantId, body.employeeId);
+    if (isGazettedForWfh(payLevel, wfhPolicy)) {
+      throw new HttpError(422, "GAZETTED_NOT_ELIGIBLE",
+        `work from home is not available at pay Level ${payLevel} (eligible up to Level ${wfhPolicy.maxPayLevel})`);
+    }
     const { start: weekStart, end: weekEnd } = isoWeekBoundsUtc(body.fromDate);
     const sameWeek = await scopedRead((tx) => tx.select({ id: hrmsWfhRequests.id }).from(hrmsWfhRequests)
       .where(and(

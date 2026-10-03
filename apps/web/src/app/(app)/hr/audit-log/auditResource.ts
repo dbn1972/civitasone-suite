@@ -65,10 +65,13 @@ export const HR_AUDIT_RESOURCE_TYPES = [
   "leave_app",
   "leave_application",
   "leave_special",
+  "leave_tenant_config", // GAP-HR-LEAVE-APPLY-05
   "leave_type",
   "loan",
   "ltc_exemption",
   "manpower_plan",
+  "policy_setting", // fin-hr-02 (wfh_eligibility / apar_deadlines / dashboard_scope)
+  "shift", // GAP-HR-SHIFTS-01
   "manpower_requisition",
   "medical_claim",
   "nomination",

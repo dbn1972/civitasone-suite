@@ -24,11 +24,21 @@ describe("EmployeeTypesPage", () => {
   beforeEach(() => { fetchJsonMock.mockReset(); mockRoles = ["hr_admin"]; });
 
   it("shows PermissionDenied and never fetches for a role the backend would 403 (GAP-HR-EMPLOYEE-TYPES-04)", async () => {
-    mockRoles = ["payroll_officer"];
+    mockRoles = ["employee"];
     render(await EmployeeTypesPage());
     expect(screen.getByRole("heading", { name: "Access restricted" })).toBeInTheDocument();
     expect(fetchJsonMock).not.toHaveBeenCalled();
   });
+
+  it.each(["hr_officer", "payroll_officer", "payroll_admin", "manager"])(
+    "%s can read the list (read roles widened to match the backend)", async (role) => {
+      mockRoles = [role];
+      fetchJsonMock.mockResolvedValue({ data: MOCK_TYPES, source: "api" });
+      render(await EmployeeTypesPage());
+      expect(screen.queryByRole("heading", { name: "Access restricted" })).not.toBeInTheDocument();
+      expect(fetchJsonMock).toHaveBeenCalled();
+    },
+  );
 
   it("renders employee types and real stat counts on success", async () => {
     fetchJsonMock.mockResolvedValue({ data: MOCK_TYPES, source: "api" });

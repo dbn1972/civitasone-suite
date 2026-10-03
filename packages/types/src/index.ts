@@ -794,6 +794,12 @@ export type HRDashboard = {
   employeeTypeBreakdown: { name: string; count: number }[];
   /** Leave applications stuck in "routing_failed" -- see hrms-service leave/consumer.ts's WORKFLOW_INSTANCE_REJECTED subscriber. */
   routingFailedCount: number;
+  /**
+   * GAP-HR-DASHBOARD-08: what the figures cover. 'direct_reports' for a
+   * manager-only viewer under the default dashboard_scope policy,
+   * 'organisation' for tenant-wide (HR roles, or a tenant that opted in).
+   */
+  scope: "organisation" | "direct_reports";
   // GAP-HR-DASHBOARD-06: real total count of this tenant's hrms_departments
   // rows -- distinct from departmentBreakdown.length, which is capped to a
   // top-6-plus-"Others" bucket and so understates the true department count.

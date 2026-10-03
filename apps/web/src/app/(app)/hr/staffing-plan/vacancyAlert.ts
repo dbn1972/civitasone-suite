@@ -1,11 +1,9 @@
 /**
  * GAP-HR-WORKFORCE-STAFFING-PLAN-01: vacancy-threshold highlight carried over
- * from the retired /hr/workforce/staffing-plan copy ("Vacancy > 10%
- * highlighted per GFR 2017 Rule 228"). The 10% figure is the platform default;
- * it is a named constant so a tenant-level override is a one-line change, and
- * the rule citation shown to the user lives in the i18n string (a configurable
- * notice template), not in logic. HR must confirm the exact statutory wording
- * (see the PR's VERIFY list).
+ * from the retired /hr/workforce/staffing-plan copy. The 10% figure is the
+ * platform default; it is a named constant so a tenant-level override is a
+ * one-line change. The alert copy deliberately cites NO statutory rule
+ * (product decision, 2026-10-03).
  *
  * Integer math (vacant * 100 > sanctioned * pct) so 10/100 is NOT over a 10%
  * threshold and floating point never decides a boundary.

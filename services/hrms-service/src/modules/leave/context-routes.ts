@@ -1,3 +1,4 @@
+import { effectiveBalanceDays } from "./domain.js";
 import type { FastifyInstance } from "fastify";
 import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
@@ -68,7 +69,7 @@ export async function leaveContextRoutes(app: FastifyInstance): Promise<void> {
         leaveTypeName: typeMap.get(a.leaveTypeId)?.name ?? "",
         fy: a.fy,
         totalDays: a.totalDays,
-        balanceDays: a.balanceDays,
+        balanceDays: effectiveBalanceDays(a),
       })),
     });
   });

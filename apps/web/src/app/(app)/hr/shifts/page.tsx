@@ -5,6 +5,9 @@ import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
 import { toHumanError } from "@/lib/messages";
 import { ShiftCard } from "../_components/ShiftCard";
+import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
+import { ShiftManager } from "./ShiftManager";
 
 /**
  * ShiftsListPage — displays and manages shift definitions.
@@ -18,6 +21,7 @@ type ApiShift = {
   endTime?: string;
   breakDuration?: string;
   breakMinutes?: number;
+  graceMinutes?: number;
   workingHours?: string;
   workingMinutes?: number;
   applicableTo?: string;
@@ -34,6 +38,7 @@ type Row = {
   workingHours: string;
   applicableTo: string;
   status: string;
+  graceMinutes: number;
 } & Record<string, unknown>;
 
 function formatMinutes(minutes: number | undefined): string {
@@ -54,6 +59,7 @@ function mapShifts(apiItems: ApiShift[]): Row[] {
     workingHours: s.workingHours ?? formatMinutes(s.workingMinutes),
     applicableTo: s.applicableTo ?? (s.departments?.join(", ") ?? "—"),
     status: s.status,
+    graceMinutes: s.graceMinutes ?? 0,
   }));
 }
 
@@ -70,6 +76,7 @@ async function getShifts(): Promise<LoaderResult<Row[]>> {
 export default async function ShiftsPage() {
   const t = await getTranslations("shifts");
   const { data: items, source } = await getShifts();
+  const canManage = getSessionRoles().some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
   // COMP-004 fix-up (round 3): this page used to silently substitute a
   // hardcoded 4-row GOVT_SHIFTS list whenever the real API call returned
   // zero rows -- whether that meant a genuine fetch failure (source:
@@ -95,12 +102,8 @@ export default async function ShiftsPage() {
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
-      {/* GAP-HR-SHIFTS-01: subtitle (en.json shifts.subtitle) no longer says
-          "Manage shift schedules..." — there is no POST/PATCH for shifts
-          anywhere in attendance/routes.ts, so shifts can only be seeded in
-          the DB today. Building real create/edit (role-gated, audited,
-          effective-dated) is a real feature, not a copy fix — left open
-          rather than built here; flagged separately. */}
+      {/* GAP-HR-SHIFTS-01: HR roles get create/edit (ShiftManager ->
+          POST/PATCH /v1/hrms/shifts, role-gated + audited server-side). */}
       <PageHeader
         title={t("title")}
         subtitle={t("subtitle")}
@@ -123,6 +126,12 @@ export default async function ShiftsPage() {
             number with no data behind it. */}
         <StatCard icon="⏰" iconBg="var(--bg, #f5f5f5)" label={t("statStdHours")} value={t("stdHoursValue")} />
       </StatGrid>
+
+      {canManage && !errored && (
+        <ShiftManager
+          shifts={items.map((i) => ({ id: i.id, name: i.name, startTime: i.startTime, endTime: i.endTime, graceMinutes: i.graceMinutes }))}
+        />
+      )}
 
       {!errored && items.length > 0 && (
         <section aria-label={t("sectionAriaLabel")} style={{ marginBottom: 16 }}>

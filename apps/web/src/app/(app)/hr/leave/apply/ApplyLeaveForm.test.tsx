@@ -234,3 +234,64 @@ describe("ApplyLeaveForm — no linked employee record (self-service)", () => {
     expect(screen.getByRole("button", { name: /submit leave request/i })).toBeDisabled();
   });
 });
+
+/**
+ * GAP-HR-LEAVE-APPLY-05: half-day / short leave behind the per-tenant switch.
+ */
+describe("ApplyLeaveForm — half-day / short leave (GAP-HR-LEAVE-APPLY-05)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubWithConfig(config: unknown) {
+    const fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
+      if (url.includes("/leave-config")) return { ok: true, json: async () => config } as Response;
+      if (url.includes("/leave-requests/preview")) return { ok: true, json: async () => ({ computedDays: 0.5, engineApplied: true }) } as Response;
+      return {
+        ok: true,
+        json: async () => ({
+          employee: { id: "emp-1", employeeNo: "E1", name: "Asha Verma" },
+          leaveTypes: [{ id: "lt1", code: "CL", name: "Casual Leave", maxDays: 8 }],
+          allocations: [{ id: "a1", leaveTypeId: "lt1", leaveTypeCode: "CL", leaveTypeName: "Casual Leave", balanceDays: 7.5 }],
+        }),
+      } as Response;
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  async function pickSingleDateCl() {
+    renderForm({ employees: EMPLOYEES });
+    await waitFor(() => expect(screen.getByRole("option", { name: /casual leave/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByLabelText(/leave type/i), { target: { value: "a1" } });
+    fireEvent.change(screen.getByLabelText(/from date/i), { target: { value: "2026-10-05" } });
+    fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-10-05" } });
+  }
+
+  it("shows NO duration control while the tenant switch is off (default)", async () => {
+    stubWithConfig({ halfDayEnabled: false, shortLeaveEnabled: false });
+    await pickSingleDateCl();
+    await waitFor(() => expect(screen.getByLabelText(/from date/i)).toHaveValue("2026-10-05"));
+    expect(screen.queryByLabelText(/duration/i)).toBeNull();
+  });
+
+  it("offers the half-day choices when enabled, and previews/sends exactly 0.5 with the chosen part", async () => {
+    const fetchMock = stubWithConfig({ halfDayEnabled: true, shortLeaveEnabled: false });
+    await pickSingleDateCl();
+    const select = await screen.findByLabelText(/duration/i);
+    expect(screen.queryByRole("option", { name: /short leave/i })).toBeNull();
+    fireEvent.change(select, { target: { value: "first_half" } });
+    await waitFor(() => {
+      const previewCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes("/leave-requests/preview"));
+      const last = previewCalls[previewCalls.length - 1]!;
+      const body = JSON.parse(String(last[1]!.body));
+      expect(body).toMatchObject({ dayPart: "first_half", daysApplied: 0.5 });
+    }, { timeout: 2500 });
+  });
+
+  it("hides the duration control again when the date range is widened", async () => {
+    stubWithConfig({ halfDayEnabled: true, shortLeaveEnabled: true });
+    await pickSingleDateCl();
+    await screen.findByLabelText(/duration/i);
+    fireEvent.change(screen.getByLabelText(/to date/i), { target: { value: "2026-10-07" } });
+    await waitFor(() => expect(screen.queryByLabelText(/duration/i)).toBeNull());
+  });
+});

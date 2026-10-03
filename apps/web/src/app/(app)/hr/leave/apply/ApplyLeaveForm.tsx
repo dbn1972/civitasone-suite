@@ -14,6 +14,10 @@ import {
   type Validator,
 } from "@/lib/form-validation";
 import { useFormError } from "@/lib/useFormError";
+import {
+  availableDayParts, daysForPart, parseLeaveConfig, NO_PART_DAY_CONFIG,
+  type LeaveDayPart, type LeaveTenantConfig,
+} from "./dayPart";
 
 type LeaveAllocation = {
   id: string;
@@ -92,6 +96,20 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
   // window.confirm."
   const [offlineConfirmOpen, setOfflineConfirmOpen] = useState(false);
 
+  // GAP-HR-LEAVE-APPLY-05: per-tenant half-day / short-leave switch. Defaults
+  // to OFF and stays OFF if the config can't be read, so a tenant that never
+  // enabled it (or an unreachable endpoint) sees exactly the whole-day form.
+  const initialLeaveConfig: LeaveTenantConfig = NO_PART_DAY_CONFIG;
+  const [leaveConfig, setLeaveConfig] = useState(initialLeaveConfig);
+  const [dayPart, setDayPart] = useState("full" as LeaveDayPart);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetch("/api/proxy/v1/hrms/leave-config", { signal: controller.signal })
+      .then(async (res) => (res.ok ? setLeaveConfig(parseLeaveConfig(await res.json())) : undefined))
+      .catch(() => undefined);
+    return () => controller.abort();
+  }, []);
+
   // Ref that mirrors fromDate value for the cross-field toDate validator.
   // Updated during render (write-to-ref-during-render pattern — safe in React).
   const fromDateRef = useRef("");
@@ -169,12 +187,22 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
     (a) => a.id === values.allocId,
   );
 
-  function calcDays(): number {
+  function calendarSpan(): number {
     if (!values.fromDate || !values.toDate) return 0;
     const from = new Date(values.fromDate);
     const to = new Date(values.toDate);
     if (to < from) return 0;
     return Math.floor((to.getTime() - from.getTime()) / 86_400_000) + 1;
+  }
+
+  // The offered duration choices (full day always; halves/short only for CL on
+  // a single date when the tenant enabled them). A chosen part that stops being
+  // offered (date range widened, other leave type picked) falls back to full.
+  const dayParts = availableDayParts(leaveConfig, selectedAlloc?.leaveTypeCode, calendarSpan() === 1);
+  const effectiveDayPart: LeaveDayPart = dayParts.includes(dayPart) ? dayPart : "full";
+
+  function calcDays(): number {
+    return daysForPart(effectiveDayPart, calendarSpan());
   }
 
   // GAP-HR-LEAVE-APPLY-01: debounced server preview whenever the three
@@ -199,6 +227,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
           fromDate: values.fromDate,
           toDate: values.toDate,
           daysApplied: calcDays(),
+          dayPart: effectiveDayPart,
         }),
       })
         .then(async (res) => {
@@ -219,7 +248,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
     }, 400);
     return () => { clearTimeout(timer); controller.abort(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- selectedAlloc is derived from values.allocId + leaveContext (already deps below); formError is stable (see loadContext's own note above).
-  }, [employeeId, values.allocId, values.fromDate, values.toDate, selectedAlloc]);
+  }, [employeeId, values.allocId, values.fromDate, values.toDate, selectedAlloc, effectiveDayPart]);
 
   async function submitAllocation(daysApplied: number) {
     if (!selectedAlloc) return;
@@ -233,6 +262,7 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
       fromDate: values.fromDate,
       toDate: values.toDate,
       daysApplied,
+      dayPart: effectiveDayPart,
       reason: values.reason.trim(),
     };
 
@@ -499,6 +529,27 @@ export function ApplyLeaveForm({ employees, initialEmployeeId, myEmployeeId, noL
             )}
           </div>
         </div>
+
+        {/* GAP-HR-LEAVE-APPLY-05: only rendered when the tenant enabled half-day /
+            short leave AND this is a single-date Casual Leave request. */}
+        {dayParts.length > 1 ? (
+          <div>
+            <label htmlFor="leave-day-part" className="block text-sm font-medium text-slate-700 mb-1">
+              {t("dayPartLabel")}
+            </label>
+            <select
+              id="leave-day-part"
+              value={effectiveDayPart}
+              onChange={(e) => setDayPart(e.target.value as LeaveDayPart)}
+              className={fieldCls}
+              style={fieldStyle}
+            >
+              {dayParts.map((part) => (
+                <option key={part} value={part}>{t(`dayPart_${part}`)}</option>
+              ))}
+            </select>
+          </div>
+        ) : null}
 
         {days > 0 ? (
           <div className="text-sm text-slate-600">

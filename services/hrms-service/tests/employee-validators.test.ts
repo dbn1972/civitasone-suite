@@ -170,10 +170,14 @@ describe("updateEmployeeBody — EM-11: sensitive field validation", () => {
   // bigint literal, so `JSON.parse` always produces a plain `number` here,
   // and zod's bigint schema rejects that with "Expected bigint, received
   // number". Every PATCH that included basicMinor 400'd unconditionally.
-  it("accepts a plain JSON number for basicMinor (regression: was z.bigint(), which JSON can never satisfy)", () => {
+  // GAP-HR-EMPLOYEES-DETAIL-EDIT-04 supersedes the old "accepts a plain JSON
+  // number" regression: basic pay is no longer editable through this generic
+  // PATCH at all (it belongs to payroll's approved, effective-dated salary
+  // revision), so ANY basicMinor is rejected with an explicit message.
+  it("rejects basicMinor outright and points at salary revision (GAP-HR-EMPLOYEES-DETAIL-EDIT-04)", () => {
     const result = updateEmployeeBody.safeParse({ basicMinor: 5000000 });
-    expect(result.success).toBe(true);
-    if (result.success) expect(result.data.basicMinor).toBe(5000000);
+    expect(result.success).toBe(false);
+    if (!result.success) expect(JSON.stringify(result.error.issues)).toMatch(/salary revision/i);
   });
 
   it("rejects a negative basicMinor", () => {

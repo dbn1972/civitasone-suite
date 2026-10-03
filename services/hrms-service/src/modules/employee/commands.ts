@@ -256,7 +256,7 @@ export async function updateEmployee(ctx: RequestContext, id: string, body: Upda
       email: body.email,
       bankAccountNo: body.bankAccountNo,
       bankIfsc: body.bankIfsc,
-      basicMinor: body.basicMinor !== undefined ? body.basicMinor.toString() : undefined,
+      // basicMinor is rejected at the boundary (updateEmployeeBody), never published from here.
       payStructureId: body.payStructureId,
       managerId: body.managerId,
       esicIpNumber: body.esicIpNumber,

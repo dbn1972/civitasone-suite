@@ -31,8 +31,15 @@ export async function markLeaveDaysOnAttendance(
     fromDate: string;
     toDate: string;
     actorId: string;
+    /**
+     * GAP-HR-LEAVE-APPLY-05: a half-day / short leave (anything but 'full')
+     * must NOT stamp the day 'on_leave' -- the employee works the other half,
+     * so attendance stays whatever punches/regularisation say.
+     */
+    dayPart?: string;
   },
 ): Promise<void> {
+  if (params.dayPart && params.dayPart !== "full") return;
   const holidays = new Set(await getHolidaysInRangeTx(tx, params.tenantId, params.fromDate, params.toDate));
   const from = new Date(`${params.fromDate}T00:00:00Z`);
   const to = new Date(`${params.toDate}T00:00:00Z`);

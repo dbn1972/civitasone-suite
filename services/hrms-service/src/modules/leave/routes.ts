@@ -9,16 +9,19 @@ import { resolveContext, requireRole, requirePermissionKey, HttpError } from "..
 import { scopedRead} from "../../shared/db.js";
 import { hrmsEmployees } from "../employee/schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
-import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody } from "./validators.js";
+import { createLeaveTypeBody, allocateLeaveBody, applyLeaveBody, idParam, rejectLeaveBody, leaveTenantConfigBody } from "./validators.js";
 import { validateLeaveRequest, LEAVE_POLICIES, type EmployeeType, type LeaveCategory } from "./rules-engine.js";
 import { loadTypeResolver, leaveEligible } from "../employee/engagement-policy.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import { fetchOpenTaskRefIds } from "../../shared/workflow-client.js";
+import { assertDayPartAllowed, blockingOverlaps, effectiveBalanceDays, DomainError } from "./domain.js";
 
 const HR_ROLES  = ["hr_admin", "hr_officer", "super_admin"];
 const ALL_ROLES = [...HR_ROLES, "manager", "employee"];
+// Mirrors policy-admin-routes.ts HR_ADMIN_ROLES: leave-entitlement policy is an HR-admin call.
+const LEAVE_CONFIG_ADMIN_ROLES = ["hr_admin", "super_admin", "tenant_admin", "platform_admin"];
 
 
 /**
@@ -87,7 +90,20 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
   // existing pending/approved leave for the same employee. Prevents double-booking
   // the same calendar days across leave types. Runs for EVERY leave code (not just
   // CCS-engine codes) so it must precede the early-return below.
-  const overlaps = await repo.findOverlappingLeaveApps(tenantId, body.employeeId, body.fromDate, body.toDate);
+  // GAP-HR-LEAVE-APPLY-05: half-day / short leave is gated by the tenant switch
+  // (default OFF) and by the leave type (CL only); anything else is whole-day.
+  if (body.dayPart !== "full") {
+    try {
+      assertDayPartAllowed(body.dayPart, code, await repo.getLeaveTenantConfig(tenantId));
+    } catch (err) {
+      if (err instanceof DomainError) throw new HttpError(422, err.code, err.message);
+      throw err;
+    }
+  }
+  const overlaps = blockingOverlaps(
+    await repo.findOverlappingLeaveApps(tenantId, body.employeeId, body.fromDate, body.toDate),
+    { fromDate: body.fromDate, toDate: body.toDate, dayPart: body.dayPart },
+  );
   if (overlaps.length > 0) {
     const clash = overlaps[0]!;
     throw new HttpError(
@@ -106,7 +122,8 @@ async function enforceCcsLeaveRules(ctx: RequestContext, body: ReturnType<typeof
     fromDate: body.fromDate,
     toDate: body.toDate,
     daysApplied: body.daysApplied,
-    currentBalance: alloc.balanceDays,
+    currentBalance: effectiveBalanceDays(alloc),
+    dayPart: body.dayPart,
     totalAccumulated: alloc.totalDays,
     serviceStartDate: (emp.dateOfJoining as unknown as string) ?? body.fromDate,
     tenantId,
@@ -210,6 +227,21 @@ export async function leaveRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const body = createLeaveTypeBody.parse(req.body);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createLeaveType(ctx, body));
+  });
+
+  // GAP-HR-LEAVE-APPLY-05: per-tenant half-day / short-leave switch. Anyone who
+  // can apply needs to READ it (to show the control); only HR admins change it.
+  app.get("/v1/hrms/leave-config", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, ALL_ROLES);
+    return reply.send(await repo.getLeaveTenantConfig(ctx.tenantId));
+  });
+
+  app.put("/v1/hrms/leave-config", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LEAVE_CONFIG_ADMIN_ROLES);
+    const body = leaveTenantConfigBody.parse(req.body);
+    return sendAccepted(reply, acceptedResponseSchema, await commands.setLeaveTenantConfig(ctx, body));
   });
 
   app.get("/v1/hrms/leave-allocations", async (req, reply) => {

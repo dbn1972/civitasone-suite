@@ -47,3 +47,24 @@ export const periodLockBody = z.object({
   reason: z.string().max(500).optional(),
 });
 export type PeriodLockBody = z.infer<typeof periodLockBody>;
+
+
+// GAP-HR-SHIFTS-01: shift definition create/update. HH:MM (24h). A shift may run
+// past midnight (night shift) so end < start is legal; start === end is not
+// (a zero/24h shift is almost certainly a typo).
+const hhmm = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "must be HH:MM (24-hour)");
+export const createShiftBody = z.object({
+  name:      z.string().trim().min(1).max(80),
+  startTime: hhmm,
+  endTime:   hhmm,
+  graceMins: z.number().int().min(0).max(240).default(0),
+}).refine((v) => v.startTime !== v.endTime, { message: "startTime and endTime must differ", path: ["endTime"] });
+export type CreateShiftBody = z.infer<typeof createShiftBody>;
+
+export const updateShiftBody = z.object({
+  name:      z.string().trim().min(1).max(80).optional(),
+  startTime: hhmm.optional(),
+  endTime:   hhmm.optional(),
+  graceMins: z.number().int().min(0).max(240).optional(),
+}).refine((v) => Object.keys(v).length > 0, { message: "at least one field is required" });
+export type UpdateShiftBody = z.infer<typeof updateShiftBody>;

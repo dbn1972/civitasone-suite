@@ -86,11 +86,11 @@ describe("WFHRequestForm", () => {
 
   // DoPT OM 2022 eligibility gate tests
 
-  it("disables submit and shows gazetted error for employee at Level > 10", () => {
-    render(<WFHRequestForm payLevel={11} weeklyWfhCount={0} />);
+  it("disables submit and shows gazetted error for employee at Level 10 or above", () => {
+    render(<WFHRequestForm payLevel={10} weeklyWfhCount={0} />);
     const banner = screen.getByTestId("gazetted-error");
     expect(banner).toBeInTheDocument();
-    expect(banner).toHaveTextContent(/Level 1.10.*DoPT OM 2022/i);
+    expect(banner).toHaveTextContent(/Level 1.9.*DoPT OM 2022/i);
     expect(screen.getByRole("button", { name: /submit request/i })).toBeDisabled();
   });
 
@@ -244,5 +244,72 @@ describe("WFHRequestForm — UX-016 clerk-safe errors", () => {
 
     // Only once the id genuinely appears in the list does it redirect.
     await waitFor(() => expect(pushMock).toHaveBeenCalledWith("/hr/wfh"), { timeout: 8000 });
+  });
+});
+
+/**
+ * GAP-HR-WFH-01: the form asks the server (GET /v1/hrms/wfh-eligibility) for
+ * the selected employee's pay level and this week's count, so the gazetted /
+ * weekly-cap banners are real instead of "could not be verified" for everyone.
+ */
+describe("WFHRequestForm — server-provided eligibility (GAP-HR-WFH-01)", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubEligibility(body: unknown, ok = true) {
+    const fetchMock = vi.fn(async () => ({ ok, json: async () => body }) as Response);
+    vi.stubGlobal("fetch", fetchMock);
+    return fetchMock;
+  }
+
+  it("asks for eligibility of the prefilled employee", async () => {
+    const fetchMock = stubEligibility({ payLevel: 8, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 0 });
+    render(<WFHRequestForm employeeId="emp-1" />);
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledWith(expect.stringContaining("/wfh-eligibility?employeeId=emp-1"), expect.anything()));
+  });
+
+  it("shows the gazetted error and disables submit for a Level 12 employee", async () => {
+    stubEligibility({ payLevel: 12, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 0 });
+    render(<WFHRequestForm employeeId="emp-1" />);
+    expect(await screen.findByTestId("gazetted-error")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /submit request/i })).toBeDisabled();
+    expect(screen.queryByTestId("paylevel-warning")).toBeNull();
+  });
+
+  it("no warning and submit enabled for a verified non-gazetted employee under the weekly cap", async () => {
+    stubEligibility({ payLevel: 8, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 1 });
+    render(<WFHRequestForm employeeId="emp-1" />);
+    await waitFor(() => expect(screen.queryByTestId("paylevel-warning")).toBeNull());
+    expect(screen.getByRole("button", { name: /submit request/i })).not.toBeDisabled();
+  });
+
+  it("honours a tenant that raised the limit or switched the exclusion off", async () => {
+    stubEligibility({ payLevel: 12, maxPayLevel: 12, enforceGazettedExclusion: true, weeklyWfhCount: 0 });
+    const { unmount } = render(<WFHRequestForm employeeId="emp-1" />);
+    await waitFor(() => expect(screen.queryByTestId("paylevel-warning")).toBeNull());
+    expect(screen.queryByTestId("gazetted-error")).toBeNull();
+    unmount();
+    stubEligibility({ payLevel: 15, maxPayLevel: 9, enforceGazettedExclusion: false, weeklyWfhCount: 0 });
+    render(<WFHRequestForm employeeId="emp-2" />);
+    await waitFor(() => expect(screen.queryByTestId("paylevel-warning")).toBeNull());
+    expect(screen.queryByTestId("gazetted-error")).toBeNull();
+  });
+
+  it("shows the weekly-cap error from the server count", async () => {
+    stubEligibility({ payLevel: 8, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 2 });
+    render(<WFHRequestForm employeeId="emp-1" />);
+    expect(await screen.findByTestId("weekly-cap-error")).toBeInTheDocument();
+  });
+
+  it("an unclassified designation (payLevel null) keeps the 'could not be verified' note and does not block", async () => {
+    stubEligibility({ payLevel: null, maxPayLevel: 9, enforceGazettedExclusion: true, weeklyWfhCount: 0 });
+    render(<WFHRequestForm employeeId="emp-1" />);
+    expect(await screen.findByTestId("paylevel-warning")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /submit request/i })).not.toBeDisabled();
+  });
+
+  it("a failed eligibility lookup degrades to the existing 'could not be verified' note (server still enforces)", async () => {
+    stubEligibility({}, false);
+    render(<WFHRequestForm employeeId="emp-1" />);
+    expect(await screen.findByTestId("paylevel-warning")).toBeInTheDocument();
   });
 });

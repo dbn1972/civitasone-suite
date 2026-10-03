@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue, cache } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { CreateLeaveTypeBody, AllocateLeaveBody, ApplyLeaveBody } from "./validators.js";
+import type { CreateLeaveTypeBody, AllocateLeaveBody, ApplyLeaveBody, LeaveTenantConfigBody } from "./validators.js";
 import * as repo from "./repo.js";
 import { HttpError } from "../../shared/context.js";
 import { assertLeaveAppStatusTransition, DomainError } from "./domain.js";
@@ -70,6 +70,16 @@ export async function applyLeave(ctx: RequestContext, body: ApplyLeaveBody): Pro
     messageId: id, type: COMMANDS.leaveApply,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
     payload: { id, tenantId: ctx.tenantId, ...body, status: "pending" },
+  });
+  return { id, status: "accepted", correlationId: ctx.correlationId };
+}
+
+export async function setLeaveTenantConfig(ctx: RequestContext, body: LeaveTenantConfigBody): Promise<Accepted> {
+  const id = randomUUID();
+  await queue.publish(COMMANDS.leaveTenantConfigSet, {
+    messageId: id, type: COMMANDS.leaveTenantConfigSet,
+    tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
+    payload: { tenantId: ctx.tenantId, ...body },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

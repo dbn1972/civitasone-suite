@@ -1,6 +1,6 @@
 /**
  * WFHRequestForm — submits a Work-From-Home request.
- * DoPT OM 2022 / DoPT WFH policy: max 2 days/week for non-gazetted staff (Level 1–10).
+ * DoPT OM 2022 / DoPT WFH policy: max 2 days/week for non-gazetted staff (Level 1–9; Level 10 and above is Group A).
  * WCAG 2.2 AA: all form fields labelled, error states, 44px touch targets.
  */
 "use client";
@@ -25,7 +25,7 @@ interface WFHRequestFormProps {
   employeeId?: string;
   /**
    * Pay Level from the employee record (GoI pay matrix Level 1–18).
-   * Non-gazetted: Level 1–10; Gazetted: Level 11–18.
+   * Eligible: Level 1–9 (default); Group A: Level 10–18.
    * Pass undefined when not yet known — form warns but allows submission.
    */
   payLevel?: number;
@@ -97,10 +97,33 @@ export function WFHRequestForm({
     return () => { cancelled = true; };
   }, [prefillId]);
 
+  // GAP-HR-WFH-01: the server knows the employee's pay level (designation
+  // level, 7th CPC) and this week's count; ask it for whichever employee is
+  // selected so the banner/submit-disable are real, not "could not be
+  // verified" for everyone. Explicit props (tests, callers that already know)
+  // still win. The server re-enforces on submit regardless.
+  const [elig, setElig] = useState<{ payLevel: number | null; maxPayLevel: number; enforceGazettedExclusion: boolean; weeklyWfhCount: number } | null>(null);
+  useEffect(() => {
+    setElig(null);
+    if (!employeeId) return;
+    const controller = new AbortController();
+    fetch(`/api/proxy/v1/hrms/wfh-eligibility?employeeId=${encodeURIComponent(employeeId)}`, { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((body) => {
+        if (body && typeof body === "object" && "weeklyWfhCount" in body) setElig(body);
+      })
+      .catch(() => { /* eligibility is advisory here; the POST re-checks */ });
+    return () => controller.abort();
+  }, [employeeId]);
+  const knownPayLevel = payLevel ?? (elig?.payLevel ?? undefined);
+  const knownWeekly = weeklyWfhCount ?? elig?.weeklyWfhCount;
+  const gazettedLimit = elig?.maxPayLevel ?? 9;
+  const enforceGazetted = elig?.enforceGazettedExclusion ?? true;
+
   // DoPT OM 2022 eligibility gates
-  const isGazetted = payLevel !== undefined && payLevel > 10;
-  const weeklyCapReached = weeklyWfhCount !== undefined && weeklyWfhCount >= 2;
-  const payLevelUnknown = payLevel === undefined;
+  const isGazetted = enforceGazetted && knownPayLevel !== undefined && knownPayLevel > gazettedLimit;
+  const weeklyCapReached = knownWeekly !== undefined && knownWeekly >= 2;
+  const payLevelUnknown = knownPayLevel === undefined;
 
   // SF-15: the POST below is a 202-accepted async write (CLAUDE.md CQRS
   // rule) -- the row this creates only exists once the queue consumer runs,

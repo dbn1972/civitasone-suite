@@ -142,6 +142,25 @@ export async function lifecycleRoutes(app: FastifyInstance): Promise<void> {
     requireRole(ctx, HR_ROLES);
     const { id } = idParam.parse(req.params);
     const body = issueOrderBody.parse(req.body);
+    // GAP-HR-TRANSFER-02: the order number/date are typed by the issuing officer
+    // (the department's order register), so validate them here, before the 202.
+    //  - the order date cannot be in the future (IST calendar date);
+    //  - the transfer must still be awaiting an order (mirrors the relieve route);
+    //  - the order number must be unique within the tenant (case-insensitive).
+    const todayIst = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
+    if (body.orderDate > todayIst) {
+      throw new HttpError(422, "ORDER_DATE_IN_FUTURE", "the order date cannot be in the future");
+    }
+    const existing = await scopedRead((tx) => tx.select().from(hrmsTransfers)
+      .where(and(eq(hrmsTransfers.id, id), eq(hrmsTransfers.tenantId, ctx.tenantId))).limit(1));
+    const transfer = existing[0];
+    if (!transfer) throw new HttpError(404, "NOT_FOUND", "transfer not found");
+    if (transfer.status !== "requested" && transfer.status !== "pending") {
+      throw new HttpError(409, "INVALID_STATE", `an order can only be issued for a 'requested' transfer (currently '${transfer.status}')`);
+    }
+    if (await repo.findTransferByOrderNo(ctx.tenantId, body.orderNo, id)) {
+      throw new HttpError(409, "ORDER_NO_EXISTS", `order number '${body.orderNo}' is already used by another transfer order`);
+    }
     return sendAccepted(reply, acceptedResponseSchema, await commands.issueTransferOrder(ctx, id, body as unknown as Record<string, unknown>));
   });
 

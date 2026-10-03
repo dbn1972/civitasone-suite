@@ -96,6 +96,17 @@ vi.mock("../modules/employee/actor-link.js", () => ({
   resolveEmployeeForActor: (...args: unknown[]) => resolveEmployeeForActorMock(...args),
 }));
 
+// GAP-HR-WFH-01: the create route now reads the tenant's wfh_eligibility policy and
+// the employee's pay level; this suite is about the IDOR guard only, so neither
+// excludes anyone here (pay-level behaviour: attendance-wfh-eligibility-real-db.test.ts).
+vi.mock("../modules/policy-settings/repo.js", () => ({
+  getPolicy: async () => ({ enforceGazettedExclusion: false, maxPayLevel: 9 }),
+}));
+vi.mock("../modules/attendance/wfh-eligibility.js", () => ({
+  isGazettedForWfh: () => false,
+  resolveEmployeePayLevel: async () => ({ payLevel: null }),
+}));
+
 import { buildApp } from "../app.js";
 import { sqlClient } from "../shared/db.js";
 

@@ -1,9 +1,10 @@
 import { eq, and, gte, lte, inArray, ne, sql, desc } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
-  hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps,
+  hrmsLeaveTypes, hrmsLeaveAllocs, hrmsLeaveApps, hrmsLeaveTenantConfig,
   type LeaveAppRow, type LeaveAllocRow,
 } from "./schema.js";
+import { DEFAULT_LEAVE_TENANT_CONFIG, type LeaveTenantConfig } from "./domain.js";
 import { hrmsLeavePolicyRules, type LeavePolicyRuleRow } from "./policy-schema.js";
 import { hrmsEmployees } from "../employee/schema.js";
 
@@ -176,6 +177,24 @@ export async function findOverlappingLeaveApps(
   });
 }
 
+/** Tx-scoped twin of findOverlappingLeaveApps (the apply consumer re-checks inside its own transaction). */
+export async function findOverlappingLeaveAppsTx(
+  tx: Writer, tenantId: string, employeeId: string, fromDate: string, toDate: string,
+): Promise<LeaveAppRow[]> {
+  return (tx as typeof db).select().from(hrmsLeaveApps).where(and(
+    eq(hrmsLeaveApps.tenantId, tenantId),
+    eq(hrmsLeaveApps.employeeId, employeeId),
+    inArray(hrmsLeaveApps.status, ["pending", "approved"]),
+    lte(hrmsLeaveApps.fromDate, toDate),
+    gte(hrmsLeaveApps.toDate, fromDate),
+  )).limit(50);
+}
+
+/** Serialises concurrent leave applications of one employee, so the overlap re-check cannot race. */
+export async function lockEmployeeLeave(tx: Writer, tenantId: string, employeeId: string): Promise<void> {
+  await (tx as typeof db).execute(sql`SELECT pg_advisory_xact_lock(hashtextextended(${`leave-apply:${tenantId}:${employeeId}`}, 0))`);
+}
+
 export async function findApprovedLeaveInMonth(tenantId: string, month: string): Promise<LeaveAppRow[]> {
   const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveApps)
     .where(and(eq(hrmsLeaveApps.tenantId, tenantId), eq(hrmsLeaveApps.status, "approved")))
@@ -224,16 +243,30 @@ export async function approveLeaveApp(tx: Writer, id: string, patch: Partial<typ
   return result.length;
 }
 
+// GAP-HR-LEAVE-APPLY-05: the effective balance is the NEW numeric column when
+// it has ever been written, else the legacy integer. balance_days is always
+// FLOOR(result) so a legacy whole-day reader can never see more balance than
+// the employee has. balance_days_exact is written ONLY when the result is
+// fractional or the column was already non-NULL: an integer-only balance that
+// only ever sees whole-day approve/cancel keeps balance_days_exact NULL, i.e.
+// behaves exactly as before this feature.
+const effectiveBalanceSql = sql`COALESCE(${hrmsLeaveAllocs.balanceDaysExact}, ${hrmsLeaveAllocs.balanceDays}::numeric)`;
+const exactAfter = (op: "-" | "+", days: number) => sql`CASE
+  WHEN ${hrmsLeaveAllocs.balanceDaysExact} IS NULL AND (${effectiveBalanceSql} ${sql.raw(op)} ${days}::numeric) = floor(${effectiveBalanceSql} ${sql.raw(op)} ${days}::numeric)
+  THEN NULL::numeric
+  ELSE ${effectiveBalanceSql} ${sql.raw(op)} ${days}::numeric END`;
+
 export async function debitLeaveBalance(tx: Writer, allocId: string, days: number): Promise<void> {
   // H7 FIX: Guarded atomic UPDATE prevents lost updates under concurrency.
-  // WHERE balance_days >= days ensures we never go negative; RETURNING confirms success.
+  // WHERE effective balance >= days ensures we never go negative; RETURNING confirms success.
   // If no rows are updated, the balance was insufficient (concurrent approval drained it).
   const result = await tx.update(hrmsLeaveAllocs)
     .set({
-      balanceDays: sql`${hrmsLeaveAllocs.balanceDays} - ${days}`,
+      balanceDaysExact: exactAfter("-", days),
+      balanceDays: sql`FLOOR(${effectiveBalanceSql} - ${days}::numeric)::int`,
       updatedAt: new Date(),
     })
-    .where(and(eq(hrmsLeaveAllocs.id, allocId), gte(hrmsLeaveAllocs.balanceDays, days)))
+    .where(and(eq(hrmsLeaveAllocs.id, allocId), sql`${effectiveBalanceSql} >= ${days}`))
     .returning({ balanceDays: hrmsLeaveAllocs.balanceDays });
   if (result.length === 0) {
     throw new Error(`INSUFFICIENT_LEAVE_BALANCE: allocation ${allocId} has fewer than ${days} days remaining`);
@@ -244,10 +277,36 @@ export async function creditLeaveBalance(tx: Writer, allocId: string, days: numb
   // H7 FIX: Atomic credit (no read-modify-write). Safe under concurrency.
   await tx.update(hrmsLeaveAllocs)
     .set({
-      balanceDays: sql`${hrmsLeaveAllocs.balanceDays} + ${days}`,
+      balanceDaysExact: exactAfter("+", days),
+      balanceDays: sql`FLOOR(${effectiveBalanceSql} + ${days}::numeric)::int`,
       updatedAt: new Date(),
     })
     .where(eq(hrmsLeaveAllocs.id, allocId));
+}
+
+// ─── GAP-HR-LEAVE-APPLY-05: per-tenant half-day / short-leave switch ──────────
+
+export async function getLeaveTenantConfig(tenantId: string): Promise<LeaveTenantConfig> {
+  const rows = await scopedRead((tx) => tx.select().from(hrmsLeaveTenantConfig)
+    .where(eq(hrmsLeaveTenantConfig.tenantId, tenantId)).limit(1));
+  const r = rows[0];
+  return r ? { halfDayEnabled: r.halfDayEnabled, shortLeaveEnabled: r.shortLeaveEnabled } : DEFAULT_LEAVE_TENANT_CONFIG;
+}
+
+export async function upsertLeaveTenantConfig(
+  tx: Writer, tenantId: string, cfg: LeaveTenantConfig, actorId: string,
+): Promise<void> {
+  await tx.insert(hrmsLeaveTenantConfig).values({
+    tenantId, halfDayEnabled: cfg.halfDayEnabled, shortLeaveEnabled: cfg.shortLeaveEnabled,
+    createdBy: actorId, updatedBy: actorId,
+  }).onConflictDoUpdate({
+    target: hrmsLeaveTenantConfig.tenantId,
+    set: {
+      halfDayEnabled: cfg.halfDayEnabled, shortLeaveEnabled: cfg.shortLeaveEnabled,
+      updatedBy: actorId, updatedAt: new Date(),
+      version: sql`${hrmsLeaveTenantConfig.version} + 1`,
+    },
+  });
 }
 
 // ─── DOM-009: tenant-configured leave policy lookups ───────────────────────

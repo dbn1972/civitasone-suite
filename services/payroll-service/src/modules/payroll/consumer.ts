@@ -11,6 +11,7 @@ import { payrollPensioners } from "./schema.js";
 import * as repo from "./repo.js";
 import * as loansRepo from "../loans/repo.js";
 import * as lopRepo from "../integration/lop-repo.js";
+import { lopDeductionMinor, proratedPayMinor } from "../integration/lop-math.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { sql } from "drizzle-orm";
 import { computeSlip, computePension, assertRunStatusTransition, DomainError, hraSlabPct, govtHraMinor, deputationAllowanceMinor, roundRupee, isPayrollEligible, resolveStatutoryConfig, DEFAULT_STATUTORY_CONFIG, type PensionScheme, type CityClass, type RawComponent, type SlipResult, type EarningsOverride, type StatutoryConfig, type StatutoryConfigRow, type SlipPayProfile } from "./domain.js";
@@ -1755,6 +1756,10 @@ async function processPayrollRun(
         suspension.kind === "subsistence" ? suspension.plan.regularDays : Number(daysInMonth),
         attendanceLopDays + joiningUnpaidDays,
       );
+      // GAP-HR-LEAVE-APPLY-05: lopDays may now carry a half-day fraction, so the
+      // bigint maths runs in hundredths of a day. For a whole-day count this is
+      // algebraically identical to the old BigInt(lopDays) formula (the factor
+      // 100 cancels before the single integer division).
       // LOP daily rate on (Basic + DA) over actual days in month. Multiply
       // before dividing (LOW, payroll-calc audit): dividing first truncated
       // the per-day rate before scaling by lopDays, under-withholding LOP by
@@ -1763,14 +1768,14 @@ async function processPayrollRun(
       // LOP line), so PF/ESI fall on the wages actually earned.
       const prorate = plan.lopMode === "prorate";
       const basicMinor = prorate
-        ? roundRupee((scaleBasicMinor * (daysInMonth - BigInt(lopDays))) / daysInMonth)
+        ? roundRupee(proratedPayMinor(scaleBasicMinor, lopDays, daysInMonth))
         : scaleBasicMinor;
       // PAY-PROFILES (Option A): LOP also reduces the deputation allowance
       // pro rata (it is paid for days on duty), alongside Basic + DA.
       const depAllowForLop = plan.slipProfile.kind === "deputation_parent_scale"
         ? deputationAllowanceMinor(basicMinor, plan.slipProfile.allowance).amountMinor
         : 0n;
-      const lopDeduction = prorate ? 0n : ((basicMinor + daMinor + depAllowForLop) * BigInt(lopDays)) / daysInMonth;
+      const lopDeduction = prorate ? 0n : lopDeductionMinor(basicMinor + daMinor + depAllowForLop, lopDays, daysInMonth);
 
       // Iter2: real loan recovery — split interest/principal, cap at outstanding.
       // P3: the actual EMI withheld may be capped by the protected-net floor, so

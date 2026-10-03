@@ -4,6 +4,7 @@ import { z, ZodError } from "zod";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
 import { sqlPool as sqlClient, sqlClient as rawSqlClient } from "../../shared/db.js";
 import { withRawTenantGuc } from "@civitasone/db";
+import { goalHealth, statusAfterCheckin } from "./goal-health.js";
 
 /**
  * Pulse Surveys — quick anonymous engagement check-ins.
@@ -245,11 +246,14 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
       [ctx.tenantId, ctx.actorId, status],
     ));
 
+    const todayIso = new Date().toISOString().slice(0, 10);
     return reply.send({
       data: rows.rows.map((r: any) => ({
         ...r,
         keyResults: r.key_results,
         dueDate: r.due_date,
+        // GAP-HR-GOALS-04: derived from progress vs time to the due date (see goal-health.ts).
+        health: goalHealth({ status: r.status, progress: r.progress, createdAt: r.created_at, dueDate: r.due_date }, todayIso),
       })),
     });
   });
@@ -262,7 +266,7 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
 
     // Verify ownership
     const goal = await withTenantGuc(ctx.tenantId, (pool) => pool.query(
-      `SELECT id FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
+      `SELECT id, status FROM hrms.goals WHERE id = $1 AND tenant_id = $2 AND employee_id = $3`,
       [id, ctx.tenantId, ctx.actorId],
     ));
     if (goal.rowCount === 0) throw new HttpError(404, "NOT_FOUND", "Goal not found");
@@ -275,7 +279,8 @@ export async function pulseGoalsRoutes(app: FastifyInstance): Promise<void> {
     ));
 
     // Update goal progress
-    const newStatus = body.progress >= 100 ? "completed" : "active";
+    // GAP-HR-GOALS-04: a manually set at_risk/behind/on_track survives a check-in.
+    const newStatus = statusAfterCheckin((goal.rows[0] as { status: string }).status, body.progress);
     await withTenantGuc(ctx.tenantId, (pool) => pool.query(
       `UPDATE hrms.goals SET progress = $1, status = $2, updated_at = NOW() WHERE id = $3`,
       [body.progress, newStatus, id],

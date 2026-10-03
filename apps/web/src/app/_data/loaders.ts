@@ -2498,6 +2498,7 @@ const HR_DASHBOARD_EMPTY: HRDashboard = {
   departmentBreakdown: [],
   employeeTypeBreakdown: [],
   routingFailedCount: 0,
+  scope: "organisation",
   totalDepartments: 0,
   servingCount: null,
 };
@@ -2528,6 +2529,7 @@ function mapHRDashboard(payload: unknown): HRDashboard | null {
       ? (raw.employeeTypeBreakdown as { name: string; count: number }[])
       : [],
     routingFailedCount: typeof raw.routingFailedCount === "number" ? raw.routingFailedCount : 0,
+    scope: raw.scope === "direct_reports" ? "direct_reports" : "organisation",
     totalDepartments: typeof raw.totalDepartments === "number" ? raw.totalDepartments : 0,
     servingCount: typeof raw.servingCount === "number" ? raw.servingCount : null,
   };

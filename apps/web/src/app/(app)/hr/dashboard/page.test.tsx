@@ -63,6 +63,7 @@ const DASH_OK = {
   // departmentBreakdown bucket's own length/count (7 vs 1 here) so a test
   // reading the wrong field would fail loudly instead of accidentally passing.
   totalDepartments: 7,
+  scope: "organisation" as const,
 };
 
 // Same shape fetchJson's `empty` fallback gives getHRDashboard() on a real
@@ -78,6 +79,7 @@ const DASH_EMPTY = {
   employeeTypeBreakdown: [],
   routingFailedCount: 0,
   totalDepartments: 0,
+  scope: "organisation" as const,
 };
 
 const EMP_ROW = { id: "e1", name: "Asha Rao", department: "Finance", status: "confirmed" };
@@ -321,12 +323,35 @@ describe("HRDashboardPage", () => {
       // Rendered twice on purpose (once above the KPI strip, once in the
       // dept chart's own header) -- getAllByText, same convention this file
       // already uses for other legitimate multi-match text.
-      expect(screen.getAllByText(/organisation-wide/i).length).toBeGreaterThan(0);
+      // (getTranslations is mocked to echo the key; the en/hi strings are asserted below.)
+      expect(screen.getAllByText("dashboard.scopeOrganisationData").length).toBeGreaterThan(0);
+      expect(screen.getAllByText("dashboard.scopeOrganisation").length).toBeGreaterThan(0);
+    });
+
+    it("the scope labels exist in en and hi (no hardcoded English in the page)", async () => {
+      const en = (await import("@/messages/en.json")).default as unknown as { dashboard: Record<string, string> };
+      const hi = (await import("@/messages/hi.json")).default as unknown as { dashboard: Record<string, string> };
+      for (const k of ["scopeDirectReports", "scopeOrganisationData", "scopeOrganisation"]) {
+        expect(en.dashboard[k]).toBeTruthy();
+        expect(hi.dashboard[k]).toBeTruthy();
+      }
+      expect(en.dashboard.scopeDirectReports).toBe("Your direct reports");
+    });
+
+    // The label follows what the SERVER says it scoped to (data.scope), so it
+    // can never call direct-report numbers "organisation-wide".
+    it("labels a scoped manager dashboard 'Your direct reports', never 'Organisation-wide'", async () => {
+      mockedRoles.mockReturnValue(["manager"]);
+      mockedDash.mockResolvedValue({ data: { ...DASH_OK, scope: "direct_reports" }, source: "api" });
+      render(await HRDashboardPage());
+      expect(screen.getAllByText("dashboard.scopeDirectReports").length).toBeGreaterThan(0);
+      expect(screen.queryByText("dashboard.scopeOrganisationData")).not.toBeInTheDocument();
+      expect(screen.queryByText("dashboard.scopeOrganisation")).not.toBeInTheDocument();
     });
 
     it("does not show the organisation-wide label for an HR-admin viewer", async () => {
       render(await HRDashboardPage());
-      expect(screen.queryByText(/organisation-wide/i)).not.toBeInTheDocument();
+      expect(screen.queryByTestId("dashboard-scope-note")).not.toBeInTheDocument();
     });
   });
 

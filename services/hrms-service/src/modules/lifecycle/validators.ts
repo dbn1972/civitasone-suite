@@ -30,8 +30,14 @@ export const createTransferBody = transferBody.extend({
 });
 export type CreateTransferBody = z.infer<typeof createTransferBody>;
 
+// GAP-HR-TRANSFER-02: the order number is the department's own order-register
+// number, typed by the issuing officer (it becomes the service-book documentRef).
+// Letters, digits and the separators order registers use (/ . - _); no spaces or
+// other punctuation so it is safe to print, search and compare.
+export const ORDER_NO_PATTERN = /^[A-Za-z0-9][A-Za-z0-9/._-]{0,63}$/;
+
 export const issueOrderBody = z.object({
-  orderNo:   z.string().min(1).max(64),
+  orderNo:   z.string().trim().regex(ORDER_NO_PATTERN, "order number may contain letters, digits and / . - _ only (max 64)"),
   orderDate: DATE,
   orderRef:  z.string().max(128).optional(),
 });

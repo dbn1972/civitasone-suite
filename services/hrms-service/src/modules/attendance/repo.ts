@@ -1,4 +1,4 @@
-import { eq, and, inArray, desc } from "drizzle-orm";
+import { eq, and, inArray, desc, sql } from "drizzle-orm";
 import { db, scopedRead} from "../../shared/db.js";
 import {
   hrmsAttendance, hrmsAttendanceRegularisations, hrmsAttendanceLocks, hrmsShifts,
@@ -246,6 +246,21 @@ export async function listCheckinLog(tenantId: string, limit = 200, employeeIds?
         })()
       : "—",
   }));
+}
+
+/** GAP-HR-SHIFTS-01: a tenant's shift by id (null when absent / other tenant). */
+export async function findShiftById(tenantId: string, id: string) {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(hrmsShifts).where(and(eq(hrmsShifts.tenantId, tenantId), eq(hrmsShifts.id, id))).limit(1));
+  return rows[0] ?? null;
+}
+
+/** GAP-HR-SHIFTS-01: case-insensitive name lookup, used for the 409 duplicate check. */
+export async function findShiftByName(tenantId: string, name: string) {
+  const rows = await scopedRead((tx) =>
+    tx.select().from(hrmsShifts)
+      .where(and(eq(hrmsShifts.tenantId, tenantId), sql`lower(${hrmsShifts.name}) = lower(${name})`)).limit(1));
+  return rows[0] ?? null;
 }
 
 /**

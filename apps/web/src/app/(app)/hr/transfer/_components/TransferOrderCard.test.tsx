@@ -40,7 +40,7 @@ describe("TransferOrderCard", () => {
     fetchMock.mockResolvedValue({ ok: true, text: () => Promise.resolve("") });
   });
 
-  it("does not call the API when 'Issue Order' is clicked -- it opens a confirmation first", () => {
+  it("does not call the API when 'Issue Order' is clicked -- it opens the order form first", () => {
     // Regression test: this action used to fire the real lifecycle-transition
     // request directly from the button's onClick, with no confirmation step,
     // even though issuing a transfer order is a hard-to-reverse official action.
@@ -49,8 +49,7 @@ describe("TransferOrderCard", () => {
     fireEvent.click(screen.getByText("Issue Order"));
 
     expect(fetchMock).not.toHaveBeenCalled();
-    const dialog = screen.getByRole("alertdialog");
-    expect(dialog).toBeInTheDocument();
+    const dialog = screen.getByRole("dialog");
     expect(within(dialog).getByText("Issue the transfer order?")).toBeInTheDocument();
     // Consequence-explaining copy names the employee and the from/to offices
     // (checked within the dialog -- the employee name also appears in the
@@ -59,16 +58,62 @@ describe("TransferOrderCard", () => {
     expect(within(dialog).getByText(/Collectorate, Pune/)).toBeInTheDocument();
   });
 
-  it("only calls the API after the dialog is confirmed, and shows the result", async () => {
+  // GAP-HR-TRANSFER-02: the order number is typed by the officer -- never the
+  // old fabricated TO-<uuid prefix>.
+  it("requires an order number and posts exactly what the officer typed (no fabricated TO-xxxx value)", async () => {
     render(<TransferOrderCard transfer={row()} />);
 
     fireEvent.click(screen.getByText("Issue Order"));
-    const dialog = screen.getByRole("alertdialog");
-    fireEvent.click(within(dialog).getByText("Issue Order"));
+    const dialog = screen.getByRole("dialog");
+    const orderNo = within(dialog).getByLabelText(/Order No/);
+    expect((orderNo as HTMLInputElement).value).toBe("");
+
+    // blank -> blocked, nothing sent
+    fireEvent.click(within(dialog).getByRole("button", { name: "Issue Order" }));
+    expect(await within(dialog).findByText("Enter the order number.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    // illegal characters -> blocked
+    fireEvent.change(orderNo, { target: { value: "TO 12 #" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Issue Order" }));
+    expect(await within(dialog).findByText(/Use letters, digits/)).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+
+    fireEvent.change(orderNo, { target: { value: " 12/2026-Estt " } });
+    fireEvent.change(within(dialog).getByLabelText(/Order reference/), { target: { value: "File 4/7" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Issue Order" }));
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
     expect(fetchMock.mock.calls[0][0]).toBe("/api/proxy/v1/hrms/lifecycle/transfers/t-123/issue-order");
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.orderNo).toBe("12/2026-Estt");
+    expect(body.orderRef).toBe("File 4/7");
+    expect(body.orderNo).not.toMatch(/^TO-/);
+    expect(body.orderDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     await waitFor(() => expect(toastSuccess).toHaveBeenCalled());
+  });
+
+  it("refuses a future order date client-side", async () => {
+    render(<TransferOrderCard transfer={row()} />);
+    fireEvent.click(screen.getByText("Issue Order"));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/Order No/), { target: { value: "55" } });
+    fireEvent.change(within(dialog).getByLabelText(/Order Date/), { target: { value: "2999-01-01" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Issue Order" }));
+    expect(await within(dialog).findByText("The order date cannot be in the future.")).toBeInTheDocument();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("shows a clerk-safe message when the server says the order number is already used", async () => {
+    fetchMock.mockResolvedValue(new Response(JSON.stringify({ code: "ORDER_NO_EXISTS", message: "dup" }), { status: 409 }));
+    render(<TransferOrderCard transfer={row()} />);
+    fireEvent.click(screen.getByText("Issue Order"));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/Order No/), { target: { value: "55" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Issue Order" }));
+    const alert = await within(dialog).findByRole("alert");
+    expect(alert.textContent).not.toMatch(/ORDER_NO_EXISTS|409|dup/);
+    expect(toastSuccess).not.toHaveBeenCalled();
   });
 
   it("lets the officer back out via Cancel without calling the API", () => {
@@ -128,8 +173,9 @@ describe("TransferOrderCard", () => {
     render(<TransferOrderCard transfer={row()} />);
 
     fireEvent.click(screen.getByText("Issue Order"));
-    const dialog = screen.getByRole("alertdialog");
-    fireEvent.click(within(dialog).getByText("Issue Order"));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/Order No/), { target: { value: "77/2026" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Issue Order" }));
 
     await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
     expect(dialog.textContent).not.toMatch(/\b500\b/);
@@ -141,8 +187,9 @@ describe("TransferOrderCard", () => {
     render(<TransferOrderCard transfer={row()} />);
 
     fireEvent.click(screen.getByText("Issue Order"));
-    const dialog = screen.getByRole("alertdialog");
-    fireEvent.click(within(dialog).getByText("Issue Order"));
+    const dialog = screen.getByRole("dialog");
+    fireEvent.change(within(dialog).getByLabelText(/Order No/), { target: { value: "77/2026" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Issue Order" }));
 
     await waitFor(() => expect(dialog).toHaveTextContent(/couldn't save/i));
     expect(dialog.textContent).not.toMatch(/hrms-service/);

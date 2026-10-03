@@ -125,6 +125,10 @@ vi.mock("./repo.js", () => ({
   // DOM-009: tx-scoped lookup the leaveAllocate consumer uses to resolve the
   // tenant's admin-configured (or default) accumulation cap.
   findAccumulationCapInputsTx: (...args: any[]) => findAccumulationCapInputsTxMock(...args),
+  // GAP-HR-LEAVE-APPLY-05: the apply consumer serialises per employee and
+  // re-checks overlap in-transaction; no clash in these mock-only tests.
+  lockEmployeeLeave: vi.fn(async () => undefined),
+  findOverlappingLeaveAppsTx: vi.fn(async () => []),
   // stubs for type-checker
   insertLeaveType:  vi.fn(async () => undefined),
 }));

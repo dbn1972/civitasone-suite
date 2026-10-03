@@ -1,11 +1,24 @@
 import { eq, and, sql, ne, or, lt, inArray } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "../../shared/db.js";
 import { hrmsEmployees, hrmsDepartments } from "../employee/schema.js";
 import { hrmsLeaveApps, hrmsLeaveTypes } from "../leave/schema.js";
 import { hrmsAttendance } from "../attendance/schema.js";
 import { SERVING_STATUSES } from "../employee/status.js";
 
-export async function getDashboard(tenantId: string): Promise<{
+/**
+ * GAP-HR-DASHBOARD-08: `scopeEmployeeIds` narrows every figure to those
+ * employees (a manager-only viewer's direct reports under the default
+ * dashboard_scope policy). `undefined` = tenant-wide, exactly the previous
+ * behaviour; an EMPTY array = no one in scope (all zeros, never fall-through
+ * to tenant-wide).
+ */
+function scopeCond(col: AnyPgColumn, scope: string[] | undefined) {
+  if (!scope) return undefined;
+  return scope.length > 0 ? inArray(col, scope) : sql`false`;
+}
+
+export async function getDashboard(tenantId: string, scopeEmployeeIds?: string[]): Promise<{
   headcount: number;
   headcountLastMonth: number;
   // GAP-HR-DASHBOARD-07: null when no hrms_attendance rows exist for the
@@ -25,6 +38,9 @@ export async function getDashboard(tenantId: string): Promise<{
   // employees page's Active/Others cards no longer derive from one page of rows.
   servingCount: number;
 }> {
+  const empScope = scopeCond(hrmsEmployees.id, scopeEmployeeIds);
+  const appScope = scopeCond(hrmsLeaveApps.employeeId, scopeEmployeeIds);
+  const attScope = scopeCond(hrmsAttendance.employeeId, scopeEmployeeIds);
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
   const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
@@ -37,7 +53,7 @@ export async function getDashboard(tenantId: string): Promise<{
       const [headcountRow] = await tx
         .select({ count: sql<number>`count(*)::int` })
         .from(hrmsEmployees)
-        .where(and(eq(hrmsEmployees.tenantId, tenantId), ne(hrmsEmployees.status, "separated")));
+        .where(and(eq(hrmsEmployees.tenantId, tenantId), ne(hrmsEmployees.status, "separated"), empScope));
 
       // Approximation: employees who joined before start of this month (proxy for last-month headcount)
       const [headcountLastMonthRow] = await tx
@@ -47,6 +63,7 @@ export async function getDashboard(tenantId: string): Promise<{
           eq(hrmsEmployees.tenantId, tenantId),
           ne(hrmsEmployees.status, "separated"),
           lt(hrmsEmployees.dateOfJoining, firstOfMonth),
+          empScope,
         ));
 
       const [pendingRow] = await tx
@@ -55,6 +72,7 @@ export async function getDashboard(tenantId: string): Promise<{
         .where(and(
           eq(hrmsLeaveApps.tenantId, tenantId),
           or(eq(hrmsLeaveApps.status, "pending"), eq(hrmsLeaveApps.status, "draft")),
+          appScope,
         ));
 
       const [presentRow] = await tx
@@ -64,6 +82,7 @@ export async function getDashboard(tenantId: string): Promise<{
           eq(hrmsAttendance.tenantId, tenantId),
           eq(hrmsAttendance.attendanceDate, today),
           eq(hrmsAttendance.status, "present"),
+          attScope,
         ));
 
       // GAP-HR-DASHBOARD-07: any attendance row at all for the tenant today
@@ -76,15 +95,23 @@ export async function getDashboard(tenantId: string): Promise<{
         .where(and(
           eq(hrmsAttendance.tenantId, tenantId),
           eq(hrmsAttendance.attendanceDate, today),
+          attScope,
         ));
 
       // GAP-HR-DASHBOARD-06: real total, unfiltered by isActive -- mirrors
       // employee/queries.ts's own unfiltered hrmsDepartments lookups (no
       // isActive column check exists in that established convention either).
-      const [totalDeptsRow] = await tx
-        .select({ count: sql<number>`count(*)::int` })
-        .from(hrmsDepartments)
-        .where(eq(hrmsDepartments.tenantId, tenantId));
+      // Scoped viewers see the number of departments their reports sit in,
+      // not the tenant's whole department list.
+      const [totalDeptsRow] = scopeEmployeeIds
+        ? await tx
+            .select({ count: sql<number>`count(distinct ${hrmsEmployees.departmentId})::int` })
+            .from(hrmsEmployees)
+            .where(and(eq(hrmsEmployees.tenantId, tenantId), empScope))
+        : await tx
+            .select({ count: sql<number>`count(*)::int` })
+            .from(hrmsDepartments)
+            .where(eq(hrmsDepartments.tenantId, tenantId));
 
       const deptRows = await tx
         .select({
@@ -96,6 +123,7 @@ export async function getDashboard(tenantId: string): Promise<{
         .where(and(
           eq(hrmsEmployees.tenantId, tenantId),
           ne(hrmsEmployees.status, "separated"),
+          empScope,
         ))
         .groupBy(hrmsDepartments.name)
         .orderBy(sql`count(${hrmsEmployees.id}) desc`)
@@ -107,6 +135,7 @@ export async function getDashboard(tenantId: string): Promise<{
         .where(and(
           eq(hrmsEmployees.tenantId, tenantId),
           eq(hrmsEmployees.status, "on_leave"),
+          empScope,
         ));
 
       // GAP-HR-EMPLOYEES-01: serving = SERVING_STATUSES. on_leave is its own
@@ -117,6 +146,7 @@ export async function getDashboard(tenantId: string): Promise<{
         .where(and(
           eq(hrmsEmployees.tenantId, tenantId),
           inArray(hrmsEmployees.status, [...SERVING_STATUSES]),
+          empScope,
         ));
 
       // Tenant-wide headcount by employeeType (mirrors headcount's "not separated" scope,
@@ -131,6 +161,7 @@ export async function getDashboard(tenantId: string): Promise<{
         .where(and(
           eq(hrmsEmployees.tenantId, tenantId),
           ne(hrmsEmployees.status, "separated"),
+          empScope,
         ))
         .groupBy(hrmsEmployees.employeeType);
 
@@ -147,6 +178,7 @@ export async function getDashboard(tenantId: string): Promise<{
         .where(and(
           eq(hrmsLeaveApps.tenantId, tenantId),
           eq(hrmsLeaveApps.status, "routing_failed"),
+          appScope,
         ));
 
       return {
@@ -225,7 +257,8 @@ function mapLeaveInboxRow(r: {
   };
 }
 
-export async function getPendingLeaveInbox(tenantId: string): Promise<LeaveInboxRow[]> {
+export async function getPendingLeaveInbox(tenantId: string, scopeEmployeeIds?: string[]): Promise<LeaveInboxRow[]> {
+  const appScope = scopeCond(hrmsLeaveApps.employeeId, scopeEmployeeIds);
   const rows = await db.transaction(async (tx) =>
     tx
       .select({
@@ -237,7 +270,7 @@ export async function getPendingLeaveInbox(tenantId: string): Promise<LeaveInbox
         leaveTypeCode: hrmsLeaveTypes.code,
         fromDate: hrmsLeaveApps.fromDate,
         toDate: hrmsLeaveApps.toDate,
-        daysApplied: hrmsLeaveApps.daysApplied,
+        daysApplied: sql<number>`coalesce(${hrmsLeaveApps.daysAppliedExact}, ${hrmsLeaveApps.daysApplied})::float8`,
         status: hrmsLeaveApps.status,
       })
       .from(hrmsLeaveApps)
@@ -247,6 +280,7 @@ export async function getPendingLeaveInbox(tenantId: string): Promise<LeaveInbox
       .where(and(
         eq(hrmsLeaveApps.tenantId, tenantId),
         or(eq(hrmsLeaveApps.status, "pending"), eq(hrmsLeaveApps.status, "draft")),
+        appScope,
       ))
       .orderBy(hrmsLeaveApps.createdAt)
       .limit(10)
@@ -266,7 +300,8 @@ export async function getPendingLeaveInbox(tenantId: string): Promise<LeaveInbox
  * chained builder type does not abstract cleanly across a function
  * boundary without fighting its generics.
  */
-export async function getRoutingFailedLeaveInbox(tenantId: string): Promise<LeaveInboxRow[]> {
+export async function getRoutingFailedLeaveInbox(tenantId: string, scopeEmployeeIds?: string[]): Promise<LeaveInboxRow[]> {
+  const appScope = scopeCond(hrmsLeaveApps.employeeId, scopeEmployeeIds);
   const rows = await db.transaction(async (tx) =>
     tx
       .select({
@@ -278,7 +313,7 @@ export async function getRoutingFailedLeaveInbox(tenantId: string): Promise<Leav
         leaveTypeCode: hrmsLeaveTypes.code,
         fromDate: hrmsLeaveApps.fromDate,
         toDate: hrmsLeaveApps.toDate,
-        daysApplied: hrmsLeaveApps.daysApplied,
+        daysApplied: sql<number>`coalesce(${hrmsLeaveApps.daysAppliedExact}, ${hrmsLeaveApps.daysApplied})::float8`,
         status: hrmsLeaveApps.status,
       })
       .from(hrmsLeaveApps)
@@ -288,6 +323,7 @@ export async function getRoutingFailedLeaveInbox(tenantId: string): Promise<Leav
       .where(and(
         eq(hrmsLeaveApps.tenantId, tenantId),
         eq(hrmsLeaveApps.status, "routing_failed"),
+        appScope,
       ))
       .orderBy(hrmsLeaveApps.createdAt)
       .limit(10)

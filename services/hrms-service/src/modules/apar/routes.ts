@@ -27,6 +27,8 @@ import { computeOverallGrade, type ScoreInput } from "./engine.js";
 import type { AppraisalRow } from "../appraisals/schema.js";
 import type { AparScoreRow } from "./schema.js";
 import { resolveEmployeeForActor } from "../employee/actor-link.js";
+import { getPolicy } from "../policy-settings/repo.js";
+import { aparDeadline } from "./deadlines.js";
 // GAP-HR-APAR-02 / GAP-HR-APAR-DETAIL-02 / GAP-HR-APAR-DETAIL-04: the
 // shared batch id->name resolver this whole lane was cross-blocked on
 // (3-way circular depends_on with GAP-HR-ADVANCES-01, see that gap's own
@@ -319,8 +321,11 @@ export async function aparRoutes(app: FastifyInstance): Promise<void> {
     // falls back to a translated "unavailable" string, never the UUID.
     const ids = rows.flatMap((r) => [r.employeeId, r.reportingOfficerId, r.reviewingOfficerId, r.acceptingAuthorityId]);
     const names = await batchEmployees(ctx.tenantId, ids);
+    // GAP-HR-APAR-03: per-stage due date from the tenant's apar_deadlines policy.
+    const deadlinePolicy = await getPolicy(ctx.tenantId, "apar_deadlines");
     const enriched = rows.map((r) => ({
       ...r,
+      deadline: aparDeadline(r, deadlinePolicy),
       employeeName: names.get(r.employeeId)?.fullName,
       employeeNo: names.get(r.employeeId)?.employeeNo,
       reportingOfficerName: r.reportingOfficerId ? names.get(r.reportingOfficerId)?.fullName : undefined,

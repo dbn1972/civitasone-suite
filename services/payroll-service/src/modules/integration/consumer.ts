@@ -4,6 +4,7 @@ import { db } from "../../shared/db.js";
 import { markProcessed } from "../../shared/outbox.js";
 import { CONSUMED_EVENTS, COMMANDS } from "../../topics.js";
 import * as lopRepo from "./lop-repo.js";
+import { leaveLopDays } from "./lop-math.js";
 import { fetchAttendanceLopApplies, fetchLeaveLopFractionBps } from "../../shared/hrms-client.js";
 import * as statutoryRepo from "../statutory/repo.js";
 import { computeGratuity, completedYearsPgAct, computeLeaveEncashmentGrossMinor } from "../payroll/domain.js";
@@ -77,7 +78,7 @@ export function registerIntegrationConsumers(queue: Queue): void {
   });
 
   queue.subscribe(CONSUMED_EVENTS.leaveApproved, async (msg) => {
-    const p = msg.payload as { employeeId: string; leaveTypeId?: string; daysApplied: number; fromDate: string };
+    const p = msg.payload as { employeeId: string; leaveTypeId?: string; daysApplied: number; daysExact?: number; dayPart?: string; fromDate: string };
     const month = p.fromDate.slice(0, 7);
     // BUG-2 fix: gate the ledger write itself on the same DIC engagement
     // exemption the live-pull payroll-input feed applies (consultant/
@@ -116,7 +117,10 @@ export function registerIntegrationConsumers(queue: Queue): void {
     // to avoid a wide change to the live payroll deduction formula for a
     // capability only one real leave type currently uses -- see this
     // change's PR description.
-    const lopDays = Math.round((p.daysApplied * lopFractionBps) / 10000);
+    // GAP-HR-LEAVE-APPLY-05: part-day (half-day / short) leave is carried to
+    // two decimals instead of being rounded up to a whole LOP day -- see
+    // lop-math.ts. Whole-day leave is unchanged.
+    const lopDays = leaveLopDays(p, lopFractionBps);
     if (lopDays <= 0) return;
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
