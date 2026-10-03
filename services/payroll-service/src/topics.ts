@@ -74,6 +74,12 @@ export const COMMANDS = {
   perquisiteComponentDelete: "payroll.perquisite_component.delete",
   taxDeclarationWindowSet:   "payroll.tax_declaration_window.set",
   bonusRuleCreate:        "payroll.bonus_rule.create",
+  // fin-payroll-03 gap batch (fin03-consumer.ts)
+  ddoSetActive:           "payroll.ddo.set_active",
+  payGroupUpdate:         "payroll.paygroup.update",
+  payGroupSetActive:      "payroll.paygroup.set_active",
+  pensionerSetStatus:     "payroll.pensioner.set_status",
+  salaryRevisionDecide:   "payroll.salary_revision.decide",
 } as const;
 
 export const EVENTS = {

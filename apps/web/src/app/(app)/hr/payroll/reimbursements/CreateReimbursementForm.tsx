@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { EmployeePicker } from "../../../../_components/EmployeePicker";
-import { browserJson } from "@/lib/api/browserClient";
+import { postWithErrorCode } from "../_lib/postWithErrorCode";
 import { formatMoney, formatPeriod } from "@/lib/formatters";
 import { rupeesToMinorString } from "@/lib/money";
 import { REIMBURSEMENT_CATEGORIES, reimbursementCategoryKey, type ReimbursementCategory } from "@/lib/payroll/reimbursementCategories";
+import { receiptRequired } from "@/lib/payroll/receiptRules";
+import { ReceiptUpload, type Receipt } from "./ReceiptUpload";
 
 /**
  * GAP-PAYROLL-REIMBURSEMENTS-01: who the claim is for.
@@ -20,7 +22,7 @@ import { REIMBURSEMENT_CATEGORIES, reimbursementCategoryKey, type ReimbursementC
  */
 export type ClaimSubject = { mode: "admin" } | { mode: "self"; employeeId: string; label: string };
 
-type InvalidField = "employeeId" | "amount" | "period" | null;
+type InvalidField = "employeeId" | "amount" | "period" | "receipts" | null;
 
 const fieldStyle = { padding: "10px 12px", borderRadius: 10, border: "1px solid var(--line)", minHeight: 44 } as const;
 
@@ -34,6 +36,9 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
   const [period, setPeriod] = useState("");
   const [billDate, setBillDate] = useState("");
   const [billRef, setBillRef] = useState("");
+  // GAP-PAYROLL-REIMBURSEMENTS-03: private receipt keys + an upload-in-flight flag.
+  const [receipts, setReceipts] = useState<Receipt[]>([]);
+  const [uploading, setUploading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -78,6 +83,9 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
     }
     // GAP-PAYROLL-REIMBURSEMENTS-04: a real month (2026-13 used to pass).
     if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(period.trim())) return fail("period", "periodFormatError", () => periodRef.current?.focus());
+    // GAP-PAYROLL-REIMBURSEMENTS-03: medical / LTA / travel claims need a receipt.
+    if (uploading) return fail("receipts", "receiptUploadingError");
+    if (receiptRequired(category) && receipts.length === 0) return fail("receipts", "receiptRequiredError");
     setDialogError(undefined);
     setConfirmOpen(true);
   }
@@ -89,16 +97,18 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
     try {
       // CQRS: 202 { id, status: "accepted" } -- the old `res.data.amount_minor`
       // read a field the response never carries and threw on every success.
-      await browserJson<{ id: string; status: string }>("v1/payroll/reimbursements", {
-        method: "POST",
-        body: JSON.stringify({
+      await postWithErrorCode<{ id: string; status: string }>("v1/payroll/reimbursements", {
           employeeId,
           category,
           amountMinor: Number(amountMinor),
           billDate: billDate.trim() || undefined,
           billRef: billRef.trim() || undefined,
           period: period.trim(),
-        }),
+          attachmentKeys: receipts.length > 0 ? receipts.map((r) => r.key) : undefined,
+        }, {
+        RECEIPT_REQUIRED: t("receiptRequiredError"),
+        RECEIPT_KEY_INVALID: t("receiptKeyInvalidError"),
+        RECEIPT_FILE_INVALID: t("receiptFileInvalidError"),
       });
       setConfirmOpen(false);
       setTone("good");
@@ -107,6 +117,7 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
       if (subject.mode === "admin") { setPickedEmployeeId(null); setPickedName(null); }
       setAmount("");
       setBillRef("");
+      setReceipts([]);
       router.refresh();
     } catch (err) {
       setDialogError(err instanceof Error ? err.message : t("networkError"));
@@ -191,7 +202,14 @@ export function CreateReimbursementForm({ subject }: { subject: ClaimSubject }) 
           </div>
 
           <div>
-            <Button type="submit" style={{ minHeight: 44 }} disabled={busy}>
+            <ReceiptUpload receipts={receipts} onChange={setReceipts} onBusyChange={setUploading} />
+            {receiptRequired(category) && (
+              <p style={{ margin: "6px 0 0", fontSize: 12, color: "var(--mut)" }}>{t("receiptRequiredHint", { category: categoryLabel(category) })}</p>
+            )}
+          </div>
+
+          <div>
+            <Button type="submit" style={{ minHeight: 44 }} disabled={busy || uploading}>
               {t("submitClaimBtn")}
             </Button>
           </div>

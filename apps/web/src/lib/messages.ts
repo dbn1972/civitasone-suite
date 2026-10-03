@@ -23,7 +23,8 @@ export type MessageKind =
   | "unknownStatus"
   | "accepted"
   | "forbidden"
-  | "conflict";
+  | "conflict"
+  | "invalid";
 
 /**
  * Build a clerk-safe message for a known situation. `area` is an optional plain
@@ -93,6 +94,15 @@ export function toHumanError(kind: MessageKind, ctx?: { area?: string }): HumanE
       return {
         what: "This can't be done while it's still in use elsewhere.",
         next: "Update or reassign whatever depends on it first, then try again.",
+        actions: ["back", "help"],
+      };
+    case "invalid":
+      // GAP-PAYROLL-STATUTORY-PT-06: a 400/422 -- the server refused the
+      // values themselves. Fixed copy, never the backend's own text (UX-020);
+      // retrying unchanged would fail again, so no "retry".
+      return {
+        what: "Some values were not accepted.",
+        next: "Check the highlighted fields and try again.",
         actions: ["back", "help"],
       };
     default:

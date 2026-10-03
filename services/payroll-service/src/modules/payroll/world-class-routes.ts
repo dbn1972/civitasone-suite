@@ -7,6 +7,7 @@ import { resolveContext, requireRole, HttpError } from "../../shared/context.js"
 import { scopedRead } from "../../shared/db.js";
 import * as repo from "./repo.js";
 import * as commands from "./commands.js";
+import { recordAudit } from "./fin03-commands.js";
 import { mergeSubsistenceSettings } from "./subsistence.js";
 import { resolveSubsistenceConfig } from "./subsistence-repo.js";
 import {
@@ -138,6 +139,12 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     requireRole(ctx, ROLES);
     const q = z.object({ employeeId: z.string().uuid().optional() }).parse(req.query);
     const rows = await repo.listSalaryRevisions(ctx.tenantId, q.employeeId ?? null);
+    // GAP-PAYROLL-SALARY-REVISIONS-05: pay history is DPDP-sensitive financial
+    // data, so every read is recorded (who looked, at whose history).
+    await recordAudit(ctx, {
+      action: "read_pay_history", resourceType: "payroll_salary_revision",
+      resourceId: q.employeeId ?? "all", details: { rows: rows.length },
+    });
     return reply.send({ data: rows });
   });
 
@@ -274,7 +281,7 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     const ctx = resolveContext(req);
     requireRole(ctx, ROLES);
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT protected_net_floor_minor, updated_at,
+      SELECT protected_net_floor_minor, updated_at, salary_revision_second_approver,
              subsistence_initial_pct_bps, subsistence_review_after_days,
              subsistence_revised_min_pct_bps, subsistence_revised_max_pct_bps,
              flex_election_maker_checker
@@ -283,7 +290,7 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
       LIMIT 1
     `))) as unknown as Array<{
       flex_election_maker_checker: boolean;
-      protected_net_floor_minor: string; updated_at: string;
+      protected_net_floor_minor: string; updated_at: string; salary_revision_second_approver: boolean;
       subsistence_initial_pct_bps: number; subsistence_review_after_days: number;
       subsistence_revised_min_pct_bps: number; subsistence_revised_max_pct_bps: number;
     }>;
@@ -291,6 +298,8 @@ export async function worldClassPayrollRoutes(app: FastifyInstance): Promise<voi
     return reply.send({
       protectedNetFloorMinor: s ? Number(s.protected_net_floor_minor) : 0,
       updatedAt: s?.updated_at ?? null,
+      // GAP-PAYROLL-SALARY-REVISIONS-04: maker != checker for salary revisions (default ON).
+      salaryRevisionSecondApprover: s ? s.salary_revision_second_approver !== false : true,
       // FR 53 subsistence allowance (FR 53 defaults when the tenant has no row).
       subsistenceInitialPctBps: s ? Number(s.subsistence_initial_pct_bps) : 5000,
       subsistenceReviewAfterDays: s ? Number(s.subsistence_review_after_days) : 90,

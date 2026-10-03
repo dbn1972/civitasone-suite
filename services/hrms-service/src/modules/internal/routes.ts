@@ -14,6 +14,20 @@ import { resolveEmployeeForActor } from "../employee/actor-link.js";
 
 const INTERNAL_ROLES = ["super_admin", "payroll_admin", "hr_admin"];
 
+const PAN_RE = /^[A-Z]{5}[0-9]{4}[A-Z]$/;
+const IFSC_RE = /^[A-Z]{4}0[A-Z0-9]{6}$/;
+
+/** Issue codes only (never the values): MISSING_PAN, INVALID_PAN, MISSING_BANK_ACCOUNT, INVALID_IFSC. */
+export function payrollReadinessIssues(e: { pan: string | null; bankAccountNo: string | null; bankIfsc: string | null }): string[] {
+  const issues: string[] = [];
+  const pan = (e.pan ?? "").trim().toUpperCase();
+  if (!pan) issues.push("MISSING_PAN");
+  else if (!PAN_RE.test(pan)) issues.push("INVALID_PAN");
+  if (!(e.bankAccountNo ?? "").trim()) issues.push("MISSING_BANK_ACCOUNT");
+  if (!IFSC_RE.test((e.bankIfsc ?? "").trim().toUpperCase())) issues.push("INVALID_IFSC");
+  return issues;
+}
+
 /** payroll-input projection of one active pay-suspension (FR 53 inputs). */
 function suspensionFeed(s: ActivePaySuspension) {
   return {
@@ -24,6 +38,33 @@ function suspensionFeed(s: ActivePaySuspension) {
     revisedEffectiveFrom: s.revisedEffectiveFrom,
     reviewOrderRef: s.reviewOrderRef,
   };
+}
+
+type ReadinessEmployee = { id: string; status: string; pan: string | null; bankAccountNo: string | null; bankIfsc: string | null };
+
+/**
+ * Walks the tenant's employees with KEYSET paging (`id > afterId ORDER BY id`,
+ * employeeRepo.listPageAfterId) -- offset paging over an unordered query can
+ * skip or repeat rows between pages -- and returns the issue codes of every
+ * non-separated employee that has any. Each employee appears at most once.
+ */
+export async function collectPayrollReadiness(
+  fetchPage: (afterId: string | null, limit: number) => Promise<ReadinessEmployee[]>,
+  pageSize = 500,
+): Promise<Array<{ employeeId: string; issues: string[] }>> {
+  const out: Array<{ employeeId: string; issues: string[] }> = [];
+  let afterId: string | null = null;
+  for (;;) {
+    const page = await fetchPage(afterId, pageSize);
+    for (const e of page) {
+      if (e.status === "separated") continue;
+      const issues = payrollReadinessIssues({ pan: e.pan, bankAccountNo: e.bankAccountNo, bankIfsc: e.bankIfsc });
+      if (issues.length > 0) out.push({ employeeId: e.id, issues });
+    }
+    if (page.length < pageSize) break;
+    afterId = page[page.length - 1]!.id;
+  }
+  return out;
 }
 
 export async function internalRoutes(app: FastifyInstance): Promise<void> {
@@ -344,6 +385,19 @@ export async function internalRoutes(app: FastifyInstance): Promise<void> {
         .limit(5000),
     );
     return reply.send(rows.map((r) => ({ employeeId: r.employeeId, pranLast4: r.pran.slice(-4) })));
+  });
+
+  // GAP-PAYROLL-DETAIL-05: payroll-service's run detail page flags employees
+  // whose slip cannot be paid cleanly BEFORE disbursement (missing/invalid PAN
+  // -> Sec 206AA higher TDS; missing bank details -> failed credit). Only issue
+  // CODES leave hrms-service -- never the PAN or the account number -- and only
+  // for employees that actually have an issue. Display enrichment: payroll
+  // treats an unreachable endpoint as "no readiness data", not as "all clear".
+  app.get("/v1/hrms/internal/payroll-readiness", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, INTERNAL_ROLES);
+    const out = await collectPayrollReadiness((afterId, limit) => employeeRepo.listPageAfterId(ctx.tenantId, afterId, limit));
+    return reply.send(out);
   });
 
   // round2 review fix: payroll-service's employee-existence check (arrears/

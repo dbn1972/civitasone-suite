@@ -9,6 +9,7 @@ import { getSessionRoles, PAYROLL_ADMIN_ROLES, PAYROLL_REPORT_ROLES } from "@/li
 import { formatMoney } from "@/lib/formatters";
 import { revisionTypeListLabelKey } from "@/lib/payroll/revisionTypes";
 import { CreateSalaryRevisionForm } from "./CreateSalaryRevisionForm";
+import { PendingRevisions, type PendingRevision } from "./PendingRevisions";
 
 // HIGH fix: the comment this replaced claimed "payroll-service exposes GET
 // /v1/payroll/salary-revisions but no create route" -- that was stale.
@@ -35,6 +36,8 @@ type Row = {
   new_gross_minor: number | string;
   revision_type: string;
   order_no: string | null;
+  /** GAP-PAYROLL-SALARY-REVISIONS-04: pending | approved | rejected (absent on an older API = approved). */
+  status?: string;
 } & Record<string, unknown>;
 
 async function getData(): Promise<LoaderResult<Row[]>> {
@@ -45,6 +48,18 @@ async function getData(): Promise<LoaderResult<Row[]>> {
       return Array.isArray(arr) ? arr : null;
     },
   });
+}
+
+/** Per-tenant maker != checker switch (default ON when the settings cannot be read). */
+async function getSecondApprover(): Promise<boolean> {
+  const r = await fetchJson<unknown, boolean>("/api/v1/payroll/settings", true, {
+    telemetryKey: "payroll.salary-revisions.settings",
+    mapResponse: (p) => {
+      const v = (p as { salaryRevisionSecondApprover?: unknown } | null)?.salaryRevisionSecondApprover;
+      return typeof v === "boolean" ? v : true;
+    },
+  });
+  return r.source === "error" ? true : r.data !== false;
 }
 
 /** Exact BigInt delta (paise) as a signed display string; "—" if either side isn't an integer. */
@@ -66,7 +81,7 @@ export default async function SalaryRevisionsPage() {
   }
   const canCreate = roles.some((r) => PAYROLL_ADMIN_ROLES.includes(r));
 
-  const { data: rawItems, source } = await getData();
+  const [{ data: rawItems, source }, secondApprover] = await Promise.all([getData(), canCreate ? getSecondApprover() : Promise.resolve(true)]);
   const errored = source === "error";
   // GAP-PAYROLL-SALARY-REVISIONS-03: employee_id used to render as a raw
   // UUID. One batched hrms directory lookup (ids=, 50 per request) for just
@@ -90,8 +105,22 @@ export default async function SalaryRevisionsPage() {
       // sent by the form but never shown, so an increment's gross delta
       // could not be audited from the list without the raw API response.
       grossChangeLabel: grossChangeLabel(r.old_gross_minor, r.new_gross_minor),
+      status: r.status ?? "approved",
     };
   });
+  // GAP-PAYROLL-SALARY-REVISIONS-04: revisions awaiting a second approver.
+  // Plain, pre-formatted data (crosses the RSC boundary into PendingRevisions).
+  const pending: PendingRevision[] = items
+    .filter((i) => i.status === "pending")
+    .map((i) => ({
+      id: i.id,
+      employeeLabel: i.employeeLabel,
+      effectiveDate: i.effective_date,
+      typeLabel: i.revisionTypeLabel,
+      oldBasic: formatMoney(i.old_basic_minor),
+      newBasic: formatMoney(i.new_basic_minor),
+      orderNo: i.order_no ?? "—",
+    }));
   type Row2 = (typeof items)[number];
 
   const columns: { key: keyof Row2 & string; label: string; align?: "left" | "right"; cellType?: "status" | "amount"; sortable?: boolean }[] = [
@@ -105,6 +134,7 @@ export default async function SalaryRevisionsPage() {
     // A display string would sort lexically, not numerically.
     { key: "grossChangeLabel", label: t("colGrossChange"), align: "right", sortable: false },
     { key: "order_no", label: t("colOrderNo") },
+    { key: "status", label: t("colStatus"), cellType: "status" },
   ];
 
   return (
@@ -128,7 +158,9 @@ export default async function SalaryRevisionsPage() {
         <StatCard icon="🛠" iconBg="var(--panel)" label={t("statCorrections")} value={errored ? null : items.filter((i) => i.revision_type === "correction").length} />
       </StatGrid>
 
-      {canCreate && <CreateSalaryRevisionForm />}
+      {canCreate && <PendingRevisions rows={errored ? [] : pending} />}
+
+      {canCreate && <CreateSalaryRevisionForm secondApprover={secondApprover} />}
 
       <Card title={t("historyCardTitle")}>
         {errored ? (

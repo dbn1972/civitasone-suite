@@ -116,4 +116,24 @@ describe("PayrollRegisterPage", () => {
     expect(fetchJsonMock).not.toHaveBeenCalled();
     expect(runsMock).not.toHaveBeenCalled();
   });
+
+  // fin-payroll-03 (GAP-PAYROLL-REGISTER-04): GPF / NPS columns.
+  it("shows GPF and NPS columns for a Govt-edition register and nets them out of 'Other deductions'", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [line({ total_gpf_minor: "300000", total_nps_minor: "150000" })], source: "api" });
+    render(await PayrollRegisterPage({ searchParams: { period: "2025-06" } }));
+    expect(screen.getByRole("columnheader", { name: /GPF/ })).toBeInTheDocument();
+    expect(screen.getByRole("columnheader", { name: /NPS/ })).toBeInTheDocument();
+    expect(screen.getByText("₹3,000.00")).toBeInTheDocument();
+    expect(screen.getByText("₹1,500.00")).toBeInTheDocument();
+    // 5000000 - (1000000+200000+800000+100000+300000+150000) = 2450000 paise
+    expect(screen.getByText("₹24,500.00")).toBeInTheDocument();
+    expect(screen.queryByText("₹29,000.00")).not.toBeInTheDocument();
+  });
+
+  it("hides the GPF / NPS columns when nothing is deducted (private edition / older rows)", async () => {
+    fetchJsonMock.mockResolvedValue({ data: [line({ total_gpf_minor: "0", total_nps_minor: "0" })], source: "api" });
+    render(await PayrollRegisterPage({ searchParams: { period: "2025-06" } }));
+    expect(screen.queryByRole("columnheader", { name: /GPF/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("columnheader", { name: /NPS/ })).not.toBeInTheDocument();
+  });
 });

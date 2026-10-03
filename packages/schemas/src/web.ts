@@ -845,6 +845,9 @@ export const PayrollRunFullDetailSchema = PayrollRunDetailSchema.extend({
     deductions: z.number(),
     net: z.number(),
     status: z.string(),
+    // GAP-PAYROLL-DETAIL-05: issue codes (MISSING_PAN, INVALID_PAN,
+    // MISSING_BANK_ACCOUNT, INVALID_IFSC) -- never the PAN / account number.
+    issues: z.array(z.string()).default([]),
   })).default([]),
   // FR 53: pay-suspended employees in this run (subsistence allowance paid,
   // or pay withheld and flagged for HR). Amounts in rupees like the rest.

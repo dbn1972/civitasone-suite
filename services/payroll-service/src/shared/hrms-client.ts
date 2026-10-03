@@ -314,6 +314,28 @@ export async function fetchNpsPranLast4(tenantId: string): Promise<Map<string, s
 }
 
 /**
+ * GAP-PAYROLL-DETAIL-05: per-employee pre-disbursement readiness issue CODES
+ * (MISSING_PAN, INVALID_PAN, MISSING_BANK_ACCOUNT, INVALID_IFSC), keyed by
+ * employeeId; employees with no issue are absent. hrms-service never sends
+ * the PAN / account number itself. Display enrichment: fails OPEN to an empty
+ * Map exactly like fetchEmployeeSummaries above.
+ */
+export async function fetchPayrollReadiness(tenantId: string): Promise<Map<string, string[]>> {
+  const url = `${HRMS_URL}/v1/hrms/internal/payroll-readiness`;
+  try {
+    const res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return new Map();
+    const rows = await res.json() as Array<{ employeeId: string; issues: string[] }>;
+    return new Map(rows.map((r) => [r.employeeId, r.issues]));
+  } catch {
+    return new Map();
+  }
+}
+
+/**
  * round2 fix: payroll and HRMS are separate databases (no DB-level FK is
  * possible), and arrears/bonus/reimbursements accepted any well-formed UUID
  * as employeeId with no check it corresponds to a real employee in the

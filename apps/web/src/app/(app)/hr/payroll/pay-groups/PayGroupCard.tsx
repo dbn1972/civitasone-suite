@@ -2,15 +2,23 @@
 
 import React from "react";
 import Link from "next/link";
-import { useTranslations } from "next-intl";
+import { useLocale, useTranslations } from "next-intl";
 import { StatusPill } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
+import { ActiveToggle } from "../_components/ActiveToggle";
+import { describePayDay, weekdayName } from "./payGroupSchedule";
 
 interface PayGroupCardProps {
   id: string;
   name: string;
   frequency: string;
   payDayOfMonth: number;
+  /** GAP-PAYROLL-PAY-GROUPS-01: ISO weekday (1 = Monday); weekly / bi-weekly. */
+  payWeekday?: number | null;
+  payLastDay?: boolean | null;
+  payWeekParity?: number | null;
+  /** GAP-PAYROLL-PAY-GROUPS-03: payroll admins get Edit and Deactivate / Reactivate. */
+  canAdminister?: boolean;
   timezone: string;
   status: string;
   /** Not returned by GET /v1/payroll/pay-groups today; "—" when absent, never a fabricated 0. */
@@ -48,9 +56,14 @@ function RevisionBadge({ date }: { date?: string }) {
 }
 
 export function PayGroupCard({
+  id,
   name,
   frequency,
   payDayOfMonth,
+  payWeekday,
+  payLastDay,
+  payWeekParity,
+  canAdminister = false,
   timezone,
   status,
   employeeCount,
@@ -58,7 +71,18 @@ export function PayGroupCard({
   lastRevisionDate,
 }: PayGroupCardProps) {
   const t = useTranslations("payGroupCard");
+  const locale = useLocale();
   const isActive = status === "active";
+  // GAP-PAYROLL-PAY-GROUPS-01: the pay day reads according to the frequency
+  // (a weekly group shows "Friday", never "5th").
+  const payDay = describePayDay({ frequency, payDayOfMonth, payWeekday, payLastDay, payWeekParity });
+  const payDayText =
+    payDay.kind === "lastDay" ? t("payDayLastDay")
+    : payDay.kind === "dayOfMonth" ? t("payDayValue", { day: payDay.day })
+    : payDay.kind === "weekday" ? weekdayName(payDay.weekday, locale)
+    : payDay.kind === "biWeekly"
+      ? t("payDayBiWeekly", { weekday: weekdayName(payDay.weekday, locale), weeks: payDay.parity === 0 ? t("weeksEven") : payDay.parity === 1 ? t("weeksOdd") : t("weeksAlternate") })
+      : t("payDayLegacy", { day: payDay.day });
   const freqIcon = FREQUENCY_ICON[frequency] ?? "📅";
   const freqLabelKey = FREQUENCY_LABEL_KEYS[frequency];
   const freqLabel = freqLabelKey ? t(freqLabelKey) : frequency;
@@ -135,7 +159,7 @@ export function PayGroupCard({
           <p style={{ margin: "4px 0 0", fontSize: 16, fontWeight: 700, color: "var(--ink)" }}>
             {/* GAP-PAYROLL-PAY-GROUPS-02: locale ordinal (1st/2nd/3rd/11th/22nd),
                 not a hard-coded English "th". */}
-            {t("payDayValue", { day: payDayOfMonth })}
+            {payDayText}
           </p>
         </div>
       </div>
@@ -171,9 +195,38 @@ export function PayGroupCard({
           {timezone}
         </span>
         <span style={{ marginInlineStart: "auto" }}>
-          <StatusPill status={status} label={isActive ? t("statusActive") : status === "inactive" ? t("statusInactive") : undefined} />
+          <StatusPill status={status} label={isActive ? t("statusActive") : status === "inactive" || status === "archived" ? t("statusInactive") : undefined} />
         </span>
       </div>
+
+      {canAdminister && (
+        <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+          {isActive && (
+            <Link href={`/hr/payroll/pay-groups?edit=${id}`} className="btn ghost" style={{ minHeight: 40, display: "inline-flex", alignItems: "center" }} aria-label={t("editAria", { name })}>
+              {t("editBtn")}
+            </Link>
+          )}
+          <ActiveToggle
+            path={`v1/payroll/pay-groups/${id}/status`}
+            active={isActive}
+            area={t("toggleArea")}
+            conflictCodes={["INVALID_STATE"]}
+            copy={{
+              deactivateBtn: t("deactivateBtn"),
+              reactivateBtn: t("reactivateBtn"),
+              deactivateTitle: t("deactivateTitle"),
+              reactivateTitle: t("reactivateTitle"),
+              deactivateDescription: t("deactivateDescription"),
+              reactivateDescription: t("reactivateDescription"),
+              reasonLabel: t("reasonLabel"),
+              deactivatedMessage: t("deactivatedMessage"),
+              reactivatedMessage: t("reactivatedMessage"),
+              conflictMessage: t("conflictMessage"),
+              networkError: t("networkError"),
+            }}
+          />
+        </div>
+      )}
     </div>
   );
 }
