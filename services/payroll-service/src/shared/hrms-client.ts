@@ -320,6 +320,34 @@ export async function searchEmployeeSummaries(
 }
 
 /**
+ * Same filtered lookup as searchEmployeeSummaries but FAILS CLOSED
+ * (HrmsUnavailableError) when hrms is unreachable or answers non-2xx, so an
+ * outage is never mistaken for "no such employee" (pay-group assignment by
+ * employee number).
+ */
+export async function searchEmployeeSummariesStrict(
+  tenantId: string,
+  filter: { q?: string | undefined; ids?: string[] | undefined },
+): Promise<Map<string, { fullName: string; departmentName: string; employeeNo: string | null }>> {
+  const params = new URLSearchParams();
+  if (filter.q) params.set("q", filter.q);
+  if (filter.ids && filter.ids.length > 0) params.set("ids", filter.ids.join(","));
+  const url = `${HRMS_URL}/v1/hrms/internal/employee-summaries${params.size > 0 ? `?${params.toString()}` : ""}`;
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+  } catch (err) {
+    throw new HrmsUnavailableError(`hrms employee lookup unreachable: ${(err as Error).message}`);
+  }
+  if (!res.ok) throw new HrmsUnavailableError(`hrms employee lookup failed: ${res.status}`);
+  const rows = await res.json() as Array<{ id: string; fullName: string; departmentName: string; employeeNo?: string | null }>;
+  return new Map(rows.map((r) => [r.id, { fullName: r.fullName, departmentName: r.departmentName, employeeNo: r.employeeNo ?? null }]));
+}
+
+/**
  * GAP-PAYROLL-FNF-03: HR-record-derived F&F inputs for one employee and
  * separation date. The outcome is explicit so the caller can fail CLOSED:
  *  - ok: hrms answered with a well-formed body

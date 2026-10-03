@@ -27,6 +27,7 @@ export async function setDdoActive(ctx: RequestContext, ddoCode: string, active:
 export type PayGroupFields = {
   name: string; frequency: string; payDayOfMonth: number; timezone: string;
   payWeekday: number | null; payLastDay: boolean; payWeekParity: number | null;
+  ddoCode: string | null; billType: string;
 };
 
 /** GAP-PAYROLL-PAY-GROUPS-03: the route sends the FULL merged field set. */

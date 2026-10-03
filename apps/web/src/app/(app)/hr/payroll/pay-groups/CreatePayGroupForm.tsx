@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { useLocale, useTranslations } from "next-intl";
 import { Button, Card, ConfirmDialog } from "../../../../_components/ds";
 import { postWithErrorCode, patchWithErrorCode } from "../_lib/postWithErrorCode";
+import { BILL_TYPES, isBillType, type BillType, type DdoOption } from "./payGroupMembership";
 import { payScheduleFields, payScheduleProblem, weekdayName, type PayFrequency } from "./payGroupSchedule";
 
 /**
@@ -48,6 +49,9 @@ export type EditablePayGroup = {
   payLastDay: boolean;
   payWeekParity: number | null;
   timezone: string;
+  /** Current DDO code (null = none) and bill type, when known. */
+  ddoCode?: string | null;
+  billType?: BillType | null;
 };
 
 /**
@@ -56,8 +60,19 @@ export type EditablePayGroup = {
  * day) for monthly, a weekday for weekly, a weekday plus which weeks for
  * bi-weekly. GAP-PAYROLL-PAY-GROUPS-03: edit sends PATCH with the full schedule.
  */
-export function CreatePayGroupForm({ editing }: { editing?: EditablePayGroup }) {
+export function CreatePayGroupForm({
+  editing,
+  ddos = [],
+  ddosUnavailable = false,
+}: {
+  editing?: EditablePayGroup;
+  /** ACTIVE DDOs only -- the server rejects a pay group on an inactive DDO. */
+  ddos?: DdoOption[];
+  /** The DDO list could not be loaded: the DDO field is disabled and left out of the request. */
+  ddosUnavailable?: boolean;
+}) {
   const t = useTranslations("createPayGroupForm");
+  const tm = useTranslations("payGroupMembers");
   const locale = useLocale();
   const FREQUENCIES = FREQUENCY_VALUES.map((value) => ({
     value,
@@ -73,6 +88,16 @@ export function CreatePayGroupForm({ editing }: { editing?: EditablePayGroup }) 
   const [weekday, setWeekday] = useState<string>(editing?.payWeekday != null ? String(editing.payWeekday) : "");
   const [parity, setParity] = useState<string>(editing?.payWeekParity != null ? String(editing.payWeekParity) : "");
   const [timezone, setTimezone] = useState(editing?.timezone ?? "Asia/Kolkata");
+  const [ddoCode, setDdoCode] = useState(editing?.ddoCode ?? "");
+  const [billType, setBillType] = useState<BillType>(isBillType(editing?.billType) ? editing.billType : "other");
+  // An already-linked DDO that has since been deactivated is not in the active
+  // list; keep it selectable (by code) so editing the group doesn't silently unlink it.
+  const ddoOptions =
+    editing?.ddoCode && !ddos.some((d) => d.ddoCode === editing.ddoCode)
+      ? [{ ddoCode: editing.ddoCode, name: editing.ddoCode }, ...ddos]
+      : ddos;
+  const ddoId = useId();
+  const billTypeId = useId();
   const [busy, setBusy] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | undefined>();
@@ -153,8 +178,20 @@ export function CreatePayGroupForm({ editing }: { editing?: EditablePayGroup }) 
       // back: reading res.data.name threw after a successful create, showing
       // an error for a group that had in fact been saved.
       const savedName = name.trim();
-      const body = { name: savedName, timezone: timezone.trim(), ...payScheduleFields(schedule()) };
-      const codeMessages = { DUPLICATE_NAME: t("duplicateNameError"), INVALID_STATE: t("inactiveEditError") };
+      const body = {
+        name: savedName,
+        timezone: timezone.trim(),
+        ...payScheduleFields(schedule()),
+        billType,
+        // null clears the DDO on edit; on create "no DDO" is simply omitted.
+        ...(ddosUnavailable ? {} : editing ? { ddoCode: ddoCode || null } : ddoCode ? { ddoCode } : {}),
+      };
+      const codeMessages = {
+        DUPLICATE_NAME: t("duplicateNameError"),
+        INVALID_STATE: t("inactiveEditError"),
+        DDO_INACTIVE: t("ddoInactiveError"),
+        DDO_NOT_FOUND: t("ddoNotFoundError"),
+      };
       if (editing) {
         await patchWithErrorCode(`v1/payroll/pay-groups/${editing.id}`, body, codeMessages, { area: t("saveArea"), statusAware: true });
       } else {
@@ -170,6 +207,7 @@ export function CreatePayGroupForm({ editing }: { editing?: EditablePayGroup }) 
         setLastDay(false);
         setWeekday("");
         setParity("");
+        setDdoCode("");
       }
       router.refresh();
     } catch (err) {
@@ -303,6 +341,35 @@ export function CreatePayGroupForm({ editing }: { editing?: EditablePayGroup }) 
             >
               {zones.map((z) => (
                 <option key={z} value={z}>{z}</option>
+              ))}
+            </select>
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            <label htmlFor={ddoId} style={{ fontSize: 13, fontWeight: 600 }}>{t("ddoLabel")}</label>
+            <select
+              id={ddoId}
+              value={ddoCode}
+              disabled={ddosUnavailable}
+              onChange={(e) => setDdoCode(e.target.value)}
+              style={selectStyle}
+            >
+              <option value="">{t("ddoNone")}</option>
+              {ddoOptions.map((d) => (
+                <option key={d.ddoCode} value={d.ddoCode}>{`${d.name} (${d.ddoCode})`}</option>
+              ))}
+            </select>
+            <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{ddosUnavailable ? t("ddoUnavailableHint") : t("ddoHint")}</p>
+          </div>
+          <div style={{ display: "grid", gap: 6 }}>
+            <label htmlFor={billTypeId} style={{ fontSize: 13, fontWeight: 600 }}>{t("billTypeLabel")}</label>
+            <select
+              id={billTypeId}
+              value={billType}
+              onChange={(e) => setBillType(e.target.value as BillType)}
+              style={selectStyle}
+            >
+              {BILL_TYPES.map((b) => (
+                <option key={b} value={b}>{tm(`billType.${b}`)}</option>
               ))}
             </select>
           </div>

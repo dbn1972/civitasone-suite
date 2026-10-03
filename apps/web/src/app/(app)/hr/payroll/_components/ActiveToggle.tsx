@@ -28,7 +28,7 @@ export type ActiveToggleCopy = {
  * displayed (UX-020).
  */
 export function ActiveToggle({
-  path, active, copy, area, conflictCodes = ["DDO_IN_USE", "INVALID_STATE"],
+  path, active, copy, area, conflictCodes = ["DDO_IN_USE", "INVALID_STATE"], conflictMessages,
 }: {
   /** PATCH path relative to the BFF proxy, e.g. v1/payroll/ddos/<code>/status. */
   path: string;
@@ -37,6 +37,8 @@ export function ActiveToggle({
   /** Plain noun for the generic failure message. */
   area?: string;
   conflictCodes?: string[];
+  /** Per-code 409 copy; takes precedence over `copy.conflictMessage` for those codes. */
+  conflictMessages?: Record<string, string>;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -51,7 +53,7 @@ export function ActiveToggle({
       await patchWithErrorCode(
         path,
         { active: !active, reason },
-        Object.fromEntries(conflictCodes.map((c) => [c, copy.conflictMessage])),
+        { ...Object.fromEntries(conflictCodes.map((c) => [c, copy.conflictMessage])), ...(conflictMessages ?? {}) },
         { ...(area ? { area } : {}), statusAware: true },
       );
       setOpen(false);

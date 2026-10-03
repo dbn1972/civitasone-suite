@@ -24,6 +24,8 @@ import { isValidIanaTimeZone } from "./validators.js";
 import { resolveVerificationPlan, verifiedDeductionFigures, NO_VERIFIED, istToday } from "../tax/verified-inputs.js";
 import { fetchEmployeeSummaries } from "../../shared/hrms-client.js";
 import { exceedsCap, isValidSplitPct, otherActiveSplitHundredths } from "../costing-rules/split-cap.js";
+import { PAY_GROUP_BILL_TYPES, todayIst } from "./pay-group-domain.js";
+import { assertActiveDdo } from "./pay-group-guards.js";
 
 const PAYROLL_ROLES = ["payroll_admin", "payroll_officer", "super_admin"];
 const READER_ROLES = [...PAYROLL_ROLES, "hr_admin", "finance_officer"];
@@ -44,6 +46,9 @@ const createPayGroupBody = z.object({
   payWeekday: z.number().int().min(1).max(7).nullable().optional(),
   payLastDay: z.boolean().optional(),
   payWeekParity: z.number().int().min(0).max(1).nullable().optional(),
+  // GAP-PAYROLL-PAY-GROUPS-03: the DDO whose bill this is (must be active) + bill type.
+  ddoCode: z.string().trim().min(1).max(32).nullable().optional(),
+  billType: z.enum(PAY_GROUP_BILL_TYPES).optional(),
 }).superRefine((b, c) => {
   const problem = validatePaySchedule(b);
   if (problem) c.addIssue({ code: z.ZodIssueCode.custom, path: ["frequency"], message: problem });
@@ -203,6 +208,7 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const ctx = resolveContext(req);
     requireRole(ctx, PAYROLL_ROLES);
     const body = createPayGroupBody.parse(req.body);
+    await assertActiveDdo(ctx.tenantId, body.ddoCode);
     return sendAccepted(reply, acceptedResponseSchema, await commands.createPayGroup(ctx, body));
   });
 
@@ -214,10 +220,14 @@ export async function gapRoutes(app: FastifyInstance): Promise<void> {
     const q = z.object({ includeInactive: z.enum(["true", "false"]).optional() }).parse(req.query);
     const includeInactive = q.includeInactive === "true";
     const rows = (await scopedRead((tx) => tx.execute(sql`
-      SELECT id, name, frequency, pay_day_of_month, pay_weekday, pay_last_day, pay_week_parity, timezone, status, created_at
-      FROM payroll.pay_groups
-      WHERE tenant_id = ${ctx.tenantId}::uuid AND (${includeInactive} OR status = 'active')
-      ORDER BY name LIMIT 100
+      SELECT g.id, g.name, g.frequency, g.pay_day_of_month, g.pay_weekday, g.pay_last_day, g.pay_week_parity,
+             g.timezone, g.status, g.created_at, g.ddo_code, g.bill_type,
+             (SELECT COUNT(*)::int FROM payroll.employee_pay_group_assignments a
+               WHERE a.tenant_id = g.tenant_id AND a.pay_group_id = g.id
+                 AND a.effective_from <= ${todayIst()}::date AND (a.effective_to IS NULL OR a.effective_to > ${todayIst()}::date)) AS "employeeCount"
+      FROM payroll.pay_groups g
+      WHERE g.tenant_id = ${ctx.tenantId}::uuid AND (${includeInactive} OR g.status = 'active')
+      ORDER BY g.name LIMIT 100
     `))) as unknown as Array<Record<string, unknown>>;
     return reply.send({ data: rows });
   });

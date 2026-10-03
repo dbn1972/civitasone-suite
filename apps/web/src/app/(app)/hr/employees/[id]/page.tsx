@@ -3,11 +3,13 @@ import { DataSourceBadge } from "../../../../_components/DataSourceBadge";
 import { PageHeader, Card, StatusPill, LoadErrorState } from "../../../../_components/ds";
 import { getEmployeeById } from "../../../../_data/loaders";
 import { formatIndianDate } from "@/lib/formatters";
-import { getSessionRoles } from "@/lib/auth/roleGuard";
+import { getSessionRoles, PAYROLL_READER_ROLES } from "@/lib/auth/roleGuard";
 import { EMPLOYEE_ADMIN_ROLES } from "@/lib/auth/workRoles";
 import { isServingStatus, isExitedStatus } from "@/lib/employeeStatus";
 import { LifecycleTimeline, type LifecycleEvent } from "../../_components/LifecycleTimeline";
 import { fetchJson } from "@/app/_data/apiClient";
+import { EmployeePayGroupCard } from "./EmployeePayGroupCard";
+import { getEmployeePayGroup } from "../../payroll/pay-groups/payGroupData";
 import { getTranslations } from "next-intl/server";
 
 // GAP-HR-EMPLOYEES-DETAIL-04: GAP-HR-SF-17 (#1658) added batch name
@@ -194,6 +196,10 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
   const roles = getSessionRoles();
   const canAdminister = roles.some((r) => EMPLOYEE_ADMIN_ROLES.includes(r));
   const costCenterName = canAdminister && employee.costCenterId ? await getCostCenterName(employee.costCenterId) : null;
+
+  // Pay group (payroll-service, PAYROLL_READER_ROLES): only fetched for roles
+  // that may read it, so everyone else never meets a 403 card.
+  const payGroupResult = roles.some((r) => PAYROLL_READER_ROLES.includes(r)) ? await getEmployeePayGroup(params.id) : null;
 
   // Build base lifecycle events from known fields
   const baseEvents: LifecycleEvent[] = [];
@@ -446,6 +452,8 @@ export default async function EmployeeDetailPage({ params }: { params: { id: str
           </div>
         </Card>
       )}
+
+      {payGroupResult && <EmployeePayGroupCard result={payGroupResult} />}
 
       {/* Lifecycle Timeline */}
       <Card title={t("lifecycleTitle")}>

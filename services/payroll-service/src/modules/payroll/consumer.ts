@@ -26,6 +26,8 @@ import { clearRunRegister, rebuildRunRegister, resolveRegisterDepartments } from
 import { computeSubsistenceEarnings, resolveProfiledSuspension, mergeSubsistenceSettings, DEFAULT_SUBSISTENCE_CONFIG, type SubsistenceEarnings } from "./subsistence.js";
 import { recordRunSuspension, resolveSubsistenceConfig } from "./subsistence-repo.js";
 import { registerFin03Consumers } from "./fin03-consumer.js";
+import { registerPayGroupConsumers } from "./pay-group-consumer.js";
+import { claimRunEmployees, findDoubleRunEmployees, resolveMonthMembers } from "./pay-group-repo.js";
 import { receiptRuleViolation } from "./fin03-domain.js";
 
 /** DOM-008: sentinel tenant_id for the platform-default statutory config row (see migration 0038). */
@@ -627,6 +629,7 @@ export async function resolveDdoDepartments(tx: typeof db, tenantId: string, ddo
 export function registerPayrollConsumers(rawQueue: Queue): void {
   const queue = tenantScoped(rawQueue);
   registerFin03Consumers(queue);
+  registerPayGroupConsumers(queue);
   queue.subscribe(COMMANDS.structureCreate, async (msg) => {
     const p = msg.payload as { id: string; tenantId: string; name: string; description?: string; isDefault: boolean };
     await db.transaction(async (tx) => {
@@ -645,7 +648,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
   queue.subscribe(COMMANDS.runCreate, async (msg) => {
     const p = msg.payload as {
       id: string; tenantId: string; runNo: string; month: string;
-      departmentId?: string; structureId?: string; runType?: string; ddoCode?: string;
+      departmentId?: string; structureId?: string; runType?: string; ddoCode?: string; payGroupId?: string;
     };
     const runType: "regular" | "supplementary" | "arrears" | "pensioner" =
       p.runType === "supplementary" || p.runType === "arrears" || p.runType === "pensioner" ? p.runType : "regular";
@@ -704,6 +707,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
           WHERE tenant_id = ${p.tenantId}::uuid AND month = ${p.month}
             AND status <> 'failed' AND run_type = 'regular'
             AND COALESCE(ddo_code, '__ALL__') = ${ddoCode ?? "__ALL__"}
+            AND pay_group_id IS NULL
           LIMIT 1
         `)) as unknown as Array<unknown>;
         if (dup.length > 0) {
@@ -724,7 +728,7 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       if (runType === "pensioner") {
         await processPensionRun(msg, { id: p.id, tenantId: p.tenantId, month: p.month, ddoCode });
       } else {
-        await processPayrollRun(msg, { ...p, structureId: p.structureId ?? NIL_STRUCTURE_ID, runType, ddoCode });
+        await processPayrollRun(msg, { ...p, structureId: p.structureId ?? NIL_STRUCTURE_ID, runType, ddoCode, payGroupId: p.payGroupId ?? null });
       }
     } catch (err) {
       // payroll-critical fix: record WHY, not just that, this run failed
@@ -1148,16 +1152,17 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
       id: string; tenantId: string; name: string;
       frequency: string; payDayOfMonth: number; timezone: string;
       payWeekday?: number | null; payLastDay?: boolean; payWeekParity?: number | null;
+      ddoCode?: string | null; billType?: string;
     };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       await tx.execute(sql`
         INSERT INTO payroll.pay_groups
           (id, tenant_id, name, frequency, pay_day_of_month, timezone, pay_weekday, pay_last_day, pay_week_parity,
-           created_by, updated_by)
+           ddo_code, bill_type, created_by, updated_by)
         VALUES (${p.id}::uuid, ${p.tenantId}::uuid, ${p.name}, ${p.frequency},
           ${p.payDayOfMonth}, ${p.timezone}, ${p.payWeekday ?? null}, ${p.payLastDay ?? false}, ${p.payWeekParity ?? null},
-          ${msg.actorId}::uuid, ${msg.actorId}::uuid)
+          ${p.ddoCode ?? null}, ${p.billType ?? "other"}, ${msg.actorId}::uuid, ${msg.actorId}::uuid)
         ON CONFLICT (id) DO NOTHING
       `);
       await enqueue(tx, {
@@ -1613,14 +1618,20 @@ export function registerPayrollConsumers(rawQueue: Queue): void {
 
 async function processPayrollRun(
   msg: { tenantId: string; actorId: string; correlationId: string },
-  p: { id: string; tenantId: string; month: string; structureId: string; departmentId?: string; runType?: "regular" | "supplementary" | "arrears"; ddoCode?: string | null },
+  p: { id: string; tenantId: string; month: string; structureId: string; departmentId?: string; runType?: "regular" | "supplementary" | "arrears"; ddoCode?: string | null; payGroupId?: string | null },
 ): Promise<void> {
   const input = await fetchPayrollInput(p.tenantId, p.month);
   const structComps = await repo.listComponentsByStructure(p.structureId, p.tenantId);
   // Multi-DDO: the departments this DDO pays (null => whole tenant, legacy).
   // FORCE-RLS fix: was called with a bare `db` (RLS-blind, see
   // resolveDdoDepartments's own doc comment); now routed through scopedRead.
-  const ddoDepartments = await scopedRead((tx) => resolveDdoDepartments(tx, p.tenantId, p.ddoCode ?? null));
+  // GAP-PAYROLL-PAY-GROUPS-03: a pay-group run pays exactly the group's members
+  // for the month (membership, not departments, defines the set); every other
+  // run keeps the department / DDO scoping unchanged.
+  const groupMembers = p.payGroupId
+    ? new Set((await scopedRead((tx) => resolveMonthMembers(tx, p.tenantId, p.month, p.payGroupId!))).keys())
+    : null;
+  const ddoDepartments = groupMembers ? null : await scopedRead((tx) => resolveDdoDepartments(tx, p.tenantId, p.ddoCode ?? null));
   // bug-fix (silent-DA-gap): must be tenant-scoped (see resolveDaRateBps's
   // doc comment) -- the bare `db` this used to call with is RLS-blind on
   // payroll.dearness_allowance_rates and silently resolved every real,
@@ -1695,6 +1706,7 @@ async function processPayrollRun(
       if (p.departmentId && emp.departmentId !== p.departmentId) return false;
       // Multi-DDO: only pay employees whose department belongs to this run's DDO.
       if (ddoDepartments && !ddoDepartments.has(emp.departmentId)) return false;
+      if (groupMembers && !groupMembers.has(emp.id)) return false;
       if (alreadyComputed.has(emp.id)) return false; // M1: skip already-computed employees
       // DIC engagement gate: consultants (invoice/194J), third-party (agency/194C)
       // and apprentices (stipend) are NOT paid through the salary run — their pay
@@ -1703,6 +1715,20 @@ async function processPayrollRun(
       return true;
     });
     const runEmployeeIds = runEmployees.map((emp) => emp.id);
+
+    // GAP-PAYROLL-PAY-GROUPS-03 hard invariant: an employee is never in two
+    // non-cancelled REGULAR runs for one period. Claim every employee this run
+    // pays (race-safe: the claims table's PRIMARY KEY) and refuse the run if
+    // any of them is already in another one (a claim, or a slip of a run
+    // that pre-dates the claims table). Throwing rolls this whole transaction
+    // back, and the caller marks the run failed with this reason.
+    if ((p.runType ?? "regular") === "regular" && runEmployeeIds.length > 0) {
+      await claimRunEmployees(tx, { tenantId: p.tenantId, runId: p.id, month: p.month, employeeIds: runEmployeeIds });
+      const doubled = await findDoubleRunEmployees(tx, p.tenantId, p.month, runEmployeeIds, p.id);
+      if (doubled.length > 0) {
+        throw new NonRetryableError(`EMPLOYEE_ALREADY_IN_RUN: ${doubled.length} employee(s) are already in another non-cancelled regular payroll run for ${p.month}`);
+      }
+    }
 
     // FY/month-index derived from p.month only -- constant for the whole
     // run. Was recomputed identically once per employee inside the loop;

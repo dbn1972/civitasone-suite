@@ -8,6 +8,15 @@ import { Button, ConfirmDialog } from "../../../_components/ds";
 import { useToast } from "@/app/_components/ds/Toast";
 import { trackActivation } from "@/lib/activation";
 import { useFormError } from "@/lib/useFormError";
+import { errorCodeFromResponse } from "@/lib/api/browserClient";
+import {
+  parseRunCreateResult,
+  runScopeFields,
+  runScopeProblem,
+  type DdoOption,
+  type GroupOption,
+  type RunScope,
+} from "./pay-groups/payGroupMembership";
 
 type Structure = { id: string; name: string };
 
@@ -15,14 +24,31 @@ type Props = {
   structures: Structure[];
   /** Pay periods that already have a run, used to guard against duplicates. */
   existingPeriods?: string[];
+  /** ACTIVE pay groups, for a per-group run. Empty/omitted = the picker only offers the whole tenant. */
+  payGroups?: GroupOption[];
+  /** ACTIVE DDOs, for "all active pay groups of a DDO". */
+  ddos?: DdoOption[];
 };
+
+type ScopeKind = RunScope["kind"];
+
+/** Server answers for a pay-group-scoped run that get their own sentence (never the raw code). */
+const RUN_ERROR_CODES = [
+  "EMPLOYEE_ALREADY_IN_RUN",
+  "PAY_GROUP_EMPTY",
+  "NO_ACTIVE_PAY_GROUPS",
+  "DDO_INACTIVE",
+  "DUPLICATE_RUN_FOR_PERIOD",
+  "PAY_GROUP_INACTIVE",
+  "PAY_GROUP_NOT_FOUND",
+] as const;
 
 const MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December",
 ];
 
-export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props) {
+export function CreatePayrollRunForm({ structures, existingPeriods = [], payGroups = [], ddos = [] }: Props) {
   const t = useTranslations("createPayrollRunForm");
   const router = useRouter();
   const { toast } = useToast();
@@ -42,6 +68,17 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [dialogError, setDialogError] = useState<string | undefined>();
   const formError = useFormError("payroll run");
+  const [scopeKind, setScopeKind] = useState<ScopeKind>("tenant");
+  const [groupIds, setGroupIds] = useState<string[]>([]);
+  const [ddoCode, setDdoCode] = useState("");
+  const [createdRunIds, setCreatedRunIds] = useState<string[]>([]);
+  const [skippedGroups, setSkippedGroups] = useState<string[]>([]);
+  const scopeId = useId();
+  const ddoSelId = useId();
+  const scope: RunScope =
+    scopeKind === "groups" ? { kind: "groups", ids: groupIds } : scopeKind === "ddo" ? { kind: "ddo", ddoCode } : { kind: "tenant" };
+  const scopeProblem = runScopeProblem(scope);
+  const groupName = (id: string) => payGroups.find((g) => g.id === id)?.name;
 
   const runNoId = useId();
   const structId = useId();
@@ -61,10 +98,14 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
 
   // A month like "2026-06" duplicates an existing period such as "Jun 2026" /
   // "2026-06" — compare on the year+month tokens to be format-agnostic.
-  const periodDuplicate = existingPeriods.some((p) => {
+  const periodHasRun = existingPeriods.some((p) => {
     const norm = p.toLowerCase().replace(/\s+/g, "");
     return norm.includes(month) || norm.includes(month.replace("-", "/"));
   });
+  // Only a whole-tenant run is blocked by an existing run for the month: pay-group
+  // runs are one per group, so another group's run must not stop this one (the
+  // server rejects a true duplicate / overlapping employee with its own code).
+  const periodDuplicate = periodHasRun && scopeKind === "tenant";
 
   const selectedStructure = structures.find((s) => s.id === structureId);
 
@@ -79,9 +120,14 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
       const res = await fetch("/api/proxy/v1/payroll/runs", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ runNo, month, structureId }),
+        body: JSON.stringify({ runNo, month, structureId, ...runScopeFields(scope) }),
       });
       if (!res.ok) {
+        const code = await errorCodeFromResponse(res);
+        if (code && (RUN_ERROR_CODES as readonly string[]).includes(code)) {
+          setDialogError(t(`runErrors.${code}`));
+          return;
+        }
         const resolved = await formError.fromResponse(res, "save");
         // Merge server field errors into the same state the pre-submit
         // client validation already renders inline (runNo/structureId/month).
@@ -93,10 +139,20 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
       }
       const text = await res.text();
       const body = text ? (JSON.parse(text) as { id?: string }) : {};
+      const created = parseRunCreateResult(body);
       setConfirmOpen(false);
       trackActivation("first_transaction");
       toast.success(t("createdToast", { month: MONTHS[selectedMonthIdx - 1], year: selectedYear }));
-      if (body.id) {
+      if (scopeKind !== "tenant" && (created.runIds.length > 1 || created.skippedEmptyGroups.length > 0)) {
+        // One run per pay group: list them all instead of jumping to one.
+        setCreatedRunIds(created.runIds);
+        setSkippedGroups(created.skippedEmptyGroups);
+        setTone("good");
+        setMessage(t("createdManyMessage", { count: created.runIds.length }));
+        router.refresh();
+      } else if (scopeKind !== "tenant" && created.runIds.length === 1) {
+        router.push(`/hr/payroll/${created.runIds[0]}`);
+      } else if (body.id) {
         router.push(`/hr/payroll/${body.id}`);
       } else {
         setTone("good");
@@ -117,7 +173,10 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
     if (!runNo.trim()) errors.runNo = t("runNoRequiredError");
     if (!structureId) errors.structureId = t("structureRequiredError");
     if (!month) errors.month = t("monthRequiredError");
+    if (scopeProblem) errors.scope = t(`scopeProblem.${scopeProblem}`);
     setFieldErrors(errors);
+    setCreatedRunIds([]);
+    setSkippedGroups([]);
     if (Object.keys(errors).length > 0) {
       setTone("bad");
       setMessage(t("incompleteFormError"));
@@ -202,6 +261,56 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
           </div>
         </div>
 
+        <fieldset style={{ border: 0, padding: 0, margin: 0, display: "grid", gap: 8 }}>
+          <legend style={labelStyle}>{t("runForLabel")}</legend>
+          <select
+            id={scopeId}
+            aria-label={t("runForLabel")}
+            value={scopeKind}
+            onChange={(e) => setScopeKind(e.target.value as ScopeKind)}
+            style={selStyle}
+          >
+            <option value="tenant">{t("runForTenant")}</option>
+            <option value="groups">{t("runForGroups")}</option>
+            <option value="ddo">{t("runForDdo")}</option>
+          </select>
+          {scopeKind === "groups" &&
+            (payGroups.length > 0 ? (
+              <div role="group" aria-label={t("groupsLabel")} style={{ display: "grid", gap: 4 }}>
+                {payGroups.map((g) => (
+                  <label key={g.id} style={{ display: "flex", gap: 8, alignItems: "center", minHeight: 36, fontSize: 13.5 }}>
+                    <input
+                      type="checkbox"
+                      checked={groupIds.includes(g.id)}
+                      onChange={(e) =>
+                        setGroupIds((prev) => (e.target.checked ? [...prev, g.id] : prev.filter((x) => x !== g.id)))
+                      }
+                    />
+                    {g.name}
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("noPayGroups")}</p>
+            ))}
+          {scopeKind === "ddo" && (
+            <select
+              id={ddoSelId}
+              aria-label={t("ddoLabel")}
+              value={ddoCode}
+              onChange={(e) => setDdoCode(e.target.value)}
+              style={selStyle}
+            >
+              <option value="">{t("ddoPlaceholder")}</option>
+              {ddos.map((d) => (
+                <option key={d.ddoCode} value={d.ddoCode}>{`${d.name} (${d.ddoCode})`}</option>
+              ))}
+            </select>
+          )}
+          {scopeKind !== "tenant" && <p style={{ margin: 0, fontSize: 12, color: "var(--mut)" }}>{t("scopeHint")}</p>}
+          {fieldErrors.scope && <span role="alert" style={{ fontSize: 12, color: "var(--bad)" }}>{fieldErrors.scope}</span>}
+        </fieldset>
+
         {periodDuplicate && (
           <p id={errId} role="alert" className="pill warn" style={{ width: "fit-content" }}>
             {t("periodDuplicateWarning", { month: MONTHS[selectedMonthIdx - 1], year: selectedYear })}
@@ -217,6 +326,22 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
         {message && (
           <p role="status" aria-live="polite" className={`pill ${tone}`} style={{ width: "fit-content" }}>
             {message}
+          </p>
+        )}
+        {createdRunIds.length > 0 && (
+          <ul aria-label={t("createdRunsLabel")} style={{ margin: 0, paddingInlineStart: 20 }}>
+            {createdRunIds.map((id, i) => (
+              <li key={id}>
+                <Link href={`/hr/payroll/${id}`} style={{ color: "var(--primary-d)", textDecoration: "underline" }}>
+                  {t("openRunLink", { n: i + 1 })}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {skippedGroups.length > 0 && (
+          <p role="status" className="pill warn" style={{ width: "fit-content" }}>
+            {t("skippedEmpty", { names: skippedGroups.map((id) => groupName(id) ?? t("unknownGroup")).join(", ") })}
           </p>
         )}
 
@@ -248,6 +373,18 @@ export function CreatePayrollRunForm({ structures, existingPeriods = [] }: Props
               <>
                 {" "}
                 {t.rich("confirmDescriptionWarning", { strong: (chunks) => <strong>{chunks}</strong> })}
+              </>
+            )}
+            {scopeKind === "groups" && (
+              <>
+                {" "}
+                {t("confirmScopeGroups", { names: groupIds.map((id) => groupName(id) ?? t("unknownGroup")).join(", ") })}
+              </>
+            )}
+            {scopeKind === "ddo" && (
+              <>
+                {" "}
+                {t("confirmScopeDdo", { ddo: ddos.find((d) => d.ddoCode === ddoCode)?.name ?? ddoCode })}
               </>
             )}
           </>

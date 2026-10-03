@@ -6,7 +6,8 @@ import { useLocale, useTranslations } from "next-intl";
 import { StatusPill } from "../../../../_components/ds";
 import { formatIndianDate } from "@/lib/formatters";
 import { ActiveToggle } from "../_components/ActiveToggle";
-import { describePayDay, weekdayName } from "./payGroupSchedule";
+import { formatPayDay, frequencyLabel } from "./payDayLabel";
+import { isBillType } from "./payGroupMembership";
 
 interface PayGroupCardProps {
   id: string;
@@ -25,20 +26,16 @@ interface PayGroupCardProps {
   employeeCount?: number;
   associatedStructureName?: string;
   lastRevisionDate?: string;
+  /** DDO the group belongs to (code), when set. */
+  ddoCode?: string | null;
+  /** gazetted | non_gazetted | contract | casual | other -- shown through i18n, never raw. */
+  billType?: string | null;
 }
 
 const FREQUENCY_ICON: Record<string, string> = {
   monthly: "📅",
   bi_weekly: "📆",
   weekly: "🗓️",
-};
-
-// UX-017: keys are the stable backend frequency codes, never translated --
-// only used to look up which message key holds the display label.
-const FREQUENCY_LABEL_KEYS: Record<string, string> = {
-  monthly: "frequencyMonthly",
-  bi_weekly: "frequencyBiWeekly",
-  weekly: "frequencyWeekly",
 };
 
 // GAP-PAYROLL-PAY-GROUPS-05: was coloured amber/green from the *browser*
@@ -69,23 +66,18 @@ export function PayGroupCard({
   employeeCount,
   associatedStructureName,
   lastRevisionDate,
+  ddoCode,
+  billType,
 }: PayGroupCardProps) {
   const t = useTranslations("payGroupCard");
+  const tm = useTranslations("payGroupMembers");
   const locale = useLocale();
   const isActive = status === "active";
   // GAP-PAYROLL-PAY-GROUPS-01: the pay day reads according to the frequency
   // (a weekly group shows "Friday", never "5th").
-  const payDay = describePayDay({ frequency, payDayOfMonth, payWeekday, payLastDay, payWeekParity });
-  const payDayText =
-    payDay.kind === "lastDay" ? t("payDayLastDay")
-    : payDay.kind === "dayOfMonth" ? t("payDayValue", { day: payDay.day })
-    : payDay.kind === "weekday" ? weekdayName(payDay.weekday, locale)
-    : payDay.kind === "biWeekly"
-      ? t("payDayBiWeekly", { weekday: weekdayName(payDay.weekday, locale), weeks: payDay.parity === 0 ? t("weeksEven") : payDay.parity === 1 ? t("weeksOdd") : t("weeksAlternate") })
-      : t("payDayLegacy", { day: payDay.day });
+  const payDayText = formatPayDay(t, locale, { frequency, payDayOfMonth, payWeekday, payLastDay, payWeekParity });
   const freqIcon = FREQUENCY_ICON[frequency] ?? "📅";
-  const freqLabelKey = FREQUENCY_LABEL_KEYS[frequency];
-  const freqLabel = freqLabelKey ? t(freqLabelKey) : frequency;
+  const freqLabel = frequencyLabel(t, frequency);
 
   return (
     <div
@@ -133,7 +125,13 @@ export function PayGroupCard({
         >
           <p style={{ margin: 0, fontSize: 11, color: "var(--mut)", fontWeight: 500 }}>{t("employeesLabel")}</p>
           <p style={{ margin: "4px 0 0", fontSize: 20, fontWeight: 700, color: "var(--ink)" }}>
-            {typeof employeeCount === "number" ? employeeCount.toLocaleString("en-IN") : "—"}
+            {typeof employeeCount === "number" ? (
+              <Link href={`/hr/payroll/pay-groups/${id}?tab=members`} aria-label={t("membersLinkAria", { name, count: employeeCount })}>
+                {employeeCount.toLocaleString("en-IN")}
+              </Link>
+            ) : (
+              "—"
+            )}
           </p>
         </div>
         <div
@@ -194,9 +192,17 @@ export function PayGroupCard({
         >
           {timezone}
         </span>
+        {ddoCode && <span className="pill mut">{t("ddoChip", { code: ddoCode })}</span>}
+        {isBillType(billType) && <span className="pill mut">{tm(`billType.${billType}`)}</span>}
         <span style={{ marginInlineStart: "auto" }}>
           <StatusPill status={status} label={isActive ? t("statusActive") : status === "inactive" || status === "archived" ? t("statusInactive") : undefined} />
         </span>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+        <Link href={`/hr/payroll/pay-groups/${id}`} className="btn ghost" style={{ minHeight: 40, display: "inline-flex", alignItems: "center" }} aria-label={t("detailsAria", { name })}>
+          {t("detailsBtn")}
+        </Link>
       </div>
 
       {canAdminister && (
@@ -211,6 +217,10 @@ export function PayGroupCard({
             active={isActive}
             area={t("toggleArea")}
             conflictCodes={["INVALID_STATE"]}
+            conflictMessages={{
+              PAY_GROUP_HAS_MEMBERS: tm("hasMembersMessage"),
+              PAY_GROUP_HAS_ACTIVE_RUN: tm("hasActiveRunMessage"),
+            }}
             copy={{
               deactivateBtn: t("deactivateBtn"),
               reactivateBtn: t("reactivateBtn"),
