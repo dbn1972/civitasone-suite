@@ -2,6 +2,7 @@ import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState } fr
 import { toHumanError } from "@/lib/messages";
 import { getStockItems } from "../../../_data/loaders";
 import { getInventoryCycleCounts, type InventoryCycleCountRow } from "../_data";
+import { getItemLinks } from "../_dataLinks";
 import { itemLabel, nameOrDash } from "../_labels";
 import { stockListStats } from "./listStats";
 import { InventoryStockListClient } from "./InventoryStockListClient";
@@ -32,10 +33,14 @@ const CYCLE_COUNT_COLUMNS = [
 ];
 
 export default async function InventoryListPage() {
-  const [{ data: items, source }, pendingRes] = await Promise.all([
+  const [{ data: items, source }, pendingRes, linksRes] = await Promise.all([
     getStockItems(),
     getInventoryCycleCounts("pending_approval"),
+    getItemLinks(),
   ]);
+  // GAP-INVENTORY-DETAIL-04: which stock items are linked to an item master entry. null when the
+  // links could not be read, so no row is mislabelled "not linked".
+  const linkedStockIds = linksRes.source === "error" ? null : linksRes.data.map((l) => l.stockItemId);
 
   // GAP-INVENTORY-LIST-01: a failed fetch yields items=[] -- never present that as
   // an unstocked store (zero SKUs, Rs 0 value, "Add stock items"). Stats read
@@ -59,7 +64,7 @@ export default async function InventoryListPage() {
       </nav>
       <PageHeader
         title="Stock Items"
-        subtitle="Stock levels per item from the stock service. The catalogued item master, with categories and reorder policy, is under Item Master."
+        subtitle="Stock levels per item from the stock service. Items linked to the item master are marked, and show once. The catalogued item master, with categories and reorder policy, is under Item Master."
       />
       <div aria-label="Inventory stock items">
         <StatGrid>
@@ -87,7 +92,7 @@ export default async function InventoryListPage() {
         {failed ? (
           <RefreshErrorState error={toHumanError("load", { area: "stock items" })} backHref="/inventory" />
         ) : (
-          <InventoryStockListClient items={items} />
+          <InventoryStockListClient items={items} linkedStockIds={linkedStockIds} />
         )}
       </div>
     </>

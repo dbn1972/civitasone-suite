@@ -12,7 +12,7 @@ export async function getItem(tenantId: string, id: string): Promise<ItemWithUom
   return row && row.tenantId === tenantId ? row : null;
 }
 
-export async function listItems(tenantId: string, opts?: { category?: string; limit?: number; offset?: number }): Promise<ItemWithUom[]> {
+export async function listItems(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemWithUom[]> {
   const key = cache.listKey(tenantId, "item", JSON.stringify(opts ?? {}));
   return (await cache.getOrLoad(key, () => repo.findItemsWithUomByTenant(tenantId, opts))) ?? [];
 }
@@ -25,4 +25,9 @@ export async function listCategories(tenantId: string): Promise<ItemCategoryRow[
 export async function listUoms(tenantId: string): Promise<UomRow[]> {
   const key = cache.listKey(tenantId, "stock-uom", "all");
   return (await cache.getOrLoad(key, () => repo.findUomsByTenant(tenantId))) ?? [];
+}
+
+/** Not cached: balances change with every stock entry and this is a low-traffic detail read. */
+export async function getItemBalances(tenantId: string, id: string): Promise<repo.ItemBalances> {
+  return repo.findItemBalances(id, tenantId);
 }

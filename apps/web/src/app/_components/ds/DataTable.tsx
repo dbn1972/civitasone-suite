@@ -292,7 +292,19 @@ function cellValue<T extends Record<string, unknown>>(col: Column<T>, row: T): R
   if (col.cellType === "percent") {
     return formatPercent(toPercentNumber(row[col.key]));
   }
-  return String(row[col.key] ?? "");
+  const raw = row[col.key];
+  if (process.env.NODE_ENV !== "production" && typeof raw === "object" && raw !== null) {
+    const dedupeKey = `${col.key}::${col.label}::object`;
+    if (!warnedRenderColumns.has(dedupeKey)) {
+      warnedRenderColumns.add(dedupeKey);
+      // eslint-disable-next-line no-console -- dev-mode-only diagnostic, same rationale as above
+      console.warn(
+        `DataTable: column "${col.key}" (label "${col.label}") has an object cell value and no "render" prop, ` +
+        `so it would print as "[object Object]". Put a string in the row, or add a "render" in a Client Component.`,
+      );
+    }
+  }
+  return String(raw ?? "");
 }
 
 /**

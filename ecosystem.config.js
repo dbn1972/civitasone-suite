@@ -548,7 +548,7 @@ module.exports = {
 
     // ── CRM & operations ───────────────────────────────────────────────────────
     svc("crm",          3024, "crm_svc",           "civitas_crm", { CRM_PII_KEY }, { graceful: true }), // PERF-015
-    svc("inventory",    3025, "inventory_svc",     "civitas_inventory", { PROCUREMENT_SERVICE_URL: "http://127.0.0.1:3008" }, { graceful: true }), // PERF-015
+    svc("inventory",    3025, "inventory_svc",     "civitas_inventory", { PROCUREMENT_SERVICE_URL: "http://127.0.0.1:3008", STOCK_SERVICE_URL: "http://127.0.0.1:3011" }, { graceful: true }), // PERF-015
     svc("telephony",    3026, "telephony_svc",     "civitas_telephony", {}, { graceful: true }), // PERF-015
     svc("helpdesk",     3027, "helpdesk_svc",      "civitas_helpdesk", {}, { graceful: true }), // PERF-015
 
@@ -606,7 +606,7 @@ module.exports = {
     worker("knowledge",    "knowledge_svc",    "civitas_knowledge"),
     worker("analytics",    "analytics_svc",    "civitas_analytics"),
     worker("location",     "location_svc",     "civitas_location"),
-    worker("inventory",    "inventory_svc",    "civitas_inventory", { PROCUREMENT_SERVICE_URL: "http://127.0.0.1:3008" }),
+    worker("inventory",    "inventory_svc",    "civitas_inventory", { PROCUREMENT_SERVICE_URL: "http://127.0.0.1:3008", STOCK_SERVICE_URL: "http://127.0.0.1:3011" }),
     worker("telephony",    "telephony_svc",    "civitas_telephony"),
     worker("ml",           "ml_svc",           "civitas_ml"),
     worker("ai-agent",     "ai_agent_svc",     "civitas_ai_agent"),

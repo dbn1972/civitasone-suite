@@ -9,6 +9,7 @@ import cors from "@fastify/cors";
 import { authPlugin } from "@civitasone/auth/plugin";
 import { randomUUID } from "node:crypto";
 import { itemRoutes } from "./modules/items/routes.js";
+import { itemLinkRoutes } from "./modules/item-links/routes.js";
 import { storeRoutes } from "./modules/stores/routes.js";
 import { warehouseRoutes } from "./modules/warehouses/routes.js";
 import { movementRoutes } from "./modules/movements/routes.js";
@@ -39,6 +40,7 @@ export async function buildApp(): Promise<FastifyInstance> {
   registerOpsRoutes(app, { service: "inventory-service", checks: { db: { ping: () => dbPing(sqlClient) }, cache, queue } });
 
   await app.register(itemRoutes);
+  await app.register(itemLinkRoutes);
   await app.register(storeRoutes);
   await app.register(warehouseRoutes);
   await app.register(movementRoutes);

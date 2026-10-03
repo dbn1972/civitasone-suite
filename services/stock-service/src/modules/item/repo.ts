@@ -1,6 +1,7 @@
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, sql, type SQL } from "drizzle-orm";
 import { runWithTenant } from "@civitasone/db";
 import { db, scopedRead } from "../../shared/db.js";
+import { stockValuationRates } from "../valuation/schema.js";
 import { stockItems, stockUoms, stockItemCategories, type ItemInsert, type ItemRow, type ItemCategoryRow, type UomRow } from "./schema.js";
 
 export type Writer = Pick<typeof db, "insert" | "update" | "select">;
@@ -57,7 +58,15 @@ export async function findItemWithUomById(id: string, tenantId: string): Promise
   }));
 }
 
-export async function findItemsWithUomByTenant(tenantId: string, opts?: { category?: string; limit?: number; offset?: number }): Promise<ItemWithUom[]> {
+const likeEscape = (v: string): string => v.replace(/[\\%_]/g, (m) => `\\${m}`);
+
+export async function findItemsWithUomByTenant(tenantId: string, opts?: { category?: string; q?: string; limit?: number; offset?: number }): Promise<ItemWithUom[]> {
+  const conds: SQL[] = [eq(stockItems.tenantId, tenantId)];
+  if (opts?.category) conds.push(eq(stockItems.categoryId, opts.category));
+  if (opts?.q) {
+    const pat = `%${likeEscape(opts.q)}%`;
+    conds.push(sql`(${stockItems.name} ILIKE ${pat} ESCAPE '\\' OR ${stockItems.code} ILIKE ${pat} ESCAPE '\\')`);
+  }
   return runWithTenant(tenantId, () => scopedRead(async (tx) =>
     tx
       .select({
@@ -81,10 +90,37 @@ export async function findItemsWithUomByTenant(tenantId: string, opts?: { catego
       })
       .from(stockItems)
       .leftJoin(stockUoms, eq(stockItems.uomId, stockUoms.id))
-      .where(eq(stockItems.tenantId, tenantId))
+      .where(and(...conds))
+      // Stable order: limit/offset pages must not skip or repeat rows.
+      .orderBy(asc(stockItems.name), asc(stockItems.id))
       .limit(opts?.limit ?? 50)
       .offset(opts?.offset ?? 0)
   ));
+}
+
+export type ItemBalances = {
+  itemId: string;
+  totalQty: number;
+  totalValueMinor: string;
+  warehouses: Array<{ warehouseId: string; qty: number; rateMinor: string; valueMinor: string }>;
+};
+
+/** Per-warehouse on-hand quantity and valuation of one item (read-only; minor units as strings). */
+export async function findItemBalances(itemId: string, tenantId: string): Promise<ItemBalances> {
+  return runWithTenant(tenantId, () => scopedRead(async (tx) => {
+    const rows = await tx.select().from(stockValuationRates)
+      .where(and(eq(stockValuationRates.tenantId, tenantId), eq(stockValuationRates.itemId, itemId)))
+      .orderBy(asc(stockValuationRates.warehouseId));
+    let totalQty = 0;
+    let totalValue = 0n;
+    const warehouses = rows.map((r) => {
+      const value = BigInt(r.qty) * r.rateMinor;
+      totalQty += r.qty;
+      totalValue += value;
+      return { warehouseId: r.warehouseId, qty: r.qty, rateMinor: r.rateMinor.toString(), valueMinor: value.toString() };
+    });
+    return { itemId, totalQty, totalValueMinor: totalValue.toString(), warehouses };
+  }));
 }
 
 export async function findCategoriesByTenant(tenantId: string, limit = 200): Promise<ItemCategoryRow[]> {

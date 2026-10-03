@@ -6,13 +6,18 @@
  * gateway proxy. Body shape (per createEntryBody):
  *   { entryType, postingDate, fromWarehouseId?, toWarehouseId?, notes?,
  *     items: [{ itemId, qty, rateMinor }] }
- * Items are loaded from GET /v1/stock/items. An optional ?itemId= query param
- * (passed from a stock item detail page) preselects the line item.
+ * The item is chosen with the shared ItemPicker (searches the item master and the stock
+ * register together; a linked pair is one item). Only items that exist on the stock side
+ * can be posted here, and the stock-service id is what the entry carries. An optional
+ * ?itemId= query param (a stock item id, passed from a stock item detail page) preselects it.
  */
 import { useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { PageHeader, ConfirmDialog, useConfirmAction } from "../../../../_components/ds";
 import { useFormError } from "@/lib/useFormError";
+import { ItemPicker } from "@/app/_components/ItemPicker";
+import { resolveStockItemEntry } from "@/lib/entityAdapters/item";
+import type { PickerEntry } from "../../linkHelpers";
 
 const ENTRY_LABELS: Record<string, string> = {
   receipt: "Receipt",
@@ -21,8 +26,6 @@ const ENTRY_LABELS: Record<string, string> = {
   adjustment: "Adjustment",
 };
 
-type ItemRow = { id: string; name?: string; sku?: string | null; itemCode?: string };
-
 const inputStyle = { width: "100%", padding: 8, borderRadius: 8, border: "1px solid var(--line)" } as const;
 
 export default function NewStockEntryPage() {
@@ -30,11 +33,10 @@ export default function NewStockEntryPage() {
   const params = useSearchParams();
   const presetItemId = params.get("itemId") ?? "";
 
-  const [items, setItems] = useState<ItemRow[]>([]);
+  const [picked, setPicked] = useState<PickerEntry | null>(null);
   const [loadError, setLoadError] = useState("");
   const [entryType, setEntryType] = useState<"receipt" | "issue" | "transfer" | "adjustment">("receipt");
   const [postingDate, setPostingDate] = useState(new Date().toISOString().slice(0, 10));
-  const [itemId, setItemId] = useState(presetItemId);
   const [qty, setQty] = useState("");
   const [rate, setRate] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
@@ -43,30 +45,27 @@ export default function NewStockEntryPage() {
   const [isError, setIsError] = useState(false);
   const formError = useFormError("stock item");
 
+  // The stock item id carried by the entry: the stock side of whatever was picked.
+  const itemId = picked?.stockItemId ?? "";
+
+  // A preselected stock item (?itemId=) is shown as the single merged item it belongs to.
   useEffect(() => {
+    if (!presetItemId) return;
     let active = true;
     (async () => {
       try {
-        const res = await fetch("/api/proxy/v1/stock/items?limit=200", { headers: { accept: "application/json" } });
-        if (!res.ok) {
-          if (active) setLoadError((await formError.fromResponse(res, "load")).message);
-          return;
+        const entry = await resolveStockItemEntry(presetItemId);
+        if (active) {
+          if (entry) setPicked(entry);
+          else setLoadError(formError.fromException("load").message);
         }
-        const json = (await res.json()) as { data?: ItemRow[] } | ItemRow[];
-        if (active) setItems(Array.isArray(json) ? json : json.data ?? []);
       } catch {
         if (active) setLoadError(formError.fromException("load").message);
       }
     })();
     return () => { active = false; };
-    // formError.fromResponse/fromException are stable (useCallback'd on a
-    // fixed `area` string inside useFormError) even though the wrapping
-    // `formError` object literal isn't, so omitting it here is safe.
+    // formError.fromException is stable (useCallback on a fixed area string).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (presetItemId) setItemId(presetItemId);
   }, [presetItemId]);
 
   // The actual irreversible post — gated behind the confirm dialog below.
@@ -149,12 +148,16 @@ export default function NewStockEntryPage() {
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="se-item">Item</label>
-              <select id="se-item" required value={itemId} onChange={(e) => setItemId(e.target.value)} style={inputStyle}>
-                <option value="" disabled>Select an item…</option>
-                {items.map((it) => (
-                  <option key={it.id} value={it.id}>{[it.itemCode ?? it.sku, it.name].filter(Boolean).join(" · ") || it.id}</option>
-                ))}
-              </select>
+              <div style={{ width: "100%" }}>
+                <ItemPicker
+                  id="se-item"
+                  value={picked?.key ?? null}
+                  onChange={setPicked}
+                  initialEntry={picked ?? undefined}
+                  masters="stock"
+                  clearable
+                />
+              </div>
             </div>
             <div className="fld" style={{ flexDirection: "column", alignItems: "flex-start" }}>
               <label className="l" htmlFor="se-qty">Quantity</label>

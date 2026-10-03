@@ -1,3 +1,5 @@
+import { NextIntlClientProvider } from "next-intl";
+import enMessages from "@/messages/en.json";
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 
@@ -50,7 +52,7 @@ describe("GAP-INVENTORY-GOODS-RETURNS-02 / DETAIL-02", () => {
 describe("GAP-INVENTORY-ITEMS-02 / -03", () => {
   const item = { id: "i", name: "Pen", sku: "P", status: "active", category: null, uom: "ea", itemType: "consumable", reorderLevel: 5, reorderQty: 40, unitCostMinor: "100" };
   it("has no always-empty Demand Forecast column and shows Reorder Qty", () => {
-    render(<ItemsTable items={[item]} />);
+    render(<NextIntlClientProvider locale="en" messages={enMessages}><ItemsTable items={[item]} /></NextIntlClientProvider>);
     expect(screen.queryByText("Demand Forecast")).not.toBeInTheDocument();
     expect(screen.getByText("Reorder Qty")).toBeInTheDocument();
     expect(screen.getByText("40")).toBeInTheDocument();
