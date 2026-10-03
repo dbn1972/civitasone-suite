@@ -14,7 +14,10 @@ import * as commands from "./commands.js";
 
 const ADMIN_ROLES = ["finance_admin", "super_admin", "admin"];
 const READER_ROLES = [...ADMIN_ROLES, "finance_officer", "audit_officer"];
-const COST_CENTER_READER_ROLES = [...READER_ROLES, "payroll_admin", "payroll_officer", "hr_admin"];
+// GAP-HR-EMPLOYEES-NEW-01: hr_officer creates employees through the same Add
+// Employee wizard as hr_admin and must be able to pick the employee's cost
+// centre from this (read-only) master.
+const COST_CENTER_READER_ROLES = [...READER_ROLES, "payroll_admin", "payroll_officer", "hr_admin", "hr_officer"];
 
 // ── Validators ──────────────────────────────────────────────────────────────
 

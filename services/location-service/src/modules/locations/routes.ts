@@ -3,11 +3,12 @@ import { ZodError } from "zod";
 import { listQuerySchema, acceptedResponseSchema } from "@civitasone/schemas/common";
 import { sendValidated, sendAccepted } from "@civitasone/schemas/validate";
 import { resolveContext, requireRole, HttpError } from "../../shared/context.js";
-import { createLocationBody, updateLocationBody, idParam, locationsListSchema, locationTreeSchema, nearbyQuerySchema } from "./validators.js";
+import { createLocationBody, updateLocationBody, archiveLocationBody, idParam, locationsListSchema, locationTreeSchema, nearbyQuerySchema } from "./validators.js";
 import * as commands from "./commands.js";
 import * as queries from "./queries.js";
 import * as repo from "./repo.js";
 import { cache } from "../../shared/infra.js";
+import { wouldCreateCycle } from "./domain.js";
 import { RESOURCE } from "../../topics.js";
 
 const LOCATION_ROLES = ["location_user", "location_admin", "super_admin", "admin", "hr_admin"];
@@ -105,7 +106,48 @@ export async function locationRoutes(app: FastifyInstance): Promise<void> {
     const existing = await queries.getLocation(id, ctx.tenantId);
     if (!existing) throw new HttpError(404, "NOT_FOUND", "location not found");
     const body = updateLocationBody.parse(req.body);
+    // Archiving has its own route (reason + active-children check). Letting it
+    // through here would bypass both, so the generic edit refuses it.
+    if (body.status === "archived") {
+      throw new HttpError(400, "USE_ARCHIVE_ENDPOINT", "archive a location through PATCH /v1/locations/:id/archive");
+    }
+    // GAP-HR-LOCATIONS-02 (edit): moving a location under a new parent must
+    // keep the tree a tree -- the parent has to exist in this tenant and must
+    // not be the location itself or one of its own descendants.
+    if (body.parentId) {
+      const parent = await queries.getLocation(body.parentId, ctx.tenantId);
+      if (!parent) {
+        throw new HttpError(400, "INVALID_PARENT", "The selected parent office does not exist or belongs to another organisation.");
+      }
+      const edges = (await repo.listAllByTenant(ctx.tenantId)).map((l) => ({ id: l.id, parentId: l.parentId }));
+      if (wouldCreateCycle(edges, id, body.parentId)) {
+        throw new HttpError(400, "INVALID_PARENT", "A location cannot be placed under itself or one of its own sub-locations.");
+      }
+    }
     sendAccepted(reply, acceptedResponseSchema, await commands.updateLocation(ctx, id, body));
+  });
+
+  // GAP-HR-LOCATIONS-02: archive (soft-remove). The web "Archive" action on
+  // /hr/locations and /locations/list called this path, but no such route
+  // existed (404) -- and the status column's CHECK only allowed 'active'
+  // (migration 0025 widens it). A location that still has non-archived
+  // sub-locations cannot be archived: archive the children first, so the tree
+  // never has an active node under an archived one.
+  app.patch("/v1/locations/:id/archive", async (req, reply) => {
+    const ctx = resolveContext(req);
+    requireRole(ctx, LOCATION_ROLES);
+    const { id } = idParam.parse(req.params);
+    const body = archiveLocationBody.parse(req.body ?? {});
+    const existing = await queries.getLocation(id, ctx.tenantId);
+    if (!existing) throw new HttpError(404, "NOT_FOUND", "location not found");
+    if (existing.status === "archived") {
+      throw new HttpError(409, "ALREADY_ARCHIVED", "this location is already archived");
+    }
+    const children = (await repo.listAllByTenant(ctx.tenantId)).filter((l) => l.parentId === id && l.status !== "archived");
+    if (children.length > 0) {
+      throw new HttpError(409, "HAS_ACTIVE_CHILDREN", `archive its ${children.length} active sub-location(s) first`);
+    }
+    sendAccepted(reply, acceptedResponseSchema, await commands.updateLocation(ctx, id, { status: "archived", ...(body.reason ? { reason: body.reason } : {}) }));
   });
 
   app.setErrorHandler((err, req, reply) => {

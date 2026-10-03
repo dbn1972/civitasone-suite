@@ -68,6 +68,10 @@ export async function createEmployee(ctx: RequestContext, body: CreateEmployeeBo
       station:        body.station ?? null,
       category:       body.category ?? null,
       disability:     body.disability ?? false,
+      serviceGrade:   body.serviceGrade ?? null,
+      maritalStatus:  body.maritalStatus ?? null,
+      bloodGroup:     body.bloodGroup ?? null,
+      shift:          body.shift ?? null,
       createdBy:      ctx.actorId,
       updatedBy:      ctx.actorId,
     }).returning({ id: hrmsEmployees.id })
@@ -262,6 +266,12 @@ export async function updateEmployee(ctx: RequestContext, id: string, body: Upda
       sacCode: body.sacCode,
       agencyRef: body.agencyRef,
       napsId: body.napsId,
+      // GAP-HR-EMPLOYEES-NEW-01 (migration 0178)
+      serviceGrade: body.serviceGrade,
+      maritalStatus: body.maritalStatus,
+      bloodGroup: body.bloodGroup,
+      shift: body.shift,
+      costCenterId: body.costCenterId,
       // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: routes.ts already enforced that
       // this is present whenever a sensitive field is being changed --
       // threaded through so the consumer's audit trail actually captures it.

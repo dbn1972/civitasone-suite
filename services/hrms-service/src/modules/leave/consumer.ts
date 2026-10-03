@@ -52,7 +52,11 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
   });
 
   queue.subscribe(COMMANDS.leaveAllocate, async (msg) => {
-    const p = msg.payload as { id: string; tenantId: string; employeeId: string; leaveTypeId: string; fy: string; totalDays: number; balanceDays: number };
+    const p = msg.payload as {
+      id: string; tenantId: string; employeeId: string; leaveTypeId: string; fy: string; totalDays: number; balanceDays: number;
+      // GAP-HR-LEAVE-ALLOCATE-01/03
+      reason?: string; exceededTypeMax?: boolean;
+    };
     await db.transaction(async (tx) => {
       if (!(await markProcessed(tx, msg.messageId))) return;
       // DOM-009: the EL (and any carry-forward-eligible) accumulation cap
@@ -77,7 +81,19 @@ export function registerLeaveConsumers(rawQueue: Queue): void {
         leaveTypeId: p.leaveTypeId, fy: p.fy, totalDays, balanceDays,
         createdBy: msg.actorId, updatedBy: msg.actorId,
       });
-      await audit(tx, msg, "allocate", "leave_alloc", p.id);
+      // GAP-HR-LEAVE-ALLOCATE-01/03: the audit event carries who it was for, how
+      // much, the stated reason and whether it overrode the type's maximum.
+      await enqueue(tx, {
+        topic: AUDIT, eventType: AUDIT,
+        tenantId: msg.tenantId, actorId: msg.actorId, correlationId: msg.correlationId,
+        payload: {
+          service: "hrms", action: "allocate", resourceType: "leave_alloc", resourceId: p.id, outcome: "success",
+          metadata: {
+            employeeId: p.employeeId, leaveTypeId: p.leaveTypeId, fy: p.fy,
+            totalDays, reason: p.reason ?? null, exceededTypeMax: p.exceededTypeMax ?? false,
+          },
+        },
+      });
       if (lapsedDays > 0) {
         await enqueue(tx, {
           topic: AUDIT, eventType: AUDIT,

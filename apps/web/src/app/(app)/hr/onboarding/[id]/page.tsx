@@ -11,6 +11,7 @@ import { JoineeWelcomeHeader } from "../_components/JoineeWelcomeHeader";
 import { type ChecklistStep } from "../_components/OnboardingChecklist";
 import { ChecklistWithActions } from "../_components/ChecklistWithActions";
 import { AddTaskForm } from "../_components/AddTaskForm";
+import { ApplyTemplateCard } from "../_components/ApplyTemplateCard";
 import { type OnboardingDocument, type DocStatus } from "../_components/DocumentUploadCard";
 import { DocumentsPanel } from "../_components/DocumentsPanel";
 import { TaskCalendar, type CalendarTask } from "../_components/TaskCalendar";
@@ -227,6 +228,9 @@ export default async function OnboardingDetailPage({ params }: Props) {
               unreachable at all (404, fixed by DETAIL-05 above) -- now that
               this page can open for them, HR needs a way to actually start
               onboarding instead of a dead end. */}
+          {/* GAP-HR-ONBOARDING-02: start the whole checklist from a template
+              (the single-task form below stays for one-off tasks). */}
+          <ApplyTemplateCard employeeId={id} hasTasks={false} />
           <AddTaskForm employeeId={id} />
         </Card>
       ) : (
@@ -241,6 +245,14 @@ export default async function OnboardingDetailPage({ params }: Props) {
           </Card>
         </div>
       )}
+
+      {/* GAP-HR-ONBOARDING-02: top up an existing checklist from a template
+          (idempotent: only steps the joinee does not already have are added). */}
+      {checklist.length > 0 && source !== "error" ? (
+        <Card style={{ padding: 20, marginBottom: 24 }}>
+          <ApplyTemplateCard employeeId={id} hasTasks />
+        </Card>
+      ) : null}
 
       {/* Document upload section */}
       <Card style={{ padding: 20 }}>

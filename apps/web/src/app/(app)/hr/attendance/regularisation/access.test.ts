@@ -1,20 +1,29 @@
 import { describe, it, expect } from "vitest";
-import { canViewRegularisations, computeRegularisationStats, REGULARISATION_VIEW_ROLES } from "./access";
+import { canViewRegularisations, canPickRegularisationEmployee, computeRegularisationStats, REGULARISATION_VIEW_ROLES } from "./access";
 import type { AttendanceRegularisation } from "@civitasone/types";
 
 describe("canViewRegularisations", () => {
-  it("admits every role attendance/routes.ts's own ALL_ROLES admits", () => {
-    for (const role of ["hr_admin", "hr_officer", "super_admin", "manager"]) {
+  it("admits every role attendance/routes.ts's GET .../regularisations admits", () => {
+    for (const role of ["hr_admin", "hr_officer", "super_admin", "manager", "employee"]) {
       expect(canViewRegularisations([role])).toBe(true);
     }
   });
 
-  it("rejects a bare employee (backend 403s GET .../regularisations for this role)", () => {
-    expect(canViewRegularisations(["employee"])).toBe(false);
+  // GAP-HR-ATTENDANCE-REGULARISATION-01: employees raise their own requests,
+  // so they may open the page (the backend scopes the list to their own rows).
+  it("still rejects roles the backend refuses", () => {
+    expect(canViewRegularisations(["payroll_officer"])).toBe(false);
+    expect(canViewRegularisations(["tenant_admin"])).toBe(false);
   });
 
-  it("exposes exactly the 4 roles this decision is based on (guards against silent drift)", () => {
-    expect(new Set(REGULARISATION_VIEW_ROLES)).toEqual(new Set(["hr_admin", "hr_officer", "super_admin", "manager"]));
+  it("exposes exactly the 5 roles this decision is based on (guards against silent drift)", () => {
+    expect(new Set(REGULARISATION_VIEW_ROLES)).toEqual(new Set(["hr_admin", "hr_officer", "super_admin", "manager", "employee"]));
+  });
+
+  it("only HR and managers pick who a request is for; an employee raises their own", () => {
+    expect(canPickRegularisationEmployee(["employee"])).toBe(false);
+    expect(canPickRegularisationEmployee(["manager"])).toBe(true);
+    expect(canPickRegularisationEmployee(["hr_officer"])).toBe(true);
   });
 });
 

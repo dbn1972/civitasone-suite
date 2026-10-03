@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { RequestContext } from "@civitasone/types";
 import { queue } from "../../shared/infra.js";
 import { COMMANDS } from "../../topics.js";
-import type { MarkAttendanceBody, RegularisationCreateBody, PeriodLockBody } from "./validators.js";
+import type { MarkAttendanceBody, ResolvedRegularisationBody, PeriodLockBody } from "./validators.js";
 
 export type Accepted = { id: string; batchId: string; count: number; status: string; correlationId: string };
 export type AcceptedSingle = { id: string; status: string; correlationId: string };
@@ -17,7 +17,7 @@ export async function markAttendance(ctx: RequestContext, body: MarkAttendanceBo
   return { id: batchId, batchId, count: body.records.length, status: "accepted", correlationId: ctx.correlationId };
 }
 
-export async function createRegularisation(ctx: RequestContext, body: RegularisationCreateBody): Promise<AcceptedSingle> {
+export async function createRegularisation(ctx: RequestContext, body: ResolvedRegularisationBody): Promise<AcceptedSingle> {
   const id = randomUUID();
   await queue.publish(COMMANDS.regularisationCreate, {
     messageId: id, type: COMMANDS.regularisationCreate,

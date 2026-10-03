@@ -1,14 +1,16 @@
 import { PageHeader, StatGrid, StatCard, Card, DataTable, RefreshErrorState, EmptyState } from "../../../_components/ds";
 import { DataSourceBadge } from "../../../_components/DataSourceBadge";
 import { fetchJson, type LoaderResult } from "@/app/_data/apiClient";
-import { CompetencyRadarChart, type CompetencyScore } from "./_components/CompetencyRadarChart";
+import { CompetencyRadarChart } from "./_components/CompetencyRadarChart";
+import { getMyProfile } from "../../../_data/loaders";
+import { buildMyRadar, hasEnoughForRadar, type HeldLevel } from "./myProfile";
 import { AddFrameworkAction } from "./_components/AddFrameworkAction";
 import { getSessionRoles } from "@/lib/auth/roleGuard";
 import { getTranslations } from "next-intl/server";
 import { toHumanError } from "@/lib/messages";
 
 type Framework  = { id: string; name: string; description?: string; status: string } & Record<string, unknown>;
-type Competency = { id: string; name: string; category: string; maxLevel?: number } & Record<string, unknown>;
+type Competency = { id: string; name: string; category: string; maxLevel?: number; certifiedLevel?: number } & Record<string, unknown>;
 // GAP-HR-COMPETENCY-04: display row -- category/maxLevel are re-mapped to
 // human-readable strings server-side (see compRows below) before ever
 // reaching DataTable, rather than via a column `render:` function. This page
@@ -40,59 +42,25 @@ async function getCompetencies(): Promise<LoaderResult<Competency[]>> {
   });
 }
 
-// 6 core government competencies shown in the radar
-const CORE_COMPETENCIES = [
-  "Domain Knowledge",
-  "Leadership",
-  "Communication",
-  "Problem Solving",
-  "Team Work",
-  "Integrity",
-] as const;
-
-// SEC/UX audit: this radar previously fabricated "current" by reusing the
-// competency DEFINITION's maxLevel (the org-wide proficiency ceiling, e.g.
-// 5) as if it were an individual employee's ACHIEVED score, and hardcoded
-// "required: 4" for every competency -- both rendered as if they were real
-// analytics, with nothing telling the viewer otherwise. This page has no
-// per-employee context at all (no :id in its route, no "current viewer's
-// own employee id" resolution anywhere here, unlike e.g.
-// competency/employees/:id/profile), so there is no real achieved score to
-// plug in without inventing a new backend lookup. Rather than keep
-// presenting synthetic numbers as analytics, this is now explicit
-// illustrative sample data -- fixed, clearly not derived from any real
-// employee's record -- and the chart/card copy below says so.
-//
-// GAP-HR-COMPETENCY-01 (formal_decision, not covered by the published
-// decision packet -- grep confirmed neither "competency" nor "COMPETENCY-01"
-// appears anywhere in /tmp/hr-decision-packet.html): the bigger call (wire
-// this to a real per-employee competency/employees/:id/profile view, which
-// needs a viewer-employee-id resolution this page doesn't have today, vs.
-// keep it illustrative and drop it once a real view exists elsewhere) is
-// still open and left for product/orchestrator -- see this ticket's [~] in
-// gaps/hr.md. What ships here is the containment step (fix_steps #1) that
-// doesn't presuppose that answer: a badge that's impossible to miss, not
-// just the pre-existing 12px footnote.
-const ILLUSTRATIVE_SAMPLE_SCORES: Record<(typeof CORE_COMPETENCIES)[number], number> = {
-  "Domain Knowledge": 3,
-  "Leadership": 2,
-  "Communication": 4,
-  "Problem Solving": 3,
-  "Team Work": 4,
-  "Integrity": 4,
-};
-
-function buildIllustrativeRadarScores(): CompetencyScore[] {
-  return CORE_COMPETENCIES.map((label) => ({
-    label,
-    current: ILLUSTRATIVE_SAMPLE_SCORES[label],
-    required: 4, // illustrative org baseline — not pulled from real role requirements on this page
-  }));
+/**
+ * GAP-HR-COMPETENCY-01: the viewer's OWN recorded competency levels
+ * (GET .../competency/employees/:id/profile; a bare employee may only read
+ * their own, which is exactly what this asks for). The id comes from the
+ * session's linked employee record (getMyProfile); an account with no linked
+ * record has no profile to show.
+ */
+async function getMyHeldLevels(employeeId: string): Promise<LoaderResult<HeldLevel[]>> {
+  return fetchJson<unknown, HeldLevel[]>(`/api/v1/hrms/competency/employees/${encodeURIComponent(employeeId)}/profile`, [], {
+    telemetryKey: "hr.competency.myProfile",
+    mapResponse: (p) => { const arr = Array.isArray(p) ? p : (p as { data?: HeldLevel[] })?.data; return Array.isArray(arr) ? arr : null; },
+  });
 }
 
 export default async function CompetencyPage() {
   const t = await getTranslations("competency");
-  const [fw, comp] = await Promise.all([getFrameworks(), getCompetencies()]);
+  const [fw, comp, me] = await Promise.all([getFrameworks(), getCompetencies(), getMyProfile()]);
+  const myId = me.data?.id ?? null;
+  const mine: LoaderResult<HeldLevel[]> = myId ? await getMyHeldLevels(myId) : { data: [], source: "api" };
   const frameworks  = fw.data;
   const competencies = comp.data;
   const source = fw.source === "error" || comp.source === "error" ? "error" : fw.source;
@@ -105,18 +73,7 @@ export default async function CompetencyPage() {
   const technical   = competencies.filter((c) => c.category === "technical").length;
   const behavioural = competencies.filter((c) => ["behavioural","behavioral"].includes(c.category)).length;
 
-  const radarScores = buildIllustrativeRadarScores();
-  // HRMS peripheral medium findings, item 3: the stat cards above are
-  // already honest (real 0s when there's genuinely no data, "—" on fetch
-  // error). The radar chart must be too: it's illustrative sample data, not
-  // derived from frameworks/competencies at all, so a brand-new tenant with
-  // zero of either would otherwise show confident-looking fake proficiency
-  // numbers directly beside those honest real zeros -- the exact
-  // fabricated-data-next-to-real-zero-counts pattern this audit flags.
-  // Gate it on there being *something* real configured to illustrate
-  // against; show an honest empty state instead when there isn't.
-  const hasCompetencyData = frameworks.length > 0 || competencies.length > 0;
-
+  const radar = buildMyRadar(mine.data, competencies);
   const fwCols: { key: keyof Framework & string; label: string; cellType?: "status" }[] = [
     { key: "name",        label: t("colFrameworkName") },
     { key: "description", label: t("colDescription") },
@@ -169,48 +126,32 @@ export default async function CompetencyPage() {
         </Card>
       ) : (
         <>
-          {/* Radar chart — core 6 government competencies. Illustrative sample
-              data (see buildIllustrativeRadarScores above): not yet wired to
-              any individual employee's real assessment. Only rendered when
-              there's real framework/competency data to illustrate against
-              (see hasCompetencyData above) — otherwise an honest empty state
-              is shown so no fabricated figures appear beside real zeros. */}
-          <Card title={t("radarCardTitle")}>
-            {hasCompetencyData ? (
+          {/* GAP-HR-COMPETENCY-01: the viewer's own recorded levels, not sample
+              data. Three honest states: no linked employee record, a failed
+              fetch, or too few recorded competencies to draw a shape. */}
+          <Card title={t("myRadarCardTitle")}>
+            {!myId ? (
+              <EmptyState icon="👤" title={t("myNoProfileTitle")} message={t("myNoProfileMessage")} />
+            ) : mine.source === "error" ? (
+              <div className="pad">
+                <RefreshErrorState error={toHumanError("load", { area: "your competency profile" })} backHref="/hr" />
+              </div>
+            ) : hasEnoughForRadar(radar) ? (
               <>
-                {/* GAP-HR-COMPETENCY-01: prominent, can't-miss marker -- the
-                    chart's own title text below already says "sample data",
-                    but this badge is the fix_steps #1 containment ask
-                    specifically (a badge, not just title/footnote text). */}
-                <div style={{ padding: "12px 16px 0" }}>
-                  <span
-                    style={{
-                      display: "inline-flex", alignItems: "center", gap: 4,
-                      fontSize: 12, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.04em",
-                      background: "var(--warnbg, #fffbe6)", color: "var(--warn, #92600a)",
-                      border: "1px solid var(--warnbd, #f5d78e)",
-                      borderRadius: 20, padding: "3px 10px",
-                    }}
-                  >
-                    ⚠️ {t("sampleDataBadge")}
-                  </span>
-                </div>
                 <div style={{ padding: "12px 16px 20px", display: "flex", justifyContent: "center" }}>
                   <CompetencyRadarChart
-                    scores={radarScores}
-                    title={t("radarChartTitle")}
+                    scores={radar.scores}
+                    maxValue={radar.maxValue}
+                    requiredLabel={t("myRequiredLabel")}
+                    title={t("myRadarChartTitle", { max: radar.maxValue })}
                   />
                 </div>
                 <p style={{ margin: "0 16px 16px", fontSize: 12, color: "var(--ink2, #475569)" }}>
-                  {t("radarIllustrativeNote")}
+                  {t("myRadarNote")}
                 </p>
               </>
             ) : (
-              <EmptyState
-                icon="🏗️"
-                title={t("radarEmptyTitle")}
-                message={t("radarEmptyMessage")}
-              />
+              <EmptyState icon="📈" title={t("myRadarEmptyTitle")} message={t("myRadarEmptyMessage")} />
             )}
           </Card>
 

@@ -971,6 +971,14 @@ export type EmployeeDetail = {
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-04 / GAP-HR-SF-06: same gap, same fix, for
   // the pay-structure picker.
   payStructureId?: string;
+  // GAP-HR-EMPLOYEES-NEW-01 (migration 0178): profile fields collected by the
+  // Add Employee wizard, returned by getEmployeeDetail and declared on
+  // EmployeeDetailSchema (packages/schemas/src/web.ts).
+  serviceGrade?: string;
+  maritalStatus?: string;
+  bloodGroup?: string;
+  shift?: string;
+  costCenterId?: string;
 };
 
 // Procurement types

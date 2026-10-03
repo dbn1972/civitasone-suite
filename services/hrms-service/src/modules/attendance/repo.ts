@@ -126,9 +126,19 @@ export async function upsertAttendance(tx: Writer, row: AttendanceInsert): Promi
     });
 }
 
-export async function listRegularisationsByTenant(tenantId: string, limit = 100): Promise<RegularisationRow[]> {
+/**
+ * `employeeIds` (when given) is applied in the WHERE, BEFORE limit, so a
+ * scoped viewer's page is filled from their own rows rather than from a
+ * tenant-wide page that is filtered afterwards. An empty array matches nothing.
+ */
+export async function listRegularisationsByTenant(tenantId: string, limit = 100, employeeIds?: string[]): Promise<RegularisationRow[]> {
+  if (employeeIds && employeeIds.length === 0) return [];
   return scopedRead((tx) => tx.select().from(hrmsAttendanceRegularisations)
-    .where(eq(hrmsAttendanceRegularisations.tenantId, tenantId))
+    .where(and(
+      eq(hrmsAttendanceRegularisations.tenantId, tenantId),
+      employeeIds ? inArray(hrmsAttendanceRegularisations.employeeId, employeeIds) : undefined,
+    ))
+    .orderBy(desc(hrmsAttendanceRegularisations.requestedAt), desc(hrmsAttendanceRegularisations.id))
     .limit(limit));
 }
 

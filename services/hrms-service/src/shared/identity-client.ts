@@ -25,6 +25,27 @@ const IDENTITY_URL = process.env.IDENTITY_SERVICE_URL ?? "http://127.0.0.1:3001"
  * auto-link bootstrap doesn't happen this one time" (safe and retryable),
  * never to a permissive fallback.
  */
+/**
+ * Role keys a user holds in identity-service's RBAC (GET
+ * /identity/rbac/users/:userId/effective, over the same internal-elevation
+ * path as above). Used to confirm a person really holds an HR role before a
+ * case is assigned to them. Fails CLOSED: undefined on any error, so a caller
+ * must treat "could not verify" as "not verified", never as permitted.
+ */
+export async function fetchUserRoleKeys(tenantId: string, userId: string): Promise<string[] | undefined> {
+  try {
+    const res = await fetch(`${IDENTITY_URL}/identity/rbac/users/${encodeURIComponent(userId)}/effective`, {
+      headers: { "x-internal": "1", "x-service-secret": process.env.INTERNAL_SERVICE_SECRET ?? "", "x-tenant-id": tenantId },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (!res.ok) return undefined;
+    const body = (await res.json()) as { roles?: Array<{ key: string }> };
+    return (body.roles ?? []).map((r) => r.key);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function fetchVerifiedActorEmail(tenantId: string, actorId: string): Promise<string | undefined> {
   try {
     const res = await fetch(

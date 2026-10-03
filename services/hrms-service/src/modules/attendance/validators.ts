@@ -25,7 +25,11 @@ export const attendanceQueryParams = z.object({
 });
 
 export const regularisationCreateBody = z.object({
-  employeeId:      z.string().uuid(),
+  // GAP-HR-ATTENDANCE-REGULARISATION-01: optional. An employee raising their
+  // own request omits it (the server derives it from the caller's linked
+  // employee record); HR must name the employee they raise it for (checked at
+  // the route, which knows the caller's role).
+  employeeId:      z.string().uuid().optional(),
   date:            z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "must be YYYY-MM-DD"),
   requestedStatus: z.enum(["present", "absent", "half_day"]),
   reason:          z.string().min(1),
@@ -34,6 +38,8 @@ export const regularisationCreateBody = z.object({
   { message: "regularisation date cannot be in the future", path: ["date"] }
 );
 export type RegularisationCreateBody = z.infer<typeof regularisationCreateBody>;
+/** A regularisation body after the route has resolved who it is for. */
+export type ResolvedRegularisationBody = Omit<RegularisationCreateBody, "employeeId"> & { employeeId: string };
 
 // DEF-AT-001: lock / unlock an attendance period (payroll cut-off).
 export const periodLockBody = z.object({

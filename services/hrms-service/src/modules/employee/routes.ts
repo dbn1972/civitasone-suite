@@ -244,24 +244,42 @@ export async function employeeRoutes(app: FastifyInstance): Promise<void> {
 
   app.get("/v1/hrms/employees/:id", async (req, reply) => {
     const ctx = resolveContext(req);
-    requireRole(ctx, READER_ROLES);
+    // GAP-HR-EMPLOYEES-DETAIL-02: a plain "employee" may now open THEIR OWN
+    // record (the /hr layout admits them, and they used to hit an "Access
+    // restricted" wall on their own profile). "employee" is deliberately
+    // NOT in READER_ROLES (that would allow id enumeration of every
+    // colleague's masked-PII detail); it is admitted here and then held to
+    // own-record-only by the scope check below.
+    requireRole(ctx, [...READER_ROLES, "employee"]);
     const { id } = idParam.parse(req.params);
     const managerScope = await resolveManagerScope(ctx, req);
     if (managerScope !== undefined) {
-      // Manager-only caller: gate on the raw row BEFORE building the full
-      // shaped detail. A genuinely nonexistent id (raw === null) falls
-      // through unchanged to the getEmployeeDetail/404 path below, for every
-      // role alike — this only ever turns an existing-but-not-mine record
-      // into a 403, never a real 404 into something else.
+      // Non-HR caller: gate on the raw row BEFORE building the full shaped
+      // detail. A genuinely nonexistent id (raw === null) falls through
+      // unchanged to the getEmployeeDetail/404 path below, for every role
+      // alike — this only ever turns an existing-but-not-mine record into a
+      // 403, never a real 404 into something else.
       const raw = await queries.getEmployee(id, ctx.tenantId);
-      const isDirectReport = raw != null && managerScope != null && raw.managerId === managerScope;
-      if (raw && !isDirectReport) {
+      const isSelf = raw != null && managerScope != null && raw.id === managerScope;
+      // Direct reports are a MANAGER privilege; a plain employee (even one
+      // who happens to be someone's manager-of-record in the data) only
+      // ever gets their own row.
+      const isDirectReport = ctx.roles.includes("manager") && raw != null && managerScope != null && raw.managerId === managerScope;
+      // An employee-only caller never learns whether an arbitrary id exists:
+      // anything but their own record is 403, a nonexistent id included
+      // (managers keep the documented 404 for a genuinely missing id).
+      if (!raw && !ctx.roles.includes("manager")) {
+        throw new HttpError(403, "FORBIDDEN", "you may only view your own employee record");
+      }
+      if (raw && !isSelf && !isDirectReport) {
         // 403, not a disguised 404: matches leave/routes.ts's identical
         // "not self, not a direct report" ownership check
         // (HttpError(403, "FORBIDDEN", "...or, for managers, a direct
         // report's)")) for consistency, and the employee id-space is an
         // unguessable UUID, so 403 here doesn't meaningfully aid enumeration.
-        throw new HttpError(403, "FORBIDDEN", "managers may only view their own direct reports' records");
+        throw new HttpError(403, "FORBIDDEN", ctx.roles.includes("manager")
+          ? "managers may only view their own record and their direct reports' records"
+          : "you may only view your own employee record");
       }
     }
     const detail = await queries.getEmployeeDetail(id, ctx.tenantId);

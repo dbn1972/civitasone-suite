@@ -13,6 +13,10 @@ export interface CompetencyRadarChartProps {
   scores: CompetencyScore[];
   title?: string;
   size?: number;
+  /** Top of the scale (default 5). GAP-HR-COMPETENCY-01: real competencies can have a max level above 5. */
+  maxValue?: number;
+  /** Legend/column label for the `required` series (default "Required"). */
+  requiredLabel?: string;
 }
 
 const DEFAULT_COMPETENCIES: CompetencyScore[] = [
@@ -39,14 +43,16 @@ export function CompetencyRadarChart({
   scores = DEFAULT_COMPETENCIES,
   title,
   size = 340,
+  maxValue = 5,
+  requiredLabel,
 }: CompetencyRadarChartProps) {
   const t = useTranslations("competency");
   const cx = size / 2;
   const cy = size / 2;
   const maxR = size * 0.34;
-  const MAX_VAL = 5;
+  const MAX_VAL = maxValue;
   const n = scores.length;
-  const levels = [1, 2, 3, 4, 5];
+  const levels = Array.from({ length: MAX_VAL }, (_, i) => i + 1);
   const startAngle = -Math.PI / 2; // top
 
   function angleFor(i: number) {
@@ -189,7 +195,7 @@ export function CompetencyRadarChart({
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <svg width={20} height={4} aria-hidden="true"><line x1={0} y1={2} x2={20} y2={2} stroke="var(--info, #3b82f6)" strokeWidth={2} strokeDasharray="5 3" /></svg>
-          <span style={{ fontSize: 12, color: "var(--info)", fontWeight: 600 }}>{t("radarLegendRequired")}</span>
+          <span style={{ fontSize: 12, color: "var(--info)", fontWeight: 600 }}>{requiredLabel ?? t("radarLegendRequired")}</span>
         </div>
       </div>
 
@@ -200,7 +206,7 @@ export function CompetencyRadarChart({
             <tr style={{ background: "var(--bg, #f8fafc)" }}>
               <th style={{ textAlign: "start", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--ink, #1e293b)" }}>{t("colCompetency")}</th>
               <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--good)" }}>{t("radarLegendCurrent")}</th>
-              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--info)" }}>{t("radarLegendRequired")}</th>
+              <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--info)" }}>{requiredLabel ?? t("radarLegendRequired")}</th>
               <th style={{ textAlign: "center", padding: "6px 10px", border: "1px solid var(--line, #e2e8f0)", color: "var(--ink, #1e293b)" }}>{t("radarColGap")}</th>
             </tr>
           </thead>

@@ -4,6 +4,11 @@ import { useId, useState } from "react";
 import { useTranslations } from "next-intl";
 import { useFormError } from "@/lib/useFormError";
 import { Button, ConfirmDialog, HelpTip } from "../../../../_components/ds";
+import { buildLocationPatch, type EditableFields } from "../locationTree";
+
+function editableBefore(e: { name: string; type: string; parentId: string | null; addressLine: string | null; city: string | null; postalCode: string | null; lgdCode: string | null }): EditableFields {
+  return { name: e.name, type: e.type, parentId: e.parentId, addressLine: e.addressLine, city: e.city, postalCode: e.postalCode, lgdCode: e.lgdCode };
+}
 
 interface MinimalLocation {
   id: string;
@@ -12,7 +17,25 @@ interface MinimalLocation {
   parentId: string | null;
 }
 
+interface EditingLocation {
+  id: string;
+  name: string;
+  type: string;
+  parentId: string | null;
+  addressLine: string | null;
+  city: string | null;
+  postalCode: string | null;
+  lgdCode: string | null;
+}
+
 interface Props {
+  /**
+   * GAP-HR-LOCATIONS-02: when set, the form edits this location (PATCH) instead
+   * of creating one -- same fields, same validation, prefilled; only changed
+   * fields are sent. `locations` should already exclude the location itself and
+   * its descendants (see locationTree.ts selectableParents).
+   */
+  editing?: EditingLocation;
   onCancel: () => void;
   onSuccess?: () => void;
   /**
@@ -79,16 +102,16 @@ const labelStyle: React.CSSProperties = {
 
 const fieldErrorStyle: React.CSSProperties = { fontSize: 12, color: "var(--bad, #b91c1c)" };
 
-export function AddLocationForm({ onCancel, onSuccess, locations = [] }: Props) {
+export function AddLocationForm({ onCancel, onSuccess, locations = [], editing }: Props) {
   const t = useTranslations("addLocationForm");
   const formId = useId();
-  const [name, setName] = useState("");
-  const [type, setType] = useState<LocationType>("office");
-  const [parentId, setParentId] = useState("");
-  const [addressLine, setAddressLine] = useState("");
-  const [city, setCity] = useState("");
-  const [postalCode, setPostalCode] = useState("");
-  const [lgdCode, setLgdCode] = useState("");
+  const [name, setName] = useState(editing?.name ?? "");
+  const [type, setType] = useState<LocationType>((editing?.type as LocationType | undefined) ?? "office");
+  const [parentId, setParentId] = useState(editing?.parentId ?? "");
+  const [addressLine, setAddressLine] = useState(editing?.addressLine ?? "");
+  const [city, setCity] = useState(editing?.city ?? "");
+  const [postalCode, setPostalCode] = useState(editing?.postalCode ?? "");
+  const [lgdCode, setLgdCode] = useState(editing?.lgdCode ?? "");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [tone, setTone] = useState<"success" | "error">("success");
@@ -138,14 +161,22 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [] }: Props) 
     }
   }
 
-  const isDirty =
-    name.trim() !== "" ||
-    type !== "office" ||
-    parentId !== "" ||
-    addressLine.trim() !== "" ||
-    city.trim() !== "" ||
-    postalCode.trim() !== "" ||
-    lgdCode.trim() !== "";
+  function editableNow() {
+    return {
+      name: name.trim(), type, parentId: showParentField && parentId ? parentId : null,
+      addressLine: addressLine.trim(), city: city.trim(), postalCode: postalCode.trim(), lgdCode: lgdCode.trim(),
+    };
+  }
+
+  const isDirty = editing
+    ? Object.keys(buildLocationPatch(editableBefore(editing), editableNow())).length > 0
+    : name.trim() !== "" ||
+      type !== "office" ||
+      parentId !== "" ||
+      addressLine.trim() !== "" ||
+      city.trim() !== "" ||
+      postalCode.trim() !== "" ||
+      lgdCode.trim() !== "";
 
   function resetFields() {
     setName("");
@@ -215,6 +246,29 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [] }: Props) 
     setBusy(true);
     formError.clear();
     try {
+      if (editing) {
+        const patch = buildLocationPatch(editableBefore(editing), editableNow());
+        if (Object.keys(patch).length === 0) {
+          setTone("error");
+          setMessage(t("noChanges"));
+          return;
+        }
+        const res = await fetch(`/api/proxy/v1/locations/${editing.id}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        if (!res.ok) {
+          const resolved = await formError.fromResponse(res, "save");
+          setTone("error");
+          setMessage(resolved.message);
+          return;
+        }
+        setTone("success");
+        setMessage(t("editSuccessMsg", { name: trimName }));
+        onSuccess?.();
+        return;
+      }
       const body: Record<string, string> = { name: trimName, type };
       if (showParentField && parentId) body.parentId = parentId;
       if (trimAddressLine) body.addressLine = trimAddressLine;
@@ -260,7 +314,7 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [] }: Props) 
       style={{ marginTop: 16 }}
     >
       <div className="card-h">
-        <h3>{t("cardHeading")}</h3>
+        <h3>{editing ? t("editHeading") : t("cardHeading")}</h3>
       </div>
       <div className="pad" style={{ display: "grid", gap: 16 }}>
         {/* Status region */}
@@ -472,7 +526,7 @@ export function AddLocationForm({ onCancel, onSuccess, locations = [] }: Props) 
             loading={busy}
             style={{ minHeight: 44, minWidth: 140 }}
           >
-            {busy ? t("addingBtn") : t("addBtn")}
+            {editing ? (busy ? t("savingBtn") : t("saveBtn")) : busy ? t("addingBtn") : t("addBtn")}
           </Button>
           <Button
             type="button"

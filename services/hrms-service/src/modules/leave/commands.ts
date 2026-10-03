@@ -34,11 +34,32 @@ export async function allocateLeave(ctx: RequestContext, body: AllocateLeaveBody
   if (existing) {
     throw new HttpError(409, "ALLOCATION_EXISTS", `an allocation already exists for this employee, leave type and financial year (${body.fy})`);
   }
+  // GAP-HR-LEAVE-ALLOCATE-03: server-side policy cap. Default policy
+  // (conservative, overridable): totalDays above the type's configured
+  // maxDays (leave-types.max_days; 0 == no cap) is refused (422) unless the
+  // caller sets exceedMax with a reason -- so a typo (40 for 4) cannot slip
+  // through, while a pro-rated/special grant stays possible and audited.
+  const leaveType = await repo.findLeaveTypeById(body.leaveTypeId, ctx.tenantId);
+  // 422 (not 404): the REQUEST references a leave type that does not exist; the route itself exists.
+  if (!leaveType) throw new HttpError(422, "UNKNOWN_LEAVE_TYPE", "leave type not found");
+  const exceedsMax = leaveType.maxDays > 0 && body.totalDays > leaveType.maxDays;
+  // Overriding the policy maximum is an entitlement decision: only an admin
+  // may do it (an hr_officer who needs more must ask an hr_admin).
+  if (body.exceedMax && !["hr_admin", "super_admin"].some((r) => ctx.roles.includes(r))) {
+    throw new HttpError(403, "FORBIDDEN", "only an hr_admin or super_admin may allocate above a leave type's maximum");
+  }
+  if (exceedsMax && !body.exceedMax) {
+    throw new HttpError(422, "EXCEEDS_TYPE_MAX", `${body.totalDays} days is above the ${leaveType.maxDays}-day maximum for ${leaveType.name}; confirm the override with a reason to allocate more`);
+  }
+  if (exceedsMax && !body.reason) {
+    throw new HttpError(422, "REASON_REQUIRED", "a reason is required to allocate above the leave type's maximum");
+  }
+  const { exceedMax: _override, ...rest } = body;
   const id = randomUUID();
   await queue.publish(COMMANDS.leaveAllocate, {
     messageId: id, type: COMMANDS.leaveAllocate,
     tenantId: ctx.tenantId, actorId: ctx.actorId, correlationId: ctx.correlationId, schemaVersion: "1.0",
-    payload: { id, tenantId: ctx.tenantId, ...body, balanceDays: body.totalDays },
+    payload: { id, tenantId: ctx.tenantId, ...rest, balanceDays: body.totalDays, exceededTypeMax: exceedsMax },
   });
   return { id, status: "accepted", correlationId: ctx.correlationId };
 }

@@ -95,10 +95,12 @@ function clearDraft() {
 }
 
 // ── Submission body helper ────────────────────────────────────────────────────
-function buildPayload(data: WizardData): Record<string, unknown> {
+export function buildPayload(data: WizardData): Record<string, unknown> {
   const body: Record<string, unknown> = {};
   const stringKeys: (keyof WizardData)[] = [
     "fullName", "dateOfBirth", "gender",
+    // GAP-HR-EMPLOYEES-NEW-01: persisted since migration 0178.
+    "maritalStatus", "bloodGroup", "shift", "costCenterId", "locationId",
     "mobile", "email",
     "employeeNo", "departmentId", "designationId",
     "dateOfJoining", "employeeType",
@@ -113,6 +115,9 @@ function buildPayload(data: WizardData): Record<string, unknown> {
   // createEmployeeBody) -- sent under its real key so it actually persists,
   // instead of the "workLocation" key the API silently discards (HR-A finding).
   if (data.workLocation.trim() !== "") body.station = data.workLocation.trim();
+  // GAP-HR-EMPLOYEES-NEW-01: the employee's own service grade/group is stored
+  // as serviceGrade (the detail API's `grade` is the DESIGNATION's pay grade).
+  if (data.grade.trim() !== "") body.serviceGrade = data.grade.trim();
   // GAP-HR-EMPLOYEES-NEW-02: basicMinor is a real createEmployeeBody field
   // (paise integer) -- every new employee used to be created at basicMinor
   // 0 with no way to set it anywhere in this wizard. rupeesToMinorString
@@ -122,22 +127,14 @@ function buildPayload(data: WizardData): Record<string, unknown> {
     const minor = rupeesToMinorString(data.basicPay.trim());
     if (minor) body.basicMinor = Number(minor);
   }
-  // GAP-HR-EMPLOYEES-NEW-01: grade / shift / costCenter / maritalStatus /
-  // bloodGroup are still collected (Step5's review screen now marks each
-  // one "not saved yet" instead of implying they persisted) but have no
-  // corresponding field in createEmployeeBody today, so the API would
-  // silently strip them as unknown Zod keys if sent -- deliberately never
-  // added to `body` here. Each needs its own product/schema decision (grade
-  // in particular is being resolved separately alongside
-  // GAP-HR-DESIGNATIONS-01/GAP-HR-EMPLOYEES-NEW-05's pay-matrix work,
-  // costCenter needs a real costCenterId picker against the cost-centre
-  // master, not free text) -- flagged as a follow-up, out of scope here.
-  // pfEnrolled/esiEnrolled/ptApplicable were REMOVED from the wizard
-  // entirely (not just left unsent): they're already derived from the
-  // selected engagement type's policy (engagement-policy.ts
-  // statutoryPf/statutoryEsi) server-side, so a form toggle here could only
-  // ever silently disagree with -- and never actually override -- that
-  // computed value.
+  // GAP-HR-EMPLOYEES-NEW-01: grade (as serviceGrade) / shift / costCenterId /
+  // maritalStatus / bloodGroup are all real createEmployeeBody keys now
+  // (migration 0178) -- buildPayload.contract.test.ts fails if this function
+  // ever emits a key the API does not accept (which zod would silently strip).
+  // pfEnrolled/esiEnrolled/ptApplicable were REMOVED from the wizard entirely:
+  // they are derived from the selected engagement type's policy
+  // (engagement-policy.ts statutoryPf/statutoryEsi) server-side, so a form
+  // toggle here could only ever silently disagree with that computed value.
   return body;
 }
 

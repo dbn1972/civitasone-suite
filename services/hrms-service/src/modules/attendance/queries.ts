@@ -42,10 +42,11 @@ export async function getAttendanceByEmpAndMonth(tenantId: string, employeeId: s
   ) as Promise<AttendanceRow[]>;
 }
 
-export async function listRegularisations(tenantId: string, limit: number) {
-  const key = cache.listKey(tenantId, "attendance_reg", `list:${limit}`);
-  return (await cache.getOrLoad(key, async () => {
-    const rows = await repo.listRegularisationsByTenant(tenantId, limit);
+export async function listRegularisations(tenantId: string, limit: number, employeeIds?: string[]) {
+  // Scoped (employee/manager) reads bypass the shared tenant-wide list cache:
+  // that key is invalidated per tenant and must never serve a scoped viewer.
+  const load = async () => {
+    const rows = await repo.listRegularisationsByTenant(tenantId, limit, employeeIds);
     const employees = await employeeRepo.listByTenant(tenantId, 500, 0);
     const empMap = new Map(employees.map((e) => [e.id, e]));
     return rows.map((r) => ({
@@ -58,7 +59,10 @@ export async function listRegularisations(tenantId: string, limit: number) {
       status: r.status as "pending" | "approved" | "rejected",
       requestedAt: new Date(r.requestedAt as unknown as string).toISOString(),
     }));
-  })) ?? [];
+  };
+  if (employeeIds) return load();
+  const key = cache.listKey(tenantId, "attendance_reg", `list:${limit}`);
+  return (await cache.getOrLoad(key, load)) ?? [];
 }
 
 export async function listAttendance(tenantId: string, limit: number) {

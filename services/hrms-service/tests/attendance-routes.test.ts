@@ -592,12 +592,15 @@ describe("GET /v1/hrms/attendance/regularisations", () => {
     await app.close();
   });
 
+  // GAP-HR-ATTENDANCE-REGULARISATION-01: "employee" is admitted (own-scoped,
+  // see attendance-regularisation-self-service-real-db.test.ts); a role that
+  // is neither HR, manager nor employee is still refused.
   it("403 — insufficient role", async () => {
     const app = await buildApp();
     const r = await app.inject({
       method: "GET",
       url: "/v1/hrms/attendance/regularisations",
-      headers: auth(USER, ["employee"]),
+      headers: auth(USER, ["vendor"]),
     });
     expect(r.statusCode).toBe(403);
     await app.close();

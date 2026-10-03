@@ -53,7 +53,14 @@ export function registerLocationConsumers(rawQueue: Queue): void {
       }
       await repo.updateById(tx as Parameters<typeof repo.updateById>[0], id, msg.tenantId, { ...patch, updatedBy: msg.actorId } as Parameters<typeof repo.updateById>[3]);
       await cache.invalidateResource(msg.tenantId, RESOURCE);
-      await emit(tx, msg, EVENTS.locationUpdated, { locationId: id }, "update", id);
+      // GAP-HR-LOCATIONS-02: the audit event names the fields changed and, for
+      // an archive, the stated reason.
+      const reason = typeof fields.reason === "string" ? fields.reason : undefined;
+      await emit(tx, msg, EVENTS.locationUpdated, { locationId: id }, patch.status === "archived" ? "archive" : "update", id, {
+        changedFields: Object.keys(patch),
+        ...(patch.status !== undefined ? { status: patch.status } : {}),
+        ...(reason ? { reason } : {}),
+      });
     });
   });
 }
@@ -64,7 +71,8 @@ async function emit(
   eventType: string,
   payload: Record<string, unknown>,
   action: string,
-  resourceId: string
+  resourceId: string,
+  metadata?: Record<string, unknown>
 ): Promise<void> {
   const t = tx as Parameters<typeof enqueue>[0];
   await enqueue(t, {
@@ -81,6 +89,6 @@ async function emit(
     tenantId: msg.tenantId,
     actorId: msg.actorId,
     correlationId: msg.correlationId,
-    payload: { service: "location", action, resourceType: "location", resourceId, outcome: "success" },
+    payload: { service: "location", action, resourceType: "location", resourceId, outcome: "success", ...(metadata ? { metadata } : {}) },
   });
 }

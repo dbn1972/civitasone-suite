@@ -35,6 +35,11 @@ export const employeeListQuery = listQuerySchema.extend({
 });
 export type EmployeeListQuery = z.infer<typeof employeeListQuery>;
 
+/** GAP-HR-EMPLOYEES-NEW-01: closed value sets for the newly persisted profile fields. */
+export const MARITAL_STATUSES = ["single", "married", "divorced", "widowed"] as const;
+export const BLOOD_GROUPS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"] as const;
+export const SHIFTS = ["general", "morning", "evening", "night"] as const;
+
 export const createEmployeeBody = z.object({
   employeeNo:    z.string().min(1).max(32),
   fullName:      z.string().min(1).max(256),
@@ -73,6 +78,11 @@ export const createEmployeeBody = z.object({
   category:     z.enum(["UR", "SC", "ST", "OBC", "EWS"]).optional(),
   disability:   z.boolean().default(false),
   photoDataUrl: z.string().optional(),
+  // GAP-HR-EMPLOYEES-NEW-01: previously silently stripped as unknown keys.
+  serviceGrade:  z.string().trim().min(1).max(64).optional(),
+  maritalStatus: z.enum(MARITAL_STATUSES).optional(),
+  bloodGroup:    z.enum(BLOOD_GROUPS).optional(),
+  shift:         z.enum(SHIFTS).optional(),
 });
 export type CreateEmployeeBody = z.infer<typeof createEmployeeBody>;
 
@@ -122,6 +132,12 @@ export const updateEmployeeBody = z.object({
   sacCode:        z.string().max(6).optional(),
   agencyRef:      z.string().max(64).optional(),
   napsId:         z.string().max(24).optional(),
+  // GAP-HR-EMPLOYEES-NEW-01
+  serviceGrade:   z.string().trim().min(1).max(64).optional(),
+  maritalStatus:  z.enum(MARITAL_STATUSES).optional(),
+  bloodGroup:     z.enum(BLOOD_GROUPS).optional(),
+  shift:          z.enum(SHIFTS).optional(),
+  costCenterId:   z.string().uuid().optional(),
   // GAP-HR-EMPLOYEES-DETAIL-EDIT-03: required (by routes.ts, not by this
   // schema -- optional here so a non-sensitive edit, e.g. email alone,
   // never needs one) whenever the patch touches bankAccountNo/bankIfsc/
