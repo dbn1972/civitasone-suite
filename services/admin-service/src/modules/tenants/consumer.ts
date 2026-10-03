@@ -5,7 +5,7 @@ import { cache } from "../../shared/infra.js";
 import { enqueue, markProcessed } from "../../shared/outbox.js";
 import { COMMANDS, EVENTS, RESOURCE_TENANT } from "../../topics.js";
 import * as repo from "./repo.js";
-import { assertTransition, type TenantView } from "./domain.js";
+import type { TenantView } from "./domain.js";
 
 const log = pino({ name: "admin-tenants-consumer" });
 const AUDIT_TOPIC = "audit.event.record";
@@ -34,53 +34,6 @@ export function registerTenantConsumers(queue: Queue): void {
       await cache.put(keyFor(msg.payload.id), msg.payload);
     } catch (err) {
       log.error({ err, messageId: msg.messageId, type: COMMANDS.tenantCreate }, "Consumer processing failed");
-    }
-  });
-
-  queue.subscribe<{ id: string; edition: string }>(COMMANDS.tenantEditionChange, async (msg) => {
-    try {
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
-        const cur = await repo.findByIdTx(tx, msg.payload.id);
-        if (!cur) throw new Error(`tenant ${msg.payload.id} not found`);
-        await repo.update(tx, msg.payload.id, { edition: msg.payload.edition, updatedBy: msg.actorId, version: cur.version + 1 });
-        await audit(tx, msg, "edition_change", msg.payload.id);
-      });
-      await cache.invalidate(keyFor(msg.payload.id));
-    } catch (err) {
-      log.error({ err, messageId: msg.messageId, type: COMMANDS.tenantEditionChange }, "Consumer processing failed");
-    }
-  });
-
-  queue.subscribe<{ id: string; reason: string }>(COMMANDS.tenantSuspend, async (msg) => {
-    try {
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
-        const cur = await repo.findByIdTx(tx, msg.payload.id);
-        if (!cur) throw new Error(`tenant ${msg.payload.id} not found`);
-        assertTransition(cur.status, "suspended");
-        await repo.update(tx, msg.payload.id, { status: "suspended", updatedBy: msg.actorId, version: cur.version + 1 });
-        await emit(tx, msg, EVENTS.tenantSuspended, { tenantId: msg.payload.id, reason: msg.payload.reason }, "suspend", msg.payload.id);
-      });
-      await cache.invalidate(keyFor(msg.payload.id));
-    } catch (err) {
-      log.error({ err, messageId: msg.messageId, type: COMMANDS.tenantSuspend }, "Consumer processing failed");
-    }
-  });
-
-  queue.subscribe<{ id: string }>(COMMANDS.tenantReactivate, async (msg) => {
-    try {
-      await db.transaction(async (tx) => {
-        if (!(await markProcessed(tx, msg.messageId))) return;
-        const cur = await repo.findByIdTx(tx, msg.payload.id);
-        if (!cur) throw new Error(`tenant ${msg.payload.id} not found`);
-        assertTransition(cur.status, "active");
-        await repo.update(tx, msg.payload.id, { status: "active", updatedBy: msg.actorId, version: cur.version + 1 });
-        await audit(tx, msg, "reactivate", msg.payload.id);
-      });
-      await cache.invalidate(keyFor(msg.payload.id));
-    } catch (err) {
-      log.error({ err, messageId: msg.messageId, type: COMMANDS.tenantReactivate }, "Consumer processing failed");
     }
   });
 

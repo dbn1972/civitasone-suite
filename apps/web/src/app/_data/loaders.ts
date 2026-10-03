@@ -5292,7 +5292,9 @@ export type AdminTenantModuleUsage = {
 
 export async function getAdminTenantDetail(id: string): Promise<LoaderResult<AdminTenantDetail | null>> {
   return fetchJson<unknown, AdminTenantDetail | null>(`/api/v1/admin/tenants/${pathSeg(id)}`, null, {
-    revalidateSeconds: 60,
+    // GAP-ADMIN-TENANTS-DETAIL-05: not cached -- the page now shows the live
+    // status right after a suspend/reactivate/edit is approved.
+    revalidateSeconds: 0,
     telemetryKey: "admin.tenant.detail",
     mapResponse: (p) => (isRecord(p) ? (p as AdminTenantDetail) : null),
   });
@@ -5314,6 +5316,69 @@ export async function getAdminTenantModules(id: string): Promise<LoaderResult<Ad
         usage: typeof m.usage === "string" ? m.usage : "—",
       }));
     },
+  });
+}
+
+// ── Tenant lifecycle approval (GAP-ADMIN-TENANTS-DETAIL-05) ───────────────────
+
+export type TenantLifecycleKind = "suspend" | "reactivate" | "edit" | "policy_change";
+
+export type TenantLifecycleRequest = {
+  id: string;
+  kind: string;
+  status: string;
+  reason: string;
+  payload: Record<string, unknown>;
+  effectiveAt: string | null;
+  requestedAt: string;
+  /** The backend never sends raw actor ids; it says whether the caller is the requester / decider. */
+  requestedByYou: boolean;
+  requiredApprovals: number;
+  approvalsCount: number;
+  decidedAt: string | null;
+  decidedByYou: boolean;
+  decisionReason: string | null;
+  failureCode: string | null;
+  directExecution: boolean;
+  /** Whether the CALLER may approve/reject it now (not the requester, eligible role, still pending). */
+  canDecide: boolean;
+  /** Whether the CALLER may cancel it (scheduled only; the requester or an approver). */
+  canCancel: boolean;
+  cancelledByYou: boolean;
+  cancelReason: string | null;
+};
+
+export type TenantApprovalPolicy = {
+  requiresSecondApprover: boolean;
+  approverRoles: string[];
+  minApprovals: number;
+  reasonRequired: boolean;
+  notifyTenantAdmins: boolean;
+};
+
+export type TenantApprovalPolicyView = {
+  policy: TenantApprovalPolicy;
+  isDefault: boolean;
+  pendingChange: TenantLifecycleRequest | null;
+};
+
+export async function getAdminTenantLifecycleRequests(id: string): Promise<LoaderResult<TenantLifecycleRequest[]>> {
+  return fetchJson<unknown, TenantLifecycleRequest[]>(`/api/v1/admin/tenants/${pathSeg(id)}/lifecycle-requests?limit=50`, [], {
+    revalidateSeconds: 0,
+    telemetryKey: "admin.tenant.lifecycle_requests",
+    mapResponse: (p) => {
+      if (!isRecord(p)) return null;
+      const items = getArrayPayload(p.items ?? p);
+      return items ? (items.filter(isRecord) as unknown as TenantLifecycleRequest[]) : null;
+    },
+  });
+}
+
+export async function getAdminTenantApprovalPolicy(id: string): Promise<LoaderResult<TenantApprovalPolicyView | null>> {
+  return fetchJson<unknown, TenantApprovalPolicyView | null>(`/api/v1/admin/tenants/${pathSeg(id)}/approval-policy`, null, {
+    revalidateSeconds: 0,
+    telemetryKey: "admin.tenant.approval_policy",
+    mapResponse: (p) => (isRecord(p) && isRecord(p.policy) ? (p as unknown as TenantApprovalPolicyView) : null),
   });
 }
 

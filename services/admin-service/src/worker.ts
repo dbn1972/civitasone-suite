@@ -4,6 +4,7 @@ import { queue } from "./shared/infra.js";
 import { startRelay } from "./shared/outbox.js";
 import { startOutboxPurge } from "@civitasone/outbox";
 import { registerTenantConsumers } from "./modules/tenants/consumer.js";
+import { registerTenantLifecycleConsumers, startLifecycleSweeper } from "./modules/tenants/lifecycle-consumer.js";
 import { registerConfigConsumers } from "./modules/config/consumer.js";
 import { registerBackupConsumers } from "./modules/backup/consumer.js";
 import { registerSupportConsumers, startBreakGlassSweeper, sweepExpiredBreakGlass } from "./modules/support/consumer.js";
@@ -64,6 +65,8 @@ registerF3_integration_settings_Consumers(tenantScoped(queue));
 registerF3_uploads_Consumers(tenantScoped(queue));
 registerF3_support_Consumers(tenantScoped(queue));
 registerIntegrationOpsConsumers(tenantScoped(queue));
+// GAP-ADMIN-TENANTS-DETAIL-05: writes FORCE-RLS tables scoped to the target tenant.
+registerTenantLifecycleConsumers(tenantScoped(queue));
 await queue.start();
 const relay = startRelay(db, queue);
 
@@ -81,6 +84,8 @@ const purge = startOutboxPurge(db as unknown as Parameters<typeof startOutboxPur
 // P1-2: periodically auto-close break-glass grants past their TTL.
 const breakGlassSweepMs = Number(process.env.BREAK_GLASS_SWEEP_MS ?? 60_000);
 const breakGlassSweeper = startBreakGlassSweeper(breakGlassSweepMs);
+// Executes approved suspensions whose effective time has arrived.
+const lifecycleSweeper = startLifecycleSweeper(Number(process.env.TENANT_LIFECYCLE_SWEEP_MS ?? 60_000));
 // Run one sweep immediately on boot so grants that expired while the worker was
 // down are closed without waiting a full interval.
 void sweepExpiredBreakGlass()
@@ -94,6 +99,7 @@ async function shutdown(signal: string): Promise<void> {
   clearInterval(purge);
   clearInterval(relay);
   clearInterval(breakGlassSweeper);
+  clearInterval(lifecycleSweeper);
   clearInterval(sftpLeadIngest);
   await queue.stop();
   await sqlClient.end();

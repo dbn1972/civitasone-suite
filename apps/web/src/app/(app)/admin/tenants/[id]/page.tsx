@@ -1,13 +1,19 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 import { PageHeader, StatGrid, StatCard, Card, EmptyState, RefreshErrorState, LoadErrorState } from "@/app/_components/ds";
-import { getAdminTenantDetail, getAdminTenantModules } from "@/app/_data/loaders";
+import {
+  getAdminTenantDetail, getAdminTenantModules, getAdminTenantLifecycleRequests, getAdminTenantApprovalPolicy,
+} from "@/app/_data/loaders";
 import { toHumanError } from "@/lib/messages";
 import { PLATFORM_ADMIN_ROLES } from "@/lib/auth/adminRoles";
 import { AdminAccessDenied, sessionHasAnyRole } from "../../_components/AdminAccessGate";
 import { isUuid } from "@/lib/pathSegment";
 import { TenantModulesTable } from "./TenantModulesTable";
 import { seatsInUse, hasNoModules, settingsRows } from "./tenantDetailView";
+import { TenantLifecycleSection } from "./TenantLifecycleSection";
+import { ApprovalPolicyCard } from "./ApprovalPolicyCard";
+import { normalizePolicy, pendingPolicyOf, tenantStatCardTone, tenantStatusKey, tenantStatusTone } from "./lifecycleModel";
 
 export default async function TenantDetailPage({ params }: { params: Promise<{ id: string }> }) {
   // GAP-ADMIN-TENANTS-DETAIL-02: a cross-tenant record -- platform operators
@@ -21,9 +27,11 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
   // GAP-ADMIN-TENANTS-DETAIL-03: tenant ids are uuids (admin-service idParam);
   // anything else never reaches the upstream path.
   if (!isUuid(id)) notFound();
-  const [detailResult, modulesResult] = await Promise.all([
+  const [detailResult, modulesResult, requestsResult, policyResult] = await Promise.all([
     getAdminTenantDetail(id),
     getAdminTenantModules(id),
+    getAdminTenantLifecycleRequests(id),
+    getAdminTenantApprovalPolicy(id),
   ]);
 
   const tenant = detailResult.data;
@@ -69,21 +77,47 @@ export default async function TenantDetailPage({ params }: { params: Promise<{ i
   const enabledCount = modules.filter((m) => m.enabled === "Yes").length;
   const seats = seatsInUse(modules);
   const settings = settingsRows(tenant.settings);
+  const t = await getTranslations("tenantLifecycle");
+  const statusKey = tenantStatusKey(tenant.status);
+  const statusLabel = t(`tenantStatus.${statusKey}`);
+  const policy = normalizePolicy(policyResult.data);
+  const requests = Array.isArray(requestsResult.data) ? requestsResult.data : [];
 
   return (
     <div className="page-main wrap" aria-labelledby="page-heading">
       <PageHeader
         title={`Tenant: ${tenant.name}`}
-        subtitle={`${tenant.domain ? `Domain: ${tenant.domain} · ` : ""}Edition: ${tenant.edition} · Status: ${tenant.status} · Region: ${tenant.region}`}
+        subtitle={`${tenant.domain ? `Domain: ${tenant.domain} · ` : ""}Edition: ${tenant.edition} · Status: ${statusLabel} · Region: ${tenant.region}`}
         back="/admin/tenants"
-        actions={<Link href="/admin/onboarding" className="btn ghost sm">Onboarding queue</Link>}
+        actions={
+          <>
+            <span className={`pill ${tenantStatusTone(tenant.status)}`}>{statusLabel}</span>
+            <Link href="/admin/onboarding" className="btn ghost sm">Onboarding queue</Link>
+          </>
+        }
       />
       <StatGrid>
         <StatCard icon="📦" iconBg="#eef2ff" label="Modules Enabled" value={enabledCount} />
         <StatCard icon="👥" iconBg="#ecfdf3" label="Module seats in use" value={seats ?? "—"} />
         <StatCard icon="🏢" iconBg="#fffaeb" label="Edition" value={tenant.edition} />
-        <StatCard icon="🔒" iconBg="#fce7ee" label="Status" value={tenant.status} />
+        <StatCard icon="🔒" tone={tenantStatCardTone(tenant.status)} label="Status" value={statusLabel} />
       </StatGrid>
+      <TenantLifecycleSection
+        tenantId={id}
+        tenantName={tenant.name}
+        tenantStatus={tenant.status}
+        current={{ name: tenant.name, domain: tenant.domain ?? "", edition: tenant.edition }}
+        initialRequests={requests}
+        requestsSource={requestsResult.source === "error" ? "error" : "api"}
+        policy={policy}
+      />
+      <ApprovalPolicyCard
+        tenantId={id}
+        policy={policy}
+        isDefault={policyResult.data?.isDefault ?? true}
+        pending={pendingPolicyOf(requests, policyResult.data)}
+        source={policyResult.source === "error" ? "error" : "api"}
+      />
       <Card title="Module Usage">
         {/* UX-012: the data-source badge now lives inside TenantModulesTable,
             driven by the same useSeededResource call that produces its rows —
